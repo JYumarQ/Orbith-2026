@@ -11,7 +11,11 @@
             data-url-movimiento="{% url 'movimiento_contrato' c.no_expediente %}" 
             data-url-pdf="{% url 'ncontrato_pdf' c.no_expediente %}"
             data-url-baja="{% url 'del_contrato' c.no_expediente %}"
+
+            data-expediente="{{ c.no_expediente }}"
+            data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}"
         >
+        
         
         <td>
             <strong>{{ c.no_expediente }}</strong>

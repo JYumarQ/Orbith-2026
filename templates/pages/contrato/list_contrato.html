@@ -70,10 +70,7 @@
                         <i class="fas fa-file-pdf"></i>
                     </a>
                     <button type="button" class="btn btn-sm btn-outline-danger" id="btn-baja" 
-                        hx-post="" 
-                        hx-confirm="¿Está seguro de dar de baja este contrato?" 
-                        hx-swap="none"
-                        hx-on:htmx:after-request="if(event.detail.successful) htmx.trigger('#search', 'searchFilters')"
+                        onclick="abrirModalBaja()"
                         title="Dar de Baja">
                         <i class="fas fa-user-minus"></i>
                     </button>
@@ -208,6 +205,54 @@
 <div class="modal fade" id="crear_empl" role="dialog"></div>
 <div class="modal fade" id="editar_aspir" role="dialog"></div>
 
+<div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-label-danger">
+                <h5 class="modal-title" style="color: #ff3e1d !important;">
+                    <i class="fas fa-user-times me-2"></i>Formulario de Baja
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label">No. Expediente</label>
+                        <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Trabajador</label>
+                        <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <form id="formBajaContrato">
+                    <input type="hidden" id="baja_contrato_id"> <input type="hidden" id="baja_url_post">    <div class="mb-3">
+                        <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+                        <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
+                        <select id="baja_causa" name="causa_baja" class="form-select">
+                            <option value="">Seleccione una causa...</option>
+                            {% for causa in causas_baja %}
+                                <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="validarYConfirmarBaja()">Confirmar Baja</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %} 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -297,7 +342,9 @@
         
         const btnBaja = document.getElementById('btn-baja');
         btnBaja.setAttribute('hx-post', fila.dataset.urlBaja);
-        if (window.htmx) htmx.process(btnBaja);
+        btnBaja.dataset.url = fila.dataset.urlBaja; // La URL del DeleteView
+        btnBaja.dataset.expediente = fila.dataset.expediente; // Asegúrate de agregar esto en el <tr>
+        btnBaja.dataset.nombre = fila.dataset.nombre;         // Asegúrate de agregar esto en el <tr>
     }
 
     function deseleccionarTodo() {
@@ -319,6 +366,92 @@
         const searchInput = document.getElementById('search');
         htmx.trigger(searchInput, 'searchFilters'); 
     }
+
+    function abrirModalBaja() {
+    const btn = document.getElementById('btn-baja');
+    const url = btn.dataset.url;
+
+    if (!url) return; // Si no hay selección, no hace nada
+
+    // 1. Cargar datos en el modal
+    document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
+    document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
+    document.getElementById('baja_url_post').value = url;
+    
+    // Limpiar campos editables
+    document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0]; // Pone fecha de hoy por defecto
+    document.getElementById('baja_causa').value = "";
+
+    // 2. Mostrar Modal
+    $('#modalBajaContrato').modal('show');
+}
+
+function validarYConfirmarBaja() {
+    // 1. Validación
+    const fecha = document.getElementById('baja_fecha').value;
+    const causa = document.getElementById('baja_causa').value;
+    const url = document.getElementById('baja_url_post').value;
+
+    if (!fecha || !causa) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Campos incompletos',
+            text: 'Por favor, seleccione una fecha y una causa de baja.',
+            confirmButtonColor: '#696cff'
+        });
+        return;
+    }
+
+    // 2. SweetAlert de Confirmación (La original, pero ahora llamada manualmente)
+    $('#modalBajaContrato').modal('hide'); // Ocultamos el modal de formulario primero
+
+    Swal.fire({
+        title: '¿Está seguro de dar de baja este contrato?',
+        text: "Esta acción registrará la baja en el sistema.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#8592a3',
+        confirmButtonText: 'Sí, dar de baja',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            enviarBajaAlBackend(url, fecha, causa);
+        } else {
+            // Si cancela el SweetAlert, volvemos a mostrar el modal por si quiere corregir algo
+            $('#modalBajaContrato').modal('show');
+        }
+    });
+}
+
+function enviarBajaAlBackend(url, fecha, causa) {
+    // Usamos HTMX para enviar la petición manualmente y mantener la consistencia
+    // O usamos jQuery AJAX. Dado que el proyecto usa ambos, jQuery es más explícito aquí para pasar datos extra.
+    
+    $.ajax({
+        url: url,
+        type: 'POST',
+        data: {
+            'fecha_baja': fecha,
+            'causa_baja': causa,
+            'csrfmiddlewaretoken': '{{ csrf_token }}' // Django CSRF
+        },
+        success: function(response) {
+            // Si todo sale bien
+            Swal.fire({
+                icon: 'success',
+                title: 'Baja procesada',
+                showConfirmButton: false,
+                timer: 1500
+            });
+            // Recargamos la tabla disparando el evento de HTMX del buscador
+            triggerSearch();
+        },
+        error: function(xhr) {
+            Swal.fire('Error', 'No se pudo procesar la baja.', 'error');
+        }
+    });
+}
 
     document.body.addEventListener('htmx:confirm', function(evt) {
         if (evt.target.id === 'btn-baja') {

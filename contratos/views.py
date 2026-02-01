@@ -6,10 +6,10 @@ from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View
 from django.core.paginator import Paginator
 from bolsa.models import Aspirante
-from .models import CAlta
+from .models import CAlta, CBaja
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
-from nomencladores.models import NSalario
+from nomencladores.models import NSalario, NCausaAltaBaja
 from django.urls import reverse_lazy
 from configuracion.models import Configuracion
 from django.template.loader import get_template
@@ -31,6 +31,7 @@ class ContratoListView(ListView):
         context = super().get_context_data(**kwargs)
         context['form'] = CAltaForm()
         context['search_url'] = 'search_contrato'
+        context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
         return context
     
 
@@ -393,18 +394,45 @@ class ContratoUpdateView(UpdateView):
         return super().form_invalid(form)
 
 class ContratoDeleteView(DeleteView):
-    def get(self, request, *args, **kwargs):
-        contrato = get_object_or_404(CAlta, pk=kwargs['pk'])
+    model = CAlta
+
+    def post(self, request, *args, **kwargs):
+        # Obtenemos el objeto contrato antes de hacer nada
+        self.object = self.get_object()
+        
         try:
-            # CORRECCIÓN: Borrado real en lugar de 'contrato.alta = False'
-            contrato.delete()
-            messages.success(request, "Contrato eliminado correctamente.")
-        except ProtectedError:
-            messages.error(request, "No se puede eliminar el contrato porque tiene datos asociados.")
+            # 1. Validar recepción de datos del Modal
+            fecha_baja = request.POST.get('fecha_baja')
+            causa_id = request.POST.get('causa_baja')
+
+            if not fecha_baja or not causa_id:
+                return JsonResponse({
+                    'success': False, 
+                    'message': 'Faltan datos obligatorios (Fecha o Causa).'
+                }, status=400)
+
+            # 2. Crear registro en el Histórico (CBaja)
+            # Copiamos los datos relevantes del contrato actual
+            CBaja.objects.create(
+                aspirante=self.object.aspirante,
+                cargo=self.object.cargo,
+                no_expediente=self.object.no_expediente,
+                fecha_alta=self.object.fecha_alta,
+                tridente=self.object.tridente,
+                # Asignamos los datos nuevos recibidos del formulario
+                fecha_baja=fecha_baja,
+                causa_baja_id=causa_id, # Django asignará la FK automáticamente usando el ID
+                observaciones=f"Baja procesada desde el sistema. Obs: {self.object.observaciones or ''}"
+            )
+
+            # 3. Eliminar el contrato activo
+            # Esto dispara la lógica interna del modelo CAlta (liberar plaza, cambiar estado aspirante)
+            self.object.delete()
+
+            return JsonResponse({'success': True, 'message': 'Contrato dado de baja correctamente.'})
+
         except Exception as e:
-            messages.error(request, f"Error al eliminar: {e}")
-            
-        return redirect('list_contrato')
+            return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 #*REPORTES
 class ContratoPDFView(View):
