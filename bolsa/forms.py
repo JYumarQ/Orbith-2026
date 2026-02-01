@@ -1,4 +1,6 @@
+from typing import cast
 from django import forms
+from django.forms import ModelChoiceField
 from django.urls import reverse, reverse_lazy
 from .models import Aspirante
 from nomencladores.models import NEspecialidad, NMunicipio
@@ -75,15 +77,12 @@ class AspiranteForm(forms.ModelForm):
                 'hx-trigger': 'change',
                 'hx-target': '#id_municipio',
                 'hx-swap': 'outerHTML',
-                # Si limpian la provincia, vaciamos y deshabilitamos municipio
-                
             }),
 
             # Municipio empieza deshabilitado y se habilita tras el swap de HTMX
             'municipio': forms.Select(attrs={
                 'class': 'form-select',
                 'disabled': 'disabled',
-                
             }),
 
             
@@ -100,37 +99,52 @@ class AspiranteForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        # Para limitar UO al moderador, la vista debe pasar user=...
+        # Extraemos 'user' para evitar error en super().__init__ y para usarlo en permisos
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
 
-        # ✅ Poner aquí la URL HTMX (evita ciclos de importación)
+        # ✅ HTMX en Provincia
         self.fields['provincia'].widget.attrs['hx-get'] = reverse('cargar_municipios')
 
-        # Moderador: ver solo sus UO asignadas (si el campo existe en el form)
-        if user and getattr(user, 'es_moderador', False) and 'unidad_organizativa' in self.fields:
-            self.fields['unidad_organizativa'].queryset = user.unidades.all()
+        # ✅ Lógica de Moderador (Protegida y Tipada)
+        # Solo se ejecuta si el campo existe en el formulario (escalabilidad)
+        if 'unidad_organizativa' in self.fields:
+            # Cast para que Pylance sepa que es un ModelChoiceField
+            uo_field = cast(ModelChoiceField, self.fields['unidad_organizativa'])
+            
+            # Lógica de negocio
+            if user and getattr(user, 'es_moderador', False):
+                uo_field.queryset = user.unidades.all()
 
         # --- Especialidad dependiente del nivel_educ ---
         nivel = self.data.get('nivel_educ') or getattr(self.instance, 'nivel_educ', None)
+        
+        # Cast para Pylance
+        esp_field = cast(ModelChoiceField, self.fields['especialidad'])
+
         if nivel == 'NS':
             qs_esp = NEspecialidad.objects.filter(educ_superior=True)
-            self.fields['especialidad'].widget.attrs.pop('disabled', None)
+            esp_field.widget.attrs.pop('disabled', None)
         elif nivel == 'TM':
             qs_esp = NEspecialidad.objects.filter(educ_superior=False)
-            self.fields['especialidad'].widget.attrs.pop('disabled', None)
+            esp_field.widget.attrs.pop('disabled', None)
         else:
             qs_esp = NEspecialidad.objects.none()
-            self.fields['especialidad'].widget.attrs['disabled'] = 'disabled'
-        self.fields['especialidad'].queryset = qs_esp
+            esp_field.widget.attrs['disabled'] = 'disabled'
+        
+        esp_field.queryset = qs_esp
 
-        # --- Municipios dependientes de la provincia (estado inicial/render) ---
+        # --- Municipios dependientes de la provincia ---
         provincia_id = self.data.get('provincia') or getattr(getattr(self.instance, 'provincia', None), 'id', None)
+        
+        # Cast para Pylance
+        mun_field = cast(ModelChoiceField, self.fields['municipio'])
+
         if provincia_id:
-            self.fields['municipio'].queryset = (
+            mun_field.queryset = (
                 NMunicipio.objects.filter(provincia_id=provincia_id).order_by('nombre')
             )
-            self.fields['municipio'].widget.attrs.pop('disabled', None)
+            mun_field.widget.attrs.pop('disabled', None)
         else:
-            self.fields['municipio'].queryset = NMunicipio.objects.none()
-            self.fields['municipio'].widget.attrs['disabled'] = 'disabled'
+            mun_field.queryset = NMunicipio.objects.none()
+            mun_field.widget.attrs['disabled'] = 'disabled'
