@@ -1,0 +1,45 @@
+{% if object_list %} 
+    {% for c in object_list %}
+    <tr>
+    <td>
+        <a>
+        {{ c.ncargo.descripcion }}
+        </a>
+        <br />
+    </td>
+    <td>
+        <a> {{ c.departamento.descripcion }} </a>
+        <br />
+    </td>
+    <td>
+        <a> {{ c.departamento.unidad_organizativa.descripcion }} </a>
+        <br />
+    </td>
+    <td>
+        <a> {{ c.cant_aprobada }} </a>
+        <br />
+    </td>
+    <td>
+        <a> {{ c.cant_cubierta }} </a>
+        <br />
+    </td>
+    <td class="project-actions text-center">
+        <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_cargo' c.id %}')"
+        >
+        <i class="fas fa-pencil-alt"></i>
+        </button>
+        <a
+            class="btn btn-sm btn-eliminar"
+            href="{% url 'del_cargoplantilla' c.id %}"
+            >
+            <i class="fas fa-trash"></i>
+        </a>
+
+    </td>
+    </tr>
+    {% endfor %} 
+    {% else %}
+    <tr>
+    <td colspan="5">No hay registros disponibles.</td>
+</tr>
+{% endif %}

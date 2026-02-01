@@ -1,0 +1,44 @@
+{% for aspirante in aspirantes %}
+<tr id="row-{{ aspirante.doc_identidad }}"
+    class="cursor-pointer fila-aspirante"
+    onclick="seleccionarAspirante(this)"
+    style="cursor: pointer;"
+    data-id="{{ aspirante.doc_identidad }}"
+    data-url-editar="{% url 'updt_aspir' aspirante.doc_identidad %}?next={% url 'list_aspir' %}"
+    data-url-contrato="{% url 'add_contrato' aspirante.doc_identidad %}"
+    data-url-eliminar="{% url 'del_aspir' aspirante.doc_identidad %}">
+    
+    <td class="text-center">
+      {{ aspirante.doc_identidad }}
+    </td>
+
+    <td class="text-center">
+      {{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }}
+    </td>
+
+    <td class="text-center">
+      {{ aspirante.municipio.nombre|default:"-" }}<br />
+      <small class="text-muted">{{ aspirante.provincia.nombre|default:"-" }}</small>
+    </td>
+
+    <td class="text-center">
+      {{ aspirante.get_nivel_educ_display }}
+    </td>
+  
+    <td class="text-center">
+      {{ aspirante.especialidad.nombre|default:"-" }}
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="5" class="text-center p-4">
+        <span class="text-muted">No se encontraron aspirantes.</span>
+    </td>
+</tr>
+{% endfor %}
+
+{% if request.headers.HX_Request %}
+    <div hx-swap-oob="innerHTML:#table-pagination-footer">
+        {% include 'pages/aspirante/partials/pagination.html' %}
+    </div>
+{% endif %}

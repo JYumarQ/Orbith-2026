@@ -1,0 +1,124 @@
+<!-- pages/usuarios/updt_usuario.html -->
+<div class="modal-dialog" role="document" id="editar_usuario">
+  <div class="modal-content">
+    <form method="post"
+          action="{% url 'updt_usuario' object.id %}"
+          id="formEditarUsuario"
+          data-user-id="{{ object.id }}"
+          data-confirm-text="¿Estás seguro de guardar los cambios para el usuario {{ object.username }}?">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">Editar Usuario</h5>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="{{ form.username.id_for_label }}" class="form-label">Nombre de usuario</label>
+          {{ form.username }}
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          {{ form.es_admin }}
+          <label for="{{ form.es_admin.id_for_label }}" class="form-check-label">
+            {{ form.es_admin.label }}
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          {{ form.es_moderador }}
+          <label for="{{ form.es_moderador.id_for_label }}" class="form-check-label">
+            {{ form.es_moderador.label }}
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
+          {{ form.contrato }}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
+          {{ form.unidades }}
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Mutual exclusión Admin vs Moderador (UX inmediata)
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'id_es_admin' && e.target.checked) {
+      const mod = document.getElementById('id_es_moderador');
+      if (mod) mod.checked = false;
+    }
+    if (e.target && e.target.id === 'id_es_moderador' && e.target.checked) {
+      const adm = document.getElementById('id_es_admin');
+      if (adm) adm.checked = false;
+    }
+  });
+
+  // Envío AJAX con confirmación integrada
+  $(document).on('submit', '#formEditarUsuario', function (e) {
+    e.preventDefault();
+    const $form = $(this);
+    const confirmText = $form.data('confirm-text') || '¿Confirmar acción?';
+
+    const doAjax = () => {
+      $.ajax({
+        url: $form.attr('action'),
+        type: $form.attr('method'),
+        data: $form.serialize(),
+        dataType: 'json',
+        success: function (data) {
+          if (data.form_is_valid || data.success) {
+            // Cerrar modal
+            $('#editar_usuario').modal('hide');
+
+            // Refrescar la tabla con HTMX
+            if (window.htmx) {
+              htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
+            }
+
+            // Ajustes visuales opcionales (si estás dentro del propio modal)
+            if (typeof data.es_admin !== 'undefined') {
+              $('#id_es_admin').prop('checked', !!data.es_admin);
+            }
+            if (typeof data.es_moderador !== 'undefined') {
+              $('#id_es_moderador').prop('checked', !!data.es_moderador);
+            }
+
+            if (window.showToast) showToast(data.message || 'Usuario actualizado', 'success');
+          } else if (data.html_form) {
+            // Reemplazar contenido del modal con el form (errores)
+            $('#editar_usuario .modal-content').html(data.html_form);
+          } else {
+            if (window.showToast) showToast('No se pudo guardar.', 'danger');
+          }
+        },
+        error: function () {
+          if (window.showToast) showToast('Error de red al guardar.', 'danger');
+        }
+      });
+    };
+
+    if (window.Swal && Swal.fire) {
+      Swal.fire({
+        title: 'Confirmar',
+        text: confirmText,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, guardar',
+        cancelButtonText: 'Cancelar'
+      }).then((r) => { if (r.isConfirmed) doAjax(); });
+    } else {
+      if (confirm(confirmText)) doAjax();
+    }
+  });
+</script>

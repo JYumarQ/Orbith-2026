@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html
+  lang="en"
+  class="light-style customizer-hide"
+  dir="ltr"
+  data-theme="theme-default"
+  data-assets-path="../assets/"
+  data-template="vertical-menu-template-free"
+>
+  <head>
+    {% load static %}
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+    />
+
+    <title>Autenticarse | ORBITH </title>
+    <link rel="icon" type="image/png" href="{% static 'img/favicon/favicon.png' %}" />
+
+
+    <meta name="description" content="" />
+
+    <!-- Icons. Uncomment required icon fonts -->
+     <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
+     <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}">
+     <link rel="stylesheet" href="{% static 'vendor/css/theme-default.css' %}">
+     
+     <!-- Core CSS -->
+     <link rel="stylesheet" href="{% static 'css/demo.css' %}">
+     
+     <!-- Vendors CSS -->
+     <link rel="stylesheet" href="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}">
+     
+     <!-- Page CSS -->
+     <!-- Page -->
+     <link rel="stylesheet" href="{% static 'vendor/css/pages/page-auth.css' %}">
+     <!-- Helpers -->
+     <link rel="stylesheet" href="{% static 'vendor/js/helpers.js' %}">
+
+    <!--! Template customizer & Theme config files MUST be included after core stylesheets and helpers.js in the <head> section -->
+    <!--? Config:  Mandatory theme config file contain global vars & default theme options, Set your preferred theme option in this file.  -->
+  </head>
+
+  <body>
+    <!-- Content -->
+
+    <div class="container-xxl">
+      <div class="authentication-wrapper authentication-basic pt-0 mt-0">
+        <div class="authentication-inner">
+          <!-- Register -->
+          <div class="card">
+            <div class="card-body pt-0">
+              <!-- Logo -->
+              <div class="app-brand justify-content-center">
+                <a href="{% url 'dashboard' %}" class="app-brand-link gap-2">
+                  <span class="app-brand-logo demo" style="width: 100%; display: flex; justify-content: center; margin-bottom: -6.5rem;">
+                    <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith Logo" style="height: 280px; width: auto; object-fit: contain;" />
+                  </span>
+
+                </a>
+              </div>
+              <!-- /Logo -->
+              <h4 class="mb-2">Bienvenido a Orbith! 👋</h4>
+              <p class="mb-4">Por favor inicie sesión para poder acceder</p>
+
+              <form id="formAuthentication" class="mb-3" method="POST">
+                {% csrf_token %}
+                <div class="mb-3">
+                  <label for="email" class="form-label">Nombre de Usuario</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="email"
+                    name="username"
+                    placeholder="Inserte su nombre de usuario"
+                    autofocus
+                  />
+                </div>
+                <div class="mb-3">
+                  <div class="d-flex justify-content-between">
+                    <label class="form-label" for="password">Contraseña</label>
+                    
+                  </div>
+                  <div class="input-group input-group-merge">
+                    <input
+                      type="password"
+                      id="password"
+                      class="form-control"
+                      name="password"
+                      placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;"
+                      aria-describedby="password"
+                    />
+                    <span class="input-group-text cursor-pointer"><i class="bx bx-hide"></i></span>
+                  </div>
+                  <a href="#">
+                      <small>¿Olvidó su contraseña?</small>
+                    </a>
+                </div>
+                <div class="mb-3">
+                  <button class="btn btn-primary d-grid w-100" type="submit">Entrar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          <!-- /Register -->
+        </div>
+      </div>
+    </div>
+
+
+  </body>
+</html>

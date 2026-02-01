@@ -1,0 +1,182 @@
+<div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="nsalariosModalLabel">Registrar Salarios</h5>
+    </div>
+    <div class="modal-body">
+      <form method="post"
+            id="formularioSalario"
+            
+            
+            action="{% url 'agregar_salarios_modal' %}">
+        {% csrf_token %}
+        <input type="hidden" name="active_tab" value="salario">
+
+        <!-- Grupo de escala -->
+        <div class="mb-3">
+          <label for="{{ form.grupo_escala.id_for_label }}" class="form-label">{{ form.grupo_escala.label }}</label>
+          {{ form.grupo_escala }}
+          {% if form.grupo_escala.errors %}
+            <div class="invalid-feedback d-block">
+              {{ form.grupo_escala.errors }}
+            </div>
+          {% endif %}
+        </div>
+
+        <!-- Checkbox: salario de cuadro -->
+        <div class="mb-3 form-check form-switch">
+          <div class="d-flex align-items-center">
+            <input
+              type="checkbox"
+              class="form-check-input"
+              name="es_para_cuadro"
+              id="toggle_es_para_cuadro"
+            >
+            <label class="form-check-label ms-2" for="toggle_es_para_cuadro">
+              Registrar como salario de cuadro
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="monto_cuadro"
+              id="monto_cuadro"
+              class="form-control w-auto ms-2"
+              placeholder="Monto"
+              disabled
+            >
+          </div>
+
+          <!-- Campo monto para cuadro (se alinea al lado del toggle) -->
+          <div class="d-flex mt-2">
+          </div>
+        </div>
+
+
+        <!-- Tabla de salarios por Rol/Tridente -->
+        {% if form.grupo_escala.field.queryset.exists %}
+          <div id="tabla_salarios" class="table-responsive">
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th class="text-center">Rol / Tridente</th>
+                  {% for tridente in tridentes %}
+                    <th class="text-center">{{ tridente.tipo }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for rol in roles %}
+                  <tr>
+                    <td><strong>{{ rol.tipo }}</strong></td>
+                    {% for tridente in tridentes %}
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          name="monto_{{ rol.id }}_{{ tridente.id }}"
+                          class="form-control salary-input"
+                          placeholder="0.00"
+                          data-row="{{ forloop.parentloop.counter0 }}"
+                          data-col="{{ forloop.counter0 }}"
+                          
+                        >
+                      </td>
+                    {% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info">
+            No hay grupos de escala disponibles para registrar salarios. Todos los grupos ya tienen salarios asignados.
+          </div>
+        {% endif %}
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Quitar el DOMContentLoaded y ejecutar esto inmediatamente.
+  // Como el script está al final, los elementos ya existen.
+
+  const form = document.getElementById('formularioSalario');
+  const modalTitle = document.getElementById('nsalariosModalLabel');
+  
+  // Si no encontramos los elementos de este modal, no hacer nada.
+  if (!form || !modalTitle) {
+    return;
+  }
+
+  // --- SOLUCIÓN 1: Bug del Doble "ENTER" ---
+  form.addEventListener('submit', function(e) {
+    // Detener el envío Y cualquier otro script de 'submit' (como el global)
+    e.preventDefault(); 
+    e.stopImmediatePropagation(); // <-- ¡MUY IMPORTANTE! Detiene el script global
+    
+    // Mensaje que quitamos del HTML
+    const msg = '¿Estás seguro de guardar un nuevo salario?'; 
+
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: msg,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Cancelar',
+      focusConfirm: true // <-- Arregla el foco del ENTER
+    }).then((result) => {
+      if (result.isConfirmed) {
+        form.submit(); // Si confirma, envía el formulario
+      }
+    });
+  });
+
+  // --- SOLUCIÓN 2: Navegación con Flechas ---
+  const inputs = form.querySelectorAll('.salary-input');
+  
+  inputs.forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      // Si no es una tecla de flecha, no hacemos nada
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        return; 
+      }
+      
+      // Prevenimos el comportamiento por defecto (cambiar el valor)
+      e.preventDefault(); // <-- ¡MUY IMPORTANTE! Detiene el cambio de valor
+
+      let row = parseInt(input.dataset.row);
+      let col = parseInt(input.dataset.col);
+
+      // Calcular la nueva posición
+      if (e.key === 'ArrowUp')    row--;
+      if (e.key === 'ArrowDown')  row++;
+      if (e.key === 'ArrowLeft')  col--;
+      if (e.key === 'ArrowRight') col++;
+
+      // Buscar el input de destino
+      const targetInput = form.querySelector(
+        `.salary-input[data-row="${row}"][data-col="${col}"]`
+      );
+
+      // Si existe, mover el foco
+      if (targetInput) {
+        targetInput.focus();
+        targetInput.select();
+      }
+    });
+  });
+
+})(); // Fin de la función autoejecutable
+</script>

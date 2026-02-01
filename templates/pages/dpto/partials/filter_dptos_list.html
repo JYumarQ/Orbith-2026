@@ -1,0 +1,23 @@
+{% if object_list %}
+    {% for d in object_list %}
+        <tr>
+            <td>{{ d.descripcion }}</td>
+            <td>{{ d.unidad_organizativa }}</td>
+            <td class="project-actions text-center">
+                <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_dpto' d.id %}')">
+                    <i class="fas fa-pencil-alt"></i>
+                </button>
+                <a class="btn btn-sm" href="{% url 'list_cargos_x_dpto' d.id %}">
+                    <i class="fas fa-list"></i>
+                </a>
+                <a class="btn btn-sm btn-eliminar" href="{% url 'del_dpto' d.id %}">
+                    <i class="fas fa-trash"></i>
+                </a>
+            </td>
+        </tr>
+    {% endfor %}
+{% else %}
+    <tr>
+        <td colspan="5">No hay registros disponibles.</td>
+    </tr>
+{% endif %}

@@ -1,0 +1,283 @@
+{% load static %}
+{% if user.is_authenticated  %}
+{% with route_name=request.resolver_match.url_name %}
+  <nav
+    class="layout-navbar container-xxl navbar navbar-expand-xl navbar-detached align-items-center"
+    id="layout-navbar"
+    style="
+      background-color: transparent !important; 
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      color: #566a7f !important;
+      
+      {% if route_name != 'dashboard' and route_name != 'index' %}
+         position: absolute; 
+         top: 0; 
+         left: 0; 
+         right: 0;
+         z-index: 1050;
+         pointer-events: none; /* Deja pasar clics al titulo de abajo */
+      {% endif %}
+    "
+    >
+    <style>
+      #layout-navbar .navbar-nav { pointer-events: auto; }
+      #layout-navbar a { color: inherit !important; } /* Asegura color gris */
+    </style>
+{% endwith %}
+
+    <div class="layout-menu-toggle navbar-nav align-items-xl-center me-3 me-xl-0 d-xl-none">
+      <a class="nav-item nav-link px-0 me-xl-4" href="javascript:void(0)">
+        <i class="fas fa-bars"></i>
+      </a>
+    </div>
+
+    <div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
+      
+      <ul class="navbar-nav flex-row align-items-center ms-auto">
+        <li class="nav-item dropdown">
+          <a 
+            class="btn btn-m position-relative" 
+            href="#" 
+            id="notificacionesDropdown" 
+            role="button" 
+            data-bs-toggle="dropdown" 
+            aria-expanded="false"
+          >
+            <i class="fas fa-bell fa-2x"></i>
+            <span 
+              id="badge-notificaciones"
+              class="position-absolute badge rounded-pill bg-danger"
+              style="display: none; top: 0.25rem; right: 0.25rem; transform: none;"
+            >0
+              <span class="visually-hidden">notificaciones</span>
+            </span>
+          </a>
+          <ul id="menu-notificaciones" class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="notificacionesDropdown" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+            <div id="lista-notificaciones">
+              <li class="text-center">Cargando notificaciones...</li>
+            </div>
+            <li><hr class="dropdown-divider"></li>
+            <li class="text-center">
+              <button 
+                class="btn btn-link" 
+                id="ver-mas-notificaciones" 
+                type="button"
+                data-bs-toggle="offcanvas" 
+                data-bs-target="#offcanvasNotificaciones"
+              >
+                Ver más
+              </button>
+            </li>
+          </ul>
+        </li>
+        <li class="nav-item navbar-dropdown dropdown-user dropdown position-relative">
+          <a
+            class="nav-link dropdown-toggle hide-arrow"
+            href="javascript:void(0);"
+            id="userDropdown"
+            role="button"
+            data-bs-toggle="dropdown" 
+            aria-expanded="false"
+          >
+            <div class="avatar avatar-online">
+              <img
+                src="{% static 'img/avatars/1.png' %}"
+                alt="Avatar"
+                class="w-px-40 h-auto rounded-circle"
+              />
+            </div>
+          </a>
+
+          <ul
+            id="menu-user"
+            class="dropdown-menu dropdown-menu-end p-0 shadow border-0 rounded-2"
+            aria-labelledby="userDropdown"
+            style="width: 250px;"
+          >
+            <li class="px-3 py-2 bg-light rounded-top">
+              <div class="d-flex align-items-center">
+                <div class="shrink-0 me-2">
+                  <div class="avatar avatar-online">
+                    <img
+                      src="{% static 'img/avatars/1.png' %}"
+                      alt="Avatar"
+                      class="w-px-40 h-auto rounded-circle"
+                    />
+                  </div>
+                </div>
+                <div class="grow"
+                  <span class="fw-semibold d-block">{{ user.username }}</span>
+                  <small class="text-muted">Administrador</small>
+                </div>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider m-0"></li>
+            
+            <li>
+              <a class="dropdown-item px-3 py-2" href="#">
+                <i class="bx bx-user me-2"></i>
+                <span class="align-middle">Perfil</span>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item px-3 py-2" href="#">
+                <i class="bx bx-cog me-2"></i>
+                <span class="align-middle">Configuración</span>
+              </a>
+            </li>
+            <li><hr class="dropdown-divider m-0"></li>
+            
+            <li>
+              <form method="POST" action="{% url 'logout' %}" id="logout-form">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item px-3 py-2">
+                  <i class="bx bx-power-off me-2"></i>
+                  <span class="align-middle">Salir</span>
+                </button>
+              </form>
+            </li>
+          </ul>
+        </li>
+        </ul> </div> </nav>
+  
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNotificaciones" aria-labelledby="offcanvasNotificacionesLabel" style="width: 400px;">
+    <div class="offcanvas-header">
+      <h5 id="offcanvasNotificacionesLabel">Todas las notificaciones</h5>
+      <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body" id="offcanvas-body-notificaciones" style="overflow-y: auto; max-height: 80vh;">
+      <p class="text-center">Cargando notificaciones...</p>
+    </div>
+  </div>
+  
+{% endif %}
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // URLs de notificaciones
+    const urlCount    = "{% url 'notificaciones_json' %}";
+    const urlUltimas  = "{% url 'ultimas_notificaciones' %}";
+    const urlTodas    = "{% url 'notificaciones_json' %}";
+
+    // Referencias DOM
+    const badge              = document.getElementById('badge-notificaciones');
+    const btnNotificaciones  = document.getElementById('notificacionesDropdown');
+    const menuNotificaciones = document.getElementById('menu-notificaciones');
+    const listaNotificaciones= document.getElementById('lista-notificaciones');
+    const verMas             = document.getElementById('ver-mas-notificaciones');
+    const offcanvasBody      = document.getElementById('offcanvas-body-notificaciones');
+
+    // (El JavaScript para 'btnUser' y 'menuUser' se elimina 
+    // porque Bootstrap ya lo maneja con 'data-bs-toggle="dropdown"')
+
+    // — Funciones de notificaciones —
+    async function actualizarBadge() {
+      try {
+        const res = await fetch(urlCount);
+        if (!res.ok) throw new Error(res.statusText);
+        const { notificaciones } = await res.json();
+        const count = notificaciones.length;
+        if (count > 0) {
+          badge.textContent = count;
+          badge.style.display = 'inline-block';
+        } else {
+          badge.style.display = 'none';
+        }
+      } catch (e) {
+        console.error('Error al actualizar badge:', e);
+      }
+    }
+
+    async function cargarUltimasNotificaciones() {
+      try {
+        const res = await fetch(urlUltimas);
+        if (!res.ok) throw new Error(res.statusText);
+        const { notificaciones } = await res.json();
+
+        listaNotificaciones.innerHTML = '';
+        if (notificaciones.length === 0) {
+          listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
+          return;
+        }
+
+        notificaciones.forEach(n => {
+          const a = document.createElement('a');
+          a.href = "#";
+          a.className = 'dropdown-item d-flex align-items-start gap-2 py-2 border-bottom';
+          a.innerHTML = `
+            <div class="grow">
+              <strong class="text-truncate d-block">${n.titulo}</strong>
+              <small class="text-muted">${n.fecha}</small>
+              <p class="mb-0 text-truncate" style="max-width: 280px;">${n.mensaje}</p>
+            </div>
+          `;
+          listaNotificaciones.appendChild(a);
+        });
+      } catch (e) {
+        console.error('Error al cargar últimas notificaciones:', e);
+      }
+    }
+
+    async function cargarTodasNotificaciones() {
+      try {
+        const res = await fetch(urlTodas);
+        if (!res.ok) throw new Error(res.statusText);
+        const { notificaciones } = await res.json();
+
+        if (notificaciones.length === 0) {
+          offcanvasBody.innerHTML = '<p class="text-center text-muted">No hay notificaciones</p>';
+          return;
+        }
+
+        offcanvasBody.innerHTML = '';
+        notificaciones.forEach(n => {
+          const div = document.createElement('div');
+          div.className = 'mb-3 border-bottom pb-2';
+          div.innerHTML = `
+            <h6>${n.titulo}</h6>
+            <small class="text-muted">${n.fecha}</small>
+            <p>${n.mensaje}</p>
+          `;
+          offcanvasBody.appendChild(div);
+        });
+      } catch (e) {
+        console.error('Error al cargar todas las notificaciones:', e);
+        offcanvasBody.innerHTML = '<p class="text-center text-danger">Error cargando notificaciones</p>';
+      }
+    }
+
+    // — Handlers de toggle —
+    // (Este código es para tu dropdown de notificaciones personalizado, 
+    // no para el acople del sidebar, así que está bien)
+    btnNotificaciones.addEventListener('click', (e) => {
+      e.preventDefault();
+      // Usamos el display 'block'/'none' manual porque no es un dropdown de Bootstrap estándar
+      if (menuNotificaciones.style.display === 'block') {
+        menuNotificaciones.style.display = 'none';
+      } else {
+        cargarUltimasNotificaciones();
+        menuNotificaciones.style.display = 'block';
+      }
+    });
+
+    verMas.addEventListener('click', () => {
+      cargarTodasNotificaciones();
+       menuNotificaciones.style.display = 'none';
+    });
+
+    // — Cerrar al hacer clic fuera —
+    document.addEventListener('click', (e) => {
+      // Notificaciones
+      if (!btnNotificaciones.contains(e.target) && !menuNotificaciones.contains(e.target)) {
+        menuNotificaciones.style.display = 'none';
+      }
+      
+      // El dropdown de Usuario ya no se maneja aquí, Bootstrap lo hace.
+    });
+
+    // — Inicialización —
+    actualizarBadge();
+    setInterval(actualizarBadge, 300000); // Corregí un error tipográfico aquí (decía 'actualarizarBadge')
+  });
+</script>

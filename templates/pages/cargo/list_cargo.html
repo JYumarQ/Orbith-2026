@@ -1,0 +1,246 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Cargos{% endblock %}
+
+{% block content %}
+
+{% load static %}
+
+  <!-- Content wrapper -->
+  <div class="content-wrapper">
+    <!-- Content -->
+
+    <div class="container-xxl grow container-p-y">
+      <h4 class="fw-bold py-3 mb-4">
+        <span class="text-muted fw-light">
+          {% if dpto %}
+            {{ dpto.unidad_organizativa.descripcion }} / {{ dpto.descripcion }} /
+          {% else %}
+            Plantilla de Cargo / 
+          {% endif %}
+        </span>Cargos</h4>
+
+      <!-- Hoverable Table rows -->
+      <div class="card">    
+        <div class="card-header d-flex justify-content-between align-items-center">
+
+          <!-- UNIDADES -->
+        <div class="mb-3 d-flex justify-content-between w-100">
+          <!-- Barra de búsqueda (ocupa todo el espacio disponible) -->
+          <div id="search_container"
+          class="nav-item d-flex align-items-center grow d-none"> <!-- Aquí usamos flex-grow-1 -->
+            <i class="fas fa-search fa-lg me-2"></i>
+            <input
+              id="search"
+              type="text"
+              name="filter_cargos"
+              class="form-control border-0 shadow-none"
+              placeholder="Buscar..."
+              aria-label="Buscar..."
+              hx-get="{% url 'search_cargos_view' %}?dpto_id={{ dpto.id }}"
+              hx-trigger="input changed delay:500ms, keyup[key=='Enter'], load"
+              hx-target="#filter_cargos_results"
+            />
+          </div>
+
+          <!-- Grupo de botones siempre a la derecha -->
+          <div class="d-flex ms-auto">
+            <button type="button" class="btn me-2" id="filter_button" onclick="show_hide_search()">
+              <i class="fas fa-filter"></i>
+            </button>
+      
+            <button type="button"
+                    class="btn btn-primary"
+                    onclick="abrir_modal_creacion('{% url 'add_cargo' %}')">
+              <i class="fas fa-plus"></i> Nuevo Cargo
+            </button>
+          </div>
+          
+        </div>
+
+        </div>
+        <div class="table-responsive text-nowrap">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Descripción</th>
+                <th>Departamento</th>
+                <th>UEB</th>
+                <th>Aprobadas</th>
+                <th>Cubiertas</th>
+                <th class="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody class="table-border-bottom-0" id="filter_cargos_results">
+              {% include 'pages/cargo/partials/filter_cargos_list.html' %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!--/ Hoverable Table rows -->
+
+
+      
+    </div>
+    <!-- / Content -->
+
+    <div class="content-backdrop fade"></div>
+  </div>
+  <!-- Content wrapper -->
+
+
+<!-- Incluir el modal del formulario -->
+<div class="modal fade" id="editar_cargo" role="dialog"></div>
+
+<div class="modal fade" id="crear_cargo" role="dialog"></div>
+
+
+{% block extra_scripts %}
+<script type="text/javascript">
+  var $ = jQuery.noConflict();
+
+  // Inicializa select2 en los selects indicados, asegurando la clase visual de Sneat
+  function initSelect2Sneat(form, modalEl) {
+    ['#id_unidad', '#id_departamento', '#id_ncargo'].forEach(function(selector) {
+      var $select = $(form).find(selector);
+      if ($select.length) {
+        if (!$select.hasClass('form-select')) {
+          $select.addClass('form-select'); // Asegura el estilo Sneat solo si no lo tiene
+        }
+        if ($select.hasClass("select2-hidden-accessible")) {
+          $select.select2('destroy');
+        }
+        $select.select2({
+          theme: 'bootstrap-5',
+          width: '100%',
+          dropdownParent: $(modalEl)
+        });
+        // Forzar evento nativo para HTMX
+        $select.off('select2:select').on('select2:select', function(e) {
+          this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+    });
+  }
+
+  function abrir_modal_edicion(url) {
+    $('#editar_cargo').load(url, function(response, status, xhr) {
+      if (status !== 'success') {
+        console.error('Error al cargar modal:', xhr.status, xhr.statusText);
+        alert('No se pudo cargar el formulario de edición.');
+        return;
+      }
+      const modalEl = document.getElementById('editar_cargo');
+      const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      bsModal.show();
+      initCargoFormLogic(modalEl);
+      if (window.htmx) {
+        htmx.process($('#cargoForm')[0]);
+      }
+      // Inicializa select2 después de htmx.process
+      const form = modalEl.querySelector('#cargoForm');
+      if (form) initSelect2Sneat(form, modalEl);
+    });
+  }
+
+  function abrir_modal_creacion(url) {
+    $('#crear_cargo').load(url, function() {
+      const modalEl = document.getElementById('crear_cargo');
+      const bsModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      bsModal.show();
+      initCargoFormLogic(modalEl);
+      if (window.htmx) {
+        htmx.process($('#cargoForm')[0]);
+      }
+      // Inicializa select2 después de htmx.process
+      const form = modalEl.querySelector('#cargoForm');
+      if (form) initSelect2Sneat(form, modalEl);
+    });
+  }
+
+  $('#crear_cargo, #editar_cargo').on('hidden.bs.modal', function () {
+    $(this).html('');
+  });
+
+  // Re-inicializa select2 cuando HTMX actualiza un select dependiente
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.target.tagName === "SELECT") {
+      var $select = $(evt.target);
+      if ($select.is('#id_unidad, #id_departamento, #id_ncargo')) {
+        $select.addClass('form-select'); // Asegura el estilo Sneat
+        if ($select.hasClass("select2-hidden-accessible")) {
+          $select.select2('destroy');
+        }
+        $select.select2({
+          theme: 'bootstrap-5',
+          width: '100%',
+          dropdownParent: $select.closest('.modal')
+        });
+        $select.off('select2:select').on('select2:select', function(e) {
+          this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+    }
+  });
+
+  // ...initCargoFormLogic y show_hide_search y resto de tu código igual...
+  function initCargoFormLogic(modalEl) {
+    const form = modalEl.querySelector('#cargoForm');
+    if (!form) return;
+    const ncargo = form.querySelector('#id_ncargo');
+    const rol = form.querySelector('#id_rol');
+    const urlCat = "{% url 'categoria_ocupacional' %}";
+    if (!ncargo || !rol) return;
+    function actualizarRol() {
+      const id = ncargo.value;
+      if (!id) {
+        rol.removeAttribute('disabled');
+        return;
+      }
+      fetch(`${urlCat}?id=${id}`, {
+        headers: { 'Accept': 'application/json' }
+      })
+      .then(resp => resp.json())
+      .then(data => {
+        const cat = data.cat_ocupacional;
+        if (cat === 'CDI' || cat === 'CEJ') {
+          rol.setAttribute('disabled', 'disabled');
+        } else {
+          rol.removeAttribute('disabled');
+        }
+      })
+      .catch(err => {
+        console.error('Error al cargar categoría ocupacional:', err);
+        rol.removeAttribute('disabled');
+      });
+    }
+    ncargo.addEventListener('change', actualizarRol);
+    actualizarRol();
+  }
+
+  function show_hide_search(){
+    $('#search_container').toggleClass('d-none');
+    if ($('#search_container').hasClass('d-none')) {
+      $('#search').val('');
+      htmx.ajax('GET', "{% url 'search_cargos_view' %}", {target:'#filter_cargos_results'});
+    } else {
+      $('#search').focus();
+    }
+  }
+
+  $(document).ready(function() {
+    $('#search').on('keydown', function(e) {
+      if (e.key === 'Escape') {
+        $(this).val('');
+        htmx.ajax('GET', "{% url 'search_cargos_view' %}", {target:'#filter_cargos_results'});
+      }
+    });
+  });
+</script>
+{% endblock extra_scripts %}
+
+
+
+{% endblock %}
+
+

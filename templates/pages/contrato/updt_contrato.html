@@ -1,0 +1,342 @@
+ <!-- Modal -->
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="contractModalLabel">Editar Datos del Contrato: {{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }} </h5>
+        </div>
+        <div class="modal-body">
+            <!-- Cargar el formulario del cargo aquí -->
+            <form method="POST"
+                class="swal-confirm"
+                data-confirm-text="¿Estás seguro de guardar los cambios del contrato?"
+                action="{% url 'updt_contrato' object.no_expediente%}" id="contratoForm">
+                {% csrf_token %}
+                
+                <div class="nav-align-top mb-4">
+                    <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
+                      <li class="nav-item">
+                        <button
+                          type="button"
+                          class="nav-link active"
+                          role="tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#navs-justified-plantilla"
+                          aria-controls="navs-justified-plantilla"
+                          aria-selected="true"
+                        >
+                          <i class="fas fa-sitemap"></i> Plantilla
+                        </button>
+                      </li>
+                      <li class="nav-item">
+                        <button
+                          type="button"
+                          class="nav-link"
+                          role="tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#navs-justified-salario"
+                          aria-controls="navs-justified-salario"
+                          aria-selected="false"
+                        >
+                          <i class="fas fa-wallet"></i> Salario
+                        </button>
+                      </li>
+                    </ul>
+                    <div class="tab-content">
+                        
+                        <!--CONTRATO-->
+                        <div class="tab-pane fade show active" id="navs-justified-plantilla" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    {{ form.no_expediente.label }}  
+                                    {{ form.no_expediente }}
+                                </div>
+                                <div class="col-md-9">
+                                    {{ form.tipo.label }}  
+                                    {{ form.tipo }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.fecha_alta.label }}  
+                                    {{ form.fecha_alta }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.duracion.label }}  
+                                    {{ form.duracion }}
+                                </div>
+                                
+                                <!--UNIDAD ORGANIZATIVA-->
+                                <div class="col-md-6">
+                                    {{ form.unidad.label }}  
+                                    {{ form.unidad }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.departamento.label }}  
+                                    {{ form.departamento }}
+                                </div>
+                                <div class="col-md-12">
+                                    {{ form.cargo.label }}  
+                                    {{ form.cargo }}
+                                </div>
+
+                                
+                                <!--CALIFICACIONES-->
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.c_formal }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.c_formal.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.c_formal_res }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.funcionario }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.funcionario.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.funcionario_res }}
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.designado }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.designado.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.designado_res }}
+                                    </div>
+                                </div>
+                                
+                                <!--CHOFER-->
+                                <div class="col-md-12">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.profesional }}
+                                                <label class="form-check-label" for="id_profesional">
+                                                    {{ form.profesional.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.jubilado_recontratado }}
+                                                <label class="form-check-label" for="id_jubilado_recontratado">
+                                                    {{ form.jubilado_recontratado.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_lic.label }}
+                                    {{ form.fecha_vence_lic }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_recal.label }}
+                                    {{ form.fecha_vence_recal }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_seg.label }}
+                                    {{ form.fecha_vence_seg }}
+                                </div>
+
+                                <div class="col-md-12">
+                                    {{ form.reg_militar.label }}  
+                                    {{ form.reg_militar }}
+                                </div>
+                                
+                            </div>
+                        </div>
+
+                        <!--SALARIO-->
+                        <div class="tab-pane fade" id="navs-justified-salario" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    {{ form.tipo_salario.label }}  
+                                    {{ form.tipo_salario }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.tridente.label }}  
+                                    {{ form.tridente }}
+                                </div>
+
+                                <div
+                                    hx-get="{% url 'cargar_salarios' %}"
+                                    hx-trigger="change from:#id_cargo, change from:#id_tridente"
+                                    hx-target="this"
+                                    hx-swap="none"
+                                    hx-include="#id_cargo, #id_tridente"
+                                    >
+                                </div>
+
+
+                                <div class="col-md-4">
+                                    <label>Salario Escala</label>
+                                    <input class="form-control" id="salarioEscala" name="salarioEscala" readonly value="{{ initial_salario_escala }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Tarifa Horaria</label>
+                                    <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ initial_tarifa_horaria }}">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Tarifa Horas Extras</label>
+                                    <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ initial_tarifa_extras }}">
+                                </div>
+
+
+                                <div class="col-md-3">
+                                    {{ form.maestria.label }}  
+                                    {{ form.maestria }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.doctorado.label }}  
+                                    {{ form.doctorado }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.instructor.label }}  
+                                    {{ form.instructor }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.cnci.label }}  
+                                    {{ form.cnci }}
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    {{ form.jornada.label }}  
+                                    {{ form.jornada }}
+                                </div>
+
+                                <!--CLA-->
+                                
+                                <div class="col-12 d-flex">
+                                    <div class="flex-fill me-2">
+                                        {{ form.cla1.label }}
+                                        {{ form.cla1 }}
+                                    </div>
+                                    <div class="flex-fill me-2">
+                                        {{ form.cla2.label }}
+                                        {{ form.cla2 }}
+                                    </div>
+                                    <div class="flex-fill me-2">
+                                        {{ form.cla3.label }}
+                                        {{ form.cla3 }}
+                                    </div>
+                                    <div class="flex-fill me-2">
+                                        {{ form.cla4.label }}
+                                        {{ form.cla4 }}
+                                    </div>
+                                    <div class="flex-fill">
+                                        {{ form.cla5.label }}
+                                        {{ form.cla5 }}
+                                    </div>
+                                </div>
+
+
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() { // Función autoejecutable para aislar variables y evitar conflictos
+        var formulario = document.getElementById('contratoForm');
+
+        // Selectores Seguros
+        var tipo = formulario.querySelector('#id_tipo');
+        var f_contrato = formulario.querySelector('#id_fecha_alta'); 
+        var duracion = formulario.querySelector('#id_duracion');
+
+        var c_formal = formulario.querySelector('#id_c_formal');
+        var c_formal_res = formulario.querySelector('#id_c_formal_res');
+
+        var funcionario = formulario.querySelector('#id_funcionario');
+        var funcionario_res = formulario.querySelector('#id_funcionario_res');
+
+        var designado = formulario.querySelector('#id_designado');
+        var designado_res = formulario.querySelector('#id_designado_res');
+        
+        var chofer = formulario.querySelector('#id_profesional');
+        // Selectores de fechas de licencia (ajustados a posibles nombres de Django)
+        var fv_lic = formulario.querySelector('#id_fecha_vence_lic') || formulario.querySelector('#id_fv_lic');
+        var fv_rec = formulario.querySelector('#id_fecha_vence_recal') || formulario.querySelector('#id_fv_rec');
+        var fv_seg = formulario.querySelector('#id_fecha_vence_seg') || formulario.querySelector('#id_fv_seg');
+
+        // --- Funciones de Lógica ---
+        
+        function actualizarEstadoContrato() {
+            if (!tipo || !f_contrato) return;
+            
+            if(tipo.value === 'IND'){
+                f_contrato.removeAttribute('disabled');
+                if(duracion) duracion.setAttribute('disabled', 'disabled');
+            } else if(['DET', 'EAD', 'MOT'].includes(tipo.value)){
+                f_contrato.removeAttribute('disabled');
+                if(duracion) duracion.removeAttribute('disabled');
+            } else {
+                f_contrato.setAttribute('disabled', 'disabled');
+                if(duracion) duracion.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        function toggleCampo(checkElement, resElement) {
+            if (!checkElement || !resElement) return;
+            if (checkElement.checked) {
+                resElement.removeAttribute('disabled');
+            } else {
+                resElement.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        function actualizarEstadoChofer() {
+            if (!chofer) return;
+            var enable = chofer.checked;
+            
+            [fv_lic, fv_rec, fv_seg].forEach(campo => {
+                if (campo) {
+                    enable ? campo.removeAttribute('disabled') : campo.setAttribute('disabled', 'disabled');
+                }
+            });
+        }
+
+        // --- Asignación de Eventos ---
+
+        if (tipo) tipo.addEventListener('change', actualizarEstadoContrato);
+        
+        if (c_formal) c_formal.addEventListener('change', function() { toggleCampo(c_formal, c_formal_res); });
+        
+        if (funcionario) funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionario_res); });
+        
+        if (designado) designado.addEventListener('change', function() { toggleCampo(designado, designado_res); });
+        
+        if (chofer) chofer.addEventListener('change', actualizarEstadoChofer);
+
+        // --- EJECUCIÓN INICIAL (CRÍTICO) ---
+        // Esto asegura que al abrir el modal, los campos estén correctos según los datos guardados
+        actualizarEstadoContrato();
+        toggleCampo(c_formal, c_formal_res);
+        toggleCampo(funcionario, funcionario_res);
+        toggleCampo(designado, designado_res);
+        actualizarEstadoChofer();
+
+    })();
+</script>

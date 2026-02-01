@@ -1,0 +1,167 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Solicitudes{% endblock %}
+
+{% block content %}
+
+{% load static %}
+
+  <!-- Content wrapper -->
+  <div class="content-wrapper">
+    <!-- Content -->
+
+    <div class="container-xxl flex-grow-1 container-p-y">
+      <h4 class="fw-bold py-3 mb-4">
+        <span class="text-muted fw-light">
+            Solicitudes /
+        </span>Cargos</h4>
+
+      <!-- Hoverable Table rows -->
+      <div class="card">    
+        <div class="card-header d-flex justify-content-between align-items-center">
+
+          <!-- UNIDADES -->
+        <div class="mb-3 d-flex justify-content-between w-100">
+          <!-- Barra de búsqueda (ocupa todo el espacio disponible) -->
+          <div id="search_container"
+          class="nav-item d-flex align-items-center flex-grow-1 d-none"> <!-- Aquí usamos flex-grow-1 -->
+            <i class="fas fa-search fa-lg me-2"></i>
+            <input
+              id="search"
+              type="text"
+              name="filter_cargos"
+
+            />
+          </div>
+
+          <!-- Grupo de botones siempre a la derecha -->
+          <div class="d-flex ms-auto">
+            <button type="button" class="btn me-2" id="filter_button" onclick="">
+              <i class="fas fa-filter"></i>
+            </button>
+      
+            <button type="button"
+                    class="btn btn-primary"
+                    onclick="abrir_modal_creacion('{% url 'add_solicitud' %}')">
+              <i class="fas fa-plus"></i> Nueva Solicitud
+            </button>
+          </div>
+          
+        </div>
+
+        </div>
+        <div class="table-responsive text-nowrap">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Cargo Origen</th>
+                <th>Tipo</th>
+                <th>Cargo Destino</th>
+                <th>Estado</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody class="table-border-bottom-0" id="filter_cargos_results">
+              {% include 'pages/solicitudes/cargo/partials/filter_solicitud_list.html' %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!--/ Hoverable Table rows -->
+
+
+      
+    </div>
+    <!-- / Content -->
+
+    <div class="content-backdrop fade"></div>
+  </div>
+  <!-- Content wrapper -->
+
+
+<!-- Incluir el modal del formulario -->
+<div class="modal fade" id="editar_sol" role="dialog"></div>
+
+<div class="modal fade" id="crear_sol" role="dialog"></div>
+
+
+{% block extra_scripts %}
+<script type="text/javascript">
+    var $ = jQuery.noConflict();
+
+    // Inicializa select2 en los selects indicados, asegurando la clase visual de Sneat
+  function initSelect2Sneat(form, modalEl) {
+    ['#id_unidad', '#id_departamento', '#id_cargo_origen'].forEach(function(selector) {
+      var $select = $(form).find(selector);
+      if ($select.length) {
+        if (!$select.hasClass('form-select')) {
+          $select.addClass('form-select'); // Asegura el estilo Sneat solo si no lo tiene
+        }
+        if ($select.hasClass("select2-hidden-accessible")) {
+          $select.select2('destroy');
+        }
+        $select.select2({
+          theme: 'bootstrap-5',
+          width: '100%',
+          dropdownParent: $(modalEl)
+        });
+        // Forzar evento nativo para HTMX
+        $select.off('select2:select').on('select2:select', function(e) {
+          this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      }
+    });
+  }
+
+    function abrir_modal_edicion(url){
+        $('#editar_sol').load(url, function(){
+            $(this).modal('show');
+        })
+    }
+
+    function abrir_modal_creacion(url) {
+      $('#crear_sol').load(url, function() {
+        const modalEl = document.getElementById('crear_sol');  // <--- aquí lo definimos
+        const bsModal = new bootstrap.Modal(modalEl);
+        bsModal.show();
+
+        const form = modalEl.querySelector('#solicitudForm');
+        if (window.htmx && form) {
+          htmx.process(form);
+        }
+        if (form) initSelect2Sneat(form, modalEl);
+
+        // --- sincroniza y filtra el select de nuevo_cargo ---
+        modalEl.addEventListener('shown.bs.modal', function () {
+          const cargoOrigen = form ? form.querySelector('#id_cargo_origen') : null;
+          const nuevoCargo  = form ? form.querySelector('#id_nuevo_cargo') : null;
+          if (!cargoOrigen || !nuevoCargo) return;
+
+          cargoOrigen.addEventListener('change', function () {
+            const origenValue = this.value;
+
+            // Copiar todas las opciones
+            nuevoCargo.innerHTML = this.innerHTML;
+
+            // Eliminar la opción que coincide con el origen
+            nuevoCargo.querySelectorAll('option').forEach(opt => {
+              if (opt.value === origenValue) opt.remove();
+            });
+
+            // Resetear selección
+            nuevoCargo.value = "";
+          });
+
+          // Disparar el evento una vez al abrir
+          cargoOrigen.dispatchEvent(new Event('change'));
+        }, { once: true });
+      });
+    }
+
+
+</script>
+{% endblock extra_scripts %}
+
+{% endblock %}
+
+

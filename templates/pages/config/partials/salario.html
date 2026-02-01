@@ -1,0 +1,83 @@
+<!-- SALARIO -->
+<div class="tab-pane fade {% if active_tab == 'salario' %}show active{% endif %}" id="navs-justified-salario" role="tabpanel">
+    <input type="hidden" name="active_tab" value="salario" id="salario-tab-input">
+    <div class="d-flex justify-content-end mb-3">
+      <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'agregar_salarios_modal' %}')">
+        <i class="fas fa-plus"></i> Nuevo Salario
+      </button>
+    </div>
+
+
+    <div class="row g-3">
+      <div class="card-body">
+        <div class="table-responsive text-nowrap">
+          <table class="table table-bordered" style="table-layout: fixed; width: 100%;">
+            <thead>
+              <tr>
+                <th rowspan="3" class="align-middle text-center">Grupo<br>Escala</th>
+                <th rowspan="3" class="align-middle text-center">Cuadro</th>
+                <th colspan="3" class="text-center">DECISORIOS</th>
+                <th colspan="3" class="text-center">FUNDAMENTALES</th>
+                <th colspan="3" class="text-center">APOYO</th>
+              </tr>
+              <tr>
+                <th colspan="3" class="text-center">TRIDENTE</th>
+                <th colspan="3" class="text-center">TRIDENTE</th>
+                <th colspan="3" class="text-center">TRIDENTE</th>
+              </tr>
+              <tr>
+                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fila in salarios %}
+                <tr>
+                  <td class="text-center fw-bold">{{ fila.nivel }}</td>
+                  <!-- Salario de Cuadro -->
+                  <td class="editable-cell text-center"
+                      {% if fila.cuadro %}
+                        data-id="{{ fila.cuadro.id }}"
+                        data-valor="{{ fila.cuadro.monto }}"
+                      {% endif %}
+                      title="Haz clic para editar">
+                    {% if fila.cuadro %}
+                      {{ fila.cuadro.monto|floatformat:2 }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <!-- Resto de celdas (decisorios, fundamentales, apoyo) igual que antes -->
+                  {% for s in fila.decisorios %}
+                    <td class="editable-cell text-center"
+                        data-id="{{ s.id }}"
+                        data-valor="{{ s.monto }}"
+                        title="Haz clic para editar">
+                      {{ s.monto|floatformat:2 }}
+                    </td>
+                  {% endfor %}
+                  {% for s in fila.fundamentales %}
+                    <td class="editable-cell text-center"
+                        data-id="{{ s.id }}"
+                        data-valor="{{ s.monto }}"
+                        title="Haz clic para editar">
+                      {{ s.monto|floatformat:2 }}
+                    </td>
+                  {% endfor %}
+                  {% for s in fila.apoyo %}
+                    <td class="editable-cell text-center"
+                        data-id="{{ s.id }}"
+                        data-valor="{{ s.monto }}"
+                        title="Haz clic para editar">
+                      {{ s.monto|floatformat:2 }}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+</div>

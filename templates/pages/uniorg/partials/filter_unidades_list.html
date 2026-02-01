@@ -1,0 +1,37 @@
+{% if object_list %} 
+    {% for u in object_list %}
+        <tr>
+        <td>
+            <a>{{ u.grupo_nomina }}</a>
+        </td>
+        <td>
+            <a>{{ u.descripcion }}</a>
+        </td>
+        <td class="text-center">
+            <a>{{ u.get_tipo_display}}</a>
+        </td>
+        
+        <td class="project-actions text-center">
+            <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_uniorg' u.grupo_nomina %}')">
+            <i class="fas fa-pencil-alt"></i>
+            </button>
+            
+            <a class="btn btn-sm" href="{% url 'list_dpto_x_unidad' u.grupo_nomina %}">
+            <i class="fas fa-list"></i>
+            </a>
+            <a
+            class="btn btn-sm btn-eliminar"
+            href="{% url 'del_uniorg' u.grupo_nomina %}"
+            >
+            <i class="fas fa-trash"></i>
+            </a>
+
+        </td>
+        </tr>
+    {% endfor %} 
+    {% else %}
+    <tr>
+    <td colspan="5">No hay registros disponibles.</td>
+    </tr>
+    {% endif %}
+    

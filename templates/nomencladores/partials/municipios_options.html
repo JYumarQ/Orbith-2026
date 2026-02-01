@@ -1,0 +1,36 @@
+<select name="municipio"
+        id="{{ elem_id|default:'id_municipio' }}"
+        
+        {% if is_filter %}
+            onfocus="mostrarNombresCompletos(this)"
+            onblur="mostrarSigla(this)"
+            onchange="mostrarSigla(this); triggerSearch()"
+        {% else %}
+            /* Si es formulario normal, aquí SÍ queremos que se vea bonito con Bootstrap */
+            class="form-select" 
+            required
+        {% endif %}
+        
+        {% if not is_filter and not municipios %}disabled{% endif %}
+        {% if is_filter and not municipios_list %}disabled{% endif %}>
+  
+  {% if is_filter %}
+      <option value="">Todos</option>
+      {% for m in municipios_list %}
+        <option value="{{ m.id }}" 
+                data-sigla="{{ m.sigla }}" 
+                data-nombre="{{ m.nombre }}">
+            {{ m.nombre }}
+        </option>
+      {% endfor %}
+
+  {% else %}
+      <option value="">Selec. municipio</option>
+      {% for m in municipios %}
+        <option value="{{ m.id }}" {% if m.id|stringformat:'s' == request.GET.municipio %}selected{% endif %}>
+          {{ m.nombre }}
+        </option>
+      {% endfor %}
+  {% endif %}
+
+</select>

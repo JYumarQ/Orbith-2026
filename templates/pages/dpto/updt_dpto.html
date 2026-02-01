@@ -1,0 +1,27 @@
+ <!-- Modal -->
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="dptoModalLabel">Editar Departamento</h5>
+        </div>
+        <div class="modal-body">
+            <!-- Cargar el formulario del cargo aquí -->
+            <form method="POST"
+                class="swal-confirm"
+                id="dptoForm"
+                data-confirm-text="¿Estás seguro de guardar los cambios del departamento?"
+                action="{% url 'updt_dpto' object.id%}">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+  
+  

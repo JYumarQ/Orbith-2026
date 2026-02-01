@@ -1,0 +1,117 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Cargos{% endblock %}
+
+{% block content %}
+
+{% load static %}
+
+  <!-- Content wrapper -->
+  <div class="content-wrapper">
+    <!-- Content -->
+
+    <div class="container-xxl grow container-p-y">
+      <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Cargos /</span> Lista de Cargos</h4>
+
+      <!-- Hoverable Table rows -->
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Cargos</h5>
+          <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'add_ncargo' %}')">
+            <i class="fas fa-plus"></i> Nuevo Cargo
+          </button>
+        </div>
+        <div class="table-responsive text-nowrap">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Descripción</th>
+                <th class="text-center">Cat. Ocup.</th>
+                <th class="text-center">Gpo. Escala</th>
+                <th class="text-center">Salario</th>
+                <th class="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody class="table-border-bottom-0">
+              {% if object_list %} 
+            {% for c in object_list %}
+            <tr>
+              <td>
+                <a>
+                  {{ c.descripcion }}
+                </a>
+                <br />
+              </td>
+              <td class="text-center">
+                <a> {{ c.get_cat_ocupacional_display }} </a>
+                <br />
+              </td>
+              <td class="text-center">
+                <a> {{ c.grupo_escala }} </a>
+                <br />
+              </td>
+              <td class="text-center">
+                <a> {{ c.salario_basico }} </a>
+                <br />
+              </td>
+              <td class="project-actions text-center">
+                <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_ncargo' c.id %}')"
+                >
+                  <i class="fas fa-pencil-alt"></i>
+                </button>
+                <a
+                  class="btn btn-sm btn-eliminar"
+                  href="{% url 'del_ncargo' c.id %}"
+                >
+                  <i class="fas fa-trash"></i>
+                </a>
+
+              </td>
+            </tr>
+            {% endfor %} 
+            {% else %}
+            <tr>
+              <td colspan="5">No hay registros disponibles.</td>
+            </tr>
+            {% endif %}
+              
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!--/ Hoverable Table rows -->
+
+      
+    </div>
+    <!-- / Content -->
+
+    <div class="content-backdrop fade"></div>
+  </div>
+  <!-- Content wrapper -->
+
+
+<!-- Incluir el modal del formulario -->
+<div class="modal fade" id="editar_ncargo" role="dialog"></div>
+
+<div class="modal fade" id="crear_ncargo" role="dialog"></div>
+
+
+{% block extra_scripts %}
+  <script type="text/javascript">
+    var $ = jQuery.noConflict();
+    function abrir_modal_edicion(url){
+      $('#editar_ncargo').load(url, function(){
+        $(this).modal('show');
+      })
+    }
+    function abrir_modal_creacion(url){
+      $('#crear_ncargo').load(url, function(){
+        $(this).modal('show');
+      })
+    }
+  </script>
+{% endblock extra_scripts %}
+
+{% endblock %}
+
+

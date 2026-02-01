@@ -1,0 +1,196 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Movimientos de Nómina{% endblock %}
+
+{% block content %}
+{% load static %}
+
+<style>
+    /* 1. Estado por DEFECTO: Amarillo (Pendiente) */
+    .row-pendiente td {
+        background-color: rgba(255, 171, 0, 0.05) !important; /* Fondo amarillo suave */
+        color: #ffab00 !important; /* Texto amarillo oscuro legible */
+        border-color: rgba(255, 171, 0, 0.2) !important;
+    }
+
+    /* 2. Estado SELECCIONADO: Azul (Activo) - Igual que en Contratos */
+    /* Usamos !important para asegurar que el azul pise al amarillo al seleccionar */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #ffab00 !important;
+        font-weight: 600;
+        border-color: rgba(105, 108, 255, 0.2) !important;
+    }
+    
+    .cursor-pointer { cursor: pointer; }
+
+    /* Control de la barra de herramientas */
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+        transition: opacity 0.3s ease;
+    }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+        <h4 class="fw-bold py-3 mb-4">
+            <span class="text-muted fw-light">Contratos /</span> Movimientos de Nómina
+        </h4>
+
+        <div class="card">
+            
+            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h5 class="mb-0">Solicitudes Pendientes</h5>
+
+                <div id="movimiento-toolbar" class="d-flex gap-2 toolbar-disabled">
+                    <button type="button" class="btn btn-primary" id="btn-confirmar-mov" 
+                        onclick="ejecutarMovimiento()" 
+                        title="Confirmar y Ejecutar Movimiento">
+                        <i class="bx bx-sync me-1"></i> Confirmar Movimiento
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive text-nowrap">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>No. Exp.</th>
+                            <th>Nombre</th>
+                            <th>Cargo Actual</th>
+                            <th>Unidad / Dpto</th>
+                            </tr>
+                    </thead>
+                    <tbody class="table-border-bottom-0">
+                        {% for c in object_list %}
+                        <tr class="cursor-pointer row-pendiente fila-movimiento"
+                            onclick="seleccionarFila(this)"
+                            data-url-movimiento="{% url 'movimiento_contrato' c.no_expediente %}"
+                        >
+                            <td><strong>{{ c.no_expediente }}</strong></td>
+                            
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}</span>
+                                    <small>{{ c.aspirante.doc_identidad }}</small>
+                                </div>
+                            </td>
+                            
+                            <td>
+                                {% if c.cargo %}
+                                    {{ c.cargo.ncargo.descripcion }}
+                                {% else %}
+                                    <span class="text-muted">Sin cargo</span>
+                                {% endif %}
+                            </td>
+                            
+                            <td>
+                                {% if c.cargo %}
+                                    {{ c.cargo.departamento.unidad_organizativa.descripcion }}<br>
+                                    <small>{{ c.cargo.departamento.descripcion }}</small>
+                                {% else %}
+                                    ---
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5">
+                                <div class="text-muted">
+                                    <i class="bx bx-inbox fs-1 mb-3"></i>
+                                    <p>No hay movimientos pendientes.</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if is_paginated %}
+            <div class="card-footer py-3">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center m-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
+                        {% endif %}
+                        <li class="page-item disabled"><span class="page-link">Pág {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
+                        {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editar_empl" role="dialog"></div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    var $ = jQuery.noConflict();
+
+    // 1. LÓGICA DE SELECCIÓN (Estilo Contratos)
+    function seleccionarFila(fila) {
+        // A. Limpiar selección previa (quita el azul de otros)
+        document.querySelectorAll('.fila-movimiento').forEach(f => f.classList.remove('table-active-row'));
+        
+        // B. Activar fila actual (pone el azul, que sobrescribe al amarillo por CSS !important)
+        fila.classList.add('table-active-row');
+
+        // C. Activar Toolbar y pasar datos al botón
+        const toolbar = document.getElementById('movimiento-toolbar');
+        toolbar.classList.remove('toolbar-disabled');
+        toolbar.classList.add('toolbar-active');
+        
+        const btn = document.getElementById('btn-confirmar-mov');
+        // Le pasamos la URL guardada en el data-attribute de la fila
+        btn.setAttribute('data-url-target', fila.dataset.urlMovimiento);
+    }
+
+    // 2. LÓGICA DE CLIC FUERA (Deseleccionar)
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.fila-movimiento') && !e.target.closest('#movimiento-toolbar')) {
+            document.querySelectorAll('.fila-movimiento').forEach(f => f.classList.remove('table-active-row'));
+            const toolbar = document.getElementById('movimiento-toolbar');
+            if(toolbar){
+                toolbar.classList.add('toolbar-disabled');
+                toolbar.classList.remove('toolbar-active');
+            }
+        }
+    });
+
+    // 3. EJECUTAR ACCIÓN (Botón del Toolbar)
+    function ejecutarMovimiento(){
+        const btn = document.getElementById('btn-confirmar-mov');
+        const url = btn.getAttribute('data-url-target');
+
+        if(!url) return;
+
+        // Abrir Modal (Reutilizamos lógica existente)
+        $('#editar_empl').load(url, function(){
+            $(this).modal('show');
+            if (window.htmx) htmx.process($('#movimientoForm')[0]); 
+        });
+    }
+
+    // 4. FEEDBACK VISUAL
+    document.body.addEventListener('showMessage', function(evt){
+        Swal.fire({
+            toast: true, position: 'top-end', icon: 'success',
+            title: evt.detail.value, showConfirmButton: false, timer: 2000
+        });
+        setTimeout(() => { location.reload(); }, 1500);
+    });
+</script>
+{% endblock %}

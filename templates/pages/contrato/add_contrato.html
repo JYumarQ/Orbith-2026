@@ -1,0 +1,462 @@
+<!-- Modal -->
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="contractModalLabel">Registrar Contrato:  {{aspirante.nombre}} {{aspirante.papellido}} {{aspirante.sapellido}}</h5>
+        </div>
+        <div class="modal-body">
+            <form method="POST"
+                class="swal-confirm"
+                data-confirm-text="¿Estás seguro de guardar un nuevo contrato?"
+                action="{% url 'add_contrato' aspirante.doc_identidad %}" id="contratoForm">                
+                {% csrf_token %}
+                
+                
+                <div class="nav-align-top mb-4">
+                    <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
+                      <li class="nav-item">
+                        <button
+                          type="button"
+                          class="nav-link active"
+                          role="tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#navs-justified-plantilla"
+                          aria-controls="navs-justified-plantilla"
+                          aria-selected="true"
+                        >
+                          <i class="fas fa-sitemap"></i> Plantilla
+                        </button>
+                      </li>
+                      <li class="nav-item">
+                        <button
+                          type="button"
+                          class="nav-link"
+                          role="tab"
+                          data-bs-toggle="tab"
+                          data-bs-target="#navs-justified-salario"
+                          aria-controls="navs-justified-salario"
+                          aria-selected="false"
+                        >
+                          <i class="fas fa-wallet"></i> Salario
+                        </button>
+                      </li>
+                    </ul>
+                    <div class="tab-content">
+                        
+                        <!--CONTRATO-->
+                        <div class="tab-pane fade show active" id="navs-justified-plantilla" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    {{ form.no_expediente.label }}  
+                                    {{ form.no_expediente }}
+
+                                    <small id="error_exp_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                                        El EXPEDIENTE LABORAL ya existe
+                                    </small>
+
+                                </div>
+                                <div class="col-md-9">
+                                    {{ form.tipo.label }}  
+                                    {{ form.tipo }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.fecha_alta.label }}  
+                                    {{ form.fecha_alta }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.duracion.label }}  
+                                    {{ form.duracion }}
+                                </div>
+                                <!--UNIDAD ORGANIZATIVA-->
+                                <div class="col-md-6">
+                                    {{ form.unidad.label }}  
+                                    {{ form.unidad }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.departamento.label }}  
+                                    {{ form.departamento }}
+                                </div>
+                                <div class="col-md-12">
+                                    {{ form.cargo.label }}  
+                                    {{ form.cargo }}
+                                    
+                                    <small id="error_plaza_agotada" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                                        </small>
+                                </div>
+
+                                
+                                <!--CALIFICACIONES-->
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.c_formal }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.c_formal.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.c_formal_res }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.funcionario }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.funcionario.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.funcionario_res }}
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.designado }}
+                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                            {{ form.designado.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.designado_res }}
+                                    </div>
+                                </div>
+                                
+                                <!--CHOFER-->
+                                <div class="col-md-12">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.profesional }}
+                                                <label class="form-check-label" for="id_profesional">
+                                                    {{ form.profesional.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.jubilado_recontratado }}
+                                                <label class="form-check-label" for="id_jubilado_recontratado">
+                                                    {{ form.jubilado_recontratado.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_lic.label }}
+                                    {{ form.fecha_vence_lic }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_recal.label }}
+                                    {{ form.fecha_vence_recal }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_seg.label }}
+                                    {{ form.fecha_vence_seg }}
+                                </div>
+
+                                <div class="col-md-12">
+                                    {{ form.reg_militar.label }}  
+                                    {{ form.reg_militar }}
+                                </div>
+                                
+                            </div>
+                        </div>
+
+                        <!--SALARIO-->
+                        <div class="tab-pane fade" id="navs-justified-salario" role="tabpanel">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    {{ form.tipo_salario.label }}  
+                                    {{ form.tipo_salario }}
+                                </div>
+                                <div class="col-md-6">
+                                    {{ form.tridente.label }}  
+                                    {{ form.tridente }}
+                                </div>
+
+                                <div
+                                    hx-get="{% url 'cargar_salarios' %}"
+                                    hx-trigger="change from:#id_cargo, change from:#id_tridente"
+                                    hx-target="this"
+                                    hx-swap="none"
+                                    hx-include="#id_cargo, #id_tridente"
+                                    >
+                                </div>
+
+
+
+                                <div class="col-md-4">
+                                    <label>Salario Escala</label>
+                                    <input class="form-control" id="salarioEscala" name="salarioEscala" readonly>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Tarifa Horaria</label>
+                                    <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly>
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Tarifa Horas Extras</label>
+                                    <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly>
+                                </div>
+
+
+                                <div class="col-md-3">
+                                    {{ form.maestria.label }}  
+                                    {{ form.maestria }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.doctorado.label }}  
+                                    {{ form.doctorado }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.instructor.label }}  
+                                    {{ form.instructor }}
+                                </div>
+                                <div class="col-md-3">
+                                    {{ form.cnci.label }}  
+                                    {{ form.cnci }}
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    {{ form.jornada.label }}  
+                                    {{ form.jornada }}
+                                </div>
+
+                                
+
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() { // Función autoejecutable
+        var formulario = document.getElementById('contratoForm');
+
+        // --- 1. Selectores Existentes ---
+        var tipo = formulario.querySelector('#id_tipo');
+        var f_contrato = formulario.querySelector('#id_fecha_alta'); 
+        var duracion = formulario.querySelector('#id_duracion');
+
+        var c_formal = formulario.querySelector('#id_c_formal');
+        var c_formal_res = formulario.querySelector('#id_c_formal_res');
+
+        var funcionario = formulario.querySelector('#id_funcionario');
+        var funcionario_res = formulario.querySelector('#id_funcionario_res');
+
+        var designado = formulario.querySelector('#id_designado');
+        var designado_res = formulario.querySelector('#id_designado_res');
+        
+        var chofer = formulario.querySelector('#id_profesional');
+        var fv_lic = formulario.querySelector('#id_fecha_vence_lic') || formulario.querySelector('#id_fv_lic');
+        var fv_rec = formulario.querySelector('#id_fecha_vence_recal') || formulario.querySelector('#id_fv_rec');
+        var fv_seg = formulario.querySelector('#id_fecha_vence_seg') || formulario.querySelector('#id_fv_seg');
+
+        // --- 2. NUEVOS Selectores para Validación de Expediente ---
+        var expInput = formulario.querySelector('#id_no_expediente');
+        var timerExp = null;
+
+        // Selector para validación de plazas
+        var cargoInput = formulario.querySelector('#id_cargo');
+        var errPlaza = document.getElementById('error_plaza_agotada');
+
+        // --- 3. Funciones de Lógica del Negocio (Existentes) ---
+        function actualizarEstadoContrato() {
+            if (!tipo || !f_contrato) return;
+            
+            if(tipo.value === 'IND'){
+                f_contrato.removeAttribute('disabled');
+                if(duracion) duracion.setAttribute('disabled', 'disabled');
+            } else if(['DET', 'EAD', 'MOT'].includes(tipo.value)){
+                f_contrato.removeAttribute('disabled');
+                if(duracion) duracion.removeAttribute('disabled');
+            } else {
+                f_contrato.setAttribute('disabled', 'disabled');
+                if(duracion) duracion.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        function toggleCampo(checkElement, resElement) {
+            if (!checkElement || !resElement) return;
+            if (checkElement.checked) {
+                resElement.removeAttribute('disabled');
+            } else {
+                resElement.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        function actualizarEstadoChofer() {
+            if (!chofer) return;
+            var enable = chofer.checked;
+            
+            [fv_lic, fv_rec, fv_seg].forEach(campo => {
+                if (campo) {
+                    enable ? campo.removeAttribute('disabled') : campo.setAttribute('disabled', 'disabled');
+                }
+            });
+        }
+
+        // --- 4. NUEVA LÓGICA: Validación de Expediente ---
+        if (expInput) {
+            expInput.addEventListener('input', function() {
+                var val = this.value;
+                var errExist = document.getElementById('error_exp_exist');
+                
+                // Limpiar estado visual al escribir
+                if(errExist) errExist.classList.add('d-none');
+                expInput.classList.remove('is-invalid');
+
+                if (val.length < 1) return;
+
+                clearTimeout(timerExp);
+                timerExp = setTimeout(function() {
+                    // Consulta al servidor
+                    fetch("{% url 'validar_datos_contrato' %}?no_expediente=" + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.expediente_existe) {
+                            if(errExist) errExist.classList.remove('d-none');
+                            expInput.classList.add('is-invalid');
+                        } else {
+                            expInput.classList.remove('is-invalid');
+                            expInput.classList.add('is-valid');
+                        }
+                    })
+                    .catch(err => console.error('Error validando Expediente:', err));
+                }, 300);
+            });
+        }
+
+
+        // --- 4.1 NUEVA LÓGICA: Validación de Plazas del Cargo ---
+        $(document).on('change', '#id_cargo', function() {
+            var cargoId = $(this).val(); // Este SIEMPRE debe ir aquí adentro
+            
+            // Refrescamos selectores por si HTMX actualizó el DOM
+            cargoInput = document.getElementById('id_cargo');
+            errPlaza = document.getElementById('error_plaza_agotada');
+
+            // Limpieza de estado previo
+            if(errPlaza) {
+                errPlaza.classList.add('d-none');
+                errPlaza.textContent = ""; 
+            }
+            if(cargoInput) cargoInput.classList.remove('is-invalid', 'is-valid');
+
+            if (!cargoId) return;
+
+            // Llamada al servidor
+            fetch("{% url 'validar_plazas_cargo' %}?cargo_id=" + cargoId)
+            .then(response => response.json())
+            .then(data => {
+                if (data.plazas_agotadas) {
+                    if(errPlaza) {
+                        errPlaza.textContent = data.mensaje;
+                        errPlaza.classList.remove('d-none');
+                    }
+                    if(cargoInput) cargoInput.classList.add('is-invalid');
+                } else {
+                    if(cargoInput) {
+                        cargoInput.classList.remove('is-invalid');
+                        cargoInput.classList.add('is-valid');
+                    }
+                }
+            })
+            .catch(err => console.error('Error validando Plazas:', err));
+        });
+
+
+        // --- 5. NUEVO: Envío AJAX (Evita Crash + Validación Local) ---
+        $(formulario).on('submit', function(e) {
+            e.preventDefault(); 
+            e.stopImmediatePropagation();
+
+            // A) Validación Local (Expediente Duplicado)
+            // Si ya hay error en rojo, no dejamos pasar.
+            var errEl = document.getElementById('error_exp_exist');
+            if (errEl && !errEl.classList.contains('d-none')) {
+                Swal.fire({ 
+                    title: 'Atención', 
+                    text: 'El EXPEDIENTE LABORAL ya existe', 
+                    icon: 'warning',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
+                });
+                return;
+            }
+
+            // B) Envío al Servidor (Manejo de "Plaza Ocupada")
+            $.ajax({
+                url: formulario.action,
+                type: formulario.method,
+                data: $(formulario).serialize(),
+                dataType: 'json',
+                success: function(data) {
+                    if (data.form_is_valid) {
+                        // ÉXITO: Cierra y recarga
+                        $('#crear_empl').modal('hide'); 
+                        window.location.href = data.success_url || "{% url 'list_aspir' %}";
+                    } else {
+                        // ERROR DEL SERVIDOR (Ej: Plaza ocupada)
+                        
+                        // 1. Mostrar Alerta si el servidor mandó mensaje específico
+                        if (data.error_popup) {
+                            Swal.fire({
+                                title: 'No se puede proceder',
+                                text: data.error_popup,
+                                icon: 'error',
+                                confirmButtonText: 'Entendido',
+                                customClass: { confirmButton: 'btn btn-primary' },
+                                buttonsStyling: false
+                            });
+                        }
+
+                        // 2. Repintar formulario (para mostrar campos en rojo)
+                        var modalParent = $(formulario).closest('.modal');
+                        var modalContent = modalParent.find('.modal-content');
+                        var newContent = $(data.html_form).find('.modal-content').html() || data.html_form;
+                        modalContent.html(newContent);
+                        
+                        // Reactivar HTMX si es necesario
+                        if (window.htmx) htmx.process(modalContent[0]);
+                    }
+                },
+                error: function() {
+                    Swal.fire({ title: 'Error', text: 'Error de conexión con el servidor.', icon: 'error' });
+                }
+            });
+        });
+
+        // --- 6. Asignación de Eventos Normales ---
+        if (tipo) tipo.addEventListener('change', actualizarEstadoContrato);
+        
+        if (c_formal) c_formal.addEventListener('change', function() { toggleCampo(c_formal, c_formal_res); });
+        
+        if (funcionario) funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionario_res); });
+        
+        if (designado) designado.addEventListener('change', function() { toggleCampo(designado, designado_res); });
+        
+        if (chofer) chofer.addEventListener('change', actualizarEstadoChofer);
+
+        // --- 7. Inicialización (Para que se vea bien al abrir) ---
+        actualizarEstadoContrato();
+        toggleCampo(c_formal, c_formal_res);
+        toggleCampo(funcionario, funcionario_res);
+        toggleCampo(designado, designado_res);
+        actualizarEstadoChofer();
+        if (window.htmx) htmx.process(formulario);
+    })();
+</script>

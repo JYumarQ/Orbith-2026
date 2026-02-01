@@ -1,0 +1,41 @@
+{% if usuarios %} 
+    {% for u in usuarios %}
+        <tr>
+            <td class="text-center">
+                {% if u.contrato %}
+                    <a>{{ u.contrato.aspirante.nombre }} {{ u.contrato.aspirante.papellido }} {{ u.contrato.aspirante.sapellido }}</a>
+                {% else %}
+                    <a>-</a>
+                {% endif %}
+                <br />
+            </td>
+            <td class="text-center">
+                <a>{{ u.username }}</a>
+                <br />
+            </td>
+            <td class="text-center">
+                {% if u.contrato and u.contrato.cargo %}
+                    <a>{{ u.contrato.cargo.departamento.descripcion }}</a>
+                {% else %}
+                    <a>-</a>
+                {% endif %}
+                <br />
+                <small>{{ u.contrato.cargo.departamento.unidad_organizativa.descripcion }}</small>
+            </td>
+            <td class="project-actions text-center">
+                <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_usuario' u.id %}')">
+                    <i class="fas fa-user-pen"></i>
+                </button>
+                <button class="btn btn-sm" onclick="abrir_modal_cambiar_password('{% url 'cambiar_password' u.id %}')">
+                    <i class="fas fa-key"></i>
+                </button>
+
+                <a class="btn btn-sm btn-eliminar" href="{% url 'del_usuario' u.id %}">
+                    <i class="fas fa-trash"></i>
+                </a>
+            </td>
+        </tr>
+    {% endfor %} 
+{% else %}
+    <tr><td colspan="5">No hay registros disponibles.</td></tr>
+{% endif %}

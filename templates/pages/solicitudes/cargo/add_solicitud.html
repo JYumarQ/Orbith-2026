@@ -1,0 +1,54 @@
+ <!-- Modal -->
+ <div class="modal-dialog" role="document">
+  <div class="modal-content">
+      <div class="modal-header">
+          <h5 class="modal-title" id="solicitudModalLabel">Registrar Nuevo Cargo</h5>
+      </div>
+      <div class="modal-body">
+          <form method="POST"
+              class="swal-confirm"
+              action="{% url 'add_solicitud' %}"
+              id="solicitudForm"
+              data-confirm-text="¿Estás seguro de crear esta solicitud?"
+              >
+              {% csrf_token %}
+              <div class="row g-3">
+                  <div class="col-md-6">
+                        {{ form.unidad.label_tag }}
+                        {{ form.unidad }}
+                  </div>
+                  <div class="col-md-6">
+                        {{ form.departamento.label_tag }}
+                        {{ form.departamento }}
+                  </div>
+                  <div class="col-md-6">
+                        {{ form.cargo_origen.label_tag }}
+                        {{ form.cargo_origen }}
+                  </div>
+                  <div class="col-md-6">
+                        {{ form.nuevo_cargo.label_tag }}
+                        {{ form.nuevo_cargo }}
+                  </div>
+                  <div class="col-md-6">
+                        {{ form.tipo.label_tag }}
+                        {{ form.tipo }}
+                  </div>
+                  <div class="col-md-6">
+                        {{ form.fecha_vigor.label_tag }}
+                        {{ form.fecha_vigor }}
+                  </div>
+                  <div class="col-md">
+                        {{ form.motivo.label_tag }}
+                        {{ form.motivo }}
+                  </div>
+              </div>
+                  <br>
+              <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="submit" class="btn btn-primary">Guardar</button>
+              </div>
+          </form>
+      </div>
+  </div>
+</div>
+

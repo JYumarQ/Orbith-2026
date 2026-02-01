@@ -1,0 +1,140 @@
+<!--PARAMETROS GENERALES-->
+<div class="tab-pane fade {% if active_tab == 'parametros' %}show active{% endif %}" id="navs-justified-parametros" role="tabpanel">
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="alert alert-primary d-flex align-items-center" role="alert">
+        <i class="fas fa-info-circle me-2"></i>
+        <div>Configure los parámetros generales de su empresa u organización.</div>
+      </div>
+    </div>
+  </div>
+
+  <form method="post"
+    class="swal-confirm"
+    data-confirm-text="¿Estás seguro de guardar los cambios?"
+    enctype="multipart/form-data"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="active_tab" value="parametros">
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.nombre_empresa.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-building"></i></span>
+              {{form.nombre_empresa}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.org_superior.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-sitemap"></i></span>
+              {{form.org_superior}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.rama.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-code-branch"></i></span>
+              {{form.rama}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.unidad_presup.label_tag}}
+            <div class="d-flex align-items-center form-check form-switch mt-2">
+              {{form.unidad_presup}}
+              <span class="ms-2">Empresarial / Presupuestado</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.moneda_local.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-money-bill-wave"></i></span>
+              {{form.moneda_local}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.periodo.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+              {{form.periodo}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.fondo_tiempo_calc_tarif.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-clock"></i></span>
+              {{form.fondo_tiempo_calc_tarif}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.correo.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+              {{form.correo}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.telefono.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-phone"></i></span>
+              {{form.telefono}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.direccion.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
+              {{form.direccion}}
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="form-group mb-3">
+            {{form.logo.label_tag}}
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-image"></i></span>
+              {{form.logo}}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mt-4">
+        <div class="col-12 d-flex justify-content-center">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save me-2"></i>Guardar
+          </button>
+        </div>
+      </div>
+  </form>
+</div>

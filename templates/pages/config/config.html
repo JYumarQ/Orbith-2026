@@ -1,0 +1,325 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Configuración{% endblock %}
+
+{% block content %}
+
+{% load static %}
+
+  <!-- Content wrapper -->
+  <div class="content-wrapper">
+    <!-- Content -->
+
+    <div class="container-xxl flex-grow-1 container-p-y">
+      <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Configuración /</span> Parámetros Generales</h4>
+
+      <!-- Hoverable Table rows -->
+      <div class="card">
+        <div class="card-body"> 
+          <div class="nav-align-top mb-4">
+            <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
+              <li class="nav-item">
+                <button
+                  type="button"
+                  class="nav-link {% if active_tab == 'parametros' %}active{% endif %}"
+                  role="tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#navs-justified-parametros"
+                  aria-controls="navs-justified-parametros"
+                  aria-selected="{% if active_tab == 'parametros' %}true{% else %}false{% endif %}"
+                  id="tab-parametros"
+                >
+                  <i class="fas fa-cog"></i> Parámetros Generales
+                </button>
+              </li>
+              <li class="nav-item">
+                <button
+                  type="button"
+                  class="nav-link {% if active_tab == 'salario' %}active{% endif %}"
+                  role="tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#navs-justified-salario"
+                  aria-controls="navs-justified-salario"
+                  aria-selected="{% if active_tab == 'salario' %}true{% else %}false{% endif %}"
+                  id="tab-salario"
+                >
+                  <i class="fas fa-wallet"></i> Salario
+                </button>
+              </li>
+              <li class="nav-item">
+                <button
+                  type="button"
+                  class="nav-link {% if active_tab == 'nomencladores' %}active{% endif %}"
+                  role="tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#navs-justified-nomencladores"
+                  aria-controls="navs-justified-nomencladores"
+                  aria-selected="{% if active_tab == 'nomencladores' %}true{% else %}false{% endif %}"
+                  id="tab-nomencladores"
+                >
+                  <i class="fas fa-tag"></i> Nomencladores
+                </button>
+              </li>
+            </ul>
+            <div class="tab-content">
+                <!--PARAMETROS GENERALES-->
+                {% include 'pages/config/partials/parametros_generales.html' %}
+
+                <!-- SALARIO -->
+                {% include 'pages/config/partials/salario.html' %}
+
+              <!--NOMENCLADORES-->
+              {% include 'pages/config/partials/nomencladores.html' %}
+
+            </div>
+          </div>
+        </div>
+      </div>
+      <!--/ Hoverable Table rows -->
+
+      
+    </div>
+    <!-- / Content -->
+
+    <div class="content-backdrop fade"></div>
+  </div>
+  <!-- Content wrapper -->
+
+<!-- abajo de todo, en tu base o en ésta plantilla -->
+<div
+  class="modal fade" id="crear_salario" tabindex="-1" aria-labelledby="nsalariosModalLabel" aria-hidden="true"></div>
+
+
+  
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Inicializar la pestaña activa según el parámetro de URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeTab = urlParams.get('tab') || 'parametros';
+    
+    // Activar la pestaña correspondiente si no está activa
+    const tabToActivate = document.getElementById('tab-' + activeTab);
+    if (tabToActivate && !tabToActivate.classList.contains('active')) {
+      // Crear y disparar un evento de clic en la pestaña
+      const clickEvent = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      });
+      tabToActivate.dispatchEvent(clickEvent);
+    }
+    
+    // Manejar cambios de pestaña para actualizar el campo hidden
+    document.querySelectorAll('.nav-link').forEach(tab => {
+      tab.addEventListener('click', function() {
+        // Obtener el ID de la pestaña (sin el prefijo 'tab-')
+        const tabId = this.id.replace('tab-', '');
+        
+        // Actualizar todos los campos hidden active_tab en los formularios
+        document.querySelectorAll('input[name="active_tab"]').forEach(input => {
+          input.value = tabId;
+        });
+      });
+    });
+    
+    document.querySelectorAll(".editable-cell").forEach(cell => {
+      cell.addEventListener("click", function () {
+        if (this.querySelector("input")) return;
+  
+        const oldValue = this.dataset.valor;
+        const salarioId = this.dataset.id;
+        const input = document.createElement("input");
+  
+        input.type = "number";
+        input.step = "0.01";
+        input.min = 0;
+        input.value = oldValue;
+        input.style.width = "100%";
+        input.classList.add("form-control", "form-control-sm");
+  
+        this.innerHTML = "";
+        this.appendChild(input);
+        input.focus();
+  
+        input.addEventListener("blur", () => guardarNuevoValor(input, salarioId, this));
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") input.blur();
+          if (e.key === "Escape") this.innerHTML = parseFloat(oldValue).toFixed(2);
+        });
+        
+        // Validar entrada mientras el usuario escribe
+        input.addEventListener("input", function(e) {
+          const value = e.target.value;
+          if (value === "" || isNaN(parseFloat(value))) {
+            input.classList.add("is-invalid");
+          } else {
+            input.classList.remove("is-invalid");
+          }
+        });
+      });
+    });
+  
+    async function guardarNuevoValor(input, id, cell) {
+      const nuevoValor = input.value;
+      const oldValue = cell.dataset.valor;
+  
+      // Validar que sea un número válido
+      if (nuevoValor === "" || isNaN(parseFloat(nuevoValor))) {
+        cell.innerHTML = parseFloat(oldValue).toFixed(2);
+        cell.classList.add("table-danger");
+        
+        // Mostrar mensaje de error en la celda
+        const errorMsg = document.createElement("div");
+        errorMsg.classList.add("invalid-feedback", "d-block");
+        //errorMsg.textContent = "Valor inválido";
+        cell.appendChild(errorMsg);
+        
+        setTimeout(() => {
+          cell.classList.remove("table-danger");
+          cell.innerHTML = parseFloat(oldValue).toFixed(2);
+        }, 1500);
+        return;
+      }
+  
+      if (nuevoValor === oldValue) {
+        cell.innerHTML = parseFloat(oldValue).toFixed(2);
+        return;
+      }
+  
+      try {
+        const response = await fetch("{% url 'actualizar_salario' %}", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify({ id: id, monto: nuevoValor })
+        });
+  
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+  
+        cell.dataset.valor = nuevoValor;
+        cell.innerHTML = parseFloat(nuevoValor).toFixed(2);
+        cell.classList.add("table-success");
+        setTimeout(() => cell.classList.remove("table-success"), 1000);
+        
+        // Si hay una URL de redirección en la respuesta, actualizar la URL sin recargar la página
+        if (result.redirect_url) {
+          history.pushState({}, '', result.redirect_url);
+        }
+      } catch (err) {
+        cell.innerHTML = parseFloat(oldValue).toFixed(2);
+        cell.classList.add("table-danger");
+        
+        // Mostrar mensaje de error en la celda
+        const errorMsg = document.createElement("div");
+        errorMsg.classList.add("invalid-feedback", "d-block");
+        errorMsg.textContent = "Error: " + err.message;
+        cell.appendChild(errorMsg);
+        
+        setTimeout(() => {
+          cell.classList.remove("table-danger");
+          cell.innerHTML = parseFloat(oldValue).toFixed(2);
+        }, 1500);
+      }
+    }
+  
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== "") {
+        const cookies = document.cookie.split(";");
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === name + "=") {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+  });
+</script>
+
+{% block extra_scripts %}
+  <script>
+    var $ = jQuery.noConflict();
+
+    function abrir_modal_creacion(url) {
+      // Añadir parámetro de pestaña activa a la URL
+      const separator = url.includes('?') ? '&' : '?';
+      const urlWithTab = url + separator + 'active_tab=salario';
+      
+      // Cargar el contenido del modal dinámicamente
+      $('#crear_salario').load(urlWithTab, function () {
+        var modalEl = document.getElementById('crear_salario');
+        var bsModal = new bootstrap.Modal(modalEl, {
+          keyboard: false
+        });
+        bsModal.show();
+        
+        // Asegurarse de que el formulario dentro del modal tenga el campo hidden active_tab
+        const form = modalEl.querySelector('form');
+        if (form) {
+          let activeTabInput = form.querySelector('input[name="active_tab"]');
+          if (!activeTabInput) {
+            activeTabInput = document.createElement('input');
+            activeTabInput.type = 'hidden';
+            activeTabInput.name = 'active_tab';
+            activeTabInput.value = 'salario';
+            form.appendChild(activeTabInput);
+          }
+        }
+
+      // Aquí comienza la lógica para habilitar/deshabilitar el campo de monto para cuadro
+      const toggle = document.getElementById('toggle_es_para_cuadro');
+      const inputMonto = document.getElementById('monto_cuadro');
+      const tabla = document.getElementById('tabla_salarios');
+      const inputsTabla = tabla ? Array.from(tabla.querySelectorAll('input')) : [];
+
+      if (!toggle || !inputMonto || !tabla) {
+        console.log('Algún elemento no se ha encontrado.');
+        return;
+      }
+
+      // Función para actualizar la vista dependiendo del toggle
+      function actualizarVista() {
+        if (toggle.checked) {
+          // Si el toggle está activado, deshabilitamos la tabla y habilitamos el campo monto
+          inputMonto.disabled = false;
+          inputMonto.required = true;
+          if(inputMonto.value <= 0)
+            inputMonto.required = true
+          else
+            inputMonto.required = false
+          //inputsTabla.forEach(i => { i.disabled = true; i.required = false; }); // Deshabilitar los inputs de la tabla
+        } else {
+          // Si el toggle está desactivado, mostramos la tabla y deshabilitamos el campo monto
+          inputMonto.disabled = true;
+          inputMonto.required = false;
+          //inputsTabla.forEach(i => { i.disabled = false; i.required = true; }); // Habilitar los inputs de la tabla
+        }
+      }
+
+      // Cuando cambia el estado del toggle, actualizamos la vista
+      toggle.addEventListener('change', function() {
+        actualizarVista();
+      });
+
+      // Usamos el evento 'shown.bs.modal' para garantizar que el modal esté completamente cargado
+      $(modalEl).on('shown.bs.modal', function () {
+        actualizarVista(); // Llamada inicial para establecer el estado correcto de los elementos
+      });
+    });
+  }
+
+</script>
+
+{% endblock extra_scripts %}
+
+
+{% endblock %}
+
+

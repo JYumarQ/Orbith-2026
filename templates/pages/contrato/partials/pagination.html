@@ -1,0 +1,64 @@
+<div class="row align-items-center mt-3">
+    <div class="col text-start text-muted">
+        <small>
+            {% if page_obj.paginator.count > 0 %}
+                Mostrando <b>{{ page_obj.start_index }}</b> - <b>{{ page_obj.end_index }}</b> de <b>{{ page_obj.paginator.count }}</b> contratos
+            {% else %}
+                0 contratos
+            {% endif %}
+        </small>
+    </div>
+
+    <div class="col-auto">
+        {% if current_page_size == '8' and page_obj.has_next %}
+            <button class="btn btn-sm btn-label-secondary"
+                    type="button"
+                    hx-get="{% url search_url %}?page_size=10"
+                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                    hx-target="#filter_contratos_results">
+                Ver más <i class="fas fa-chevron-down ms-1"></i>
+            </button>
+        {% endif %}
+
+        {% if current_page_size == '10' %}
+            <button class="btn btn-sm btn-label-secondary"
+                    type="button"
+                    hx-get="{% url search_url %}?page_size=8"
+                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                    hx-target="#filter_contratos_results">
+                Ver menos <i class="fas fa-chevron-up ms-1"></i>
+            </button>
+        {% endif %}
+
+        {% if page_obj.paginator.count > 8 %} <nav aria-label="Navegación">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <button class="page-link" 
+                                    hx-get="{% url search_url %}?page={{ page_obj.previous_page_number }}&page_size={{ current_page_size }}"
+                                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                                    hx-target="#filter_contratos_results">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                        </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_obj.number }}</span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <button class="page-link" 
+                                    hx-get="{% url search_url %}?page={{ page_obj.next_page_number }}&page_size={{ current_page_size }}"
+                                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                                    hx-target="#filter_contratos_results">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    </div>
+</div>

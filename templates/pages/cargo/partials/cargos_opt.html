@@ -1,0 +1,4 @@
+<option value="">---------</option>
+{% for cargo in cargos %}
+    <option value="{{ cargo.id }}">{{ cargo.ncargo.descripcion }}</option>
+{% endfor %}

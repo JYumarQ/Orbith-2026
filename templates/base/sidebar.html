@@ -1,0 +1,111 @@
+{% load static %}
+
+<aside id="layout-menu" class="layout-menu menu-vertical menu bg-menu-theme">
+    <div class="app-brand demo" style="justify-content: center; display: flex; margin-bottom: 32px;">
+      <a href="{% url 'dashboard' %}" class="app-brand-link" style="display: flex; align-items: center; justify-content: center; width: 100%;">
+        <span class="app-brand-logo demo" style="width: 100%; display: flex; justify-content: center;">
+          <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith Logo" style="height: 220px; width: auto; max-width: 420px; object-fit: contain; display: block; margin: 0 auto;" />
+        </span>
+      </a>
+
+      <a href="javascript:void(0);" class="layout-menu-toggle text-large ms-auto d-none d-xl-block">
+        <i class="fas fa-angle-left fs-4 d-block m-auto"></i>
+      </a>
+
+    </div>
+
+    <div class="menu-inner-shadow"></div>
+
+    <ul class="menu-inner py-1">
+      <li class="menu-item {%if request.resolver_match.url_name == 'dashboard' %} active {% endif %}">
+        <a href="{% url 'dashboard' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-home-circle"></i>
+          <div data-i18n="Analytics">Dashboard</div>
+        </a>
+      </li>
+
+      {% if user.es_admin or user.es_moderador or user.is_staff %}
+          <li class="menu-header small text-uppercase">
+            <span class="menu-header-text">Configuración</span>
+          </li>
+
+          <li class="menu-item {% if request.resolver_match.url_name == 'parametros' %} active {% endif %} ">
+            <a href="{% url 'parametros' %}" class="menu-link">
+              <i class="menu-icon tf-icons bx bx-cog"></i>
+              <div data-i18n="Basic">Parámetros Generales</div>
+            </a>
+          </li>
+
+          <li class="menu-item {% if request.resolver_match.url_name == 'list_usuarios' %} active {% endif %} ">
+            <a href="{% url 'list_usuarios' %}" class="menu-link">
+              <i class="menu-icon tf-icons bx bx-user"></i>
+              <div data-i18n="Basic">Usuarios</div>
+            </a>
+          </li>
+
+          <li class="menu-item {% if request.resolver_match.url_name == 'list_cargos' or request.resolver_match.url_name == 'list_dptos' or request.resolver_match.url_name == 'list_uniorg' or request.resolver_match.url_name == 'list_dpto_x_unidad' or request.resolver_match.url_name == 'list_cargos_x_dpto'%} active open {% endif %} ">
+            <a href="#" class="menu-link menu-toggle">
+              <i class="menu-icon tf-icons bx bx-briefcase"></i>
+              <div data-i18n="Account Settings">Plantilla de Cargos</div>
+            </a>
+            <ul class="menu-sub">
+              <li class="menu-item {% if request.resolver_match.url_name == 'list_uniorg' %} active {% endif %} ">
+                <a href="{% url 'list_uniorg' %}" class="menu-link">
+                  <div data-i18n="Account">Unidad Organizativa</div>
+                </a>
+              </li>
+              <li class="menu-item {% if request.resolver_match.url_name == 'list_dptos' or request.resolver_match.url_name == 'list_dpto_x_unidad'%} active {% endif %}">
+                <a href="{% url 'list_dptos' %}" class="menu-link">
+                  <div data-i18n="Notifications">Departamentos</div>
+                </a>
+              </li>
+              <li class="menu-item {% if request.resolver_match.url_name == 'list_cargos' or request.resolver_match.url_name == 'list_cargos_x_dpto'%} active {% endif %} ">
+                <a href="{% url 'list_cargos' %}" class="menu-link">
+                  <div data-i18n="Account">Cargos</div>
+                </a>
+              </li>
+            </ul>
+          </li>
+      {% endif %}
+
+      <li class="menu-header small text-uppercase">
+        <span class="menu-header-text">Plantilla</span>
+      </li>
+      <li class="menu-item {% if request.resolver_match.url_name == 'list_aspir' %} active {% endif %} ">
+        <a href="{% url 'list_aspir' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-user-plus"></i>
+          <div data-i18n="Basic">Aspirante</div>
+        </a>
+      </li>
+      <li class="menu-item {% if request.resolver_match.url_name == 'list_contrato' %} active {% endif %} ">
+        <a href="{% url 'list_contrato' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-file"></i>
+          <div data-i18n="Basic">Contrato</div>
+        </a>
+      </li>
+
+      <li class="menu-item {% if request.resolver_match.url_name == 'list_movimientos' %} active {% endif %} ">
+        <a href="{% url 'list_movimientos' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-sync"></i> <div data-i18n="Basic">Mov. Nómina</div>
+        </a>
+      </li>
+
+      <li class="menu-item {% if request.resolver_match.url_name == 'list_baja' %} active {% endif %} ">
+        <a href="{% url 'list_baja' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-user-minus"></i>
+          <div data-i18n="Basic">Bajas</div>
+        </a>
+      </li>
+
+      <li class="menu-header small text-uppercase">
+        <span class="menu-header-text">Solicitudes</span>
+      </li>
+      <li class="menu-item {% if request.resolver_match.url_name == 'list_solicitudes' %} active {% endif %} ">
+        <a href="{% url 'list_solicitudes' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-clipboard"></i>
+          <div data-i18n="Basic">Solicitudes</div>
+        </a>
+      </li>
+
+    </ul>
+  </aside>

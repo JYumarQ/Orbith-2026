@@ -1,0 +1,300 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Usuarios{% endblock %}
+
+{% block content %}
+
+{% load static %}
+
+<!-- Content wrapper -->
+<div class="content-wrapper">
+  <!-- Content -->
+
+  <div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Usuarios /</span> Lista de Usuarios</h4>
+
+    <!-- Hoverable Table rows -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+
+        <!-- Barra de búsqueda -->
+        <div id="search_container"
+          class="nav-item d-flex align-items-center flex-grow-1 d-none">
+          <i class="fas fa-search fa-lg me-2"></i>
+          <input
+            id="search"
+            type="text"
+            name="filter_usuario"
+            class="form-control border-0 shadow-none"
+            placeholder="Buscar..."
+            aria-label="Buscar..."
+            hx-get="{% url 'search_usuarios' %}"
+            hx-trigger="input changed delay:500ms, keyup[key=='Enter'], load"
+            hx-target="#filter_usuarios_results"
+          />
+        </div>
+
+        <!-- Grupo de botones a la derecha -->
+        <div class="d-flex ms-auto">
+          <button type="button" class="btn me-2" id="filter_button" onclick="show_hide_search()">
+            <i class="fas fa-filter"></i>
+          </button>
+
+          <button type="button"
+                class="btn btn-primary"
+                onclick="abrir_modal_creacion('{% url 'add_usuario' %}')">
+            <i class="fas fa-plus"></i> Nuevo Usuario
+          </button>
+        </div>
+
+      </div>
+      <div class="table-responsive text-nowrap">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th class="text-center">Nombre</th>
+              <th class="text-center">Usuario</th>
+              <th class="text-center">Departamento</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="table-border-bottom-0" id="filter_usuarios_results">
+            {% include 'pages/usuarios/partials/filter_usuarios_list.html' %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!--/ Hoverable Table rows -->
+
+  </div>
+  <!-- / Content -->
+
+  <div class="content-backdrop fade"></div>
+</div>
+<!-- Content wrapper -->
+
+<!-- Modales vacíos para cargar -->
+<div class="modal fade" id="editar_usuario" role="dialog"></div>
+<div class="modal fade" id="crear_usuario" role="dialog"></div>
+<div class="modal fade" id="cambiar_password" tabindex="-1" role="dialog" aria-hidden="true"></div>
+
+
+{% block extra_scripts %}
+<script type="text/javascript">
+  var $ = jQuery.noConflict();
+
+  // ---------------------------------------------------
+  // 1) Función genérica para mostrar los toasts
+  // ---------------------------------------------------
+function showToast(message, type = 'success') {
+  const toastContainer = document.getElementById('toastContainer');
+  // Limpiar cualquier toast anterior
+  toastContainer.innerHTML = '';
+
+  // Crear el contenedor del toast SIN 'fade' ni 'show'
+  const toastEl = document.createElement('div');
+  toastEl.className = `bs-toast toast bg-${type}`;
+  toastEl.setAttribute('role', 'alert');
+  toastEl.setAttribute('aria-live', 'assertive');
+  toastEl.setAttribute('aria-atomic', 'true');
+
+  // Obtener hora actual en formato HH:mm
+  const now = new Date();
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Rellenar el HTML igual al de Cargos
+  toastEl.innerHTML = `
+    <div class="toast-header">
+      <i class="fas fa-bell me-2"></i>
+      <div class="me-auto fw-semibold">Notificación</div>
+      <small>${time}</small>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body">
+      ${message}
+    </div>
+  `;
+
+  // Añadir al contenedor y dejar que Bootstrap agregue la clase 'show'
+  toastContainer.appendChild(toastEl);
+
+  // Inicializar y mostrar
+  new bootstrap.Toast(toastEl, {
+    autohide: true,
+    delay: 3000
+  }).show();
+}
+
+
+
+  // ---------------------------------------------------
+  // 2) Funciones de apertura de modales y búsqueda
+  // ---------------------------------------------------
+  function abrir_modal_edicion(url) {
+    $('#editar_usuario').load(url, function() {
+      $(this).modal('show');
+    });
+  }
+  function abrir_modal_creacion(url) {
+    $('#crear_usuario').load(url, function() {
+      $(this).modal('show');
+    });
+  }
+  function abrir_modal_cambiar_password(url) {
+  $('#cambiar_password').load(url, function() {
+    $(this).modal('show');
+  });
+}
+
+  function show_hide_search() {
+    $('#search_container').toggleClass('d-none');
+    if ($('#search_container').hasClass('d-none')) {
+      $('#search').val('');
+      htmx.ajax('GET', "{% url 'search_usuarios' %}", {
+        target: '#filter_usuarios_results'
+      });
+    } else {
+      $('#search').focus();
+    }
+  }
+
+  // ---------------------------------------------------
+  // 3) Evaluar fortaleza de contraseña
+  // ---------------------------------------------------
+  function evaluarFortaleza(password) {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[\W]/.test(password)) strength++;
+    switch (strength) {
+      case 0:
+      case 1: return { text: "Débil", color: "red" };
+      case 2:
+      case 3: return { text: "Media", color: "orange" };
+      case 4: return { text: "Fuerte", color: "green" };
+    }
+  }
+
+  // ---------------------------------------------------
+  // 4) Document ready: búsquedas, validaciones y envío
+  // ---------------------------------------------------
+  $(document).ready(function() {
+    // ESC limpia búsqueda
+    $('#search').on('keydown', function(e) {
+      if (e.key === 'Escape') {
+        $(this).val('');
+        htmx.ajax('GET', "{% url 'search_usuarios' %}", {
+          target: '#filter_usuarios_results'
+        });
+      }
+    });
+
+    // Validación AJAX del username
+    $(document).on('blur', '#id_username', function() {
+      const username = $(this).val();
+      if (username.length < 3) return;
+      $.ajax({
+        url: "{% url 'validar_username' %}",
+        data: { 'username': username },
+        dataType: 'json',
+        success: function(data) {
+          $('#username-error').remove();
+          if (data.exists) {
+            $('#id_username').after(
+              '<div id="username-error" class="text-danger small mt-1">' +
+              'El usuario ya existe.' +
+              '</div>'
+            );
+          }
+        }
+      });
+    });
+
+    // Indicador de fortaleza de contraseña
+    $(document).on('input', '#id_password1', function() {
+      const resultado = evaluarFortaleza($(this).val());
+      if ($('#password-strength').length === 0) {
+        $('<div id="password-strength" class="small mt-1"></div>')
+          .insertAfter('#id_password1');
+      }
+      $('#password-strength')
+        .text("Fortaleza: " + resultado.text)
+        .css("color", resultado.color);
+    });
+
+    // Envío AJAX del formulario con SweetAlert y toast
+    $(document).on('submit', '#userForm', function(e) {
+      e.preventDefault();
+      const $form = $(this);
+
+      // 1) Validar contraseñas
+      const p1 = $('#id_password1').val(),
+            p2 = $('#id_password2').val();
+      if (p1 !== p2) {
+        return Swal.fire({
+          title: 'Contraseñas no coinciden',
+          text: 'Por favor, asegúrate de que ambas contraseñas sean iguales.',
+          icon: 'warning',
+          buttonsStyling: false,
+          customClass: { confirmButton: 'btn btn-primary' }
+        });
+      }
+
+      // 2) Confirmación con SweetAlert
+      Swal.fire({
+        title: '¿Estás seguro?',
+        text: $form.data('confirm-text') || '¿Deseas guardar este usuario?',
+        icon: 'question',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+        buttonsStyling: false,
+        customClass: {
+          confirmButton: 'btn btn-primary ms-2',
+          cancelButton: 'btn btn-secondary'
+        }
+      }).then((result) => {
+        if (!result.isConfirmed) return;
+
+        // 3) Envío AJAX final
+        $.ajax({
+          url: $form.attr('action'),
+          type: $form.attr('method'),
+          data: $form.serialize(),
+          dataType: 'json',
+          success: function(data) {
+            if (data.form_is_valid) {
+              $('#crear_usuario').modal('hide');
+
+              // Mostrar toast con el mensaje del servidor
+              if (data.message) {
+                showToast(data.message, 'success');
+              }
+
+              // Actualizar tabla de usuarios
+              htmx.ajax('GET', "{% url 'search_usuarios' %}", {
+                target: '#filter_usuarios_results'
+              });
+            } else {
+              $('#crear_usuario .modal-content').html(data.html_form);
+            }
+          },
+          error: function() {
+            showToast('Hubo un problema al enviar el formulario.', 'danger');
+          }
+        });
+      });
+    });
+  });
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+{% endblock %}

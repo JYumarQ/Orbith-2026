@@ -1,0 +1,377 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Contratos{% endblock %}
+
+{% block content %}
+{% load static %}
+
+<style>
+    /* Estilos visuales */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .cursor-pointer { cursor: pointer; }
+    .dropdown-header-custom {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #a1acb8;
+        font-weight: 700;
+        padding: 0.5rem 0.5rem 0.2rem 0.5rem;
+        border-bottom: 1px solid #eceef1;
+        margin-bottom: 0.5rem;
+    }
+
+    .row-movimiento-pendiente td {
+        color: #ffab00 !important; /* Texto amarillo oscuro/naranja legible */
+        border-top: 1px solid #ffab00 !important;
+        border-bottom: 1px solid #ffab00 !important;
+        background-color: rgba(255, 171, 0, 0.05); /* Fondo muy sutil */
+    }
+    /* Borde izquierdo más grueso para destacar */
+    .row-movimiento-pendiente td:first-child {
+        border-left: 3px solid #ffab00 !important;
+    }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+        <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Contratos /</span> Lista de Contratos</h4>
+
+        <div class="card">
+            
+            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                
+                <div id="contrato-toolbar" class="d-flex gap-2 toolbar-disabled">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-edit-contrato" 
+                        onclick="abrir_modal_edicion(this.dataset.url)" title="Editar Contrato">
+                        <i class="fas fa-file-signature"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" id="btn-edit-personal" 
+                        onclick="abrir_modal_aspir(this.dataset.url)" title="Editar Datos Personales">
+                        <i class="fas fa-user-edit"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" id="btn-movimiento" 
+                        onclick="confirmarSolicitudMovimiento()" title="Enviar a Mov. Nomina">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <a class="btn btn-sm btn-outline-secondary" id="btn-pdf" href="#" target="_blank" title="Exportar Contrato">
+                        <i class="fas fa-file-pdf"></i>
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="btn-baja" 
+                        hx-post="" 
+                        hx-confirm="¿Está seguro de dar de baja este contrato?" 
+                        hx-swap="none"
+                        hx-on:htmx:after-request="if(event.detail.successful) htmx.trigger('#search', 'searchFilters')"
+                        title="Dar de Baja">
+                        <i class="fas fa-user-minus"></i>
+                    </button>
+                </div>
+
+                <div id="search_container" class="ms-3 grow" style="max-width: 300px;">
+                    <div class="input-group input-group-merge">
+                        <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+                        <input id="search" type="text" class="form-control border-0 shadow-none" 
+                            placeholder="Buscar..." 
+                            name="filter_contrato"
+                            hx-get="{% url 'search_contrato' %}" 
+                            hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
+                            hx-target="#filter_contratos_results"
+                            hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado">
+                    </div>
+                </div>
+
+                <div class="d-flex ms-auto gap-2">
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                            <i class="fas fa-filter"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+                            <div class="dropdown-header-custom"><i class="fas fa-map-marker-alt me-1"></i> Ubicación</div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Provincia</label>
+                                <select id="f_provincia" name="provincia" class="form-select form-select-sm"
+                                    hx-get="{% url 'cargar_municipios' %}?for_filter=1" hx-target="#f_municipio_container" hx-trigger="change"
+                                    onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    {% for p in provincias_list %}
+                                        <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-2" id="f_municipio_container">
+                                <label class="small text-muted">Municipio</label>
+                                <select id="f_municipio" name="municipio" class="form-select form-select-sm" disabled>
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+
+                            <div class="dropdown-header-custom mt-3"><i class="fas fa-user me-1"></i> Datos Personales</div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small text-muted">Sexo</label>
+                                    <select id="f_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        <option value="M">M</option>
+                                        <option value="F">F</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted">Raza</label>
+                                    <select id="f_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todas</option>
+                                        <option value="BL">Blanca</option>
+                                        <option value="NE">Negra</option>
+                                        <option value="ME">Mestiza</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="dropdown-header-custom mt-3"><i class="fas fa-graduation-cap me-1"></i> Formación</div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Nivel Educ.</label>
+                                <select id="f_nivel" name="nivel_educ" class="form-select form-select-sm"
+                                    hx-get="{% url 'cargar_esp' %}?for_filter=1" hx-target="#f_especialidad" hx-trigger="change"
+                                    onchange="triggerSearch()">
+                                    <option value="">Todos</option>
+                                    {% for k, v in niveles_educ %}
+                                        <option value="{{ k }}">{{ v }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Especialidad</label>
+                                <select id="f_especialidad" name="especialidad" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Grado Científico</label>
+                                <select id="f_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todos</option>
+                                    <option value="MC">Master</option>
+                                    <option value="DC">Doctor</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="{% url 'list_aspir' %}" id="btn-nuevo-contrato" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nuevo</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="table-responsive text-nowrap">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>No. Exp.</th>
+                            <th>Nombre</th>
+                            <th>Área</th>
+                            <th>Cat. Ocup.</th>
+                            <th>G. Escala</th>
+                            <th class="text-center">Rol</th>
+                            <th>Tridente</th>
+                            <th>Salario</th>
+                            <th></th> 
+                        </tr>
+                    </thead>
+                    <tbody class="table-border-bottom-0" id="filter_contratos_results">
+                        {% include 'pages/contrato/partials/filter_contratos_list.html' %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="table-pagination-footer" class="px-4 pb-3 border-top">
+                {% include 'pages/contrato/partials/pagination.html' %}
+            </div>
+
+        </div> 
+      </div> 
+      
+      <div class="content-backdrop fade"></div>
+</div>
+
+<div class="modal fade" id="editar_empl" role="dialog"></div>
+<div class="modal fade" id="crear_empl" role="dialog"></div>
+<div class="modal fade" id="editar_aspir" role="dialog"></div>
+
+{% endblock %} 
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    var $ = jQuery.noConflict();
+
+    function abrir_modal_edicion(url){
+      $('#editar_empl').load(url, function(){
+        $(this).modal('show');
+        if (window.htmx) htmx.process($('#contratoForm')[0]); 
+      });
+    }
+    
+    function abrir_modal_aspir(url){
+      $('#editar_aspir').load(url, function(){
+        $(this).modal('show');
+        if (window.htmx) htmx.process($('#formEditarAspirante')[0]); 
+      });
+    }
+
+    function confirmarSolicitudMovimiento(){
+        // Obtenemos el botón y la URL que guardamos al seleccionar la fila
+        const btn = document.getElementById('btn-movimiento');
+        const url = btn.getAttribute('data-url-solicitar');
+
+        if(!url || url === '#' || url === ''){
+            Swal.fire({
+                toast: true, position: 'top-end', icon: 'warning',
+                title: 'Seleccione un contrato válido primero.',
+                showConfirmButton: false, timer: 3000
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: '¿Desea Permitir un Movimiento de Nómina?',
+            text: "El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#ffab00', // Amarillo/Naranja
+            cancelButtonColor: '#8592a3',
+            confirmButtonText: 'Sí, permitir',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Hacemos la petición AJAX (usando jQuery que ya tienes cargado)
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    headers: {'X-CSRFToken': '{{ csrf_token }}'}, // Importante para Django
+                    success: function(response) {
+                        if(response.success){
+                            Swal.fire({
+                                toast: true, position: 'top-end', icon: 'success',
+                                title: 'Solicitud aprobada',
+                                text: 'El contrato ahora aparece enmarcado en amarillo.',
+                                showConfirmButton: false, timer: 3000
+                            });
+                            // Recargamos la tabla para ver el borde amarillo
+                            triggerSearch(); 
+                        } else {
+                            Swal.fire('Error', response.message, 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error');
+                    }
+                });
+            }
+        });
+    }
+
+    
+
+    function seleccionarContrato(fila) {
+        document.querySelectorAll('.fila-contrato').forEach(f => f.classList.remove('table-active-row'));
+        fila.classList.add('table-active-row');
+
+        const toolbar = document.getElementById('contrato-toolbar');
+        toolbar.classList.remove('toolbar-disabled');
+        toolbar.classList.add('toolbar-active');
+        
+        document.getElementById('btn-edit-contrato').setAttribute('data-url', fila.dataset.urlEditarContrato);
+        document.getElementById('btn-edit-personal').setAttribute('data-url', fila.dataset.urlEditarPersonal);
+        document.getElementById('btn-movimiento').setAttribute('data-url-solicitar', fila.dataset.urlSolicitar);
+        document.getElementById('btn-pdf').setAttribute('href', fila.dataset.urlPdf);
+        
+        const btnBaja = document.getElementById('btn-baja');
+        btnBaja.setAttribute('hx-post', fila.dataset.urlBaja);
+        if (window.htmx) htmx.process(btnBaja);
+    }
+
+    function deseleccionarTodo() {
+        document.querySelectorAll('.fila-contrato').forEach(f => f.classList.remove('table-active-row'));
+        const toolbar = document.getElementById('contrato-toolbar');
+        if(toolbar){
+            toolbar.classList.add('toolbar-disabled');
+            toolbar.classList.remove('toolbar-active');
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.fila-contrato') && !e.target.closest('#contrato-toolbar')) {
+            deseleccionarTodo();
+        }
+    });
+
+    function triggerSearch() {
+        const searchInput = document.getElementById('search');
+        htmx.trigger(searchInput, 'searchFilters'); 
+    }
+
+    document.body.addEventListener('htmx:confirm', function(evt) {
+        if (evt.target.id === 'btn-baja') {
+            evt.preventDefault();
+            Swal.fire({
+                title: '¿Estás seguro?', text: evt.detail.question, icon: 'warning',
+                showCancelButton: true, confirmButtonColor: '#d33',
+                confirmButtonText: 'Sí, dar de baja', cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) evt.detail.issueRequest(true);
+            });
+        }
+    });
+
+    document.body.addEventListener('showMessage', function(evt){
+        Swal.fire({
+            toast: true, position: 'top-end', icon: 'success',
+            title: evt.detail.value, showConfirmButton: false,
+            timer: 3000, timerProgressBar: true
+        });
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Delete' || e.key === 'Del') {
+            const tag = document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            const toolbar = document.getElementById('contrato-toolbar');
+            const estaActivo = toolbar && !toolbar.classList.contains('toolbar-disabled');
+
+            if (estaActivo) {
+                e.preventDefault();
+                document.getElementById('btn-baja').click();
+            }
+        }
+    });
+
+    const btnNuevo = document.getElementById('btn-nuevo-contrato');
+    if (btnNuevo) {
+        btnNuevo.addEventListener('click', function (e) {
+            e.preventDefault();
+            const url = this.href;
+            Swal.fire({
+                title: 'Antes de continuar',
+                text: 'Revise el listado de aspirantes antes de hacer un nuevo contrato.',
+                icon: 'info', confirmButtonText: 'Ir al listado',
+                showCancelButton: true, cancelButtonText: 'Cancelar',
+                customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) window.location.href = url;
+            });
+        });
+    }
+</script>
+{% endblock %}

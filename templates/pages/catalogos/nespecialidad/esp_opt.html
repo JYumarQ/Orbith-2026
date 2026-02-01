@@ -1,0 +1,9 @@
+{% if is_filter %}
+    <option value="">Todos</option>
+{% else %}
+    <option value="" selected>Selec. Especialidad</option>
+{% endif %}
+
+{% for esp in list_esp %}
+    <option value="{{ esp.id }}">{{ esp }}</option>
+{% endfor %}

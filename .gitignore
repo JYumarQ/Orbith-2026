@@ -1,0 +1,8 @@
+.venv/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+orbith_db.sqlite3
+media/
+static_root/

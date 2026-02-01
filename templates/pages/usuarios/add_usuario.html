@@ -1,0 +1,150 @@
+<!-- pages/usuarios/add_usuario.html -->
+<div class="modal-dialog" role="document" id="nuevo_usuario">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Nuevo Usuario</h5>
+    </div>
+
+    <div class="modal-body">
+      <form method="POST"
+            action="{% url 'add_usuario' %}"
+            id="userForm"
+            data-confirm-text="¿Estás seguro de guardar el nuevo Usuario?">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="{{ form.username.id_for_label }}" class="form-label">Usuario</label>
+          {{ form.username }}
+          {% if form.username.errors %}
+            <div class="text-danger small">{{ form.username.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.email.id_for_label }}" class="form-label">Correo electrónico</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <div class="text-danger small">{{ form.email.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
+          {{ form.contrato }}
+          {% if form.contrato.errors %}
+            <div class="text-danger small">{{ form.contrato.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
+          {{ form.unidades }}
+          {% if form.unidades.errors %}
+            <div class="text-danger small">{{ form.unidades.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          {{ form.es_admin }}
+          <label for="{{ form.es_admin.id_for_label }}" class="form-check-label">
+            {{ form.es_admin.label }}
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          {{ form.es_moderador }}
+          <label for="{{ form.es_moderador.id_for_label }}" class="form-check-label">
+            {{ form.es_moderador.label }}
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.password1.id_for_label }}" class="form-label">Contraseña</label>
+          {{ form.password1 }}
+          {% if form.password1.errors %}
+            <div class="text-danger small">{{ form.password1.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.password2.id_for_label }}" class="form-label">Confirmar contraseña</label>
+          {{ form.password2 }}
+          {% if form.password2.errors %}
+            <div class="text-danger small">{{ form.password2.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    // 1. Lógica de Admin/Moderador
+    $(document).off('change.roles').on('change.roles', '#id_es_admin, #id_es_moderador', function (e) {
+      if (e.target.id === 'id_es_admin' && e.target.checked) {
+        $('#id_es_moderador').prop('checked', false);
+      }
+      if (e.target.id === 'id_es_moderador' && e.target.checked) {
+        $('#id_es_admin').prop('checked', false);
+      }
+    });
+
+    // 2. Envío AJAX
+    $(document).off('submit.userForm').on('submit.userForm', '#userForm', function (e) {
+      e.preventDefault();
+      const $form = $(this);
+      const confirmText = $form.data('confirm-text') || '¿Confirmar acción?';
+
+      const doAjax = () => {
+        $.ajax({
+          url: $form.attr('action'),
+          type: $form.attr('method'),
+          data: $form.serialize(),
+          dataType: 'json',
+          success: function (data) {
+            if (data.form_is_valid || data.success) {
+              
+              // --- CORRECCIÓN AQUÍ ---
+              // Buscamos el padre con clase .modal y cerramos ESE elemento
+              $('#nuevo_usuario').closest('.modal').modal('hide'); 
+              
+              if (window.htmx) {
+                htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
+              }
+              if (window.showToast) showToast(data.message || 'Usuario guardado', 'success');
+
+            } else if (data.html_form) {
+              // Si hay error, reemplazamos el diálogo. 
+              // Al ser un reemplazo interno, el modal padre sigue abierto.
+              $('#nuevo_usuario').replaceWith(data.html_form);
+            } else {
+              if (window.showToast) showToast('No se pudo guardar.', 'danger');
+            }
+          },
+          error: function () {
+            if (window.showToast) showToast('Error de red al guardar.', 'danger');
+          }
+        });
+      };
+
+      if (window.Swal && Swal.fire) {
+        Swal.fire({
+          title: 'Confirmar',
+          text: confirmText,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sí, guardar',
+          cancelButtonText: 'Cancelar'
+        }).then((r) => { if (r.isConfirmed) doAjax(); });
+      } else {
+        if (confirm(confirmText)) doAjax();
+      }
+    });
+  })();
+</script>

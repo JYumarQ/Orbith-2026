@@ -1,0 +1,46 @@
+{% if object_list %} 
+    {% for c in object_list %}
+    <tr>
+    <td>
+        <a>
+        {{ c.cargo_origen }}
+        </a>
+        <br />
+    </td>
+    <td>
+        <a>
+        {{ c.get_tipo_display }}
+        </a>
+        <br />
+    </td>
+    <td>
+        <a>
+        {{ c.nuevo_cargo }}
+        </a>
+        <br />
+    </td>
+    <td>
+        {% if c.estado == 'B' %}
+            <span class="badge bg-label-secondary">{{ c.get_estado_display }}</span>
+        {% elif c.estado == 'E' %}
+            <span class="badge bg-label-info">{{ c.get_estado_display }}</span>
+        {% elif c.estado == 'R' %}
+            <span class="badge bg-label-warning">{{ c.get_estado_display }}</span>
+        {% elif c.estado == 'A' %}
+            <span class="badge bg-label-success">{{ c.get_estado_display }}</span>
+        {% elif c.estado == 'X' %}
+            <span class="badge bg-label-danger">{{ c.get_estado_display }}</span>
+        {% endif %}
+        <br />
+    </td>
+    <td>
+        <a> {{ c.fecha_vigor|date:'d/m/y' }} </a>
+        <br />
+    </td>
+    </tr>
+    {% endfor %} 
+    {% else %}
+    <tr>
+    <td colspan="5">No hay registros disponibles.</td>
+</tr>
+{% endif %}

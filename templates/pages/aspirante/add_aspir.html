@@ -1,0 +1,424 @@
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="aspirModalLabel">Nuevo Aspirante</h5>
+        </div>
+        <div class="modal-body">
+            <form method="POST"
+                class="swal-confirm"
+                data-confirm-text="¿Estás seguro de guardar el nuevo aspirante?"
+                action="{% url 'add_aspir' %}" id="formAgregarAspirante">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        {{ form.doc_identidad.label_tag }}  
+                        {{ form.doc_identidad }}
+                        <small id="error_ci_len" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            Debe tener 11 dígitos.
+                        </small>
+                        <small id="error_ci_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            El CI ya está asociado a un trabajador de la Empresa.
+                        </small>
+                    </div>
+
+                    <div class="col-md-3">
+                        {{ form.sexo.label_tag }}  
+                        {{ form.sexo }}
+                    </div>
+
+                    <div class="col-md-5">
+                        {{ form.nombre.label_tag }}  
+                        {{ form.nombre }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.papellido.label_tag }}  
+                        {{ form.papellido }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.sapellido.label_tag }}  
+                        {{ form.sapellido }}
+                    </div>
+
+                    <div class="col-md-6">
+                        {{ form.movil_personal.label_tag }}  
+                        {{ form.movil_personal }}
+                        <small id="error_movil_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            El móvil ya está asociado a un trabajador de la Empresa.
+                        </small>
+                    </div>
+
+                    <div class="col-md-6">
+                        {{ form.fijo_personal.label_tag }}  
+                        {{ form.fijo_personal }}
+                    </div>
+                    <div class="col-md-12">
+                        {{ form.direccion.label_tag }}  
+                        {{ form.direccion }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.provincia.label_tag }}  
+                        {{ form.provincia }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.municipio.label_tag }}  
+                        {{ form.municipio }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.codigo_postal.label_tag }}  
+                        {{ form.codigo_postal }}
+                    </div>
+
+                    <div class="col-md-6">
+                        {{ form.nivel_educ.label_tag }}  
+                        {{ form.nivel_educ }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.especialidad.label_tag }}  
+                        {{ form.especialidad }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.grado_cientifico.label_tag }}  
+                        {{ form.grado_cientifico }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.raza.label_tag }}  
+                        {{ form.raza }}
+                    </div>
+
+                    <div class="col-md-12"><b>Tallas:</b></div>
+                    <div class="col-md-4">
+                        {{ form.tpantalon.label_tag }}  
+                        {{ form.tpantalon }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.tcamisa.label_tag }}  
+                        {{ form.tcamisa }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.tzapatos.label_tag }}  
+                        {{ form.tzapatos }}
+                    </div>
+                </div>
+                <br>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        var formulario = document.getElementById('formAgregarAspirante');
+        
+        // Selectores originales
+        var nivel = formulario.querySelector('#id_nivel_educ');
+        var espec = formulario.querySelector('#id_especialidad');
+        var grado = formulario.querySelector('#id_grado_cientifico');
+
+        // Nuevos selectores para validación (Django usa id_ + nombre_campo)
+        var ciInput = formulario.querySelector('#id_doc_identidad');
+        var movilInput = formulario.querySelector('#id_movil_personal'); // Ajustado a movil_personal
+
+        var timer = null;
+
+        // ---------------- INICIO DE NUEVA LÓGICA DE VALIDACIÓN ----------------
+        
+        // 1. Configuración de campos
+        const configCampos = {
+            'id_doc_identidad': { tipo: 'ci', mensaje: 'Inserte solo dígitos numéricos', esCI: true },
+            'id_sexo':          { tipo: 'select' },
+            'id_nombre':        { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_papellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_sapellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_movil_personal':         { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
+            'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
+            'id_provincia':     { tipo: 'select' }, // Solo para colores
+            'id_municipio':     { tipo: 'select' }  // Solo para colores
+        };
+
+        // 2. Expresiones Regulares (Lo que se BORRA si se intenta escribir)
+        const patrones = {
+            numeros:  /[^0-9]/g,
+            telefono: /[^0-9\(\)\s\+\-]/g,
+            texto:    /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜçÇ\-\s]/g
+        };
+
+        // Nueva función para validar lógica de fechas en el CI
+        function validarLogicaCI(input) {
+            let val = input.value;
+            if (val.length < 4) return; // Aún no hay mes para validar
+
+            // Validar MES (Dígitos 3 y 4)
+            const mes = parseInt(val.substring(2, 4));
+            if (val.length >= 4 && (mes < 1 || mes > 12)) {
+                input.value = val.substring(0, 2); // Borrar el mes inválido
+                mostrarErrorFlotante(input, "Mes inválido (01-12)");
+                return;
+            }
+
+            // Validar DÍA (Dígitos 5 y 6)
+            if (val.length >= 6) {
+                const dia = parseInt(val.substring(4, 6));
+                let maxDias = 31;
+                // Abril, Junio, Sept, Nov tienen 30 días
+                if ([4, 6, 9, 11].includes(mes)) maxDias = 30;
+                // Febrero aceptamos hasta 29
+                if (mes === 2) maxDias = 29;
+
+                if (dia < 1 || dia > maxDias) {
+                    input.value = val.substring(0, 4); // Borrar el día inválido
+                    mostrarErrorFlotante(input, "Día inválido para este mes");
+                    return;
+                }
+            }
+        }
+
+        // Ayudante para mostrar la burbuja temporalmente
+        function mostrarErrorFlotante(input, msg) {
+            input.setCustomValidity(msg);
+            input.reportValidity();
+        }
+
+        // 3. Función del Semáforo (Amarillo / Rojo / Verde)
+        function actualizarEstilo(input, cfg) {
+            // Limpiar estados previos
+            input.classList.remove('border-warning', 'is-invalid', 'is-valid', 'border-success');
+            const valor = input.value.trim();
+
+            // CASO 1: Vacío (Obligatorio) -> Amarillo
+            if (!valor) {
+                // Solo si es obligatorio (asumimos que CI, Nombres y Ubicación lo son)
+                if(cfg.tipo !== 'telefono') { 
+                    input.classList.add('border-warning');
+                }
+                return;
+            }
+
+            // CASO 2: Error específico de CI (Rojo si no son 11 dígitos)
+            if (cfg.esCI && valor.length !== 11) {
+                input.classList.add('is-invalid');
+                return;
+            }
+
+            // CASO 3: Todo bien -> Verde
+            input.classList.add('is-valid');
+        }
+
+        // 4. Aplicar lógica a cada campo
+        for (const [id, cfg] of Object.entries(configCampos)) {
+            const input = formulario.querySelector('[id="' + id + '"]');
+            if (!input) continue;
+
+            // A) Evento de escritura (Bloqueo y Burbuja)
+            if (cfg.tipo !== 'select') {
+                input.addEventListener('input', function() {
+                    // 1. Limpiamos cualquier error previo al empezar a escribir (Soluciona conflicto de mensajes)
+                    this.setCustomValidity(""); 
+
+                    const valorAntes = this.value;
+                    const tipoPatron = (cfg.tipo === 'ci') ? 'numeros' : cfg.tipo;
+                    
+                    // 2. DEFINIMOS LA VARIABLE QUE FALTABA (Soluciona ReferenceError)
+                    const patron = patrones[tipoPatron]; 
+
+                    // 3. Bloqueo de caracteres prohibidos
+                    if (patron.test(valorAntes)) {
+                        this.value = valorAntes.replace(patron, '');
+                        mostrarErrorFlotante(this, cfg.mensaje);
+                    } 
+                    
+                    // 4. Validación lógica extra para CI
+                    if (cfg.tipo === 'ci') {
+                        validarLogicaCI(this);
+                    }
+
+                    actualizarEstilo(this, cfg);
+                });
+
+                input.addEventListener('blur', function() {
+                    this.setCustomValidity(""); 
+                });
+
+                // B) Evento al salir (Mayúsculas)
+                if (cfg.capitalizar) {
+                    input.addEventListener('blur', function() {
+                        if (this.value) {
+                            // Capitalizar primera letra de CADA palabra
+                            this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, match => match.toUpperCase());
+                        }
+                        actualizarEstilo(this, cfg);
+                    });
+                }
+            } else {
+                // C) Evento para selects
+                input.addEventListener('change', function() { 
+                    actualizarEstilo(this, cfg);
+                    
+                    // TRUCO: Si cambiamos Provincia, forzamos validación visual del Municipio
+                    if (id === 'id_provincia') {
+                        // Esperamos un momento a que HTMX habilite el campo
+                        setTimeout(() => {
+                             const muni = formulario.querySelector('#id_municipio');
+                             if(muni) actualizarEstilo(muni, configCampos['id_municipio']);
+                        }, 200); 
+                    }
+                });
+                // Soporte Select2
+                $(input).on('select2:select', function() { 
+                    this.dispatchEvent(new Event('change'));
+                });
+            }
+
+            // FALTABA ESTO: Inicializar el estado visual (amarillo) al cargar
+            actualizarEstilo(input, cfg); 
+
+        } // <--- ¡AQUÍ ESTABA LA LLAVE FALTANTE!
+
+        // Observador especial para Municipio (cambia con HTMX)
+        const observerMuni = new MutationObserver(function() {
+            const muni = document.getElementById('id_municipio');
+            if (muni) {
+                actualizarEstilo(muni, configCampos['id_municipio']);
+                muni.addEventListener('change', function() { actualizarEstilo(this, configCampos['id_municipio']); });
+            }
+        });
+        const muniParent = document.getElementById('id_municipio')?.parentNode;
+        if(muniParent) observerMuni.observe(muniParent, { childList: true });
+
+        // ---------------- FIN DE NUEVA LÓGICA ----------------
+
+        // --- LÓGICA ORIGINAL DE CAMPOS ---
+        function actualizarCampos() {
+            if(!nivel) return;
+            var valorNivel = nivel.value;
+
+            if (valorNivel === 'NS' || valorNivel === 'TM') {
+                espec.removeAttribute('disabled');
+            } else {
+                espec.setAttribute('disabled', 'disabled');
+            }
+
+            if (valorNivel === 'NS') {
+                grado.removeAttribute('disabled');
+            } else {
+                grado.setAttribute('disabled', 'disabled');
+            }
+        }
+
+        if(nivel) nivel.addEventListener('change', actualizarCampos);
+        actualizarCampos(); // Ejecutar al inicio
+
+
+
+        // 1. Validación Carnet Identidad
+        if (ciInput) {
+            ciInput.addEventListener('input', function() {
+                var val = this.value;
+                var errLen = formulario.querySelector('#error_ci_len');
+                var errExist = formulario.querySelector('#error_ci_exist');
+
+                // Limpiar estados previos
+                errLen.classList.add('d-none');
+                errExist.classList.add('d-none');
+                ciInput.classList.remove('is-invalid', 'is-valid');
+
+                // Validación 1: Longitud (Local)
+                if (val.length !== 11) {
+                    errLen.classList.remove('d-none');
+                    ciInput.classList.add('is-invalid');
+                    return; // No consultamos al servidor si la longitud está mal
+                }
+
+                // Validación 2: Existencia (Servidor)
+                clearTimeout(timer);
+                timer = setTimeout(function() {
+                    fetch("{% url 'validar_datos_aspirante' %}?doc_identidad=" + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.ci_existe) {
+                            errExist.classList.remove('d-none');
+                            
+                            // AQUÍ ESTÁ LA CORRECCIÓN: Usar mensaje del servidor
+                            if(data.ci_error_msg) {
+                                errExist.innerText = data.ci_error_msg;
+                            }
+                            
+                            ciInput.classList.add('is-invalid');
+                        } else {
+                            ciInput.classList.add('is-valid');
+                        }
+                    })
+                    .catch(err => console.error('Error validando CI:', err));
+                }, 300);
+            });
+        }
+        // 2. Validación Móvil
+        if (movilInput) {
+            movilInput.addEventListener('input', function() {
+                var val = this.value;
+                var errExist = formulario.querySelector('#error_movil_exist');
+
+                errExist.classList.add('d-none');
+                movilInput.classList.remove('is-invalid', 'is-valid');
+
+                if (val.length < 6) return; // Ignorar si es muy corto
+
+                clearTimeout(timer);
+                timer = setTimeout(function() {
+                    fetch("{% url 'validar_datos_aspirante' %}?movil=" + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.movil_existe) {
+                            errExist.classList.remove('d-none');
+                            movilInput.classList.add('is-invalid');
+                        } else {
+                            movilInput.classList.add('is-valid');
+                        }
+                    })
+                    .catch(err => console.error('Error validando Móvil:', err));
+                }, 300);
+            });
+        }
+
+        // 3. Interceptar Envío (SweetAlert de Error)
+        formulario.addEventListener('submit', function(e) {
+            // Verificamos si hay algún error visible o clase inválida
+            // Buscamos los elementos dentro del formulario actual
+            var elLen = formulario.querySelector('#error_ci_len');
+            var elCiExist = formulario.querySelector('#error_ci_exist');
+            var elMovil = formulario.querySelector('#error_movil_exist');
+
+            var tieneErrorLen = elLen && !elLen.classList.contains('d-none');
+            var tieneErrorCiExist = elCiExist && !elCiExist.classList.contains('d-none');
+            var tieneErrorMovil = elMovil && !elMovil.classList.contains('d-none');
+            
+            // Verificar también si la longitud actual del CI es incorrecta (por si intentan enviar rápido)
+            var longitudIncorrecta = ciInput && ciInput.value.length !== 11;
+
+            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
+
+            if (tieneErrorLen || tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios) {
+                e.preventDefault(); // Evita el envío normal
+                e.stopImmediatePropagation(); // Evita que se dispare el otro swal-confirm de éxito
+
+                Swal.fire({
+                    title: 'Atención',
+                    text: 'Revise los campos resaltados en rojo o amarillo.',
+                    icon: 'warning',
+                    confirmButtonText: 'OK',
+                    customClass: {
+                        confirmButton: 'btn btn-primary'
+                    },
+                    buttonsStyling: false
+                });
+            }
+            // Si todo está bien, deja pasar el evento para que lo maneje el script genérico de confirmación
+        });
+        actualizarCampos(); // Ejecutar al inicio
+        if (window.htmx) htmx.process(formulario);
+    })();
+</script>

@@ -1,0 +1,68 @@
+{% if object_list %} 
+    {% for c in object_list %}
+        <tr class="fila-contrato cursor-pointer {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
+            onclick="seleccionarContrato(this)"
+            data-id="{{ c.no_expediente }}"
+            data-url-editar-contrato="{% url 'updt_contrato' c.no_expediente %}"
+            data-url-editar-personal="{% url 'updt_aspir' c.aspirante.doc_identidad %}?next={% url 'list_contrato' %}"
+            data-url-solicitar="{% url 'solicitar_movimiento' c.no_expediente %}"
+
+            
+            data-url-movimiento="{% url 'movimiento_contrato' c.no_expediente %}" 
+            data-url-pdf="{% url 'ncontrato_pdf' c.no_expediente %}"
+            data-url-baja="{% url 'del_contrato' c.no_expediente %}"
+        >
+        
+        <td>
+            <strong>{{ c.no_expediente }}</strong>
+        </td>
+        
+        <td>
+            {{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}
+        </td>
+        
+        <td>
+            {{ c.cargo.departamento.descripcion }}<br>
+            <small class="text-muted">
+                {{ c.cargo.departamento.unidad_organizativa.descripcion }}
+            </small>
+        </td>
+        
+        <td>
+            {{ c.cargo.ncargo.get_cat_ocupacional_display }}
+        </td>
+        
+        <td>
+            {{ c.cargo.ncargo.grupo_escala }}
+        </td>
+
+        <td class="text-center">
+            {% if c.cargo.rol %}
+                <span class="badge bg-label-primary me-1">{{ c.cargo.rol.tipo }}</span>
+            {% else %}
+                <span class="badge bg-label-secondary">Cuadro</span>
+            {% endif %}
+        </td>
+
+        <td>
+            {{ c.tridente }}
+        </td>
+
+        <td>
+            {{ c.calcular_salario_escala }}
+        </td>
+
+        <td></td>
+        </tr>
+    {% endfor %} 
+{% else %}
+    <tr>
+        <td colspan="9" class="text-center">No hay registros disponibles.</td>
+    </tr>
+{% endif %}
+
+{% if request.META.HTTP_HX_REQUEST %}
+    <div id="table-pagination-footer" hx-swap-oob="true">
+        {% include 'pages/contrato/partials/pagination.html' %}
+    </div>
+{% endif %}

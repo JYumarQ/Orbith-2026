@@ -1,0 +1,2021 @@
+<!-- Nomencladores - Vista tipo acordeón sin sub-pestañas -->
+<div class="tab-pane fade {% if active_tab == 'nomencladores' %}show active{% endif %}"
+     id="navs-justified-nomencladores" role="tabpanel">
+
+  <!-- Acordeón -->
+  <div class="accordion" id="accordionNomencladores">
+
+    <!-- 1. Estructura Organizativa -->
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingEstructura">
+        <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseEstructura" aria-expanded="true">
+          <i class="fas fa-sitemap me-2"></i>Estructura Organizativa
+        </button>
+      </h2>
+      <div id="collapseEstructura" class="accordion-collapse collapse show"
+           data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body">
+          <div class="row g-4">
+          <!-- CARGOS -->
+            <div class="col-12 mb-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Cargos</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="cargos-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="cargos-table">
+                    <thead>
+                      <tr>
+                        <th>Descripción</th>
+                        <th>Cat. Ocup.</th>
+                        <th>Gpo. Escala</th>
+                        <th>Salario</th>
+                        <th>Activo</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="cargos-tbody">
+                      {% for c in cargos %}
+                      <tr data-id="{{ c.id }}">
+                        <td class="desc-cell">{{ c.descripcion }}</td>
+                        <td class="cat-cell">{{ c.get_cat_ocupacional_display }}</td>
+                        <td class="grupo-cell">{{ c.grupo_escala.nivel }}</td>
+                        <td class="salario-cell">${{ c.salario_basico }}</td>
+                        <td class="activo-cell">{{ c.activo|yesno:"Sí,No" }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Paginador Cargos -->
+                <nav aria-label="Cargos paginación">
+                  <ul class="pagination pagination-sm justify-content-center mt-3" id="cargos-paginator"></ul>
+                </nav>
+              </div>
+            </div>
+            <!-- Tridentes -->
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Tridentes</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="tridentes-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="tridentes-table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tridentes-tbody">
+                      {% for t in tridentes %}
+                      <tr data-id="{{ t.id }}">
+                        <td class="tipo-cell">{{ t.tipo }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Roles -->
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Roles</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="roles-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="roles-table">
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="roles-tbody">
+                      {% for r in roles %}
+                      <tr data-id="{{ r.id }}">
+                        <td class="tipo-cell">{{ r.tipo }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Grupos Escala -->
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Grupos Escala</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="grupos-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div id="grupos-paginate-container">
+                  <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="grupos-table">
+                      <thead>
+                        <tr>
+                          <th style="width: 100px;">Nivel</th>
+                          <th style="width: 120px;">Es Cuadro</th>
+                          <th style="width: 120px;" class="text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody id="grupos-tbody">
+                        {% for g in grupos %}
+                        <tr data-id="{{ g.id }}">
+                          <td class="nivel-cell">{{ g.nivel }}</td>
+                          <td class="es-cuadro-cell">{{ g.es_cuadro|yesno:"Sí,No" }}</td>
+                          <td class="text-center">
+                            <div class="btn-group btn-group-sm">
+                              <button class="btn btn-sm edit-btn" title="Editar">
+                                <i class="fas fa-pencil-alt"></i>
+                              </button>
+                              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                                <i class="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <!-- Paginador Sneat (pequeño, centrado, con iconos) -->
+                  <nav aria-label="Grupos Escala paginación">
+                    <ul class="pagination pagination-sm justify-content-center mt-3"
+                        id="grupos-paginator"></ul>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div><!-- /row -->
+        </div><!-- /accordion-body -->
+      </div><!-- /collapse -->
+    </div><!-- /accordion-item -->
+
+    <!-- 2. Territorial -->
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingTerritorial">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseTerritorial">
+          <i class="fas fa-map-marker-alt me-2"></i>Territorial
+        </button>
+      </h2>
+      <div id="collapseTerritorial" class="accordion-collapse collapse"
+           data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body">
+          <div class="row g-4">
+            <!-- Provincias -->
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Provincias</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="provincias-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="provincias-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="provincias-tbody">
+                      {% for p in provincias %}
+                      <tr data-id="{{ p.id }}">
+                        <td class="nombre-cell">{{ p.nombre }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                    <!-- Paginador Provincias -->
+                    <nav aria-label="Provincias paginación">
+                      <ul class="pagination pagination-sm justify-content-center mt-3"
+                          id="provincias-paginator"></ul>
+                    </nav>
+                </div>
+              </div>
+            </div>
+
+            <!-- Municipios -->
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span id="municipios-card-title">Municipios</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="municipios-table" disabled>
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="municipios-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 400px;">Nombre</th>
+                        <th style="width: 300px;">Provincia</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="municipios-tbody">
+                      {% for m in municipios %}
+                      <tr data-id="{{ m.id }}" data-provincia-id="{{ m.provincia.id }}">
+                        <td class="nombre-cell">{{ m.nombre }}</td>
+                        <td class="provincia-cell">{{ m.provincia.nombre }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                <!-- Paginador Municipios -->
+                <nav aria-label="Municipios paginación">
+                  <ul class="pagination pagination-sm justify-content-center mt-3"
+                      id="municipios-paginator"></ul>
+                </nav>
+                </div>
+              </div>
+            </div>
+          </div><!-- /row -->
+        </div><!-- /accordion-body -->
+      </div><!-- /collapse -->
+    </div><!-- /accordion-item -->
+
+    <!-- 3. Tiempo de Trabajo (abreviado) -->
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingTiempo">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseTiempo">
+          <i class="fas fa-clock me-2"></i>Tiempo de Trabajo
+        </button>
+      </h2>
+      <div id="collapseTiempo" class="accordion-collapse collapse"
+           data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body">
+          <div class="row g-4">
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Horarios</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="horarios-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="horarios-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th style="width: 55px;" class="text-center">Desde</th>
+                        <th style="width: 55px;" class="text-center">Hasta</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for h in horarios %}
+                      <tr data-id="{{ h.id }}">
+                        <td>{{ h.descripcion }}</td>
+                        <td class="text-center">{{ h.hora_inicio|time:"H:i" }}</td>
+                        <td class="text-center">{{ h.hora_fin|time:"H:i" }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Jornadas</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="jornadas-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="jornadas-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Horas</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for j in jornadas %}
+                      <tr data-id="{{ j.id }}">
+                        <td>{{ j.tipo }}</td>
+                        <td>{{ j.horario|default:"—" }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Causas Alta/Baja</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="causas-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="causas-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 130px;">Descripción</th>
+                        <th style="width: 100px;">Alta</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for c in causas %}
+                      <tr data-id="{{ c.id }}">
+                        <td>{{ c.descripcion }}</td>
+                        <td>{{ c.alta|yesno:"Sí,No" }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div><!-- /row -->
+        </div><!-- /accordion-body -->
+      </div><!-- /collapse -->
+    </div><!-- /accordion-item -->
+
+    <!-- 4. Laborales y Profesionales -->
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingLaboral">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseLaboral">
+          <i class="fas fa-tools me-2"></i>Laborales y Profesionales
+        </button>
+      </h2>
+      <div id="collapseLaboral" class="accordion-collapse collapse"
+           data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Condiciones Laborales Anormales</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn"
+                          data-table="condiciones-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="condiciones-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Tarifa Hora</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for c in condiciones %}
+                      <tr data-id="{{ c.id }}">
+                        <td>{{ c.nombre }}</td>
+                        <td>{{ c.tarifa_hora }} CUP</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar">
+                              <i class="fas fa-pencil-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Especialidades -->
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Especialidades</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="especialidades-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="especialidades-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th style="width: 120px;">Educ. Superior</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for e in especialidades %}
+                      <tr data-id="{{ e.id }}">
+                        <td class="nombre-cell">{{ e.nombre }}</td>
+                        <td class="educ-cell text-center">{{ e.educ_superior|yesno:"Sí,No" }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div><!-- /row -->
+        </div><!-- /accordion-body -->
+      </div><!-- /collapse -->
+    </div><!-- /accordion-item -->
+
+  </div><!-- /accordion -->
+</div><!-- /tab-pane -->
+
+<script>
+
+
+/* ----------  HELPERS  ---------- */
+function cancelAllInsertRows() {
+  document.querySelectorAll('.insert-row').forEach(r => r.remove());
+}
+
+/* ----------  CONSTANTES DE PAGINACIÓN  ---------- */
+const GRUPOS_PER_PAGE = 4;
+const PROVINCIAS_PER_PAGE = 4;
+const MUNICIPIOS_PER_PAGE = 4;
+const CARGOS_PER_PAGE = 5;
+
+/* ----------  VARIABLES DE PÁGINA  ---------- */
+let gruposCurrentPage = 1;
+let provinciasCurrentPage = 1;
+let municipiosCurrentPage = 1;
+let cargosCurrentPage = 1;
+
+/* ----------  FUNCIONES CREAR  ---------- */
+async function guardarTridente(row) {
+  const tipo = row.querySelector('.input-tipo').value.trim();
+  if (!tipo) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/tridentes/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ tipo })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="tipo-cell">${data.tipo}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarRol(row) {
+  const tipo = row.querySelector('.input-tipo').value.trim();
+  if (!tipo) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/roles/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ tipo })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="tipo-cell">${data.tipo}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarGrupo(row) {
+  const nivel = row.querySelector('.input-nivel').value.trim();
+  const esCuadro = row.querySelector('.input-es-cuadro').checked;
+  if (!nivel) return alert('Campo nivel obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/grupos/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nivel, es_cuadro: esCuadro })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="nivel-cell">${data.nivel}</td>
+        <td class="es-cuadro-cell">${data.es_cuadro ? 'Sí' : 'No'}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    paginateGrupos();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarProvincia(row) {
+  const nombre = row.querySelector('.input-nombre').value.trim();
+  if (!nombre) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/provincias/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nombre })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="nombre-cell">${data.nombre}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    paginateProvincias();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarMunicipio(row) {
+  const nombre = row.querySelector('.input-nombre').value.trim();
+  const provinciaId = row.closest('tbody').dataset.provinciaId;
+  if (!nombre || !provinciaId) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/municipios/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nombre, provincia_id: provinciaId })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    const provinciaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent || '';
+    row.outerHTML = `
+      <tr data-id="${data.id}" data-provincia-id="${data.provincia_id}">
+        <td class="nombre-cell">${data.nombre}</td>
+        <td class="provincia-cell">${provinciaName}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    paginateMunicipios();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarHorario(row) {
+  const descripcion = row.querySelector('.input-descripcion').value.trim();
+  const desde = row.querySelector('.input-desde').value.trim();
+  const hasta = row.querySelector('.input-hasta').value.trim();
+  if (!descripcion || !desde || !hasta) return alert('Complete todos los campos');
+  try {
+    const res = await fetch("/nomencladores/api/horarios/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ descripcion, hora_inicio: desde, hora_fin: hasta })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="nombre-cell">${data.descripcion}</td>
+        <td class="text-center desde-cell">${data.hora_inicio}</td>
+        <td class="text-center hasta-cell">${data.hora_fin}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarJornada(row) {
+  const tipo = row.querySelector('.input-tipo').value.trim();
+  const horas = row.querySelector('.input-horas').value.trim();
+  if (!tipo) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/jornadas/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ tipo, horario: horas || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="tipo-cell">${data.tipo}</td>
+        <td class="horas-cell">${data.horario || '—'}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarCausa(row) {
+  const desc = row.querySelector('.input-desc').value.trim();
+  const alta = row.querySelector('.input-alta').checked;
+  if (!desc) return alert('Campo obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/causas/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ descripcion: desc, alta })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="desc-cell">${data.descripcion}</td>
+        <td class="alta-cell">${data.alta ? 'Sí' : 'No'}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarCondicion(row) {
+  const nombre = row.querySelector('.input-nombre').value.trim();
+  const tarifa = parseFloat(row.querySelector('.input-tarifa').value) || 0;
+  if (!nombre) return alert('Campo nombre obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/condiciones/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nombre, tarifa_hora: tarifa })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="nombre-cell">${data.nombre}</td>
+        <td class="tarifa-cell">${data.tarifa_hora} CUP</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarEspecialidad(row) {
+  const nombre = row.querySelector('.input-nombre').value.trim();
+  const educSup = row.querySelector('.input-educ-superior').checked;
+  if (!nombre) return alert('Campo nombre obligatorio');
+  try {
+    const res = await fetch("/nomencladores/api/especialidades/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ nombre, educ_superior: educSup })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="nombre-cell">${data.nombre}</td>
+        <td class="educ-cell text-center">${data.educ_superior ? 'Sí' : 'No'}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function guardarCargo(row) {
+  const descripcion = row.querySelector('.input-descripcion').value.trim();
+  const cat = row.querySelector('.input-cat').value;
+  const grupoId = row.querySelector('.input-grupo').value;
+  const salario = parseFloat(row.querySelector('.input-salario').value) || 0;
+  const activo = row.querySelector('.input-activo').checked;
+
+  if (!descripcion || !cat || !grupoId) return alert('Complete todos los campos obligatorios');
+
+  try {
+    const res = await fetch("/nomencladores/api/cargos/", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({
+        descripcion,
+        cat_ocupacional: cat,
+        grupo_escala_id: grupoId,
+        salario_basico: salario,
+        activo
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    row.outerHTML = `
+      <tr data-id="${data.id}">
+        <td class="desc-cell">${data.descripcion}</td>
+        <td class="cat-cell">${data.cat_ocupacional}</td>
+        <td class="grupo-cell">${data.grupo_escala}</td>
+        <td class="salario-cell">$${data.salario_basico}</td>
+        <td class="activo-cell">${data.activo ? 'Sí' : 'No'}</td>
+        <td class="text-center">
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    paginateCargos();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+/* ----------  PAGINACIÓN CARGOS  ---------- */
+function paginateCargos() {
+  const tbody = document.querySelector('#cargos-tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+  const total = rows.length;
+  const pages = Math.ceil(total / CARGOS_PER_PAGE);
+
+  rows.forEach((tr, idx) => {
+    tr.style.display = (idx >= (cargosCurrentPage - 1) * CARGOS_PER_PAGE &&
+                        idx <  cargosCurrentPage * CARGOS_PER_PAGE)
+                        ? '' : 'none';
+  });
+
+  const paginator = document.getElementById('cargos-paginator');
+  if (!paginator) return;
+
+  paginator.innerHTML = '';
+  const prevLi = document.createElement('li');
+  prevLi.className = 'page-item prev' + (cargosCurrentPage === 1 ? ' disabled' : '');
+  prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
+  prevLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (cargosCurrentPage > 1) { cargosCurrentPage--; paginateCargos(); }
+  });
+  paginator.appendChild(prevLi);
+
+  const delta = 1, gap = pages > 5;
+  const range = [];
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || (i >= cargosCurrentPage - delta && i <= cargosCurrentPage + delta)) range.push(i);
+  }
+  let last = 0;
+  range.forEach(num => {
+    if (gap && last && num - last > 1) {
+      const dots = document.createElement('li');
+      dots.className = 'page-item disabled';
+      dots.innerHTML = '<span class="page-link">…</span>';
+      paginator.appendChild(dots);
+    }
+    const li = document.createElement('li');
+    li.className = 'page-item' + (num === cargosCurrentPage ? ' active' : '');
+    li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
+    li.addEventListener('click', e => { e.preventDefault(); cargosCurrentPage = num; paginateCargos(); });
+    paginator.appendChild(li);
+    last = num;
+  });
+
+  const nextLi = document.createElement('li');
+  nextLi.className = 'page-item next' + (cargosCurrentPage === pages ? ' disabled' : '');
+  nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
+  nextLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (cargosCurrentPage < pages) { cargosCurrentPage++; paginateCargos(); }
+  });
+  paginator.appendChild(nextLi);
+}
+
+/* ---------- AYUDANTE PARA ORDENAR NÚMEROS ROMANOS ---------- */
+function romanToInt(s) {
+    const map = { 
+        'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 
+    };
+    let result = 0;
+    let prevValue = 0;
+
+    // Iterar desde el final de la cadena hacia el principio
+    for (let i = s.length - 1; i >= 0; i--) {
+        const currentValue = map[s[i].toUpperCase()];
+        if (!currentValue) continue; // Ignorar si no es un caracter romano
+
+        if (currentValue < prevValue) {
+            result -= currentValue; // Caso substractivo (ej. IV -> 5 - 1)
+        } else {
+            result += currentValue; // Caso aditivo (ej. VI -> 5 + 1)
+        }
+        prevValue = currentValue;
+    }
+    return result;
+}
+
+/* ----------  PAGINACIÓN GRUPOS ESCALA  ---------- */
+function paginateGrupos() {
+  const tbody = document.querySelector('#grupos-tbody');
+  if (!tbody) return;
+  let rows = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+// ordenar el array de filas por nivel romano 
+  rows.sort((a,b) => {
+    const nivelA = a.querySelector('td:first-child')?.textContent.trim() || '';
+    const nivelB = b.querySelector('td:first-child')?.textContent.trim() || '';
+    return romanToInt(nivelA) - romanToInt(nivelB);
+  });
+
+  rows.forEach(row => tbody.appendChild(row));
+  const total = rows.length;
+  const pages = Math.ceil(total / GRUPOS_PER_PAGE);
+
+  rows.forEach((tr, idx) => {
+    tr.style.display = (idx >= (gruposCurrentPage - 1) * GRUPOS_PER_PAGE &&
+                        idx <  gruposCurrentPage * GRUPOS_PER_PAGE)
+                        ? '' : 'none';
+  });
+
+  const paginator = document.getElementById('grupos-paginator');
+  if (!paginator) return;
+  paginator.innerHTML = '';
+
+  const prevLi = document.createElement('li');
+  prevLi.className = 'page-item prev' + (gruposCurrentPage === 1 ? ' disabled' : '');
+  prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
+  prevLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (gruposCurrentPage > 1) { gruposCurrentPage--; paginateGrupos(); }
+  });
+  paginator.appendChild(prevLi);
+
+  const delta = 1;
+  const gap = pages > 5;
+  const range = [];
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || (i >= gruposCurrentPage - delta && i <= gruposCurrentPage + delta)) range.push(i);
+  }
+  let last = 0;
+  range.forEach(num => {
+    if (gap && last && num - last > 1) {
+      const dots = document.createElement('li');
+      dots.className = 'page-item disabled';
+      dots.innerHTML = '<span class="page-link">…</span>';
+      paginator.appendChild(dots);
+    }
+    const li = document.createElement('li');
+    li.className = 'page-item' + (num === gruposCurrentPage ? ' active' : '');
+    li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
+    li.addEventListener('click', e => { e.preventDefault(); gruposCurrentPage = num; paginateGrupos(); });
+    paginator.appendChild(li);
+    last = num;
+  });
+
+  const nextLi = document.createElement('li');
+  nextLi.className = 'page-item next' + (gruposCurrentPage === pages ? ' disabled' : '');
+  nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
+  nextLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (gruposCurrentPage < pages) { gruposCurrentPage++; paginateGrupos(); }
+  });
+  paginator.appendChild(nextLi);
+}
+
+/* ----------  PAGINACIÓN PROVINCIAS  ---------- */
+function paginateProvincias() {
+  const tbody = document.querySelector('#provincias-tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+  const total = rows.length;
+  const pages = Math.ceil(total / PROVINCIAS_PER_PAGE);
+
+  rows.forEach((tr, idx) => {
+    tr.style.display = (idx >= (provinciasCurrentPage - 1) * PROVINCIAS_PER_PAGE &&
+                        idx <  provinciasCurrentPage * PROVINCIAS_PER_PAGE)
+                        ? '' : 'none';
+  });
+
+  const paginator = document.getElementById('provincias-paginator');
+  if (!paginator) return;
+
+  paginator.innerHTML = '';
+  const prevLi = document.createElement('li');
+  prevLi.className = 'page-item prev' + (provinciasCurrentPage === 1 ? ' disabled' : '');
+  prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
+  prevLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (provinciasCurrentPage > 1) { provinciasCurrentPage--; paginateProvincias(); }
+  });
+  paginator.appendChild(prevLi);
+
+  const delta = 1, gap = pages > 5;
+  const range = [];
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || (i >= provinciasCurrentPage - delta && i <= provinciasCurrentPage + delta)) range.push(i);
+  }
+  let last = 0;
+  range.forEach(num => {
+    if (gap && last && num - last > 1) {
+      const dots = document.createElement('li');
+      dots.className = 'page-item disabled';
+      dots.innerHTML = '<span class="page-link">…</span>';
+      paginator.appendChild(dots);
+    }
+    const li = document.createElement('li');
+    li.className = 'page-item' + (num === provinciasCurrentPage ? ' active' : '');
+    li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
+    li.addEventListener('click', e => { e.preventDefault(); provinciasCurrentPage = num; paginateProvincias(); });
+    paginator.appendChild(li);
+    last = num;
+  });
+
+  const nextLi = document.createElement('li');
+  nextLi.className = 'page-item next' + (provinciasCurrentPage === pages ? ' disabled' : '');
+  nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
+  nextLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (provinciasCurrentPage < pages) { provinciasCurrentPage++; paginateProvincias(); }
+  });
+  paginator.appendChild(nextLi);
+}
+
+/* ----------  PAGINACIÓN MUNICIPIOS  ---------- */
+function paginateMunicipios() {
+  const tbody = document.querySelector('#municipios-tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+  const total = rows.length;
+  const pages = Math.ceil(total / MUNICIPIOS_PER_PAGE);
+
+  rows.forEach((tr, idx) => {
+    tr.style.display = (idx >= (municipiosCurrentPage - 1) * MUNICIPIOS_PER_PAGE &&
+                        idx <  municipiosCurrentPage * MUNICIPIOS_PER_PAGE)
+                        ? '' : 'none';
+  });
+
+  const paginator = document.getElementById('municipios-paginator');
+  if (!paginator) return;
+
+  paginator.innerHTML = '';
+  const prevLi = document.createElement('li');
+  prevLi.className = 'page-item prev' + (municipiosCurrentPage === 1 ? ' disabled' : '');
+  prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
+  prevLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (municipiosCurrentPage > 1) { municipiosCurrentPage--; paginateMunicipios(); }
+  });
+  paginator.appendChild(prevLi);
+
+  const delta = 1, gap = pages > 5;
+  const range = [];
+  for (let i = 1; i <= pages; i++) {
+    if (i === 1 || i === pages || (i >= municipiosCurrentPage - delta && i <= municipiosCurrentPage + delta)) range.push(i);
+  }
+  let last = 0;
+  range.forEach(num => {
+    if (gap && last && num - last > 1) {
+      const dots = document.createElement('li');
+      dots.className = 'page-item disabled';
+      dots.innerHTML = '<span class="page-link">…</span>';
+      paginator.appendChild(dots);
+    }
+    const li = document.createElement('li');
+    li.className = 'page-item' + (num === municipiosCurrentPage ? ' active' : '');
+    li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
+    li.addEventListener('click', e => { e.preventDefault(); municipiosCurrentPage = num; paginateMunicipios(); });
+    paginator.appendChild(li);
+    last = num;
+  });
+
+  const nextLi = document.createElement('li');
+  nextLi.className = 'page-item next' + (municipiosCurrentPage === pages ? ' disabled' : '');
+  nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
+  nextLi.addEventListener('click', e => {
+    e.preventDefault();
+    if (municipiosCurrentPage < pages) { municipiosCurrentPage++; paginateMunicipios(); }
+  });
+  paginator.appendChild(nextLi);
+}
+
+/* ----------  EDICIÓN INLINE  ---------- */
+document.addEventListener('click', e => {
+  const edit = e.target.closest('.edit-btn');
+  if (!edit) return;
+
+  const tr   = edit.closest('tr');
+  const tableId = tr.closest('table').id;
+
+  /* ----------  EDICIÓN GRUPOS ESCALA  ---------- */
+  if (tableId === 'grupos-table') {
+    const nivelCell = tr.querySelector('td:nth-child(1)');
+    const esCuadroCell = tr.querySelector('td:nth-child(2)');
+
+    const oldNivel = nivelCell.textContent.trim();
+    const oldEsCuadro = esCuadroCell.textContent.trim() === 'Sí';
+
+    const actionCell = tr.querySelector('td:nth-child(3)');
+    const originalButtons = actionCell.innerHTML;
+
+    // Convertir celdas en inputs
+    nivelCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nivel" value="${oldNivel}">`;
+    esCuadroCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-es-cuadro" ${oldEsCuadro ? 'checked' : ''}>`;
+    
+    // Mantener el checkbox centrado
+    esCuadroCell.style.textAlign = 'center'; 
+
+    // Cambiar botones a Guardar/Cancelar
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+
+      if (save) {
+        // Si se guarda
+        const newNivel = nivelCell.querySelector('.input-edit-nivel').value.trim();
+        const newEsCuadro = esCuadroCell.querySelector('.input-edit-es-cuadro').checked;
+
+        if (!newNivel) { 
+          alert('El campo Nivel es obligatorio');
+          actionTaken = false; // Permitir reintento
+          return; 
+        }
+
+        fetch(`/nomencladores/api/grupos/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({
+            nivel: newNivel,
+            es_cuadro: newEsCuadro
+          })
+        })
+          .then(r => {
+             if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Error al guardar') });
+             return r.json();
+          })
+          .then(d => {
+            // Éxito: actualizar la fila en la vista
+            nivelCell.textContent = d.nivel;
+            esCuadroCell.textContent = d.es_cuadro ? 'Sí' : 'No';
+            esCuadroCell.style.textAlign = ''; // Restaurar
+            actionCell.innerHTML = originalButtons;
+            
+            // ¡Importante! Re-ordenar y paginar por si el nivel cambió
+            paginateGrupos(); 
+          })
+          .catch(err => {
+            // Error: revertir cambios
+            alert('Error: ' + err.message);
+            nivelCell.textContent = oldNivel;
+            esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
+            esCuadroCell.style.textAlign = '';
+            actionCell.innerHTML = originalButtons;
+          });
+      } else {
+        // Cancelar: revertir cambios
+        nivelCell.textContent = oldNivel;
+        esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
+        esCuadroCell.style.textAlign = '';
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    // Asignar eventos a los nuevos botones
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    
+    // Importante para que no se ejecuten otros 'if' de edición
+    return; 
+  }
+
+  /* ----------  EDICIÓN CARGOS  ---------- */
+  if (tableId === 'cargos-table') {
+    const descCell = tr.querySelector('td:nth-child(1)');
+    const catCell  = tr.querySelector('td:nth-child(2)');
+    const grupoCell = tr.querySelector('td:nth-child(3)');
+    const salarioCell = tr.querySelector('td:nth-child(4)');
+    const activoCell = tr.querySelector('td:nth-child(5)');
+
+    const oldDesc = descCell.textContent.trim();
+    const oldCatText = catCell.textContent.trim();
+    const oldGrupoText = grupoCell.textContent.trim();
+    const oldSalario = parseFloat(salarioCell.textContent.replace('$', '').trim());
+    const oldActivo = activoCell.textContent.trim() === 'Sí';
+
+    const actionCell = tr.querySelector('td:nth-child(6)');
+    const originalButtons = actionCell.innerHTML;
+
+    const catOptions = `
+      <option value="TEC" ${oldCatText === 'Técnico' ? 'selected' : ''}>Técnico</option>
+      <option value="ADM" ${oldCatText === 'Administrativo' ? 'selected' : ''}>Administrativo</option>
+      <option value="SER" ${oldCatText === 'Servicio' ? 'selected' : ''}>Servicio</option>
+      <option value="OPE" ${oldCatText === 'Operario' ? 'selected' : ''}>Operario</option>
+      <option value="CDI" ${oldCatText === 'Cuadro Directivo' ? 'selected' : ''}>Cuadro Directivo</option>
+      <option value="CEJ" ${oldCatText === 'Cuadro Ejecutivo' ? 'selected' : ''}>Cuadro Ejecutivo</option>
+    `;
+
+    let grupoOptions = '<option value="">-- Gpo. Escala --</option>';
+    {% for g in grupos %}
+      grupoOptions += `<option value="{{ g.id }}" ${oldGrupoText === "{{ g.nivel }}" ? 'selected' : ''}>{{ g.nivel }}</option>`;
+    {% endfor %}
+
+    descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+    catCell.innerHTML = `<select class="form-control form-control-sm input-edit-cat">${catOptions}</select>`;
+    grupoCell.innerHTML = `<select class="form-control form-control-sm input-edit-grupo">${grupoOptions}</select>`;
+    salarioCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" value="${oldSalario}">`;
+    activoCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-activo" ${oldActivo ? 'checked' : ''}>`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+        const newCat = catCell.querySelector('.input-edit-cat').value;
+        const newGrupoId = grupoCell.querySelector('.input-edit-grupo').value;
+        const newSalario = parseFloat(salarioCell.querySelector('.input-edit-salario').value);
+        const newActivo = activoCell.querySelector('.input-edit-activo').checked;
+
+        if (!newDesc || !newCat || !newGrupoId) { alert('Complete todos los campos obligatorios'); return; }
+
+        fetch(`/nomencladores/api/cargos/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({
+            descripcion: newDesc,
+            cat_ocupacional: newCat,
+            grupo_escala_id: newGrupoId,
+            salario_basico: newSalario,
+            activo: newActivo
+          })
+        })
+          .then(r => r.json())
+          .then(d => {
+            descCell.textContent = d.descripcion;
+            catCell.textContent = d.cat_ocupacional;
+            grupoCell.textContent = d.grupo_escala;
+            salarioCell.textContent = `$${d.salario_basico}`;
+            activoCell.textContent = d.activo ? 'Sí' : 'No';
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        descCell.textContent = oldDesc;
+        catCell.textContent = oldCatText;
+        grupoCell.textContent = oldGrupoText;
+        salarioCell.textContent = `$${oldSalario}`;
+        activoCell.textContent = oldActivo ? 'Sí' : 'No';
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN ESPECIALIDADES  ---------- */
+  if (tableId === 'especialidades-table') {
+    const nombreCell = tr.querySelector('td:nth-child(1)');
+    const educCell   = tr.querySelector('td:nth-child(2)');
+    const oldNombre  = nombreCell.textContent.trim();
+    const oldEduc    = educCell.textContent.trim() === 'Sí';
+
+    const actionCell = tr.querySelector('td:nth-child(3)');
+    const originalButtons = actionCell.innerHTML;
+
+    nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+    educCell.innerHTML   = `<input type="checkbox" class="form-check-input input-edit-educ" ${oldEduc ? 'checked' : ''}>`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+        const newEduc   = educCell.querySelector('.input-edit-educ').checked;
+        if (!newNombre) { alert('Campo obligatorio'); return; }
+
+        fetch(`/nomencladores/api/especialidades/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ nombre: newNombre, educ_superior: newEduc })
+        })
+          .then(r => r.json())
+          .then(d => {
+            nombreCell.textContent = d.nombre;
+            educCell.textContent   = d.educ_superior ? 'Sí' : 'No';
+            actionCell.innerHTML   = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        nombreCell.textContent = oldNombre;
+        educCell.textContent   = oldEduc ? 'Sí' : 'No';
+        actionCell.innerHTML   = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN CONDICIONES  ---------- */
+  if (tableId === 'condiciones-table') {
+    const nombreCell = tr.querySelector('td:nth-child(1)');
+    const tarifaCell = tr.querySelector('td:nth-child(2)');
+
+    const oldNombre = nombreCell.textContent.trim();
+    const oldTarifa = parseFloat(tarifaCell.textContent.replace(' CUP', '').trim());
+
+    const actionCell = tr.querySelector('td:nth-child(3)');
+    const originalButtons = actionCell.innerHTML;
+
+    nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+    tarifaCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-tarifa" value="${oldTarifa}">`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+        const newTarifa = parseFloat(tarifaCell.querySelector('.input-edit-tarifa').value);
+        if (!newNombre) { alert('Campo obligatorio'); return; }
+
+        fetch(`/nomencladores/api/condiciones/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ nombre: newNombre, tarifa_hora: newTarifa })
+        })
+          .then(r => r.json())
+          .then(d => {
+            nombreCell.textContent = d.nombre;
+            tarifaCell.textContent = d.tarifa_hora + ' CUP';
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        nombreCell.textContent = oldNombre;
+        tarifaCell.textContent = oldTarifa + ' CUP';
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN HORARIOS  ---------- */
+  if (tableId === 'horarios-table') {
+    const descCell = tr.querySelector('td:nth-child(1)');
+    const iniCell  = tr.querySelector('td:nth-child(2)');
+    const finCell  = tr.querySelector('td:nth-child(3)');
+
+    const oldDesc = descCell.textContent.trim();
+    const oldIni  = iniCell.textContent.trim();
+    const oldFin  = finCell.textContent.trim();
+
+    const actionCell = tr.querySelector('td:nth-child(4)');
+    const originalButtons = actionCell.innerHTML;
+
+    descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+    iniCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-ini" value="${oldIni}">`;
+    finCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-fin" value="${oldFin}">`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+        const newIni  = iniCell.querySelector('.input-edit-ini').value.trim();
+        const newFin  = finCell.querySelector('.input-edit-fin').value.trim();
+        if (!newDesc || !newIni || !newFin) { alert('Complete todos los campos'); return; }
+
+        fetch(`/nomencladores/api/horarios/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ descripcion: newDesc, hora_inicio: newIni, hora_fin: newFin })
+        })
+          .then(r => r.json())
+          .then(d => {
+            descCell.textContent = d.descripcion;
+            iniCell.textContent  = d.hora_inicio;
+            finCell.textContent  = d.hora_fin;
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        descCell.textContent = oldDesc;
+        iniCell.textContent  = oldIni;
+        finCell.textContent  = oldFin;
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN JORNADAS  ---------- */
+  if (tableId === 'jornadas-table') {
+    const tipoCell = tr.querySelector('td:nth-child(1)');
+    const horaCell = tr.querySelector('td:nth-child(2)');
+
+    const oldTipo = tipoCell.textContent.trim();
+    const oldHoraId = tr.dataset.horarioId || '';
+
+    const actionCell = tr.querySelector('td:nth-child(3)');
+    const originalButtons = actionCell.innerHTML;
+
+    let opts = '<option value="">—</option>';
+    {% for h in horarios %}
+      opts += `<option value="{{ h.id }}" ${oldHoraId == "{{ h.id }}" ? 'selected' : ''}>{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
+    {% endfor %}
+
+    tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+    horaCell.innerHTML = `<select class="form-control form-control-sm input-edit-hora">${opts}</select>`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
+        const newHora = horaCell.querySelector('.input-edit-hora').value;
+        if (!newTipo) { alert('Campo obligatorio'); return; }
+
+        fetch(`/nomencladores/api/jornadas/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ tipo: newTipo, horario: newHora || null })
+        })
+          .then(r => r.json())
+          .then(d => {
+            tipoCell.textContent = d.tipo;
+            horaCell.textContent = d.horario ? `${d.horario}` : '—';
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        tipoCell.textContent = oldTipo;
+        horaCell.textContent = oldHoraId ? horaCell.querySelector(`option[value="${oldHoraId}"]`)?.text || '—' : '—';
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN CAUSAS  ---------- */
+  if (tableId === 'causas-table') {
+    const descCell = tr.querySelector('td:nth-child(1)');
+    const altaCell = tr.querySelector('td:nth-child(2)');
+
+    const oldDesc = descCell.textContent.trim();
+    const oldAlta = altaCell.textContent.trim() === 'Sí';
+
+    const actionCell = tr.querySelector('td:nth-child(3)');
+    const originalButtons = actionCell.innerHTML;
+
+    descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+    altaCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-alta" ${oldAlta ? 'checked' : ''}>`;
+
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+        const newAlta = altaCell.querySelector('.input-edit-alta').checked;
+        if (!newDesc) { alert('Campo obligatorio'); return; }
+
+        fetch(`/nomencladores/api/causas/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ descripcion: newDesc, alta: newAlta })
+        })
+          .then(r => r.json())
+          .then(d => {
+            descCell.textContent = d.descripcion;
+            altaCell.textContent = d.alta ? 'Sí' : 'No';
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        descCell.textContent = oldDesc;
+        altaCell.textContent = oldAlta ? 'Sí' : 'No';
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    return;
+  }
+
+  /* ----------  EDICIÓN PROVINCIAS / MUNICIPIOS  ---------- */
+  if (tableId === 'provincias-table' || tableId === 'municipios-table') {
+    const cell = tr.querySelector('.nombre-cell');
+    const oldVal = cell.textContent.trim();
+
+    const actionCell = tr.querySelector('td.text-center');
+    const originalButtons = actionCell.innerHTML;
+
+    cell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit" value="${oldVal}">`;
+    actionCell.innerHTML = `
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+        <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+      </div>`;
+
+    let actionTaken = false;
+    const finishEdit = (save = false) => {
+      if (actionTaken) return;
+      actionTaken = true;
+      if (save) {
+        const newVal = cell.querySelector('input').value.trim();
+        if (!newVal) { alert('Campo obligatorio'); return; }
+        const endpoint = tableId === 'provincias-table' ? 'provincias' : 'municipios';
+        fetch(`/nomencladores/api/${endpoint}/${tr.dataset.id}/`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+          body: JSON.stringify({ nombre: newVal })
+        })
+          .then(r => r.json())
+          .then(d => {
+            cell.textContent = d.nombre;
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+      } else {
+        cell.textContent = oldVal;
+        actionCell.innerHTML = originalButtons;
+      }
+    };
+
+    actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+    actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+    cell.querySelector('input').onkeydown = ev => {
+      if (ev.key === 'Enter') finishEdit(true);
+      if (ev.key === 'Escape') finishEdit(false);
+    };
+    cell.querySelector('input').addEventListener('blur', () => {
+      setTimeout(() => { if (!actionTaken) finishEdit(true); }, 150);
+    });
+  }
+});
+
+/* ----------  ELIMINAR  ---------- */
+document.addEventListener('click', e => {
+  const del = e.target.closest('.delete-btn');
+  if (!del) return;
+
+  const tr = del.closest('tr');
+  const id = tr.dataset.id;
+  const tableId = tr.closest('table').id;
+  let endpoint = '';
+  if (tableId === 'tridentes-table') endpoint = 'tridentes';
+  else if (tableId === 'roles-table') endpoint = 'roles';
+  else if (tableId === 'grupos-table') endpoint = 'grupos';
+  else if (tableId === 'provincias-table') endpoint = 'provincias';
+  else if (tableId === 'municipios-table') endpoint = 'municipios';
+  else if (tableId === 'horarios-table') endpoint = 'horarios';
+  else if (tableId === 'jornadas-table') endpoint = 'jornadas';
+  else if (tableId === 'causas-table') endpoint = 'causas';
+  else if (tableId === 'condiciones-table') endpoint = 'condiciones';
+  else if (tableId === 'especialidades-table') endpoint = 'especialidades';
+  else if (tableId === 'cargos-table') endpoint = 'cargos';
+  else return;
+
+  Swal.fire({
+    title: '¿Estás seguro?',
+    text: "No podrás revertir esta acción.",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Sí, eliminar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true,
+    width: '28rem',
+    background: '#fff',
+    color: '#697a8d',
+    iconColor: '#dc3545',
+    buttonsStyling: false,
+    customClass: {
+      popup: 'border rounded-3 shadow-lg p-3',
+      title: 'fs-4 text-dark fw-semibold',
+      htmlContainer: 'text-muted fs-6',
+      actions: 'd-flex justify-content-center gap-3 mt-3',
+      confirmButton: 'btn btn-danger px-4',
+      cancelButton: 'btn btn-secondary px-4'
+    }
+  }).then(result => {
+    if (result.isConfirmed) {
+      fetch(`/nomencladores/api/${endpoint}/${id}/delete/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': csrftoken }
+      })
+        .then(r => {
+          if (!r.ok) throw new Error("Error al eliminar");
+          return r.json();
+        })
+        .then(() => {
+          tr.remove();
+          Swal.fire({ icon: 'success', title: 'Eliminado', text: 'Registro eliminado con éxito.', timer: 1000, showConfirmButton: false });
+          if (tableId === 'grupos-table') paginateGrupos();
+          if (tableId === 'cargos-table') paginateCargos();
+        })
+        .catch(res => res.json().then(data => {
+          Swal.fire('Error', data.error || 'Error desconocido', 'error');
+        }))
+    }
+  });
+});
+
+/* ----------  BOTÓN “+” PARA AÑADIR FILA  ---------- */
+document.querySelectorAll('.add-row-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    cancelAllInsertRows();
+
+    const tableId = btn.dataset.table;
+    const table   = document.getElementById(tableId);
+    const tbody   = table.querySelector('tbody');
+    if (tbody.querySelector('.insert-row')) return;
+
+    const row = document.createElement('tr');
+    row.className = 'insert-row';
+
+    switch (tableId) {
+      case 'tridentes-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'roles-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'grupos-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-nivel" placeholder="Nivel (I, II, III...)"></td>
+          <td class="text-center">
+            <input type="checkbox" class="form-check-input input-es-cuadro">
+          </td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'provincias-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'municipios-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+          <td class="provincia-cell">—</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        const provinciaActivaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent?.trim() || '—';
+        const provinciaCell = row.querySelector('td:nth-child(2)');
+        if (provinciaCell) provinciaCell.textContent = provinciaActivaName;
+        break;
+
+      case 'horarios-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-descripcion" placeholder="Nombre"></td>
+          <td><input type="time" class="form-control form-control-sm input-desde text-center"></td>
+          <td><input type="time" class="form-control form-control-sm input-hasta text-center"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'jornadas-table':
+        let horariosOptions = '<option value="">—</option>';
+            {% for h in horarios %}
+              horariosOptions += `<option value="{{ h.id }}">{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
+            {% endfor %}
+
+            row.innerHTML = `
+              <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Nombre"></td>
+              <td>
+                <select class="form-control form-control-sm input-horas">
+                  ${horariosOptions}
+                </select>
+              </td>
+              <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                  <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+                </div>
+              </td>`;
+        break;
+
+      case 'causas-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+          <td class="text-center"><input type="checkbox" class="form-check-input input-alta"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'condiciones-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+          <td><input type="number" step="0.01" class="form-control form-control-sm input-tarifa" placeholder="Tarifa hora"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'especialidades-table':
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+          <td class="text-center"><input type="checkbox" class="form-check-input input-educ-superior"></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      case 'cargos-table':
+        let grupoOptions = '<option value="">-- Gpo. Escala --</option>';
+        {% for g in grupos %}
+          grupoOptions += `<option value="{{ g.id }}">{{ g.nivel }}</option>`;
+        {% endfor %}
+        let catOptions = `
+          <option value="">-- Cat. --</option>
+          <option value="TEC">Técnico</option>
+          <option value="ADM">Administrativo</option>
+          <option value="SER">Servicio</option>
+          <option value="OPE">Operario</option>
+          <option value="CDI">Cuadro Directivo</option>
+          <option value="CEJ">Cuadro Ejecutivo</option>
+        `;
+        row.innerHTML = `
+          <td><input type="text" class="form-control form-control-sm input-descripcion" placeholder="Descripción"></td>
+          <td>
+            <select class="form-control form-control-sm input-cat">${catOptions}</select>
+          </td>
+          <td>
+            <select class="form-control form-control-sm input-grupo">${grupoOptions}</select>
+          </td>
+          <td><input type="number" step="0.01" class="form-control form-control-sm input-salario" placeholder="Salario"></td>
+          <td class="text-center"><input type="checkbox" class="form-check-input input-activo" checked></td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+              <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+            </div>
+          </td>`;
+        break;
+
+      default:
+        row.innerHTML = `<td colspan="2">Sin definir</td>`;
+    }
+
+    tbody.insertBefore(row, tbody.firstChild);
+
+    const input     = row.querySelector('.input-tipo, .input-nivel, .input-nombre, .input-descripcion, .input-desc, .input-tarifa, .input-educ-superior, .input-descripcion');
+    const saveBtn   = row.querySelector('.save-create-btn');
+    const cancelBtn = row.querySelector('.cancel-btn');
+
+    const check = () => {
+      const val = input?.value?.trim();
+      saveBtn.disabled = !val;
+    };
+    input?.addEventListener('input', check);
+    check();
+
+    cancelBtn.addEventListener('click', () => row.remove());
+    input?.focus();
+  });
+});
+
+/* ----------  LISTENER ÚNICO PARA “SALVAR”  ---------- */
+document.addEventListener('click', async e => {
+  const save = e.target.closest('.save-create-btn');
+  if (!save) return;
+
+  const tableId = save.closest('table').id;
+  const row     = save.closest('.insert-row');
+
+  switch (tableId) {
+    case 'tridentes-table':
+      await guardarTridente(row);
+      break;
+    case 'roles-table':
+      await guardarRol(row);
+      break;
+    case 'grupos-table':
+      await guardarGrupo(row);
+      break;
+    case 'provincias-table':
+      await guardarProvincia(row);
+      break;
+    case 'municipios-table':
+      await guardarMunicipio(row);
+      break;
+    case 'horarios-table':
+      await guardarHorario(row);
+      break;
+    case 'jornadas-table':
+      await guardarJornada(row);
+      break;
+    case 'causas-table':
+      await guardarCausa(row);
+      break;
+    case 'condiciones-table':
+      await guardarCondicion(row);
+      break;
+    case 'especialidades-table':
+      await guardarEspecialidad(row);
+      break;
+    case 'cargos-table':
+      await guardarCargo(row);
+      break;
+    default:
+      alert('Tabla no implementada');
+  }
+});
+
+/* ----------  SELECCIONAR PROVINCIA ACTIVA  ---------- */
+let provinciaActiva = null;
+
+document.addEventListener('click', e => {
+  const filaProv = e.target.closest('#provincias-table tbody tr');
+  if (!filaProv) return;
+
+  document.querySelectorAll('#provincias-table tbody tr').forEach(f => f.classList.remove('active'));
+  filaProv.classList.add('active');
+
+  provinciaActiva = {
+    id: filaProv.dataset.id,
+    nombre: filaProv.querySelector('.nombre-cell').textContent.trim()
+  };
+
+  document.getElementById('municipios-card-title').textContent = `Provincia ${provinciaActiva.nombre} / Municipios`;
+  const btnMunicipio = document.querySelector('[data-table="municipios-table"]');
+  if (btnMunicipio) btnMunicipio.disabled = false;
+
+  filtrarMunicipiosPorProvincia(provinciaActiva.id);
+});
+
+function filtrarMunicipiosPorProvincia(provinciaId) {
+  const tbody = document.getElementById('municipios-tbody');
+  tbody.dataset.provinciaId = provinciaId;
+  const filas = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+  filas.forEach(fila => {
+    fila.style.display = fila.dataset.provinciaId === provinciaId ? '' : 'none';
+  });
+  municipiosCurrentPage = 1;
+  paginateMunicipios();
+}
+
+/* ----------  INICIALIZAR  ---------- */
+paginateProvincias();
+paginateMunicipios();
+paginateGrupos();
+paginateCargos();
+</script>

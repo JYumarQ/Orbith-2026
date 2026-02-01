@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Orbith{% endblock %}</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{% static 'img/favicon/favicon.png' %}" />
+
+
+    <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}" class="template-customizer-core-css">
+    <link rel="stylesheet" href="{% static 'vendor/css/theme-default.css' %}" class="template-customizer-core-css">
+    <link rel="stylesheet" href="{% static 'css/demo.css' %}">
+
+    <!-- Vendors CSS -->
+    <link rel="stylesheet" href="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/css/select2.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/css/select2-bootstrap-5-theme.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/select2-sneat-fix.css' %}"> <!-- Ajuste visual select2 = Sneat -->
+    
+    <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
+    <link rel="stylesheet" href="{% static 'css/all.min.css' %}"> <!-- Font Awesome -->
+
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Layout wrapper -->
+    <div class="layout-wrapper layout-content-navbar">
+      <div class="layout-container">
+        <!-- Menu -->
+
+        {% include 'base/sidebar.html' %}
+        <div class="layout-page">
+           
+            {% include 'base/navbar.html' %}
+            
+            {% include 'base/scripts.html' %}
+            
+            {% block content %}{% endblock %}
+
+            {% include 'base/footer.html' %}
+            
+        </div>
+      </div>
+
+      <div class="layout-overlay layout-menu-toggle"></div>
+    
+    </div>
+    
+
+    <!-- Toasts container -->
+<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 1080;"></div>
+
+
+<!-- MENSAJES DJANGO (ocultos para evitar problemas del linter dentro de <script>) -->
+<div id="djangoMessages" class="d-none">
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="msg" data-tags="{{ msg.tags|default_if_none:'info' }}">{{ msg|escape }}</div>
+    {% endfor %}
+  {% endif %}
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toastContainer = document.getElementById('toastContainer');
+    const hidden = document.getElementById('djangoMessages');
+    if (!hidden) return;
+    hidden.querySelectorAll('.msg').forEach(function(node) {
+      const text = (node.textContent || '').trim();
+      const tags = node.dataset.tags || 'info';
+
+      const toastEl = document.createElement('div');
+      toastEl.className = 'bs-toast toast fade';
+      if (tags) toastEl.classList.add('bg-' + tags);
+      toastEl.setAttribute('role', 'alert');
+      toastEl.setAttribute('aria-live', 'assertive');
+      toastEl.setAttribute('aria-atomic', 'true');
+
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2,'0');
+      const mm = String(now.getMinutes()).padStart(2,'0');
+
+      toastEl.innerHTML = `
+        <div class="toast-header">
+          <i class="fas fa-bell me-2"></i>
+          <div class="me-auto fw-semibold">Notificación</div>
+          <small>${hh}:${mm}</small>
+          <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body"></div>
+      `;
+      toastEl.querySelector('.toast-body').textContent = text;
+      toastContainer.appendChild(toastEl);
+
+      const bsToast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
+      bsToast.show();
+    });
+  });
+</script>
+
+
+
+
+
+<!-- sweetalert2 -->
+<script src="{% static 'js/sweetalert2.js' %}"></script>
+<script>
+  document.addEventListener('submit', function (e) {
+    const form = e.target;
+    if (!form.matches('form.swal-confirm')) return;
+    e.preventDefault();
+
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: form.dataset.confirmText || '¿Deseas continuar?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Guardar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      width: '28rem',
+      background: '#fff',
+      color: '#697a8d',
+      iconColor: '#696cff',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'border rounded-3 shadow-lg p-3',
+        title: 'fs-4 text-dark fw-semibold',
+        htmlContainer: 'text-muted fs-6',
+        actions: 'd-flex justify-content-center gap-3 mt-3',
+        confirmButton: 'btn btn-primary px-4',
+        cancelButton: 'btn btn-secondary px-4'
+      },
+      didOpen: () => {
+        const container = document.querySelector('.swal2-container');
+        const backdrop = document.querySelector('.swal2-backdrop');
+        if (container) container.style.zIndex = 2000;
+        if (backdrop) backdrop.style.zIndex = 1500;
+      }
+    }).then(result => {
+      if (result.isConfirmed) {
+        form.submit();
+      }
+    });
+  });
+</script>
+
+<!--ELIMINAR-->
+<script>
+  document.addEventListener('click', function(e) {
+    const eliminarLink = e.target.closest('a.btn-eliminar');
+    if (!eliminarLink) return;
+
+    // Evitar doble confirmación si el enlace usa HTMX
+    if (
+      eliminarLink.hasAttribute('hx-delete') ||
+      eliminarLink.hasAttribute('hx-post')   ||
+      eliminarLink.hasAttribute('hx-put')    ||
+      eliminarLink.hasAttribute('hx-get')
+    ){
+      return;
+    }
+
+    e.preventDefault();
+    const url = eliminarLink.href;
+
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      width: '28rem',
+      background: '#fff',
+      color: '#697a8d',
+      iconColor: '#dc3545',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'border rounded-3 shadow-lg p-3',
+        title: 'fs-4 text-dark fw-semibold',
+        htmlContainer: 'text-muted fs-6',
+        actions: 'd-flex justify-content-center gap-3 mt-3',
+        confirmButton: 'btn btn-danger px-4',
+        cancelButton: 'btn btn-secondary px-4'
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        window.location.href = url;
+      }
+    });
+  });
+</script>
+
+
+
+<!-- sweetalert2 -->
+
+<!-- Incluye tu ui-toasts.js después de cargar Bootstrap JS -->
+<script src="{% static 'js/ui-toasts.js' %}"></script>
+
+<!-- HTMX: añadir CSRF a todas las peticiones -->
+<script>
+  document.body.addEventListener('htmx:configRequest', function (e) {
+    var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
+  });
+</script>
+
+{% block extra_scripts %}{% endblock %}
+
+</body>
+</html>

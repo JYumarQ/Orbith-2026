@@ -1,0 +1,461 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Aspirante{% endblock %}
+
+{% block content %}
+
+<style>
+    /* Fila seleccionada: Azul transparente que permite leer */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+    
+    /* Botonera desactivada (Estado inicial: Opaca) */
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none; /* No permite clic */
+        transition: opacity 0.3s ease;
+    }
+    
+    /* Botonera activada */
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    
+    .cursor-pointer { cursor: pointer; }
+
+    /* --- ESTILOS PARA FILTROS EN CABECERA --- */
+    .th-filter-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .th-filter-container select:disabled {
+        background-color: #eceef1 !important; /* Fondo gris igual al de Localidad */
+        color: #a1acb8 !important; /* Texto más claro */
+        cursor: default;
+    }
+    
+    .th-filter-container select {
+        font-size: 0.75rem !important;
+        /* Aumentamos padding derecho (20px) para que la flecha tenga su sitio reservado */
+        padding: 0.1rem 20px 0.1rem 0.5rem !important; 
+        height: auto !important;
+        width: auto !important;
+        border: 1px solid #d9dee3;
+        border-radius: 4px;
+        background-color: #fff;
+        
+        /* SOLUCIÓN AL "ENCOGIMIENTO": */
+        /* Forzamos que mida SIEMPRE al menos 85px. 
+           Así, aunque se inhabilite y la letra se afine, la caja NO se encoge. */
+        min-width: 85px; 
+        max-width: 85px; /* Fijamos el máximo igual para que sea una caja estable */
+        
+        /* Si el texto es largo, pone "..." en lugar de romperse */
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+
+        cursor: pointer;
+    }
+    /* Estilo para cuando el filtro está ACTIVO (Habilitado) */
+    .th-filter-container select:not(:disabled) {
+        color: #566a7f !important; /* Color texto normal (oscuro) */
+        font-weight: 600 !important; /* Negrita */
+        border-color: #696cff; /* Borde azulado opcional para resaltar */
+        background-color: #fff;
+    }
+    
+</style>
+
+{% load static %}
+
+  <div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+      <h4 class="fw-bold py-3 mb-4">
+    <span class="text-muted fw-light">Plantilla /</span> 
+    {% if titulo_pagina %}{{ titulo_pagina }}{% else %}Aspirantes{% endif %}</h4>
+
+
+      <div class="card">
+        
+        <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            
+            <div id="aspirante-toolbar" class="d-flex gap-2 toolbar-disabled">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-editar" 
+                    onclick="abrir_modal_edicion(this.dataset.url)" title="Editar">
+                    <i class="fas fa-user-edit"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btn-contrato" 
+                    onclick="abrir_modal_contrato(this.dataset.url)" title="Contrato">
+                    <i class="fas fa-file-signature"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="btn-eliminar" 
+                    hx-post="" 
+                    hx-confirm="¿Está seguro de eliminar este aspirante?" 
+                    hx-swap="none"
+                    hx-on:htmx:after-request="if(event.detail.successful) htmx.trigger('#search', 'searchFilters')"
+                    title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+
+            <div id="search_container" class="ms-3 grow" style="max-width: 300px;">
+                <div class="input-group input-group-merge">
+                    <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+                    <input id="search" type="text" class="form-control border-0 shadow-none" 
+                          placeholder="Buscar..." 
+                          name="filter_aspirante"
+                          hx-get="{% url search_url %}" 
+                          hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
+                          hx-target="#filter_aspirantes_results"
+                          hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado">
+                </div>
+            </div>
+
+            <div class="d-flex ms-auto">
+              <div class="btn-group me-2">
+                <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Más filtros">
+                    <i class="fas fa-filter"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 200px;">
+                    
+                    <div class="mb-2">
+                        <label class="form-label mb-1 small text-muted">Sexo</label>
+                        <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
+                            <option value="">Todos</option>
+                            <option value="M">M</option>
+                            <option value="F">F</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label mb-1 small text-muted">Raza</label>
+                        <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
+                            <option value="">Todos</option>
+                            <option value="NE">Negra</option>
+                            <option value="BL">Blanca</option>
+                            <option value="ME">Mestiza</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="form-label mb-1 small text-muted">Grado Científico</label>
+                        <select id="filter_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
+                            <option value="">Todos</option>
+                            <option value="MC">Master</option>
+                            <option value="DC">Doctor</option>
+                        </select>
+                    </div>
+
+                </div>
+            </div>
+                {% if not es_baja_view and request.user.es_admin or request.user.es_moderador %}
+                <button type="button" class="btn btn-primary"
+                        data-url="{% url 'add_aspir' %}"
+                        onclick="abrir_modal_creacion(this.dataset.url)">
+                    <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nuevo</span>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="table-responsive text-nowrap">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+              <th class="text-center" style="min-width: 140px;">CI</th>
+              <th class="text-center" style="min-width: 260px;">Nombre</th>
+              
+              <th class="text-center">
+                  <div class="th-filter-container">
+                      <select name="provincia" 
+                              id="filter_provincia_select"
+                              hx-get="{% url 'cargar_municipios' %}?for_filter=1" 
+                              hx-target="#filter-municipio-container" 
+                              hx-trigger="change"
+                              onfocus="mostrarNombresCompletos(this)"
+                              onblur="mostrarSigla(this)"
+                              onchange="mostrarSigla(this); document.getElementById('filter_municipio_select').value=''; triggerSearch()">
+                              
+                          <option value="">Todos</option>
+                          {% for p in provincias_list %}
+                          <option value="{{ p.id }}" 
+                                  data-sigla="{{ p.sigla }}" 
+                                  data-nombre="{{ p.nombre }}">
+                              {{ p.nombre }}
+                          </option>
+                          {% endfor %}
+                      </select>
+
+                      <span>Localidad</span>
+
+                      <span id="filter-municipio-container">
+                          <select name="municipio" id="filter_municipio_select" disabled>
+                              <option value="">Todos</option>
+                          </select>
+                      </span>
+                  </div>
+              </th>
+
+              <th class="text-center">
+                  <div class="th-filter-container">
+                      <span>N. Educacional</span>
+                      <select name="nivel_educ"
+                              id="filter_nivel_select"
+                              hx-get="{% url 'cargar_esp' %}?for_filter=1"  hx-target="#filter_especialidad" 
+                              hx-trigger="change"
+                              onchange="toggleEspecialidad(this); triggerSearch()">
+                          <option value="">Todos</option>
+                          {% for k, v in niveles_educ %}
+                          <option value="{{ k }}">{{ v }}</option>
+                          {% endfor %}
+                      </select>
+                  </div>
+              </th>
+
+              <th class="text-center">
+                  <div class="th-filter-container">
+                      <span>Especialidad</span>
+                      <select id="filter_especialidad" name="especialidad" disabled onchange="triggerSearch()">
+                          <option value="">Todos</option>
+                      </select>
+                  </div>
+              </th>
+            </tr>
+          </thead>
+            <tbody class="table-border-bottom-0" id="filter_aspirantes_results">
+              {% include 'pages/aspirante/partials/filter_aspirantes_list.html' %}
+            </tbody>
+          </table>
+        </div> 
+        
+        <div id="table-pagination-footer" class="px-4 pb-3 border-top">
+            {% include 'pages/aspirante/partials/pagination.html' %}
+        </div>
+
+    </div> 
+  </div> 
+  <div class="content-backdrop fade"></div>
+  </div>
+  <div class="modal fade" id="editar_aspir" role="dialog"></div>
+  <div class="modal fade" id="crear_aspir" role="dialog"></div>
+  <div class="modal fade" id="crear_contrato" role="dialog"></div>
+
+{% block extra_scripts %}
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script type="text/javascript">
+    var $ = jQuery.noConflict();
+    function abrir_modal_edicion(url){
+      $('#editar_aspir').load(url, function(){
+        $(this).modal('show');
+        
+      })
+    }
+    function abrir_modal_creacion(url){
+      $('#crear_aspir').load(url, function(){
+        $(this).modal('show');
+        
+      })
+    }
+    function abrir_modal_contrato(url){
+      $('#crear_contrato').load(url, function(){
+        $(this).modal('show');
+        
+      });
+    }
+
+    function show_hide_search(){
+      $('#search_container').toggleClass('d-none');
+      if ($('#search_container').hasClass('d-none')) {
+        $('#search').val('');
+        htmx.ajax('GET', "{% url search_url %}", {target:'#filter_aspirantes_results'});
+      } else {
+        $('#search').focus();
+      }
+    }
+
+    $(document).ready(function() {
+      $('#search').on('keydown', function(e) {
+        if (e.key === 'Escape') {
+          $(this).val('');
+          htmx.ajax('GET', "{% url search_url %}", {target:'#filter_aspirantes_results'});
+        }
+      });
+    });
+
+    // Intercepta el evento de confirmación de HTMX
+  document.body.addEventListener('htmx:confirm', function(evt) {
+    // Verificamos si el elemento que disparó el evento es nuestro botón de eliminar
+    if (evt.target.id === 'btn-eliminar') {
+      evt.preventDefault(); // 1. Prevenir el confirm nativo del navegador
+
+      // 2. Mostrar SweetAlert
+      Swal.fire({
+        title: '¿Estás seguro?',
+        text: evt.detail.question, // Toma el texto de tu atributo hx-confirm
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33', // Rojo para peligro
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+      }).then((result) => {
+        // 3. Si el usuario confirma, emitimos la solicitud manualmente
+        if (result.isConfirmed) {
+          evt.detail.issueRequest(true); // 'true' omite la verificación de confirmación
+        }
+      });
+    }
+  });
+
+</script>
+
+
+<script>
+    // Variable para guardar el ID seleccionado actualmente
+    let seleccionadoID = null;
+
+    // Función principal de selección (se activa al hacer click en la fila)
+    function seleccionarAspirante(fila) {
+        // 1. Gestión Visual
+        document.querySelectorAll('.fila-aspirante').forEach(f => f.classList.remove('table-active-row'));
+        fila.classList.add('table-active-row');
+
+        // 2. Obtener datos
+        seleccionadoID = fila.getAttribute('data-id');
+        const urlEditar = fila.getAttribute('data-url-editar');
+        const urlContrato = fila.getAttribute('data-url-contrato');
+        const urlEliminar = fila.getAttribute('data-url-eliminar');
+
+        // 3. Activar Botonera
+        const toolbar = document.getElementById('aspirante-toolbar');
+        toolbar.classList.remove('toolbar-disabled');
+        toolbar.classList.add('toolbar-active');
+
+        // 4. Actualizar botones
+        document.getElementById('btn-editar').setAttribute('data-url', urlEditar);
+        document.getElementById('btn-contrato').setAttribute('data-url', urlContrato);
+        
+        const btnEliminar = document.getElementById('btn-eliminar');
+        btnEliminar.setAttribute('hx-post', urlEliminar);
+        if (window.htmx) htmx.process(btnEliminar);
+    }
+
+    // Función para deseleccionar todo (limpiar estado)
+    function deseleccionarTodo() {
+        document.querySelectorAll('.fila-aspirante').forEach(f => f.classList.remove('table-active-row'));
+        const toolbar = document.getElementById('aspirante-toolbar');
+        if (toolbar) {
+            toolbar.classList.add('toolbar-disabled');
+            toolbar.classList.remove('toolbar-active');
+        }
+        seleccionadoID = null;
+    }
+
+    // EVENTO GLOBAL: Detectar clicks fuera de la tabla
+    document.addEventListener('click', function(e) {
+        const clickEnFila = e.target.closest('.fila-aspirante');
+        const clickEnToolbar = e.target.closest('#aspirante-toolbar');
+
+        if (!clickEnFila && !clickEnToolbar) {
+            deseleccionarTodo();
+        }
+    });
+
+    // --- LÓGICA PARA FILTROS EN CABECERA ---
+
+    function triggerSearch() {
+        const searchInput = document.getElementById('search');
+        // CAMBIO: Disparamos el evento personalizado 'searchFilters'
+        // Esto fuerza a HTMX a buscar, aunque el input esté vacío.
+        htmx.trigger(searchInput, 'searchFilters'); 
+    }
+
+    function toggleEspecialidad(selectElement) {
+        const val = selectElement.value;
+        const espSelect = document.getElementById('filter_especialidad');
+        
+        // Solo habilitar para TM (Medio Superior TM) y NS (Nivel Superior)
+        if (val === 'TM' || val === 'NS') {
+            espSelect.removeAttribute('disabled');
+        } else {
+            espSelect.setAttribute('disabled', 'disabled');
+            espSelect.value = ''; // Resetear a 'Todos'
+        }
+    }
+
+    // Detectar cambios en el select de Municipio (que se carga por Ajax)
+    $(document).on('change', '#filter-municipio-container select', function() {
+        triggerSearch();
+    });
+
+    // --- LÓGICA VISUAL: SIGLAS VS NOMBRES ---
+
+    // Al desplegar (click/focus), mostrar Nombres Completos para leer bien
+    function mostrarNombresCompletos(select) {
+        for (let i = 0; i < select.options.length; i++) {
+            const opt = select.options[i];
+            // Si es opción de filtro y tiene el dato guardado, ponemos el nombre
+            if (opt.dataset.nombre) {
+                opt.text = opt.dataset.nombre;
+            }
+        }
+    }
+
+    // Al seleccionar o salir (blur/change), mostrar Sigla para ahorrar espacio
+    function mostrarSigla(select) {
+        // 1. Restauramos todos a nombre completo primero (para que el desplegable se vea bien)
+        mostrarNombresCompletos(select);
+
+        // 2. Solo a la opción SELECCIONADA le ponemos la sigla
+        const selectedOpt = select.options[select.selectedIndex];
+        if (selectedOpt.value !== "" && selectedOpt.dataset.sigla) {
+            selectedOpt.text = selectedOpt.dataset.sigla;
+        }
+    }
+
+    // Escucha el evento 'showMessage' que envía el servidor al eliminar
+    document.body.addEventListener('showMessage', function(evt){
+        // Usamos SweetAlert en modo "Toast"
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: evt.detail.value,
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+        });
+    }); // <--- AQUÍ SE CIERRA EL EVENTO showMessage. ¡ESTO FALTABA!
+
+    // --- LÓGICA PARA TECLA DELETE ---
+    document.addEventListener('keydown', function(e) {
+        // 1. Detectar tecla Supr o Delete
+        if (e.key === 'Delete' || e.key === 'Del') {
+            
+            // 2. Seguridad: No borrar si el usuario está escribiendo
+            const tag = document.activeElement.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+            // 3. Verificar si hay un aspirante seleccionado
+            const toolbar = document.getElementById('aspirante-toolbar');
+            const estaActivo = toolbar && !toolbar.classList.contains('toolbar-disabled');
+
+            if (estaActivo) {
+                e.preventDefault(); 
+                // 4. Hacemos "clic virtual" en el botón rojo
+                document.getElementById('btn-eliminar').click();
+            }
+        }
+    });
+</script>
+
+{% endblock extra_scripts %}
+{% endblock %}

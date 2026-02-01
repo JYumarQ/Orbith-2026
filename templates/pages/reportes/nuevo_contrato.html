@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4; margin: 2cm; }
+    body { font-family: "Calibri", sans-serif; font-size: 11pt; line-height: 1.15; margin: 0; padding: 0; }
+    table { border-collapse: collapse; width: 100%; }
+    .header-table td { border: 1pt solid #000; padding: 3px; vertical-align: top; }
+    .logo-cell { width: 18%; }
+    .logo-cell img { width: auto; height: 60px; }
+    .title-cell { width: 54%; text-align: center; font-size: 14pt; font-weight: bold; }
+    .meta-cell { width: 28%; text-align: right; font-size: 10pt; }
+    .content p { margin: 0; padding: 0; text-align: justify; font-size: 11pt; }
+    .content p + p { margin-top: 4px; }
+    .content .indent { text-indent: 12pt; }
+    .signature-table { margin-top: 40px; }
+    .signature-table td { border-top: 1pt solid #000; padding-top: 20px; text-align: center; vertical-align: top; }
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+  <!-- Página 1 -->
+  <table class="header-table">
+    <tr>
+      <td class="logo-cell"><img src="data:image/png;base64,..." alt="Logo"></td>
+      <td class="title-cell">CONTRATO DE TRABAJO</td>
+      <td class="meta-cell">OC-PH 0503.A1<br>Rev: 03<br>Pág. 1 de 2</td>
+    </tr>
+  </table>
+    <br>
+
+  <div class="content">
+    <p>Al efecto de suscribir el presente contrato de trabajo, el que tiene toda la fuerza legal que en derecho se requiere,
+    <strong>DE UNA PARTE:</strong>
+    {% if contrato.get_director.aspirante.nombre and contrato.get_director.aspirante.papellido and contrato.get_director.aspirante.sapellido %}
+        <u>{{ contrato.get_director.aspirante.nombre }} {{ contrato.get_director.aspirante.papellido }} {{ contrato.get_director.aspirante.sapellido }}</u>
+    {% else %}
+        _________________________________
+    {% endif %}
+    , que ocupa el cargo de 
+    <u>
+        {{ contrato.get_director.cargo.ncargo.descripcion | default:"_________________________________"}}
+    </u>
+    , a nombre y en representación de la <strong>ORGANIZACIÓN EMPRESARIAL</strong>, 
+    <u>
+        {{ contrato.get_director.cargo.departamento.unidad_organizativa | default:"_________________________________"}}
+    </u> 
+    que, en lo sucesivo, se denominará <strong>EMPLEADOR</strong>, cuyos datos fundamentales de identificación son:</p>
+    
+    <!-- Tabla de Datos de la UEB o Entidad -->
+    <table style="width: 80%; border-collapse: collapse; margin: 20px auto;">
+        <tr>
+            <td colspan="3" style="border: 1px solid #000; padding: 10px;">
+            <strong>Nombre de la UEB o Entidad:</strong>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3" style="border: 1px solid #000; padding: 10px;">
+            <strong>Dirección:</strong>
+            direccion
+            </td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Provincia:</strong>
+            provincia
+            </td>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Municipio:</strong>
+            municipio
+            </td>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Rama:</strong>
+            rama
+            </td>
+        </tr>
+    </table>
+
+    <p><strong>Y, DE OTRA PARTE:</strong>
+        <u>
+            {% if contrato.aspirante.nombre and contrato.aspirante.papellido and contrato.aspirante.sapellido %}
+                {{ contrato.aspirante.nombre }} {{ contrato.aspirante.papellido }} {{ contrato.aspirante.sapellido }}  
+            {% else %}
+                ________________________________
+            {% endif %}
+        </u> 
+    , Quien concurre por su propio derecho y cuyos datos personales son:</p>
+    
+    <!-- Tabla de Datos de la Otra Parte -->
+    <table style="width: 80%; border-collapse: collapse; margin: 20px auto;">
+        <tr>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>No. Carné de Identidad:</strong>
+                {{ contrato.aspirante.doc_identidad }}
+            </td>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Fecha de nacimiento:</strong>
+            calcular
+            </td>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Profesión u oficio:</strong> <br>
+                {{ contrato.aspirante.get_especialidad_display }}
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3" style="border: 1px solid #000; padding: 10px;">
+            <strong>Dirección:</strong><br>
+            {{ contrato.aspirante.direccion }}
+            </td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #000; padding: 10px;">
+            <strong>Provincia:</strong><br>
+            {{ contrato.aspirante.municipio }}
+            </td>
+            <td colspan="2" style="border: 1px solid #000; padding: 10px;">
+            <strong>Municipio:</strong><br>
+            {{ contrato.aspirante.provincia }}
+            </td>
+        </tr>
+    </table>
+
+    <p>El que en lo sucesivo y al efecto del documento, se denominará el TRABAJADOR.</p>
+    <p>Ambas partes, libre y voluntariamente:</p>
+    <p><strong>CONVIENEN</strong></p>
+    <p><strong>PRIMERO:</strong> Que el presente contrato se suscribe por:</p>
+    <p>
+        {% if contrato.tipo == 'IND' %}
+            <u> x </u>  
+        {% else %}
+            __
+        {% endif %}
+        Tiempo Indeterminado</p>
+    <p>
+        {% if contrato.tipo == 'DET' %}
+            <u> x </u>  
+        {% else %}
+            __
+        {% endif %}
+        Tiempo Determinado o para la ejecución de un trabajo u obra.</p>
+    <p>a) por un periodo de _____________________calcular______________________</p>
+    <p>b) por motivo de _______________________(no se)_______________________</p>
+    <p><strong>SEGUNDO:</strong> El Trabajador prestará su servicio al Empleador bajo las condiciones siguientes:</p>
+    <p>a) Desempeñará la ocupación o cargo denominado: 
+        <u>
+            {{ contrato.cargo | default:"_______________________"}}
+        </u>
+        que corresponde al Grupo 
+        <u>
+            {{ contrato.cargo.ncargo.grupo_escala | default:"_____"}}
+        </u> 
+        de la Escala Salarial y a la Categoría Ocupacional de: 
+        Obrero (
+            {% if contrato.cargo.ncargo.cat_ocupacional == 'OPE' %}
+                <u> x </u>  
+            {% else %}
+                __
+            {% endif %}
+        ) 
+        Administrativo (
+            {% if contrato.cargo.ncargo.cat_ocupacional == 'ADM' %}
+                <u> x </u>  
+            {% else %}
+                __
+            {% endif %}
+        ) 
+        Servicio (
+            {% if contrato.cargo.ncargo.cat_ocupacional == 'SER' %}
+                <u> x </u>  
+            {% else %}
+                __
+            {% endif %}
+        ) 
+        Técnico (
+            {% if contrato.cargo.ncargo.cat_ocupacional == 'TEC' %}
+                <u> x </u>  
+            {% else %}
+                __
+            {% endif %}
+        )
+        , cuyo contenido de trabajo se anexa al presente contrato y es de obligatorio cumplimiento, así como aquellas tareas o actividades que le sean asignadas por su jefe inmediato superior.</p>
+    <p>b) La jornada de trabajo será de: __________________tantas horas_________________ horas diarias   y el horario de: _____________________tantas horas__________________</p>
+    <p class="indent">c) Cumplirá las normas de conducta de carácter general o específico y características personales, en los casos que se exigen para la ocupación o cargo y que se anexan.</p>
+    <p>d) El puesto de trabajo se regirá por las condiciones de Seguridad, Salud y Medio Ambiente del trabajo aprobado en los manuales y legislaciones que a tales efectos existen.</p>
+    <p>e) Responsabilidades como usuario de la RED hacia la Seguridad Informática que se anexan al contrato.</p>
+    <p><strong>TERCERO:</strong> El Empleador abonará el salario en correspondencia con lo establecido en la legislación vigente cuya cuantía puede variar en dependencia de la norma que se establezca</p>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <th colspan="2" style="padding: 5px; text-align: left;">a) Rol:</th>
+        </tr>
+        <tr>
+            <td style="padding: 5px;">Apoyo (
+                    {% if contrato.cargo.rol.id == 3 %}
+                        <u> x </u>  
+                    {% else %}
+                        __
+                    {% endif %}
+                )</td>
+            <td style="padding: 5px;">Tridente 1 (
+                    {% if contrato.tridente.id == 1 %}
+                        <u> x </u>  
+                    {% else %}
+                        ___
+                    {% endif %}
+                )</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px;">Fundamental (
+                    {% if contrato.cargo.rol.id == 2 %}
+                        <u> x </u>  
+                    {% else %}
+                        __
+                    {% endif %}
+                )</td>
+            <td style="padding: 5px;">Tridente 2 (
+                    {% if contrato.tridente.id == 2 %}
+                        <u> x </u>  
+                    {% else %}
+                        ___
+                    {% endif %}
+                )</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px;">Decisorio (
+                    {% if contrato.cargo.rol.id == 1 %}
+                        <u> x </u>  
+                    {% else %}
+                        ___
+                    {% endif %}
+                )</td>
+            <td style="padding: 5px;">Tridente 3 (
+                    {% if contrato.tridente.id == 3 %}
+                        <u> x </u>  
+                    {% else %}
+                        ___
+                    {% endif %}
+                )</td>
+        </tr>
+    </table>
+
+
+    <p>Salario escala Dec. Ley 87/2023: Tarifa______ Importe______ -------- de este no me acuerdo--------</p>
+    <p>b) Disfrutará de otros pagos adicionales como: </p> 
+    <p> CLA: Importe_________ Nocturnidad: ____________ CNCI: Tarifa: ________ Importe: ________</p>
+    <p> Otros:(especificar) ____________</p>
+    <p>Grado Científico Maestría (
+            {% if contrato.maestria > 0 %}
+                <u> x </u> ) Tarifa _____ Importe______ </p>
+            {% else %}
+                ___ ) Tarifa______ Importe______ </p>
+            {% endif %}
+    <p>Doctorado (
+            {% if contrato.doctorado > 0 %}
+                <u> x </u> ) Tarifa _____ Importe______ </p>
+            {% else %}
+                ___ ) Tarifa______ Importe______ </p>
+            {% endif %}
+        ) Tarifa______ Importe______</p>
+    <p>c) El periodo de pago será: Quincenal (__) Mensual (__), en las fechas acordadas según cronograma aprobado.</p>
+    <p>d) Estará acogido al Sistema de Pago siguiente: ___________________</p>
+    <p><strong>CUARTO:</strong> Si al vencimiento del término pactado en el contrato de trabajo para el periodo a prueba, continúa la relación laboral por un período superior a 30 días, sin que medie prórroga del mismo, el contrato original se transforma en contrato por tiempo indeterminado y tendrá derecho a exigir la suscripción del nuevo contrato al Empleador.</p>
+    <p><strong>QUINTO:</strong> El trabajador, durante el desempeño de su cargo, disfrutará de los beneficios del descanso retribuido y de la seguridad social, siempre que se cumplan los requisitos establecidos por las disposiciones vigentes sobre estas materias y los demás derechos laborales enmarcados en la legislación vigente.</p>
+    <p><strong>SEXTO:</strong> El trabajador se compromete a cumplir con calidad y eficiencia las labores que ha de desempeñar, y mantener una disciplina correcta, así como obedecer las órdenes de sus superiores facultados para ello y acatará todas las normas y reglamentos que rigen para el mejor funcionamiento de la Organización Empresarial, así como las normas que se fijen en el Convenio Colectivo de Trabajo y Reglamento Disciplinario Interno.</p>
+    <p><strong>SÉPTIMO:</strong> El Empleador se compromete a abonar al trabajador su salario en la forma establecida en el presente contrato, a cumplir las normas de Protección de Trabajo, Seguridad Social y descanso retribuido, y a cumplir con las Disposiciones vigentes en materia laboral.</p>
+    <p><strong>OCTAVO:</strong> El trabajador que por su voluntad decide dar por terminado el contrato de trabajo está en la obligación de comunicarlos por escrito al empleador en los términos de aviso previo establecidos para cada tipo de contrato.</p>
+    <p><strong>NOVENO:</strong> La terminación del Contrato de trabajo por tiempo determinado antes del plazo previsto por voluntad del Empleador, debe comunicarse por escrito al trabajador, con quince días hábiles de antelación.</p>
+    <p><strong>DÉCIMO:</strong> El presente contrato de trabajo se dará por terminado por las causas señaladas en la legislación laboral vigente y ambas partes se comprometen a cumplir los términos que se establecen para otorgar la baja definitiva, en cualquier caso.</p>
+    <p><strong>UNDÉCIMO:</strong> Al terminar la relación laboral el Empleador puede liquidarle las vacaciones al mismo, en cada pago o al finalizar el contrato.</p>
+    <p><strong>DUODÉCIMO:</strong> El Empleador está facultado para reubicar al trabajador en otra ocupación distinta a la que es objeto del presente contrato cuando existan situaciones de interrupción o proceso de disponibilidad u otras causas previstas en la legislación.</p>
+    <p><strong>DÉCIMO TERCERO:</strong> El trabajador debe permanecer en la entidad por el periodo de _________ una vez concluido el curso de capacitación profesional para el cual fue contratado, para la amortización de los gastos en su preparación. (Contratos de aprendizaje)</p>
+    <p><strong>DÉCIMO CUARTO:</strong> El Trabajador tendrá la obligación de abonar el porcentaje aprobado del salario devengado mensualmente, por concepto de contribución especial a la Seguridad Social.</p>
+    <p><strong>DÉCIMO QUINTO:</strong> Ambas partes convienen en lo expresado en el presente documento, comprometiéndose a su más estricto cumplimiento.</p>
+    <p><strong> PARA QUE CONSTE </strong>, Se emite y notifica Resolución de nombramiento No. ______ correspondiente al cargo denominado como; Funcionario (__) o Designado (__).</p>
+    <p>Se le extiende el presente contrato individual de trabajo que suscriben de común acuerdo, en original y copia, de un solo tenor y efectos jurídicos, en el municipio de ______________a los ____ días del mes de ___________________ del año ________</p>
+    
+    <br>
+    <br>
+    <br>
+    <br>
+    
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="border-bottom: 1px solid #000; text-align: center; padding: 5px; width: 45%;"> </td>
+            <td style="width: 10%;"> </td>
+            <td style="border-bottom: 1px solid #000; text-align: center; padding: 5px; width: 45%;"> </td>
+        </tr>
+        <tr>
+            <td style="text-align: center; padding-top: 5px;">Empleador</td>
+            <td> </td>
+            <td style="text-align: center; padding-top: 5px;">Trabajador</td>
+        </tr>
+    </table>
+    
+</div>
+
+
+
+</body>
+</html>

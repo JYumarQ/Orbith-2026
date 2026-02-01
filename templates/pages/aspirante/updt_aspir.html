@@ -1,0 +1,330 @@
+ <!-- Modal -->
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
+        </div>
+        <div class="modal-body">
+            <!-- Cargar el formulario del cargo aquí -->
+            <form method="POST"
+                class="swal-confirm"
+                action="{% url 'updt_aspir' object.doc_identidad%}"
+                id="formEditarAspirante"
+                data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?"
+                >
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        {{ form.doc_identidad.label_tag }}  
+                        {{ form.doc_identidad }}
+                    </div>
+                    <div class="col-md-3">
+                        {{ form.sexo.label_tag }}  
+                        {{ form.sexo }}
+                    </div>
+                    <div class="col-md-5">
+                        {{ form.nombre.label_tag }}  
+                        {{ form.nombre }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.papellido.label_tag }}  
+                        {{ form.papellido }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.sapellido.label_tag }}  
+                        {{ form.sapellido }}
+                    </div>
+                    <!--TELEFONOS-->
+                    <div class="col-md-6">
+                        {{ form.movil_personal.label_tag }}  
+                        {{ form.movil_personal }}
+                        <small id="error_movil_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            El móvil ya está asociado a un trabajador.
+                        </small>
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.fijo_personal.label_tag }}  
+                        {{ form.fijo_personal }}
+                    </div>
+                    <div class="col-md-12">
+                        {{ form.direccion.label_tag }}  
+                        {{ form.direccion }}
+                    </div>
+
+                    <div class="col-md-4">
+                        {{ form.provincia.label_tag }}  
+                        {{ form.provincia }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.municipio.label_tag }}  
+                        {{ form.municipio }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.codigo_postal.label_tag }}  
+                        {{ form.codigo_postal }}
+                    </div>
+
+                    
+
+                    <div class="col-md-6">
+                        {{ form.nivel_educ.label_tag }}  
+                        {{ form.nivel_educ }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.especialidad.label_tag }}  
+                        {{ form.especialidad }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.grado_cientifico.label_tag }}  
+                        {{ form.grado_cientifico }}
+                    </div>
+                    <div class="col-md-6">
+                        {{ form.raza.label_tag }}  
+                        {{ form.raza }}
+                    </div>
+                    <div class="col-md-12"><b>Tallas:</b></div>
+                    <div class="col-md-4">
+                        {{ form.tpantalon.label_tag }}  
+                        {{ form.tpantalon }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.tcamisa.label_tag }}  
+                        {{ form.tcamisa }}
+                    </div>
+                    <div class="col-md-4">
+                        {{ form.tzapatos.label_tag }}  
+                        {{ form.tzapatos }}
+                    </div>
+                </div>
+                </br>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function() {
+        var formulario = document.getElementById('formEditarAspirante');
+        var ciInput = formulario.querySelector('#id_doc_identidad');
+        // --- 1. LÓGICA ORIGINAL: Dependencias de Nivel Educativo ---
+        var nivel = formulario.querySelector('#id_nivel_educ');
+        var espec = formulario.querySelector('#id_especialidad');
+        var grado = formulario.querySelector('#id_grado_cientifico');
+
+        function actualizarCampos() {
+            if(!nivel) return;
+            var valorNivel = nivel.value;
+
+            // Habilitar Especialidad solo en NS (Superior) o TM (Medio)
+            if (valorNivel === 'NS' || valorNivel === 'TM') {
+                espec.removeAttribute('disabled');
+            } else {
+                espec.setAttribute('disabled', 'disabled');
+            }
+
+            // Habilitar Grado solo en NS
+            if (valorNivel === 'NS') {
+                grado.removeAttribute('disabled');
+            } else {
+                grado.setAttribute('disabled', 'disabled');
+            }
+        }
+        
+        if(nivel) nivel.addEventListener('change', actualizarCampos);
+        // Ejecutamos esto al inicio para que se ajuste a los datos cargados
+        actualizarCampos(); 
+
+
+        // --- 2. LÓGICA NUEVA: Validaciones y Semáforo ---
+        
+        // Selectores
+        
+        var movilInput = formulario.querySelector('#id_movil_personal');
+        const initialMovil = movilInput ? movilInput.value.trim() : "";
+        var timer = null;
+
+        // Configuración idéntica a "Crear"
+        const configCampos = {
+            'id_doc_identidad': { tipo: 'ci',      mensaje: 'Inserte solo dígitos numéricos', esCI: true },
+            'id_sexo':          { tipo: 'select' },
+            'id_nombre':        { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_papellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_sapellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
+            'id_movil_personal':{ tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
+            'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
+            'id_provincia':     { tipo: 'select' },
+            'id_municipio':     { tipo: 'select' }
+        };
+
+        const patrones = {
+            numeros:  /[^0-9]/g,
+            telefono: /[^0-9\(\)\s\+\-]/g,
+            texto:    /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜçÇ\-\s]/g
+        };
+
+        // Función Auxiliar: Validar fechas del CI (Mes/Día)
+        function validarLogicaCI(input) {
+            let val = input.value;
+            if (val.length < 4) return; 
+
+            const mes = parseInt(val.substring(2, 4));
+            if (val.length >= 4 && (mes < 1 || mes > 12)) {
+                input.value = val.substring(0, 2); 
+                mostrarError(input, "Mes inválido (01-12)");
+                return;
+            }
+            if (val.length >= 6) {
+                const dia = parseInt(val.substring(4, 6));
+                let max = 31;
+                if ([4, 6, 9, 11].includes(mes)) max = 30;
+                if (mes === 2) max = 29;
+                if (dia < 1 || dia > max) {
+                    input.value = val.substring(0, 4); 
+                    mostrarError(input, "Día inválido para este mes");
+                }
+            }
+        }
+
+        function mostrarError(input, msg) {
+            input.setCustomValidity(msg);
+            input.reportValidity();
+        }
+
+        function actualizarEstilo(input, cfg) {
+            input.classList.remove('border-warning', 'is-invalid', 'is-valid');
+            const valor = input.value.trim();
+
+            if (!valor) {
+                if(cfg.tipo !== 'telefono') input.classList.add('border-warning');
+                return;
+            }
+            if (cfg.esCI && valor.length !== 11) {
+                input.classList.add('is-invalid');
+                return;
+            }
+            input.classList.add('is-valid');
+        }
+
+        // Inicializar validaciones
+        for (const [id, cfg] of Object.entries(configCampos)) {
+            const input = formulario.querySelector('[id="' + id + '"]');
+            if (!input) continue;
+
+            if (cfg.tipo !== 'select') {
+                input.addEventListener('input', function() {
+                    this.setCustomValidity("");
+                    const tipoPatron = (cfg.tipo === 'ci') ? 'numeros' : cfg.tipo;
+                    const patron = patrones[tipoPatron];
+                    
+                    if (patron.test(this.value)) {
+                        this.value = this.value.replace(patron, '');
+                        mostrarError(this, cfg.mensaje);
+                    }
+                    if (cfg.tipo === 'ci') validarLogicaCI(this);
+                    actualizarEstilo(this, cfg);
+                });
+
+                input.addEventListener('blur', function() {
+                    this.setCustomValidity(""); 
+                });
+
+                if (cfg.capitalizar) {
+                    input.addEventListener('blur', function() {
+                        if (this.value) this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, m => m.toUpperCase());
+                        actualizarEstilo(this, cfg);
+                    });
+                }
+            } else {
+                input.addEventListener('change', function() { 
+                    actualizarEstilo(this, cfg);
+                    if (id === 'id_provincia') {
+                        setTimeout(() => {
+                             const muni = document.getElementById('id_municipio');
+                             if(muni) actualizarEstilo(muni, configCampos['id_municipio']);
+                        }, 200); 
+                    }
+                });
+                $(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
+            }
+            // Estado inicial (Pintará verde si ya tiene datos cargados de la BD)
+            actualizarEstilo(input, cfg);
+        }
+
+        // Validación Servidor para Móvil (Solo si cambió)
+        if (movilInput) {
+            movilInput.addEventListener('input', function() {
+                var val = this.value.trim();
+                var errExist = formulario.querySelector('#error_movil_exist');
+
+                // Si es su propio número, es válido
+                if (val === initialMovil) {
+                    if (errExist) errExist.classList.add('d-none');
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                    return;
+                }
+
+                if (val.length < 6) return;
+
+                clearTimeout(timer);
+                timer = setTimeout(function() {
+                    fetch("/bolsa/validar_datos/?movil=" + val)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.movil_existe) {
+                            if (errExist) errExist.classList.remove('d-none');
+                            movilInput.classList.add('is-invalid');
+                            movilInput.classList.remove('is-valid');
+                        } else {
+                            if (errExist) errExist.classList.add('d-none');
+                            movilInput.classList.remove('is-invalid');
+                            movilInput.classList.add('is-valid');
+                        }
+                    })
+                    .catch(err => console.error('Error validando Móvil:', err));
+                }, 300);
+            });
+        }
+
+        // --- 3. INTERCEPTAR ENVÍO ---
+        formulario.addEventListener('submit', function(e) {
+            // Verificar si queda algo mal o vacío
+            var ciError = ciInput && ciInput.value.length !== 11;
+            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
+            var elMovil = formulario.querySelector('#error_movil_exist');
+            var movilError = elMovil && !elMovil.classList.contains('d-none');
+            var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
+
+            if (ciError || hayVacios || hayRojos) {
+                e.preventDefault(); 
+                e.stopImmediatePropagation(); 
+
+                Swal.fire({
+                    title: 'Atención',
+                    text: 'Revise los campos resaltados.',
+                    icon: 'warning',
+                    confirmButtonText: 'OK',
+                    customClass: { confirmButton: 'btn btn-primary' }
+                });
+            }
+        });
+        
+        // Observador de Municipio (Para HTMX)
+        const obs = new MutationObserver(function() {
+            const muni = document.getElementById('id_municipio');
+            if (muni) {
+                actualizarEstilo(muni, configCampos['id_municipio']);
+                muni.addEventListener('change', function() { actualizarEstilo(this, configCampos['id_municipio']); });
+            }
+        });
+        const muniP = document.getElementById('id_municipio')?.parentNode;
+        if(muniP) obs.observe(muniP, { childList: true });
+
+    })();
+</script>
+

@@ -1,0 +1,100 @@
+ <!-- Modal -->
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="cargosModalLabel">Editar Cargo</h5>
+        </div>
+        <div class="modal-body">
+            <!-- Cargar el formulario del cargo aquí -->
+            <form method="POST"
+                class="swal-confirm"
+                action="{% url 'updt_cargo' object.id%}"
+                id="cargoForm"
+                data-confirm-text="¿Estás seguro de guardar los cambios del cargo?"
+                >
+                {% csrf_token %}
+                <div class="row g-3">
+                <div class="col-md-6">
+                    {{ form.unidad.label_tag }}  
+                    {{ form.unidad }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.departamento.label_tag }}  
+                    {{ form.departamento }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.ncargo.label_tag }}  
+                    {{ form.ncargo }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.rol.label_tag }}  
+                    {{ form.rol }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.cant_aprobada.label_tag }}  
+                    {{ form.cant_aprobada }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.cant_cubierta.label_tag }}  
+                    {{ form.cant_cubierta }}
+                </div>
+                <div class="col-md-6">
+                    {{ form.activo.label_tag }}  
+                    {{ form.activo }}
+                </div>
+              </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('cargoForm');
+  if (!form) return;
+
+  const ncargo = form.querySelector('#id_ncargo');
+  const rol = form.querySelector('#id_rol');
+  const urlCat = "{% url 'categoria_ocupacional' %}";
+
+  if (!ncargo || !rol) return;
+
+  function actualizarRol() {
+    const id = ncargo.value;
+    if (!id) {
+      rol.removeAttribute('disabled');
+      return;
+    }
+
+    fetch(`${urlCat}?id=${id}`, {
+      headers: { 'Accept': 'application/json' }
+    })
+    .then(resp => resp.json())
+    .then(data => {
+      const cat = data.cat_ocupacional;
+      if (cat === 'CDI' || cat === 'CEJ') {
+        rol.setAttribute('disabled', 'disabled');
+      } else {
+        rol.removeAttribute('disabled');
+      }
+    })
+    .catch(err => {
+      console.error('Error al cargar categoría ocupacional:', err);
+      rol.removeAttribute('disabled');
+    });
+  }
+
+  ncargo.addEventListener('change', actualizarRol);
+  actualizarRol();  // al cargar
+});
+</script>
+
+
+
+
+  
+  
