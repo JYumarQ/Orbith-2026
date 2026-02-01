@@ -15,6 +15,7 @@ from configuracion.models import Configuracion
 from django.template.loader import get_template
 from django.db.models import Q, ProtectedError, Value
 from django.db.models.functions import Concat
+from django.db import transaction
 from xhtml2pdf import pisa
 from .forms import CAltaForm, MovimientoForm
 
@@ -393,47 +394,79 @@ class ContratoUpdateView(UpdateView):
             
         return super().form_invalid(form)
 
+# contratos/views.py
+from django.db import transaction # IMPORTANTE
+from django.shortcuts import get_object_or_404
+from django.http import JsonResponse
+from django.views.generic import DeleteView
+from .models import CAlta, CBaja
+
 class ContratoDeleteView(DeleteView):
     model = CAlta
 
     def post(self, request, *args, **kwargs):
-        # Obtenemos el objeto contrato antes de hacer nada
-        self.object = self.get_object()
-        
+        # 1. Recuperar el objeto de forma segura
         try:
-            # 1. Validar recepción de datos del Modal
-            fecha_baja = request.POST.get('fecha_baja')
-            causa_id = request.POST.get('causa_baja')
+            self.object = self.get_object()
+        except CAlta.DoesNotExist:
+            return JsonResponse({
+                'success': False, 
+                'message': 'El contrato que intenta eliminar no existe.'
+            }, status=404)
 
-            if not fecha_baja or not causa_id:
-                return JsonResponse({
-                    'success': False, 
-                    'message': 'Faltan datos obligatorios (Fecha o Causa).'
-                }, status=400)
+        # 2. Obtener y validar datos del formulario
+        fecha_baja = request.POST.get('fecha_baja')
+        causa_id = request.POST.get('causa_baja')
 
-            # 2. Crear registro en el Histórico (CBaja)
-            # Copiamos los datos relevantes del contrato actual
-            CBaja.objects.create(
-                aspirante=self.object.aspirante,
-                cargo=self.object.cargo,
-                no_expediente=self.object.no_expediente,
-                fecha_alta=self.object.fecha_alta,
-                tridente=self.object.tridente,
-                # Asignamos los datos nuevos recibidos del formulario
-                fecha_baja=fecha_baja,
-                causa_baja_id=causa_id, # Django asignará la FK automáticamente usando el ID
-                observaciones=f"Baja procesada desde el sistema. Obs: {self.object.observaciones or ''}"
-            )
+        if not fecha_baja or not causa_id:
+            return JsonResponse({
+                'success': False, 
+                'message': 'Faltan datos obligatorios: Fecha de Baja o Causa.'
+            }, status=400)
 
-            # 3. Eliminar el contrato activo
-            # Esto dispara la lógica interna del modelo CAlta (liberar plaza, cambiar estado aspirante)
-            self.object.delete()
+        try:
+            # 3. Iniciar Transacción Atómica
+            # Asegura que se crea la baja Y se borra el alta, o no sucede nada.
+            with transaction.atomic():
+                
+                # A. Crear el registro histórico (CBaja)
+                # Pasamos SOLO los campos confirmados que existen en tu modelo CBaja.
+                CBaja.objects.create(
+                    # --- Campos heredados de ContratoBase ---
+                    aspirante=self.object.aspirante,
+                    no_expediente=self.object.no_expediente,
+                    tipo=self.object.tipo,
+                    cargo=self.object.cargo,
+                    reg_militar=self.object.reg_militar,
+                    profesional=self.object.profesional,
+                    
+                    # --- Campos específicos de CBaja (Confirmados) ---
+                    fecha_baja=fecha_baja,
+                    causa_baja_id=causa_id,  # Usamos el ID recibido del POST
+                    
+                    # Estos campos existen en CAlta y confirmaste que están en CBaja
+                    fecha_alta=self.object.fecha_alta,
+                    tridente=self.object.tridente
+                    
+                    # NOTA: Se ha eliminado 'observaciones' porque causaba Error 500
+                )
 
-            return JsonResponse({'success': True, 'message': 'Contrato dado de baja correctamente.'})
+                # B. Eliminar el contrato activo
+                # Esto dispara la lógica del modelo CAlta (liberar plaza, cambiar estado aspirante)
+                self.object.delete()
+
+            # Si llegamos aquí, todo salió bien
+            return JsonResponse({
+                'success': True, 
+                'message': 'Contrato dado de baja y archivado correctamente.'
+            })
 
         except Exception as e:
-            return JsonResponse({'success': False, 'message': str(e)}, status=500)
-
+            # Captura cualquier error (Integridad, Modelo, etc.) y evita el crash del servidor
+            return JsonResponse({
+                'success': False, 
+                'message': f'Error interno al procesar la baja: {str(e)}'
+            }, status=500)
 #*REPORTES
 class ContratoPDFView(View):
     def get(self, request, *args, **kwargs):

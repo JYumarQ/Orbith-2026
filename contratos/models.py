@@ -1,7 +1,7 @@
 from django.db import models
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla
-from nomencladores.models import NTridente, NSalario, NJornada
+from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja
 from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
@@ -207,11 +207,27 @@ class CAlta(ContratoBase):
 class CBaja(ContratoBase):
     
     fecha_baja = models.DateField(null=True, blank=True)
+    fecha_alta = models.DateField(null=True, blank=True) # Necesario para guardar el historial
     
+    tridente = models.ForeignKey(
+        NTridente,
+        on_delete=models.RESTRICT,
+        blank=True, 
+        null=True
+    )
+    
+    causa_baja = models.ForeignKey(
+        NCausaAltaBaja, 
+        on_delete=models.RESTRICT,
+        null=True, 
+        blank=True
+    )
+    
+    # Asumo que 'observaciones' viene de 'Base', si no, agrégalo aquí también.
+
     class Meta:
         verbose_name = ("Baja")
         verbose_name_plural = ("Bajas")
 
     def __str__(self):
         return self.aspirante.nombre
-
