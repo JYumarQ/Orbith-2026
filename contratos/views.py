@@ -573,10 +573,19 @@ class MovimientoUpdateView(UpdateView):
                 return self.form_invalid(form)
 
     def form_invalid(self, form):
+        # --- 1. EL CHIVATO (Debug) ---
+        # Esto imprimirá en tu terminal EXACTAMENTE por qué falla el formulario
+        print("\n" + "!"*50)
+        print("❌ ERROR DE VALIDACIÓN (400):")
+        print(form.errors.as_json()) 
+        print("!"*50 + "\n")
+        
+        # --- 2. RESPUESTA AL FRONTEND ---
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            # Error de validación normal (campos vacíos, etc.) -> Status 400
+            # Renderizamos de nuevo el modal, ahora con los mensajes de error (rojos) que Django generó
             html = render_to_string(self.template_name, self.get_context_data(form=form), request=self.request)
             return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
+            
         return super().form_invalid(form)
 
 

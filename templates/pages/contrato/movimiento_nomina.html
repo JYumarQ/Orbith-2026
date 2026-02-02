@@ -3,7 +3,7 @@
         <div class="modal-header bg-label-primary py-2">
             <h5 class="modal-title fs-5" id="movimientoLabel">
                 <i class="fas fa-exchange-alt me-2"></i>Movimiento de Nómina: 
-                <span class="fw-bold fs-6">No. Exp. {{ contrato_actual.no_expediente }} - {{ aspirante.nombre }} {{ aspirante.papellido }}</span>
+                <span class="fw-bold fs-6">No. Exp. {{ contrato_actual.no_expediente }} - {{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }}</span>
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
@@ -239,9 +239,18 @@
                             </div>
                             
                             <div class="d-none">
+                                {# AGREGADO: El campo 'tipo' que faltaba #}
+                                {{ form.tipo }}
+                                
                                 {{ form.fecha_alta }}
                                 {{ form.no_expediente }}
                                 {{ form.reg_militar }}
+                                
+                                {# Opcional: Agrégalo si tu modelo usa 'profesional' y es obligatorio #}
+                                {{ form.profesional }} 
+
+                                <input type="hidden" name="no_expediente" value="{{ contrato_actual.no_expediente }}">
+
                                 <input id="tarifaHoraria" name="tarifaHoraria" value="{{ initial_tarifa_horaria }}">
                                 <input id="tarifaExtras" name="tarifaExtras" value="{{ initial_tarifa_extras }}">
                             </div>
