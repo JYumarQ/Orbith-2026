@@ -237,3 +237,27 @@ class CBaja(ContratoBase):
 
     def __str__(self):
         return self.aspirante.nombre
+    
+
+# En contratos/models.py
+
+class TMovimiento(models.Model):
+    contrato = models.ForeignKey(CAlta, on_delete=models.CASCADE, related_name='trazabilidad')
+    fecha_movimiento = models.DateField(auto_now_add=True)
+    fecha_efectiva = models.DateField()
+    
+    # Guardamos strings para que la historia no cambie si se borran los cargos del nomenclador
+    cargo_anterior = models.CharField(max_length=255)
+    cargo_nuevo = models.CharField(max_length=255)
+    
+    salario_anterior = models.DecimalField(max_digits=10, decimal_places=2)
+    salario_nuevo = models.DecimalField(max_digits=10, decimal_places=2)
+
+    unidad_anterior = models.CharField(max_length=255, null=True, blank=True)
+    unidad_nueva = models.CharField(max_length=255, null=True, blank=True)
+    
+    tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")
+    usuario = models.CharField(max_length=100, null=True, blank=True) # Opcional: quién lo hizo
+
+    class Meta:
+        ordering = ['-fecha_efectiva']

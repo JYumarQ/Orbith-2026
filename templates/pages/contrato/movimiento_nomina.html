@@ -243,7 +243,7 @@
                                 {{ form.tipo }}
                                 
                                 {{ form.fecha_alta }}
-                                {{ form.no_expediente }}
+                                
                                 {{ form.reg_militar }}
                                 
                                 {# Opcional: Agrégalo si tu modelo usa 'profesional' y es obligatorio #}
@@ -251,6 +251,7 @@
 
                                 <input type="hidden" name="no_expediente" value="{{ contrato_actual.no_expediente }}">
 
+                                <input type="hidden" id="fecha_alta_original" value="{{ contrato_actual.fecha_alta|date:'Y-m-d' }}">
                                 <input id="tarifaHoraria" name="tarifaHoraria" value="{{ initial_tarifa_horaria }}">
                                 <input id="tarifaExtras" name="tarifaExtras" value="{{ initial_tarifa_extras }}">
                             </div>
@@ -275,19 +276,33 @@
         if (window.htmx) htmx.process($form[0]);
 
         $form.on('submit', function(e) {
-            e.preventDefault(); // Detener envío normal
+            e.preventDefault(); 
             
-            // 1. Validación Frontend
-            var fecha = $form.find('[name="fecha_efectiva"]').val();
-            if(!fecha) {
+            // Leemos los valores
+            var fechaInput = $form.find('[name="fecha_efectiva"]').val();
+            var fechaAlta = $('#fecha_alta_original').val(); // Leemos la fecha oculta
+
+            // 1. Validar que haya fecha
+            if(!fechaInput) {
                 Swal.fire('Atención', 'Debe seleccionar una Fecha Efectiva.', 'warning');
                 return;
             }
 
-            // 2. Pregunta de Confirmación (Reemplaza a la de base.html)
+            // 2. Validar Cronología (Tu requisito)
+            // Si la fecha del movimiento es menor que la fecha de alta del contrato, error.
+            if (fechaAlta && fechaInput < fechaAlta) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Fecha Inválida',
+                    text: 'La fecha del movimiento debe ser posterior a la fecha de Alta (' + fechaAlta + ').'
+                });
+                return; // Detenemos el envío
+            }
+
+            // 3. Confirmación y Envío AJAX
             Swal.fire({
                 title: '¿Confirmar Movimiento?',
-                text: "¿Desea aplicar este cambio de nómina? Esta acción generará históricos.",
+                text: "¿Desea aplicar este cambio de nómina? Se generará un histórico.",
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'Sí, aplicar',
@@ -296,7 +311,6 @@
                 cancelButtonColor: '#8592a3'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // 3. Si dice SÍ -> Enviamos AJAX
                     enviarDatos();
                 }
             });

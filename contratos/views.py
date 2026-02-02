@@ -204,59 +204,99 @@ def cargar_cargos(request):
 
 
 def historico_trabajador(request, aspirante_id):
-    """
-    Devuelve el historial cronológico de contratos (Altas) y Bajas de un aspirante.
-    """
-    # 1. Obtener todos los contratos (Altas) ordenados por fecha
+    from .models import CAlta, CBaja, TMovimiento 
+
+    # 1. Obtener Contratos
     contratos = CAlta.objects.filter(aspirante_id=aspirante_id).select_related(
-        'aspirante', 
-        'cargo__departamento__unidad_organizativa',
-        'cargo__ncargo'
-    ).order_by('fecha_alta')
+        'aspirante', 'cargo__departamento__unidad_organizativa', 'cargo__ncargo'
+    )
 
-    historial = []
-    
-    # 2. Iterar sobre los contratos para construir la historia
+    lista_general = []
+
+    # 2. Procesar Contratos (Altas)
     for index, alta in enumerate(contratos):
-        # Buscar si este contrato específico tiene una baja asociada
-        # Asumimos que la baja coincide en expediente y fecha de alta original
-        baja = CBaja.objects.filter(
-            aspirante_id=aspirante_id,
-            no_expediente=alta.no_expediente,
-            fecha_alta=alta.fecha_alta
-        ).first()
-
-        # 3. Determinar el Evento
-        # Si es el primero de la lista cronológica -> Alta Inicial
-        # Si no es el primero -> Recontratación
-        evento = "Alta Inicial" if index == 0 else "Recontratación"
-
-        # 4. Formatear fechas
-        f_inicio = alta.fecha_alta.strftime('%d/%m/%Y') if alta.fecha_alta else "-"
+        evento_tipo = "Alta Inicial" if index == 0 else "Recontratación"
+        nombre = f"{alta.aspirante.nombre} {alta.aspirante.papellido} {alta.aspirante.sapellido}"
+        ci = alta.aspirante.doc_identidad
         
-        if baja:
-            f_fin = baja.fecha_baja.strftime('%d/%m/%Y') if baja.fecha_baja else "-"
-            motivo_baja = f" (Baja: {baja.causa_baja.descripcion})" if baja.causa_baja else ""
-        else:
-            f_fin = "Activo"
-            motivo_baja = ""
-
-        # 5. Construir el objeto de datos
-        item = {
+        item_alta = {
+            'tipo': 'alta', 
+            'fecha_orden': alta.fecha_alta,
+            'nombre_completo': nombre,
+            'ci': ci,
+            'evento': evento_tipo,
             'expediente': alta.no_expediente,
-            'nombre_completo': f"{alta.aspirante.nombre} {alta.aspirante.papellido} {alta.aspirante.sapellido}",
-            'ci': alta.aspirante.doc_identidad,
             'unidad': alta.cargo.departamento.unidad_organizativa.descripcion if alta.cargo else "---",
             'cargo': alta.cargo.ncargo.descripcion if alta.cargo else "---",
             'salario': alta.calcular_salario_escala(),
-            'fecha_inicio': f_inicio,
-            'fecha_fin': f_fin,
-            'evento': evento,
-            'estado_clase': 'text-danger' if baja else 'text-success' # Para darle color al estado
+            'fecha_inicio': alta.fecha_alta.strftime('%d/%m/%Y') if alta.fecha_alta else "-",
+            'fecha_fin': "Activo", # Se ajustará en el paso 5
+            'estado_clase': 'text-success'
         }
-        historial.append(item)
 
-    return JsonResponse({'data': historial})
+        # Buscar Baja asociada (Si hay baja, esa es su fecha fin definitiva)
+        baja = CBaja.objects.filter(no_expediente=alta.no_expediente).first()
+        if baja and baja.fecha_baja:
+            # La baja cierra el ciclo, pero guardamos la fecha para ordenarla
+            item_alta['fecha_baja_real'] = baja.fecha_baja.strftime('%d/%m/%Y')
+            item_alta['tiene_baja'] = True
+            item_alta['estado_clase'] = 'text-danger'
+
+        lista_general.append(item_alta)
+
+        # 3. Procesar Movimientos INTERNOS (AQUÍ VA EL CÓDIGO QUE PREGUNTASTE)
+        movimientos = TMovimiento.objects.filter(contrato=alta)
+        
+        for mov in movimientos:
+            # --- TÚ CÓDIGO DE DETECCIÓN DE EVENTO VA AQUÍ ---
+            nombre_evento = "Movimiento de Nómina" # Default
+            
+            if mov.unidad_anterior != mov.unidad_nueva:
+                nombre_evento = "Cambio de Unidad Organizativa"
+            elif mov.cargo_anterior != mov.cargo_nuevo:
+                nombre_evento = "Cambio de Cargo"
+            elif mov.salario_anterior != mov.salario_nuevo:
+                nombre_evento = "Movimiento Salarial"
+            # ------------------------------------------------
+
+            item_mov = {
+                'tipo': 'movimiento',
+                'fecha_orden': mov.fecha_efectiva,
+                'nombre_completo': nombre,
+                'ci': ci,
+                'evento': nombre_evento,
+                'expediente': alta.no_expediente,
+                'unidad': mov.unidad_nueva if mov.unidad_nueva else "---", 
+                'cargo': mov.cargo_nuevo,
+                'salario': mov.salario_nuevo,
+                'fecha_inicio': mov.fecha_efectiva.strftime('%d/%m/%Y'),
+                'fecha_fin': "Activo", # Se ajustará abajo
+                'estado_clase': 'text-warning'
+            }
+            lista_general.append(item_mov)
+
+    # 4. Ordenar todo cronológicamente
+    lista_general.sort(key=lambda x: x['fecha_orden'])
+
+    # 5. LÓGICA DE FECHAS ENCADENADAS (TU REQUISITO PRINCIPAL)
+    # Recorremos la lista para que el inicio de uno sea el fin del anterior.
+    for i in range(len(lista_general)):
+        item_actual = lista_general[i]
+        
+        # Si tiene baja oficial registrada en CBaja, esa manda sobre todo
+        if item_actual.get('tiene_baja'):
+             item_actual['fecha_fin'] = item_actual['fecha_baja_real']
+             item_actual['evento'] += " (Baja)" # Opcional: indicar que terminó en baja
+        
+        # Si no es el último elemento de la lista, su fin es el inicio del siguiente
+        elif i < len(lista_general) - 1:
+            siguiente_item = lista_general[i + 1]
+            # Solo encadenamos si pertenecen al mismo expediente (ciclo laboral)
+            if item_actual['expediente'] == siguiente_item['expediente']:
+                item_actual['fecha_fin'] = siguiente_item['fecha_inicio']
+                item_actual['estado_clase'] = 'text-muted' # Ya pasó
+
+    return JsonResponse({'data': lista_general})
 
 
 class ContratoCreateView(CreateView):
@@ -576,21 +616,68 @@ class MovimientoUpdateView(UpdateView):
         return context
     
     # ... (form_valid y form_invalid se quedan igual) ...
+    @transaction.atomic
     def form_valid(self, form):
         try:
-            # 1. Lógica de Negocio
+            # --- 1. CAPTURAR ESTADO PREVIO (Antes de guardar) ---
+            contrato_previo = CAlta.objects.get(pk=self.object.pk)
+            
+            # Cargo y Unidad Anterior
+            cargo_ant = contrato_previo.cargo.ncargo.descripcion if contrato_previo.cargo else "---"
+            unidad_ant = contrato_previo.cargo.departamento.unidad_organizativa.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---"
+            
+            # Salario Anterior
+            salario_ant = 0
+            if contrato_previo.cargo:
+                 try:
+                     salario_obj = NSalario.objects.filter(
+                         grupo_escala=contrato_previo.cargo.ncargo.grupo_escala,
+                         rol=contrato_previo.cargo.rol,
+                         tridente=contrato_previo.tridente
+                     ).first()
+                     salario_ant = salario_obj.monto if salario_obj else 0
+                 except:
+                     salario_ant = 0
+
+            # --- 2. CAPTURAR ESTADO NUEVO (Del formulario) ---
             nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+            cargo_nuevo_obj = form.cleaned_data.get('cargo')
+            
+            # Cargo y Unidad Nueva
+            cargo_nue = cargo_nuevo_obj.ncargo.descripcion if cargo_nuevo_obj else "---"
+            unidad_nue = cargo_nuevo_obj.departamento.unidad_organizativa.descripcion if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else "---"
+            
+            # Salario Nuevo (del input oculto)
+            salario_nue = float(self.request.POST.get('salarioEscala', 0))
+
+            # --- 3. GUARDAR EL HISTÓRICO (TMovimiento) ---
+            from .models import TMovimiento
+            from django.utils import timezone 
+            
+            TMovimiento.objects.create(
+                contrato=self.object,
+                fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
+                
+                cargo_anterior=cargo_ant,
+                cargo_nuevo=cargo_nue,
+                salario_anterior=salario_ant,
+                salario_nuevo=salario_nue,
+                unidad_anterior=unidad_ant,
+                unidad_nueva=unidad_nue,
+                
+                tipo_movimiento="Movimiento de Nómina"
+            )
+
+            # --- 4. ACTUALIZAR Y GUARDAR EL CONTRATO ---
             if nueva_fecha: 
                 form.instance.fecha_alta = nueva_fecha
             
             form.instance.en_proceso_movimiento = False
-            
-            # 2. Guardado (Dispara señales, validaciones de DB, etc.)
             self.object = form.save()
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
-            # 3. Respuesta Exitosa JSON
+            # --- 5. RESPUESTA AL FRONTEND ---
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({
                     'form_is_valid': True, 
@@ -600,24 +687,22 @@ class MovimientoUpdateView(UpdateView):
             return super().form_valid(form)
 
         except Exception as e:
-            # --- EL CHIVATO: Imprimir error real en la consola ---
+            # --- MANEJO DE ERRORES ---
             print("\n" + "="*50)
             print("🔴 ERROR CRÍTICO EN MOVIMIENTO DE NÓMINA")
             print(f"Tipo: {type(e).__name__}")
             print(f"Mensaje: {str(e)}")
             print("-" * 20)
-            traceback.print_exc() # Muestra la línea exacta del fallo
+            import traceback
+            traceback.print_exc()
             print("="*50 + "\n")
 
-            # Revertir cualquier cambio en DB
             transaction.set_rollback(True)
 
-            # --- RESPUESTA CONTROLADA AL FRONTEND ---
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                # Devolvemos status 500 para que el JS sepa que explotó
                 return JsonResponse({
                     'form_is_valid': False,
-                    'error_popup': f"Error del Sistema: {str(e)}", # El mensaje que verá el usuario
+                    'error_popup': f"Error del Sistema: {str(e)}",
                     'html_form': render_to_string(
                         self.template_name, 
                         self.get_context_data(form=form), 
