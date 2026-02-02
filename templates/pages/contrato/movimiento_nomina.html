@@ -10,9 +10,9 @@
         
         <div class="modal-body p-0">
             <form method="POST"
-                class="swal-confirm"
+                class=""
                 data-confirm-text="¿Confirma que desea aplicar este Movimiento de Nómina?"
-                action="{% url 'movimiento_contrato' object.no_expediente %}" 
+                action="{% url 'movimiento_contrato' object.pk %}" 
                 id="movimientoForm">
                 {% csrf_token %}
 
@@ -261,16 +261,75 @@
 
 <script>
     (function() {
-        var form = document.getElementById('movimientoForm');
-        if (window.htmx) htmx.process(form);
+        var $form = $('#movimientoForm');
+        
+        if (window.htmx) htmx.process($form[0]);
 
-        form.addEventListener('submit', function(e) {
-            var fecha = form.querySelector('[name="fecha_efectiva"]').value;
+        $form.on('submit', function(e) {
+            e.preventDefault(); // Detener envío normal
+            
+            // 1. Validación Frontend
+            var fecha = $form.find('[name="fecha_efectiva"]').val();
             if(!fecha) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                Swal.fire('Atención', 'Debe seleccionar una Fecha Efectiva para el movimiento.', 'warning');
+                Swal.fire('Atención', 'Debe seleccionar una Fecha Efectiva.', 'warning');
+                return;
             }
+
+            // 2. Pregunta de Confirmación (Reemplaza a la de base.html)
+            Swal.fire({
+                title: '¿Confirmar Movimiento?',
+                text: "¿Desea aplicar este cambio de nómina? Esta acción generará históricos.",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, aplicar',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#696cff',
+                cancelButtonColor: '#8592a3'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // 3. Si dice SÍ -> Enviamos AJAX
+                    enviarDatos();
+                }
+            });
         });
+
+        function enviarDatos() {
+            // Mostrar estado de carga (opcional pero recomendado)
+            Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
+
+            $.ajax({
+                url: $form.attr('action'),
+                type: 'POST',
+                data: $form.serialize(),
+                success: function(response) {
+                    if (response.form_is_valid) {
+                        $('#editar_empl').modal('hide');
+                        Swal.fire({
+                            icon: 'success', 
+                            title: 'Operación Exitosa', 
+                            text: response.message,
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            if(response.success_url) window.location.href = response.success_url;
+                            else location.reload();
+                        });
+                    }
+                },
+                error: function(xhr) {
+                    var res = xhr.responseJSON;
+                    if (res && res.error_popup) {
+                        // Error Crítico (500)
+                        Swal.fire('Error del Sistema', res.error_popup, 'error');
+                    } else if (res && res.html_form) {
+                        // Error de Validación (400) - Cerramos el loading y pintamos el form
+                        Swal.close(); 
+                        $('#editar_empl').html(res.html_form);
+                    } else {
+                        Swal.fire('Error', 'Error de comunicación inesperado.', 'error');
+                    }
+                }
+            });
+        }
     })();
 </script>

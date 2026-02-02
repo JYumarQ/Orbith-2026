@@ -1,4 +1,4 @@
-from typing import override
+from typing import override, Any
 from django.http import response, HttpResponseRedirect, HttpResponse, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import render, get_object_or_404, redirect
@@ -18,6 +18,8 @@ from django.db.models.functions import Concat
 from django.db import transaction
 from xhtml2pdf import pisa
 from .forms import CAltaForm, MovimientoForm
+import traceback
+import sys
 
 # Create your views here.
     
@@ -119,47 +121,7 @@ def search_contratos(request):
         'current_page_size': str(page_size)  # Para mantener el tamaño de página seleccionado
     })
 
-#!UTIL
-def cargar_salario(request):
-    # lee correctamente los parámetros que HTMX está enviando
-    cargo_id    = request.GET.get('cargo')
-    tridente_id = request.GET.get('tridente')
 
-
-    context = {}
-    try:
-        cargo = CargoPlantilla.objects.select_related('rol', 'ncargo').get(id=cargo_id)
-        grupo_escala = cargo.ncargo.grupo_escala
-        rol = cargo.rol
-
-        salario = NSalario.objects.get(
-            grupo_escala=grupo_escala,
-            rol=rol,
-            tridente_id=tridente_id
-        )
-        config = Configuracion.objects.first()
-        if config and config.fondo_tiempo_calc_tarif is not None:
-            fondo = float(config.fondo_tiempo_calc_tarif)
-        else:
-            fondo = 190.6
-
-        tarifa_calculada = round(salario.monto / fondo, 5) if fondo else 0
-
-        context = {
-            'salario': round(float(salario.monto), 2),
-            #Usar esta en caso de error o cambio, esta llama al valor en BD
-            # 'tarifa':  round(salario.monto / config.fondo_tiempo_calc_tarif, 5),
-            'tarifa':  tarifa_calculada,
-            'extras':  round(float(salario.monto) / 160.6, 5),
-        }
-    except Exception as e:
-        context = {
-            'salario': '',
-            'tarifa':  '',
-            'extras':  '',
-        }
-
-    return render(request, "pages/contrato/partials/cargar_salario.html", context)
 
 
 def validar_datos_contrato(request):
@@ -407,7 +369,9 @@ class ContratoDeleteView(DeleteView):
     def post(self, request, *args, **kwargs):
         # 1. Recuperar el objeto de forma segura
         try:
-            self.object = self.get_object()
+            # Tipado explícito para evitar errores de linter "Cannot access attribute..."
+            contrato: CAlta = self.get_object() # type: ignore
+            self.object = contrato
         except CAlta.DoesNotExist:
             return JsonResponse({
                 'success': False, 
@@ -430,30 +394,26 @@ class ContratoDeleteView(DeleteView):
             with transaction.atomic():
                 
                 # A. Crear el registro histórico (CBaja)
-                # Pasamos SOLO los campos confirmados que existen en tu modelo CBaja.
                 CBaja.objects.create(
                     # --- Campos heredados de ContratoBase ---
-                    aspirante=self.object.aspirante,
-                    no_expediente=self.object.no_expediente,
-                    tipo=self.object.tipo,
-                    cargo=self.object.cargo,
-                    reg_militar=self.object.reg_militar,
-                    profesional=self.object.profesional,
+                    aspirante=contrato.aspirante,
+                    no_expediente=contrato.no_expediente,
+                    tipo=contrato.tipo,
+                    cargo=contrato.cargo,
+                    reg_militar=contrato.reg_militar,
+                    profesional=contrato.profesional,
                     
                     # --- Campos específicos de CBaja (Confirmados) ---
                     fecha_baja=fecha_baja,
-                    causa_baja_id=causa_id,  # Usamos el ID recibido del POST
+                    causa_baja_id=causa_id,
                     
-                    # Estos campos existen en CAlta y confirmaste que están en CBaja
-                    fecha_alta=self.object.fecha_alta,
-                    tridente=self.object.tridente
-                    
-                    # NOTA: Se ha eliminado 'observaciones' porque causaba Error 500
+                    # Estos campos existen en CAlta
+                    fecha_alta=contrato.fecha_alta,
+                    tridente=contrato.tridente
                 )
 
                 # B. Eliminar el contrato activo
-                # Esto dispara la lógica del modelo CAlta (liberar plaza, cambiar estado aspirante)
-                self.object.delete()
+                contrato.delete()
 
             # Si llegamos aquí, todo salió bien
             return JsonResponse({
@@ -481,7 +441,7 @@ class ContratoPDFView(View):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachement; filename="report.pdf"'
         pisaStatus = pisa.CreatePDF(html, dest=response)
-        if pisaStatus.err:
+        if pisaStatus.err: # type: ignore
             return HttpResponse('Hay un error <pre>'+html+'</pre>')
         return response
         
@@ -497,7 +457,7 @@ class PrintContratoPDFView(View):
         html = template.render(context)
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'attachement; filename="'+contrato.aspirante.nombre+"_"+'"contrato.pdf"'
-        pisaStatus = pisa.CreatePDF(html, dest=response)
+        pisaStatus: Any = pisa.CreatePDF(html, dest=response)
         if pisaStatus.err:
             return HttpResponse('Hay un error <pre>'+html+'</pre>')
         return response
@@ -561,19 +521,62 @@ class MovimientoUpdateView(UpdateView):
     
     # ... (form_valid y form_invalid se quedan igual) ...
     def form_valid(self, form):
-        nueva_fecha = form.cleaned_data.get('fecha_efectiva')
-        if nueva_fecha: form.instance.fecha_alta = nueva_fecha
-        form.instance.en_proceso_movimiento = False
-        self.object = form.save()
-        messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
-        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'form_is_valid': True, 'message': 'Movimiento registrado correctamente.', 'success_url': str(self.success_url)})
-        return super().form_valid(form)
+        try:
+            # 1. Lógica de Negocio
+            nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+            if nueva_fecha: 
+                form.instance.fecha_alta = nueva_fecha
+            
+            form.instance.en_proceso_movimiento = False
+            
+            # 2. Guardado (Dispara señales, validaciones de DB, etc.)
+            self.object = form.save()
+
+            messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
+
+            # 3. Respuesta Exitosa JSON
+            if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'form_is_valid': True, 
+                    'message': 'Movimiento registrado correctamente.', 
+                    'success_url': str(self.success_url)
+                })
+            return super().form_valid(form)
+
+        except Exception as e:
+            # --- EL CHIVATO: Imprimir error real en la consola ---
+            print("\n" + "="*50)
+            print("🔴 ERROR CRÍTICO EN MOVIMIENTO DE NÓMINA")
+            print(f"Tipo: {type(e).__name__}")
+            print(f"Mensaje: {str(e)}")
+            print("-" * 20)
+            traceback.print_exc() # Muestra la línea exacta del fallo
+            print("="*50 + "\n")
+
+            # Revertir cualquier cambio en DB
+            transaction.set_rollback(True)
+
+            # --- RESPUESTA CONTROLADA AL FRONTEND ---
+            if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                # Devolvemos status 500 para que el JS sepa que explotó
+                return JsonResponse({
+                    'form_is_valid': False,
+                    'error_popup': f"Error del Sistema: {str(e)}", # El mensaje que verá el usuario
+                    'html_form': render_to_string(
+                        self.template_name, 
+                        self.get_context_data(form=form), 
+                        request=self.request
+                    )
+                }, status=500)
+            else:
+                messages.error(self.request, f"Error crítico: {str(e)}")
+                return self.form_invalid(form)
 
     def form_invalid(self, form):
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            # Error de validación normal (campos vacíos, etc.) -> Status 400
             html = render_to_string(self.template_name, self.get_context_data(form=form), request=self.request)
-            return JsonResponse({'form_is_valid': False, 'html_form': html})
+            return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
         return super().form_invalid(form)
 
 
@@ -591,7 +594,7 @@ def cargar_salario(request):
         
         # Datos extra (solo necesarios para movimiento, pero no estorban si se calculan)
         context['nuevo_grupo'] = cargo.ncargo.grupo_escala
-        context['nueva_cat'] = cargo.ncargo.get_cat_ocupacional_display()
+        context['nueva_cat'] = getattr(cargo.ncargo, 'get_cat_ocupacional_display')()
         context['nuevo_rol'] = cargo.rol.tipo if cargo.rol else "Cuadro"
 
         salario = NSalario.objects.get(
@@ -602,7 +605,7 @@ def cargar_salario(request):
         
         config = Configuracion.objects.first()
         fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-        tarifa_calculada = round(salario.monto / fondo, 5) if fondo else 0
+        tarifa_calculada = round(float(salario.monto) / fondo, 5) if fondo else 0
 
         context.update({
             'salario': round(float(salario.monto), 2),

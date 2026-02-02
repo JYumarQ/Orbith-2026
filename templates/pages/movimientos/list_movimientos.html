@@ -70,7 +70,7 @@
                         {% for c in object_list %}
                         <tr class="cursor-pointer row-pendiente fila-movimiento"
                             onclick="seleccionarFila(this)"
-                            data-url-movimiento="{% url 'movimiento_contrato' c.no_expediente %}"
+                            data-url-movimiento="{% url 'movimiento_contrato' c.pk %}"
                         >
                             <td><strong>{{ c.no_expediente }}</strong></td>
                             
