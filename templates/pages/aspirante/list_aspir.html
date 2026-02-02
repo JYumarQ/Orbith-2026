@@ -320,7 +320,9 @@
 
 <script>
     // Variable para guardar el ID seleccionado actualmente
-    let seleccionadoID = null;
+    if (typeof seleccionadoID === 'undefined') {
+        var seleccionadoID = null;
+    }
 
     // Función principal de selección (se activa al hacer click en la fila)
     function seleccionarAspirante(fila) {

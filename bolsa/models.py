@@ -8,7 +8,7 @@ from django.core.exceptions import ValidationError
 # CONTACTO
 class Contacto(Base):
 
-    doc_identidad = models.CharField(max_length=11, primary_key=True)
+    doc_identidad = models.CharField(max_length=11, unique=True, verbose_name="Carnet de Identidad")
     nombre = models.CharField(max_length=20, blank=False, null=False)
     papellido = models.CharField(max_length=30, null=False, blank=False)
     sapellido = models.CharField(max_length=30, null=False, blank=False)

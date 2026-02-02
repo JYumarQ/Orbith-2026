@@ -324,7 +324,7 @@ class ContratoUpdateView(UpdateView):
         context = super().get_context_data(**kwargs)
 
         contrato = self.object
-        context['aspirante'] = get_object_or_404(Aspirante, doc_identidad=contrato.aspirante_id)
+        context['aspirante'] = contrato.aspirante
 
         config = Configuracion.objects.first()
         if config and config.fondo_tiempo_calc_tarif is not None:

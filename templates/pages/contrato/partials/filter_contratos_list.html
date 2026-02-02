@@ -2,16 +2,15 @@
     {% for c in object_list %}
         <tr class="fila-contrato cursor-pointer {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
             onclick="seleccionarContrato(this)"
-            data-id="{{ c.no_expediente }}"
-            data-url-editar-contrato="{% url 'updt_contrato' c.no_expediente %}"
-            data-url-editar-personal="{% url 'updt_aspir' c.aspirante.doc_identidad %}?next={% url 'list_contrato' %}"
-            data-url-solicitar="{% url 'solicitar_movimiento' c.no_expediente %}"
-
-            
-            data-url-movimiento="{% url 'movimiento_contrato' c.no_expediente %}" 
+            data-id="{{ c.pk }}"
+            data-url-editar-contrato="{% url 'updt_contrato' c.pk %}"
+            {# Aquí es vital usar c.aspirante.pk #}
+            data-url-editar-personal="{% url 'updt_aspir' c.aspirante.pk %}?next={% url 'list_contrato' %}"
+            data-url-solicitar="{% url 'solicitar_movimiento' c.pk %}"
+            data-url-movimiento="{% url 'movimiento_contrato' c.pk %}" 
+            {# PREFERIBLE: Usar el nombre del campo real para reportes #}
             data-url-pdf="{% url 'ncontrato_pdf' c.no_expediente %}"
-            data-url-baja="{% url 'del_contrato' c.no_expediente %}"
-
+            data-url-baja="{% url 'del_contrato' c.pk %}"
             data-expediente="{{ c.no_expediente }}"
             data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}"
         >

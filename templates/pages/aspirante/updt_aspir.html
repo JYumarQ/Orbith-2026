@@ -5,10 +5,9 @@
             <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
         </div>
         <div class="modal-body">
-            <!-- Cargar el formulario del cargo aquí -->
             <form method="POST"
                 class="swal-confirm"
-                action="{% url 'updt_aspir' object.doc_identidad%}"
+                action="{% url 'updt_aspir' object.pk %}"
                 id="formEditarAspirante"
                 data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?"
                 >

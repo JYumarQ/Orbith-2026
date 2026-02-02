@@ -8,8 +8,8 @@ urlpatterns = [
     path('list_contrato/', login_required(views.ContratoListView.as_view()), name='list_contrato'),
     # contratos/urls.py
     path('add_contrato/<str:aspirante_id>/', login_required(views.ContratoCreateView.as_view()), name='add_contrato'),
-    path('updt_contrato/<pk>/', login_required(views.ContratoUpdateView.as_view()), name='updt_contrato'),
-    path('del_contrato/<pk>/', login_required(views.ContratoDeleteView.as_view()), name='del_contrato'),
+    path('updt_contrato/<str:pk>/', login_required(views.ContratoUpdateView.as_view()), name='updt_contrato'),
+    path('del_contrato/<str:pk>/', login_required(views.ContratoDeleteView.as_view()), name='del_contrato'),
     path('cargar_salarios/', login_required(views.cargar_salario), name='cargar_salarios'),
     path('search_contrato/', login_required(views.search_contratos), name='search_contrato'),
     

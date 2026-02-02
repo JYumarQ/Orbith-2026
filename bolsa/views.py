@@ -322,7 +322,9 @@ class AspiranteUpdateView(UpdateView):
         return next_url or reverse_lazy('list_aspir')
 
     def form_valid(self, form):
-        aspirante = form.save(commit=False)
+        aspirante = form.save()
+        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente (CI: {aspirante.doc_identidad}).')
+        return HttpResponseRedirect(self.get_success_url())
 
         # Lógica de especialidad según nivel educativo
         if aspirante.nivel_educ not in ['NS', 'MS', 'TM']:

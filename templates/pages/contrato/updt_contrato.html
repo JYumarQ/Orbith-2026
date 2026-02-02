@@ -9,7 +9,7 @@
             <form method="POST"
                 class="swal-confirm"
                 data-confirm-text="¿Estás seguro de guardar los cambios del contrato?"
-                action="{% url 'updt_contrato' object.no_expediente%}" id="contratoForm">
+                action="{% url 'updt_contrato' object.pk %}" id="contratoForm">
                 {% csrf_token %}
                 
                 <div class="nav-align-top mb-4">

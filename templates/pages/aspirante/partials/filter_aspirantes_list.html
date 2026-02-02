@@ -1,12 +1,13 @@
 {% for aspirante in aspirantes %}
-<tr id="row-{{ aspirante.doc_identidad }}"
+<tr id="row-{{ aspirante.pk }}"
     class="cursor-pointer fila-aspirante"
     onclick="seleccionarAspirante(this)"
     style="cursor: pointer;"
-    data-id="{{ aspirante.doc_identidad }}"
-    data-url-editar="{% url 'updt_aspir' aspirante.doc_identidad %}?next={% url 'list_aspir' %}"
+    data-id="{{ aspirante.pk }}" 
+    data-url-editar="{% url 'updt_aspir' aspirante.pk %}?next={% url 'list_aspir' %}"
+    {# IMPORTANTE: add_contrato sigue esperando el CI string, así que ese lo dejamos igual #}
     data-url-contrato="{% url 'add_contrato' aspirante.doc_identidad %}"
-    data-url-eliminar="{% url 'del_aspir' aspirante.doc_identidad %}">
+    data-url-eliminar="{% url 'del_aspir' aspirante.pk %}">
     
     <td class="text-center">
       {{ aspirante.doc_identidad }}

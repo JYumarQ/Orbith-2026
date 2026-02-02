@@ -11,8 +11,12 @@ from auditoria.models import Base
 #?CONTRATO
 class ContratoBase(Base):
     
-    aspirante = models.ForeignKey(Aspirante, on_delete=models.RESTRICT)
-    no_expediente = models.CharField(max_length=5, primary_key=True)
+    aspirante = models.ForeignKey(Aspirante, on_delete=models.RESTRICT, related_name="%(class)s_contratos")
+    no_expediente = models.CharField(
+        max_length=5, 
+        unique=True,
+        verbose_name="No. Expediente"
+    )
     #?CONTRATO
     tipo = models.CharField(max_length=50, choices=[
         ('IND', 'Indeterminado'), 
