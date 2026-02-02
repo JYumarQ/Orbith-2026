@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator
 from auditoria.models import Base
@@ -12,8 +13,7 @@ class Configuracion(Base):
     rama = models.CharField(max_length=50, blank=True, null=True)
     moneda_local = models.CharField(max_length=10, default='CUP')
     periodo = models.PositiveIntegerField(default=15, validators=[MinValueValidator(7)], null=False, blank=False)
-    fondo_tiempo_calc_tarif = models.DecimalField(max_digits=5, decimal_places=2, default=190.6, null=False, blank=False)
-    correo = models.EmailField(null=True, blank=True)
+    fondo_tiempo_calc_tarif = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('190.6'), null=False, blank=False)
     telefono = models.CharField(max_length=20, blank=True, null=True)
     direccion = models.TextField(max_length=200, blank=True, null=True)
     logo = models.ImageField(upload_to='img/empr/', blank=True, null=True)

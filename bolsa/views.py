@@ -43,7 +43,8 @@ class AspiranteListView(ListView):
         qs = Aspirante.objects.filter(estado='ASPIRANTE')
         u = self.request.user
         if getattr(u, 'es_moderador', False):
-            ids_permitidos = u.unidades.values_list('pk', flat=True)
+            # Usamos getattr para evitar error de tipado en 'unidades'
+            ids_permitidos = getattr(u, 'unidades').values_list('pk', flat=True)
             qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
         return qs
 
@@ -69,7 +70,7 @@ class AspiranteListView(ListView):
             # Busca la sigla en el diccionario, si no existe usa las 3 primeras letras mayúsculas
             sigla = ABR_PROVINCIAS.get(p.nombre, p.nombre[:3].upper())
             provincias_list.append({
-                'id': p.id,
+                'id': p.pk,
                 'nombre': p.nombre,
                 'sigla': sigla
             })
@@ -77,7 +78,7 @@ class AspiranteListView(ListView):
         context['provincias_list'] = provincias_list
 
         context['provincias'] = NProvincia.objects.all()
-        context['niveles_educ'] = Aspirante.nivel_educ.field.choices
+        context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
         return context
 
 def search_aspirantes(request):
@@ -160,7 +161,7 @@ class BajaListView(ListView):
         qs = Aspirante.objects.filter(estado='BAJA')
         u = self.request.user
         if getattr(u, 'es_moderador', False):
-            ids_permitidos = u.unidades.values_list('pk', flat=True)
+            ids_permitidos = getattr(u,'unidades').values_list('pk', flat=True)
             qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
         return qs
 
@@ -185,9 +186,9 @@ class BajaListView(ListView):
         provincias_list = []
         for p in provincias_raw:
             sigla = ABR_PROVINCIAS.get(p.nombre, p.nombre[:3].upper())
-            provincias_list.append({'id': p.id, 'nombre': p.nombre, 'sigla': sigla})
+            provincias_list.append({'id': p.pk, 'nombre': p.nombre, 'sigla': sigla})
         context['provincias_list'] = provincias_list
-        context['niveles_educ'] = Aspirante.nivel_educ.field.choices
+        context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
 
         return context
 
@@ -245,10 +246,11 @@ def validar_datos_aspirante(request):
         if qs.exists():
             data['ci_existe'] = True
             persona = qs.first()
-            # Mensajes personalizados según estado
-            if persona.estado == 'ACTIVO':
+            # Mensajes personalizados según estado (Verificamos que persona no sea None)
+            if persona and persona.estado == 'ACTIVO':
                 data['ci_error_msg'] = 'El CI ya está asociado a un trabajador de la Empresa (ACTIVO).'
-            elif persona.estado == 'BAJA':
+            elif persona and persona.estado == 'BAJA':
+            
                 data['ci_error_msg'] = 'El CI pertenece a una persona en BAJA.'
             else:
                 data['ci_error_msg'] = 'El CI ya existe en el registro de ASPIRANTES.'
@@ -286,7 +288,7 @@ class AspiranteCreateView(CreateView):
         u = self.request.user
         # Moderador: solo en sus UO
         if getattr(u, 'es_moderador', False):
-            permitidas = set(u.unidades.values_list('pk', flat=True))
+            permitidas = set(getattr(u, 'unidades').values_list('pk', flat=True))
             if not form.instance.unidad_organizativa_id:
                 form.add_error('unidad_organizativa', 'Debe seleccionar una UO.')
                 return self.form_invalid(form)
@@ -332,7 +334,7 @@ class AspiranteUpdateView(UpdateView):
         # Moderador: solo edición en sus UO
         u = self.request.user
         if getattr(u, 'es_moderador', False):
-            permitidas = set(u.unidades.values_list('pk', flat=True))
+            permitidas = set(getattr(u, 'unidades').values_list('pk', flat=True))
             if aspirante.unidad_organizativa_id not in permitidas:
                 return HttpResponseForbidden("Fuera de su UO asignada.")
 
@@ -351,8 +353,9 @@ class AspiranteDeleteView(DeleteView):
         
         # Moderador: solo en sus UO
         if getattr(request.user, 'es_moderador', False):
-            permitidas = set(request.user.unidades.values_list('pk', flat=True))
-            if aspirante.unidad_organizativa_id not in permitidas:
+            permitidas = set(getattr(request.user, 'unidades').values_list('pk', flat=True))
+            uo_id = getattr(aspirante, 'unidad_organizativa_id')
+            if uo_id not in permitidas:
                 return HttpResponseForbidden("Fuera de su UO asignada.")
         
         try:

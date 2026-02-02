@@ -4,12 +4,16 @@ import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-env = environ.Env()
+# Definimos el esquema (NombreVariable=(Tipo, ValorPorDefecto)) al instanciar
+env = environ.Env(
+    DEBUG=(bool, True)
+)
 env.read_env(BASE_DIR / "core" / ".env", encoding="utf-8")
 
 
 SECRET_KEY = env('SECRET_KEY')
-DEBUG = env.bool('DEBUG', default=True)
+DEBUG = env('DEBUG')  # Limpio y sin errores: toma el tipo y default definidos arriba
+
 #SECRET_KEY = 'django-insecure-ee#a$ki#9h1=@&4o8u^e4aih+0g-=c5h+yrx0n2i-bgiwjnxe_'
 #DEBUG = True
 ALLOWED_HOSTS = ['*']

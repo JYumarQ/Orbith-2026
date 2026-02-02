@@ -81,8 +81,9 @@ class Aspirante(Contacto):
 
     def clean(self):
         super().clean()
-        if self.municipio_id and self.provincia_id:
-            if self.municipio.provincia_id != self.provincia_id:
+        # Usamos los objetos directos para evitar falsos positivos de Pylance con los campos _id
+        if self.municipio and self.provincia:
+            if self.municipio.provincia != self.provincia:
                 raise ValidationError({'municipio': 'El municipio no pertenece a la provincia seleccionada.'})
         
     def save(self, *args, **kwargs):
