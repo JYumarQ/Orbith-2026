@@ -97,11 +97,13 @@ class CAltaForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.user = user
 
-        if user:
+        f_unidad = self.fields['unidad']
+
+        if user and isinstance(f_unidad, forms.ModelChoiceField):
             if user.is_superuser:
-                self.fields['unidad'].queryset = UnidadOrganizativa.objects.all()
+                f_unidad.queryset = UnidadOrganizativa.objects.all()
             else:
-                self.fields['unidad'].queryset = user.unidades.all()
+                f_unidad.queryset = getattr(user, 'unidades').all()
         
         # 1. PRIMERO: Cargar datos iniciales de la instancia (BD) si existen
         # Esto establece los valores por defecto al abrir el formulario de edición
@@ -113,32 +115,46 @@ class CAltaForm(forms.ModelForm):
 
             self.fields['unidad'].initial = unidad.pk
 
-            self.fields['departamento'].queryset = Departamento.objects.filter(
-                unidad_organizativa=unidad
-            )
-            self.fields['departamento'].initial = dpto.pk
+            f_dpto = self.fields['departamento']
+            if isinstance(f_dpto, forms.ModelChoiceField):
+                f_dpto.queryset = Departamento.objects.filter(unidad_organizativa=unidad)
+                f_dpto.initial = dpto.pk
 
-            self.fields['cargo'].queryset = CargoPlantilla.objects.filter(
-                departamento=dpto
-            )
-            self.fields['cargo'].initial = self.instance.cargo.pk
+            
+
+            f_cargo = self.fields['cargo']
+            if isinstance(f_cargo, forms.ModelChoiceField):
+                f_cargo.queryset = CargoPlantilla.objects.filter(departamento=dpto)
+                f_cargo.initial = self.instance.cargo.pk
+
+            
 
         # 2. SEGUNDO: Sobrescribir con datos del formulario (POST) si existen
         # Esto es crucial: si el usuario cambió la unidad/departamento, 
         # cargamos los nuevos querysets para que la validación pase.
         if "unidad" in self.data:
             try:
-                unidad_id = int(self.data.get("unidad"))
-                self.fields["departamento"].queryset = Departamento.objects.filter(unidad_organizativa=unidad_id)
+                # [Corrección Pylance] Validamos que no sea None antes de int()
+                val_unidad = self.data.get("unidad")
+                if val_unidad:
+                    unidad_id = int(val_unidad)
+                    f_dpto = self.fields["departamento"]
+                    if isinstance(f_dpto, forms.ModelChoiceField):
+                        f_dpto.queryset = Departamento.objects.filter(unidad_organizativa=unidad_id)
             except (ValueError, TypeError):
-                pass  # Si hay error, dejamos el queryset vacío o el que estaba
+                pass
             
         if "departamento" in self.data:
             try:
-                dpto_id = int(self.data.get("departamento"))
-                self.fields["cargo"].queryset = CargoPlantilla.objects.filter(departamento=dpto_id)
+                val_dpto = self.data.get("departamento")
+                if val_dpto:
+                    dpto_id = int(val_dpto)
+                    f_cargo = self.fields["cargo"]
+                    if isinstance(f_cargo, forms.ModelChoiceField):
+                        f_cargo.queryset = CargoPlantilla.objects.filter(departamento=dpto_id)
             except (ValueError, TypeError):
                 pass
+                
         self.fields['reg_militar'].required = True
 
     def clean(self):

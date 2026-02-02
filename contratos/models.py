@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla
@@ -67,14 +68,14 @@ class CAlta(ContratoBase):
         )
     maestria = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
     doctorado = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
-    cnci = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=5, decimal_places=2, null=True, blank=True)
-    instructor = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=5, decimal_places=2, null=True, blank=True)
+    instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
     
-    cla1 = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla2 = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla3 = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla4 = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla5 = models.DecimalField(default=0, validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cla1 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cla2 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cla3 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cla4 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    cla5 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
     
     jornada = models.ForeignKey(NJornada, blank=True, null=True, on_delete=models.RESTRICT)
 
@@ -101,9 +102,10 @@ class CAlta(ContratoBase):
         
     @staticmethod
     def actualizar_plantilla(cargo_id):
-        cargo = CargoPlantilla.objects.filter(id = cargo_id).first()
-        cargo.cant_cubierta += 1
-        cargo.save()
+        cargo = CargoPlantilla.objects.filter(pk=cargo_id).first() # Usamos pk por consistencia
+        if cargo: # Verificamos que exista antes de editar
+            cargo.cant_cubierta += 1
+            cargo.save()
         
     def calcular_salario_escala(self):
         try:
@@ -121,7 +123,7 @@ class CAlta(ContratoBase):
                 )
                 return round(float(salario_obj.monto),2)
             else:
-                return self.cargo.ncargo.salario_basico
+                return self.cargo.ncargo.salario_basico if self.cargo else None
         except NSalario.DoesNotExist:
             return None
     
@@ -141,7 +143,7 @@ class CAlta(ContratoBase):
         return max(delta, 0)
         
     def get_director(self):
-        if self.cargo.ncargo.cat_ocupacional != 'CDI' and self.cargo.ncargo.cat_ocupacional != 'CEJ':
+        if self.cargo and self.cargo.ncargo.cat_ocupacional != 'CDI' and self.cargo.ncargo.cat_ocupacional != 'CEJ':
             director = CAlta.objects.filter(cargo__ncargo__cat_ocupacional__in=['CDI','CEJ']).first()
             return director
         else:
@@ -166,7 +168,7 @@ class CAlta(ContratoBase):
                 
                 # Solo sumamos plaza si es contrato INDETERMINADO y tiene cargo
                 if self.tipo == 'IND' and self.cargo:
-                    self.actualizar_plantilla(self.cargo.id)
+                    self.actualizar_plantilla(self.cargo.pk)
             
             super().save(*args, **kwargs)
             
