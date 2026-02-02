@@ -203,6 +203,62 @@ def cargar_cargos(request):
     return render(request, 'pages/contrato/partials/options_cargos.html', {'cargos': cargos})
 
 
+def historico_trabajador(request, aspirante_id):
+    """
+    Devuelve el historial cronológico de contratos (Altas) y Bajas de un aspirante.
+    """
+    # 1. Obtener todos los contratos (Altas) ordenados por fecha
+    contratos = CAlta.objects.filter(aspirante_id=aspirante_id).select_related(
+        'aspirante', 
+        'cargo__departamento__unidad_organizativa',
+        'cargo__ncargo'
+    ).order_by('fecha_alta')
+
+    historial = []
+    
+    # 2. Iterar sobre los contratos para construir la historia
+    for index, alta in enumerate(contratos):
+        # Buscar si este contrato específico tiene una baja asociada
+        # Asumimos que la baja coincide en expediente y fecha de alta original
+        baja = CBaja.objects.filter(
+            aspirante_id=aspirante_id,
+            no_expediente=alta.no_expediente,
+            fecha_alta=alta.fecha_alta
+        ).first()
+
+        # 3. Determinar el Evento
+        # Si es el primero de la lista cronológica -> Alta Inicial
+        # Si no es el primero -> Recontratación
+        evento = "Alta Inicial" if index == 0 else "Recontratación"
+
+        # 4. Formatear fechas
+        f_inicio = alta.fecha_alta.strftime('%d/%m/%Y') if alta.fecha_alta else "-"
+        
+        if baja:
+            f_fin = baja.fecha_baja.strftime('%d/%m/%Y') if baja.fecha_baja else "-"
+            motivo_baja = f" (Baja: {baja.causa_baja.descripcion})" if baja.causa_baja else ""
+        else:
+            f_fin = "Activo"
+            motivo_baja = ""
+
+        # 5. Construir el objeto de datos
+        item = {
+            'expediente': alta.no_expediente,
+            'nombre_completo': f"{alta.aspirante.nombre} {alta.aspirante.papellido} {alta.aspirante.sapellido}",
+            'ci': alta.aspirante.doc_identidad,
+            'unidad': alta.cargo.departamento.unidad_organizativa.descripcion if alta.cargo else "---",
+            'cargo': alta.cargo.ncargo.descripcion if alta.cargo else "---",
+            'salario': alta.calcular_salario_escala(),
+            'fecha_inicio': f_inicio,
+            'fecha_fin': f_fin,
+            'evento': evento,
+            'estado_clase': 'text-danger' if baja else 'text-success' # Para darle color al estado
+        }
+        historial.append(item)
+
+    return JsonResponse({'data': historial})
+
+
 class ContratoCreateView(CreateView):
     model = CAlta
     form_class = CAltaForm
@@ -468,7 +524,7 @@ class MovimientoUpdateView(UpdateView):
     model = CAlta
     form_class = MovimientoForm
     template_name = "pages/contrato/movimiento_nomina.html"
-    success_url = reverse_lazy('list_contrato')
+    success_url = reverse_lazy('list_movimientos')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

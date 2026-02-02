@@ -229,7 +229,9 @@
                 <hr class="my-3">
 
                 <form id="formBajaContrato">
-                    <input type="hidden" id="baja_contrato_id"> <input type="hidden" id="baja_url_post">    <div class="mb-3">
+                    <input type="hidden" id="baja_contrato_id"> 
+                    <input type="hidden" id="baja_url_post">    
+                    <div class="mb-3">
                         <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
                         <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
                     </div>
@@ -253,36 +255,98 @@
     </div>
 </div>
 
+
+
+<div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header bg-label-primary">
+                <h5 class="modal-title" id="tituloHistorico">
+                    <i class="fas fa-history me-2"></i>Histórico del Trabajador
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <div class="modal-body" id="areaImpresionHistorico">
+                <div class="card bg-lighter mb-3 shadow-none border">
+                    <div class="card-body p-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Nombre:</strong> <span id="histNombre">Cargando...</span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>CI:</strong> <span id="histCI">Cargando...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="bg-label-primary"> 
+                            <tr>
+                                <th>Evento</th>
+                                <th>Exp.</th>
+                                <th>Unidad Organizativa</th>
+                                <th>Cargo</th>
+                                <th>Salario</th> 
+                                <th class="text-center">Fecha Inicio</th>
+                                <th class="text-center">Fecha Fin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaHistoricoBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    Cerrar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="imprimirHistorico()">
+                    <i class="fas fa-print me-1"></i> Imprimir
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
 {% endblock %} 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
     var $ = jQuery.noConflict();
 
-    function abrir_modal_edicion(url){
-      $('#editar_empl').load(url, function(){
-        $(this).modal('show');
-        if (window.htmx) htmx.process($('#contratoForm')[0]); 
-      });
-    }
-    
-    function abrir_modal_aspir(url){
-      $('#editar_aspir').load(url, function(){
-        $(this).modal('show');
-        if (window.htmx) htmx.process($('#formEditarAspirante')[0]); 
-      });
+    function abrir_modal_edicion(url) {
+        $('#editar_empl').load(url, function() {
+            $(this).modal('show');
+            if (window.htmx) htmx.process($('#contratoForm')[0]);
+        });
     }
 
-    function confirmarSolicitudMovimiento(){
+    function abrir_modal_aspir(url) {
+        $('#editar_aspir').load(url, function() {
+            $(this).modal('show');
+            if (window.htmx) htmx.process($('#formEditarAspirante')[0]);
+        });
+    }
+
+    function confirmarSolicitudMovimiento() {
         // Obtenemos el botón y la URL que guardamos al seleccionar la fila
         const btn = document.getElementById('btn-movimiento');
         const url = btn.getAttribute('data-url-solicitar');
 
-        if(!url || url === '#' || url === ''){
+        if (!url || url === '#' || url === '') {
             Swal.fire({
-                toast: true, position: 'top-end', icon: 'warning',
+                toast: true,
+                position: 'top-end',
+                icon: 'warning',
                 title: 'Seleccione un contrato válido primero.',
-                showConfirmButton: false, timer: 3000
+                showConfirmButton: false,
+                timer: 3000
             });
             return;
         }
@@ -302,17 +366,22 @@
                 $.ajax({
                     url: url,
                     type: 'POST',
-                    headers: {'X-CSRFToken': '{{ csrf_token }}'}, // Importante para Django
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }, // Importante para Django
                     success: function(response) {
-                        if(response.success){
+                        if (response.success) {
                             Swal.fire({
-                                toast: true, position: 'top-end', icon: 'success',
+                                toast: true,
+                                position: 'top-end',
+                                icon: 'success',
                                 title: 'Solicitud aprobada',
                                 text: 'El contrato ahora aparece enmarcado en amarillo.',
-                                showConfirmButton: false, timer: 3000
+                                showConfirmButton: false,
+                                timer: 3000
                             });
                             // Recargamos la tabla para ver el borde amarillo
-                            triggerSearch(); 
+                            triggerSearch();
                         } else {
                             Swal.fire('Error', response.message, 'error');
                         }
@@ -325,8 +394,6 @@
         });
     }
 
-    
-
     function seleccionarContrato(fila) {
         document.querySelectorAll('.fila-contrato').forEach(f => f.classList.remove('table-active-row'));
         fila.classList.add('table-active-row');
@@ -334,26 +401,117 @@
         const toolbar = document.getElementById('contrato-toolbar');
         toolbar.classList.remove('toolbar-disabled');
         toolbar.classList.add('toolbar-active');
-        
+
         document.getElementById('btn-edit-contrato').setAttribute('data-url', fila.dataset.urlEditarContrato);
         document.getElementById('btn-edit-personal').setAttribute('data-url', fila.dataset.urlEditarPersonal);
         document.getElementById('btn-movimiento').setAttribute('data-url-solicitar', fila.dataset.urlSolicitar);
         document.getElementById('btn-pdf').setAttribute('href', fila.dataset.urlPdf);
-        
+
         const btnBaja = document.getElementById('btn-baja');
-        btnBaja.setAttribute('hx-post', fila.dataset.urlBaja);
+
         btnBaja.dataset.url = fila.dataset.urlBaja; // La URL del DeleteView
         btnBaja.dataset.expediente = fila.dataset.expediente; // Asegúrate de agregar esto en el <tr>
-        btnBaja.dataset.nombre = fila.dataset.nombre;         // Asegúrate de agregar esto en el <tr>
+        btnBaja.dataset.nombre = fila.dataset.nombre; // Asegúrate de agregar esto en el <tr>
     }
 
     function deseleccionarTodo() {
         document.querySelectorAll('.fila-contrato').forEach(f => f.classList.remove('table-active-row'));
         const toolbar = document.getElementById('contrato-toolbar');
-        if(toolbar){
+        if (toolbar) {
             toolbar.classList.add('toolbar-disabled');
             toolbar.classList.remove('toolbar-active');
         }
+    }
+
+    function abrirModalHistorico(url) {
+        // 1. Mostrar modal y spinner de carga
+        const modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
+        const tbody = document.getElementById('tablaHistoricoBody');
+
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Cargando historial...</p></td></tr>';
+        document.getElementById('histNombre').innerText = '...';
+        document.getElementById('histCI').innerText = '...';
+
+        modal.show();
+
+        // 2. Petición AJAX a la nueva vista
+        fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error("Error en la red");
+                return response.json();
+            })
+            .then(data => {
+                const historial = data.data;
+                tbody.innerHTML = ''; // Limpiar spinner
+
+                if (historial.length > 0) {
+                    // Llenar datos de cabecera
+                    document.getElementById('histNombre').innerText = historial[0].nombre_completo;
+                    document.getElementById('histCI').innerText = historial[0].ci;
+                    
+                    // --- CORRECCIÓN 1: Título estático sin nombre redundante ---
+                    document.getElementById('tituloHistorico').innerHTML = `<i class="fas fa-history me-2"></i>Histórico del Trabajador`;
+
+                    // Llenar tabla
+                    historial.forEach(item => {
+                        const fila = `
+                            <tr>
+                                <td><span class="badge bg-label-info">${item.evento}</span></td>
+                                <td><strong>${item.expediente}</strong></td>
+                                <td><small>${item.unidad}</small></td>
+                                <td>${item.cargo}</td>
+                                
+                                <td class="fw-bold">${item.salario}</td>
+                                
+                                <td class="text-center">${item.fecha_inicio}</td>
+                                <td class="text-center fw-bold ${item.estado_clase}">${item.fecha_fin}</td>
+                            </tr>
+                        `;
+                        tbody.insertAdjacentHTML('beforeend', fila);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">No se encontró historial para este trabajador.</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error al cargar datos: ${error.message}</td></tr>`;
+            });
+    }
+
+    function imprimirHistorico() {
+        // Opción simple: Imprimir solo el contenido del modal
+        const contenido = document.getElementById('areaImpresionHistorico').innerHTML;
+        const titulo = document.getElementById('tituloHistorico').innerText;
+        // Sacamos la URL fuera para que el editor no marque error de sintaxis HTML
+        const urlBootstrap = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css";
+
+        const ventanaImpresion = window.open('', '', 'height=600,width=800');
+
+        // Construimos el HTML de forma más limpia usando Template Literals (``)
+        const htmlContent = `
+            <html>
+                <head>
+                    <title>${titulo}</title>
+                    <link rel="stylesheet" href="${urlBootstrap}">
+                </head>
+                <body>
+                    <h3 class="text-center my-4">${titulo}</h3>
+                    ${contenido}
+                </body>
+            </html>
+        `;
+
+        ventanaImpresion.document.write(htmlContent);
+
+        ventanaImpresion.document.close();
+        ventanaImpresion.focus();
+
+        // Esperar un poco a que carguen los estilos antes de imprimir
+        setTimeout(() => {
+            ventanaImpresion.print();
+            ventanaImpresion.close();
+        }, 500);
     }
 
     document.addEventListener('click', function(e) {
@@ -364,113 +522,121 @@
 
     function triggerSearch() {
         const searchInput = document.getElementById('search');
-        htmx.trigger(searchInput, 'searchFilters'); 
+        htmx.trigger(searchInput, 'searchFilters');
     }
 
     function abrirModalBaja() {
-    const btn = document.getElementById('btn-baja');
-    const url = btn.dataset.url;
+        const btn = document.getElementById('btn-baja');
+        const url = btn.dataset.url;
 
-    if (!url) return; // Si no hay selección, no hace nada
+        if (!url) return; // Si no hay selección, no hace nada
 
-    // 1. Cargar datos en el modal
-    document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
-    document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
-    document.getElementById('baja_url_post').value = url;
-    
-    // Limpiar campos editables
-    document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0]; // Pone fecha de hoy por defecto
-    document.getElementById('baja_causa').value = "";
+        // 1. Cargar datos en el modal
+        document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
+        document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
+        document.getElementById('baja_url_post').value = url;
 
-    // 2. Mostrar Modal
-    $('#modalBajaContrato').modal('show');
-}
+        // Limpiar campos editables
+        document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0]; // Pone fecha de hoy por defecto
+        document.getElementById('baja_causa').value = "";
 
-function validarYConfirmarBaja() {
-    // 1. Validación
-    const fecha = document.getElementById('baja_fecha').value;
-    const causa = document.getElementById('baja_causa').value;
-    const url = document.getElementById('baja_url_post').value;
-
-    if (!fecha || !causa) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Campos incompletos',
-            text: 'Por favor, seleccione una fecha y una causa de baja.',
-            confirmButtonColor: '#696cff'
-        });
-        return;
+        // 2. Mostrar Modal
+        $('#modalBajaContrato').modal('show');
     }
 
-    // 2. SweetAlert de Confirmación (La original, pero ahora llamada manualmente)
-    $('#modalBajaContrato').modal('hide'); // Ocultamos el modal de formulario primero
+    function validarYConfirmarBaja() {
+        // 1. Validación
+        const fecha = document.getElementById('baja_fecha').value;
+        const causa = document.getElementById('baja_causa').value;
+        const url = document.getElementById('baja_url_post').value;
 
-    Swal.fire({
-        title: '¿Está seguro de dar de baja este contrato?',
-        text: "Esta acción registrará la baja en el sistema.",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#8592a3',
-        confirmButtonText: 'Sí, dar de baja',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            enviarBajaAlBackend(url, fecha, causa);
-        } else {
-            // Si cancela el SweetAlert, volvemos a mostrar el modal por si quiere corregir algo
-            $('#modalBajaContrato').modal('show');
-        }
-    });
-}
-
-function enviarBajaAlBackend(url, fecha, causa) {
-    // Usamos HTMX para enviar la petición manualmente y mantener la consistencia
-    // O usamos jQuery AJAX. Dado que el proyecto usa ambos, jQuery es más explícito aquí para pasar datos extra.
-    
-    $.ajax({
-        url: url,
-        type: 'POST',
-        data: {
-            'fecha_baja': fecha,
-            'causa_baja': causa,
-            'csrfmiddlewaretoken': '{{ csrf_token }}' // Django CSRF
-        },
-        success: function(response) {
-            // Si todo sale bien
+        if (!fecha || !causa) {
             Swal.fire({
-                icon: 'success',
-                title: 'Baja procesada',
-                showConfirmButton: false,
-                timer: 1500
+                icon: 'warning',
+                title: 'Campos incompletos',
+                text: 'Por favor, seleccione una fecha y una causa de baja.',
+                confirmButtonColor: '#696cff'
             });
-            // Recargamos la tabla disparando el evento de HTMX del buscador
-            triggerSearch();
-        },
-        error: function(xhr) {
-            Swal.fire('Error', 'No se pudo procesar la baja.', 'error');
+            return;
         }
-    });
-}
+
+        // 2. SweetAlert de Confirmación (La original, pero ahora llamada manualmente)
+        $('#modalBajaContrato').modal('hide'); // Ocultamos el modal de formulario primero
+
+        Swal.fire({
+            title: '¿Está seguro de dar de baja este contrato?',
+            text: "Esta acción registrará la baja en el sistema.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#8592a3',
+            confirmButtonText: 'Sí, dar de baja',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                enviarBajaAlBackend(url, fecha, causa);
+            } else {
+                // Si cancela el SweetAlert, volvemos a mostrar el modal por si quiere corregir algo
+                $('#modalBajaContrato').modal('show');
+            }
+        });
+    }
+
+    function enviarBajaAlBackend(url, fecha, causa) {
+        // Usamos HTMX para enviar la petición manualmente y mantener la consistencia
+        // O usamos jQuery AJAX. Dado que el proyecto usa ambos, jQuery es más explícito aquí para pasar datos extra.
+
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: {
+                'fecha_baja': fecha,
+                'causa_baja': causa,
+                'csrfmiddlewaretoken': '{{ csrf_token }}' // Django CSRF
+            },
+            success: function(response) {
+                // Si todo sale bien
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Baja procesada',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+                // Recargamos la tabla disparando el evento de HTMX del buscador
+                triggerSearch();
+            },
+            error: function(xhr) {
+                Swal.fire('Error', 'No se pudo procesar la baja.', 'error');
+            }
+        });
+    }
 
     document.body.addEventListener('htmx:confirm', function(evt) {
         if (evt.target.id === 'btn-baja') {
             evt.preventDefault();
             Swal.fire({
-                title: '¿Estás seguro?', text: evt.detail.question, icon: 'warning',
-                showCancelButton: true, confirmButtonColor: '#d33',
-                confirmButtonText: 'Sí, dar de baja', cancelButtonText: 'Cancelar'
+                title: '¿Estás seguro?',
+                text: evt.detail.question,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'Sí, dar de baja',
+                cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) evt.detail.issueRequest(true);
             });
         }
     });
 
-    document.body.addEventListener('showMessage', function(evt){
+    document.body.addEventListener('showMessage', function(evt) {
         Swal.fire({
-            toast: true, position: 'top-end', icon: 'success',
-            title: evt.detail.value, showConfirmButton: false,
-            timer: 3000, timerProgressBar: true
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: evt.detail.value,
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
         });
     });
 
@@ -491,15 +657,20 @@ function enviarBajaAlBackend(url, fecha, causa) {
 
     const btnNuevo = document.getElementById('btn-nuevo-contrato');
     if (btnNuevo) {
-        btnNuevo.addEventListener('click', function (e) {
+        btnNuevo.addEventListener('click', function(e) {
             e.preventDefault();
             const url = this.href;
             Swal.fire({
                 title: 'Antes de continuar',
                 text: 'Revise el listado de aspirantes antes de hacer un nuevo contrato.',
-                icon: 'info', confirmButtonText: 'Ir al listado',
-                showCancelButton: true, cancelButtonText: 'Cancelar',
-                customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+                icon: 'info',
+                confirmButtonText: 'Ir al listado',
+                showCancelButton: true,
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    confirmButton: 'btn btn-primary me-2',
+                    cancelButton: 'btn btn-label-secondary'
+                },
                 buttonsStyling: false
             }).then((result) => {
                 if (result.isConfirmed) window.location.href = url;

@@ -29,4 +29,6 @@ urlpatterns = [
     # Agrega esta línea en urlpatterns
     path('movimiento_contrato/<pk>/', login_required(views.MovimientoUpdateView.as_view()), name='movimiento_contrato'),
     path('movimientos/nomina/', login_required(views.MovimientoNominaListView.as_view()), name='list_movimientos'),
+
+    path('ajax/historico/<int:aspirante_id>/', login_required(views.historico_trabajador), name='historico_trabajador'),
 ]
