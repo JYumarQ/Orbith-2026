@@ -212,6 +212,8 @@ class CAlta(ContratoBase):
 
 class CBaja(ContratoBase):
     
+    no_expediente = models.CharField(max_length=5, unique=False)
+
     fecha_baja = models.DateField(null=True, blank=True)
     fecha_alta = models.DateField(null=True, blank=True) # Necesario para guardar el historial
     
@@ -242,7 +244,10 @@ class CBaja(ContratoBase):
 # En contratos/models.py
 
 class TMovimiento(models.Model):
-    contrato = models.ForeignKey(CAlta, on_delete=models.CASCADE, related_name='trazabilidad')
+    contrato = models.ForeignKey(CAlta, on_delete=models.SET_NULL, null=True, blank=True, related_name='trazabilidad')
+    aspirante = models.ForeignKey('bolsa.Aspirante', on_delete=models.CASCADE, null=True, blank=True)
+    no_expediente = models.CharField(max_length=20, null=True, blank=True)
+
     fecha_movimiento = models.DateField(auto_now_add=True)
     fecha_efectiva = models.DateField()
     
@@ -258,6 +263,9 @@ class TMovimiento(models.Model):
     
     tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")
     usuario = models.CharField(max_length=100, null=True, blank=True) # Opcional: quién lo hizo
+
+    fecha_solicitud = models.DateField(null=True, blank=True, verbose_name="Fecha de Solicitud")
+    observaciones = models.TextField(null=True, blank=True)
 
     class Meta:
         ordering = ['-fecha_efectiva']

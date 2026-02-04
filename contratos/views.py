@@ -5,6 +5,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View
 from django.core.paginator import Paginator
+from django.conf import settings
 from bolsa.models import Aspirante
 from .models import CAlta, CBaja
 from .forms import CAltaForm
@@ -17,7 +18,11 @@ from django.db.models import Q, ProtectedError, Value
 from django.db.models.functions import Concat
 from django.db import transaction
 from xhtml2pdf import pisa
+from datetime import datetime
 from .forms import CAltaForm, MovimientoForm
+from docxtpl import DocxTemplate, RichText
+from io import BytesIO
+import os
 import traceback
 import sys
 
@@ -56,6 +61,38 @@ class MovimientoNominaListView(ListView):
         context['titulo'] = "Movimientos de Nómina Pendientes"
         return context
 
+
+def obtener_datos_previos(request):
+    """
+    Busca datos previos en CAlta (Activos) O CBaja (Histórico de Bajas)
+    para recuperar No. Expediente y Registro Militar.
+    """
+    aspirante_id = request.GET.get('aspirante_id')
+    if not aspirante_id:
+        return JsonResponse({'existe': False})
+
+    # 1. Buscar primero en Bajas (lo más probable si se está recontratando)
+    baja_reciente = CBaja.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_baja').first()
+    
+    if baja_reciente:
+        return JsonResponse({
+            'existe': True,
+            'no_expediente': baja_reciente.no_expediente,
+            'reg_militar': baja_reciente.reg_militar
+        })
+
+    # 2. Si no está en bajas, buscar en Activos (casos raros de pluriempleo o errores)
+    alta_reciente = CAlta.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_alta').first()
+    
+    if alta_reciente:
+        return JsonResponse({
+            'existe': True,
+            'no_expediente': alta_reciente.no_expediente,
+            'reg_militar': alta_reciente.reg_militar
+        })
+
+    # 3. No se encontró nada
+    return JsonResponse({'existe': False})
 
 def search_contratos(request):
     # 1. Obtener parámetros de filtros
@@ -205,98 +242,172 @@ def cargar_cargos(request):
 
 def historico_trabajador(request, aspirante_id):
     from .models import CAlta, CBaja, TMovimiento 
+    from bolsa.models import Aspirante
 
-    # 1. Obtener Contratos
-    contratos = CAlta.objects.filter(aspirante_id=aspirante_id).select_related(
-        'aspirante', 'cargo__departamento__unidad_organizativa', 'cargo__ncargo'
-    )
+    # 1. Obtener Aspirante
+    try:
+        aspirante = Aspirante.objects.get(pk=aspirante_id)
+        encabezado = {
+            'nombre_completo': f"{aspirante.nombre} {aspirante.papellido} {aspirante.sapellido}",
+            'ci': aspirante.doc_identidad
+        }
+    except Aspirante.DoesNotExist:
+        return JsonResponse({'data': [], 'encabezado': {'nombre_completo': 'Desconocido', 'ci': ''}})
 
     lista_general = []
 
-    # 2. Procesar Contratos (Altas)
-    for index, alta in enumerate(contratos):
-        evento_tipo = "Alta Inicial" if index == 0 else "Recontratación"
-        nombre = f"{alta.aspirante.nombre} {alta.aspirante.papellido} {alta.aspirante.sapellido}"
-        ci = alta.aspirante.doc_identidad
+    # Helper para formatear dinero con 2 decimales
+    def fmt_dinero(valor):
+        try:
+            return f"{float(valor):.2f}"
+        except:
+            return "0.00"
+
+    # ---------------------------------------------------------
+    # FUENTE A: Contratos Activos (CAlta)
+    # ---------------------------------------------------------
+    altas = CAlta.objects.filter(aspirante_id=aspirante_id).select_related('cargo__ncargo', 'cargo__departamento__unidad_organizativa')
+    
+    for alta in altas:
+        # LÓGICA INTELIGENTE:
+        # Buscamos si este contrato tiene movimientos.
+        primer_mov = TMovimiento.objects.filter(contrato=alta).order_by('fecha_efectiva').first()
         
-        item_alta = {
-            'tipo': 'alta', 
+        if primer_mov:
+            # Si hubo movimientos, el "Alta Inicial" era lo que había ANTES del primer movimiento
+            cargo_inicial = primer_mov.cargo_anterior
+            unidad_inicial = primer_mov.unidad_anterior or "---"
+            salario_inicial = primer_mov.salario_anterior
+        else:
+            # Si nunca hubo movimientos, el "Alta Inicial" es lo que tiene ahora
+            cargo_inicial = alta.cargo.ncargo.descripcion if alta.cargo else "---"
+            unidad_inicial = alta.cargo.departamento.unidad_organizativa.descripcion if (alta.cargo and alta.cargo.departamento) else "---"
+            salario_inicial = alta.calcular_salario_escala()
+
+        item = {
             'fecha_orden': alta.fecha_alta,
-            'nombre_completo': nombre,
-            'ci': ci,
-            'evento': evento_tipo,
+            'evento': 'Alta / Recontratación',
             'expediente': alta.no_expediente,
-            'unidad': alta.cargo.departamento.unidad_organizativa.descripcion if alta.cargo else "---",
-            'cargo': alta.cargo.ncargo.descripcion if alta.cargo else "---",
-            'salario': alta.calcular_salario_escala(),
+            'unidad': unidad_inicial,
+            'cargo': cargo_inicial,
+            'salario': fmt_dinero(salario_inicial), # Formato corregido
             'fecha_inicio': alta.fecha_alta.strftime('%d/%m/%Y') if alta.fecha_alta else "-",
-            'fecha_fin': "Activo", # Se ajustará en el paso 5
+            'fecha_fin': "Activo",
             'estado_clase': 'text-success'
         }
+        lista_general.append(item)
 
-        # Buscar Baja asociada (Si hay baja, esa es su fecha fin definitiva)
-        baja = CBaja.objects.filter(no_expediente=alta.no_expediente).first()
-        if baja and baja.fecha_baja:
-            # La baja cierra el ciclo, pero guardamos la fecha para ordenarla
-            item_alta['fecha_baja_real'] = baja.fecha_baja.strftime('%d/%m/%Y')
-            item_alta['tiene_baja'] = True
-            item_alta['estado_clase'] = 'text-danger'
+    # ---------------------------------------------------------
+    # FUENTE B: Contratos Cerrados (CBaja)
+    # ---------------------------------------------------------
+    bajas = CBaja.objects.filter(aspirante_id=aspirante_id)
+    
+    for baja in bajas:
+        if baja.fecha_alta:
+            # Misma lógica: Buscamos si hubo movimientos para este expediente viejo
+            # Nota: Al estar de baja, el 'contrato' en TMovimiento es Null, buscamos por expediente
+            primer_mov_baja = TMovimiento.objects.filter(
+                aspirante_id=aspirante_id, 
+                no_expediente=baja.no_expediente
+            ).order_by('fecha_efectiva').first()
 
-        lista_general.append(item_alta)
+            if primer_mov_baja:
+                # Recuperamos el pasado real
+                cargo_baja_ini = primer_mov_baja.cargo_anterior
+                unidad_baja_ini = primer_mov_baja.unidad_anterior or "---"
+                # Ojo: salario_anterior en TMovimiento es Decimal, salario_basico en Nomenclador es otra cosa.
+                salario_baja_ini = primer_mov_baja.salario_anterior
+            else:
+                # Si no hubo movimientos, usamos la foto final de la baja
+                cargo_baja_ini = baja.cargo.ncargo.descripcion if baja.cargo else "---"
+                unidad_baja_ini = "---" 
+                if baja.cargo and baja.cargo.departamento:
+                    unidad_baja_ini = baja.cargo.departamento.unidad_organizativa.descripcion
+                
+                # Intentamos sacar salario básico histórico
+                salario_baja_ini = 0
+                if baja.cargo and baja.cargo.ncargo.salario_basico:
+                    salario_baja_ini = baja.cargo.ncargo.salario_basico
 
-        # 3. Procesar Movimientos INTERNOS (AQUÍ VA EL CÓDIGO QUE PREGUNTASTE)
-        movimientos = TMovimiento.objects.filter(contrato=alta)
+            item_alta_vieja = {
+                'fecha_orden': baja.fecha_alta,
+                'evento': 'Alta / Recontratación',
+                'expediente': baja.no_expediente,
+                'unidad': unidad_baja_ini,
+                'cargo': cargo_baja_ini,
+                'salario': fmt_dinero(salario_baja_ini),
+                'fecha_inicio': baja.fecha_alta.strftime('%d/%m/%Y'),
+                'fecha_fin': baja.fecha_baja.strftime('%d/%m/%Y') if baja.fecha_baja else "-",
+                'estado_clase': 'text-muted'
+            }
+            lista_general.append(item_alta_vieja)
+
+    # ---------------------------------------------------------
+    # FUENTE C: Movimientos (TMovimiento)
+    # ---------------------------------------------------------
+    movimientos = TMovimiento.objects.filter(aspirante_id=aspirante_id)
+    
+    for mov in movimientos:
+        nombre_evento = mov.tipo_movimiento
         
-        for mov in movimientos:
-            # --- TÚ CÓDIGO DE DETECCIÓN DE EVENTO VA AQUÍ ---
-            nombre_evento = "Movimiento de Nómina" # Default
-            
+        # Refinar nombres
+        if nombre_evento == "Movimiento de Nómina":
             if mov.unidad_anterior != mov.unidad_nueva:
-                nombre_evento = "Cambio de Unidad Organizativa"
+                nombre_evento = "Cambio de Unidad"
             elif mov.cargo_anterior != mov.cargo_nuevo:
                 nombre_evento = "Cambio de Cargo"
             elif mov.salario_anterior != mov.salario_nuevo:
                 nombre_evento = "Movimiento Salarial"
-            # ------------------------------------------------
 
-            item_mov = {
-                'tipo': 'movimiento',
-                'fecha_orden': mov.fecha_efectiva,
-                'nombre_completo': nombre,
-                'ci': ci,
-                'evento': nombre_evento,
-                'expediente': alta.no_expediente,
-                'unidad': mov.unidad_nueva if mov.unidad_nueva else "---", 
-                'cargo': mov.cargo_nuevo,
-                'salario': mov.salario_nuevo,
-                'fecha_inicio': mov.fecha_efectiva.strftime('%d/%m/%Y'),
-                'fecha_fin': "Activo", # Se ajustará abajo
-                'estado_clase': 'text-warning'
-            }
-            lista_general.append(item_mov)
+        clase_css = 'text-warning'
+        if nombre_evento == 'Baja':
+             clase_css = 'text-danger fw-bold'
 
-    # 4. Ordenar todo cronológicamente
+        item_mov = {
+            'fecha_orden': mov.fecha_efectiva,
+            'evento': nombre_evento,
+            'expediente': mov.no_expediente,
+            'unidad': mov.unidad_nueva if mov.unidad_nueva else "---", 
+            'cargo': mov.cargo_nuevo,
+            'salario': fmt_dinero(mov.salario_nuevo),
+            'fecha_inicio': mov.fecha_efectiva.strftime('%d/%m/%Y'),
+            'fecha_fin': "-", 
+            'estado_clase': clase_css
+        }
+        lista_general.append(item_mov)
+
+    # ---------------------------------------------------------
+    # ORDENAR Y ENCADENAR
+    # ---------------------------------------------------------
     lista_general.sort(key=lambda x: x['fecha_orden'])
 
-    # 5. LÓGICA DE FECHAS ENCADENADAS (TU REQUISITO PRINCIPAL)
-    # Recorremos la lista para que el inicio de uno sea el fin del anterior.
+    primer_alta_encontrada = False
+    for item in lista_general:
+        if 'Alta' in item['evento']:
+            if not primer_alta_encontrada:
+                item['evento'] = "Alta Inicial"
+                primer_alta_encontrada = True
+            else:
+                item['evento'] = "Recontratación"
+
     for i in range(len(lista_general)):
         item_actual = lista_general[i]
         
-        # Si tiene baja oficial registrada en CBaja, esa manda sobre todo
-        if item_actual.get('tiene_baja'):
-             item_actual['fecha_fin'] = item_actual['fecha_baja_real']
-             item_actual['evento'] += " (Baja)" # Opcional: indicar que terminó en baja
-        
-        # Si no es el último elemento de la lista, su fin es el inicio del siguiente
-        elif i < len(lista_general) - 1:
+        if item_actual['evento'] == 'Baja':
+            item_actual['fecha_fin'] = item_actual['fecha_inicio']
+            continue
+
+        if i < len(lista_general) - 1:
             siguiente_item = lista_general[i + 1]
-            # Solo encadenamos si pertenecen al mismo expediente (ciclo laboral)
             if item_actual['expediente'] == siguiente_item['expediente']:
                 item_actual['fecha_fin'] = siguiente_item['fecha_inicio']
-                item_actual['estado_clase'] = 'text-muted' # Ya pasó
+                if item_actual['estado_clase'] == 'text-success': 
+                     item_actual['estado_clase'] = 'text-muted'
 
-    return JsonResponse({'data': lista_general})
+    return JsonResponse({
+        'data': lista_general, 
+        'encabezado': encabezado
+    })
 
 
 class ContratoCreateView(CreateView):
@@ -463,51 +574,90 @@ class ContratoDeleteView(DeleteView):
     model = CAlta
 
     def post(self, request, *args, **kwargs):
+        # Asegúrate de tener este import arriba del todo en el archivo:
+        from datetime import datetime
+        
         # 1. Recuperar el objeto de forma segura
         try:
-            # Tipado explícito para evitar errores de linter "Cannot access attribute..."
             contrato: CAlta = self.get_object() # type: ignore
-            self.object = contrato
         except CAlta.DoesNotExist:
-            return JsonResponse({
-                'success': False, 
-                'message': 'El contrato que intenta eliminar no existe.'
-            }, status=404)
+            return JsonResponse({'success': False, 'message': 'El contrato que intenta eliminar no existe.'}, status=404)
 
-        # 2. Obtener y validar datos del formulario
-        fecha_baja = request.POST.get('fecha_baja')
+        # 2. Obtener datos del formulario
+        fecha_baja_str = request.POST.get('fecha_baja')
         causa_id = request.POST.get('causa_baja')
 
-        if not fecha_baja or not causa_id:
+        if not fecha_baja_str or not causa_id:
+            return JsonResponse({'success': False, 'message': 'Faltan datos obligatorios: Fecha de Baja o Causa.'}, status=400)
+
+        # 3. Convertir fecha para validar
+        try:
+            fecha_baja = datetime.strptime(fecha_baja_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+             return JsonResponse({'success': False, 'message': 'Formato de fecha inválido.'}, status=400)
+
+        # =================================================================
+        # VALIDACIÓN CRONOLÓGICA (La Barrera)
+        # =================================================================
+        from .models import TMovimiento
+        
+        # A. Buscar último movimiento registrado
+        ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
+        
+        # B. Definir fecha límite (El evento más reciente entre el último mov o el alta original)
+        fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+        
+        # C. Comparar (Baja no puede ser anterior a lo último que pasó)
+        if fecha_limite and fecha_baja < fecha_limite:
             return JsonResponse({
                 'success': False, 
-                'message': 'Faltan datos obligatorios: Fecha de Baja o Causa.'
+                'message': f"No puede dar Baja con fecha {fecha_baja.strftime('%d/%m/%Y')} porque existe un evento posterior el {fecha_limite.strftime('%d/%m/%Y')}."
             }, status=400)
+        # =================================================================
 
         try:
-            # 3. Iniciar Transacción Atómica
-            # Asegura que se crea la baja Y se borra el alta, o no sucede nada.
+            # 4. Iniciar Transacción (Si pasó la validación)
             with transaction.atomic():
+                # A. SALVAR EL HISTORIAL EXISTENTE
+                TMovimiento.objects.filter(contrato=contrato).update(
+                    aspirante=contrato.aspirante,
+                    no_expediente=contrato.no_expediente
+                )
+
+                # 2. CREAR EL NUEVO EVENTO DE "BAJA" EN EL HISTÓRICO
+                # Capturamos datos finales
+                cargo_final = contrato.cargo.ncargo.descripcion if contrato.cargo else "---"
+                unidad_final = contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---"
+                salario_final = contrato.calcular_salario_escala() or 0
+
+                TMovimiento.objects.create(
+                    aspirante=contrato.aspirante,
+                    no_expediente=contrato.no_expediente,
+                    contrato=None, # Ya no hay contrato activo
+                    fecha_efectiva=fecha_baja,
+                    tipo_movimiento="Baja",
+                    
+                    cargo_anterior=contrato.cargo.ncargo.descripcion if contrato.cargo else "---",
+                    cargo_nuevo="---",
+                    salario_anterior=contrato.calcular_salario_escala() or 0,
+                    salario_nuevo=0,
+                    unidad_anterior=contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---",
+                    unidad_nueva="---"
+                )
                 
                 # A. Crear el registro histórico (CBaja)
                 CBaja.objects.create(
-                    # --- Campos heredados de ContratoBase ---
                     aspirante=contrato.aspirante,
                     no_expediente=contrato.no_expediente,
                     tipo=contrato.tipo,
                     cargo=contrato.cargo,
                     reg_militar=contrato.reg_militar,
                     profesional=contrato.profesional,
-                    
-                    # --- Campos específicos de CBaja (Confirmados) ---
                     fecha_baja=fecha_baja,
                     causa_baja_id=causa_id,
-                    
-                    # Estos campos existen en CAlta
                     fecha_alta=contrato.fecha_alta,
                     tridente=contrato.tridente
                 )
-
                 # B. Eliminar el contrato activo
                 contrato.delete()
 
@@ -519,44 +669,13 @@ class ContratoDeleteView(DeleteView):
 
         except Exception as e:
             # Captura cualquier error (Integridad, Modelo, etc.) y evita el crash del servidor
+            print(f"ERROR AL DAR BAJA: {e}")
             return JsonResponse({
                 'success': False, 
                 'message': f'Error interno al procesar la baja: {str(e)}'
             }, status=500)
 #*REPORTES
-class ContratoPDFView(View):
-    def get(self, request, *args, **kwargs):
-        # Obtiene todos los contratos
-        list_contratos = CAlta.objects.all()
-        template = get_template('pages/reportes/reporte_contratos.html')
-        context = {
-            'titulo': 'Contratos',
-            'contratos': list_contratos
-            }
-        html = template.render(context)
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachement; filename="report.pdf"'
-        pisaStatus = pisa.CreatePDF(html, dest=response)
-        if pisaStatus.err: # type: ignore
-            return HttpResponse('Hay un error <pre>'+html+'</pre>')
-        return response
-        
-class PrintContratoPDFView(View):
-    def get(self, request, *args, **kwargs):
-        # Obtiene todos los contratos
-        contrato = get_object_or_404(CAlta, no_expediente=kwargs['no_expediente'])
-        template = get_template('pages/reportes/nuevo_contrato.html')
-        context = {
-            'titulo': 'Contratos',
-            'contrato': contrato
-            }
-        html = template.render(context)
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachement; filename="'+contrato.aspirante.nombre+"_"+'"contrato.pdf"'
-        pisaStatus: Any = pisa.CreatePDF(html, dest=response)
-        if pisaStatus.err:
-            return HttpResponse('Hay un error <pre>'+html+'</pre>')
-        return response
+
         
 
 
@@ -619,14 +738,41 @@ class MovimientoUpdateView(UpdateView):
     @transaction.atomic
     def form_valid(self, form):
         try:
-            # --- 1. CAPTURAR ESTADO PREVIO (Antes de guardar) ---
+            # 1. Obtener contrato y fecha nueva
+            contrato = self.object
+            nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+
+            # =================================================================
+            # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
+            # =================================================================
+            from .models import TMovimiento
+            
+            # Buscamos si hay movimientos previos
+            ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
+            
+            # La fecha límite es: La del último movimiento, O si no hay, la fecha de Alta original
+            fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+
+            if nueva_fecha and nueva_fecha < fecha_limite:
+                # Si la nueva fecha es viajar al pasado -> ERROR
+                mensaje = f"Error Cronológico: La fecha seleccionada ({nueva_fecha.strftime('%d/%m/%Y')}) es anterior al último evento registrado ({fecha_limite.strftime('%d/%m/%Y')})."
+                
+                if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
+                else:
+                    form.add_error('fecha_efectiva', mensaje)
+                    return self.form_invalid(form)
+
+            # =================================================================
+            # PASO 2: CAPTURAR DATOS PREVIOS (LÓGICA DE NEGOCIO)
+            # =================================================================
+            # Como pasamos la validación, ahora sí procedemos a guardar
+            
             contrato_previo = CAlta.objects.get(pk=self.object.pk)
             
-            # Cargo y Unidad Anterior
             cargo_ant = contrato_previo.cargo.ncargo.descripcion if contrato_previo.cargo else "---"
             unidad_ant = contrato_previo.cargo.departamento.unidad_organizativa.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---"
             
-            # Salario Anterior
             salario_ant = 0
             if contrato_previo.cargo:
                  try:
@@ -639,24 +785,28 @@ class MovimientoUpdateView(UpdateView):
                  except:
                      salario_ant = 0
 
-            # --- 2. CAPTURAR ESTADO NUEVO (Del formulario) ---
-            nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+            # PASO 3: CAPTURAR DATOS NUEVOS
             cargo_nuevo_obj = form.cleaned_data.get('cargo')
             
-            # Cargo y Unidad Nueva
             cargo_nue = cargo_nuevo_obj.ncargo.descripcion if cargo_nuevo_obj else "---"
             unidad_nue = cargo_nuevo_obj.departamento.unidad_organizativa.descripcion if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else "---"
             
-            # Salario Nuevo (del input oculto)
             salario_nue = float(self.request.POST.get('salarioEscala', 0))
 
-            # --- 3. GUARDAR EL HISTÓRICO (TMovimiento) ---
-            from .models import TMovimiento
+            observaciones_txt = form.cleaned_data.get('observaciones', '')
+            fecha_solicitud_dt = form.cleaned_data.get('fecha_solicitud')
+
+            # PASO 4: GUARDAR EL HISTÓRICO
             from django.utils import timezone 
             
             TMovimiento.objects.create(
                 contrato=self.object,
+                aspirante=self.object.aspirante,
+                no_expediente=self.object.no_expediente,
                 fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
+
+                fecha_solicitud=fecha_solicitud_dt,
+                observaciones=observaciones_txt,
                 
                 cargo_anterior=cargo_ant,
                 cargo_nuevo=cargo_nue,
@@ -668,24 +818,26 @@ class MovimientoUpdateView(UpdateView):
                 tipo_movimiento="Movimiento de Nómina"
             )
 
-            # --- 4. ACTUALIZAR Y GUARDAR EL CONTRATO ---
-            if nueva_fecha: 
-                form.instance.fecha_alta = nueva_fecha
+            # PASO 5: ACTUALIZAR CONTRATO
+            # NOTA: NO actualizamos fecha_alta aquí para preservar la antigüedad original
             
             form.instance.en_proceso_movimiento = False
             self.object = form.save()
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
-            # --- 5. RESPUESTA AL FRONTEND ---
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                from django.urls import reverse
+
                 return JsonResponse({
                     'form_is_valid': True, 
                     'message': 'Movimiento registrado correctamente.', 
-                    'success_url': str(self.success_url)
+                    'success_url': str(self.success_url),
+                    'pdf_url': reverse('imprimir_modelo_movimiento', kwargs={'pk': self.object.pk})
                 })
             return super().form_valid(form)
 
+        
         except Exception as e:
             # --- MANEJO DE ERRORES ---
             print("\n" + "="*50)
@@ -693,11 +845,13 @@ class MovimientoUpdateView(UpdateView):
             print(f"Tipo: {type(e).__name__}")
             print(f"Mensaje: {str(e)}")
             print("-" * 20)
+            print(f"Error: {e}")
             import traceback
             traceback.print_exc()
             print("="*50 + "\n")
 
             transaction.set_rollback(True)
+            return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)
 
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 return JsonResponse({
@@ -728,6 +882,109 @@ class MovimientoUpdateView(UpdateView):
             return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
             
         return super().form_invalid(form)
+    
+
+def abreviar_cargo_inteligente(texto_cargo):
+    if not texto_cargo: return "-"
+    
+    diccionario = {
+        "OPERADOR": "OP.", "OPERARIO": "OPE.", "ESPECIALISTA": "ESP.",
+        "MANTENIMIENTO": "MANT.", "DEPARTAMENTO": "DPTO.", "ADMINISTRATIVO": "ADMIN.",
+        "ADMINISTRACION": "ADMIN.", "SERVICIOS": "SERVS.", "GENERAL": "GRAL.",
+        "AUXILIAR": "AUX.", "TECNICO": "TEC.", "TÉCNICO": "TÉC.",
+        "SUPERIOR": "SUP.", "PRINCIPAL": "PRAL.", "PRODUCCION": "PROD.",
+        "FABRICACION": "FAB.", "FABRICACIÓN": "FAB.", "TRANSFORMADORES": "TRANSF.",
+        "DISTRIBUCION": "DIST.", "ENERGETICO": "ENERG.", "MAQUINARIA": "MAQ.",
+        "RECURSOS": "REC.", "HUMANOS": "HUM.", "SEGURIDAD": "SEG.",
+    }
+    
+    palabras = texto_cargo.upper().split()
+    # Pylance fix: Aseguramos que 'p' siempre es str y el resultado también
+    palabras_nuevas = [str(diccionario.get(p, p)) for p in palabras]
+    return " ".join(palabras_nuevas)
+
+
+# --- LA VISTA DEFINITIVA (Sustituye a ModeloMovimientoPDFView) ---
+class ModeloMovimientoDocxView(View):
+    def get(self, request, *args, **kwargs):
+        from .models import CAlta, TMovimiento
+        
+        contrato = get_object_or_404(CAlta, pk=kwargs['pk'])
+        mov = TMovimiento.objects.filter(contrato=contrato).order_by('-id').first()
+        
+        # --- CORRECCIÓN PARA PYLANCE ---
+        if not mov:
+            return HttpResponse("Error: No se encontró el movimiento de nómina.", status=404)
+        # -------------------------------
+
+        hoy = datetime.now()
+        
+        template_path = os.path.join(settings.BASE_DIR, 'templates', 'pages', 'reportes', '13-MOVIMIENTO DE NOMINAS.docx')
+        
+        try:
+            doc = DocxTemplate(template_path)
+        except FileNotFoundError:
+            return HttpResponse(f"Error: No se encuentra la plantilla en {template_path}", status=500)
+
+        # Lógica de Cargo
+        cargo_texto = contrato.cargo.ncargo.descripcion if contrato.cargo else "-"
+        cargo_abreviado = abreviar_cargo_inteligente(cargo_texto)
+        
+        if len(cargo_abreviado) > 35:
+            cargo_final = RichText(cargo_abreviado, size=14)
+        elif len(cargo_abreviado) > 25:
+            cargo_final = RichText(cargo_abreviado, size=16)
+        else:
+            cargo_final = cargo_abreviado
+
+        # Contexto (Con protecciones para valores None)
+        context = {
+            'ueb': mov.unidad_nueva if mov.unidad_nueva else (contrato.cargo.departamento.unidad_organizativa.descripcion if contrato.cargo else ""),
+            'doc_id': f"{mov.pk:06d}", # Pylance ya sabe que mov no es None
+            'd': hoy.strftime("%d"),
+            'm': hoy.strftime("%m"),
+            'a': hoy.strftime("%y"),
+            
+            'x_alta': "X" if "Alta" in (mov.tipo_movimiento or "") else "",
+            'x_baja': "X" if "Baja" in (mov.tipo_movimiento or "") else "",
+            'x_mov':  "X" if "Movimiento" in (mov.tipo_movimiento or "") else "",
+            
+            'ed': mov.fecha_efectiva.strftime("%d") if mov.fecha_efectiva else "-",
+            'em': mov.fecha_efectiva.strftime("%m") if mov.fecha_efectiva else "-",
+            'ea': mov.fecha_efectiva.strftime("%Y") if mov.fecha_efectiva else "-",
+            
+            'nombre': contrato.aspirante.nombre,
+            'ap1': contrato.aspirante.papellido,
+            'ap2': contrato.aspirante.sapellido,
+            'exp': contrato.no_expediente,
+            
+            # Usamos getattr para métodos mágicos de Django que Pylance no ve
+            'cat': getattr(contrato.cargo.ncargo, 'get_cat_ocupacional_display')() if contrato.cargo else "-",
+            'cargo': cargo_final,
+            'area': contrato.cargo.departamento.descripcion if contrato.cargo else "-",
+            
+            'sal_ant': mov.salario_anterior if mov.salario_anterior is not None else 0,
+            'rol_nue': contrato.cargo.rol.tipo if (contrato.cargo and contrato.cargo.rol) else "-",
+            'tri_nue': contrato.tridente if contrato.tridente else "-",
+            'sal_nue': mov.salario_nuevo if mov.salario_nuevo is not None else 0,
+            
+            'observaciones': mov.observaciones or ""
+        }
+
+        doc.render(context)
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        filename = f"Movimiento_{contrato.no_expediente}.docx"
+        
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response
 
 
 # 2. ACTUALIZA ESTA FUNCIÓN (Agregamos el retorno de textos para OOB)

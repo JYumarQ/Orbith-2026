@@ -14,8 +14,8 @@ urlpatterns = [
     path('search_contrato/', login_required(views.search_contratos), name='search_contrato'),
     
     #?REPORTES
-    path('contratos/reporte/contratos/', login_required(views.ContratoPDFView.as_view()), name='contratos_pdf'),
-    path('contratos/reporte/ncontrato/<str:no_expediente>/', login_required(views.PrintContratoPDFView.as_view()), name='ncontrato_pdf'),
+    path('reporte/modelo_movimiento/<str:pk>/', login_required(views.ModeloMovimientoDocxView.as_view()), name='imprimir_modelo_movimiento'),
+    
 
     #?Validaciones
     path('validar_datos_contrato/', login_required(views.validar_datos_contrato), name='validar_datos_contrato'),
@@ -31,4 +31,8 @@ urlpatterns = [
     path('movimientos/nomina/', login_required(views.MovimientoNominaListView.as_view()), name='list_movimientos'),
 
     path('ajax/historico/<int:aspirante_id>/', login_required(views.historico_trabajador), name='historico_trabajador'),
+
+    path('ajax/datos_previos/', login_required(views.obtener_datos_previos), name='obtener_datos_previos'),
+
+
 ]

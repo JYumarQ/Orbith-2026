@@ -187,9 +187,20 @@ class MovimientoForm(CAltaForm):
         required=True
     )
 
+    fecha_solicitud = forms.DateField(
+        label='Fecha de Solicitud',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        required=False
+    )
+    observaciones = forms.CharField(
+        label='Observaciones',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        required=False
+    )
+
     class Meta(CAltaForm.Meta):
         # Mantenemos los campos pero añadimos fecha_efectiva
-        fields = CAltaForm.Meta.fields + ('fecha_efectiva',)
+        fields = CAltaForm.Meta.fields + ('fecha_efectiva', 'fecha_solicitud', 'observaciones')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

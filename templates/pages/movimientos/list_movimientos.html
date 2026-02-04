@@ -70,6 +70,8 @@
                         {% for c in object_list %}
                         <tr class="cursor-pointer row-pendiente fila-movimiento"
                             onclick="seleccionarFila(this)"
+                            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' c.aspirante.pk %}')"
+
                             data-url-movimiento="{% url 'movimiento_contrato' c.pk %}"
                         >
                             <td><strong>{{ c.no_expediente }}</strong></td>
@@ -132,6 +134,8 @@
 </div>
 
 <div class="modal fade" id="editar_empl" role="dialog"></div>
+
+{% include 'pages/contrato/partials/modal_historico_include.html' %}
 
 {% endblock %}
 

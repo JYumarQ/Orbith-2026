@@ -3,6 +3,7 @@
 {% block title %}Cargos{% endblock %}
 
 {% block content %}
+<h1>ESTOY EDITANDO EL ARCHIVO CORRECTO</h1>
 
 {% load static %}
 
@@ -15,70 +16,38 @@
 
       <!-- Hoverable Table rows -->
       <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Cargos</h5>
-          <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'add_ncargo' %}')">
-            <i class="fas fa-plus"></i> Nuevo Cargo
-          </button>
+        <div class="card-header">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" 
+                              name="search_cargo" 
+                              class="form-control" 
+                              placeholder="Buscar cargo..."
+                              hx-get="{% url 'search_cargos' %}" 
+                              hx-trigger="keyup changed delay:500ms, search" 
+                              hx-target="#table-cargos-container" 
+                              hx-indicator=".htmx-indicator">
+                    </div>
+                </div>
+                
+                <div class="col-md-6 text-end">
+                    <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'add_ncargo' %}')">
+                        <i class="fas fa-plus"></i> Nuevo Cargo
+                    </button>
+                </div>
+            </div>
         </div>
-        <div class="table-responsive text-nowrap">
-          <table class="table table-hover">
-            <thead>
-              <tr>
-                <th>Descripción</th>
-                <th class="text-center">Cat. Ocup.</th>
-                <th class="text-center">Gpo. Escala</th>
-                <th class="text-center">Salario</th>
-                <th class="text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody class="table-border-bottom-0">
-              {% if object_list %} 
-            {% for c in object_list %}
-            <tr>
-              <td>
-                <a>
-                  {{ c.descripcion }}
-                </a>
-                <br />
-              </td>
-              <td class="text-center">
-                <a> {{ c.get_cat_ocupacional_display }} </a>
-                <br />
-              </td>
-              <td class="text-center">
-                <a> {{ c.grupo_escala }} </a>
-                <br />
-              </td>
-              <td class="text-center">
-                <a> {{ c.salario_basico }} </a>
-                <br />
-              </td>
-              <td class="project-actions text-center">
-                <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_ncargo' c.id %}')"
-                >
-                  <i class="fas fa-pencil-alt"></i>
-                </button>
-                <a
-                  class="btn btn-sm btn-eliminar"
-                  href="{% url 'del_ncargo' c.id %}"
-                >
-                  <i class="fas fa-trash"></i>
-                </a>
 
-              </td>
-            </tr>
-            {% endfor %} 
-            {% else %}
-            <tr>
-              <td colspan="5">No hay registros disponibles.</td>
-            </tr>
-            {% endif %}
-              
-            </tbody>
-          </table>
+        <div class="htmx-indicator progress" style="height: 3px; display:none;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 100%"></div>
         </div>
-      </div>
+
+        <div class="table-responsive text-nowrap">
+            {% include 'pages/catalogos/ncargo/partials/ncargo_list_partial.html' %}
+        </div>
+    </div>
       <!--/ Hoverable Table rows -->
 
       

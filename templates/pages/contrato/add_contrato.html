@@ -245,6 +245,42 @@
     (function() { // Función autoejecutable
         var formulario = document.getElementById('contratoForm');
 
+
+        var idAspiranteActual = "{{ aspirante.pk }}"; // Django inyecta el ID aquí
+
+        if (idAspiranteActual) {
+            // Llamamos a la vista que creamos en el paso anterior
+            fetch("{% url 'obtener_datos_previos' %}?aspirante_id=" + idAspiranteActual)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.existe) {
+                        // Selectores (usando IDs estándar de Django)
+                        var campoExp = formulario.querySelector('#id_no_expediente');
+                        var campoMil = formulario.querySelector('#id_reg_militar');
+
+                        // Rellenar Expediente
+                        if (campoExp) {
+                            campoExp.value = data.no_expediente;
+                            // Efecto visual para que el usuario sepa que se rellenó solo
+                            campoExp.style.backgroundColor = "#e8f0fe"; 
+                            campoExp.setAttribute('title', 'Recuperado del historial anterior');
+                        }
+
+                        // Rellenar Registro Militar
+                        if (campoMil) {
+                            campoMil.value = data.reg_militar;
+                        }
+                        
+                        // Opcional: Mostrar Toast discreto
+                        if(typeof Swal !== 'undefined'){
+                            const Toast = Swal.mixin({toast: true, position: 'top-end', showConfirmButton: false, timer: 3000});
+                            Toast.fire({icon: 'info', title: 'Datos anteriores recuperados'});
+                        }
+                    }
+                })
+                .catch(err => console.error('Error recuperando datos:', err));
+        }
+
         // --- 1. Selectores Existentes ---
         var tipo = formulario.querySelector('#id_tipo');
         var f_contrato = formulario.querySelector('#id_fecha_alta'); 

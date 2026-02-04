@@ -14,6 +14,8 @@ from django.http import JsonResponse
 import json
 from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.core.paginator import Paginator
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
@@ -838,3 +840,26 @@ def cargo_delete(request, pk):
     except NCargo.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
+@login_required
+def search_cargos(request):
+    # Obtener texto de búsqueda
+    query = request.GET.get('search_cargo', '').strip()
+    page_number = request.GET.get('page', 1)
+
+    # QueryBase ordenada
+    qs = NCargo.objects.all().order_by('descripcion')
+
+    # Filtrado por 'descripcion' (Nombre del Cargo según tu models.py)
+    if query:
+        qs = qs.filter(descripcion__icontains=query)
+
+    # Paginación (Usamos 8 para coincidir con tu NCargoListView)
+    paginator = Paginator(qs, 8)
+    page_obj = paginator.get_page(page_number)
+
+    # Renderizar solo la tabla (Partial)
+    return render(request, 'pages/catalogos/ncargo/partials/ncargo_list_partial.html', {
+        'page_obj': page_obj,
+        'search_url': 'search_cargos', # Para mantener la paginación con búsqueda
+        'current_search': query
+    })

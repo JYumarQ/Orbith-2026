@@ -68,4 +68,6 @@ urlpatterns = [
     path('api/cargos/<int:pk>/', views.cargo_update, name='cargo-update'),
     path('api/cargos/<int:pk>/delete/', views.cargo_delete, name='cargo-delete'),
 
+    # ---------- Buscar cargos ----------
+    path('search_cargos/', views.search_cargos, name='search_cargos'),
 ]
