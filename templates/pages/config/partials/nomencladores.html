@@ -20,11 +20,16 @@
           <!-- CARGOS -->
             <div class="col-12 mb-4">
               <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Cargos</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="cargos-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
+                <div class="card-header row align-items-center">
+                  <div class="col-6">
+                    <span class="fw-bold">Cargos</span>
+                  </div>
+                  <div class="col-6 d-flex justify-content-end gap-2">
+                    <input type="text" id="search-cargos-input" class="form-control form-control-sm" placeholder="Buscar..." style="max-width: 150px;">
+                    <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="cargos-table">
+                      <i class="fas fa-plus"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="table-responsive">
                   <table class="table table-hover mb-0" id="cargos-table">
@@ -890,61 +895,112 @@ async function guardarCargo(row) {
 }
 
 /* ----------  PAGINACIÓN CARGOS  ---------- */
+/* ----------  PAGINACIÓN Y BÚSQUEDA CARGOS (NUEVO)  ---------- */
 function paginateCargos() {
   const tbody = document.querySelector('#cargos-tbody');
+  // Obtenemos todas las filas que no sean de inserción
   const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
-  const total = rows.length;
-  const pages = Math.ceil(total / CARGOS_PER_PAGE);
 
-  rows.forEach((tr, idx) => {
-    tr.style.display = (idx >= (cargosCurrentPage - 1) * CARGOS_PER_PAGE &&
-                        idx <  cargosCurrentPage * CARGOS_PER_PAGE)
-                        ? '' : 'none';
+  // 1. Obtener texto del buscador
+  const searchInput = document.getElementById('search-cargos-input');
+  const filterText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  // 2. Filtrar filas (Detectar cuáles coinciden)
+  const visibleRows = rows.filter(row => {
+    // Buscamos en la primera celda (Descripción)
+    const desc = row.querySelector('.desc-cell')?.textContent?.toLowerCase() || '';
+    const match = desc.includes(filterText);
+
+    if (match) {
+        row.dataset.visible = "true"; // Marcamos como visible
+    } else {
+        row.dataset.visible = "false"; // Marcamos como oculta
+        row.style.display = 'none';    // La ocultamos visualmente ya
+    }
+    return match;
   });
 
+  // 3. Calcular paginación solo con las visibles
+  const total = visibleRows.length;
+  const pages = Math.ceil(total / CARGOS_PER_PAGE);
+
+  // Ajustar página actual si se reduce el número de resultados
+  if (cargosCurrentPage > pages && pages > 0) cargosCurrentPage = pages;
+  if (cargosCurrentPage < 1) cargosCurrentPage = 1;
+
+  // 4. Mostrar/Ocultar según la página
+  visibleRows.forEach((tr, idx) => {
+    const start = (cargosCurrentPage - 1) * CARGOS_PER_PAGE;
+    const end = cargosCurrentPage * CARGOS_PER_PAGE;
+
+    if (idx >= start && idx < end) {
+        tr.style.display = ''; // Mostrar (es parte de la página actual)
+    } else {
+        tr.style.display = 'none'; // Ocultar (es de otra página)
+    }
+  });
+
+  // 5. Generar los numeritos de abajo (Paginador)
   const paginator = document.getElementById('cargos-paginator');
   if (!paginator) return;
-
   paginator.innerHTML = '';
+
+  if (total === 0) return; // Si no hay nada, no mostrar paginador
+
+  // Botón Anterior
   const prevLi = document.createElement('li');
   prevLi.className = 'page-item prev' + (cargosCurrentPage === 1 ? ' disabled' : '');
-  prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
+  prevLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-left"></i></a>`;
   prevLi.addEventListener('click', e => {
     e.preventDefault();
     if (cargosCurrentPage > 1) { cargosCurrentPage--; paginateCargos(); }
   });
   paginator.appendChild(prevLi);
 
-  const delta = 1, gap = pages > 5;
-  const range = [];
+  // Números de página
   for (let i = 1; i <= pages; i++) {
-    if (i === 1 || i === pages || (i >= cargosCurrentPage - delta && i <= cargosCurrentPage + delta)) range.push(i);
-  }
-  let last = 0;
-  range.forEach(num => {
-    if (gap && last && num - last > 1) {
-      const dots = document.createElement('li');
-      dots.className = 'page-item disabled';
-      dots.innerHTML = '<span class="page-link">…</span>';
-      paginator.appendChild(dots);
+    // Lógica simple para no mostrar demasiados números si hay muchas páginas
+    if (i === 1 || i === pages || (i >= cargosCurrentPage - 1 && i <= cargosCurrentPage + 1)) {
+        const li = document.createElement('li');
+        li.className = 'page-item' + (i === cargosCurrentPage ? ' active' : '');
+        li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+        li.addEventListener('click', e => {
+            e.preventDefault();
+            cargosCurrentPage = i;
+            paginateCargos();
+        });
+        paginator.appendChild(li);
+    } else if (paginator.lastChild.textContent !== '...') {
+         // Poner puntos suspensivos
+         const dots = document.createElement('li');
+         dots.className = 'page-item disabled';
+         dots.innerHTML = `<span class="page-link">...</span>`;
+         paginator.appendChild(dots);
     }
-    const li = document.createElement('li');
-    li.className = 'page-item' + (num === cargosCurrentPage ? ' active' : '');
-    li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
-    li.addEventListener('click', e => { e.preventDefault(); cargosCurrentPage = num; paginateCargos(); });
-    paginator.appendChild(li);
-    last = num;
-  });
+  }
 
+  // Botón Siguiente
   const nextLi = document.createElement('li');
   nextLi.className = 'page-item next' + (cargosCurrentPage === pages ? ' disabled' : '');
-  nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
+  nextLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-right"></i></a>`;
   nextLi.addEventListener('click', e => {
     e.preventDefault();
     if (cargosCurrentPage < pages) { cargosCurrentPage++; paginateCargos(); }
   });
   paginator.appendChild(nextLi);
 }
+
+// ACTIVAR EL BUSCADOR (ESTO ES IMPORTANTE)
+// Agrega esto justo después de la función paginateCargos
+document.addEventListener("DOMContentLoaded", function() {
+    const inputBusqueda = document.getElementById('search-cargos-input');
+    if(inputBusqueda){
+        inputBusqueda.addEventListener('keyup', function() {
+            cargosCurrentPage = 1; // Volver a la primera página al buscar
+            paginateCargos();
+        });
+    }
+});
 
 /* ---------- AYUDANTE PARA ORDENAR NÚMEROS ROMANOS ---------- */
 function romanToInt(s) {

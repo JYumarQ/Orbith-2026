@@ -55,15 +55,20 @@
 
 <script>
     function abrirModalHistorico(url) {
-        const modal = new bootstrap.Modal(document.getElementById('modalHistorico'));
+        // 1. Obtener o crear instancia del modal (CORREGIDO)
+        var myModalEl = document.getElementById('modalHistorico');
+        var modal = bootstrap.Modal.getOrCreateInstance(myModalEl);
+        
         const tbody = document.getElementById('tablaHistoricoBody');
         
+        // Limpiar interfaz previa
         tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Cargando historial...</p></td></tr>';
-        document.getElementById('histNombre').innerText = '...';
+        document.getElementById('histNombre').innerText = 'Cargando...';
         document.getElementById('histCI').innerText = '...';
         
         modal.show();
 
+        // 2. Pedir datos
         fetch(url)
             .then(response => {
                 if (!response.ok) throw new Error("Error en la red");
@@ -71,13 +76,19 @@
             })
             .then(data => {
                 const historial = data.data;
-                tbody.innerHTML = '';
+                const encabezado = data.encabezado; // Aquí vienen nombre y CI separados
 
-                if (historial.length > 0) {
-                    document.getElementById('histNombre').innerText = historial[0].nombre_completo;
-                    document.getElementById('histCI').innerText = historial[0].ci;
-                    document.getElementById('tituloHistorico').innerHTML = `<i class="fas fa-history me-2"></i>Histórico del Trabajador`;
+                // --- CORRECCIÓN "UNDEFINED" ---
+                // Leemos el nombre del encabezado, NO de la tabla. Así no falla en Bajas.
+                if (encabezado) {
+                    document.getElementById('histNombre').innerText = encabezado.nombre_completo || '---';
+                    document.getElementById('histCI').innerText = encabezado.ci || '---';
+                }
 
+                tbody.innerHTML = ''; // Limpiar spinner
+
+                // Llenar tabla
+                if (historial && historial.length > 0) {
                     historial.forEach(item => {
                         const fila = `
                             <tr>
@@ -93,14 +104,22 @@
                         tbody.insertAdjacentHTML('beforeend', fila);
                     });
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">No se encontró historial para este trabajador.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Este trabajador no tiene historial registrado.</td></tr>';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error al cargar datos: ${error.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error: ${error.message}</td></tr>`;
             });
     }
+
+    // --- CORRECCIÓN PANTALLA AZUL (FREEZE) ---
+    // Esto asegura que al cerrar el modal, se quite el fondo oscuro
+    document.getElementById('modalHistorico').addEventListener('hidden.bs.modal', function () {
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.paddingRight = '';
+    });
 
     function imprimirHistorico() {
         const contenido = document.getElementById('areaImpresionHistorico').innerHTML;
@@ -109,20 +128,19 @@
         
         const ventanaImpresion = window.open('', '', 'height=600,width=800');
         
-        const htmlContent = `
+        ventanaImpresion.document.write(`
             <html>
                 <head>
                     <title>${titulo}</title>
                     <link rel="stylesheet" href="${urlBootstrap}">
+                    <style>body { padding: 20px; }</style>
                 </head>
                 <body>
                     <h3 class="text-center my-4">${titulo}</h3>
                     ${contenido}
                 </body>
             </html>
-        `;
-
-        ventanaImpresion.document.write(htmlContent);
+        `);
         ventanaImpresion.document.close();
         ventanaImpresion.focus();
         

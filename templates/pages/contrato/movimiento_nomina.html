@@ -216,6 +216,20 @@
                                     {% endif %}
                                 </div>
 
+                                <div class="col-md-12 mt-2">
+                                    <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
+                                        <i class="far fa-calendar-plus me-1 text-secondary"></i> {{ form.fecha_solicitud.label }}
+                                    </label>
+                                    {{ form.fecha_solicitud }}
+                                </div>
+
+                                <div class="col-12 mt-2">
+                                    <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
+                                        <i class="far fa-comment-dots me-1 text-secondary"></i> {{ form.observaciones.label }}
+                                    </label>
+                                    {{ form.observaciones }}
+                                </div>
+
                                 <div
                                     hx-get="{% url 'cargar_salarios' %}?es_movimiento=1"
                                     hx-trigger="change from:#id_cargo, change from:#id_tridente"
@@ -327,15 +341,33 @@
                 success: function(response) {
                     if (response.form_is_valid) {
                         $('#editar_empl').modal('hide');
+                        
+                        // Preguntar si quiere el PDF
                         Swal.fire({
-                            icon: 'success', 
-                            title: 'Operación Exitosa', 
-                            text: response.message,
-                            timer: 1500,
-                            showConfirmButton: false
-                        }).then(() => {
-                            if(response.success_url) window.location.href = response.success_url;
-                            else location.reload();
+                            icon: 'success',
+                            title: '¡Movimiento Realizado!',
+                            text: '¿Desea Exportar a PDF el Movimiento de Nómina realizado?',
+                            showCancelButton: true,
+                            confirmButtonText: '<i class="fas fa-file-pdf"></i> Sí, Exportar',
+                            cancelButtonText: 'No, cerrar',
+                            confirmButtonColor: '#dc3545', // Rojo PDF
+                            cancelButtonColor: '#8592a3',
+                            reverseButtons: true
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                // Abre el PDF en una pestaña nueva
+                                if(response.pdf_url) {
+                                    window.open(response.pdf_url, '_blank');
+                                } else {
+                                    console.error("No se recibió URL del PDF desde el servidor");
+                                }
+                            }
+                            
+                            // Recargar la página después de elegir (Sí o No)
+                            setTimeout(() => {
+                                if(response.success_url) window.location.href = response.success_url;
+                                else location.reload();
+                            }, 500);
                         });
                     }
                 },

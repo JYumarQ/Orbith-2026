@@ -14,6 +14,8 @@ from django.http import JsonResponse
 import json
 from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.core.paginator import Paginator
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)

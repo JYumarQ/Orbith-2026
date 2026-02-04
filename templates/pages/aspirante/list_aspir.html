@@ -315,6 +315,20 @@
     }
   });
 
+  // ... (tu código existente) ...
+
+    // --- NUEVO: DOBLE CLIC PARA HISTÓRICO (ASPIRANTES Y BAJAS) ---
+    // Usamos delegación (.on) para que funcione también al filtrar/paginar con HTMX
+    {% if es_baja_view %}
+        $(document).on('dblclick', '.fila-aspirante', function() {
+            var idAspirante = $(this).attr('data-id');
+            if(idAspirante) {
+                var urlBase = "{% url 'historico_trabajador' 0 %}";
+                var urlFinal = urlBase.replace('/0/', '/' + idAspirante + '/');
+                abrirModalHistorico(urlFinal);
+            }
+        });
+    {% endif %}
 </script>
 
 
@@ -458,6 +472,8 @@
         }
     });
 </script>
+
+{% include 'pages/contrato/partials/modal_historico_include.html' %}
 
 {% endblock extra_scripts %}
 {% endblock %}
