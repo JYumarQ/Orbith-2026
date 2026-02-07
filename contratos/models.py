@@ -2,11 +2,12 @@ from decimal import Decimal
 from django.db import models
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla
-from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja
+from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol
 from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
 from auditoria.models import Base
+
 
 #?CONTRATO
 class ContratoBase(Base):
@@ -64,6 +65,15 @@ class CAlta(ContratoBase):
         ('FIJ', 'Fijo'),
         ('DIN', 'Dinámico')
     ], default='DIN')
+
+    rol = models.ForeignKey(
+        NRol,
+        on_delete=models.RESTRICT,
+        blank=True,
+        null=True,
+        verbose_name="Rol de Pago"
+    )
+
     tridente = models.ForeignKey(
         NTridente,
         on_delete=models.RESTRICT,

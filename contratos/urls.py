@@ -34,5 +34,5 @@ urlpatterns = [
 
     path('ajax/datos_previos/', login_required(views.obtener_datos_previos), name='obtener_datos_previos'),
 
-
+    path('ajax/cargar_roles/', login_required(views.cargar_roles), name='cargar_roles'),
 ]

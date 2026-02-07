@@ -4,7 +4,7 @@ from django.contrib import messages
 from .models import Configuracion
 from .forms import ConfiguracionForm
 from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, NHorario, NJornada, \
-    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo
+    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -43,11 +43,26 @@ class ParametrosGeneralesView(FormView):
             if dec.exists() or fun.exists() or apo.exists() or salario_cuadro:
                 salarios.append({
                     'nivel': grupo.nivel,
+                    'grupo_id': grupo.id,
                     'decisorios': list(dec),
                     'fundamentales': list(fun),
                     'apoyo': list(apo),
                     'cuadro': salario_cuadro,  # Puede ser None
                 })
+
+        # --- SECCIÓN FAMILIAS ---
+        
+        # 1. Cargos Activos Totales
+        total_cargos = NCargo.objects.filter(activo=True).count()
+        
+        # 2. Cargos Pendientes (Sin familia)
+        cargos_pendientes = NCargo.objects.filter(familia__isnull=True, activo=True).order_by('descripcion')
+        
+        # 3. Cargos Asignados (Matemática simple)
+        cargos_asignados = total_cargos - cargos_pendientes.count()
+        
+        # 4. Familias
+        familias = NFamiliaCargo.objects.prefetch_related('cargos').all().order_by('-id')
 
         context['salarios'] = salarios
         context['active_tab'] = self.request.GET.get('tab', 'parametros')
@@ -62,6 +77,13 @@ class ParametrosGeneralesView(FormView):
         context['condiciones'] = NCondicionLaboralAnormal.objects.all()
         context['especialidades'] = NEspecialidad.objects.all()
         context['cargos'] = NCargo.objects.all()
+        context['cargos_sin_familia'] = NCargo.objects.filter(
+            familia__isnull=True, 
+            activo=True
+        ).order_by('descripcion')
+        context['familias'] = NFamiliaCargo.objects.prefetch_related('cargos').all().order_by('-id')
+        context['total_cargos'] = total_cargos       
+        context['cargos_asignados'] = cargos_asignados
         return context
 
     def get_form_kwargs(self):

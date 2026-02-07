@@ -10,7 +10,7 @@
             data-url-solicitar="{% url 'solicitar_movimiento' c.pk %}"
             data-url-movimiento="{% url 'movimiento_contrato' c.pk %}" 
             {# PREFERIBLE: Usar el nombre del campo real para reportes #}
-            data-url-pdf="{% url 'ncontrato_pdf' c.no_expediente %}"
+            
             data-url-baja="{% url 'del_contrato' c.pk %}"
             data-expediente="{{ c.no_expediente }}"
             data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}"

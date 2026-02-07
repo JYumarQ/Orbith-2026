@@ -2,6 +2,7 @@ from django import forms
 from django.urls import reverse_lazy
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
+from nomencladores.models import NRol
 
 
 class CAltaForm(forms.ModelForm):
@@ -30,7 +31,38 @@ class CAltaForm(forms.ModelForm):
     cargo = forms.ModelChoiceField(
         label='Cargo',
         queryset=CargoPlantilla.objects.none(), 
-        widget=forms.Select(attrs={'class': 'form-select', 'required': True})
+        widget=forms.Select(attrs={
+            'class': 'form-select', 
+            'required': True,
+            # HTMX: Al cambiar cargo -> Calcular Todo (Salario, Rol, Grupo)
+            'hx-get': reverse_lazy('cargar_salarios'), 
+            'hx-target': '#resultados_salariales', # Apunta al contenedor de salarios
+            'hx-swap': 'innerHTML', # Reemplaza el contenido interno
+            'hx-trigger': 'change',
+            'hx-include': '#id_tridente' # Incluye tridente por si ya estaba seleccionado
+        })
+    )
+
+    rol = forms.CharField(
+        label='Rol de Pago',
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly',
+            'id': 'id_rol',
+            'placeholder': '---'
+        })
+    )
+
+    grupo_escala = forms.CharField(
+        label='Grupo Escala',
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'readonly': 'readonly',
+            'id': 'id_grupo_escala',
+            'placeholder': '---'
+        })
     )
     
     
@@ -73,7 +105,14 @@ class CAltaForm(forms.ModelForm):
             'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled'}),
             'duracion': forms.NumberInput(attrs={'class':'form-control', 'disabled': 'disabled'}),
             'reg_militar': forms.Select(attrs={'class':'form-select'}),
-            'tridente': forms.Select(attrs={'class':'form-select'}),
+            'tridente': forms.Select(attrs={
+                'class':'form-select',
+                # Tridente también debe recalcular salario si cambia
+                'hx-get': reverse_lazy('cargar_salarios'),
+                'hx-target': '#resultados_salariales',
+                'hx-include': '#id_cargo',
+                'hx-trigger': 'change'
+            }),
             'profesional': forms.CheckboxInput(attrs={'class': 'form-check-input',  'id': 'id_profesional'}),
             'fecha_vence_lic': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_lic', 'disabled': 'disabled'}),
             'fecha_vence_recal': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_rec', 'disabled': 'disabled'}),
@@ -84,7 +123,13 @@ class CAltaForm(forms.ModelForm):
             'funcionario_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_funcionario_res', 'disabled': 'disabled'}),
             'designado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_designado'}), 
             'designado_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_designado_res', 'disabled': 'disabled'}),
-            'tipo_salario': forms.Select(attrs={'class': 'form-select'}),
+            'tipo_salario': forms.Select(attrs={
+                'class': 'form-select',
+                'hx-get': reverse_lazy('cargar_salarios'),
+                'hx-target': '#resultados_salariales',
+                'hx-include': '#id_cargo, #id_tridente',
+                'hx-trigger': 'change'
+            }),
             'maestria':forms.NumberInput(attrs={'class':'form-control'}),
             'doctorado':forms.NumberInput(attrs={'class':'form-control'}),
             'cnci':forms.NumberInput(attrs={'class':'form-control'}),
@@ -127,6 +172,13 @@ class CAltaForm(forms.ModelForm):
                 f_cargo.queryset = CargoPlantilla.objects.filter(departamento=dpto)
                 f_cargo.initial = self.instance.cargo.pk
 
+
+        if self.instance and self.instance.pk and self.instance.cargo:
+            # Precargar textos visuales
+            if self.instance.cargo.rol:
+                 self.fields['rol'].initial = self.instance.cargo.rol.tipo
+            if self.instance.cargo.ncargo.grupo_escala:
+                 self.fields['grupo_escala'].initial = self.instance.cargo.ncargo.grupo_escala.nivel
             
 
         # 2. SEGUNDO: Sobrescribir con datos del formulario (POST) si existen

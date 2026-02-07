@@ -4,18 +4,18 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from .models import NCargo, NProvincia, NMunicipio, NHorario, NJornada, NCausaAltaBaja, NCondicionLaboralAnormal
-from .forms import NCargoForm
+from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm
 from django.urls import reverse_lazy
 from django.contrib import messages, admin
 from django.db import transaction
 from nomencladores.models import NSalario, NRol, NTridente, NGrupoEscala, NEspecialidad
-from .forms import RegistrarSalariosForm
 from django.http import JsonResponse
 import json
 from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.core.paginator import Paginator
+from .models import NFamiliaCargo
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
@@ -147,6 +147,117 @@ def cargar_municipios(request):
             'is_filter': False,
             'elem_id': 'id_municipio' 
         })
+    
+
+
+# Agregar estas funciones en views.py
+
+@login_required
+def eliminar_salarios_grupo(request, grupo_id):
+    if request.method == "DELETE" or request.method == "POST":
+        try:
+            # Borrar todos los salarios asociados a este grupo escala
+            count, _ = NSalario.objects.filter(grupo_escala_id=grupo_id).delete()
+            
+            if count > 0:
+                return JsonResponse({'success': True, 'message': 'Grupo de salarios eliminado y liberado correctamente.'})
+            else:
+                return JsonResponse({'error': 'No se encontraron salarios para eliminar.'}, status=404)
+                
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+
+
+@login_required
+@transaction.atomic
+def editar_salarios_grupo(request, grupo_id):
+    grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
+    roles = NRol.objects.all()
+    tridentes = NTridente.objects.all()
+    
+    # Recuperar salarios existentes
+    salarios_existentes = NSalario.objects.filter(grupo_escala=grupo)
+    
+    # 1. Crear mapa temporal de valores
+    mapa_montos = {}
+    monto_cuadro = 0
+    tiene_cuadro = False
+    
+    for s in salarios_existentes:
+        if s.rol is None: # Salario de Cuadro
+            monto_cuadro = s.monto
+            tiene_cuadro = True
+        else:
+            key = f"{s.rol.id}_{s.tridente.id}"
+            mapa_montos[key] = s.monto
+
+    # 2. PROCESADO DE FORMULARIO (GUARDAR)
+    if request.method == 'POST':
+        form = EditarSalariosForm(request.POST)
+        if form.is_valid():
+            try:
+                # --- Guardar Cuadro ---
+                es_para_cuadro = request.POST.get('es_para_cuadro') == 'on'
+                if es_para_cuadro:
+                    monto_c = request.POST.get('monto_cuadro', '0').strip()
+                    if monto_c and monto_c.replace('.', '', 1).isdigit():
+                        NSalario.objects.update_or_create(
+                            grupo_escala=grupo, rol=None, tridente=None,
+                            defaults={'monto': float(monto_c)}
+                        )
+                else:
+                    NSalario.objects.filter(grupo_escala=grupo, rol=None).delete()
+
+                # --- Guardar Matriz (Roles x Tridentes) ---
+                for rol in roles:
+                    for tridente in tridentes:
+                        field_name = f'monto_{rol.id}_{tridente.id}'
+                        monto_str = request.POST.get(field_name, '').strip()
+                        
+                        if monto_str and monto_str.replace('.', '', 1).isdigit():
+                            NSalario.objects.update_or_create(
+                                grupo_escala=grupo, rol=rol, tridente=tridente,
+                                defaults={'monto': float(monto_str)}
+                            )
+                        else:
+                            # Si está vacío o es 0, guardamos 0 (o podrías borrar el registro)
+                            NSalario.objects.update_or_create(
+                                grupo_escala=grupo, rol=rol, tridente=tridente,
+                                defaults={'monto': 0}
+                            )
+
+                messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
+                return redirect(reverse_lazy('parametros') + '?tab=salario')
+
+            except Exception as e:
+                messages.error(request, f"Error al guardar: {e}")
+    
+    else:
+        form = EditarSalariosForm(grupo_label=str(grupo), initial={'es_para_cuadro': tiene_cuadro})
+
+    # 3. PREPARAR LA MATRIZ PARA EL HTML (Aquí está el truco para no usar get_item)
+    matriz_html = []
+    for rol in roles:
+        fila = {'rol': rol, 'celdas': []}
+        for tridente in tridentes:
+            key = f"{rol.id}_{tridente.id}"
+            valor = mapa_montos.get(key, 0) # Si no existe, pone 0
+            fila['celdas'].append({
+                'tridente_id': tridente.id,
+                'valor': valor
+            })
+        matriz_html.append(fila)
+
+    return render(request, 'pages/catalogos/nsalario/edit_salario_modal.html', {
+        'form': form,
+        'grupo': grupo,
+        'tridentes': tridentes,
+        'matriz_html': matriz_html, # Enviamos la lista ya procesada
+        'monto_cuadro': monto_cuadro
+    })
+
 
 # NCARGO
 class NCargoListView(ListView):
@@ -156,6 +267,8 @@ class NCargoListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = NCargoForm()
+        context['cargos_sin_familia'] = NCargo.objects.filter(familia__isnull=True, activo=True)
+        context['familias'] = NFamiliaCargo.objects.prefetch_related('cargos').all().order_by('-id')
         return context
     
 class NCargoCreateView(CreateView):
@@ -558,10 +671,13 @@ def horario_update(request, pk):
     obj.hora_fin = fin_time
     obj.save()
 
-    return JsonResponse({'id': obj.id,
-                         'descripcion': obj.descripcion,
-                         'hora_inicio': obj.hora_inicio.strftime('%H:%M'),
-                         'hora_fin': obj.hora_fin.strftime('%H:%M')})
+    return JsonResponse({
+        'id': obj.id,
+        'descripcion': obj.descripcion,
+        # PROTECCIÓN: Si existe la hora, la formatea. Si no, devuelve null (None)
+        'hora_inicio': obj.hora_inicio.strftime('%H:%M') if obj.hora_inicio else None,
+        'hora_fin': obj.hora_fin.strftime('%H:%M') if obj.hora_fin else None
+    })
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -840,3 +956,74 @@ def cargo_delete(request, pk):
     except NCargo.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
+
+@csrf_exempt
+@require_POST
+@login_required
+def api_familia_create(request):
+    """Crea una nueva familia"""
+    try:
+        data = json.loads(request.body)
+        nombre = data.get('nombre', '').strip()
+        if not nombre:
+            return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+        
+        familia = NFamiliaCargo.objects.create(nombre=nombre)
+        return JsonResponse({'id': familia.id, 'nombre': familia.nombre})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
+@csrf_exempt
+@require_POST
+@login_required
+def api_familia_update(request, pk):
+    """Actualiza el nombre de una familia"""
+    try:
+        data = json.loads(request.body)
+        nombre = data.get('nombre', '').strip()
+        if not nombre:
+            return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+        
+        familia = get_object_or_404(NFamiliaCargo, pk=pk)
+        familia.nombre = nombre
+        familia.save()
+        return JsonResponse({'success': True, 'nombre': familia.nombre})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_POST
+@login_required
+def api_familia_delete(request, pk):
+    """Elimina una familia y libera los cargos (SET_NULL automático)"""
+    try:
+        familia = get_object_or_404(NFamiliaCargo, pk=pk)
+        # Eliminamos la restricción. Al borrar, los cargos pasan a familia=None automáticamente.
+        familia.delete()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+    
+
+@csrf_exempt
+@require_POST
+@login_required
+def api_cargo_move(request):
+    """Mueve un cargo a una familia (o lo saca si familia_id es null)"""
+    try:
+        data = json.loads(request.body)
+        cargo_id = data.get('cargo_id')
+        familia_id = data.get('familia_id') # Puede ser None (para desasignar)
+
+        cargo = get_object_or_404(NCargo, pk=cargo_id)
+        
+        if familia_id:
+            familia = get_object_or_404(NFamiliaCargo, pk=familia_id)
+            cargo.familia = familia
+        else:
+            cargo.familia = None
+            
+        cargo.save()
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

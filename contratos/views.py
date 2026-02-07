@@ -10,7 +10,7 @@ from bolsa.models import Aspirante
 from .models import CAlta, CBaja
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
-from nomencladores.models import NSalario, NCausaAltaBaja
+from nomencladores.models import NSalario, NCausaAltaBaja, NRol
 from django.urls import reverse_lazy
 from configuracion.models import Configuracion
 from django.template.loader import get_template
@@ -61,6 +61,52 @@ class MovimientoNominaListView(ListView):
         context['titulo'] = "Movimientos de Nómina Pendientes"
         return context
 
+
+def cargar_roles(request):
+    cargo_id = request.GET.get('cargo')
+    roles_disponibles = []
+    
+    if cargo_id:
+        try:
+            cargo = CargoPlantilla.objects.select_related('ncargo').get(pk=cargo_id)
+            grupo = cargo.ncargo.grupo_escala
+            categoria = cargo.ncargo.cat_ocupacional
+            
+            # 1. LA LIMPIEZA: Buscar en NSalario qué roles tienen dinero (> 0) para este grupo
+            #    Esto elimina automáticamente opciones como "Fundamental" si en la tabla valen 0.00
+            salarios_con_fondo = NSalario.objects.filter(
+                grupo_escala=grupo, 
+                monto__gt=0
+            ).values_list('rol_id', flat=True).distinct()
+            
+            # Convertimos a Set para manipular fácil
+            ids_validos = set(salarios_con_fondo)
+            
+            # 2. EL PORTERO: Lógica "Cuadro"
+            # Buscamos el ID del rol "Cuadro" en el nomenclador
+            rol_cuadro_obj = NRol.objects.filter(tipo__iexact="Cuadro").first()
+            
+            if rol_cuadro_obj:
+                id_cuadro = rol_cuadro_obj.id
+                
+                # REGLA DE ORO: Si NO es directivo, PROHIBIDO ver el rol Cuadro
+                if categoria not in ['CDI', 'CEJ']:
+                    if id_cuadro in ids_validos:
+                        ids_validos.remove(id_cuadro)
+                else:
+                    # Si ES directivo, nos aseguramos que vea la opción "Cuadro"
+                    # (siempre que exista en el nomenclador, aunque NSalario a veces lo guarde como Rol=Null o Rol=Cuadro)
+                    # Si tu tabla de salario tiene columna 'Cuadro', asumimos que es válida para ellos.
+                    ids_validos.add(id_cuadro)
+
+            # 3. Query Final
+            roles_disponibles = NRol.objects.filter(id__in=ids_validos).order_by('tipo')
+
+        except Exception as e:
+            print(f"Error cargando roles: {e}")
+            pass
+            
+    return render(request, 'pages/contrato/partials/options_roles.html', {'roles': roles_disponibles})
 
 def obtener_datos_previos(request):
     """
@@ -429,11 +475,18 @@ class ContratoCreateView(CreateView):
         return context
 
     def form_valid(self, form):
-        # Asignar aspirante
-        aspirante_id = self.kwargs['aspirante_id']
-        form.instance.aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
+        self.object = form.save(commit=False)
         
-        self.object = form.save()
+        # ASIGNACIÓN AUTOMÁTICA DEL ROL
+        # Como quitamos 'rol' del formulario, lo copiamos del cargo
+        if self.object.cargo and self.object.cargo.rol:
+            self.object.rol = self.object.cargo.rol
+        
+        # Asignar aspirante (tu lógica existente)
+        aspirante_id = self.kwargs['aspirante_id']
+        self.object.aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
+        
+        self.object.save()
         
         messages.success(self.request, 'Contrato registrado correctamente.')
 
@@ -444,7 +497,7 @@ class ContratoCreateView(CreateView):
                 'message': 'Contrato registrado correctamente.',
                 'success_url': str(self.success_url) 
             })
-        return super().form_valid(form)
+        return super(CreateView, self).form_valid(form)
 
     def form_invalid(self, form):
         # 1. Imprimir en consola para depuración
@@ -538,7 +591,13 @@ class ContratoUpdateView(UpdateView):
     # --- MÉTODOS AÑADIDOS PARA SOPORTE AJAX ---
 
     def form_valid(self, form):
-        self.object = form.save()
+        self.object = form.save(commit=False)
+        
+        # ASIGNACIÓN AUTOMÁTICA (Por si cambió de cargo)
+        if self.object.cargo and self.object.cargo.rol:
+            self.object.rol = self.object.cargo.rol
+            
+        self.object.save()
         
         messages.success(self.request, 'Contrato actualizado correctamente.')
 
@@ -549,7 +608,7 @@ class ContratoUpdateView(UpdateView):
                 'message': 'Contrato actualizado correctamente.',
                 'success_url': str(self.success_url)
             })
-        return super().form_valid(form)
+        return super(UpdateView, self).form_valid(form)
 
     def form_invalid(self, form):
         # RESPUESTA AJAX (ERROR)
@@ -988,47 +1047,86 @@ class ModeloMovimientoDocxView(View):
 
 
 # 2. ACTUALIZA ESTA FUNCIÓN (Agregamos el retorno de textos para OOB)
+# contratos/views.py
+
 def cargar_salario(request):
-    cargo_id    = request.GET.get('cargo')
-    tridente_id = request.GET.get('tridente')
-    
-    # DETECTAR SI ES MOVIMIENTO (buscamos el parámetro extra en la URL)
+    cargo_id      = request.GET.get('cargo')
+    tridente_id   = request.GET.get('tridente')
+    tipo_salario  = request.GET.get('tipo_salario')
     es_movimiento = request.GET.get('es_movimiento') 
 
-    context = {}
-    try:
-        cargo = CargoPlantilla.objects.select_related('rol', 'ncargo').get(id=cargo_id)
-        
-        # Datos extra (solo necesarios para movimiento, pero no estorban si se calculan)
-        context['nuevo_grupo'] = cargo.ncargo.grupo_escala
-        context['nueva_cat'] = getattr(cargo.ncargo, 'get_cat_ocupacional_display')()
-        context['nuevo_rol'] = cargo.rol.tipo if cargo.rol else "Cuadro"
+    context = {
+        'salario': 0.00, 'tarifa': 0, 'extras': 0,
+        'nuevo_rol': '', 'nuevo_grupo': '', # Variables para actualizar los inputs
+        'mostrar_tridente': False # Bandera para habilitar visualmente el tridente
+    }
 
-        salario = NSalario.objects.get(
-            grupo_escala=cargo.ncargo.grupo_escala,
-            rol=cargo.rol,
-            tridente_id=tridente_id
-        )
-        
-        config = Configuracion.objects.first()
-        fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-        tarifa_calculada = round(float(salario.monto) / fondo, 5) if fondo else 0
+    if cargo_id:
+        try:
+            cargo = CargoPlantilla.objects.select_related('ncargo').get(id=cargo_id)
 
-        context.update({
-            'salario': round(float(salario.monto), 2),
-            'tarifa':  tarifa_calculada,
-            'extras':  round(float(salario.monto) / 160.6, 5),
-        })
-    except Exception:
-        context.update({
-            'salario': 0.00, 'tarifa': 0, 'extras': 0,
-            'nuevo_grupo': '', 'nueva_cat': '', 'nuevo_rol': ''
-        })
+            grupo_obj = cargo.ncargo.grupo_escala
+            rol_obj = cargo.rol
+            
+            # Datos extra para el contexto
+            
+            context['nueva_cat'] = getattr(cargo.ncargo, 'get_cat_ocupacional_display')()
+            context['nuevo_rol'] = rol_obj.tipo if rol_obj else "Cuadro"
+            context['nuevo_grupo'] = grupo_obj.nivel if grupo_obj else "-"
+            
+            monto = 0.00
 
-    # DECISIÓN DE PLANTILLA
-    if es_movimiento:
-        # Usamos el archivo NUEVO con estilos corregidos y OOB swaps extra
-        return render(request, "pages/contrato/partials/cargar_datos_movimiento.html", context)
-    else:
-        # Usamos el archivo VIEJO (Original) para no romper Add/Update Contrato
-        return render(request, "pages/contrato/partials/cargar_salario.html", context)
+            # --- ESCENARIO A: SALARIO FIJO ---
+            if tipo_salario == 'FIJ':
+                # Si es Fijo, tomamos el salario base del cargo directamente
+                monto = float(cargo.ncargo.salario_basico)
+                context['mostrar_tridente'] = False # No se muestra el tridente para salario fijo
+            
+            # --- ESCENARIO B: SALARIO DINÁMICO ---
+            # CASO B: Salario DINÁMICO
+            else:
+                salario_obj = None
+                
+                # Si el Rol del cargo es "Cuadro" (o nulo asumido como cuadro)
+                # Buscamos en la columna única de Cuadro
+                if not rol_obj or rol_obj.tipo == "Cuadro":
+                    context['mostrar_tridente'] = False
+                    salario_obj = NSalario.objects.filter(
+                        grupo_escala=grupo_obj,
+                        rol=rol_obj # o rol__isnull=True si usas ese sistema
+                    ).first()
+                    
+                    if not salario_obj: # Fallback
+                         salario_obj = NSalario.objects.filter(grupo_escala=grupo_obj, rol__isnull=True).first()
+
+                # Si es otro Rol (Decisorio, Fundamental, etc.)
+                else:
+                    context['mostrar_tridente'] = True # Activamos el combo de tridente
+                    if tridente_id:
+                        salario_obj = NSalario.objects.filter(
+                            grupo_escala=grupo_obj,
+                            rol=rol_obj,
+                            tridente_id=tridente_id
+                        ).first()
+                
+                if salario_obj:
+                    monto = float(salario_obj.monto)
+
+            # Cálculos Finales
+            if monto > 0:
+                config = Configuracion.objects.first()
+                fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
+                
+                context.update({
+                    'salario': round(monto, 2),
+                    'tarifa':  round(monto / fondo, 5) if fondo else 0,
+                    'extras':  round(monto / 160.6, 5),
+                })
+                
+        except Exception as e:
+            print(f"Error calculando: {e}")
+            pass
+
+    # Usamos la plantilla parcial para devolver los datos
+    # NOTA: Asegúrate de crear el archivo en el paso 3
+    return render(request, "pages/contrato/partials/cargar_salario.html", context)

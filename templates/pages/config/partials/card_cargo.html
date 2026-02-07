@@ -1,0 +1,34 @@
+<div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
+    <div class="card-body p-2 d-flex justify-content-between align-items-center">
+        <span class="small fw-semibold text-dark text-truncate cargo-desc" 
+              title="{{ cargo.descripcion }}" style="max-width: 75%;">
+            {{ cargo.descripcion }}
+        </span>
+        
+        <div class="dropdown div-menu {% if is_assigned %}d-none{% endif %}">
+            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill dropdown-toggle hide-arrow p-0" 
+                    data-bs-toggle="dropdown" title="Mover a...">
+                <i class="fas fa-share-square text-primary"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" style="max-height: 200px; overflow-y: auto;">
+                <li><h6 class="dropdown-header text-uppercase small">Mover a...</h6></li>
+                {% for f in familias %}
+                    <li>
+                        <a class="dropdown-item cursor-pointer" 
+                           onclick="moverCargoDirecto(this, {{ cargo.id }}, {{ f.id }})">
+                            <i class="fas fa-folder text-warning me-2"></i>{{ f.nombre }}
+                        </a>
+                    </li>
+                {% empty %}
+                    <li><span class="dropdown-item disabled small">Cree una familia primero</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="div-x {% if not is_assigned %}d-none{% endif %}">
+            <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
+               onclick="removeFromFamily(this, {{ cargo.id }})" 
+               title="Devolver a lista"></i>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,108 @@
+<div class="modal-dialog modal-xl modal-dialog-centered" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Editar Salarios: Grupo {{ grupo.nivel }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form method="post" action="{% url 'editar_salarios' grupo.id %}">
+            {% csrf_token %}
+            <div class="modal-body">
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">{{ form.grupo_nombre.label }}</label>
+                        {{ form.grupo_nombre }}
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        <div class="form-check form-switch mb-2">
+                            {{ form.es_para_cuadro }}
+                            <label class="form-check-label fw-bold cursor-pointer" for="{{ form.es_para_cuadro.id_for_label }}">
+                                {{ form.es_para_cuadro.label }}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="div_monto_cuadro" class="mb-4 p-3 bg-lighter rounded border {% if not form.es_para_cuadro.value %}d-none{% endif %}">
+                    <label class="form-label fw-bold fs-6">Salario Único (Cuadro)</label>
+                    <div class="input-group">
+                        <span class="input-group-text fw-bold">$</span>
+                        <input type="number" step="0.01" name="monto_cuadro" 
+                               class="form-control fs-5 fw-bold text-primary" 
+                               value="{{ monto_cuadro|stringformat:'.2f' }}" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered text-center align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-uppercase fw-bold">Rol \ Tridente</th>
+                                {% for t in tridentes %}
+                                    <th class="fw-bold">{{ t.tipo }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in matriz_html %}
+                                <tr>
+                                    <td class="fw-bold text-start ps-3" style="font-size: 1.05rem;">
+                                        {{ fila.rol.tipo }}
+                                    </td>
+                                    
+                                    {% for celda in fila.celdas %}
+                                        <td class="p-1">
+                                            <input type="number" step="0.01" 
+                                                   name="monto_{{ fila.rol.id }}_{{ celda.tridente_id }}" 
+                                                   class="form-control text-center input-salario"
+                                                   placeholder="-"
+                                                   value="{{ celda.valor|stringformat:'.2f' }}"> 
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    var checkCuadro = document.getElementById('{{ form.es_para_cuadro.id_for_label }}');
+    var divCuadro = document.getElementById('div_monto_cuadro');
+    
+    if(checkCuadro){
+        checkCuadro.addEventListener('change', function(){
+            if(this.checked){
+                divCuadro.classList.remove('d-none');
+                const input = divCuadro.querySelector('input');
+                if(input) input.focus();
+            } else {
+                divCuadro.classList.add('d-none');
+            }
+        });
+    }
+</script>
+
+<style>
+    /* CLASE PERSONALIZADA PARA TAMAÑO INTERMEDIO */
+    .input-salario {
+        height: 42px;         /* Más alto que el normal (38px) pero menos que el gigante (50px) */
+        font-size: 1.1rem;    /* Números claros y legibles */
+        font-weight: 600;     /* Negrita */
+        min-width: 90px;      /* Ancho mínimo para que no se rompa */
+        color: #566a7f;
+    }
+    
+    .input-salario:focus {
+        border-color: #696cff;
+        box-shadow: 0 0 0 0.2rem rgba(105, 108, 255, 0.15); /* Sombra suave */
+        color: #696cff;
+    }
+</style>

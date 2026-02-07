@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 from auditoria.models import Base
@@ -78,6 +79,20 @@ class NSalario(Base):
             return f"{self.grupo_escala} - {self.rol} - Tridente {self.tridente}: ${self.monto}"
         else:
             return f"{self.grupo_escala} (CUADRO): ${self.monto}"
+        
+
+
+class NFamiliaCargo(Base):
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Familia de Cargos"
+        verbose_name_plural = "Familias de Cargos"
+
+    def __str__(self):
+        return self.nombre
+
 
 class NCargo(Base):
 
@@ -91,6 +106,9 @@ class NCargo(Base):
         ('CEJ', 'Cuadro Ejecutivo')
     ])
     grupo_escala = models.ForeignKey(NGrupoEscala, on_delete=models.RESTRICT)
+
+    familia = models.ForeignKey(NFamiliaCargo, null=True, blank=True, on_delete=models.SET_NULL, related_name='cargos')
+    
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2)
     activo = models.BooleanField(default=True)
 
@@ -104,7 +122,7 @@ class NCargo(Base):
 class NCondicionLaboralAnormal(models.Model):
     nombre = models.CharField(max_length=10, unique=True)
     descripcion = models.TextField(max_length=200, blank=True, null=True)
-    tarifa_hora = models.DecimalField(validators=[MinValueValidator(0)], max_digits=7, decimal_places=2, default=0)
+    tarifa_hora = models.DecimalField(validators=[MinValueValidator(0)], max_digits=7, decimal_places=2, default=Decimal('0'))
 
     class Meta:
         verbose_name = "Condición Laboral Anormal"
@@ -193,6 +211,5 @@ class NEspecialidad(models.Model):
 
     def __str__(self):
         return self.nombre
-
 
 

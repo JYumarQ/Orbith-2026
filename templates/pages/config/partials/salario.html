@@ -1,31 +1,41 @@
-<!-- SALARIO -->
 <div class="tab-pane fade {% if active_tab == 'salario' %}show active{% endif %}" id="navs-justified-salario" role="tabpanel">
     <input type="hidden" name="active_tab" value="salario" id="salario-tab-input">
-    <div class="d-flex justify-content-end mb-3">
-      <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'agregar_salarios_modal' %}')">
-        <i class="fas fa-plus"></i> Nuevo Salario
-      </button>
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        
+        <div id="salary-toolbar" class="d-flex gap-2 toolbar-disabled">
+            <button type="button" class="btn btn-secondary" id="btn-edit-salary">
+                <i class="fas fa-pencil-alt me-1"></i> Editar
+            </button>
+            <button type="button" class="btn btn-danger" id="btn-delete-salary">
+                <i class="fas fa-trash-alt me-1"></i> Eliminar
+            </button>
+        </div>
+
+        <div class="ms-auto">
+            <button class="btn btn-primary" onclick="abrir_modal_creacion('{% url 'agregar_salarios_modal' %}')">
+                <i class="fas fa-plus"></i> Nuevo Salario
+            </button>
+        </div>
     </div>
 
-
-    <div class="row g-3">
-      <div class="card-body">
+    <div class="card">
         <div class="table-responsive text-nowrap">
-          <table class="table table-bordered" style="table-layout: fixed; width: 100%;">
+          <table class="table table-bordered table-hover" id="tabla-salarios" style="table-layout: fixed; width: 100%;">
             <thead>
-              <tr>
+              <tr class="table-light">
                 <th rowspan="3" class="align-middle text-center">Grupo<br>Escala</th>
                 <th rowspan="3" class="align-middle text-center">Cuadro</th>
                 <th colspan="3" class="text-center">DECISORIOS</th>
                 <th colspan="3" class="text-center">FUNDAMENTALES</th>
                 <th colspan="3" class="text-center">APOYO</th>
               </tr>
-              <tr>
+              <tr class="table-light">
                 <th colspan="3" class="text-center">TRIDENTE</th>
                 <th colspan="3" class="text-center">TRIDENTE</th>
                 <th colspan="3" class="text-center">TRIDENTE</th>
               </tr>
-              <tr>
+              <tr class="table-light">
                 <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
                 <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
                 <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
@@ -33,51 +43,206 @@
             </thead>
             <tbody>
               {% for fila in salarios %}
-                <tr>
-                  <td class="text-center fw-bold">{{ fila.nivel }}</td>
-                  <!-- Salario de Cuadro -->
-                  <td class="editable-cell text-center"
-                      {% if fila.cuadro %}
-                        data-id="{{ fila.cuadro.id }}"
-                        data-valor="{{ fila.cuadro.monto }}"
-                      {% endif %}
-                      title="Haz clic para editar">
-                    {% if fila.cuadro %}
-                      {{ fila.cuadro.monto|floatformat:2 }}
+                <tr class="cursor-pointer salary-row" onclick="seleccionarSalario(this, '{{ fila.grupo_id }}')">
+                  
+                  <td class="text-center fw-bold text-primary">{{ fila.nivel }}</td>
+                  
+                  <td class="text-center">
+                    {% if fila.cuadro and fila.cuadro.monto > 0 %}
+                        {{ fila.cuadro.monto|floatformat:2 }}
                     {% else %}
-                      <span class="text-muted">—</span>
+                        <span class="fw-bold">-</span>
                     {% endif %}
                   </td>
-                  <!-- Resto de celdas (decisorios, fundamentales, apoyo) igual que antes -->
+                  
                   {% for s in fila.decisorios %}
-                    <td class="editable-cell text-center"
-                        data-id="{{ s.id }}"
-                        data-valor="{{ s.monto }}"
-                        title="Haz clic para editar">
-                      {{ s.monto|floatformat:2 }}
+                    <td class="text-center">
+                        {% if s.monto > 0 %}
+                            {{ s.monto|floatformat:2 }}
+                        {% else %}
+                            <span class="fw-bold">-</span>
+                        {% endif %}
                     </td>
                   {% endfor %}
+
                   {% for s in fila.fundamentales %}
-                    <td class="editable-cell text-center"
-                        data-id="{{ s.id }}"
-                        data-valor="{{ s.monto }}"
-                        title="Haz clic para editar">
-                      {{ s.monto|floatformat:2 }}
+                    <td class="text-center">
+                        {% if s.monto > 0 %}
+                            {{ s.monto|floatformat:2 }}
+                        {% else %}
+                            <span class="fw-bold">-</span>
+                        {% endif %}
                     </td>
                   {% endfor %}
+
                   {% for s in fila.apoyo %}
-                    <td class="editable-cell text-center"
-                        data-id="{{ s.id }}"
-                        data-valor="{{ s.monto }}"
-                        title="Haz clic para editar">
-                      {{ s.monto|floatformat:2 }}
+                    <td class="text-center">
+                        {% if s.monto > 0 %}
+                            {{ s.monto|floatformat:2 }}
+                        {% else %}
+                            <span class="fw-bold">-</span>
+                        {% endif %}
                     </td>
                   {% endfor %}
+
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
-      </div>
     </div>
 </div>
+
+<div class="modal fade" id="editar_salario_modal" tabindex="-1" aria-hidden="true" role="dialog"></div>
+
+<style>
+    /* Estilos copiados de list_aspirante.html */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+    
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    
+    .cursor-pointer { cursor: pointer; }
+    .salary-row:hover { background-color: rgba(105, 108, 255, 0.08) !important; }
+</style>
+
+<script>
+    // 1. Asegurar jQuery localmente
+    if (typeof jQuery !== 'undefined') {
+        var $ = jQuery.noConflict();
+        // Tu código que usa $ va aquí o se habilita aquí
+    } else {
+        console.error("jQuery no está cargado");
+    }
+    var selectedGrupoId = null;
+
+    function seleccionarSalario(row, grupoId) {
+        // Si toco el mismo, deseleccionar
+        if (selectedGrupoId === grupoId) {
+            deseleccionarTodo();
+            return;
+        }
+
+        // Limpiar estilos anteriores
+        document.querySelectorAll('.salary-row').forEach(r => r.classList.remove('table-active-row'));
+        
+        // Activar nuevo
+        row.classList.add('table-active-row');
+        selectedGrupoId = grupoId;
+        
+        // Activar toolbar
+        const toolbar = document.getElementById('salary-toolbar');
+        toolbar.classList.remove('toolbar-disabled');
+        toolbar.classList.add('toolbar-active');
+    }
+
+    function deseleccionarTodo() {
+        document.querySelectorAll('.salary-row').forEach(r => r.classList.remove('table-active-row'));
+        const toolbar = document.getElementById('salary-toolbar');
+        if(toolbar){
+            toolbar.classList.add('toolbar-disabled');
+            toolbar.classList.remove('toolbar-active');
+        }
+        selectedGrupoId = null;
+    }
+
+    // --- EVENTOS GLOBALES ---
+
+    // Deseleccionar al hacer clic fuera
+    document.addEventListener('click', function(e) {
+        const clickEnFila = e.target.closest('.salary-row');
+        const clickEnToolbar = e.target.closest('#salary-toolbar');
+        // Importante: No deseleccionar si el clic fue dentro del modal
+        const clickEnModal = e.target.closest('.modal');
+
+        if (!clickEnFila && !clickEnToolbar && !clickEnModal) {
+            deseleccionarTodo();
+        }
+    });
+
+    // Tecla ESCAPE
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            deseleccionarTodo();
+        }
+    });
+
+    // --- ACCIONES ---
+
+    // Botón Editar
+    document.getElementById('btn-edit-salary').addEventListener('click', function() {
+        // VALIDACIÓN MEJORADA (Toast)
+        if(!selectedGrupoId) {
+            if(typeof Swal !== 'undefined'){
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'warning',
+                    title: 'Seleccione un grupo primero',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            }
+            return;
+        }
+
+        var url = "{% url 'editar_salarios' 0 %}".replace('0', selectedGrupoId);
+        
+        // Carga con jQuery y manejo de errores
+        $('#editar_salario_modal').load(url, function(response, status, xhr) {
+            if (status === "error") {
+                Swal.fire('Error', 'No se pudo cargar el formulario: ' + xhr.status + " " + xhr.statusText, 'error');
+            } else {
+                var myModal = new bootstrap.Modal(document.getElementById('editar_salario_modal'));
+                myModal.show();
+            }
+        });
+    });
+
+    // Botón Eliminar
+    document.getElementById('btn-delete-salary').addEventListener('click', function() {
+        if(!selectedGrupoId) return;
+
+        Swal.fire({
+            title: '¿Eliminar salarios?',
+            text: "Se eliminará toda la configuración salarial de este grupo y quedará disponible para crear de nuevo.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                var url = "{% url 'eliminar_salarios' 0 %}".replace('0', selectedGrupoId);
+                
+                fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if(data.success) {
+                        Swal.fire('Eliminado!', data.message, 'success')
+                        .then(() => location.reload()); 
+                    } else {
+                        Swal.fire('Error', data.error || 'No se pudo eliminar', 'error');
+                    }
+                })
+                .catch(err => Swal.fire('Error', 'Error de conexión', 'error'));
+            }
+        });
+    });
+</script>

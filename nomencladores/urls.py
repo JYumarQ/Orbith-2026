@@ -68,5 +68,13 @@ urlpatterns = [
     path('api/cargos/<int:pk>/', views.cargo_update, name='cargo-update'),
     path('api/cargos/<int:pk>/delete/', views.cargo_delete, name='cargo-delete'),
 
-    
+    path('salarios/editar/<int:grupo_id>/', login_required(views.editar_salarios_grupo), name='editar_salarios'),
+    path('salarios/eliminar/<int:grupo_id>/', login_required(views.eliminar_salarios_grupo), name='eliminar_salarios'),
+
+    # API FAMILIAS DE CARGOS
+    path('api/familias/create/', views.api_familia_create, name='api_familia_create'),
+    path('api/familias/<int:pk>/delete/', views.api_familia_delete, name='api_familia_delete'),
+    path('api/cargos/move/', views.api_cargo_move, name='api_cargo_move'),
+    path('api/familias/<int:pk>/update/', views.api_familia_update, name='api_familia_update'),
+
 ]

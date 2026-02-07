@@ -1,0 +1,475 @@
+{% load static %}
+
+<style>
+    .familia-column {
+        height: calc(100vh - 220px);
+        min-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .cargo-card { cursor: grab; transition: all 0.2s; border-left: 3px solid transparent; }
+    .cargo-card:hover { transform: translateX(4px); border-left-color: #696cff; background-color: #f8f9fa; }
+    .cargo-card:active { cursor: grabbing; }
+    .sortable-ghost { opacity: 0.4; background-color: #e7e7ff; }
+    .sortable-chosen { background-color: #fff; box-shadow: 0 0.25rem 1rem rgba(161, 172, 184, 0.45); }
+    .family-header { background: linear-gradient(90deg, #2E3192 0%, #5256c9 100%); color: white; }
+    
+    /* Botones de acción en cabecera */
+    .btn-action-family {
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: none;
+        transition: all 0.2s;
+    }
+    .btn-action-family:hover {
+        background-color: rgba(255, 255, 255, 0.4);
+        transform: scale(1.1);
+    }
+    .btn-delete-family:hover {
+        background-color: #ff3e1d !important;
+    }
+</style>
+
+<div class="tab-pane fade {% if active_tab == 'familias' %}show active{% endif %}" id="navs-justified-familias" role="tabpanel">
+    
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 bg-white rounded shadow-sm border gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="p-2 bg-label-primary rounded">
+                <i class="fas fa-layer-group fs-4"></i>
+            </div>
+            <div class="d-none d-md-block">
+                <h5 class="mb-0 fw-bold text-primary">Familias de Cargos</h5>
+            </div>
+        </div>
+
+        <div class="flex-grow-1 mx-md-4" style="max-width: 600px; min-width: 300px;">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0 text-primary">
+                    <i class="fas fa-plus-circle"></i>
+                </span>
+                <input type="text" id="new-family-name" 
+                       class="form-control bg-light border-start-0 shadow-none fw-bold text-primary" 
+                       placeholder="Nombre de nueva familia..."
+                       style="height: 45px;">
+                <button class="btn btn-primary px-4 fw-bold" id="btn-create-family">Crear</button>
+            </div>
+        </div>
+        
+        <div class="d-flex gap-3 text-center ms-auto ms-md-0 align-items-center bg-light p-2 rounded">
+    
+            <div class="px-2">
+                <h6 class="mb-0 fw-bold text-dark" id="stat-total">{{ total_cargos }}</h6>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Total</small>
+            </div>
+            <div class="vr opacity-25"></div>
+
+            <div class="px-2">
+                <h6 class="mb-0 fw-bold text-primary" id="stat-asignados">{{ cargos_asignados }}</h6>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Asignados</small>
+            </div>
+            <div class="vr opacity-25"></div>
+
+            <div class="px-2">
+                <h6 class="mb-0 fw-bold text-danger" id="stat-pendientes">{{ cargos_sin_familia.count }}</h6>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Pendientes</small>
+            </div>
+            <div class="vr opacity-25"></div>
+
+            <div class="px-2">
+                <h6 class="mb-0 fw-bold text-success" id="stat-familias">{{ familias.count }}</h6>
+                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.65rem;">Familias</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 h-100">
+        
+        <div class="col-md-4 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-header bg-white border-bottom p-3 sticky-top zindex-1">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-2">
+                        <i class="fas fa-box-open me-1"></i> Sin Clasificar
+                    </h6>
+                    <div class="input-group input-group-merge">
+                        <span class="input-group-text border-0 ps-2 bg-light"><i class="fas fa-search small"></i></span>
+                        <input type="text" id="search-cargos" class="form-control border-0 bg-light shadow-none" placeholder="Buscar cargo...">
+                    </div>
+                </div>
+                
+                <div class="card-body p-2 bg-light familia-column" id="unassigned-list">
+                    {% for cargo in cargos_sin_familia %}
+                        <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
+                            <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                                <span class="small fw-semibold text-dark text-truncate cargo-desc" 
+                                      title="{{ cargo.descripcion }}" style="max-width: 75%;">
+                                    {{ cargo.descripcion }}
+                                </span>
+                                <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu" 
+                                        onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
+                                    <i class="fas fa-share-square text-primary"></i>
+                                </button>
+                                <div class="div-x d-none">
+                                    <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
+                                       onclick="removeFromFamily(this, {{ cargo.id }})" 
+                                       title="Devolver a lista"></i>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="text-center mt-5 opacity-50 empty-msg">
+                            <i class="fas fa-check-circle fs-1 mb-2"></i>
+                            <p class="small">¡Todo clasificado!</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8 col-lg-9">
+            <div class="row g-3" id="families-container">
+                {% for familia in familias %}
+                    <div class="col-md-6 col-xl-4 family-wrapper" id="family-wrapper-{{ familia.id }}">
+                        <div class="card h-100 shadow-sm border">
+                            <div class="card-header family-header p-3 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2 text-white" style="flex: 1; min-width: 0;">
+                                    <i class="fas fa-folder"></i>
+                                    <span class="fw-bold text-truncate family-name" style="max-width: 85%;" title="{{ familia.nombre }}">
+                                        {{ familia.nombre }}
+                                    </span>
+                                    <span class="badge bg-white text-primary rounded-pill small count-badge">{{ familia.cargos.count }}</span>
+                                </div>
+                                
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-icon btn-action-family" 
+                                            onclick="editFamily({{ familia.id }}, '{{ familia.nombre|escapejs }}')" 
+                                            title="Editar Nombre">
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-icon btn-action-family btn-delete-family" 
+                                            onclick="deleteFamily({{ familia.id }})" 
+                                            title="Eliminar Familia">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="card-body p-2 bg-light family-droppable" 
+                                 data-family-id="{{ familia.id }}" 
+                                 style="min-height: 150px; max-height: 300px; overflow-y: auto;">
+                                
+                                {% for cargo in familia.cargos.all %}
+                                    <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
+                                        <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                                            <span class="small fw-semibold text-dark text-truncate cargo-desc" 
+                                                  title="{{ cargo.descripcion }}" style="max-width: 75%;">
+                                                {{ cargo.descripcion }}
+                                            </span>
+                                            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu d-none" 
+                                                    onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
+                                                <i class="fas fa-share-square text-primary"></i>
+                                            </button>
+                                            <div class="div-x">
+                                                <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
+                                                   onclick="removeFromFamily(this, {{ cargo.id }})" 
+                                                   title="Devolver a lista"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                                
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script>
+    // --- DATOS DE FAMILIAS PARA EL SELECT (Generado por Django) ---
+    const FAMILIAS_OPTIONS = {
+        {% for f in familias %}
+            "{{ f.id }}": "{{ f.nombre|escapejs }}",
+        {% endfor %}
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        initDragAndDrop();
+    });
+
+    function initDragAndDrop() {
+        const unassignedList = document.getElementById('unassigned-list');
+        const familyLists = document.querySelectorAll('.family-droppable');
+
+        const commonConfig = {
+            group: 'cargos', animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', delay: 100, delayOnTouchOnly: true
+        };
+
+        new Sortable(unassignedList, {
+            ...commonConfig, sort: false,
+            onAdd: function (evt) {
+                moverCargoAPI(evt.item.dataset.id, null);
+                actualizarContadores();
+                toggleControles(evt.item, false);
+            }
+        });
+
+        familyLists.forEach(el => initSortableFamilia(el));
+    }
+
+    function initSortableFamilia(el) {
+        new Sortable(el, {
+            group: 'cargos', animation: 150, ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen', delay: 100, delayOnTouchOnly: true,
+            onAdd: function (evt) {
+                moverCargoAPI(evt.item.dataset.id, evt.to.dataset.familyId);
+                actualizarContadores();
+                toggleControles(evt.item, true);
+            }
+        });
+    }
+
+    // --- UTILS VISUALES ---
+    function toggleControles(card, isAssigned) {
+        const menu = card.querySelector('.div-menu');
+        const xIcon = card.querySelector('.div-x');
+        if(isAssigned) {
+            if(menu) menu.classList.add('d-none');
+            if(xIcon) xIcon.classList.remove('d-none');
+        } else {
+            if(menu) menu.classList.remove('d-none');
+            if(xIcon) xIcon.classList.add('d-none');
+        }
+    }
+
+    // --- NUEVO: MOVER VÍA MODAL (Solución al solapamiento) ---
+    window.abrirModalMover = async function(cargoId) {
+        // Convertir objeto de familias a opciones HTML
+        let opciones = '<option value="">Seleccione destino...</option>';
+        for (const [id, nombre] of Object.entries(FAMILIAS_OPTIONS)) {
+            opciones += `<option value="${id}">${nombre}</option>`;
+        }
+
+        const { value: familiaId } = await Swal.fire({
+            title: 'Mover cargo a...',
+            html: `<select id="swal-familia-select" class="form-select">${opciones}</select>`,
+            showCancelButton: true,
+            confirmButtonText: 'Mover',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                return document.getElementById('swal-familia-select').value;
+            }
+        });
+
+        if (familiaId) {
+            // Lógica de movimiento manual
+            const card = document.querySelector(`.cargo-card[data-id="${cargoId}"]`);
+            const targetContainer = document.querySelector(`.family-droppable[data-family-id="${familiaId}"]`);
+            
+            if(card && targetContainer) {
+                targetContainer.appendChild(card);
+                toggleControles(card, true);
+                actualizarContadores();
+                moverCargoAPI(cargoId, familiaId);
+            }
+        }
+    };
+
+    function moverCargoAPI(cargoId, familiaId) {
+        fetch("{% url 'api_cargo_move' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ cargo_id: cargoId, familia_id: familiaId })
+        }).catch(err => console.error(err));
+    }
+
+    // --- NUEVO: EDITAR FAMILIA ---
+    window.editFamily = async function(id, currentName) {
+        const { value: newName } = await Swal.fire({
+            title: 'Editar Nombre',
+            input: 'text',
+            inputValue: currentName,
+            showCancelButton: true,
+            confirmButtonText: 'Guardar',
+            cancelButtonText: 'Cancelar',
+            inputValidator: (value) => {
+                if (!value) return 'El nombre no puede estar vacío';
+            }
+        });
+
+        if (newName && newName !== currentName) {
+            fetch(`/nomencladores/api/familias/${id}/update/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify({ nombre: newName })
+            })
+            .then(r => r.json())
+            .then(d => {
+                if(d.success) {
+                    // Actualizar DOM
+                    const wrapper = document.getElementById(`family-wrapper-${id}`);
+                    const title = wrapper.querySelector('.family-name');
+                    title.textContent = d.nombre;
+                    title.title = d.nombre;
+                    // Actualizar variable global de opciones
+                    FAMILIAS_OPTIONS[id] = d.nombre;
+                    // Actualizar evento onclick del botón editar para tener el nombre nuevo
+                    const editBtn = wrapper.querySelector('.btn-action-family');
+                    editBtn.setAttribute('onclick', `editFamily(${id}, '${d.nombre}')`);
+                } else {
+                    Swal.fire('Error', d.error, 'error');
+                }
+            });
+        }
+    };
+
+    // --- CREAR FAMILIA ---
+    const btnCreate = document.getElementById('btn-create-family');
+    const inputCreate = document.getElementById('new-family-name');
+
+    function createFamily() {
+        const nombre = inputCreate.value.trim();
+        if(!nombre) return;
+
+        fetch("{% url 'api_familia_create' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({ nombre: nombre })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if(data.error) {
+                Swal.fire('Error', data.error, 'error');
+            } else {
+                // Agregar a opciones globales
+                FAMILIAS_OPTIONS[data.id] = data.nombre;
+
+                const html = `
+                    <div class="col-md-6 col-xl-4 family-wrapper" id="family-wrapper-${data.id}">
+                        <div class="card h-100 shadow-sm border">
+                            <div class="card-header family-header p-3 d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2 text-white" style="flex: 1; min-width: 0;">
+                                    <i class="fas fa-folder"></i>
+                                    <span class="fw-bold text-truncate family-name" style="max-width: 85%;" title="${data.nombre}">${data.nombre}</span>
+                                    <span class="badge bg-white text-primary rounded-pill small count-badge">0</span>
+                                </div>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-icon btn-action-family" onclick="editFamily(${data.id}, '${data.nombre}')">
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-icon btn-action-family btn-delete-family" onclick="deleteFamily(${data.id})">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-2 bg-light family-droppable" data-family-id="${data.id}" style="min-height: 150px; max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>`;
+                
+                document.getElementById('families-container').insertAdjacentHTML('afterbegin', html);
+                inputCreate.value = '';
+                
+                const newEl = document.querySelector(`#family-wrapper-${data.id} .family-droppable`);
+                initSortableFamilia(newEl);
+                actualizarContadores();
+            }
+        });
+    }
+    btnCreate.addEventListener('click', createFamily);
+    inputCreate.addEventListener('keypress', (e) => { if(e.key === 'Enter') createFamily(); });
+
+    // --- BORRAR FAMILIA ---
+    window.deleteFamily = function(id) {
+        Swal.fire({
+            title: '¿Eliminar familia?',
+            text: "Los cargos volverán a 'Sin Clasificar'.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            confirmButtonText: 'Sí, eliminar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch(`/nomencladores/api/familias/${id}/delete/`, {
+                    method: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                })
+                .then(r => r.json())
+                .then(d => {
+                    if(d.success) {
+                        const container = document.querySelector(`#family-wrapper-${id} .family-droppable`);
+                        const unassigned = document.getElementById('unassigned-list');
+                        Array.from(container.children).forEach(card => {
+                            unassigned.prepend(card);
+                            toggleControles(card, false);
+                        });
+                        document.getElementById(`family-wrapper-${id}`).remove();
+                        delete FAMILIAS_OPTIONS[id]; // Limpiar memoria
+                        actualizarContadores();
+                        Swal.fire('Eliminado', '', 'success');
+                    }
+                });
+            }
+        });
+    };
+
+    // --- QUITAR DE FAMILIA ---
+    window.removeFromFamily = function(icon, cargoId) {
+        const card = icon.closest('.cargo-card');
+        const unassigned = document.getElementById('unassigned-list');
+        unassigned.prepend(card);
+        moverCargoAPI(cargoId, null);
+        toggleControles(card, false);
+        actualizarContadores();
+    };
+
+    // --- BUSCADOR ---
+    document.getElementById('search-cargos').addEventListener('keyup', function() {
+        const term = this.value.toLowerCase();
+        const cards = document.querySelectorAll('#unassigned-list .cargo-card');
+        cards.forEach(card => {
+            const text = card.querySelector('.cargo-desc').textContent.toLowerCase();
+            card.style.display = text.includes(term) ? '' : 'none';
+        });
+    });
+
+    function actualizarContadores() {
+        // 1. Contar elementos en el DOM
+        // Nota: Usamos querySelectorAll para contar las tarjetas reales, excluyendo mensajes vacíos
+        const countPendientes = document.querySelectorAll('#unassigned-list .cargo-card').length;
+        const countFamilias = document.querySelectorAll('.family-wrapper').length;
+        
+        // 2. Obtener el total fijo (este no cambia al mover, solo al crear/borrar cargos en BD)
+        const total = parseInt(document.getElementById('stat-total').textContent) || 0;
+        
+        // 3. Calcular asignados (Matemática simple: Total - Pendientes)
+        const countAsignados = total - countPendientes;
+
+        // 4. Actualizar contadores de las familias (badges azules)
+        document.querySelectorAll('.family-wrapper').forEach(wrapper => {
+            const numCargosFamilia = wrapper.querySelector('.family-droppable').querySelectorAll('.cargo-card').length;
+            wrapper.querySelector('.count-badge').textContent = numCargosFamilia;
+        });
+
+        // 5. Actualizar los números grandes en la barra superior
+        document.getElementById('stat-pendientes').textContent = countPendientes;
+        document.getElementById('stat-asignados').textContent = countAsignados;
+        document.getElementById('stat-familias').textContent = countFamilias;
+
+        // 6. Manejo visual del mensaje "¡Todo clasificado!"
+        const unassignedList = document.getElementById('unassigned-list');
+        const emptyMsg = unassignedList.querySelector('.empty-msg');
+        
+        if (countPendientes === 0) {
+            if (!emptyMsg) {
+                unassignedList.insertAdjacentHTML('beforeend', `
+                    <div class="text-center mt-5 opacity-50 empty-msg">
+                        <i class="fas fa-check-circle fs-1 mb-2"></i>
+                        <p class="small">¡Todo clasificado!</p>
+                    </div>`);
+            }
+        } else {
+            if (emptyMsg) emptyMsg.remove();
+        }
+    }
+</script>

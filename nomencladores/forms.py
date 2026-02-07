@@ -90,3 +90,25 @@ class ImportarCargosForm(forms.Form):
         widget=forms.RadioSelect,
         initial='SALTAR'
     )
+
+# Agregar esto al final de forms.py
+
+class EditarSalariosForm(forms.Form):
+    # Campo oculto o de solo lectura para mostrar qué grupo estamos editando
+    grupo_nombre = forms.CharField(
+        label="Grupo Escala",
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'})
+    )
+    # Checkbox para habilitar edición de cuadro
+    es_para_cuadro = forms.BooleanField(
+        required=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        label="Salario para Cuadro"
+    )
+
+    def __init__(self, *args, **kwargs):
+        # Recibimos el nombre del grupo para mostrarlo
+        grupo_label = kwargs.pop('grupo_label', '')
+        super().__init__(*args, **kwargs)
+        self.fields['grupo_nombre'].initial = grupo_label

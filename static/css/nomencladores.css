@@ -1,0 +1,77 @@
+/* --- MEJORAS VISUALES CARGOS --- */
+
+/* 1. Cursor de manito en toda la fila (Feedback de interactividad) */
+#cargos-tbody tr {
+    cursor: pointer;
+    transition: background-color 0.1s;
+}
+
+/* 2. MODO EDICIÓN EXPLÍCITO (Cajas Blancas y Bordes Activos) */
+/* Forzamos el estilo "Focus" permanentemente en los inputs de la tabla */
+#cargos-tbody .form-control,
+#cargos-tbody .form-select {
+    background-color: #fff !important;       /* Fondo blanco puro */
+    border: 1px solid #696cff !important;    /* Borde Violeta/Azul Primario */
+    box-shadow: 0 0 0 0.1rem rgba(105, 108, 255, 0.15) !important; /* Brillo suave */
+    color: #566a7f;                          /* Texto oscuro */
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+/* Ajuste específico para que el Checkbox se vea centrado y elegante */
+#cargos-tbody .form-check-input {
+    border: 1px solid #696cff;
+    width: 1.2em;
+    height: 1.2em;
+    margin-top: 0; /* Centrado vertical */
+    cursor: pointer;
+}
+
+
+/* --- ESTILOS PARA LA GESTIÓN DE CARGOS Y NOMENCLADORES --- */
+
+/* 1. Fila seleccionada (Resaltado azul suave) */
+.table-active-row > td {
+    background-color: rgba(105, 108, 255, 0.16) !important;
+    color: #696cff !important;
+    font-weight: 600;
+}
+
+/* 2. Barra de Herramientas (Toolbar) */
+/* Estado Desactivado (Opaco y sin clics) */
+.toolbar-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.2s ease-in-out;
+}
+
+/* Estado Activado (Visible) */
+.toolbar-active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 3. Inputs invisibles (Para edición en línea limpia) */
+/* Quita bordes y fondo para que parezca texto normal hasta que lo editas */
+.input-edit-desc, 
+.input-edit-cat, 
+.input-edit-grupo, 
+.input-edit-salario, 
+.input-edit-activo {
+    border: 1px solid transparent;
+    background-color: transparent;
+    padding: 0.25rem;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+/* Al hacer foco, que parezca un input normal */
+.input-edit-desc:focus, 
+.input-edit-cat:focus, 
+.input-edit-grupo:focus, 
+.input-edit-salario:focus {
+    border-color: #696cff; /* Color primario */
+    background-color: #fff;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(105, 108, 255, 0.25);
+}

@@ -1,4 +1,28 @@
-<input class="form-control" type="text" id="salarioEscala" value="{{ salario }}" hx-swap-oob="true" readonly>
-<input class="form-control" type="text" id="tarifaHoraria" value="{{ tarifa }}" hx-swap-oob="true" readonly>
-<input class="form-control" type="text" id="tarifaExtras" value="{{ extras }}" hx-swap-oob="true" readonly>
+<div class="col-md-4">
+    <label>Salario Escala</label>
+    <input class="form-control fw-bold text-primary" id="salarioEscala" name="salarioEscala" readonly value="{{ salario|floatformat:2 }}">
+</div>
+<div class="col-md-4">
+    <label>Tarifa Horaria</label>
+    <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ tarifa }}">
+</div>
+<div class="col-md-4">
+    <label>Tarifa Horas Extras</label>
+    <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ extras }}">
+</div>
 
+<input id="id_rol" value="{{ nuevo_rol }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+
+<input id="id_grupo_escala" value="{{ nuevo_grupo }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+
+<script hx-swap-oob="true">
+    var selTridente = document.getElementById('id_tridente');
+    if(selTridente) {
+        {% if mostrar_tridente %}
+            selTridente.removeAttribute('disabled');
+        {% else %}
+            selTridente.setAttribute('disabled', 'disabled');
+            selTridente.value = ""; // Limpiar si se deshabilita
+        {% endif %}
+    }
+</script>
