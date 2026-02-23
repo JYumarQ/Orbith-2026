@@ -48,6 +48,10 @@ class CargoPlantilla(Base):
         verbose_name_plural = ("Cargos")
         
     def save(self, *args, **kwargs):
+        # LÓGICA AUTOMÁTICA: Si plazas es 0 -> Inactivo, si > 0 -> Activo
+        if self.cant_aprobada is not None:
+            self.activo = self.cant_aprobada > 0
+        
         es_nuevo = self.pk is None
         super().save(*args, **kwargs)  # Guarda primero para obtener el PK
 
@@ -56,11 +60,26 @@ class CargoPlantilla(Base):
                 titulo="Nuevo Cargo creado",
                 mensaje=f"Se ha creado un nuevo cargo: {self.ncargo.descripcion} en {self.departamento}.",
                 content_type=ContentType.objects.get_for_model(self),
-                object_id=str(self.pk),  # ¡Convertir a string para coincidir con CharField!
+                object_id=str(self.pk),
                 unidad = self.departamento.unidad_organizativa
-
             )
+
+
+    @property
+    def plazas_fijas(self):
+        """Cuenta solo los contratos INDETERMINADOS (Plantilla Oficial)"""
+        if hasattr(self, 'count_ind'): 
+            return self.count_ind
+        # CORRECCIÓN: Usar 'self.calta' en lugar de 'self.calta_set'
+        return self.calta.filter(tipo='IND').count()
+
+    @property
+    def plazas_contrato(self):
+        """Cuenta el resto de contratos (Determinados, Adiestramiento, etc)"""
+        if hasattr(self, 'count_cont'): 
+            return self.count_cont
+        # CORRECCIÓN: Usar 'self.calta' en lugar de 'self.calta_set'
+        return self.calta.exclude(tipo='IND').count()
 
     def __str__(self):
         return self.ncargo.descripcion
-

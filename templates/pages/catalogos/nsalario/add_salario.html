@@ -4,98 +4,76 @@
       <h5 class="modal-title" id="nsalariosModalLabel">Registrar Salarios</h5>
     </div>
     <div class="modal-body">
-      <form method="post"
-            id="formularioSalario"
-            
-            
-            action="{% url 'agregar_salarios_modal' %}">
+      <form method="post" id="formularioSalario" action="{% url 'agregar_salarios_modal' %}">
         {% csrf_token %}
         <input type="hidden" name="active_tab" value="salario">
 
-        <!-- Grupo de escala -->
-        <div class="mb-3">
+        <div class="mb-4">
           <label for="{{ form.grupo_escala.id_for_label }}" class="form-label">{{ form.grupo_escala.label }}</label>
           {{ form.grupo_escala }}
           {% if form.grupo_escala.errors %}
-            <div class="invalid-feedback d-block">
-              {{ form.grupo_escala.errors }}
-            </div>
+            <div class="invalid-feedback d-block">{{ form.grupo_escala.errors }}</div>
           {% endif %}
         </div>
 
-        <!-- Checkbox: salario de cuadro -->
-        <div class="mb-3 form-check form-switch">
-          <div class="d-flex align-items-center">
-            <input
-              type="checkbox"
-              class="form-check-input"
-              name="es_para_cuadro"
-              id="toggle_es_para_cuadro"
-            >
-            <label class="form-check-label ms-2" for="toggle_es_para_cuadro">
-              Registrar como salario de cuadro
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              name="monto_cuadro"
-              id="monto_cuadro"
-              class="form-control w-auto ms-2"
-              placeholder="Monto"
-              disabled
-            >
-          </div>
-
-          <!-- Campo monto para cuadro (se alinea al lado del toggle) -->
-          <div class="d-flex mt-2">
-          </div>
-        </div>
-
-
-        <!-- Tabla de salarios por Rol/Tridente -->
         {% if form.grupo_escala.field.queryset.exists %}
           <div id="tabla_salarios" class="table-responsive">
-            <table class="table table-bordered">
-              <thead>
+            <table class="table table-bordered align-middle">
+              <thead class="table-light">
                 <tr>
-                  <th class="text-center">Rol / Tridente</th>
-                  {% for tridente in tridentes %}
+                  <th class="text-center" style="width: 25%;">Rol</th>
+                  <th class="text-center" colspan="{{ tridentes|length }}">Desglose Salarial (Tridentes)</th>
+                </tr>
+                <tr class="text-muted small">
+                    <th></th>
+                    {% for tridente in tridentes %}
                     <th class="text-center">{{ tridente.tipo }}</th>
-                  {% endfor %}
+                    {% endfor %}
                 </tr>
               </thead>
               <tbody>
                 {% for rol in roles %}
                   <tr>
-                    <td><strong>{{ rol.tipo }}</strong></td>
-                    {% for tridente in tridentes %}
-                      <td>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          name="monto_{{ rol.id }}_{{ tridente.id }}"
-                          class="form-control salary-input"
-                          placeholder="0.00"
-                          data-row="{{ forloop.parentloop.counter0 }}"
-                          data-col="{{ forloop.counter0 }}"
-                          
-                        >
+                    <td class="fw-bold text-dark">
+                        {{ rol.tipo }}
+                        {% if rol.es_cuadro %}
+                            <span class="badge bg-label-primary ms-1" style="font-size: 0.6em;">CUADRO</span>
+                        {% endif %}
+                    </td>
+
+                    {% if rol.es_cuadro %}
+                      <td colspan="{{ tridentes|length }}" class="bg-light">
+                        <div class="input-group input-group-sm mx-auto" style="max-width: 200px;">
+                            <span class="input-group-text">$</span>
+                            <input type="number" step="0.01" min="0"
+                                name="monto_{{ rol.id }}_cuadro"
+                                class="form-control salary-input fw-bold text-primary"
+                                placeholder="Salario Único"
+                                data-row="{{ forloop.counter0 }}" data-col="0">
+                        </div>
                       </td>
-                    {% endfor %}
+                    {% else %}
+                      {% for tridente in tridentes %}
+                        <td>
+                          <input type="number" step="0.01" min="0"
+                            name="monto_{{ rol.id }}_{{ tridente.id }}"
+                            class="form-control salary-input text-center"
+                            placeholder="-"
+                            data-row="{{ forloop.parentloop.counter0 }}"
+                            data-col="{{ forloop.counter0 }}">
+                        </td>
+                      {% endfor %}
+                    {% endif %}
                   </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
         {% else %}
-          <div class="alert alert-info">
-            No hay grupos de escala disponibles para registrar salarios. Todos los grupos ya tienen salarios asignados.
-          </div>
+          <div class="alert alert-info">No hay grupos disponibles o todos ya tienen salarios.</div>
         {% endif %}
 
-        <div class="modal-footer">
+        <div class="modal-footer px-0 pb-0 mt-3">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="submit" class="btn btn-primary">Guardar</button>
         </div>

@@ -53,10 +53,10 @@ class ParametrosGeneralesView(FormView):
         # --- SECCIÓN FAMILIAS ---
         
         # 1. Cargos Activos Totales
-        total_cargos = NCargo.objects.filter(activo=True).count()
+        total_cargos = NCargo.objects.count()
         
         # 2. Cargos Pendientes (Sin familia)
-        cargos_pendientes = NCargo.objects.filter(familia__isnull=True, activo=True).order_by('descripcion')
+        cargos_pendientes = NCargo.objects.filter(familia__isnull=True).order_by('descripcion')
         
         # 3. Cargos Asignados (Matemática simple)
         cargos_asignados = total_cargos - cargos_pendientes.count()
@@ -79,7 +79,6 @@ class ParametrosGeneralesView(FormView):
         context['cargos'] = NCargo.objects.all()
         context['cargos_sin_familia'] = NCargo.objects.filter(
             familia__isnull=True, 
-            activo=True
         ).order_by('descripcion')
         context['familias'] = NFamiliaCargo.objects.prefetch_related('cargos').all().order_by('-id')
         context['total_cargos'] = total_cargos       

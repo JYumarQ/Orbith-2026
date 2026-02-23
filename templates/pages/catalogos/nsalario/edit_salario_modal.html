@@ -8,28 +8,10 @@
             {% csrf_token %}
             <div class="modal-body">
                 
-                <div class="row mb-3">
-                    <div class="col-md-6">
+                <div class="row mb-4">
+                    <div class="col-12">
                         <label class="form-label fw-bold">{{ form.grupo_nombre.label }}</label>
                         {{ form.grupo_nombre }}
-                    </div>
-                    <div class="col-md-6 d-flex align-items-end">
-                        <div class="form-check form-switch mb-2">
-                            {{ form.es_para_cuadro }}
-                            <label class="form-check-label fw-bold cursor-pointer" for="{{ form.es_para_cuadro.id_for_label }}">
-                                {{ form.es_para_cuadro.label }}
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="div_monto_cuadro" class="mb-4 p-3 bg-lighter rounded border {% if not form.es_para_cuadro.value %}d-none{% endif %}">
-                    <label class="form-label fw-bold fs-6">Salario Único (Cuadro)</label>
-                    <div class="input-group">
-                        <span class="input-group-text fw-bold">$</span>
-                        <input type="number" step="0.01" name="monto_cuadro" 
-                               class="form-control fs-5 fw-bold text-primary" 
-                               value="{{ monto_cuadro|stringformat:'.2f' }}" placeholder="0.00">
                     </div>
                 </div>
 
@@ -37,7 +19,7 @@
                     <table class="table table-bordered text-center align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th class="text-uppercase fw-bold">Rol \ Tridente</th>
+                                <th class="text-uppercase fw-bold text-start ps-3">Rol</th>
                                 {% for t in tridentes %}
                                     <th class="fw-bold">{{ t.tipo }}</th>
                                 {% endfor %}
@@ -48,17 +30,33 @@
                                 <tr>
                                     <td class="fw-bold text-start ps-3" style="font-size: 1.05rem;">
                                         {{ fila.rol.tipo }}
+                                        {% if fila.rol.es_cuadro %}
+                                            <span class="badge bg-label-primary ms-1" style="font-size: 0.6em;">CUADRO</span>
+                                        {% endif %}
                                     </td>
                                     
-                                    {% for celda in fila.celdas %}
-                                        <td class="p-1">
-                                            <input type="number" step="0.01" 
-                                                   name="monto_{{ fila.rol.id }}_{{ celda.tridente_id }}" 
-                                                   class="form-control text-center input-salario"
-                                                   placeholder="-"
-                                                   value="{{ celda.valor|stringformat:'.2f' }}"> 
+                                    {% if fila.rol.es_cuadro %}
+                                        <td colspan="{{ tridentes|length }}" class="bg-light">
+                                            <div class="input-group mx-auto" style="max-width: 200px;">
+                                                <span class="input-group-text border-0 bg-transparent fw-bold text-muted">$</span>
+                                                <input type="number" step="0.01" 
+                                                       name="monto_{{ fila.rol.id }}_cuadro" 
+                                                       class="form-control text-center input-salario fw-bold text-primary"
+                                                       placeholder="0.00"
+                                                       value="{{ fila.monto_unico|stringformat:'.2f' }}"> 
+                                            </div>
                                         </td>
-                                    {% endfor %}
+                                    {% else %}
+                                        {% for celda in fila.celdas %}
+                                            <td class="p-1">
+                                                <input type="number" step="0.01" 
+                                                       name="monto_{{ fila.rol.id }}_{{ celda.tridente_id }}" 
+                                                       class="form-control text-center input-salario"
+                                                       placeholder="-"
+                                                       value="{{ celda.valor|stringformat:'.2f' }}"> 
+                                            </td>
+                                        {% endfor %}
+                                    {% endif %}
                                 </tr>
                             {% endfor %}
                         </tbody>

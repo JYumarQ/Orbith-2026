@@ -1,0 +1,46 @@
+
+
+{% for dpto in departamentos %}
+    <div id="dept-{{ dpto.pk }}" class="card mb-0 nav-card dept-card"
+         data-pk="{{ dpto.pk }}"
+         data-desc="{{ dpto.descripcion }}"
+         data-url-edit="{% url 'updt_dpto' dpto.pk %}"
+         data-url-del="{% url 'del_dpto' dpto.pk %}"
+         onclick="selectDept(this)"
+         hx-get="{% url 'htmx_load_cargos' dpto.pk %}"
+         hx-target="#col-cargos"
+         hx-swap="innerHTML"
+         hx-indicator="#col-cargos">
+         
+        <div class="card-body">
+            <div class="d-flex align-items-center gap-3">
+                <div class="icon-box p-2 rounded-2 bg-white text-secondary border shadow-sm" style="width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-layer-group text-primary opacity-75"></i>
+                </div>
+                
+                <div class="d-flex flex-column">
+                    <h6 class="fw-bold text-dark mb-0 text-truncate" style="font-size: 0.85rem; max-width: 180px;">{{ dpto.descripcion }}</h6>
+                    
+                    <div class="d-flex align-items-center gap-1 mt-1">
+                        <span class="badge bg-label-primary" style="font-size: 0.65rem;">{{ dpto.total_cargos }} Cargos</span>
+                        {% if dpto.inactivos > 0 %}
+                            <span class="badge bg-label-secondary" style="font-size: 0.65rem;">{{ dpto.inactivos }} Inactivos</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <i class="fas fa-chevron-right text-muted opacity-25" style="font-size: 0.8rem;"></i>
+        </div>
+    </div>
+{% empty %}
+    <div class="text-center py-5">
+        {% if q %}
+            <i class="fas fa-search fs-1 text-muted mb-3 opacity-25"></i>
+            <p class="text-muted small">Sin resultados.</p>
+        {% else %}
+            <i class="fas fa-folder-open fs-1 text-muted mb-3 opacity-25"></i>
+            <p class="text-muted small">Esta unidad no tiene departamentos.</p>
+        {% endif %}
+    </div>
+{% endfor %}

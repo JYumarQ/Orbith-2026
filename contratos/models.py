@@ -124,21 +124,33 @@ class CAlta(ContratoBase):
     def calcular_salario_escala(self):
         try:
             if self.tipo_salario == 'DIN':
-                if not self.cargo or not self.tridente:
+                # Validación estricta: Si falta cargo, rol o tridente, retornamos 0
+                if not self.cargo or not self.cargo.rol or not self.tridente:
                     return None
+                
                 grupo_escala_temp = self.cargo.ncargo.grupo_escala
                 rol_temp = self.cargo.rol
                 tridente_temp = self.tridente
                 
-                salario_obj = NSalario.objects.get(
-                    grupo_escala = grupo_escala_temp,
-                    rol = rol_temp,
-                    tridente = tridente_temp
-                )
-                return round(float(salario_obj.monto),2)
+                # USAR FILTER + FIRST (Más seguro que .get() para evitar errores de duplicados)
+                salario_obj = NSalario.objects.filter(
+                    grupo_escala=grupo_escala_temp,
+                    rol=rol_temp,
+                    tridente=tridente_temp
+                ).first()
+
+                if salario_obj:
+                    return round(float(salario_obj.monto), 2)
+                return None
             else:
-                return self.cargo.ncargo.salario_basico if self.cargo else None
-        except NSalario.DoesNotExist:
+                # Salario Fijo: Validar que exista el cargo y el nomenclador
+                if self.cargo and self.cargo.ncargo and self.cargo.ncargo.salario_basico:
+                    return self.cargo.ncargo.salario_basico
+                return None
+
+        except Exception as e:
+            # "Catch-all" para que NUNCA rompa la vista, solo devuelva 0
+            print(f"Error calculando salario contrato {self.pk}: {e}")
             return None
     
     @property

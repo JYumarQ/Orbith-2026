@@ -18,6 +18,7 @@ class NTridente(Base):
 class NRol(Base):
     
     tipo = models.CharField(max_length=50)    
+    es_cuadro = models.BooleanField(default=False, verbose_name="Es Cuadro")
 
     class Meta:
         verbose_name = ("NRol")
@@ -29,7 +30,7 @@ class NRol(Base):
 class NGrupoEscala(Base):
 
     nivel = models.CharField(max_length=8, unique=True)
-    es_cuadro = models.BooleanField(default=False)
+    
 
     class Meta:
         verbose_name = ("NGrupoEscala")
@@ -75,10 +76,11 @@ class NSalario(Base):
         unique_together = ('grupo_escala', 'rol', 'tridente')
 
     def __str__(self):
-        if self.rol and self.tridente:
-            return f"{self.grupo_escala} - {self.rol} - Tridente {self.tridente}: ${self.monto}"
-        else:
-            return f"{self.grupo_escala} (CUADRO): ${self.monto}"
+        if self.rol and self.rol.es_cuadro:
+             return f"{self.grupo_escala} - {self.rol} (CUADRO): ${self.monto}"
+        elif self.rol and self.tridente:
+            return f"{self.grupo_escala} - {self.rol} - {self.tridente}: ${self.monto}"
+        return f"Salario {self.pk}"
         
 
 
@@ -110,7 +112,6 @@ class NCargo(Base):
     familia = models.ForeignKey(NFamiliaCargo, null=True, blank=True, on_delete=models.SET_NULL, related_name='cargos')
     
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2)
-    activo = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = ("NCargo")

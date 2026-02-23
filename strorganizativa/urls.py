@@ -30,5 +30,13 @@ urlpatterns = [
     path('search_unidad_view/', login_required(views.search_unidades_views), name='search_unidad_view'), 
     
     path('categoria_ocupacional/', login_required(views.get_cat_ocup_from_ncargo), name='categoria_ocupacional'), 
+
+    # === NUEVO GESTOR DE PLANTILLA (HTMX) ===
+    path('gestor/', views.gestor_plantilla_view, name='gestor_plantilla'),
+
+    # APIs HTMX (Fragmentos)
+    path('htmx/departamentos/<int:unidad_id>/', views.htmx_load_departamentos, name='htmx_load_departamentos'),
+    path('htmx/cargos/<int:dpto_id>/', views.htmx_load_cargos, name='htmx_load_cargos'),
+    path('htmx/contratos/<int:cargo_id>/', views.htmx_load_contratos, name='htmx_load_contratos'),
 ]
 

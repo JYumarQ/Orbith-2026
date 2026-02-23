@@ -1,0 +1,53 @@
+<div class="list-group list-group-flush bg-white">
+    {% for cargo in cargos %}
+        <div id="cargo-{{ cargo.pk }}" 
+             class="list-group-item list-group-item-action p-3 border-bottom-0 border-top cursor-pointer group-hover {% if not cargo.activo %}bg-light text-muted{% endif %}"
+             data-pk="{{ cargo.pk }}"
+             data-desc="{{ cargo.ncargo.descripcion }}"
+             data-url-edit="{% url 'updt_cargo' cargo.pk %}"
+             data-url-del="{% url 'del_cargoplantilla' cargo.pk %}"
+             onclick="selectCargo(this)"
+             {% if not cargo.activo %}style="background-color: #f8f9fa;"{% endif %}>
+            
+            <div class="d-flex justify-content-between align-items-center" {% if not cargo.activo %}style="opacity: 0.7;"{% endif %}>
+                
+                <div class="d-flex align-items-center gap-3 overflow-hidden">
+                    <i class="fas fa-briefcase {% if not cargo.activo %}text-secondary{% else %}text-muted{% endif %} opacity-50"></i>
+                    <div class="overflow-hidden">
+                        <h6 class="mb-0 fw-bold {% if not cargo.activo %}text-secondary{% else %}text-dark{% endif %} text-truncate" style="font-size: 0.85rem;">
+                            {{ cargo.ncargo.descripcion }}
+                        </h6>
+                        
+                        <div class="d-flex align-items-center flex-wrap gap-2 mt-1">
+                            <small class="{% if not cargo.activo %}text-secondary{% else %}text-muted{% endif %}" style="font-size: 0.75rem;">
+                                <strong>{{ cargo.plazas_fijas }}</strong> / {{ cargo.cant_aprobada }} Plazas
+                            </small>
+
+                            <span class="badge {% if cargo.plazas_contrato > 0 %}bg-label-warning{% else %}bg-label-secondary opacity-50{% endif %} border px-2 d-flex align-items-center" 
+                                style="font-size: 0.65rem; height: 18px;" 
+                                title="Contratos Temporales / Adiestrados">
+                                Contrato: {{ cargo.plazas_contrato }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-shrink-0 ms-2">
+                    {% if cargo.cant_aprobada > 0 %}
+                        <span class="badge bg-label-success rounded-pill border fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">ACTIVO</span>
+                    {% else %}
+                        <span class="badge bg-label-secondary rounded-pill border fw-bold" style="font-size: 0.65rem; letter-spacing: 0.5px;">INACTIVO</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="text-center py-5">
+            {% if q %}
+                <p class="text-muted mb-3">No hay cargos con ese nombre.</p>
+            {% else %}
+                <p class="text-muted mb-3">No hay cargos definidos.</p>
+            {% endif %}
+        </div>
+    {% endfor %}
+</div>

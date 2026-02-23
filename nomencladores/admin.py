@@ -54,9 +54,9 @@ class NMunicipioAdmin(ImportExportModelAdmin):
     autocomplete_fields = ['provincia']
 @admin.register(NCargo)
 class NCargoAdmin(admin.ModelAdmin):
-    list_display = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico', 'activo')
+    list_display = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
     search_fields = ('descripcion',)
-    list_filter = ('cat_ocupacional', 'grupo_escala', 'activo')
+    list_filter = ('cat_ocupacional', 'grupo_escala')
     
     # CORRECCIÓN 1: Ruta exacta a tu archivo existente
     change_list_template = "pages/catalogos/ncargo/admin_change_list.html"

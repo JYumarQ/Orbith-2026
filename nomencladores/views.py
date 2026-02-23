@@ -177,85 +177,74 @@ def editar_salarios_grupo(request, grupo_id):
     roles = NRol.objects.all()
     tridentes = NTridente.objects.all()
     
-    # Recuperar salarios existentes
     salarios_existentes = NSalario.objects.filter(grupo_escala=grupo)
     
-    # 1. Crear mapa temporal de valores
+    # Mapa para búsqueda rápida: "rol_ID_tridente_ID" o "rol_ID_None"
     mapa_montos = {}
-    monto_cuadro = 0
-    tiene_cuadro = False
-    
     for s in salarios_existentes:
-        if s.rol is None: # Salario de Cuadro
-            monto_cuadro = s.monto
-            tiene_cuadro = True
-        else:
-            key = f"{s.rol.id}_{s.tridente.id}"
-            mapa_montos[key] = s.monto
+        t_id = s.tridente.id if s.tridente else 'None'
+        key = f"{s.rol.id}_{t_id}"
+        mapa_montos[key] = s.monto
 
-    # 2. PROCESADO DE FORMULARIO (GUARDAR)
     if request.method == 'POST':
-        form = EditarSalariosForm(request.POST)
-        if form.is_valid():
-            try:
-                # --- Guardar Cuadro ---
-                es_para_cuadro = request.POST.get('es_para_cuadro') == 'on'
-                if es_para_cuadro:
-                    monto_c = request.POST.get('monto_cuadro', '0').strip()
-                    if monto_c and monto_c.replace('.', '', 1).isdigit():
-                        NSalario.objects.update_or_create(
-                            grupo_escala=grupo, rol=None, tridente=None,
-                            defaults={'monto': float(monto_c)}
-                        )
+        try:
+            for rol in roles:
+                if rol.es_cuadro:
+                    field_name = f'monto_{rol.id}_cuadro'
+                    monto_str = request.POST.get(field_name, '').strip()
+                    monto = float(monto_str) if monto_str else 0
+                    
+                    NSalario.objects.update_or_create(
+                        grupo_escala=grupo, rol=rol, tridente=None,
+                        defaults={'monto': monto}
+                    )
                 else:
-                    NSalario.objects.filter(grupo_escala=grupo, rol=None).delete()
-
-                # --- Guardar Matriz (Roles x Tridentes) ---
-                for rol in roles:
                     for tridente in tridentes:
                         field_name = f'monto_{rol.id}_{tridente.id}'
                         monto_str = request.POST.get(field_name, '').strip()
+                        monto = float(monto_str) if monto_str else 0
                         
-                        if monto_str and monto_str.replace('.', '', 1).isdigit():
-                            NSalario.objects.update_or_create(
-                                grupo_escala=grupo, rol=rol, tridente=tridente,
-                                defaults={'monto': float(monto_str)}
-                            )
-                        else:
-                            # Si está vacío o es 0, guardamos 0 (o podrías borrar el registro)
-                            NSalario.objects.update_or_create(
-                                grupo_escala=grupo, rol=rol, tridente=tridente,
-                                defaults={'monto': 0}
-                            )
+                        NSalario.objects.update_or_create(
+                            grupo_escala=grupo, rol=rol, tridente=tridente,
+                            defaults={'monto': monto}
+                        )
 
-                messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
-                return redirect(reverse_lazy('parametros') + '?tab=salario')
+            messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
+            return redirect(reverse_lazy('parametros') + '?tab=salario')
 
-            except Exception as e:
-                messages.error(request, f"Error al guardar: {e}")
+        except Exception as e:
+            messages.error(request, f"Error al guardar: {e}")
+            return redirect(reverse_lazy('parametros') + '?tab=salario')
     
     else:
-        form = EditarSalariosForm(grupo_label=str(grupo), initial={'es_para_cuadro': tiene_cuadro})
+        form = EditarSalariosForm(grupo_label=str(grupo))
 
-    # 3. PREPARAR LA MATRIZ PARA EL HTML (Aquí está el truco para no usar get_item)
+    # Construir estructura para el template
     matriz_html = []
     for rol in roles:
-        fila = {'rol': rol, 'celdas': []}
-        for tridente in tridentes:
-            key = f"{rol.id}_{tridente.id}"
-            valor = mapa_montos.get(key, 0) # Si no existe, pone 0
-            fila['celdas'].append({
-                'tridente_id': tridente.id,
-                'valor': valor
-            })
+        fila = {'rol': rol}
+        
+        if rol.es_cuadro:
+            # Recuperar monto único
+            key = f"{rol.id}_None"
+            fila['monto_unico'] = mapa_montos.get(key, 0)
+        else:
+            # Recuperar lista de tridentes
+            fila['celdas'] = []
+            for tridente in tridentes:
+                key = f"{rol.id}_{tridente.id}"
+                fila['celdas'].append({
+                    'tridente_id': tridente.id,
+                    'valor': mapa_montos.get(key, 0)
+                })
+        
         matriz_html.append(fila)
 
     return render(request, 'pages/catalogos/nsalario/edit_salario_modal.html', {
         'form': form,
         'grupo': grupo,
         'tridentes': tridentes,
-        'matriz_html': matriz_html, # Enviamos la lista ya procesada
-        'monto_cuadro': monto_cuadro
+        'matriz_html': matriz_html
     })
 
 
@@ -311,6 +300,7 @@ class NMunicipioInline(admin.TabularInline):
 
 
 #SALARIOS
+@login_required
 @transaction.atomic
 def crear_salarios_por_grupo(request):
     form = RegistrarSalariosForm(request.POST or None)
@@ -319,82 +309,40 @@ def crear_salarios_por_grupo(request):
 
     if request.method == 'POST' and form.is_valid():
         grupo_escala = form.cleaned_data['grupo_escala']
-        es_para_cuadro = request.POST.get('es_para_cuadro') == 'on'
-
+        
         try:
-            # Procesar salario de cuadro si está marcado
-            if es_para_cuadro:
-                monto = request.POST.get('monto_cuadro', '0').strip()
-                
-                # Validar y convertir monto
-                if not monto or not monto.replace('.', '', 1).isdigit():
-                    raise ValueError("Monto de cuadro inválido")
-                
-                monto = float(monto)
-                
-                # Crear o actualizar salario de cuadro
-                NSalario.objects.update_or_create(
-                    grupo_escala=grupo_escala,
-                    rol=None,
-                    tridente=None,
-                    defaults={'monto': monto}
-                )
-                messages.success(request, f"Salario de cuadro {grupo_escala.nivel} registrado correctamente.")
-                
-                # Crear salario para cada combinación de rol y tridente con monto 0
-                for rol in roles:
-                    for tridente in tridentes:
-                        field_name = f'monto_{rol.id}_{tridente.id}'
-                        monto_str = request.POST.get(field_name, '').strip()
-                        
-                        # Si no se proporciona un monto para la combinación, se crea con monto 0
-                        if not monto_str:
-                            monto = 0
-                        else:
-                            # Si se proporciona un monto, validamos y lo usamos
-                            if not monto_str.replace('.', '', 1).isdigit():
-                                raise ValueError(f"Valor inválido para {rol.tipo} - {tridente.tipo}")
-                            monto = float(monto_str)
-                        
-                        # Crear o actualizar salario
-                        NSalario.objects.update_or_create(
-                            grupo_escala=grupo_escala,
-                            rol=rol,
-                            tridente=tridente,
-                            defaults={'monto': monto}
-                        )
-                messages.success(request, f"Salarios para {grupo_escala.nivel} registrados correctamente.")
-
-            # Procesar salarios normales si NO es para cuadro
-            else:
-                for rol in roles:
+            for rol in roles:
+                if rol.es_cuadro:
+                    # LÓGICA ROL CUADRO: Solo un monto, sin tridente
+                    field_name = f'monto_{rol.id}_cuadro'
+                    monto_str = request.POST.get(field_name, '0').strip()
+                    monto = float(monto_str) if monto_str else 0
+                    
+                    NSalario.objects.update_or_create(
+                        grupo_escala=grupo_escala,
+                        rol=rol,
+                        tridente=None, # Sin tridente
+                        defaults={'monto': monto}
+                    )
+                else:
+                    # LÓGICA ROL NORMAL: 3 Tridentes
                     for tridente in tridentes:
                         field_name = f'monto_{rol.id}_{tridente.id}'
                         monto_str = request.POST.get(field_name, '0').strip()
+                        monto = float(monto_str) if monto_str else 0
                         
-                        # Saltar campos vacíos
-                        if not monto_str:
-                            continue
-                            
-                        # Validar y convertir monto
-                        if not monto_str.replace('.', '', 1).isdigit():
-                            raise ValueError(f"Valor inválido para {rol.tipo} - {tridente.tipo}")
-                            
-                        monto = float(monto_str)
-                        
-                        # Crear o actualizar salario
                         NSalario.objects.update_or_create(
                             grupo_escala=grupo_escala,
                             rol=rol,
                             tridente=tridente,
                             defaults={'monto': monto}
                         )
-                messages.success(request, f"Salarios para {grupo_escala.nivel} registrados correctamente.")
             
+            messages.success(request, f"Salarios para {grupo_escala.nivel} registrados correctamente.")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
         
         except ValueError as e:
-            messages.error(request, f"Error: {str(e)}")
+            messages.error(request, f"Error de valor: {str(e)}")
         except Exception as e:
             messages.error(request, f"Error inesperado: {str(e)}")
     
@@ -476,10 +424,11 @@ def tridente_delete(request, pk):
 def rol_create(request):
     data = json.loads(request.body)
     tipo = data.get('tipo', '').strip()
+    es_cuadro = data.get('es_cuadro', False)
     if not tipo:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NRol.objects.create(tipo=tipo)
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
+    obj = NRol.objects.create(tipo=tipo, es_cuadro=es_cuadro)
+    return JsonResponse({'id': obj.id, 'tipo': obj.tipo, 'es_cuadro': obj.es_cuadro})
 
 @csrf_exempt
 @require_http_methods(["PUT"])
@@ -487,11 +436,13 @@ def rol_update(request, pk):
     obj = NRol.objects.get(pk=pk)
     data = json.loads(request.body)
     tipo = data.get('tipo', '').strip()
+    es_cuadro = data.get('es_cuadro', False)
     if not tipo:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
     obj.tipo = tipo
+    obj.es_cuadro = es_cuadro
     obj.save()
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
+    return JsonResponse({'id': obj.id, 'tipo': obj.tipo, 'es_cuadro': obj.es_cuadro})
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -505,14 +456,13 @@ def rol_delete(request, pk):
 def grupo_create(request):
     data = json.loads(request.body)
     nivel = data.get('nivel', '').strip()
-    es_cuadro = data.get('es_cuadro', False)
 
     if not nivel:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
 
     try:
-        obj = NGrupoEscala.objects.create(nivel=nivel.upper(), es_cuadro=es_cuadro)
-        return JsonResponse({'id': obj.id, 'nivel': obj.nivel, 'es_cuadro': obj.es_cuadro})
+        obj = NGrupoEscala.objects.create(nivel=nivel.upper())
+        return JsonResponse({'id': obj.id, 'nivel': obj.nivel})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
@@ -522,16 +472,14 @@ def grupo_update(request, pk):
     obj = NGrupoEscala.objects.get(pk=pk)
     data = json.loads(request.body)
     nivel = data.get('nivel', '').strip()
-    es_cuadro = data.get('es_cuadro', False)
 
     if not nivel:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
 
     try:
         obj.nivel = nivel.upper()
-        obj.es_cuadro = es_cuadro
         obj.save()
-        return JsonResponse({'id': obj.id, 'nivel': obj.nivel, 'es_cuadro': obj.es_cuadro})
+        return JsonResponse({'id': obj.id, 'nivel': obj.nivel})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
@@ -951,10 +899,26 @@ def cargo_update(request, pk):
 @require_http_methods(["DELETE"])
 def cargo_delete(request, pk):
     try:
-        NCargo.objects.get(pk=pk).delete()
+        # Buscamos el cargo
+        cargo = NCargo.objects.get(pk=pk)
+        
+        # Intentamos eliminar
+        cargo.delete()
+        
         return JsonResponse({'success': True})
+
     except NCargo.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+        return JsonResponse({'error': 'El cargo no existe.'}, status=404)
+
+    except RestrictedError:
+        # Capturamos el bloqueo de seguridad de Django
+        return JsonResponse({
+            'error': 'No se puede eliminar: Este Nomenclador está siendo usado en la Plantilla de Cargos o tiene históricos asociados.'
+        }, status=409) # 409 Conflict
+
+    except Exception as e:
+        # Capturamos cualquier otro error inesperado
+        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
 
 
 @csrf_exempt

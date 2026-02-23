@@ -65,7 +65,7 @@
                   <table class="table table-hover mb-0" id="cargos-table" style="table-layout: fixed; width: 100%;">
                     <thead>
                       <tr>
-                        <th style="width: 53%; cursor: pointer;" onclick="ordenarCargos('descripcion')">
+                        <th style="width: 61%; cursor: pointer;" onclick="ordenarCargos('descripcion')">
                           <div class="d-flex justify-content-between align-items-center">
                             <span>Descripción</span> <i class="fas fa-sort text-muted" id="icon-descripcion"></i>
                           </div>
@@ -85,11 +85,6 @@
                             <span>Salario</span> <i class="fas fa-sort text-muted" id="icon-salario"></i>
                           </div>
                         </th>
-                        <th style="width: 8%; cursor: pointer;" onclick="ordenarCargos('activo')">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <span>Activo</span> <i class="fas fa-sort text-muted" id="icon-activo"></i>
-                          </div>
-                        </th>
                       </tr>
                     </thead>
                     <tbody id="cargos-tbody">
@@ -105,7 +100,6 @@
                         <td class="cat-cell text-center align-middle">{{ c.get_cat_ocupacional_display }}</td>
                         <td class="grupo-cell text-center align-middle">{{ c.grupo_escala.nivel }}</td>
                         <td class="salario-cell text-center align-middle">${{ c.salario_basico }}</td>
-                        <td class="activo-cell text-center align-middle">{{ c.activo|yesno:"Sí,No" }}</td>
                       </tr>
                       {% endfor %}
                     </tbody>
@@ -174,6 +168,7 @@
                     <thead>
                       <tr>
                         <th>Tipo</th>
+                        <th style="width: 100px;" class="text-center">Es Cuadro</th>
                         <th style="width: 120px;" class="text-center">Acciones</th>
                       </tr>
                     </thead>
@@ -181,6 +176,7 @@
                       {% for r in roles %}
                       <tr data-id="{{ r.id }}">
                         <td class="tipo-cell">{{ r.tipo }}</td>
+                        <td class="es-cuadro-cell text-center">{{ r.es_cuadro|yesno:"Sí,No" }}</td>
                         <td class="text-center">
                           <div class="btn-group btn-group-sm">
                             <button class="btn btn-sm edit-btn" title="Editar">
@@ -215,7 +211,6 @@
                       <thead>
                         <tr>
                           <th style="width: 100px;">Nivel</th>
-                          <th style="width: 120px;">Es Cuadro</th>
                           <th style="width: 120px;" class="text-center">Acciones</th>
                         </tr>
                       </thead>
@@ -223,7 +218,6 @@
                         {% for g in grupos %}
                         <tr data-id="{{ g.id }}">
                           <td class="nivel-cell">{{ g.nivel }}</td>
-                          <td class="es-cuadro-cell">{{ g.es_cuadro|yesno:"Sí,No" }}</td>
                           <td class="text-center">
                             <div class="btn-group btn-group-sm">
                               <button class="btn btn-sm edit-btn" title="Editar">
@@ -891,24 +885,57 @@
               icon: 'warning',
               showCancelButton: true,
               confirmButtonText: 'Sí, eliminar',
-              cancelButtonText: 'Cancelar'
+              confirmButtonColor: '#d33', // Rojo para peligro
+              cancelButtonText: 'Cancelar',
+              cancelButtonColor: '#3085d6'
           }).then((result) => {
               if (result.isConfirmed) {
                   fetch(`/nomencladores/api/cargos/${cargoSeleccionadoID}/delete/`, {
                       method: 'DELETE',
                       headers: { 'X-CSRFToken': '{{ csrf_token }}' }
                   })
-                  .then(r => {
-                      if(!r.ok) throw new Error('Error al eliminar');
-                      return r.json();
+                  .then(async r => {
+                      // 1. Intentamos leer la respuesta JSON siempre
+                      let data = {};
+                      try {
+                          data = await r.json();
+                      } catch (e) {
+                          console.warn("Respuesta no JSON");
+                      }
+
+                      // 2. Si hay error (Status no es 200-299)
+                      if(!r.ok) {
+                          // Usamos el mensaje del servidor (data.error) o uno por defecto
+                          throw new Error(data.error || 'Error al eliminar');
+                      }
+
+                      return data;
                   })
                   .then(() => {
-                      document.querySelector(`tr[data-id="${cargoSeleccionadoID}"]`).remove();
+                      // ÉXITO
+                      const row = document.querySelector(`tr[data-id="${cargoSeleccionadoID}"]`);
+                      if(row) row.remove();
+                      
                       deseleccionarCargos();
-                      Swal.fire('Eliminado', '', 'success');
+                      
+                      Swal.fire({
+                          icon: 'success',
+                          title: 'Eliminado',
+                          text: 'El cargo ha sido eliminado correctamente.',
+                          timer: 1500,
+                          showConfirmButton: false
+                      });
+                      
                       paginateCargos();
                   })
-                  .catch(err => Swal.fire('Error', err.message, 'error'));
+                  .catch(err => {
+                      // ERROR: Mostramos el mensaje específico que lanzamos arriba
+                      Swal.fire({
+                          icon: 'warning',
+                          title: 'No se puede eliminar',
+                          text: err.message
+                      });
+                  });
               }
           });
       });
@@ -1109,18 +1136,23 @@
 
   async function guardarRol(row) {
     const tipo = row.querySelector('.input-tipo').value.trim();
+    const esCuadro = row.querySelector('.input-es-cuadro').checked; // NUEVO
+
     if (!tipo) return alert('Campo obligatorio');
     try {
       const res = await fetch("/nomencladores/api/roles/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ tipo })
+        body: JSON.stringify({ tipo, es_cuadro: esCuadro }) // ENVIAR CAMPO
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      
+      // RECONSTRUIR FILA CON COLUMNA EXTRA
       row.outerHTML = `
         <tr data-id="${data.id}">
           <td class="tipo-cell">${data.tipo}</td>
+          <td class="es-cuadro-cell text-center">${data.es_cuadro ? 'Sí' : 'No'}</td>
           <td class="text-center">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
@@ -1135,20 +1167,21 @@
 
   async function guardarGrupo(row) {
     const nivel = row.querySelector('.input-nivel').value.trim();
-    const esCuadro = row.querySelector('.input-es-cuadro').checked;
+    // ELIMINADO: const esCuadro...
+    
     if (!nivel) return alert('Campo nivel obligatorio');
     try {
       const res = await fetch("/nomencladores/api/grupos/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nivel, es_cuadro: esCuadro })
+        body: JSON.stringify({ nivel }) // SOLO NIVEL
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      
       row.outerHTML = `
         <tr data-id="${data.id}">
           <td class="nivel-cell">${data.nivel}</td>
-          <td class="es-cuadro-cell">${data.es_cuadro ? 'Sí' : 'No'}</td>
           <td class="text-center">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
@@ -1554,21 +1587,15 @@
     // NOTA: Cargos ahora se gestiona arriba con funciones específicas
 
     /* ----------  EDICIÓN GRUPOS ESCALA  ---------- */
+    /* ----------  EDICIÓN GRUPOS ESCALA (MODIFICADO) ---------- */
     if (tableId === 'grupos-table') {
       const nivelCell = tr.querySelector('td:nth-child(1)');
-      const esCuadroCell = tr.querySelector('td:nth-child(2)');
+      const actionCell = tr.querySelector('td:nth-child(2)'); // Ahora es el índice 2
 
       const oldNivel = nivelCell.textContent.trim();
-      const oldEsCuadro = esCuadroCell.textContent.trim() === 'Sí';
-
-      const actionCell = tr.querySelector('td:nth-child(3)');
       const originalButtons = actionCell.innerHTML;
 
-      // Convertir celdas en inputs
       nivelCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nivel" value="${oldNivel}">`;
-      esCuadroCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-es-cuadro" ${oldEsCuadro ? 'checked' : ''}>`;
-      
-      esCuadroCell.style.textAlign = 'center'; 
 
       actionCell.innerHTML = `
         <div class="btn-group btn-group-sm">
@@ -1583,44 +1610,22 @@
 
         if (save) {
           const newNivel = nivelCell.querySelector('.input-edit-nivel').value.trim();
-          const newEsCuadro = esCuadroCell.querySelector('.input-edit-es-cuadro').checked;
-
-          if (!newNivel) { 
-            alert('El campo Nivel es obligatorio');
-            actionTaken = false; 
-            return; 
-          }
+          if (!newNivel) { alert('El campo Nivel es obligatorio'); actionTaken = false; return; }
 
           fetch(`/nomencladores/api/grupos/${tr.dataset.id}/`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({
-              nivel: newNivel,
-              es_cuadro: newEsCuadro
-            })
+            body: JSON.stringify({ nivel: newNivel }) // SOLO NIVEL
           })
-            .then(r => {
-              if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Error al guardar') });
-              return r.json();
-            })
+            .then(r => r.json())
             .then(d => {
               nivelCell.textContent = d.nivel;
-              esCuadroCell.textContent = d.es_cuadro ? 'Sí' : 'No';
-              esCuadroCell.style.textAlign = ''; 
               actionCell.innerHTML = originalButtons;
               paginateGrupos(); 
             })
-            .catch(err => {
-              alert('Error: ' + err.message);
-              nivelCell.textContent = oldNivel;
-              esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
-              esCuadroCell.style.textAlign = '';
-              actionCell.innerHTML = originalButtons;
-            });
+            .catch(err => alert(err));
         } else {
           nivelCell.textContent = oldNivel;
-          esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
-          esCuadroCell.style.textAlign = '';
           actionCell.innerHTML = originalButtons;
         }
       };
@@ -1628,6 +1633,60 @@
       actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
       actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
       return; 
+    }
+
+    /* ----------  EDICIÓN ROLES (NUEVO) ---------- */
+    if (tableId === 'roles-table') {
+      const tipoCell = tr.querySelector('td:nth-child(1)');
+      const esCuadroCell = tr.querySelector('td:nth-child(2)');
+      const actionCell = tr.querySelector('td:nth-child(3)');
+
+      const oldTipo = tipoCell.textContent.trim();
+      const oldEsCuadro = esCuadroCell.textContent.trim() === 'Sí';
+      const originalButtons = actionCell.innerHTML;
+
+      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+      esCuadroCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-es-cuadro" ${oldEsCuadro ? 'checked' : ''}>`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+
+        if (save) {
+          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
+          const newEsCuadro = esCuadroCell.querySelector('.input-edit-es-cuadro').checked;
+
+          if (!newTipo) { alert('Campo obligatorio'); actionTaken = false; return; }
+
+          fetch(`/nomencladores/api/roles/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ tipo: newTipo, es_cuadro: newEsCuadro })
+          })
+          .then(r => r.json())
+          .then(d => {
+            tipoCell.textContent = d.tipo;
+            esCuadroCell.textContent = d.es_cuadro ? 'Sí' : 'No';
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+        } else {
+          tipoCell.textContent = oldTipo;
+          esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
     }
 
     /* ----------  EDICIÓN ESPECIALIDADES  ---------- */
@@ -2058,7 +2117,7 @@
         case 'roles-table':
           row.innerHTML = `
             <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
-            <td class="text-center">
+            <td class="text-center"><input type="checkbox" class="form-check-input input-es-cuadro"></td> <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
                 <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
@@ -2069,9 +2128,6 @@
         case 'grupos-table':
           row.innerHTML = `
             <td><input type="text" class="form-control form-control-sm input-nivel" placeholder="Nivel (I, II, III...)"></td>
-            <td class="text-center">
-              <input type="checkbox" class="form-check-input input-es-cuadro">
-            </td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>

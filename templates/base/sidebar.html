@@ -43,29 +43,14 @@
             </a>
           </li>
 
-          <li class="menu-item {% if request.resolver_match.url_name == 'list_cargos' or request.resolver_match.url_name == 'list_dptos' or request.resolver_match.url_name == 'list_uniorg' or request.resolver_match.url_name == 'list_dpto_x_unidad' or request.resolver_match.url_name == 'list_cargos_x_dpto'%} active open {% endif %} ">
-            <a href="#" class="menu-link menu-toggle">
-              <i class="menu-icon tf-icons bx bx-briefcase"></i>
-              <div data-i18n="Account Settings">Plantilla de Cargos</div>
+          <li class="menu-item {% if 'gestor' in request.path %} active {% endif %} ">
+            <a href="{% url 'gestor_plantilla' %}" class="menu-link">
+              <i class="menu-icon tf-icons bx bx-sitemap"></i> 
+              <div data-i18n="Basic">Gestor de Plantilla</div>
             </a>
-            <ul class="menu-sub">
-              <li class="menu-item {% if request.resolver_match.url_name == 'list_uniorg' %} active {% endif %} ">
-                <a href="{% url 'list_uniorg' %}" class="menu-link">
-                  <div data-i18n="Account">Unidad Organizativa</div>
-                </a>
-              </li>
-              <li class="menu-item {% if request.resolver_match.url_name == 'list_dptos' or request.resolver_match.url_name == 'list_dpto_x_unidad'%} active {% endif %}">
-                <a href="{% url 'list_dptos' %}" class="menu-link">
-                  <div data-i18n="Notifications">Departamentos</div>
-                </a>
-              </li>
-              <li class="menu-item {% if request.resolver_match.url_name == 'list_cargos' or request.resolver_match.url_name == 'list_cargos_x_dpto'%} active {% endif %} ">
-                <a href="{% url 'list_cargos' %}" class="menu-link">
-                  <div data-i18n="Account">Cargos</div>
-                </a>
-              </li>
-            </ul>
           </li>
+
+          
       {% endif %}
 
       <li class="menu-header small text-uppercase">

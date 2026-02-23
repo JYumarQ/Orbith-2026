@@ -12,33 +12,27 @@ class NCargoForm(forms.ModelForm):
     
     class Meta:
         model = NCargo
-        fields = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico', 'activo')
+        fields = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
         labels = {
             'descripcion': 'Descripción', 
             'cat_ocupacional': 'Cat. Ocup.', 
             'grupo_escala': 'Gpo. Escala', 
-            'salario_basico': 'Salario', 
-            'activo': 'Activo'
+            'salario_basico': 'Salario'
         }
         widgets = {
             'descripcion': forms.TextInput(attrs={'class':'form-control'}), 
             'cat_ocupacional': forms.Select(attrs={'class':'form-select'}), 
             'grupo_escala': forms.Select(attrs={'class':'form-select'}), 
-            'salario_basico': forms.NumberInput(attrs={'class':'form-control'}), 
-            'activo': forms.CheckboxInput()
+            'salario_basico': forms.NumberInput(attrs={'class':'form-control'})
         }
         
 class NGrupoEscalaForm(forms.ModelForm):
     
     class Meta:
         model = NGrupoEscala
-        fields = ('nivel', 'es_cuadro')
-        labels = {
-            'es_cuadro': 'Es Cuadro'
-        }
+        fields = ('nivel',)
         widgets = {
             'nivel': forms.TextInput(attrs={'class': 'form-control'}),
-            'es_cuadro': forms.CheckboxInput()
         }
         
 class RegistrarSalariosForm(forms.Form):
@@ -46,11 +40,6 @@ class RegistrarSalariosForm(forms.Form):
         queryset=NGrupoEscala.objects.none(),
         widget=forms.Select(attrs={'class': 'form-select'}),
         label="Grupo Escala"
-    )
-    es_para_cuadro = forms.BooleanField(
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-control'}),
-        label="Salario para Cuadro"
     )
     
     def __init__(self, *args, **kwargs):
@@ -100,12 +89,7 @@ class EditarSalariosForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'})
     )
-    # Checkbox para habilitar edición de cuadro
-    es_para_cuadro = forms.BooleanField(
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        label="Salario para Cuadro"
-    )
+    
 
     def __init__(self, *args, **kwargs):
         # Recibimos el nombre del grupo para mostrarlo

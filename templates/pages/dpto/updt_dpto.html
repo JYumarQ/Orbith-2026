@@ -1,19 +1,23 @@
- <!-- Modal -->
 <div class="modal-dialog" role="document">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title" id="dptoModalLabel">Editar Departamento</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
+        
         <div class="modal-body">
-            <!-- Cargar el formulario del cargo aquí -->
-            <form method="POST"
-                class="swal-confirm"
-                id="dptoForm"
-                data-confirm-text="¿Estás seguro de guardar los cambios del departamento?"
-                action="{% url 'updt_dpto' object.id%}">
+            <form hx-post="{{ request.path }}" 
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-target="#modal_generic"
+                  hx-swap="innerHTML"
+                  hx-confirm="¿Estás seguro de guardar los cambios del departamento?"
+                  id="dptoForm">
+                
                 {% csrf_token %}
+                
                 {{ form.as_p }}
-                <div class="modal-footer">
+                
+                <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar</button>
                 </div>
@@ -22,6 +26,32 @@
     </div>
 </div>
 
+<script>
+    (function(){
+        const form = document.getElementById('dptoForm'); // OJO: Asegúrate que el ID sea correcto en cada archivo ('dptoForm')
+        if(!form) return;
 
-  
-  
+        const selectUnidad = form.querySelector('#id_unidad_organizativa');
+        
+        if(selectUnidad && (selectUnidad.value || selectUnidad.options.selectedIndex !== -1)){
+            // Bloqueo funcional
+            selectUnidad.setAttribute('readonly', 'readonly');
+            selectUnidad.setAttribute('tabindex', '-1'); 
+            
+            // ESTILO VISUAL SUAVE
+            selectUnidad.style.pointerEvents = 'none'; // Necesario para que no se abra el desplegable
+            selectUnidad.style.backgroundColor = '#e9ecef'; // El gris suave de Bootstrap
+            selectUnidad.style.color = '#566a7f';
+            selectUnidad.style.borderColor = '#d9dee3';
+            
+            // Forzamos cursor por defecto (flecha) en lugar de prohibido
+            selectUnidad.style.cursor = 'default'; 
+            
+            selectUnidad.classList.remove('bg-light');
+            
+            // (Solo para updt_dpto.html) Protección extra contra cambios
+            const valorOriginal = selectUnidad.value;
+            selectUnidad.addEventListener('change', function(){ this.value = valorOriginal; });
+        }
+    })();
+</script>

@@ -1,19 +1,23 @@
- <!-- Modal -->
 <div class="modal-dialog" role="document">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title" id="uniorgModalLabel">Editar Unidad</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
+        
         <div class="modal-body">
-            <!-- Cargar el formulario del cargo aquí -->
-            <form method="POST"
-                class="swal-confirm"
-                id="uniorgForm"
-                data-confirm-text="¿Estás seguro de guardar los cambios de la unidad organizativa?"
-                action="{% url 'updt_uniorg' object.grupo_nomina%}">
+            <form hx-post="{{ request.path }}" 
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-target="#modal_generic"
+                  hx-swap="innerHTML"
+                  hx-confirm="¿Estás seguro de guardar los cambios de la unidad organizativa?"
+                  id="uniorgForm">
+                
                 {% csrf_token %}
+                
                 {{ form.as_p }}
-                <div class="modal-footer">
+                
+                <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar</button>
                 </div>
@@ -21,7 +25,3 @@
         </div>
     </div>
 </div>
-
-
-  
-  

@@ -28,7 +28,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'rol': 'Rol', 
             'cant_aprobada': 'Cantidad Aprobada', 
             'cant_cubierta': 'Cantidad Cubierta', 
-            'activo': 'Activo'
+            'activo': ' Estado(Automático)'
         }
         widgets = {
             'ncargo': forms.Select(attrs={
@@ -40,13 +40,15 @@ class CargoPlantillaForm(forms.ModelForm):
             'rol': forms.Select(attrs={'class':'form-select', 'id':'id_rol'}),
             'cant_aprobada': forms.NumberInput(attrs={'class': 'form-control'}),
             'cant_cubierta': forms.NumberInput(attrs={'class': 'form-control'}),
-            'activo': forms.CheckboxInput(attrs={'class':'form-check-input'})
+            'activo': forms.CheckboxInput(attrs={'class':'form-check-input', 'disabled': 'disabled', 'id': 'id_activo'})
         }
     
     # strorganizativa/forms.py (Corregido)
 
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.fields['ncargo'].queryset = self.fields['ncargo'].queryset.order_by('descripcion')
 
         # 1) Restringe por usuario (si aplica)
         # 1) Restringe por usuario (Solo si NO es superusuario)
@@ -76,6 +78,27 @@ class CargoPlantillaForm(forms.ModelForm):
             )
         else:
             self.fields['departamento'].queryset = Departamento.objects.none()
+
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        ncargo = cleaned_data.get('ncargo')
+        rol = cleaned_data.get('rol')
+
+        if ncargo:
+            # Validamos Categoría Ocupacional vs Rol
+            # CDI = Cuadro Directivo, CDJ = Cuadro Ejecutivo (o similar según tu nomenclatura)
+            es_cuadro = ncargo.cat_ocupacional in ['CDI', 'CDJ']
+            
+            # Regla 1: Si es Cuadro, NO debe tener Rol.
+            if es_cuadro and rol is not None:
+                self.add_error('rol', f'El cargo "{ncargo.descripcion}" es de categoría Cuadro ({ncargo.cat_ocupacional}) y NO debe llevar Rol.')
+            
+            # Regla 2: Si NO es Cuadro, DEBE tener Rol.
+            if not es_cuadro and rol is None:
+                self.add_error('rol', f'El cargo "{ncargo.descripcion}" NO es Cuadro, por lo tanto DEBE tener un Rol asignado.')
+        
+        return cleaned_data
 
 
 

@@ -1,94 +1,193 @@
- <!-- Modal -->
- <div class="modal-dialog" role="document">
-  <div class="modal-content">
-      <div class="modal-header">
-          <h5 class="modal-title" id="cargosModalLabel">Registrar Nuevo Cargo</h5>
-      </div>
-      <div class="modal-body">
-          <!-- Cargar el formulario del cargo aquí -->
-          <form method="POST"
-              class="swal-confirm"
-              action="{% url 'add_cargo' %}"
-              id="cargoForm"
-              data-confirm-text="¿Estás seguro de guardar los cambios del cargo?"
-              >
-              {% csrf_token %}
-              <div class="row g-3">
-                <div class="col-md-6">
-                    {{ form.unidad.label_tag }}  
-                    {{ form.unidad }}
+<div class="modal-dialog" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="cargosModalLabel">Registrar Nuevo Cargo</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        
+        <div class="modal-body">
+            <form hx-post="{{ request.get_full_path }}" 
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-target="#modal_generic"
+                  hx-swap="innerHTML"
+                  hx-confirm="¿Estás seguro de guardar el nuevo cargo?"
+                  id="cargoForm">
+                
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger d-flex align-items-center p-2 mb-3" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <div>
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Unidad Organizativa</label>
+                        <input type="text" class="form-control" 
+                            style="background-color: #e9ecef; color: #566a7f;" 
+                            value="{{ unidad_visual.descripcion|default:form.initial.unidad.descripcion }}" readonly>
+                        <input type="hidden" name="unidad" value="{{ unidad_visual.pk|default:form.initial.unidad.pk }}">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Departamento</label>
+                        <input type="text" class="form-control" 
+                            style="background-color: #e9ecef; color: #566a7f;" 
+                            value="{{ dpto_visual.descripcion|default:form.initial.departamento.descripcion }}" readonly>
+                        <input type="hidden" name="departamento" value="{{ dpto_visual.id|default:form.initial.departamento.id }}">
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">Cargo</label>
+                        {{ form.ncargo }}
+                        {% if form.ncargo.errors %}
+                            <div class="text-danger small mt-1 fw-bold">{{ form.ncargo.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label text-muted">Grupo Escala</label>
+                        <input type="text" id="visual_grupo_escala" class="form-control" 
+                            style="background-color: #e9ecef; color: #566a7f;"
+                            readonly placeholder="Automático">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Rol</label>
+                        {{ form.rol }}
+                        {% if form.rol.errors %}
+                            <div class="text-danger small mt-1 fw-bold">{{ form.rol.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Cantidad Aprobada</label>
+                        {{ form.cant_aprobada }}
+                        {% if form.cant_aprobada.errors %}
+                            <div class="text-danger small mt-1 fw-bold">{{ form.cant_aprobada.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Cantidad Cubierta</label>
+                        {{ form.cant_cubierta }} 
+                    </div>
+                    
+                    <div class="col-12 mt-2">
+                        <div class="form-check form-switch">
+                            {{ form.activo }}
+                            <label class="form-check-label" for="{{ form.activo.id_for_label }}">
+                                Activo (Se calcula según Cant. Aprobada)
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    {{ form.departamento.label_tag }}  
-                    {{ form.departamento }}
+
+                <div class="modal-footer px-0 pb-0 mt-3">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
                 </div>
-                <div class="col-md-6">
-                    {{ form.ncargo.label_tag }}  
-                    {{ form.ncargo }}
-                </div>
-                <div class="col-md-6">
-                    {{ form.rol.label_tag }}  
-                    {{ form.rol }}
-                </div>
-                <div class="col-md-6">
-                    {{ form.cant_aprobada.label_tag }}  
-                    {{ form.cant_aprobada }}
-                </div>
-                <div class="col-md-6">
-                    {{ form.cant_cubierta.label_tag }}  
-                    {{ form.cant_cubierta }}
-                </div>
-                <div class="col-md-6">
-                    {{ form.activo.label_tag }}  
-                    {{ form.activo }}
-                </div>
-              </div>
-              <div class="modal-footer">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                  <button type="submit" class="btn btn-primary">Guardar</button>
-              </div>
-          </form>
-      </div>
-  </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.getElementById('cargoForm');
-  if (!form) return;
+(function() {
+    const form = document.getElementById('cargoForm');
+    if (!form) return;
 
-  const ncargo = form.querySelector('#id_ncargo');
-  const rol = form.querySelector('#id_rol');
-  const urlCat = "{% url 'categoria_ocupacional' %}";
+    // Referencias: Usamos jQuery ($) para el select principal porque Select2 lo requiere
+    const $ncargo = $('#id_ncargo'); 
+    
+    // Referencias nativas para el resto
+    const rol = form.querySelector('#id_rol');
+    const inputGrupo = form.querySelector('#visual_grupo_escala');
+    const cantCubierta = form.querySelector('[name="cant_cubierta"]');
+    const cantAprobada = form.querySelector('#id_cant_aprobada'); 
+    const checkActivo = form.querySelector('#id_activo');
+    
+    const urlInfoCargo = "/estructuras/categoria_ocupacional/"; 
 
-  if (!ncargo || !rol) return;
+    // --- 0. INICIALIZAR SELECT2 ---
+    // dropdownParent es OBLIGATORIO en Modales de Bootstrap para que el buscador funcione
+    $ncargo.select2({
+        dropdownParent: $('#modal_generic'), 
+        width: '100%',
+        placeholder: "Escriba para buscar cargo...",
+        allowClear: true,
+        language: {
+            noResults: function() { return "No se encontró coincidencia"; }
+        }
+    });
 
-  function actualizarRol() {
-    const id = ncargo.value;
-    if (!id) {
-      rol.removeAttribute('disabled');
-      return;
+    // 1. Inicialización campos ReadOnly
+    if(cantCubierta) {
+        cantCubierta.setAttribute('readonly', true);
+        
+        // ESTILO SUAVE (Igual al de Contratos)
+        cantCubierta.style.backgroundColor = '#e9ecef';
+        cantCubierta.style.color = '#566a7f';
+        // Eliminamos la línea de 'cursor: not-allowed' para que salga el normal
+        
+        if (!cantCubierta.value) cantCubierta.value = 0; 
     }
 
-    fetch(`${urlCat}?id=${id}`, {
-      headers: { 'Accept': 'application/json' }
-    })
-    .then(resp => resp.json())
-    .then(data => {
-      const cat = data.cat_ocupacional;
-      if (cat === 'CDI' || cat === 'CDJ') {
-        rol.setAttribute('disabled', 'disabled');
-      } else {
-        rol.removeAttribute('disabled');
-      }
-    })
-    .catch(err => {
-      console.error('Error al cargar categoría ocupacional:', err);
-      rol.removeAttribute('disabled');
-    });
-  }
+    // 2. Lógica Activo
+    function actualizarEstadoActivo() {
+        if (!cantAprobada || !checkActivo) return;
+        const cantidad = parseInt(cantAprobada.value) || 0;
+        checkActivo.checked = (cantidad > 0);
 
-  ncargo.addEventListener('change', actualizarRol);
-  actualizarRol();  // al cargar
-});
+        checkActivo.removeAttribute('disabled');
+        const wrapper = checkActivo.closest('.form-check');
+        if (wrapper) {
+            wrapper.style.pointerEvents = 'none';
+        }
+    }
+
+    // 3. Lógica Datos Cargo
+    function actualizarDatosCargo() {
+        // Obtenemos valor desde Select2
+        const id = $ncargo.val(); 
+        
+        // Reset si borran la selección
+        if (!id) {
+            if(rol) rol.removeAttribute('disabled');
+            if(inputGrupo) inputGrupo.value = "";
+            return;
+        }
+
+        fetch(`${urlInfoCargo}?id=${id}`, { headers: { 'Accept': 'application/json' } })
+        .then(resp => resp.json())
+        .then(data => {
+            if(inputGrupo) inputGrupo.value = data.grupo_escala || "---";
+
+            if (rol) {
+                const cat = data.cat_ocupacional;
+                if (cat === 'CDI' || cat === 'CDJ') {
+                    rol.value = ""; 
+                    rol.setAttribute('disabled', 'disabled');
+                } else {
+                    rol.removeAttribute('disabled');
+                }
+            }
+        })
+        .catch(err => console.error('Error fetching cargo:', err));
+    }
+
+    // Listeners
+    if (cantAprobada) cantAprobada.addEventListener('input', actualizarEstadoActivo);
+    
+    // IMPORTANTE: Select2 dispara eventos de jQuery, no nativos.
+    $ncargo.on('change', actualizarDatosCargo);
+    
+    actualizarEstadoActivo();
+})();
 </script>
