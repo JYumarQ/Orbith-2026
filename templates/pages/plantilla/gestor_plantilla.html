@@ -305,7 +305,7 @@
 {% endblock %} 
 
 {% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
 <script>
     // 1. VARIABLES DE ESTADO (CRUCIALES PARA QUE NO DE ERROR)
     let selectedUnitId = null;

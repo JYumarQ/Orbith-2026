@@ -40,7 +40,8 @@ class AspiranteListView(ListView):
 
     def get_queryset(self):
         # FILTRO CORREGIDO
-        qs = Aspirante.objects.filter(estado='ASPIRANTE')
+        # Ordenamos por -id para garantizar la fecha de registro (más recientes primero)
+        qs = Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
         u = self.request.user
         if getattr(u, 'es_moderador', False):
             # Usamos getattr para evitar error de tipado en 'unidades'
@@ -94,8 +95,8 @@ def search_aspirantes(request):
     raza = request.GET.get('raza')
     grado_cientifico = request.GET.get('grado_cientifico')
 
-    # Filtro base
-    qs = Aspirante.objects.filter(estado='ASPIRANTE')
+    # Filtro base (Añadido ordenamiento cronológico por defecto)
+    qs = Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
 
     # Filtro de seguridad (Moderador)
     u = request.user
@@ -158,7 +159,7 @@ class BajaListView(ListView):
 
     def get_queryset(self):
         # SOLO BAJAS
-        qs = Aspirante.objects.filter(estado='BAJA')
+        qs = Aspirante.objects.filter(estado='BAJA').order_by('-id')
         u = self.request.user
         if getattr(u, 'es_moderador', False):
             ids_permitidos = getattr(u,'unidades').values_list('pk', flat=True)
@@ -192,10 +193,11 @@ class BajaListView(ListView):
 
         return context
 
+
 # 4. NUEVO: Búsqueda de Bajas
 def search_bajas(request):
     query = request.GET.get('filter_aspirante', '').strip() # Usamos mismo nombre de input para no tocar template
-    qs = Aspirante.objects.filter(estado='BAJA')
+    qs = Aspirante.objects.filter(estado='BAJA').order_by('-id')
 
     u = request.user
     if getattr(u, 'es_moderador', False):

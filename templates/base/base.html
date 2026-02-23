@@ -203,7 +203,7 @@
 <!-- Incluye tu ui-toasts.js después de cargar Bootstrap JS -->
 <script src="{% static 'js/ui-toasts.js' %}"></script>
 
-<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script src="{% static 'vendor/js/htmx.min.js' %}"></script>
 <script>
   document.body.addEventListener('htmx:configRequest', function (e) {
     var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');

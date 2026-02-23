@@ -6,8 +6,6 @@
         </div>
         <div class="modal-body">
             <form method="POST"
-                class="swal-confirm"
-                data-confirm-text="¿Estás seguro de guardar un nuevo contrato?"
                 action="{% url 'add_contrato' aspirante.doc_identidad %}" id="contratoForm">                
                 {% csrf_token %}
                 
@@ -226,7 +224,7 @@
                                 </div>
 
                                 <div class="col-12">
-                                    <label class="form-label d-block mb-1 text-muted small">Condiciones Laborales Anormales</label>
+                                    
                                     <div class="d-flex gap-2">
                                         <div class="flex-fill">{{ form.cla1.label }} {{ form.cla1 }}</div>
                                         <div class="flex-fill">{{ form.cla2.label }} {{ form.cla2 }}</div>
@@ -244,7 +242,7 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    <button type="submit" class="btn btn-primary">Continuar</button>
                 </div>
             </form>
         </div>
@@ -444,7 +442,7 @@
                 return;
             }
 
-            // B) Envío al Servidor (Manejo de "Plaza Ocupada")
+            // B) Envío al Servidor
             $.ajax({
                 url: formulario.action,
                 type: formulario.method,
@@ -452,12 +450,18 @@
                 dataType: 'json',
                 success: function(data) {
                     if (data.form_is_valid) {
-                        // ÉXITO: Cierra y recarga
                         $('#crear_empl').modal('hide'); 
-                        window.location.href = data.success_url || "{% url 'list_aspir' %}";
+                        if (data.redirect_to_wizard) {
+                            $.get(data.redirect_to_wizard, function(html) {
+                                if ($('#editar_empl').length === 0) {
+                                    $('body').append('<div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>');
+                                }
+                                $('#editar_empl').html(html).modal('show');
+                            });
+                        } else {
+                            window.location.href = data.success_url || "{% url 'list_aspir' %}";
+                        }
                     } else {
-                        // ERROR DEL SERVIDOR (Ej: Plaza ocupada)
-                        
                         // 1. Mostrar Alerta si el servidor mandó mensaje específico
                         if (data.error_popup) {
                             Swal.fire({
@@ -469,7 +473,7 @@
                                 buttonsStyling: false
                             });
                         }
-
+                        
                         // 2. Repintar formulario (para mostrar campos en rojo)
                         var modalParent = $(formulario).closest('.modal');
                         var modalContent = modalParent.find('.modal-content');

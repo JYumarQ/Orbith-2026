@@ -11,10 +11,10 @@
         <div class="modal-body p-0">
             <form method="POST"
                 class=""
-                data-confirm-text="¿Confirma que desea aplicar este Movimiento de Nómina?"
-                action="{% url 'movimiento_contrato' object.pk %}" 
+                action="{% if is_wizard %}{% url 'finalizar_contrato_wizard' aspirante.doc_identidad %}{% else %}{% url 'movimiento_contrato' object.pk %}{% endif %}" 
                 id="movimientoForm">
                 {% csrf_token %}
+                <input type="hidden" name="generar_movimiento" id="inputGenerarMovimiento" value="true">
 
                 <div class="row g-0 h-100">
                     
@@ -22,6 +22,14 @@
                         <h6 class="text-dark fw-bold mb-3 small" style="font-size: 0.8rem;">
                             <i class="fas fa-history me-1"></i> Situación Actual
                         </h6>
+                        
+                        {% if is_wizard %}
+                        <div class="d-flex flex-column flex-grow-1 align-items-center justify-content-center text-center opacity-50">
+                            <i class="fas fa-file-contract mb-3" style="font-size: 4rem;"></i>
+                            <h5 class="text-secondary">Contrato Nuevo</h5>
+                            <p class="small text-muted">Aún no existe registro de contrato anterior.<br>Esta columna permanece vacía.</p>
+                        </div>
+                        <div class="d-none"> {% endif %}
                         
                         <div class="d-flex flex-column flex-grow-1 gap-3">
                             
@@ -145,6 +153,9 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        {% if is_wizard %}
+                        </div> {% endif %}
                     </div>
 
                     <div class="col-md-6 p-4 bg-white d-flex flex-column">
@@ -232,10 +243,11 @@
 
                                 <div
                                     hx-get="{% url 'cargar_salarios' %}?es_movimiento=1"
-                                    hx-trigger="change from:#id_cargo, change from:#id_tridente"
+                                    hx-trigger="change from:#movimientoForm [id='id_cargo'], change from:#movimientoForm [id='id_tridente'], change from:#movimientoForm [id='id_tipo_salario']"
                                     hx-target="this"
-                                    hx-swap="none"
-                                    hx-include="#id_cargo, #id_tridente">
+                                    hx-swap="innerHTML"
+                                    hx-include="#movimientoForm"
+                                    style="display: none;">
                                 </div>
                             </div>
                         </div>
@@ -275,7 +287,7 @@
                 </div> 
 
                 <div class="modal-footer bg-body-tertiary border-top px-4 py-2">
-                    <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-label-secondary" id="btnCancelarMov">Cancelar</button>
                     <button type="submit" class="btn btn-primary px-4">Confirmar Movimiento</button>
                 </div>
             </form>
@@ -286,37 +298,64 @@
 <script>
     (function() {
         var $form = $('#movimientoForm');
+        // Variable clave inyectada por Django para saber en qué modo estamos
+        var isWizard = "{{ is_wizard|yesno:'true,false' }}" === "true"; 
         
         if (window.htmx) htmx.process($form[0]);
 
+        // CASO 1: Interceptar botón "Cancelar"
+        $('#btnCancelarMov').on('click', function() {
+            if (isWizard) {
+                Swal.fire({
+                    title: '¿Omitir Movimiento?',
+                    text: '¿Desea realizar contrato sin crear un movimiento de nómina?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'SÍ, guardar contrato',
+                    cancelButtonText: 'NO, seguir editando',
+                    confirmButtonColor: '#696cff',
+                    cancelButtonColor: '#8592a3'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#inputGenerarMovimiento').val('false');
+                        enviarDatos(); // Enviar para forzar el guardado del contrato
+                    }
+                });
+            } else {
+                // Comportamiento normal si no es wizard: solo cerrar el modal
+                $('#editar_empl').modal('hide'); 
+            }
+        });
+
+        // CASO 2: Confirmación normal (Submit)
         $form.on('submit', function(e) {
             e.preventDefault(); 
             
-            // Leemos los valores
             var fechaInput = $form.find('[name="fecha_efectiva"]').val();
-            var fechaAlta = $('#fecha_alta_original').val(); // Leemos la fecha oculta
+            var fechaAlta = $('#fecha_alta_original').val(); 
 
-            // 1. Validar que haya fecha
-            if(!fechaInput) {
+            if(!fechaInput && isWizard === false) {
+                // Si es wizard, quizás no quieras que sea obligatoria la fecha, lo maneja el backend
                 Swal.fire('Atención', 'Debe seleccionar una Fecha Efectiva.', 'warning');
                 return;
             }
 
-            // 2. Validar Cronología (Tu requisito)
-            // Si la fecha del movimiento es menor que la fecha de alta del contrato, error.
-            if (fechaAlta && fechaInput < fechaAlta) {
+            if (!isWizard && fechaAlta && fechaInput < fechaAlta) {
                 Swal.fire({
                     icon: 'error',
                     title: 'Fecha Inválida',
                     text: 'La fecha del movimiento debe ser posterior a la fecha de Alta (' + fechaAlta + ').'
                 });
-                return; // Detenemos el envío
+                return; 
             }
 
-            // 3. Confirmación y Envío AJAX
+            var textoAlerta = isWizard 
+                ? "¿Desea aplicar este movimiento inicial? Se generará un histórico junto al contrato." 
+                : "¿Desea aplicar este cambio de nómina? Se generará un histórico.";
+
             Swal.fire({
                 title: '¿Confirmar Movimiento?',
-                text: "¿Desea aplicar este cambio de nómina? Se generará un histórico.",
+                text: textoAlerta,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonText: 'Sí, aplicar',
@@ -325,6 +364,7 @@
                 cancelButtonColor: '#8592a3'
             }).then((result) => {
                 if (result.isConfirmed) {
+                    $('#inputGenerarMovimiento').val('true');
                     enviarDatos();
                 }
             });
@@ -365,8 +405,8 @@
                             
                             // Recargar la página después de elegir (Sí o No)
                             setTimeout(() => {
-                                if(response.success_url) window.location.href = response.success_url;
-                                else location.reload();
+                                // Forzamos la redirección a la lista de aspirantes siempre
+                                window.location.href = "{% url 'list_aspir' %}";
                             }, 500);
                         });
                     }
@@ -388,3 +428,5 @@
         }
     })();
 </script>
+
+

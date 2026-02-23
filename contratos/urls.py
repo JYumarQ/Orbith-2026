@@ -27,9 +27,15 @@ urlpatterns = [
     path('movimiento/solicitar/<pk>/', login_required(views.solicitar_movimiento_nomina), name='solicitar_movimiento'),
 
     # Agrega esta línea en urlpatterns
+    # Agrega esta línea en urlpatterns
     path('movimiento_contrato/<pk>/', login_required(views.MovimientoUpdateView.as_view()), name='movimiento_contrato'),
     path('movimientos/nomina/', login_required(views.MovimientoNominaListView.as_view()), name='list_movimientos'),
-
+    
+    # --- RUTAS PARA EL WIZARD (FASE 3) ---
+    # Registramos la misma vista con dos nombres para compatibilidad con el GET de Fase 1 y el POST de Fase 2
+    path('wizard_movimiento/<str:aspirante_id>/', login_required(views.finalizar_contrato_wizard), name='wizard_movimiento_nomina'),
+    path('finalizar_wizard/<str:aspirante_id>/', login_required(views.finalizar_contrato_wizard), name='finalizar_contrato_wizard'),
+    
     path('ajax/historico/<int:aspirante_id>/', login_required(views.historico_trabajador), name='historico_trabajador'),
 
     path('ajax/datos_previos/', login_required(views.obtener_datos_previos), name='obtener_datos_previos'),

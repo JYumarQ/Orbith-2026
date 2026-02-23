@@ -477,27 +477,46 @@ class ContratoCreateView(CreateView):
     def form_valid(self, form):
         self.object = form.save(commit=False)
         
-        # ASIGNACIÓN AUTOMÁTICA DEL ROL
-        # Como quitamos 'rol' del formulario, lo copiamos del cargo
         if self.object.cargo and self.object.cargo.rol:
             self.object.rol = self.object.cargo.rol
         
-        # Asignar aspirante (tu lógica existente)
         aspirante_id = self.kwargs['aspirante_id']
         self.object.aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
         
-        self.object.save()
+        # --- FASE 1: GUARDAR EN SESIÓN, NO EN BD ---
+        # Convertimos los datos críticos del formulario a un diccionario serializable
+        contrato_data = form.cleaned_data.copy()
         
-        messages.success(self.request, 'Contrato registrado correctamente.')
-
-        # RESPUESTA AJAX (ÉXITO)
+        from decimal import Decimal # <--- Importación necesaria para detectar los decimales
+        
+        # Limpiar datos no serializables (fechas, objetos, decimales) para la sesión
+        for key, value in contrato_data.items():
+            if hasattr(value, 'isoformat'): # Fechas
+                contrato_data[key] = value.isoformat()
+            elif hasattr(value, 'pk'): # Modelos (ForeignKeys)
+                contrato_data[key] = value.pk
+            elif isinstance(value, Decimal): # <--- SOLUCIÓN AL ERROR: Convertir Decimales
+                contrato_data[key] = str(value) # Lo guardamos como string para no perder precisión
+        
+        # Almacenamos el borrador
+        self.request.session['contrato_borrador'] = contrato_data
+        self.request.session['aspirante_borrador'] = aspirante_id
+        
+        # NO HACEMOS self.object.save()
+        
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            from django.urls import reverse
             return JsonResponse({
                 'form_is_valid': True,
-                'message': 'Contrato registrado correctamente.',
-                'success_url': str(self.success_url) 
+                'message': 'Borrador guardado. Continuando al movimiento de nómina...',
+                # En la Fase 2 crearemos esta URL para el modal del Movimiento, 
+                # por ahora usaremos un endpoint temporal o el que vayamos a crear:
+                'redirect_to_wizard': reverse('wizard_movimiento_nomina', kwargs={'aspirante_id': aspirante_id}) 
             })
-        return super(CreateView, self).form_valid(form)
+        
+        # Evitamos el guardado por defecto de CreateView
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(self.success_url)
 
     def form_invalid(self, form):
         # 1. Imprimir en consola para depuración
@@ -1058,7 +1077,8 @@ def cargar_salario(request):
     context = {
         'salario': 0.00, 'tarifa': 0, 'extras': 0,
         'nuevo_rol': '', 'nuevo_grupo': '', # Variables para actualizar los inputs
-        'mostrar_tridente': False # Bandera para habilitar visualmente el tridente
+        'mostrar_tridente': False, # Bandera para habilitar visualmente el tridente
+        'es_movimiento': es_movimiento == '1' # Detecta si estamos en modo movimiento
     }
 
     if cargo_id:
@@ -1130,3 +1150,198 @@ def cargar_salario(request):
     # Usamos la plantilla parcial para devolver los datos
     # NOTA: Asegúrate de crear el archivo en el paso 3
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
+
+# =========================================================================
+# VISTA WIZARD FASE 3: Finalizar Contrato y (Opcional) Movimiento
+# =========================================================================
+def finalizar_contrato_wizard(request, aspirante_id):
+    borrador = request.session.get('contrato_borrador')
+    
+    if not borrador:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'form_is_valid': False, 'error_popup': 'No hay datos en proceso. Cierre y vuelva a intentar.'}, status=400)
+        return redirect('list_aspir')
+
+    aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
+
+    # Convertir formato de diccionario para la creación dinámica del Modelo 
+    # y filtrar campos extras del formulario que no existen en la BD (ej. unidad, departamento)
+    borrador_db = borrador.copy()
+    
+    # Obtenemos los nombres válidos de los campos reales del modelo CAlta
+    campos_validos = {f.name for f in CAlta._meta.get_fields()}
+    atributos_validos = {getattr(f, 'attname', f.name) for f in CAlta._meta.get_fields()}
+
+    for k in list(borrador_db.keys()):
+        # Convertir FKs (ej. cargo -> cargo_id)
+        if k + '_id' in atributos_validos and not k.endswith('_id'):
+            borrador_db[k + '_id'] = borrador_db.pop(k)
+        # Si el campo es del formulario pero NO del modelo, lo descartamos
+        elif k not in campos_validos and k not in atributos_validos:
+            borrador_db.pop(k)
+
+    # GET: Construir el modal vacío (La columna izquierda oculta)
+    if request.method == 'GET':
+        try:
+            unsaved_contrato = CAlta(**borrador_db)
+            unsaved_contrato.aspirante = aspirante
+        except Exception as e:
+            print(f"🔴 ERROR AL INSTANCIAR CALTA: {e}")
+            return JsonResponse({'form_is_valid': False, 'error_popup': f"Error interno en los datos: {str(e)}"}, status=500)
+            
+        # 1. PRECARGAR EL FORMULARIO CON LA INSTANCIA
+        initial_data = {}
+        if borrador_db.get('fecha_alta'):
+            initial_data['fecha_efectiva'] = borrador_db.get('fecha_alta') 
+            
+        # --- INGENIERÍA INVERSA: Recuperar combos perdidos en la purga ---
+        unidad_id = None
+        dpto_id = None
+        
+        if unsaved_contrato.cargo_id:
+            try:
+                cargo_obj = CargoPlantilla.objects.select_related('departamento').get(pk=unsaved_contrato.cargo_id)
+                if cargo_obj.departamento:
+                    dpto_id = cargo_obj.departamento.id
+                    unidad_id = cargo_obj.departamento.unidad_organizativa_id
+                    
+                    # Inyectamos al formulario para que los combos aparezcan seleccionados
+                    initial_data['unidad'] = unidad_id
+                    initial_data['departamento'] = dpto_id
+                    initial_data['cargo'] = unsaved_contrato.cargo_id
+            except CargoPlantilla.DoesNotExist:
+                pass
+                
+        form_movimiento = MovimientoForm(instance=unsaved_contrato, initial=initial_data, user=request.user)
+        
+        # FORZAR QUERYSETS DE COMBOS DEPENDIENTES
+        if unidad_id:
+            form_movimiento.fields['departamento'].queryset = Departamento.objects.filter(unidad_organizativa_id=unidad_id)
+        if dpto_id:
+            form_movimiento.fields['cargo'].queryset = CargoPlantilla.objects.filter(departamento_id=dpto_id)
+
+        # 2. CÁLCULO DE DATOS VISUALES (Columna Derecha)
+        i_grupo = '-'
+        i_cat = '-'
+        i_rol = 'Cuadro'
+        i_salario = 0
+        i_tarifa = 0
+        i_extras = 0
+
+        if unsaved_contrato.cargo_id:
+            try:
+                cargo_obj = CargoPlantilla.objects.select_related('ncargo', 'rol').get(pk=unsaved_contrato.cargo_id)
+                i_grupo = cargo_obj.ncargo.grupo_escala.nivel if cargo_obj.ncargo.grupo_escala else '-'
+                i_cat = getattr(cargo_obj.ncargo, 'get_cat_ocupacional_display')() if hasattr(cargo_obj.ncargo, 'get_cat_ocupacional_display') else '-'
+                i_rol = cargo_obj.rol.tipo if cargo_obj.rol else "Cuadro"
+                
+                
+                # Rescatar cálculos salariales exactos
+                monto = 0
+                if unsaved_contrato.tipo_salario == 'FIJ':
+                    monto = float(cargo_obj.ncargo.salario_basico)
+                elif hasattr(unsaved_contrato, 'tridente_id') and unsaved_contrato.tridente_id:
+                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol=cargo_obj.rol, tridente_id=unsaved_contrato.tridente_id).first()
+                    if sal_obj: monto = float(sal_obj.monto)
+                elif not cargo_obj.rol or cargo_obj.rol.tipo == "Cuadro":
+                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol=cargo_obj.rol).first()
+                    if sal_obj: monto = float(sal_obj.monto)
+
+                if monto > 0:
+                    config = Configuracion.objects.first()
+                    fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
+                    i_salario = round(monto, 2)
+                    i_tarifa = round(monto / fondo, 5) if fondo else 0
+                    i_extras = round((i_tarifa*0.25)+i_tarifa, 5)
+            except Exception as e:
+                print(f"Error precargando datos del cargo: {e}")
+
+        context = {
+            'is_wizard': True,
+            'aspirante': aspirante,
+            'contrato_actual': unsaved_contrato, 
+            'form': form_movimiento,
+            'initial_rol': i_rol, 
+            'initial_grupo': i_grupo, 
+            'initial_cat': i_cat,
+            'salario_actual': 0, # En wizard la izquierda SIEMPRE es 0 o vacía
+            'initial_salario_escala': i_salario,
+            'initial_tarifa_horaria': i_tarifa, 
+            'initial_tarifa_extras': i_extras,
+        }
+        return render(request, "pages/contrato/movimiento_nomina.html", context)
+
+    # POST: Ejecutar el guardado en Base de Datos
+    elif request.method == 'POST':
+        generar_movimiento = request.POST.get('generar_movimiento') == 'true'
+        from django.urls import reverse
+        from django.utils import timezone
+        from .models import TMovimiento
+        
+        try:
+            with transaction.atomic():
+                # 1. CREAR CONTRATO (Siempre se hace)
+                contrato = CAlta(**borrador_db)
+                contrato.aspirante = aspirante
+                
+                if contrato.cargo_id:
+                    cargo_obj = CargoPlantilla.objects.get(pk=contrato.cargo_id)
+                    if cargo_obj.rol:
+                        contrato.rol = cargo_obj.rol
+                contrato.save() # Guardado Físico
+
+                pdf_url = ""
+                
+                # 2. CREAR MOVIMIENTO (Solo si el Caso 2 fue Confirmado)
+                if generar_movimiento:
+                    form = MovimientoForm(request.POST, instance=contrato, user=request.user)
+                    if form.is_valid():
+                        nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+                        cargo_nuevo = form.cleaned_data.get('cargo')
+                        salario_nue = float(request.POST.get('salarioEscala', 0))
+                        
+                        TMovimiento.objects.create(
+                            contrato=contrato,
+                            aspirante=aspirante,
+                            no_expediente=contrato.no_expediente,
+                            fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
+                            fecha_solicitud=form.cleaned_data.get('fecha_solicitud'),
+                            observaciones=form.cleaned_data.get('observaciones', ''),
+                            cargo_anterior="---",
+                            cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
+                            salario_anterior=0,
+                            salario_nuevo=salario_nue,
+                            unidad_anterior="---",
+                            unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
+                            tipo_movimiento="Alta Inicial"
+                        )
+                        form.instance.en_proceso_movimiento = False
+                        contrato = form.save()
+                        pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': contrato.pk})
+                    else:
+                        # Si el form falla, cancelamos todo (Contrato no se guarda) y devolvemos el error al modal
+                        transaction.set_rollback(True)
+                        context = {
+                            'is_wizard': True, 'aspirante': aspirante, 'contrato_actual': contrato, 'form': form,
+                            'initial_rol': '-', 'initial_grupo': '-', 'initial_cat': '-',
+                            'salario_actual': 0, 'initial_salario_escala': 0,
+                            'initial_tarifa_horaria': 0, 'initial_tarifa_extras': 0,
+                        }
+                        html = render_to_string("pages/contrato/movimiento_nomina.html", context, request=request)
+                        return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
+                
+                # 3. LIMPIEZA
+                del request.session['contrato_borrador']
+                if 'aspirante_borrador' in request.session:
+                    del request.session['aspirante_borrador']
+                
+                return JsonResponse({
+                    'form_is_valid': True, 
+                    'success_url': reverse('list_contrato'),
+                    'pdf_url': pdf_url
+                })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)

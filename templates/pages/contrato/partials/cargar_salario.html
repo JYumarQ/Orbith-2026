@@ -1,28 +1,54 @@
-<div class="col-md-4">
-    <label>Salario Escala</label>
-    <input class="form-control fw-bold text-primary" id="salarioEscala" name="salarioEscala" readonly value="{{ salario|floatformat:2 }}">
-</div>
-<div class="col-md-4">
-    <label>Tarifa Horaria</label>
-    <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ tarifa }}">
-</div>
-<div class="col-md-4">
-    <label>Tarifa Horas Extras</label>
-    <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ extras }}">
-</div>
+{% if not es_movimiento %}
+    <div class="col-md-4">
+        <label for="salarioEscala">Salario Escala</label>
+        <input class="form-control fw-bold text-primary" id="salarioEscala" name="salarioEscala" readonly value="{{ salario|floatformat:2 }}">
+    </div>
+    <div class="col-md-4">
+        <label for="tarifaHoraria">Tarifa Horaria</label>
+        <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ tarifa }}">
+    </div>
+    <div class="col-md-4">
+        <label for="tarifaExtras">Tarifa Horas Extras</label>
+        <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ extras }}">
+    </div>
 
-<input id="id_rol" value="{{ nuevo_rol }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+    <input id="id_rol" value="{{ nuevo_rol }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+    <input id="id_grupo_escala" value="{{ nuevo_grupo }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+{% endif %}
 
-<input id="id_grupo_escala" value="{{ nuevo_grupo }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
+<script>
+    // Magia anti-colisiones: Si es Movimiento, busca solo dentro del modal; si no, busca en todo el documento.
+    var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
+    
+    if (formActivo) {
+        var selTridente = formActivo.querySelector('#id_tridente');
+        if(selTridente) {
+            {% if mostrar_tridente %}
+                selTridente.removeAttribute('disabled');
+            {% else %}
+                selTridente.setAttribute('disabled', 'disabled');
+                selTridente.value = ""; 
+            {% endif %}
+        }
 
-<script hx-swap-oob="true">
-    var selTridente = document.getElementById('id_tridente');
-    if(selTridente) {
-        {% if mostrar_tridente %}
-            selTridente.removeAttribute('disabled');
-        {% else %}
-            selTridente.setAttribute('disabled', 'disabled');
-            selTridente.value = ""; // Limpiar si se deshabilita
-        {% endif %}
+        // Sincronizar dinámicamente los campos dentro del formulario activo
+        if(formActivo.querySelector('#salarioEscala')) {
+            formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
+        }
+        if(formActivo.querySelector('#tarifaHoraria')) {
+            formActivo.querySelector('#tarifaHoraria').value = "{{ tarifa }}";
+        }
+        if(formActivo.querySelector('#tarifaExtras')) {
+            formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";
+        }
+        if(formActivo.querySelector('#mov_rol')) {
+            formActivo.querySelector('#mov_rol').value = "{{ nuevo_rol }}";
+        }
+        if(formActivo.querySelector('#mov_grupo')) {
+            formActivo.querySelector('#mov_grupo').value = "{{ nuevo_grupo }}";
+        }
+        if(formActivo.querySelector('#mov_cat')) {
+            formActivo.querySelector('#mov_cat').value = "{{ nueva_cat }}";
+        }
     }
 </script>

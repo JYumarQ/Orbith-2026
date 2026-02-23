@@ -39,7 +39,7 @@ class CAltaForm(forms.ModelForm):
             'hx-target': '#resultados_salariales', # Apunta al contenedor de salarios
             'hx-swap': 'innerHTML', # Reemplaza el contenido interno
             'hx-trigger': 'change',
-            'hx-include': '#id_tridente' # Incluye tridente por si ya estaba seleccionado
+            'hx-include': '#id_tridente, #id_tipo_salario' # Solución: Enviar también el tipo de salario
         })
     )
 
@@ -110,7 +110,7 @@ class CAltaForm(forms.ModelForm):
                 # Tridente también debe recalcular salario si cambia
                 'hx-get': reverse_lazy('cargar_salarios'),
                 'hx-target': '#resultados_salariales',
-                'hx-include': '#id_cargo',
+                'hx-include': '#id_cargo, #id_tipo_salario', # Solución: Enviar también el tipo de salario
                 'hx-trigger': 'change'
             }),
             'profesional': forms.CheckboxInput(attrs={'class': 'form-check-input',  'id': 'id_profesional'}),
@@ -271,3 +271,12 @@ class MovimientoForm(CAltaForm):
         self.fields['unidad'].required = True
         self.fields['departamento'].required = True
         self.fields['cargo'].required = True
+
+        # --- 4. LIMPIEZA DE HTMX HEREDADO ---
+        # Eliminamos los llamados HTMX de la clase padre para evitar que busquen 
+        # contenedores inexistentes en el modal de movimiento.
+        for campo in ['cargo', 'tridente', 'tipo_salario']:
+            if campo in self.fields:
+                attrs = self.fields[campo].widget.attrs
+                for hx_attr in ['hx-get', 'hx-target', 'hx-swap', 'hx-trigger', 'hx-include']:
+                    attrs.pop(hx_attr, None)
