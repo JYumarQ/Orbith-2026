@@ -1,0 +1,65 @@
+<div id="table-cargos-container">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Descripción</th>
+                <th class="text-center">Cat. Ocup.</th>
+                <th class="text-center">Gpo. Escala</th>
+                <th class="text-center">Salario</th>
+                <th class="text-center">Acciones</th>
+            </tr>
+        </thead>
+        <tbody class="table-border-bottom-0">
+            {% for c in page_obj %}
+            <tr>
+                <td>{{ c.descripcion }}</td>
+                <td class="text-center">{{ c.get_cat_ocupacional_display }}</td>
+                <td class="text-center">{{ c.grupo_escala }}</td>
+                <td class="text-center">{{ c.salario_basico }}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_ncargo' c.id %}')">
+                        <i class="fas fa-pencil-alt"></i>
+                    </button>
+                    <a class="btn btn-sm btn-eliminar" href="{% url 'del_ncargo' c.id %}">
+                        <i class="fas fa-trash"></i>
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center">No hay registros disponibles.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if page_obj.has_other_pages %}
+    <nav aria-label="Page navigation" class="mt-3">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="#"
+                   hx-get="{% url 'search_cargos' %}?page={{ page_obj.previous_page_number }}&search_cargo={{ current_search }}"
+                   hx-target="#table-cargos-container">
+                   Anterior
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item disabled">
+                <span class="page-link">Pág. {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+            </li>
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="#"
+                   hx-get="{% url 'search_cargos' %}?page={{ page_obj.next_page_number }}&search_cargo={{ current_search }}"
+                   hx-target="#table-cargos-container">
+                   Siguiente
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
