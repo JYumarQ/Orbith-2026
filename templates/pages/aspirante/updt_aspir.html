@@ -119,12 +119,7 @@
             if(!nivel) return;
             var valorNivel = nivel.value;
 
-            // Habilitar Especialidad solo en NS (Superior) o TM (Medio)
-            if (valorNivel === 'NS' || valorNivel === 'TM') {
-                espec.removeAttribute('disabled');
-            } else {
-                espec.setAttribute('disabled', 'disabled');
-            }
+            
 
             // Habilitar Grado solo en NS
             if (valorNivel === 'NS') {
@@ -157,7 +152,8 @@
             'id_movil_personal':{ tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
             'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
             'id_provincia':     { tipo: 'select' },
-            'id_municipio':     { tipo: 'select' }
+            'id_municipio':     { tipo: 'select' },
+            'id_raza':          { tipo: 'select' }
         };
 
         const patrones = {
@@ -323,6 +319,8 @@
         });
         const muniP = document.getElementById('id_municipio')?.parentNode;
         if(muniP) obs.observe(muniP, { childList: true });
+
+        if (window.htmx) htmx.process(formulario);
 
     })();
 </script>

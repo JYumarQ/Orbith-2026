@@ -1,9 +1,17 @@
-{% if is_filter %}
-    <option value="">Todos</option>
-{% else %}
-    <option value="" selected>Selec. Especialidad</option>
-{% endif %}
+<select name="especialidad" 
+        id="{% if is_filter %}filter_especialidad{% else %}id_especialidad{% endif %}" 
+        class="form-select {% if is_filter %}form-select-sm{% endif %}" 
+        {% if not list_esp %}disabled{% endif %}
+        {% if is_filter %}onchange="triggerSearch()"{% endif %}>
+    
+    <option value="">
+        {% if is_filter %}Todas{% else %}Seleccione una especialidad...{% endif %}
+    </option>
+    
+    {% for e in list_esp %}
+        <option value="{{ e.id }}" {% if e.id|stringformat:"s" == request.GET.especialidad %}selected{% endif %}>
+            {{ e.nombre }}
+        </option>
+    {% endfor %}
+</select>
 
-{% for esp in list_esp %}
-    <option value="{{ esp.id }}">{{ esp }}</option>
-{% endfor %}

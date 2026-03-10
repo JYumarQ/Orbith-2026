@@ -5,8 +5,14 @@
     style="cursor: pointer;"
     data-id="{{ aspirante.pk }}" 
     data-url-editar="{% url 'updt_aspir' aspirante.pk %}?next={% url 'list_aspir' %}"
-    {# IMPORTANTE: add_contrato sigue esperando el CI string, así que ese lo dejamos igual #}
+    
+    {# --- LÓGICA DE WIZARD PARA BAJAS --- #}
+    {% if es_baja_view %}
+    data-url-contrato="{% url 'add_contrato' aspirante.doc_identidad %}?es_recontratacion=1"
+    {% else %}
     data-url-contrato="{% url 'add_contrato' aspirante.doc_identidad %}"
+    {% endif %}
+    
     data-url-eliminar="{% url 'del_aspir' aspirante.pk %}">
     
     <td class="text-center">

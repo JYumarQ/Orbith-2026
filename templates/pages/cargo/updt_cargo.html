@@ -50,6 +50,11 @@
                     </div>
 
                     <div class="col-md-6">
+                        <label class="form-label">Nivel de Preparación</label>
+                        {{ form.nivel_preparacion }}
+                    </div>
+
+                    <div class="col-md-6">
                         <label class="form-label">Cantidad Aprobada</label>
                         {{ form.cant_aprobada }}
                     </div>
@@ -121,26 +126,93 @@
         }
     }
 
-    // 3. Datos
+    // 3. Lógica Datos Cargo Inteligente
     function actualizarDatosCargo() {
         const id = $ncargo.val(); 
-        if (!id) return;
+        
+        // Reset si borran la selección
+        if (!id) {
+            if(rol) {
+                rol.removeAttribute('disabled');
+                Array.from(rol.options).forEach(opt => { opt.hidden = false; opt.disabled = false; });
+            }
+            if(inputGrupo) inputGrupo.value = "";
+            return;
+        }
 
         fetch(`${urlInfoCargo}?id=${id}`, { headers: { 'Accept': 'application/json' } })
         .then(resp => resp.json())
         .then(data => {
-            if(inputGrupo) inputGrupo.value = data.grupo_escala || "---";
+            const grupo = data.grupo_escala || "";
+            const cat = data.cat_ocupacional || "";
             
+            if(inputGrupo) inputGrupo.value = grupo || "---";
+
             if (rol) {
-                const cat = data.cat_ocupacional;
-                if (cat === 'CDI' || cat === 'CDJ') {
-                    rol.setAttribute('disabled', 'disabled');
-                } else {
-                    rol.removeAttribute('disabled');
+                rol.removeAttribute('disabled');
+                
+                let opcionesValidas = 0;
+                let ultimaOpcionValida = "";
+
+                // Recorremos las opciones del select de Roles
+                Array.from(rol.options).forEach(opt => {
+                    // Ignoramos la opción por defecto vacía "---------"
+                    if (!opt.value) {
+                        opt.hidden = false; 
+                        opt.disabled = false;
+                        return;
+                    }
+
+                    const textoRol = opt.text.toUpperCase();
+                    let mostrar = false;
+
+                    // --- REGLAS DE NEGOCIO ---
+                    // 1. Si es Cuadro Directivo (CDI) o Ejecutivo (CEJ)
+                    if (cat === 'CDI' || cat === 'CEJ') {
+                        if (textoRol.includes('CUADRO')) mostrar = true;
+                    } 
+                    // 2. Si NO es Cuadro, depende del Grupo Escala
+                    else {
+                        if (grupo === 'XX' || grupo === 'XXI') {
+                            if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) mostrar = true;
+                        } 
+                        else if (grupo === 'XXII' || grupo === 'XXIII' || grupo === 'XXIV') {
+                            if (textoRol.includes('DECISORIO')) mostrar = true;
+                        } 
+                        else if (grupo === 'XXV') {
+                            if (textoRol.includes('CUADRO')) mostrar = true;
+                        }
+                        // 3. PARA EL RESTO DE GRUPOS (XIX, XVIII, etc.)
+                        else {
+                            if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) {
+                                mostrar = true;
+                            }
+                        }
+                    }
+
+                    // Aplicamos la visibilidad de forma segura para todos los navegadores
+                    if (mostrar) {
+                        opt.hidden = false;
+                        opt.disabled = false;
+                        opcionesValidas++;
+                        ultimaOpcionValida = opt.value;
+                    } else {
+                        opt.hidden = true;
+                        opt.disabled = true;
+                        // Si la opción seleccionada actualmente se acaba de ocultar, la limpiamos
+                        if (rol.value === opt.value) {
+                            rol.value = ''; 
+                        }
+                    }
+                });
+
+                // MEJORA UX: Si después de filtrar solo quedó 1 opción válida, la seleccionamos automáticamente
+                if (opcionesValidas === 1 && rol.value === '') {
+                    rol.value = ultimaOpcionValida;
                 }
             }
         })
-        .catch(err => console.error(err));
+        .catch(err => console.error('Error fetching cargo:', err));
     }
 
     if (cantAprobada) cantAprobada.addEventListener('input', actualizarEstadoActivo);

@@ -9,6 +9,7 @@
             data-url-editar-personal="{% url 'updt_aspir' c.aspirante.pk %}?next={% url 'list_contrato' %}"
             data-url-solicitar="{% url 'solicitar_movimiento' c.pk %}"
             data-url-movimiento="{% url 'movimiento_contrato' c.pk %}" 
+            data-en-proceso="{{ c.en_proceso_movimiento|yesno:'true,false' }}" 
             {# PREFERIBLE: Usar el nombre del campo real para reportes #}
             
             data-url-baja="{% url 'del_contrato' c.pk %}"

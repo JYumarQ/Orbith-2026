@@ -27,49 +27,29 @@
     
     .cursor-pointer { cursor: pointer; }
 
-    /* --- ESTILOS PARA FILTROS EN CABECERA --- */
-    .th-filter-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
+    .dropdown-header-custom {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #a1acb8;
+        font-weight: 700;
+        padding: 0.5rem 0.5rem 0.2rem 0.5rem;
+        border-bottom: 1px solid #eceef1;
+        margin-bottom: 0.5rem;
     }
 
-    .th-filter-container select:disabled {
-        background-color: #eceef1 !important; /* Fondo gris igual al de Localidad */
-        color: #a1acb8 !important; /* Texto más claro */
-        cursor: default;
-    }
-    
-    .th-filter-container select {
-        font-size: 0.75rem !important;
-        /* Aumentamos padding derecho (20px) para que la flecha tenga su sitio reservado */
-        padding: 0.1rem 20px 0.1rem 0.5rem !important; 
-        height: auto !important;
-        width: auto !important;
-        border: 1px solid #d9dee3;
-        border-radius: 4px;
-        background-color: #fff;
-        
-        /* SOLUCIÓN AL "ENCOGIMIENTO": */
-        /* Forzamos que mida SIEMPRE al menos 85px. 
-           Así, aunque se inhabilite y la letra se afine, la caja NO se encoge. */
-        min-width: 85px; 
-        max-width: 85px; /* Fijamos el máximo igual para que sea una caja estable */
-        
-        /* Si el texto es largo, pone "..." en lugar de romperse */
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        overflow: hidden;
-
-        cursor: pointer;
-    }
-    /* Estilo para cuando el filtro está ACTIVO (Habilitado) */
-    .th-filter-container select:not(:disabled) {
-        color: #566a7f !important; /* Color texto normal (oscuro) */
-        font-weight: 600 !important; /* Negrita */
-        border-color: #696cff; /* Borde azulado opcional para resaltar */
-        background-color: #fff;
+    /* Garantizar que los selects inyectados por HTMX no rompan el diseño */
+    .dropdown-menu select {
+        display: block !important;
+        width: 100% !important;
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 400 !important;
+        color: #566a7f !important;
+        background-color: #fff !important;
+        border: 1px solid #d9dee3 !important;
+        border-radius: 0.25rem !important;
+        height: 30px !important;
     }
     
 </style>
@@ -124,36 +104,80 @@
                 <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Más filtros">
                     <i class="fas fa-filter"></i>
                 </button>
-                <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 200px;">
-                    
+                <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+                    <div class="dropdown-header-custom"><i class="fas fa-map-marker-alt me-1"></i> Ubicación</div>
                     <div class="mb-2">
-                        <label class="form-label mb-1 small text-muted">Sexo</label>
-                        <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
-                            <option value="">Todos</option>
-                            <option value="M">M</option>
-                            <option value="F">F</option>
+                        <label class="small text-muted">Provincia</label>
+                        <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
+                            hx-get="{% url 'cargar_municipios' %}?for_filter=1" 
+                            hx-target="#filter-municipio-container" 
+                            hx-trigger="change"
+                            onchange="triggerSearch();">
+                            <option value="">Todas</option>
+                            {% for p in provincias_list %}
+                                <option value="{{ p.id }}">{{ p.nombre }}</option>
+                            {% endfor %}
                         </select>
                     </div>
-
                     <div class="mb-2">
-                        <label class="form-label mb-1 small text-muted">Raza</label>
-                        <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
-                            <option value="">Todos</option>
-                            <option value="NE">Negra</option>
-                            <option value="BL">Blanca</option>
-                            <option value="ME">Mestiza</option>
-                        </select>
+                        <label class="small text-muted">Municipio</label>
+                        <div id="filter-municipio-container">
+                            <select id="filter_municipio_select" name="municipio" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                                <option value="">Todos</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="form-label mb-1 small text-muted">Grado Científico</label>
+                    <div class="dropdown-header-custom mt-3"><i class="fas fa-user me-1"></i> Datos Personales</div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="small text-muted">Sexo</label>
+                            <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todos</option>
+                                <option value="M">M</option>
+                                <option value="F">F</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted">Raza</label>
+                            <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todas</option>
+                                <option value="BL">Blanca</option>
+                                <option value="NE">Negra</option>
+                                <option value="ME">Mestiza</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="dropdown-header-custom mt-3"><i class="fas fa-graduation-cap me-1"></i> Formación</div>
+                    <div class="mb-2">
+                        <label class="small text-muted">Nivel Educ.</label>
+                        <select id="filter_nivel_select" name="nivel_educ" class="form-select form-select-sm"
+                            hx-get="{% url 'cargar_esp' %}?for_filter=1" 
+                            hx-target="#filter_especialidad" 
+                            hx-swap="outerHTML" 
+                            hx-trigger="change"
+                            onchange="triggerSearch()">
+                            <option value="">Todos</option>
+                            {% for k, v in niveles_educ %}
+                                <option value="{{ k }}">{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted">Especialidad</label>
+                        <select id="filter_especialidad" name="especialidad" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                            <option value="">Todas</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted">Grado Científico</label>
                         <select id="filter_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
                             <option value="">Todos</option>
                             <option value="MC">Master</option>
                             <option value="DC">Doctor</option>
                         </select>
                     </div>
-
                 </div>
             </div>
                 {% if not es_baja_view and request.user.es_admin or request.user.es_moderador %}
@@ -169,67 +193,24 @@
         <div class="table-responsive text-nowrap">
           <table class="table table-hover">
             <thead>
-              <tr>
-              <th class="text-center" style="min-width: 140px;">CI</th>
-              <th class="text-center" style="min-width: 260px;">Nombre</th>
-              
-              <th class="text-center">
-                  <div class="th-filter-container">
-                      <select name="provincia" 
-                              id="filter_provincia_select"
-                              hx-get="{% url 'cargar_municipios' %}?for_filter=1" 
-                              hx-target="#filter-municipio-container" 
-                              hx-trigger="change"
-                              onfocus="mostrarNombresCompletos(this)"
-                              onblur="mostrarSigla(this)"
-                              onchange="mostrarSigla(this); document.getElementById('filter_municipio_select').value=''; triggerSearch()">
-                              
-                          <option value="">Todos</option>
-                          {% for p in provincias_list %}
-                          <option value="{{ p.id }}" 
-                                  data-sigla="{{ p.sigla }}" 
-                                  data-nombre="{{ p.nombre }}">
-                              {{ p.nombre }}
-                          </option>
-                          {% endfor %}
-                      </select>
-
-                      <span>Localidad</span>
-
-                      <span id="filter-municipio-container">
-                          <select name="municipio" id="filter_municipio_select" disabled>
-                              <option value="">Todos</option>
-                          </select>
-                      </span>
-                  </div>
-              </th>
-
-              <th class="text-center">
-                  <div class="th-filter-container">
-                      <span>N. Educacional</span>
-                      <select name="nivel_educ"
-                              id="filter_nivel_select"
-                              hx-get="{% url 'cargar_esp' %}?for_filter=1"  hx-target="#filter_especialidad" 
-                              hx-trigger="change"
-                              onchange="toggleEspecialidad(this); triggerSearch()">
-                          <option value="">Todos</option>
-                          {% for k, v in niveles_educ %}
-                          <option value="{{ k }}">{{ v }}</option>
-                          {% endfor %}
-                      </select>
-                  </div>
-              </th>
-
-              <th class="text-center">
-                  <div class="th-filter-container">
-                      <span>Especialidad</span>
-                      <select id="filter_especialidad" name="especialidad" disabled onchange="triggerSearch()">
-                          <option value="">Todos</option>
-                      </select>
-                  </div>
-              </th>
-            </tr>
-          </thead>
+                <tr>
+                    <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(0, 'ci')">
+                        CI <i class="fas fa-sort ms-1 text-muted" id="sort-icon-0"></i>
+                    </th>
+                    <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(1, 'string')">
+                        Nombre y Apellidos <i class="fas fa-sort ms-1 text-muted" id="sort-icon-1"></i>
+                    </th>
+                    <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(2, 'string')">
+                        Ubicación <i class="fas fa-sort ms-1 text-muted" id="sort-icon-2"></i>
+                    </th>
+                    <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(3, 'educacion')">
+                        Nivel Educacional <i class="fas fa-sort ms-1 text-muted" id="sort-icon-3"></i>
+                    </th>
+                    <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(4, 'string')">
+                        Especialidad <i class="fas fa-sort ms-1 text-muted" id="sort-icon-4"></i>
+                    </th>
+                </tr>
+            </thead>
             <tbody class="table-border-bottom-0" id="filter_aspirantes_results">
               {% include 'pages/aspirante/partials/filter_aspirantes_list.html' %}
             </tbody>
@@ -270,6 +251,10 @@
         
       });
     }
+
+    $('#editar_aspir, #crear_aspir, #crear_contrato').on('hidden.bs.modal', function () {
+        $(this).empty();
+    });
 
     function show_hide_search(){
       $('#search_container').toggleClass('d-none');
@@ -338,6 +323,77 @@
         var seleccionadoID = null;
     }
 
+    // Variables para controlar el estado del orden
+    let columnaActual = -1;
+    let ordenAscendente = true;
+
+    // Diccionario de jerarquía para Nivel Educacional
+    const JERARQUIA_EDUCACION = {
+        "SIN ACREDITAR": 1,
+        "PRIMARIA": 2,
+        "MEDIO": 3,
+        "OBRERO": 4,
+        "MEDIO SUPERIOR (TM)": 5,
+        "MEDIO SUPERIOR (DG)": 6,
+        "NIVEL SUPERIOR": 7
+    };
+
+    function ordenarTablaAspirantes(n, tipo) {
+        const tabla = document.querySelector("table"); // Selecciona la tabla de aspirantes
+        const tbody = tabla.querySelector("tbody");
+        let filas = Array.from(tbody.rows);
+        
+        // Cambiar dirección si se toca la misma columna
+        if (columnaActual === n) {
+            ordenAscendente = !ordenAscendente;
+        } else {
+            ordenAscendente = true;
+            columnaActual = n;
+        }
+
+        // Actualizar iconos visuales
+        actualizarIconosOrden(n, ordenAscendente);
+
+        filas.sort((a, b) => {
+            let x = a.cells[n].innerText.trim().toUpperCase();
+            let y = b.cells[n].innerText.trim().toUpperCase();
+
+            // Lógica según el tipo de dato
+            if (tipo === 'ci') {
+                // Orden numérico para CI
+                return ordenAscendente ? x - y : y - x;
+            } 
+            
+            if (tipo === 'educacion') {
+                // Orden por jerarquía de diccionario
+                let pesoX = JERARQUIA_EDUCACION[x] || 0;
+                let pesoY = JERARQUIA_EDUCACION[y] || 0;
+                return ordenAscendente ? pesoX - pesoY : pesoY - pesoX;
+            }
+
+            // Orden alfabético por defecto (Nombre, Ubicación, Especialidad)
+            return ordenAscendente ? x.localeCompare(y) : y.localeCompare(x);
+        });
+
+        // Reinsertar filas ordenadas en el body
+        filas.forEach(fila => tbody.appendChild(fila));
+    }
+
+    function actualizarIconosOrden(columnaIndice, isAsc) {
+        // Resetear todos los iconos a estado neutro
+        for (let i = 0; i <= 4; i++) {
+            const icon = document.getElementById(`sort-icon-${i}`);
+            if (icon) {
+                icon.className = 'fas fa-sort ms-1 text-muted';
+            }
+        }
+        // Aplicar icono activo
+        const activeIcon = document.getElementById(`sort-icon-${columnaIndice}`);
+        if (activeIcon) {
+            activeIcon.className = isAsc ? 'fas fa-sort-up ms-1 text-primary' : 'fas fa-sort-down ms-1 text-primary';
+        }
+    }
+
     // Función principal de selección (se activa al hacer click en la fila)
     function seleccionarAspirante(fila) {
         // 1. Gestión Visual
@@ -394,48 +450,14 @@
         htmx.trigger(searchInput, 'searchFilters'); 
     }
 
-    function toggleEspecialidad(selectElement) {
-        const val = selectElement.value;
-        const espSelect = document.getElementById('filter_especialidad');
-        
-        // Solo habilitar para TM (Medio Superior TM) y NS (Nivel Superior)
-        if (val === 'TM' || val === 'NS') {
-            espSelect.removeAttribute('disabled');
-        } else {
-            espSelect.setAttribute('disabled', 'disabled');
-            espSelect.value = ''; // Resetear a 'Todos'
-        }
-    }
+    
 
     // Detectar cambios en el select de Municipio (que se carga por Ajax)
     $(document).on('change', '#filter-municipio-container select', function() {
         triggerSearch();
     });
 
-    // --- LÓGICA VISUAL: SIGLAS VS NOMBRES ---
-
-    // Al desplegar (click/focus), mostrar Nombres Completos para leer bien
-    function mostrarNombresCompletos(select) {
-        for (let i = 0; i < select.options.length; i++) {
-            const opt = select.options[i];
-            // Si es opción de filtro y tiene el dato guardado, ponemos el nombre
-            if (opt.dataset.nombre) {
-                opt.text = opt.dataset.nombre;
-            }
-        }
-    }
-
-    // Al seleccionar o salir (blur/change), mostrar Sigla para ahorrar espacio
-    function mostrarSigla(select) {
-        // 1. Restauramos todos a nombre completo primero (para que el desplegable se vea bien)
-        mostrarNombresCompletos(select);
-
-        // 2. Solo a la opción SELECCIONADA le ponemos la sigla
-        const selectedOpt = select.options[select.selectedIndex];
-        if (selectedOpt.value !== "" && selectedOpt.dataset.sigla) {
-            selectedOpt.text = selectedOpt.dataset.sigla;
-        }
-    }
+    
 
     // Escucha el evento 'showMessage' que envía el servidor al eliminar
     document.body.addEventListener('showMessage', function(evt){

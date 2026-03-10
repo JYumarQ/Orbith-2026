@@ -2,9 +2,7 @@
         id="{{ elem_id|default:'id_municipio' }}"
         
         {% if is_filter %}
-            onfocus="mostrarNombresCompletos(this)"
-            onblur="mostrarSigla(this)"
-            onchange="mostrarSigla(this); triggerSearch()"
+            onchange="triggerSearch()"
         {% else %}
             /* Si es formulario normal, aquí SÍ queremos que se vea bonito con Bootstrap */
             class="form-select" 

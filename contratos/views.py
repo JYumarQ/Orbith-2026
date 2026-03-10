@@ -10,7 +10,7 @@ from bolsa.models import Aspirante
 from .models import CAlta, CBaja
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
-from nomencladores.models import NSalario, NCausaAltaBaja, NRol
+from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia
 from django.urls import reverse_lazy
 from configuracion.models import Configuracion
 from django.template.loader import get_template
@@ -32,7 +32,11 @@ import sys
 class ContratoListView(ListView):
     model = CAlta
     template_name = "pages/contrato/list_contrato.html"
-    paginate_by = 8
+    def get_paginate_by(self, queryset):
+        # PROTECCIÓN: Si viene vacío (''), usar 8 por defecto
+        page_size = self.request.GET.get('per_page')
+        return int(page_size) if page_size else 8
+        
     ordering = ['-fecha_alta']  
     
     def get_context_data(self, **kwargs):
@@ -40,6 +44,12 @@ class ContratoListView(ListView):
         context['form'] = CAltaForm()
         context['search_url'] = 'search_contrato'
         context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
+        context['provincias_list'] = NProvincia.objects.all()
+        context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
+
+        # LA CLAVE: Enviar la variable al HTML desde la carga inicial
+        page_size = self.request.GET.get('per_page')
+        context['current_page_size'] = str(page_size) if page_size else '8'
         return context
     
 
@@ -62,6 +72,18 @@ class MovimientoNominaListView(ListView):
         return context
 
 
+# --- Función de apoyo para entender los Grupos Escala ---
+def nivel_romano_a_int(romano):
+    mapa = {'I': 1, 'V': 5, 'X': 10, 'L': 50}
+    res, prev = 0, 0
+    for c in reversed(romano.upper()):
+        val = mapa.get(c, 0)
+        if val < prev: res -= val
+        else: res += val
+        prev = val
+    return res
+
+
 def cargar_roles(request):
     cargo_id = request.GET.get('cargo')
     roles_disponibles = []
@@ -71,9 +93,9 @@ def cargar_roles(request):
             cargo = CargoPlantilla.objects.select_related('ncargo').get(pk=cargo_id)
             grupo = cargo.ncargo.grupo_escala
             categoria = cargo.ncargo.cat_ocupacional
+            nivel_num = nivel_romano_a_int(grupo.nivel) # Leemos el número del grupo
             
-            # 1. LA LIMPIEZA: Buscar en NSalario qué roles tienen dinero (> 0) para este grupo
-            #    Esto elimina automáticamente opciones como "Fundamental" si en la tabla valen 0.00
+            # 1. LA LIMPIEZA (Tu código original): Buscar en NSalario qué roles tienen dinero (> 0)
             salarios_con_fondo = NSalario.objects.filter(
                 grupo_escala=grupo, 
                 monto__gt=0
@@ -82,25 +104,54 @@ def cargar_roles(request):
             # Convertimos a Set para manipular fácil
             ids_validos = set(salarios_con_fondo)
             
-            # 2. EL PORTERO: Lógica "Cuadro"
-            # Buscamos el ID del rol "Cuadro" en el nomenclador
+            # Buscamos los IDs de los roles clave
             rol_cuadro_obj = NRol.objects.filter(tipo__iexact="Cuadro").first()
+            rol_decisorio_obj = NRol.objects.filter(tipo__iexact="Decisorio").first()
             
-            if rol_cuadro_obj:
-                id_cuadro = rol_cuadro_obj.id
-                
-                # REGLA DE ORO: Si NO es directivo, PROHIBIDO ver el rol Cuadro
-                if categoria not in ['CDI', 'CEJ']:
+            id_cuadro = rol_cuadro_obj.id if rol_cuadro_obj else None
+            id_decisorio = rol_decisorio_obj.id if rol_decisorio_obj else None
+            
+            # 2. LA CATEGORÍA (Tu código original)
+            if id_cuadro:
+                # Si ES directivo, nos aseguramos que vea la opción "Cuadro"
+                if categoria in ['CDI', 'CEJ']:
+                    ids_validos.add(id_cuadro)
+                else:
                     if id_cuadro in ids_validos:
                         ids_validos.remove(id_cuadro)
-                else:
-                    # Si ES directivo, nos aseguramos que vea la opción "Cuadro"
-                    # (siempre que exista en el nomenclador, aunque NSalario a veces lo guarde como Rol=Null o Rol=Cuadro)
-                    # Si tu tabla de salario tiene columna 'Cuadro', asumimos que es válida para ellos.
-                    ids_validos.add(id_cuadro)
 
-            # 3. Query Final
-            roles_disponibles = NRol.objects.filter(id__in=ids_validos).order_by('tipo')
+            # 3. EL PORTERO INTELIGENTE: Reglas estrictas de los Grupos Escala
+            
+            # Regla Grupos I al XIX: PROHIBIDO Cuadro (Incluso si es CDI/CEJ lo quitamos)
+            if nivel_num <= 19:
+                if id_cuadro and id_cuadro in ids_validos:
+                    ids_validos.remove(id_cuadro)
+                    
+            # Regla Grupos XX y XXI: Permite todos (No quitamos nada)
+            elif 20 <= nivel_num <= 21:
+                pass
+                
+            # Regla Grupos XXII al XXIV: SOLO Cuadro o Decisorio (Destruimos Apoyo y Fundamental)
+            elif 22 <= nivel_num <= 24:
+                permitidos = set()
+                if id_cuadro and id_cuadro in ids_validos: 
+                    permitidos.add(id_cuadro)
+                if id_decisorio and id_decisorio in ids_validos: 
+                    permitidos.add(id_decisorio)
+                ids_validos = permitidos 
+                
+            # Regla Grupo XXV: SOLO Cuadro
+            elif nivel_num == 25:
+                permitidos = set()
+                if id_cuadro and id_cuadro in ids_validos: 
+                    permitidos.add(id_cuadro)
+                ids_validos = permitidos
+
+            # 4. Query Final
+            if ids_validos:
+                roles_disponibles = NRol.objects.filter(id__in=ids_validos).order_by('tipo')
+            else:
+                roles_disponibles = NRol.objects.none()
 
         except Exception as e:
             print(f"Error cargando roles: {e}")
@@ -144,7 +195,10 @@ def search_contratos(request):
     # 1. Obtener parámetros de filtros
     query = request.GET.get('filter_contrato', '').strip()
     page_num = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', '8')
+    page_size = request.GET.get('per_page')
+    if not page_size:
+        page_size = '8'
+    
     
     # Filtros directos del Contrato (o Cargo)
     # (Si quisieras filtrar por Cargo o Unidad, irían aquí)
@@ -190,18 +244,51 @@ def search_contratos(request):
             Q(nombre_completo__icontains=query)
         )
 
-    # 5. Paginación
+    # 5. ORDENAMIENTO COMPLETO EN EL SERVIDOR (Todas las páginas)
+    sort_col = request.GET.get('sort', '')
+    order = request.GET.get('order', 'asc')
     
+    # Convertimos el QuerySet a una Lista para poder ordenar por Métodos (Salario) y Jerarquías personalizadas
+    contratos_list = list(qs)
     
-    paginator = Paginator(qs, page_size)
+    if sort_col:
+        reverse_sort = (order == 'desc')
+        
+        if sort_col == 'expediente':
+            contratos_list.sort(key=lambda x: int(x.no_expediente) if x.no_expediente.isdigit() else 0, reverse=reverse_sort)
+        elif sort_col == 'nombre':
+            contratos_list.sort(key=lambda x: f"{x.aspirante.nombre} {x.aspirante.papellido} {x.aspirante.sapellido}".lower(), reverse=reverse_sort)
+        elif sort_col == 'area':
+            contratos_list.sort(key=lambda x: x.cargo.departamento.descripcion.lower() if x.cargo and x.cargo.departamento else "", reverse=reverse_sort)
+        elif sort_col == 'cat':
+            contratos_list.sort(key=lambda x: getattr(x.cargo.ncargo, 'get_cat_ocupacional_display')() if x.cargo and hasattr(x.cargo, 'ncargo') else "", reverse=reverse_sort)
+        elif sort_col == 'grupo':
+            def get_grupo_val(c):
+                nivel = c.cargo.ncargo.grupo_escala.nivel if c.cargo and c.cargo.ncargo and c.cargo.ncargo.grupo_escala else ""
+                return nivel_romano_a_int(nivel)
+            contratos_list.sort(key=get_grupo_val, reverse=reverse_sort)
+        elif sort_col == 'rol':
+            jerarquia = {"APOYO": 1, "FUNDAMENTAL": 2, "DECISORIO": 3, "CUADRO": 4}
+            def get_rol_val(c):
+                r = c.rol or (c.cargo.rol if c.cargo else None)
+                rol_str = r.tipo.upper() if r else "CUADRO"
+                return jerarquia.get(rol_str, 0)
+            contratos_list.sort(key=get_rol_val, reverse=reverse_sort)
+        elif sort_col == 'tridente':
+            contratos_list.sort(key=lambda x: x.tridente.tipo if x.tridente else "", reverse=reverse_sort)
+        elif sort_col == 'salario':
+            contratos_list.sort(key=lambda x: x.calcular_salario_escala() or 0, reverse=reverse_sort)
+
+    # 6. Paginación SOBRE la lista ya ordenada
+    paginator = Paginator(contratos_list, int(page_size))
     page_obj = paginator.get_page(page_num)
 
     return render(request, 'pages/contrato/partials/filter_contratos_list.html', {
-        'object_list': page_obj,  # La lista de contratos de ESTA página
-        'page_obj': page_obj,     # El objeto paginador (para contar páginas)
-        'paginator': paginator,   # Esto es lo que usa para decir "Total de X registros"
-        'search_url': 'search_contrato', # Clave para que HTMX sepa a dónde pedir la siguiente página
-        'current_page_size': str(page_size)  # Para mantener el tamaño de página seleccionado
+        'object_list': page_obj,  
+        'page_obj': page_obj,     
+        'paginator': paginator,   
+        'search_url': 'search_contrato', 
+        'current_page_size': str(page_size)  
     })
 
 
@@ -221,15 +308,24 @@ def validar_datos_contrato(request):
 
 def solicitar_movimiento_nomina(request, pk):
     """
-    Marca un contrato como 'En Proceso de Movimiento' para que aparezca
-    en la bandeja de Mov. Nómina.
+    Alterna el estado de 'En Proceso de Movimiento' de un contrato.
     """
     if request.method == "POST":
         try:
             contrato = get_object_or_404(CAlta, pk=pk)
-            contrato.en_proceso_movimiento = True
+            
+            # Leemos el parámetro enviado por JS
+            es_cancelacion = request.POST.get('cancelar') == 'true'
+            
+            if es_cancelacion:
+                contrato.en_proceso_movimiento = False
+                mensaje = 'Movimiento cancelado. El contrato regresó a su estado normal.'
+            else:
+                contrato.en_proceso_movimiento = True
+                mensaje = 'Contrato enviado a la bandeja de movimientos pendientes.'
+                
             contrato.save()
-            return JsonResponse({'success': True, 'message': 'Contrato enviado a proceso de movimiento.'})
+            return JsonResponse({'success': True, 'message': mensaje})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=500)
     
@@ -525,13 +621,18 @@ class ContratoCreateView(CreateView):
         # 2. RESPUESTA AJAX (Para evitar el crasheo)
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             
-            # Buscar si hay un error específico de "cargo" (Plazas agotadas)
+            # Capturador dinámico de errores para el SweetAlert
             error_mensaje = None
-            if 'cargo' in form.errors:
-                # Tomamos el primer error de la lista del campo 'cargo'
+            if 'no_expediente' in form.errors:
+                error_mensaje = f"El Número de Expediente ya está en uso por un contrato activo."
+            elif 'cargo' in form.errors:
                 error_mensaje = form.errors['cargo'][0]
             elif 'reg_militar' in form.errors:
                 error_mensaje = "El campo Servicio Militar es obligatorio."
+            elif form.errors:
+                # Si es cualquier otro error, agarramos el primero que encuentre
+                primer_campo = list(form.errors.keys())[0]
+                error_mensaje = f"Verifique el campo '{primer_campo}': {form.errors[primer_campo][0]}"
             
             # Renderizamos el formulario con los errores pintados (rojo)
             html = render_to_string(
@@ -1089,7 +1190,6 @@ def cargar_salario(request):
             rol_obj = cargo.rol
             
             # Datos extra para el contexto
-            
             context['nueva_cat'] = getattr(cargo.ncargo, 'get_cat_ocupacional_display')()
             context['nuevo_rol'] = rol_obj.tipo if rol_obj else "Cuadro"
             context['nuevo_grupo'] = grupo_obj.nivel if grupo_obj else "-"
@@ -1103,33 +1203,45 @@ def cargar_salario(request):
                 context['mostrar_tridente'] = False # No se muestra el tridente para salario fijo
             
             # --- ESCENARIO B: SALARIO DINÁMICO ---
-            # CASO B: Salario DINÁMICO
             else:
                 salario_obj = None
                 
-                # Si el Rol del cargo es "Cuadro" (o nulo asumido como cuadro)
-                # Buscamos en la columna única de Cuadro
+                # 1. REGLA UNIVERSAL DEL CUADRO: Si es Cuadro, NUNCA lleva tridente
                 if not rol_obj or rol_obj.tipo == "Cuadro":
                     context['mostrar_tridente'] = False
                     salario_obj = NSalario.objects.filter(
                         grupo_escala=grupo_obj,
-                        rol=rol_obj # o rol__isnull=True si usas ese sistema
+                        rol=rol_obj,
+                        tridente__isnull=True # <--- BLOQUEO DE SEGURIDAD: Fuerza a buscar el valor único sin tridente
                     ).first()
                     
                     if not salario_obj: # Fallback
-                         salario_obj = NSalario.objects.filter(grupo_escala=grupo_obj, rol__isnull=True).first()
+                         salario_obj = NSalario.objects.filter(
+                             grupo_escala=grupo_obj, 
+                             rol__isnull=True, 
+                             tridente__isnull=True
+                         ).first()
 
-                # Si es otro Rol (Decisorio, Fundamental, etc.)
+                # 2. REGLA PARA LOS DEMÁS ROLES (Apoyo, Fundamental, Decisorio)
                 else:
-                    context['mostrar_tridente'] = True # Activamos el combo de tridente
-                    if tridente_id:
-                        salario_obj = NSalario.objects.filter(
-                            grupo_escala=grupo_obj,
-                            rol=rol_obj,
-                            tridente_id=tridente_id
-                        ).first()
+                    nivel_num = nivel_romano_a_int(grupo_obj.nivel) if grupo_obj else 0
+                    
+                    # EXCEPCIÓN GRUPOS XXII al XXIV: En estos grupos solo el "Decisorio" tiene tridente y dinero.
+                    if 22 <= nivel_num <= 24 and rol_obj.tipo != "Decisorio":
+                        context['mostrar_tridente'] = False
+                        salario_obj = None # Obliga a que sea 0.00 porque no hay Apoyo/Fundamental
+                    else:
+                        # Si es un grupo I-XXI o es Decisorio en XXII-XXIV, habilitamos tridente
+                        context['mostrar_tridente'] = True 
+                        if tridente_id:
+                            salario_obj = NSalario.objects.filter(
+                                grupo_escala=grupo_obj,
+                                rol=rol_obj,
+                                tridente_id=tridente_id
+                            ).first()
                 
-                if salario_obj:
+                # Asignación final del monto si se encontró el registro
+                if salario_obj and salario_obj.monto:
                     monto = float(salario_obj.monto)
 
             # Cálculos Finales
@@ -1148,9 +1260,7 @@ def cargar_salario(request):
             pass
 
     # Usamos la plantilla parcial para devolver los datos
-    # NOTA: Asegúrate de crear el archivo en el paso 3
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
-
 # =========================================================================
 # VISTA WIZARD FASE 3: Finalizar Contrato y (Opcional) Movimiento
 # =========================================================================

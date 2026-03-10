@@ -3,9 +3,16 @@
     <div id="contrato-{{ c.pk }}" 
          class="list-group-item list-group-item-action p-2 border-bottom-0 border-top cursor-pointer group-hover nav-card"
          onclick="selectContrato(this)"
+         ondblclick="abrirModalHistorico(this.dataset.urlHistorico)"
          data-pk="{{ c.pk }}"
          data-url-contrato="{% url 'updt_contrato' c.pk %}"
-         data-url-personal="{% url 'updt_aspir' c.aspirante.pk %}">
+         data-url-personal="{% url 'updt_aspir' c.aspirante.pk %}"
+         data-url-solicitar="{% url 'solicitar_movimiento' c.pk %}"
+         data-url-pdf="{% url 'imprimir_modelo_movimiento' c.pk %}"
+         data-url-baja="{% url 'del_contrato' c.pk %}"
+         data-expediente="{{ c.no_expediente }}"
+         data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}"
+         data-url-historico="{% url 'historico_trabajador' c.aspirante.pk %}">
         
         <div class="d-flex align-items-center">
             

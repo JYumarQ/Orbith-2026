@@ -14,7 +14,8 @@ class AspiranteForm(forms.ModelForm):
             'class': 'form-select',
             'hx-get': reverse_lazy('cargar_esp'),     # seguro en import-time
             'hx-target': '#id_especialidad',
-            'hx-trigger': 'change'
+            'hx-trigger': 'change, select2:select',
+            'hx-swap': 'outerHTML'
         })
     )
 
@@ -87,7 +88,7 @@ class AspiranteForm(forms.ModelForm):
 
             
             'codigo_postal': forms.TextInput(attrs={'class':'form-control'}),
-            'raza': forms.Select(attrs={'class': 'form-select'}),
+            'raza': forms.Select(attrs={'class': 'form-select', 'required': 'required'}),
             'grado_cientifico': forms.Select(attrs={
                 'class': 'form-select',
                 'id': 'id_grado_cientifico',
@@ -105,6 +106,9 @@ class AspiranteForm(forms.ModelForm):
 
         # ✅ HTMX en Provincia
         self.fields['provincia'].widget.attrs['hx-get'] = reverse('cargar_municipios')
+
+        self.fields['raza'].empty_label = "Seleccione una raza..."
+        self.fields['raza'].required = True
 
         # ✅ Lógica de Moderador (Protegida y Tipada)
         # Solo se ejecuta si el campo existe en el formulario (escalabilidad)

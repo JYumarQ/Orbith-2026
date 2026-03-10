@@ -17,21 +17,45 @@
 {% endif %}
 
 <script>
-    // Magia anti-colisiones: Si es Movimiento, busca solo dentro del modal; si no, busca en todo el documento.
+    // 1. Identificamos en qué formulario estamos trabajando
     var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
     
     if (formActivo) {
-        var selTridente = formActivo.querySelector('#id_tridente');
-        if(selTridente) {
-            {% if mostrar_tridente %}
-                selTridente.removeAttribute('disabled');
-            {% else %}
-                selTridente.setAttribute('disabled', 'disabled');
-                selTridente.value = ""; 
-            {% endif %}
+        // 2. Buscamos el Tridente de forma segura (Abarcando Contrato y Movimiento)
+        var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('[name="tridente"]');
+        
+        if (selTridente) {
+            // Evaluamos la decisión del Backend (True/False)
+            var debeMostrarTridente = "{{ mostrar_tridente }}" === "True";
+
+            if (!debeMostrarTridente) {
+                // MODO CUADRO (O Apoyo/Fundamental sin fondos): Bloqueamos y vaciamos el tridente
+                selTridente.disabled = true;
+                selTridente.value = ""; // Vaciamos el valor internamente
+                
+                // Si usas Select2 (Librería de búsqueda en selects)
+                if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
+                    $(selTridente).val(null).trigger('change.select2');
+                }
+            } else {
+                // MODO NORMAL (Fundamental, Decisorio, Apoyo): Habilitamos el tridente
+                selTridente.disabled = false;
+                
+                // Si usas Select2
+                if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
+                    $(selTridente).trigger('change.select2');
+                }
+            }
         }
 
-        // Sincronizar dinámicamente los campos dentro del formulario activo
+        // 3. Sincronización robusta de los datos de Rol y Grupo Ocultos
+        var inputRol = formActivo.querySelector('#id_rol') || formActivo.querySelector('#mov_rol');
+        if(inputRol) inputRol.value = "{{ nuevo_rol }}";
+
+        var inputGrupo = formActivo.querySelector('#id_grupo_escala') || formActivo.querySelector('#mov_grupo');
+        if(inputGrupo) inputGrupo.value = "{{ nuevo_grupo }}";
+
+        // 4. Actualización de dineros
         if(formActivo.querySelector('#salarioEscala')) {
             formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
         }
@@ -40,15 +64,6 @@
         }
         if(formActivo.querySelector('#tarifaExtras')) {
             formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";
-        }
-        if(formActivo.querySelector('#mov_rol')) {
-            formActivo.querySelector('#mov_rol').value = "{{ nuevo_rol }}";
-        }
-        if(formActivo.querySelector('#mov_grupo')) {
-            formActivo.querySelector('#mov_grupo').value = "{{ nuevo_grupo }}";
-        }
-        if(formActivo.querySelector('#mov_cat')) {
-            formActivo.querySelector('#mov_cat').value = "{{ nueva_cat }}";
         }
     }
 </script>

@@ -12,6 +12,7 @@
         color: #696cff !important;
         font-weight: 600;
     }
+    
     .toolbar-disabled {
         opacity: 0.4;
         pointer-events: none;
@@ -42,6 +43,20 @@
     /* Borde izquierdo más grueso para destacar */
     .row-movimiento-pendiente td:first-child {
         border-left: 3px solid #ffab00 !important;
+    }
+
+    /* Garantizar que los selects inyectados por HTMX no rompan el diseño */
+    .dropdown-menu select {
+        display: block !important;
+        width: 100% !important;
+        padding: 0.25rem 0.5rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 400 !important;
+        color: #566a7f !important;
+        background-color: #fff !important;
+        border: 1px solid #d9dee3 !important;
+        border-radius: 0.25rem !important;
+        height: 30px !important;
     }
 </style>
 
@@ -77,6 +92,10 @@
                 </div>
 
                 <div id="search_container" class="ms-3 grow" style="max-width: 300px;">
+                    <input type="hidden" id="filter_per_page" name="per_page" value="8">
+                    <input type="hidden" id="hidden_sort" name="sort" value="">
+                    <input type="hidden" id="hidden_order" name="order" value="asc">
+                    
                     <div class="input-group input-group-merge">
                         <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
                         <input id="search" type="text" class="form-control border-0 shadow-none" 
@@ -85,7 +104,7 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado">
+                            hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_per_page, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -97,9 +116,10 @@
                         <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
                             <div class="dropdown-header-custom"><i class="fas fa-map-marker-alt me-1"></i> Ubicación</div>
                             <div class="mb-2">
-                                <label class="small text-muted">Provincia</label>
-                                <select id="f_provincia" name="provincia" class="form-select form-select-sm"
-                                    hx-get="{% url 'cargar_municipios' %}?for_filter=1" hx-target="#f_municipio_container" hx-trigger="change"
+                                <label class="small text-muted" for="filter_provincia_select">Provincia</label> <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
+                                    hx-get="{% url 'cargar_municipios' %}?for_filter=1" 
+                                    hx-target="#filter-municipio-container" 
+                                    hx-trigger="change"
                                     onchange="triggerSearch()">
                                     <option value="">Todas</option>
                                     {% for p in provincias_list %}
@@ -107,26 +127,25 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="mb-2" id="f_municipio_container">
-                                <label class="small text-muted">Municipio</label>
-                                <select id="f_municipio" name="municipio" class="form-select form-select-sm" disabled>
-                                    <option value="">Todos</option>
-                                </select>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_municipio_select">Municipio</label> <div id="filter-municipio-container">
+                                    <select id="filter_municipio_select" name="municipio" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <div class="dropdown-header-custom mt-3"><i class="fas fa-user me-1"></i> Datos Personales</div>
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
-                                    <label class="small text-muted">Sexo</label>
-                                    <select id="f_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <label class="small text-muted" for="filter_sexo">Sexo</label> <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
                                         <option value="">Todos</option>
                                         <option value="M">M</option>
                                         <option value="F">F</option>
                                     </select>
                                 </div>
                                 <div class="col-6">
-                                    <label class="small text-muted">Raza</label>
-                                    <select id="f_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <label class="small text-muted" for="filter_raza">Raza</label> <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
                                         <option value="">Todas</option>
                                         <option value="BL">Blanca</option>
                                         <option value="NE">Negra</option>
@@ -137,9 +156,11 @@
 
                             <div class="dropdown-header-custom mt-3"><i class="fas fa-graduation-cap me-1"></i> Formación</div>
                             <div class="mb-2">
-                                <label class="small text-muted">Nivel Educ.</label>
-                                <select id="f_nivel" name="nivel_educ" class="form-select form-select-sm"
-                                    hx-get="{% url 'cargar_esp' %}?for_filter=1" hx-target="#f_especialidad" hx-trigger="change"
+                                <label class="small text-muted" for="filter_nivel_select">Nivel Educ.</label> <select id="filter_nivel_select" name="nivel_educ" class="form-select form-select-sm"
+                                    hx-get="{% url 'cargar_esp' %}?for_filter=1" 
+                                    hx-target="#filter_especialidad" 
+                                    hx-swap="outerHTML" 
+                                    hx-trigger="change"
                                     onchange="triggerSearch()">
                                     <option value="">Todos</option>
                                     {% for k, v in niveles_educ %}
@@ -148,14 +169,12 @@
                                 </select>
                             </div>
                             <div class="mb-2">
-                                <label class="small text-muted">Especialidad</label>
-                                <select id="f_especialidad" name="especialidad" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                                <label class="small text-muted" for="filter_especialidad">Especialidad</label> <select id="filter_especialidad" name="especialidad" class="form-select form-select-sm" disabled onchange="triggerSearch()">
                                     <option value="">Todas</option>
                                 </select>
                             </div>
                             <div class="mb-2">
-                                <label class="small text-muted">Grado Científico</label>
-                                <select id="f_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <label class="small text-muted" for="filter_grado">Grado Científico</label> <select id="filter_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
                                     <option value="">Todos</option>
                                     <option value="MC">Master</option>
                                     <option value="DC">Doctor</option>
@@ -174,14 +193,30 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>No. Exp.</th>
-                            <th>Nombre</th>
-                            <th>Área</th>
-                            <th>Cat. Ocup.</th>
-                            <th>G. Escala</th>
-                            <th class="text-center">Rol</th>
-                            <th>Tridente</th>
-                            <th>Salario</th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('expediente', this)">
+                                No. Exp. <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('nombre', this)">
+                                Nombre <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('area', this)">
+                                Área <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('cat', this)">
+                                Cat. Ocup. <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('grupo', this)">
+                                G. Escala <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none text-center" onclick="triggerBackendSort('rol', this)">
+                                Rol <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('tridente', this)">
+                                Tridente <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
+                            <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('salario', this)">
+                                Salario <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon"></i>
+                            </th>
                             <th></th> 
                         </tr>
                     </thead>
@@ -191,8 +226,10 @@
                 </table>
             </div>
             
-            <div id="table-pagination-footer" class="px-4 pb-3 border-top">
-                {% include 'pages/contrato/partials/pagination.html' %}
+            <div class="px-4 pb-3 border-top d-flex justify-content-end align-items-center pt-3">
+                <div id="table-pagination-footer" class="m-0 w-100">
+                    {% include 'pages/contrato/partials/pagination.html' %}
+                </div>
             </div>
 
         </div> 
@@ -217,11 +254,11 @@
             <div class="modal-body">
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="form-label">No. Expediente</label>
+                        <label class="form-label" for="baja_expediente">No. Expediente</label> 
                         <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
                     </div>
                     <div class="col-md-8">
-                        <label class="form-label">Trabajador</label>
+                        <label class="form-label" for="baja_nombre">Trabajador</label> 
                         <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
                     </div>
                 </div>
@@ -280,9 +317,47 @@
         });
     }
 
+   
+
+
+    let currentSort = '';
+    let currentOrder = 'asc';
+
+    function triggerBackendSort(colName, element) {
+        // 1. Cambiar dirección (Ascendente/Descendente)
+        if (currentSort === colName) {
+            currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort = colName;
+            currentOrder = 'asc';
+        }
+
+        // 2. Efecto visual en los iconos
+        document.querySelectorAll('.sort-icon').forEach(i => {
+            i.className = 'fas fa-sort ms-1 text-muted opacity-50 sort-icon';
+        });
+        
+        let icon = element.querySelector('.sort-icon');
+        if (icon) {
+            icon.className = currentOrder === 'asc' 
+                ? 'fas fa-sort-amount-down-alt ms-1 text-primary sort-icon' 
+                : 'fas fa-sort-amount-up-alt ms-1 text-primary sort-icon';
+        }
+
+        // 3. Escribir los valores en los inputs ocultos y disparar la búsqueda a Django
+        document.getElementById('hidden_sort').value = currentSort;
+        document.getElementById('hidden_order').value = currentOrder;
+        
+        // Llamamos a la función de búsqueda de HTMX que ya tienes configurada
+        triggerSearch(); 
+    }
+    
+
     function confirmarSolicitudMovimiento() {
-        // Obtenemos el botón y la URL que guardamos al seleccionar la fila
+        // 1. Obtenemos el botón y la URL (Tu código original seguro)
         const btn = document.getElementById('btn-movimiento');
+        // Si tu botón tiene otro ID en el HTML, asegúrate de que sea el correcto
+        if (!btn) return;
         const url = btn.getAttribute('data-url-solicitar');
 
         if (!url || url === '#' || url === '') {
@@ -297,36 +372,59 @@
             return;
         }
 
+        // 2. Encontrar la fila que el usuario tiene seleccionada para leer el estado
+        const filaActiva = document.querySelector('.fila-contrato.table-active-row');
+        if (!filaActiva) return;
+        
+        // Leemos el chivato que pusimos en el HTML
+        const estaEnProceso = filaActiva.getAttribute('data-en-proceso') === 'true';
+
+        // 3. Configurar los textos y colores según el estado
+        const titulo = estaEnProceso ? '¿Cancelar Movimiento?' : '¿Desea Permitir un Movimiento de Nómina?';
+        const texto = estaEnProceso 
+            ? 'Desea anular esta solicitud de movimiento de nómina.' 
+            : 'El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.';
+        const btnText = estaEnProceso ? 'Sí, anular' : 'Sí, permitir';
+        const btnColor = estaEnProceso ? '#8592a3' : '#ffab00'; // Gris para cancelar, Amarillo para enviar
+        
         Swal.fire({
-            title: '¿Desea Permitir un Movimiento de Nómina?',
-            text: "El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.",
+            title: titulo,
+            text: texto,
             icon: 'question',
             showCancelButton: true,
-            confirmButtonColor: '#ffab00', // Amarillo/Naranja
-            cancelButtonColor: '#8592a3',
-            confirmButtonText: 'Sí, permitir',
+            confirmButtonColor: btnColor,
+            cancelButtonColor: estaEnProceso ? '#d33' : '#8592a3', // Ajuste visual de botones
+            confirmButtonText: btnText,
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Hacemos la petición AJAX (usando jQuery que ya tienes cargado)
+                
+                // Preparamos los datos a enviar
+                let datosPayload = {};
+                if (estaEnProceso) {
+                    datosPayload = { 'cancelar': 'true' };
+                }
+
+                // 4. Hacemos la petición AJAX (Tu código original con $.ajax)
                 $.ajax({
                     url: url,
                     type: 'POST',
+                    data: datosPayload, // Enviamos el dato de si estamos cancelando o no
                     headers: {
                         'X-CSRFToken': '{{ csrf_token }}'
-                    }, // Importante para Django
+                    }, 
                     success: function(response) {
                         if (response.success) {
                             Swal.fire({
                                 toast: true,
                                 position: 'top-end',
                                 icon: 'success',
-                                title: 'Solicitud de movimiento de nómina aprobada',
-                                text: 'El contrato ahora aparece enmarcado en amarillo.',
+                                // Usamos el mensaje dinámico que devuelve tu views.py
+                                title: response.message, 
                                 showConfirmButton: false,
                                 timer: 3000
                             });
-                            // Recargamos la tabla para ver el borde amarillo
+                            // Recargamos la tabla para ver u ocultar el borde amarillo
                             triggerSearch();
                         } else {
                             Swal.fire('Error', response.message, 'error');
@@ -463,10 +561,25 @@
                 triggerSearch();
             },
             error: function(xhr) {
-                Swal.fire('Error', 'No se pudo procesar la baja.', 'error');
+                // EXTRAEMOS EL MENSAJE INTELIGENTE DE DJANGO
+                let mensajeError = 'No se pudo procesar la baja debido a un error de conexión.';
+                
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    mensajeError = xhr.responseJSON.message;
+                }
+
+                // Mostramos el mensaje exacto al usuario
+                Swal.fire({
+                    title: 'No se puede procesar',
+                    text: mensajeError,
+                    icon: 'error',
+                    confirmButtonColor: '#696cff'
+                });
             }
         });
     }
+
+    
 
     document.body.addEventListener('htmx:confirm', function(evt) {
         if (evt.target.id === 'btn-baja') {
@@ -534,6 +647,8 @@
             });
         });
     }
+
+
 </script>
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
 {% endblock %}

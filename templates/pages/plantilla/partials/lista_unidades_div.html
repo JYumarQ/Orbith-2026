@@ -9,34 +9,29 @@
          hx-target="#col-departamentos"
          hx-swap="innerHTML"
          hx-indicator="#col-departamentos"
-         style="cursor: pointer;">
+         style="cursor: pointer; position: relative;">
          
         <div class="card-body p-2 d-flex align-items-center">
-            
             <div class="me-3 text-secondary opacity-50" style="width: 20px; text-align: center;">
                 <i class="fas fa-building"></i>
             </div>
 
             <div class="row flex-grow-1 m-0 align-items-center gx-2">
-                
                 <div class="col-6">
                     <h6 class="mb-0 fw-bold text-dark text-truncate" title="{{ u.descripcion }}" style="font-size: 0.85rem;">
                         {{ u.descripcion }}
                     </h6>
                 </div>
-
                 <div class="col-2">
                     <span class="badge bg-label-secondary border px-1 text-truncate w-100 text-center" style="font-size: 0.65rem;" title="Grupo de Nómina">
                         GN: {{ u.grupo_nomina }}
                     </span>
                 </div>
-
                 <div class="col-2">
                     <small class="text-muted fw-bold text-truncate d-block" style="font-size: 0.7rem;">
                         {{ u.tipo }}
                     </small>
                 </div>
-
                 <div class="col-2 text-end">
                     <span class="badge bg-label-primary" style="font-size: 0.65rem;">
                         <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;"></i>{{ u.total_dptos }}
@@ -44,9 +39,67 @@
                 </div>
             </div>
 
-            <i class="fas fa-chevron-right text-muted opacity-25 ms-2" style="font-size: 0.7rem;"></i>
+            {% if u.direcciones_hijas.all %}
+                <div class="ms-2 p-2" onclick="toggleHijas('{{ u.pk }}'); event.stopPropagation();" title="Desplegar Direcciones Funcionales" style="z-index: 10;">
+                    <i id="icon-toggle-{{ u.pk }}" class="fas fa-chevron-down text-primary" style="font-size: 0.9rem; transition: transform 0.3s;"></i>
+                </div>
+            {% else %}
+                <div class="ms-2 p-2">
+                    <i class="fas fa-chevron-right text-muted opacity-25" style="font-size: 0.9rem;"></i>
+                </div>
+            {% endif %}
         </div>
     </div>
+
+    {% if u.direcciones_hijas.all %}
+        <div id="hijas-{{ u.pk }}" class="hijas-container" style="display: none; background-color: #f8fafc; border-left: 3px solid #696cff;">
+            {% for hija in u.direcciones_hijas.all %}
+                <div id="unit-{{ hija.pk }}" class="card mb-0 border-bottom nav-card unit-card"
+                     data-pk="{{ hija.pk }}"
+                     data-desc="{{ hija.descripcion }}"
+                     data-url-edit="{% url 'updt_uniorg' hija.pk %}"
+                     data-url-del="{% url 'del_uniorg' hija.pk %}"
+                     onclick="selectUnit(this)"
+                     hx-get="{% url 'htmx_load_departamentos' hija.pk %}"
+                     hx-target="#col-departamentos"
+                     hx-swap="innerHTML"
+                     hx-indicator="#col-departamentos"
+                     style="cursor: pointer; padding-left: 1.5rem !important;"> 
+                     
+                     <div class="card-body p-2 d-flex align-items-center">
+                        <div class="me-3 text-primary opacity-50" style="width: 20px; text-align: center;">
+                            <i class="fas fa-level-up-alt fa-rotate-90"></i> 
+                        </div>
+
+                        <div class="row flex-grow-1 m-0 align-items-center gx-2">
+                            <div class="col-6">
+                                <h6 class="mb-0 fw-bold text-dark text-truncate" title="{{ hija.descripcion }}" style="font-size: 0.85rem;">
+                                    {{ hija.descripcion }}
+                                </h6>
+                            </div>
+                            <div class="col-2">
+                                <span class="badge bg-label-secondary border px-1 text-truncate w-100 text-center" style="font-size: 0.65rem;">
+                                    GN: {{ hija.grupo_nomina }}
+                                </span>
+                            </div>
+                            <div class="col-2">
+                                <small class="text-muted fw-bold text-truncate d-block" style="font-size: 0.7rem;">
+                                    {{ hija.tipo }}
+                                </small>
+                            </div>
+                            <div class="col-2 text-end">
+                                <span class="badge bg-label-primary" style="font-size: 0.65rem;">
+                                    <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;"></i>{{ hija.departamento_set.count }}
+                                </span>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-right text-muted opacity-25 ms-2 p-2" style="font-size: 0.9rem;"></i>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
 {% empty %}
     <div class="text-center py-4">
         <i class="fas fa-search fs-4 text-muted mb-2 opacity-25"></i>

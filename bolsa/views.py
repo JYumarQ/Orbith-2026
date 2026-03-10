@@ -4,7 +4,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView
 from django.urls import reverse, reverse_lazy
-from django.db.models import Q, ProtectedError, Value
+from django.db.models import Q, ProtectedError, Value, RestrictedError
 from django.db.models.functions import Concat
 from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
@@ -379,9 +379,14 @@ class AspiranteDeleteView(DeleteView):
             messages.success(request, f'Aspirante "{nombre}" ha sido eliminado correctamente.')
             return HttpResponseRedirect(reverse('list_aspir'))
 
-        except ProtectedError:
-            # Si falla por integridad (tiene contrato u otros datos), avisamos al usuario
-            messages.error(request, "No se puede eliminar el aspirante porque tiene contratos o datos asociados.")
+        except (ProtectedError, RestrictedError):
+            # Si falla por protección (tiene contratos activos) o restricción (tiene historial de bajas)
+            mensaje_amigable = (
+                f'Acción denegada: No se puede eliminar a "{aspirante.nombre}" '
+                f'porque tiene un historial de contratos o bajas asociado en el sistema. '
+                f'Por normas de auditoría, este registro está protegido.'
+            )
+            messages.error(request, mensaje_amigable)
             
             # Importante: Forzamos recarga (HX-Refresh) para que el usuario vea que la fila SIGUE ahí
             if request.headers.get('HX-Request'):
@@ -390,7 +395,7 @@ class AspiranteDeleteView(DeleteView):
             return HttpResponseRedirect(reverse('list_aspir'))
             
         except Exception as e:
-            messages.error(request, f"Error desconocido al eliminar: {e}")
+            messages.error(request, f"Error inesperado al intentar eliminar: {e}")
             if request.headers.get('HX-Request'):
                 return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
             return HttpResponseRedirect(reverse('list_aspir'))

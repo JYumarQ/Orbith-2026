@@ -4,12 +4,13 @@ from django.contrib import messages
 from .models import Configuracion
 from .forms import ConfiguracionForm
 from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, NHorario, NJornada, \
-    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo
+    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo, NNivelPreparacion
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 from operator import attrgetter
+from django.http import JsonResponse
 
 class ParametrosGeneralesView(FormView):
     template_name = "pages/config/config.html"
@@ -76,6 +77,7 @@ class ParametrosGeneralesView(FormView):
         context['causas'] = NCausaAltaBaja.objects.all()
         context['condiciones'] = NCondicionLaboralAnormal.objects.all()
         context['especialidades'] = NEspecialidad.objects.all()
+        context['niveles_preparacion'] = NNivelPreparacion.objects.all()
         context['cargos'] = NCargo.objects.all()
         context['cargos_sin_familia'] = NCargo.objects.filter(
             familia__isnull=True, 

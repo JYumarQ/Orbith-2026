@@ -15,7 +15,7 @@ from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.core.paginator import Paginator
-from .models import NFamiliaCargo
+from .models import NFamiliaCargo, NNivelPreparacion
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
@@ -370,6 +370,8 @@ def cargar_esp(request):
     nivel = request.GET.get('nivel_educ')
     
     is_filter = request.GET.get('for_filter') == '1'
+
+    
 
     if nivel == 'NS':
         # Nivel Superior
@@ -828,7 +830,6 @@ def cargo_create(request):
     cat_ocupacional = data.get('cat_ocupacional', '').strip()
     grupo_escala_id = data.get('grupo_escala_id')
     salario_basico = data.get('salario_basico', 0)
-    activo = data.get('activo', True)
 
     if not descripcion or not cat_ocupacional or not grupo_escala_id:
         return JsonResponse({'error': 'Complete todos los campos obligatorios'}, status=400)
@@ -839,8 +840,7 @@ def cargo_create(request):
             descripcion=descripcion.title(),
             cat_ocupacional=cat_ocupacional,
             grupo_escala=grupo,
-            salario_basico=float(salario_basico),
-            activo=activo
+            salario_basico=float(salario_basico)
         )
         return JsonResponse({
             'id': obj.id,
@@ -848,8 +848,7 @@ def cargo_create(request):
             'cat_ocupacional': obj.get_cat_ocupacional_display(),
             'cat_ocupacional_value': obj.cat_ocupacional,
             'grupo_escala': obj.grupo_escala.nivel,
-            'salario_basico': str(obj.salario_basico),
-            'activo': obj.activo
+            'salario_basico': str(obj.salario_basico)
         })
     except NGrupoEscala.DoesNotExist:
         return JsonResponse({'error': 'Grupo de escala no encontrado'}, status=400)
@@ -866,7 +865,6 @@ def cargo_update(request, pk):
         cat_ocupacional = data.get('cat_ocupacional', '').strip()
         grupo_escala_id = data.get('grupo_escala_id')
         salario_basico = data.get('salario_basico', 0)
-        activo = data.get('activo', True)
 
         if not descripcion or not cat_ocupacional or not grupo_escala_id:
             return JsonResponse({'error': 'Complete todos los campos obligatorios'}, status=400)
@@ -876,7 +874,6 @@ def cargo_update(request, pk):
         obj.cat_ocupacional = cat_ocupacional
         obj.grupo_escala = grupo
         obj.salario_basico = float(salario_basico)
-        obj.activo = activo
         obj.save()
 
         return JsonResponse({
@@ -885,8 +882,7 @@ def cargo_update(request, pk):
             'cat_ocupacional': obj.get_cat_ocupacional_display(),
             'cat_ocupacional_value': obj.cat_ocupacional,
             'grupo_escala': obj.grupo_escala.nivel,
-            'salario_basico': str(obj.salario_basico),
-            'activo': obj.activo
+            'salario_basico': str(obj.salario_basico)
         })
     except NCargo.DoesNotExist:
         return JsonResponse({'error': 'Cargo no encontrado'}, status=404)
@@ -991,3 +987,40 @@ def api_cargo_move(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+    
+
+# ---------- CRUD NNivelPreparacion ----------
+@csrf_exempt
+@require_POST
+def nivel_preparacion_create(request):
+    data = json.loads(request.body)
+    nombre = data.get('nombre', '').strip()
+    if not nombre:
+        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    
+    obj = NNivelPreparacion.objects.create(nombre=nombre.title())
+    return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def nivel_preparacion_update(request, pk):
+    obj = get_object_or_404(NNivelPreparacion, pk=pk)
+    data = json.loads(request.body)
+    nombre = data.get('nombre', '').strip()
+    if not nombre:
+        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    
+    obj.nombre = nombre.title()
+    obj.save()
+    return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def nivel_preparacion_delete(request, pk):
+    try:
+        NNivelPreparacion.objects.get(pk=pk).delete()
+        return JsonResponse({'success': True})
+    except NNivelPreparacion.DoesNotExist:
+        return JsonResponse({'error': 'No encontrado'}, status=404)
+    except RestrictedError:
+        return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)

@@ -25,3 +25,54 @@
         </div>
     </div>
 </div>
+
+<script>
+    function hacerFormularioInteligente() {
+        const selectTipo = document.getElementById('id_tipo');
+        const inputNomina = document.getElementById('id_grupo_nomina');
+        
+        // 1. Atrapamos el valor que Django nos mandó desde la vista
+        const dgGrupoNomina = "{{ dg_grupo_nomina|default_if_none:'' }}"; 
+        
+        if (!selectTipo || !inputNomina) return;
+
+        // Guardamos el valor que el usuario escribe por si cambia de opinión
+        let valorUsuario = inputNomina.value;
+        
+        function actualizarEstado() {
+            if (selectTipo.value === 'DF') {
+                // Si eligen DF, guardamos lo que habían escrito (si no es el de la DG)
+                if (inputNomina.value !== dgGrupoNomina) {
+                    valorUsuario = inputNomina.value;
+                }
+                
+                inputNomina.setAttribute('readonly', 'readonly');
+                inputNomina.style.backgroundColor = '#e9ecef';
+                
+                // 2. Le inyectamos el número real de la Dirección General
+                if (dgGrupoNomina !== "") {
+                    inputNomina.value = dgGrupoNomina;
+                } else {
+                    inputNomina.value = "";
+                    inputNomina.placeholder = "Falta crear Dir. General";
+                }
+                
+            } else {
+                // Si es UEB o DG, liberamos el campo
+                inputNomina.removeAttribute('readonly');
+                inputNomina.style.backgroundColor = '';
+                inputNomina.placeholder = "";
+                
+                // 3. Le devolvemos el número que el usuario estaba escribiendo
+                if (inputNomina.value === dgGrupoNomina) {
+                    inputNomina.value = valorUsuario !== dgGrupoNomina ? valorUsuario : "";
+                }
+            }
+        }
+        
+        actualizarEstado();
+        selectTipo.addEventListener('change', actualizarEstado);
+    }
+    
+    hacerFormularioInteligente();
+</script>

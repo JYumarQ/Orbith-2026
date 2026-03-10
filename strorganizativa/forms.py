@@ -21,11 +21,12 @@ class CargoPlantillaForm(forms.ModelForm):
     
     class Meta:
         model = CargoPlantilla
-        fields = ('ncargo', 'departamento', 'rol', 'cant_aprobada', 'cant_cubierta', 'activo')
+        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo')
         labels = {
             'ncargo': 'Cargo', 
             'departamento': 'Departamento', 
             'rol': 'Rol', 
+            'nivel_preparacion': 'Nivel de Preparación',
             'cant_aprobada': 'Cantidad Aprobada', 
             'cant_cubierta': 'Cantidad Cubierta', 
             'activo': ' Estado(Automático)'
@@ -38,6 +39,7 @@ class CargoPlantillaForm(forms.ModelForm):
             }),
             'departamento': forms.Select(attrs={'class':'form-select'}),
             'rol': forms.Select(attrs={'class':'form-select', 'id':'id_rol'}),
+            'nivel_preparacion': forms.Select(attrs={'class':'form-select', 'id':'id_nivel_preparacion'}),
             'cant_aprobada': forms.NumberInput(attrs={'class': 'form-control'}),
             'cant_cubierta': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class':'form-check-input', 'disabled': 'disabled', 'id': 'id_activo'})
@@ -86,20 +88,12 @@ class CargoPlantillaForm(forms.ModelForm):
         rol = cleaned_data.get('rol')
 
         if ncargo:
-            # Validamos Categoría Ocupacional vs Rol
-            # CDI = Cuadro Directivo, CDJ = Cuadro Ejecutivo (o similar según tu nomenclatura)
-            es_cuadro = ncargo.cat_ocupacional in ['CDI', 'CDJ']
-            
-            # Regla 1: Si es Cuadro, NO debe tener Rol.
-            if es_cuadro and rol is not None:
-                self.add_error('rol', f'El cargo "{ncargo.descripcion}" es de categoría Cuadro ({ncargo.cat_ocupacional}) y NO debe llevar Rol.')
-            
-            # Regla 2: Si NO es Cuadro, DEBE tener Rol.
-            if not es_cuadro and rol is None:
-                self.add_error('rol', f'El cargo "{ncargo.descripcion}" NO es Cuadro, por lo tanto DEBE tener un Rol asignado.')
+            # Como ahora "Cuadro" es un Rol válido en el nomenclador, 
+            # simplemente exigimos que TODO cargo tenga un rol asignado.
+            if rol is None:
+                self.add_error('rol', f'El cargo "{ncargo.descripcion}" debe tener un Rol asignado (Ej: Cuadro, Decisorio, Apoyo...).')
         
         return cleaned_data
-
 
 
         
@@ -135,7 +129,7 @@ class DepartamentoForm(forms.ModelForm):
 class UnidadOrganizativaForm(forms.ModelForm):
     class Meta:
         model = UnidadOrganizativa
-        fields = ('grupo_nomina', 'descripcion', 'tipo')
+        fields = [ 'grupo_nomina', 'descripcion', 'tipo']
         label = {
             'grupo_nomina': 'Grupo de Nómina',
             'descripcion': 'Descripción',

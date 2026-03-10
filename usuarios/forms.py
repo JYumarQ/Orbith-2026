@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from .models import CustomUser
+from django.contrib.auth.forms import AuthenticationForm
 
 class CustomUserCreationForm(UserCreationForm):
     class Meta:
@@ -107,3 +108,21 @@ class CustomPasswordChangeForm(forms.Form):
             raise ValidationError("Las contraseñas no coinciden.")
         return new_password2
 
+class CustomAuthenticationForm(AuthenticationForm):
+    def clean(self):
+        cleaned_data = super().clean()
+        user = self.get_user()
+        
+        # Obtenemos qué botón presionó el usuario desde el HTML
+        tipo_acceso = self.data.get('tipo_acceso') 
+
+        if user is not None and tipo_acceso:
+            # Validación Administrador
+            if tipo_acceso == 'administrador' and not user.es_admin:
+                raise ValidationError("Credenciales válidas, pero no posee privilegios de Administrador.")
+            
+            # Validación Moderador
+            elif tipo_acceso == 'moderador' and not user.es_moderador:
+                raise ValidationError("Credenciales válidas, pero no posee privilegios de Moderador.")
+        
+        return cleaned_data

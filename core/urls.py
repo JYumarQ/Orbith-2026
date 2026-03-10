@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from dashboard import views as dashboard_views
 from django.urls import path, include
+from usuarios.views import CustomLoginView
 
 urlpatterns = [
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
@@ -15,6 +16,7 @@ urlpatterns = [
     path('notificaciones/', include('notificaciones.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),
+    path('accounts/login/', CustomLoginView.as_view(), name='login'),
 
     
     

@@ -214,7 +214,33 @@ class CAltaForm(forms.ModelForm):
         cargo = cleaned_data.get('cargo')
         tipo_contrato = cleaned_data.get('tipo')
 
-        # VALIDACIÓN DE CAPACIDAD (Solo para plazas fijas INDETERMINADAS)
+        # --- MÓDULO 3: VALIDACIÓN Y LIMPIEZA ESTRICTA DE TRIDENTE ---
+        if cargo:
+            rol_obj = cargo.rol
+            es_cuadro = rol_obj and rol_obj.tipo.strip() == "Cuadro"
+            
+            # Convertimos el nivel romano a número para aplicar las reglas
+            mapa = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100}
+            nivel_num = 0
+            if cargo.ncargo and cargo.ncargo.grupo_escala:
+                romano = cargo.ncargo.grupo_escala.nivel
+                prev = 0
+                for c in reversed(romano.upper().strip()):
+                    val = mapa.get(c, 0)
+                    if val < prev: nivel_num -= val
+                    else: nivel_num += val
+                    prev = val
+            
+            # REGLAS DE ORO: Forzamos el tridente a None (NULL en la BD) si no corresponde
+            if es_cuadro:
+                # Regla 1: Un "Cuadro" NUNCA se guarda con tridente, no importa el grupo.
+                cleaned_data['tridente'] = None
+                
+            elif 22 <= nivel_num <= 24 and (not rol_obj or rol_obj.tipo.strip() != "Decisorio"):
+                # Regla 2: En los Grupos XXII al XXIV, solo el rol "Decisorio" puede guardarse con tridente.
+                cleaned_data['tridente'] = None
+
+        # --- VALIDACIÓN DE CAPACIDAD (Tu código original intacto) ---
         if cargo and tipo_contrato == 'IND':
             check_capacity = True
             
@@ -228,7 +254,6 @@ class CAltaForm(forms.ModelForm):
                     self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta}/{cargo.cant_aprobada}).')
         
         return cleaned_data
-        
    
 
 

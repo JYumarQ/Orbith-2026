@@ -60,11 +60,19 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>No. Exp.</th>
-                            <th>Nombre</th>
-                            <th>Cargo Actual</th>
-                            <th>Unidad / Dpto</th>
-                            </tr>
+                            <th style="cursor:pointer;" onclick="ordenarTablaMovimientos(0, 'number')">
+                                No. Exp. <i class="fas fa-sort ms-1 text-muted" id="sort-icon-0"></i>
+                            </th>
+                            <th style="cursor:pointer;" onclick="ordenarTablaMovimientos(1, 'string')">
+                                Nombre <i class="fas fa-sort ms-1 text-muted" id="sort-icon-1"></i>
+                            </th>
+                            <th style="cursor:pointer;" onclick="ordenarTablaMovimientos(2, 'string')">
+                                Cargo Actual <i class="fas fa-sort ms-1 text-muted" id="sort-icon-2"></i>
+                            </th>
+                            <th style="cursor:pointer;" onclick="ordenarTablaMovimientos(3, 'string')">
+                                Unidad / Dpto <i class="fas fa-sort ms-1 text-muted" id="sort-icon-3"></i>
+                            </th>
+                        </tr>
                     </thead>
                     <tbody class="table-border-bottom-0">
                         {% for c in object_list %}
@@ -160,6 +168,55 @@
         const btn = document.getElementById('btn-confirmar-mov');
         // Le pasamos la URL guardada en el data-attribute de la fila
         btn.setAttribute('data-url-target', fila.dataset.urlMovimiento);
+    }
+
+    let colMovActual = -1;
+    let ordenMovAsc = true;
+
+    function ordenarTablaMovimientos(n, tipo) {
+        const tabla = document.querySelector("table");
+        const tbody = tabla.querySelector("tbody");
+        let filas = Array.from(tbody.rows);
+
+        // Si la tabla está vacía, no hacemos nada
+        if (filas.length === 0 || filas[0].cells.length < 2) return;
+
+        if (colMovActual === n) {
+            ordenMovAsc = !ordenMovAsc;
+        } else {
+            ordenMovAsc = true;
+            colMovActual = n;
+        }
+
+        actualizarIconosMovimiento(n, ordenMovAsc);
+
+        filas.sort((a, b) => {
+            let x = a.cells[n].innerText.trim().toUpperCase();
+            let y = b.cells[n].innerText.trim().toUpperCase();
+
+            if (tipo === 'number') {
+                let numX = parseFloat(x) || 0;
+                let numY = parseFloat(y) || 0;
+                return ordenMovAsc ? numX - numY : numY - numX;
+            }
+
+            // Orden alfabético para Nombre, Cargo Actual y Unidad/Dpto
+            return ordenMovAsc ? x.localeCompare(y) : y.localeCompare(x);
+        });
+
+        filas.forEach(fila => tbody.appendChild(fila));
+    }
+
+    function actualizarIconosMovimiento(colIdx, isAsc) {
+        // Solo tenemos 4 columnas (0 a 3)
+        for (let i = 0; i <= 3; i++) {
+            const icon = document.getElementById(`sort-icon-${i}`);
+            if (icon) icon.className = 'fas fa-sort ms-1 text-muted';
+        }
+        const activeIcon = document.getElementById(`sort-icon-${colIdx}`);
+        if (activeIcon) {
+            activeIcon.className = isAsc ? 'fas fa-sort-up ms-1 text-primary' : 'fas fa-sort-down ms-1 text-primary';
+        }
     }
 
     // 2. LÓGICA DE CLIC FUERA (Deseleccionar)

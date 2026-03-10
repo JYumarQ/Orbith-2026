@@ -1,113 +1,218 @@
 <!DOCTYPE html>
-<html
-  lang="en"
-  class="light-style customizer-hide"
-  dir="ltr"
-  data-theme="theme-default"
-  data-assets-path="../assets/"
-  data-template="vertical-menu-template-free"
->
-  <head>
+<html lang="es" dir="ltr">
+<head>
     {% load static %}
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
 
-    <title>Autenticarse | ORBITH </title>
+    <title>Autenticarse | ORBITH</title>
     <link rel="icon" type="image/png" href="{% static 'img/favicon/favicon.png' %}" />
 
+    <style>
+        /* ==========================================
+           1. VARIABLES Y TEMAS DINÁMICOS
+           ========================================== */
+        :root {
+            --mod-bg: radial-gradient(circle at top left, #2e1065, #0f172a);
+            --mod-accent: #8b5cf6;
+            --mod-btn: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+            
+            --admin-bg: radial-gradient(circle at top left, #1e3a8a, #020617);
+            --admin-accent: #e65c00; /* Naranja ligeramente más oscuro para que el texto se lea bien */
+            --admin-btn: linear-gradient(135deg, #ff8c42 0%, #e65c00 100%); /* Degradado 100% naranja vibrante, adiós al azul oscuro */
+        }
 
-    <meta name="description" content="" />
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s ease;
+        }
 
-    <!-- Icons. Uncomment required icon fonts -->
-     <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
-     <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}">
-     <link rel="stylesheet" href="{% static 'vendor/css/theme-default.css' %}">
-     
-     <!-- Core CSS -->
-     <link rel="stylesheet" href="{% static 'css/demo.css' %}">
-     
-     <!-- Vendors CSS -->
-     <link rel="stylesheet" href="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}">
-     
-     <!-- Page CSS -->
-     <!-- Page -->
-     <link rel="stylesheet" href="{% static 'vendor/css/pages/page-auth.css' %}">
-     <!-- Helpers -->
-     <link rel="stylesheet" href="{% static 'vendor/js/helpers.js' %}">
+        body.theme-moderador { background: var(--mod-bg); --current-accent: var(--mod-accent); --current-btn: var(--mod-btn); }
+        body.theme-administrador { background: var(--admin-bg); --current-accent: var(--admin-accent); --current-btn: var(--admin-btn); }
 
-    <!--! Template customizer & Theme config files MUST be included after core stylesheets and helpers.js in the <head> section -->
-    <!--? Config:  Mandatory theme config file contain global vars & default theme options, Set your preferred theme option in this file.  -->
-  </head>
+        /* ==========================================
+           2. TAMAÑO Y CENTRADO DE LOGOS
+           ========================================== */
+        .logo-une { 
+            height: 130px; 
+            width: auto; 
+            object-fit: contain; 
+            margin: 0 auto 1.5rem auto; /* Esto fuerza el centrado perfecto */
+            display: block; 
+        }
+        
+        .logo-orbith { 
+            height: 100px; 
+            width: auto; 
+            object-fit: contain; 
+            margin: 0 auto 1rem auto; 
+            display: block;
+        }
 
-  <body>
-    <!-- Content -->
+        /* ==========================================
+           3. ESTRUCTURA SPLIT-SCREEN
+           ========================================== */
+        .login-container {
+            width: 100%; max-width: 950px;
+            display: grid; grid-template-columns: 1fr 1fr;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 2rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            overflow: hidden; margin: 20px;
+        }
 
-    <div class="container-xxl">
-      <div class="authentication-wrapper authentication-basic pt-0 mt-0">
-        <div class="authentication-inner">
-          <!-- Register -->
-          <div class="card">
-            <div class="card-body pt-0">
-              <!-- Logo -->
-              <div class="app-brand justify-content-center">
-                <a href="{% url 'dashboard' %}" class="app-brand-link gap-2">
-                  <span class="app-brand-logo demo" style="width: 100%; display: flex; justify-content: center; margin-bottom: -6.5rem;">
-                    <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith Logo" style="height: 280px; width: auto; object-fit: contain;" />
-                  </span>
+        /* PANEL IZQUIERDO: Fondo Gris/Azul Suave (Adiós blanco nuclear) */
+        .info-panel { 
+            background: linear-gradient(135deg, #f8fafc 50%, #6b8fec 100%); 
+            padding: 3.5rem 3rem; 
+            display: flex; flex-direction: column; justify-content: space-between; 
+            text-align: center; /* Centramos todo el texto de la columna */
+        }
+        .info-title { color: #0f172a; font-size: 2.3rem; font-weight: 800; line-height: 1.15; margin: 0 0 1rem 0; letter-spacing: -0.5px; }
+        .info-subtitle { color: #475569; font-size: 1.05rem; margin: 0; line-height: 1.5; }
+        
+        /* Insignia de seguridad inferior */
+        .security-badge { display: flex; align-items: center; justify-content: center; gap: 10px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 2rem; margin-top: 2rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
 
-                </a>
-              </div>
-              <!-- /Logo -->
-              <h4 class="mb-2">Bienvenido a Orbith! 👋</h4>
-              <p class="mb-4">Por favor inicie sesión para poder acceder</p>
+        /* PANEL DERECHO: Fondo Oscuro para el Formulario */
+        .form-panel { 
+            background: linear-gradient(10deg, #6b8fec 0%, #f8fafc 100%); 
+            padding: 3.5rem 3rem; 
+            display: flex; flex-direction: column; justify-content: center; 
+            color: #ffffff;
+        }
+        .role-indicator { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--current-accent); margin-bottom: 2rem; transition: color 0.3s; }
 
-              <form id="formAuthentication" class="mb-3" method="POST">
-                {% csrf_token %}
-                <div class="mb-3">
-                  <label for="email" class="form-label">Nombre de Usuario</label>
-                  <input
-                    type="text"
-                    class="form-control"
-                    id="email"
-                    name="username"
-                    placeholder="Inserte su nombre de usuario"
-                    autofocus
-                  />
-                </div>
-                <div class="mb-3">
-                  <div class="d-flex justify-content-between">
-                    <label class="form-label" for="password">Contraseña</label>
-                    
-                  </div>
-                  <div class="input-group input-group-merge">
-                    <input
-                      type="password"
-                      id="password"
-                      class="form-control"
-                      name="password"
-                      placeholder="&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;&#xb7;"
-                      aria-describedby="password"
-                    />
-                    <span class="input-group-text cursor-pointer"><i class="bx bx-hide"></i></span>
-                  </div>
-                  <a href="#">
-                      <small>¿Olvidó su contraseña?</small>
-                    </a>
-                </div>
-                <div class="mb-3">
-                  <button class="btn btn-primary d-grid w-100" type="submit">Entrar</button>
-                </div>
-              </form>
+        /* Selector de Roles */
+        .role-selector { display: flex; gap: 0.5rem; padding: 0.4rem; background: rgba(159, 111, 111, 0.05); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem; }
+        .role-btn { flex: 1; padding: 0.8rem 1rem; border: none; background: transparent; color: #9ca3af; font-weight: 700; border-radius: 0.75rem; cursor: pointer; transition: all 0.3s; }
+        .role-btn.active { background: var(--current-btn); color: #fff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); }
+        .role-btn:not(.active):hover { color: #fff; }
+
+        /* Inputs */
+        .input-group { position: relative; margin-bottom: 1.5rem; }
+        .input-icon { position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.4); display: flex; transition: color 0.3s; }
+        .floating-input { width: 100%; padding: 1.2rem 1rem 1.2rem 3.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; color: #fff; font-size: 0.95rem; box-sizing: border-box; transition: all 0.2s; }
+        .floating-input:focus { outline: none; background: rgba(255,255,255,0.08); border-color: var(--current-accent); }
+        .input-group:focus-within .input-icon { color: var(--current-accent); }
+        
+        /* Botones y Enlaces */
+        /* Botones y Enlaces */
+        .form-options { display: flex; justify-content: flex-end; margin-bottom: 1.5rem; }
+        .form-options a { color: #475569; text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: color 0.2s; }
+        .form-options a:hover { color: #0f172a; text-decoration: underline; }
+        .btn-submit { width: 100%; padding: 1.2rem; background: var(--current-btn); border: none; border-radius: 1rem; color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: transform 0.1s; }
+        .btn-submit:active { transform: scale(0.98); }
+
+        /* Errores Django */
+        .django-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 1rem; border-radius: 1rem; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; }
+
+        /* Responsive para móviles */
+        @media (max-width: 768px) {
+            .login-container { grid-template-columns: 1fr; border-radius: 1.5rem; }
+            .info-panel { display: none; }
+            .form-panel { padding: 2.5rem 2rem; }
+        }
+    </style>
+</head>
+
+<body id="body-context" class="theme-moderador">
+
+    <div class="login-container">
+        <div class="info-panel">
+            <div>
+                <img src="{% static 'img/logo_une.png' %}" alt="UNE Logo" class="logo-une">
+                
+                <h2 class="info-title">Gestión de<br>Capital Humano</h2>
+                <p class="info-subtitle">Soluciones inteligentes para la Empresa Eléctrica Camagüey.</p>
             </div>
-          </div>
-          <!-- /Register -->
+            <div class="security-badge">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>¡Gestiona de forma fácil y segura!</span>
+            </div>
         </div>
-      </div>
+
+        <div class="form-panel">
+            
+            <div style="text-align: center;">
+                <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith Logo" class="logo-orbith">
+                <div id="role-indicator" class="role-indicator">Acceso: Moderador</div>
+            </div>
+
+            <div class="role-selector">
+                <button type="button" onclick="setRole('moderador')" id="tab-mod" class="role-btn active">Moderador</button>
+                <button type="button" onclick="setRole('administrador')" id="tab-admin" class="role-btn">Administrador</button>
+            </div>
+
+            <form id="formAuthentication" method="POST">
+                {% csrf_token %}
+                
+                <input type="hidden" name="tipo_acceso" id="tipo_acceso" value="moderador">
+
+                {% if form.errors %}
+                <div class="django-error">
+                    {% if form.non_field_errors %}
+                        {{ form.non_field_errors.0 }}
+                    {% else %}
+                        Usuario o contraseña incorrectos. Verifique sus credenciales.
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="input-group">
+                    <span class="input-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </span>
+                    <input type="text" name="username" class="floating-input" placeholder="Usuario de red" required autofocus>
+                </div>
+
+                <div class="input-group">
+                    <span class="input-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </span>
+                    <input type="password" name="password" class="floating-input" placeholder="Contraseña" required>
+                </div>
+
+                <div class="form-options">
+                    <a href="#">¿Problemas para acceder?</a>
+                </div>
+
+                <button type="submit" class="btn-submit">
+                    Ingresar 
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16l4-4-4-4"/><path d="M8 12h8"/></svg>
+                </button>
+            </form>
+        </div>
     </div>
 
+    <script>
+        function setRole(role) {
+            const body = document.getElementById('body-context');
+            const tabMod = document.getElementById('tab-mod');
+            const tabAdmin = document.getElementById('tab-admin');
+            const roleText = document.getElementById('role-indicator');
 
-  </body>
+            const tipoAccesoInput = document.getElementById('tipo_acceso');
+
+            if (role === 'administrador') {
+                body.className = 'theme-administrador';
+                tabAdmin.classList.add('active');
+                tabMod.classList.remove('active');
+                roleText.innerText = 'Acceso: Administrador';
+                if(tipoAccesoInput) tipoAccesoInput.value = 'administrador';
+            } else {
+                body.className = 'theme-moderador';
+                tabMod.classList.add('active');
+                tabAdmin.classList.remove('active');
+                roleText.innerText = 'Acceso: Moderador';
+                if(tipoAccesoInput) tipoAccesoInput.value = 'moderador';
+            }
+        }
+    </script>
+</body>
 </html>

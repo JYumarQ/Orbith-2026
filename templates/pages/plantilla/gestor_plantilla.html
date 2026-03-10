@@ -3,6 +3,7 @@
 
 {% block content %}
 <style>
+    
     /* --- 1. AJUSTES DE ESTRUCTURA Y SCROLL (4 FILAS) --- */
     .dashboard-container {
         height: calc(100vh - 100px); /* Ajuste para pantalla completa menos cabecera */
@@ -256,6 +257,17 @@
                                     onclick="abrir_modal_edicion(this.dataset.url)" title="Editar Datos Personales">
                                 <i class="fas fa-user-edit text-info"></i>
                             </button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary border-0" id="btn-movimiento" 
+                                onclick="confirmarSolicitudMovimiento()" title="Enviar a Mov. Nómina">
+                                <i class="fas fa-sync-alt text-warning"></i>
+                            </button>
+                            <a class="btn btn-xs btn-outline-secondary border-0" id="btn-pdf" href="#" target="_blank" title="Exportar Contrato">
+                                <i class="fas fa-file-pdf text-secondary"></i>
+                            </a>
+                            <button type="button" class="btn btn-xs btn-outline-secondary border-0" id="btn-baja" 
+                                onclick="abrirModalBaja()" title="Dar de Baja">
+                                <i class="fas fa-user-minus text-danger"></i>
+                            </button>
                         </div>
 
                         <div class="vr mx-1 opacity-25"></div>
@@ -302,6 +314,55 @@
 </div>
 
 <div class="modal fade" id="modal_generic" role="dialog"></div>
+
+<div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-label-danger">
+                <h5 class="modal-title" style="color: #ff3e1d !important;">
+                    <i class="fas fa-user-times me-2"></i>Formulario de Baja
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label" for="baja_expediente">No. Expediente</label> 
+                        <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="baja_nombre">Trabajador</label> 
+                        <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                </div>
+                <hr class="my-3">
+                <form id="formBajaContrato">
+                    <input type="hidden" id="baja_url_post">    
+                    <div class="mb-3">
+                        <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+                        <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
+                        <select id="baja_causa" name="causa_baja" class="form-select">
+                            <option value="">Seleccione una causa...</option>
+                            {% for causa in causas_baja %}
+                                <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="validarYConfirmarBaja()">Confirmar Baja</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'pages/contrato/partials/modal_historico_include.html' %}
+
 {% endblock %} 
 
 {% block extra_scripts %}
@@ -462,9 +523,41 @@
 
         const btnContrato = document.getElementById('btn-edit-contrato');
         const btnPersonal = document.getElementById('btn-edit-personal');
+        const btnMov = document.getElementById('btn-movimiento');
+        const btnPdf = document.getElementById('btn-pdf');
+        const btnBaja = document.getElementById('btn-baja');
 
         if (btnContrato) btnContrato.dataset.url = item.dataset.urlContrato;
         if (btnPersonal) btnPersonal.dataset.url = item.dataset.urlPersonal;
+        
+        // Enlazar los nuevos botones
+        if (btnMov) btnMov.dataset.urlSolicitar = item.dataset.urlSolicitar;
+        if (btnPdf) btnPdf.setAttribute('href', item.dataset.urlPdf);
+        if (btnBaja) {
+            btnBaja.dataset.url = item.dataset.urlBaja;
+            btnBaja.dataset.expediente = item.dataset.expediente;
+            btnBaja.dataset.nombre = item.dataset.nombre;
+        }
+    }
+
+    // --- FUNCIÓN ACORDEÓN (PADRES E HIJAS) ---
+    window.toggleHijas = function(padreId) {
+        const contenedor = document.getElementById('hijas-' + padreId);
+        const icono = document.getElementById('icon-toggle-' + padreId);
+        
+        if (contenedor) {
+            // Alternar entre mostrar y ocultar
+            if (contenedor.style.display === 'none' || contenedor.style.display === '') {
+                // Mostrar con un pequeño efecto jQuery-like usando CSS puro
+                contenedor.style.display = 'block';
+                // Rotar la flechita hacia arriba
+                if (icono) icono.style.transform = 'rotate(-180deg)'; 
+            } else {
+                contenedor.style.display = 'none';
+                // Volver la flechita a la normalidad
+                if (icono) icono.style.transform = 'rotate(0deg)';
+            }
+        }
     }
 
     // --- FUNCIONES AUXILIARES ---
@@ -518,8 +611,40 @@
     window.procesarRespuestaEliminar = function(evt) {
         try {
             const response = JSON.parse(evt.detail.xhr.responseText);
-            if(response.status === 'ok') window.location.reload(); 
-            else Swal.fire('Error', response.message, 'error'); 
+            if(response.status === 'ok') {
+                // 1. Mostrar mensaje de éxito sin interrumpir
+                Swal.fire({
+                    icon: 'success', title: 'Eliminado', text: response.message,
+                    toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
+                });
+
+                // 2. Identificar qué botón se presionó para recargar solo esa columna
+                const btnId = evt.detail.elt.id;
+
+                if (btnId === 'btn-del-unit') {
+                    document.body.dispatchEvent(new Event('updateUnitList'));
+                    resetPanel('col-departamentos', 'Seleccione Unidad');
+                    resetPanel('col-cargos', 'Seleccione Depto');
+                    resetPanel('col-contratos', 'Seleccione Cargo');
+                    disableToolbar('dept'); disableToolbar('cargo'); disableToolbar('contrato');
+                } 
+                else if (btnId === 'btn-del-dept') {
+                    document.body.dispatchEvent(new Event('updateDeptList'));
+                    document.body.dispatchEvent(new Event('updateUnitList'));
+                    resetPanel('col-cargos', 'Seleccione Depto');
+                    resetPanel('col-contratos', 'Seleccione Cargo');
+                    disableToolbar('cargo'); disableToolbar('contrato');
+                } 
+                else if (btnId === 'btn-del-cargo') {
+                    document.body.dispatchEvent(new Event('updateCargoList'));
+                    document.body.dispatchEvent(new Event('updateDeptList')); // <--- Refresca las matemáticas del Depto
+                    resetPanel('col-contratos', 'Seleccione Cargo');
+                    disableToolbar('contrato');
+                }
+            } 
+            else {
+                Swal.fire('Error', response.message, 'error'); 
+            }
         } catch(e) { console.error(e); }
     }
 
@@ -552,10 +677,41 @@
     });
 
     document.body.addEventListener('closeModal', () => $('#modal_generic').modal('hide'));
-    document.body.addEventListener('updateUnitList', () => { const input = document.querySelector('input[name="q"]'); if(input) htmx.trigger(input, 'search'); });
-    document.body.addEventListener('updateDeptList', () => { if (selectedUnitId) { const card = document.querySelector(`.active-unit[data-pk="${selectedUnitId}"]`); if(card) htmx.trigger(card, 'click'); } });
-    document.body.addEventListener('updateCargoList', () => { if (selectedDeptId) { const card = document.querySelector(`.active-dept[data-pk="${selectedDeptId}"]`); if(card) htmx.trigger(card, 'click'); } });
-    
+    // Recargas directas con AJAX (Bypass al caché de los inputs que causaba el fallo intercalado)
+    document.body.addEventListener('updateUnitList', () => { 
+        htmx.ajax('GET', "{% url 'gestor_plantilla' %}", { 
+            target: '#lista-unidades-container', indicator: '#lista-unidades-container', 
+            values: { sort: sortState.unit.sort, order: sortState.unit.order, q: document.getElementById('search-unit')?.value || '' }
+        }); 
+    });
+
+    document.body.addEventListener('updateDeptList', () => { 
+        if (selectedUnitId) {
+            htmx.ajax('GET', "{% url 'htmx_load_departamentos' 0 %}".replace('0', selectedUnitId), { 
+                target: '#col-departamentos', indicator: '#col-departamentos', 
+                values: { sort: sortState.dept.sort, order: sortState.dept.order, q: document.getElementById('search-dept')?.value || '' }
+            }); 
+        }
+    });
+
+    document.body.addEventListener('updateCargoList', () => { 
+        if (selectedDeptId) {
+            htmx.ajax('GET', "{% url 'htmx_load_cargos' 0 %}".replace('0', selectedDeptId), { 
+                target: '#col-cargos', indicator: '#col-cargos', 
+                values: { sort: sortState.cargo.sort, order: sortState.cargo.order, q: document.getElementById('search-cargo')?.value || '' }
+            }); 
+        }
+    });
+
+    document.body.addEventListener('updateContratoList', () => { 
+        if (selectedCargoId) {
+            htmx.ajax('GET', "{% url 'htmx_load_contratos' 0 %}".replace('0', selectedCargoId), { 
+                target: '#col-contratos', indicator: '#col-contratos', 
+                values: { sort: sortState.contrato.sort, order: sortState.contrato.order, q: document.getElementById('search-personal')?.value || '' }
+            }); 
+        }
+    });
+
     // Mensajes Toast
     document.body.addEventListener('showMessage', (evt) => {
         const data = evt.detail.value || evt.detail;
@@ -575,6 +731,83 @@
                 title: 'Nuevo Contrato', text: 'Serás redirigido al listado de aspirantes.', icon: 'info',
                 showCancelButton: true, confirmButtonText: 'Ir al listado'
             }).then((result) => { if (result.isConfirmed) window.location.href = this.href; });
+        });
+    }
+
+    // ================= LÓGICA DE CONTRATOS INTEGRADA =================
+
+    window.confirmarSolicitudMovimiento = function() {
+        const btn = document.getElementById('btn-movimiento');
+        if (!btn) return;
+        const url = btn.dataset.urlSolicitar;
+
+        if (!url || url === '#' || url === '') return Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Seleccione un contrato válido.', showConfirmButton: false, timer: 3000 });
+
+        Swal.fire({
+            title: '¿Desea Permitir un Movimiento de Nómina?',
+            text: 'El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.',
+            icon: 'question', showCancelButton: true, confirmButtonColor: '#ffab00',
+            cancelButtonColor: '#8592a3', confirmButtonText: 'Sí, permitir', cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: url, type: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, 
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: response.message, showConfirmButton: false, timer: 3000 });
+                            // MODIFICADO: Llamamos al nuevo actualizador de contratos
+                            document.body.dispatchEvent(new Event('updateContratoList')); 
+                        } else Swal.fire('Error', response.message, 'error');
+                    },
+                    error: () => Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error')
+                });
+            }
+        });
+    }
+
+    window.abrirModalBaja = function() {
+        const btn = document.getElementById('btn-baja');
+        const url = btn.dataset.url;
+        if (!url) return;
+
+        document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
+        document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
+        document.getElementById('baja_url_post').value = url;
+        document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0];
+        document.getElementById('baja_causa').value = "";
+        
+        $('#modalBajaContrato').modal('show');
+    }
+
+    window.validarYConfirmarBaja = function() {
+        const fecha = document.getElementById('baja_fecha').value;
+        const causa = document.getElementById('baja_causa').value;
+        const url = document.getElementById('baja_url_post').value;
+
+        if (!fecha || !causa) return Swal.fire({ icon: 'warning', title: 'Campos incompletos', text: 'Seleccione fecha y causa.'});
+
+        $('#modalBajaContrato').modal('hide');
+        Swal.fire({
+            title: '¿Está seguro?', text: "Se registrará la baja en el sistema.", icon: 'warning',
+            showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#8592a3',
+            confirmButtonText: 'Sí, dar de baja', cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: url, type: 'POST',
+                    data: { 'fecha_baja': fecha, 'causa_baja': causa, 'csrfmiddlewaretoken': '{{ csrf_token }}' },
+                    success: function() {
+                        Swal.fire({ icon: 'success', title: 'Baja procesada', showConfirmButton: false, timer: 1500 });
+                        // MODIFICADO: Disparamos AMBOS eventos
+                        document.body.dispatchEvent(new Event('updateCargoList')); 
+                        document.body.dispatchEvent(new Event('updateContratoList')); 
+                    },
+                    error: function(xhr) {
+                        let msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error de conexión.';
+                        Swal.fire('No se puede procesar', msg, 'error');
+                    }
+                });
+            } else $('#modalBajaContrato').modal('show');
         });
     }
 </script>

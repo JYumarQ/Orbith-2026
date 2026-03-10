@@ -137,7 +137,8 @@
             'id_movil_personal':         { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
             'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
             'id_provincia':     { tipo: 'select' }, // Solo para colores
-            'id_municipio':     { tipo: 'select' }  // Solo para colores
+            'id_municipio':     { tipo: 'select' },  // Solo para colores
+            'id_raza':          { tipo: 'select' }
         };
 
         // 2. Expresiones Regulares (Lo que se BORRA si se intenta escribir)
@@ -296,11 +297,7 @@
             if(!nivel) return;
             var valorNivel = nivel.value;
 
-            if (valorNivel === 'NS' || valorNivel === 'TM') {
-                espec.removeAttribute('disabled');
-            } else {
-                espec.setAttribute('disabled', 'disabled');
-            }
+            
 
             if (valorNivel === 'NS') {
                 grado.removeAttribute('disabled');

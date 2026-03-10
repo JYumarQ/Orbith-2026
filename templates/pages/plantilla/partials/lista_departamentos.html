@@ -13,16 +13,21 @@
          hx-indicator="#col-cargos">
          
         <div class="card-body">
-            <div class="d-flex align-items-center gap-3">
-                <div class="icon-box p-2 rounded-2 bg-white text-secondary border shadow-sm" style="width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;">
+            <div class="d-flex align-items-center gap-3" style="flex: 1; min-width: 0;">
+                
+                <div class="icon-box p-2 rounded-2 bg-white text-secondary border shadow-sm flex-shrink-0" style="width: 35px; height: 35px; display: flex; align-items: center; justify-content: center;">
                     <i class="fas fa-layer-group text-primary opacity-75"></i>
                 </div>
                 
-                <div class="d-flex flex-column">
-                    <h6 class="fw-bold text-dark mb-0 text-truncate" style="font-size: 0.85rem; max-width: 180px;">{{ dpto.descripcion }}</h6>
+                <div class="d-flex flex-column overflow-hidden" style="flex: 1;">
+                    <h6 class="fw-bold text-dark mb-0 text-truncate" style="font-size: 0.85rem;" title="{{ dpto.descripcion }}">
+                        {{ dpto.descripcion }}
+                    </h6>
                     
-                    <div class="d-flex align-items-center gap-1 mt-1">
+                    <div class="d-flex align-items-center flex-wrap gap-1 mt-1">
                         <span class="badge bg-label-primary" style="font-size: 0.65rem;">{{ dpto.total_cargos }} Cargos</span>
+                        <span class="badge bg-label-info" style="font-size: 0.65rem;">{{ dpto.total_plazas|default:"0" }} Plazas</span>
+                        
                         {% if dpto.inactivos > 0 %}
                             <span class="badge bg-label-secondary" style="font-size: 0.65rem;">{{ dpto.inactivos }} Inactivos</span>
                         {% endif %}
@@ -30,7 +35,7 @@
                 </div>
             </div>
 
-            <i class="fas fa-chevron-right text-muted opacity-25" style="font-size: 0.8rem;"></i>
+            <i class="fas fa-chevron-right text-muted opacity-25 ms-2 flex-shrink-0" style="font-size: 0.8rem;"></i>
         </div>
     </div>
 {% empty %}

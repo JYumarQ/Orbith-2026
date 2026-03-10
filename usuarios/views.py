@@ -4,11 +4,13 @@ from django.template.loader import render_to_string
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, View
 from .models import CustomUser
-from .forms import CustomUserCreationForm, CustomUserChangeForm, CustomPasswordChangeForm
+from .forms import CustomUserCreationForm, CustomUserChangeForm, CustomPasswordChangeForm, CustomAuthenticationForm
 from django.views.generic.edit import FormView
 from django.urls import reverse_lazy
 from django.db.models import Q
 from django.contrib.auth import get_user_model, update_session_auth_hash
+from django.contrib.auth.views import LoginView
+
 
 class UsuarioListView(ListView):
     model = CustomUser
@@ -176,3 +178,7 @@ class CustomUserDeleteView(DeleteView):
         messages.success(request, f'Usuario "{usuario.username}" eliminado correctamente.')
         return redirect('list_usuarios')
     
+
+class CustomLoginView(LoginView):
+    form_class = CustomAuthenticationForm
+    template_name = 'registration/login.html'

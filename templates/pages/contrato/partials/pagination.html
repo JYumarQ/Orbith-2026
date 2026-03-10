@@ -2,41 +2,41 @@
     <div class="col text-start text-muted">
         <small>
             {% if page_obj.paginator.count > 0 %}
-                Mostrando <b>{{ page_obj.start_index }}</b> - <b>{{ page_obj.end_index }}</b> de <b>{{ page_obj.paginator.count }}</b> contratos
+                Mostrando <b>{{ page_obj.start_index }}</b> - <b>{{ page_obj.end_index }}</b> de <b>{{ page_obj.paginator.count }}</b> registros
             {% else %}
-                0 contratos
+                0 registros
             {% endif %}
         </small>
     </div>
 
-    <div class="col-auto">
+    <div class="col-auto d-flex align-items-center gap-3">
+        
         {% if current_page_size == '8' and page_obj.has_next %}
             <button class="btn btn-sm btn-label-secondary"
                     type="button"
-                    hx-get="{% url search_url %}?page_size=10"
-                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                    hx-get="{% url search_url %}?per_page=10"
+                    hx-include="[name='provincia'], [name='municipio'], [name='nivel_educ'], [name='especialidad'], [name='sexo'], [name='raza'], [name='grado_cientifico'], [name='filter_contrato'], [name='filter_aspirante'], [name='sort'], [name='order']"
                     hx-target="#filter_contratos_results">
                 Ver más <i class="fas fa-chevron-down ms-1"></i>
             </button>
-        {% endif %}
-
-        {% if current_page_size == '10' %}
+        {% elif current_page_size == '10' %}
             <button class="btn btn-sm btn-label-secondary"
                     type="button"
-                    hx-get="{% url search_url %}?page_size=8"
-                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                    hx-get="{% url search_url %}?per_page=8"
+                    hx-include="[name='provincia'], [name='municipio'], [name='nivel_educ'], [name='especialidad'], [name='sexo'], [name='raza'], [name='grado_cientifico'], [name='filter_contrato'], [name='filter_aspirante'], [name='sort'], [name='order']"
                     hx-target="#filter_contratos_results">
                 Ver menos <i class="fas fa-chevron-up ms-1"></i>
             </button>
         {% endif %}
 
-        {% if page_obj.paginator.count > 8 %} <nav aria-label="Navegación">
+        {% if page_obj.paginator.count > 8 %} 
+            <nav aria-label="Navegación">
                 <ul class="pagination pagination-sm mb-0">
                     {% if page_obj.has_previous %}
                         <li class="page-item">
                             <button class="page-link" 
-                                    hx-get="{% url search_url %}?page={{ page_obj.previous_page_number }}&page_size={{ current_page_size }}"
-                                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                                    hx-get="{% url search_url %}?page={{ page_obj.previous_page_number }}&per_page={{ current_page_size }}"
+                                    hx-include="[name='provincia'], [name='municipio'], [name='nivel_educ'], [name='especialidad'], [name='sexo'], [name='raza'], [name='grado_cientifico'], [name='filter_contrato'], [name='filter_aspirante'], [name='sort'], [name='order']"
                                     hx-target="#filter_contratos_results">
                                 <i class="fas fa-chevron-left"></i>
                             </button>
@@ -50,8 +50,8 @@
                     {% if page_obj.has_next %}
                         <li class="page-item">
                             <button class="page-link" 
-                                    hx-get="{% url search_url %}?page={{ page_obj.next_page_number }}&page_size={{ current_page_size }}"
-                                    hx-include="#f_provincia, #f_municipio, #f_nivel, #f_especialidad, #f_sexo, #f_raza, #f_grado, #search"
+                                    hx-get="{% url search_url %}?page={{ page_obj.next_page_number }}&per_page={{ current_page_size }}"
+                                    hx-include="[name='provincia'], [name='municipio'], [name='nivel_educ'], [name='especialidad'], [name='sexo'], [name='raza'], [name='grado_cientifico'], [name='filter_contrato'], [name='filter_aspirante'], [name='sort'], [name='order']"
                                     hx-target="#filter_contratos_results">
                                 <i class="fas fa-chevron-right"></i>
                             </button>

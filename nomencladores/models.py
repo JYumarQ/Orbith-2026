@@ -214,3 +214,12 @@ class NEspecialidad(models.Model):
         return self.nombre
 
 
+class NNivelPreparacion(Base):
+    nombre = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        verbose_name = "Nivel de Preparación"
+        verbose_name_plural = "Niveles de Preparación"
+
+    def __str__(self):
+        return self.nombre

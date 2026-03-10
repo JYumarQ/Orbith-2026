@@ -3,11 +3,11 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from .models import CargoPlantilla, Departamento, UnidadOrganizativa
 from .forms import CargoPlantillaForm, DepartamentoForm, UnidadOrganizativaForm
-from nomencladores.models import NCargo
+from nomencladores.models import NCargo, NCausaAltaBaja
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Q, ProtectedError, Count, RestrictedError
+from django.db.models import Q, ProtectedError, Count, RestrictedError, Sum
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
 import json
@@ -143,6 +143,7 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
             triggers = {
                 'closeModal': True,
                 'updateCargoList': True,
+                'updateDeptList': True,
                 'showMessage': {'icon': 'success', 'text': 'Cargo creado correctamente'}
             }
             response['HX-Trigger'] = json.dumps(triggers)
@@ -166,59 +167,37 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
-        self.object = form.save()
+        # 1. Guardar temporalmente para evaluar tu validación de roles
+        cargo = form.save(commit=False)
+        
+        # Evaluamos si el rol es correcto según la categoría ocupacional
+        rol_valido = ((cargo.ncargo.cat_ocupacional in ('CDI', 'CDJ') and cargo.rol is None) or
+                      (cargo.ncargo.cat_ocupacional not in ('CDI', 'CDJ') and cargo.rol is not None))
+        
+        # 2. Guardar definitivamente en la base de datos
+        cargo.save()
+
+        # 3. La magia de HTMX para refrescar la columna de Cargos automáticamente
         if self.request.headers.get('HX-Request'):
             response = HttpResponse(status=204)
+            
+            # Ajustamos el mensaje flotante (SweetAlert) dependiendo de si el rol era válido
+            if rol_valido:
+                mensaje = {'icon': 'success', 'text': 'Cargo actualizado correctamente'}
+            else:
+                mensaje = {'icon': 'warning', 'text': 'Guardado, pero debe seleccionar un rol para los cargos que no son cuadro'}
+
             triggers = {
                 'closeModal': True,
                 'updateCargoList': True,
-                'showMessage': {'icon': 'success', 'text': 'Cargo actualizado correctamente'}
+                'updateDeptList': True,
+                'showMessage': mensaje
             }
             response['HX-Trigger'] = json.dumps(triggers)
             return response
+            
         return super().form_valid(form)
 
-class CargoPlantillaDeleteView(DeleteView):
-    model = CargoPlantilla
-
-    def post(self, request, *args, **kwargs):
-        try:
-            self.get_object().delete()
-            return JsonResponse({'status': 'ok', 'message': 'Cargo eliminado correctamente.'})
-        except (ProtectedError, RestrictedError) as e:
-            error_msg = str(e)
-            if 'CBaja' in error_msg:
-                mensaje = "No se puede eliminar: Tiene historial de Bajas."
-            elif 'Contrato' in error_msg or 'calta' in error_msg:
-                mensaje = "No se puede eliminar: Hay contratos activos."
-            else:
-                mensaje = "No se puede eliminar: Está en uso en el sistema."
-            return JsonResponse({'status': 'error', 'message': mensaje})
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)})
-
-
-class CargoPlantillaUpdateView(UpdateView):
-    model = CargoPlantilla
-    form_class = CargoPlantillaForm
-    template_name = 'pages/cargo/updt_cargo.html'
-    success_url = reverse_lazy('list_cargos')
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user  # <-- aquí pasas el usuario
-        return kwargs
-
-    def form_valid(self, form):
-        cargo = form.save(commit=False)
-        if ((cargo.ncargo.cat_ocupacional in ('CDI', 'CDJ') and cargo.rol is None) or
-            (cargo.ncargo.cat_ocupacional not in ('CDI', 'CDJ') and cargo.rol is not None)):
-            messages.success(self.request, 'Cargo actualizado correctamente')
-        else:
-            messages.warning(self.request,
-                             'Debe seleccionar un rol para los cargos que no son cuadro')
-        cargo.save()
-        return super().form_valid(form)
 
 
 class CargoPlantillaDeleteView(DeleteView):
@@ -430,6 +409,12 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
     template_name = 'pages/uniorg/add_uniorg.html'
     success_url = reverse_lazy('gestor_plantilla') # Fallback por si falla JS
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        dg = UnidadOrganizativa.objects.filter(tipo='DG').first()
+        context['dg_grupo_nomina'] = dg.grupo_nomina if dg else ''
+        return context
+
     def form_valid(self, form):
         self.object = form.save()
         if self.request.headers.get('HX-Request'):
@@ -448,6 +433,12 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
     form_class = UnidadOrganizativaForm
     template_name = 'pages/uniorg/updt_uniorg.html'
     success_url = reverse_lazy('gestor_plantilla')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        dg = UnidadOrganizativa.objects.filter(tipo='DG').exclude(pk=self.object.pk).first()
+        context['dg_grupo_nomina'] = dg.grupo_nomina if dg else ''
+        return context
 
     def form_valid(self, form):
         self.object = form.save()
@@ -481,18 +472,27 @@ class UnidadOrganizativaDeleteView(DeleteView):
 # 1. VISTA CONTENEDOR Y COLUMNA 1 (UNIDADES)
 @login_required
 def gestor_plantilla_view(request):
-    # 1. Filtro base
+    # 1. ¿Existe alguna Dirección General en la empresa?
+    existe_dg = UnidadOrganizativa.objects.filter(tipo='DG').exists()
+
+    # 2. Filtro base (Traemos todas sin ocultar todavía)
     if request.user.is_superuser:
         unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamento'))
     else:
         unidades = request.user.unidades.annotate(total_dptos=Count('departamento'))
 
-    # 2. Búsqueda
+    # 3. Lógica dinámica de visibilidad (Tu nueva regla)
+    if existe_dg:
+        # Si hay DG, ocultamos a las "hijas" para que vivan dentro del acordeón
+        unidades = unidades.filter(padre__isnull=True)
+    # Si NO hay DG, no filtramos nada, permitiendo que las DF se vean en la lista principal
+
+    # 4. Búsqueda
     q = request.GET.get('q')
     if q:
         unidades = unidades.filter(descripcion__icontains=q)
 
-    # 3. Lógica de Ordenamiento (Columna 1)
+    # 5. Lógica de Ordenamiento (Columna 1)
     # Default: grupo_nomina (numérico)
     sort_by = request.GET.get('sort', 'grupo_nomina') 
     order = request.GET.get('order', 'asc')
@@ -515,7 +515,8 @@ def gestor_plantilla_view(request):
         })
 
     return render(request, 'pages/plantilla/gestor_plantilla.html', {
-        'unidades': unidades
+        'unidades': unidades,
+        'causas_baja': NCausaAltaBaja.objects.filter(alta=False)
     })
 
 
@@ -540,6 +541,7 @@ def htmx_load_departamentos(request, unidad_id):
 
     dptos = dptos.annotate(
         total_cargos=Count('cargoplantilla'),
+        total_plazas=Sum('cargoplantilla__cant_aprobada'),
         activos=Count('cargoplantilla', filter=Q(cargoplantilla__activo=True)),
         inactivos=Count('cargoplantilla', filter=Q(cargoplantilla__activo=False))
     ).order_by(field)

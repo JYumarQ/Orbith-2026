@@ -49,7 +49,7 @@ class Aspirante(Contacto):
         ('BL', 'Blanca'),
         ('NE', 'Negra'),
         ('ME', 'Mestiza')
-    ], blank=True, null= True) 
+    ], blank=False, null=False)
     grado_cientifico = models.CharField(max_length=50, choices=[
         ('MC', 'Master'),
         ('DC', 'Doctor')

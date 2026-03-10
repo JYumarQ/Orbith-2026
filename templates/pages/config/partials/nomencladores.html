@@ -508,12 +508,12 @@
            data-bs-parent="#accordionNomencladores">
         <div class="accordion-body">
           <div class="row g-4">
-            <div class="col-md-6">
+            
+            <div class="col-md-4">
               <div class="card">
                 <div class="card-header d-flex justify-content-between">
                   <span>Condiciones Laborales Anormales</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="condiciones-table">
+                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="condiciones-table">
                     <i class="fas fa-plus"></i>
                   </button>
                 </div>
@@ -533,12 +533,8 @@
                         <td>{{ c.tarifa_hora }} CUP</td>
                         <td class="text-center">
                           <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
+                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
                           </div>
                         </td>
                       </tr>
@@ -549,8 +545,7 @@
               </div>
             </div>
 
-            <!-- Especialidades -->
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="card">
                 <div class="card-header d-flex justify-content-between">
                   <span>Especialidades</span>
@@ -585,10 +580,45 @@
                 </div>
               </div>
             </div>
-          </div><!-- /row -->
-        </div><!-- /accordion-body -->
-      </div><!-- /collapse -->
-    </div><!-- /accordion-item -->
+
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header d-flex justify-content-between">
+                  <span>Niveles de Preparación</span>
+                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="niveles-preparacion-table">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0" id="niveles-preparacion-table">
+                    <thead>
+                      <tr>
+                        <th>Nivel</th>
+                        <th style="width: 120px;" class="text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for np in niveles_preparacion %}
+                      <tr data-id="{{ np.id }}">
+                        <td class="nombre-cell">{{ np.nombre }}</td>
+                        <td class="text-center">
+                          <div class="btn-group btn-group-sm">
+                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
 
   </div><!-- /accordion -->
 </div><!-- /tab-pane -->
@@ -691,39 +721,31 @@
     modoEdicion = true;
     toggleToolbarMode('editing');
 
-    // Celdas visuales
+    // Celdas visuales (sin activo)
     const descCell = tr.querySelector('.desc-cell');
     const catCell = tr.querySelector('.cat-cell');
     const grupoCell = tr.querySelector('.grupo-cell');
     const salarioCell = tr.querySelector('.salario-cell');
-    const activoCell = tr.querySelector('.activo-cell');
 
     // Guardar HTML original para restaurar si cancela
     tr.dataset.htmlDesc = descCell.innerHTML;
     tr.dataset.htmlCat = catCell.innerHTML;
     tr.dataset.htmlGrupo = grupoCell.innerHTML;
     tr.dataset.htmlSalario = salarioCell.innerHTML;
-    tr.dataset.htmlActivo = activoCell.innerHTML;
 
-    // VALORES REALES (Leídos de los data-attributes, NO del texto visible)
+    // VALORES REALES
     const valDesc = descCell.textContent.trim();
     const valCat = tr.dataset.cat;      
     const valGrupo = tr.dataset.grupo;  
     const valSalario = tr.dataset.salario; 
-    const valActivo = tr.dataset.activo === 'true';
 
-    // Inyectar Inputs
+    // Inyectar Inputs (sin el checkbox de activo)
     descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${valDesc}">`;
-    
     catCell.innerHTML = `<select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select>`;
     catCell.querySelector('select').value = valCat; 
-
     grupoCell.innerHTML = `<select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select>`;
     grupoCell.querySelector('select').value = valGrupo; 
-
     salarioCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" value="${valSalario}">`;
-    
-    activoCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-activo" ${valActivo ? 'checked' : ''}>`;
   }
 
   /* ---------- 3. AÑADIR NUEVO ---------- */
@@ -740,11 +762,10 @@
         tr.dataset.id = 'new'; 
         
         tr.innerHTML = `
-            <td class="align-middle"><input type="text" class="form-control form-control-sm input-edit-desc" placeholder="Descripción"></td>
-            <td class="align-middle"><select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select></td>
-            <td class="align-middle text-center"><select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select></td> 
-            <td class="align-middle"><input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" placeholder="0.00"></td>
-            <td class="align-middle text-center"><input type="checkbox" class="form-check-input input-edit-activo" checked></td>
+            <td class="desc-cell align-middle"><input type="text" class="form-control form-control-sm input-edit-desc" placeholder="Descripción"></td>
+            <td class="cat-cell text-center align-middle"><select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select></td>
+            <td class="grupo-cell text-center align-middle"><select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select></td> 
+            <td class="salario-cell text-center align-middle"><input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" placeholder="0.00"></td>
         `;
         
         tbody.insertBefore(tr, tbody.firstChild);
@@ -765,7 +786,6 @@
           trEdit.querySelector('.cat-cell').innerHTML = trEdit.dataset.htmlCat;
           trEdit.querySelector('.grupo-cell').innerHTML = trEdit.dataset.htmlGrupo;
           trEdit.querySelector('.salario-cell').innerHTML = trEdit.dataset.htmlSalario;
-          trEdit.querySelector('.activo-cell').innerHTML = trEdit.dataset.htmlActivo;
         }
 
         modoEdicion = false;
@@ -789,7 +809,7 @@
         const cat = tr.querySelector('.input-edit-cat').value;
         const grupoId = tr.querySelector('.input-edit-grupo').value;
         const salario = tr.querySelector('.input-edit-salario').value;
-        const activo = tr.querySelector('.input-edit-activo').checked;
+        
 
         if (!desc || !grupoId) {
             alert("La descripción y el grupo son obligatorios.");
@@ -801,7 +821,7 @@
             cat_ocupacional: cat,
             grupo_escala_id: grupoId, 
             salario_basico: salario,
-            activo: activo
+            
         };
 
         // Determinar URL y Método
@@ -827,7 +847,6 @@
             tr.dataset.cat = data.cat_ocupacional_value; 
             tr.dataset.grupo = grupoId; 
             tr.dataset.salario = data.salario_basico;
-            tr.dataset.activo = data.activo;
             tr.classList.remove('insert-row');
             tr.onclick = function() { seleccionarCargo(this); }; 
 
@@ -836,7 +855,6 @@
             tr.querySelector('.cat-cell').textContent = data.cat_ocupacional; 
             tr.querySelector('.grupo-cell').textContent = data.grupo_escala; 
             tr.querySelector('.salario-cell').textContent = `$${data.salario_basico}`;
-            tr.querySelector('.activo-cell').textContent = data.activo ? 'Sí' : 'No';
 
             modoEdicion = false;
             toggleToolbarMode('default');
@@ -954,7 +972,7 @@
   }
 
   function updateSortIcons() {
-    ['descripcion', 'cat', 'grupo', 'salario', 'activo'].forEach(col => {
+    ['descripcion', 'cat', 'grupo', 'salario'].forEach(col => {
       const icon = document.getElementById('icon-' + col);
       if (icon) icon.className = 'fas fa-sort float-end mt-1 text-muted';
     });
@@ -1015,10 +1033,7 @@
           valA = romanToInt(a.querySelector('.grupo-cell').textContent.trim());
           valB = romanToInt(b.querySelector('.grupo-cell').textContent.trim());
           return cargosSortAsc ? valA - valB : valB - valA;
-        case 'activo':
-          valA = a.querySelector('.activo-cell').textContent.trim();
-          valB = b.querySelector('.activo-cell').textContent.trim();
-          return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        
         case 'cat':
           valA = a.querySelector('.cat-cell').textContent.trim();
           valB = b.querySelector('.cat-cell').textContent.trim();
@@ -1394,6 +1409,32 @@
     }
   }
 
+  async function guardarNivelPreparacion(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    if (!nombre) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/niveles-preparacion/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
   /* ----------  PAGINACIÓN GRUPOS ESCALA  ---------- */
   function paginateGrupos() {
     const tbody = document.querySelector('#grupos-tbody');
@@ -1741,6 +1782,52 @@
       return;
     }
 
+    /* ----------  EDICIÓN NIVELES DE PREPARACIÓN  ---------- */
+    if (tableId === 'niveles-preparacion-table') {
+      const nombreCell = tr.querySelector('td:nth-child(1)');
+      const oldNombre  = nombreCell.textContent.trim();
+
+      const actionCell = tr.querySelector('td:nth-child(2)');
+      const originalButtons = actionCell.innerHTML;
+
+      nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+          if (!newNombre) { alert('Campo obligatorio'); return; }
+
+          fetch(`/nomencladores/api/niveles-preparacion/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newNombre })
+          })
+            .then(r => r.json())
+            .then(d => {
+              nombreCell.textContent = d.nombre;
+              actionCell.innerHTML   = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          nombreCell.textContent = oldNombre;
+          actionCell.innerHTML   = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
     /* ----------  EDICIÓN CONDICIONES  ---------- */
     if (tableId === 'condiciones-table') {
       const nombreCell = tr.querySelector('td:nth-child(1)');
@@ -2039,6 +2126,7 @@
     else if (tableId === 'causas-table') endpoint = 'causas';
     else if (tableId === 'condiciones-table') endpoint = 'condiciones';
     else if (tableId === 'especialidades-table') endpoint = 'especialidades';
+    else if (tableId === 'niveles-preparacion-table') endpoint = 'niveles-preparacion';
     else return;
 
     Swal.fire({
@@ -2232,6 +2320,17 @@
             </td>`;
           break;
 
+        case 'niveles-preparacion-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre (Ej. Básico)"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
         default:
           row.innerHTML = `<td colspan="2">Sin definir</td>`;
       }
@@ -2297,6 +2396,9 @@
         break;
       case 'especialidades-table':
         await guardarEspecialidad(row);
+        break;
+      case 'niveles-preparacion-table':
+        await guardarNivelPreparacion(row);
         break;
       default:
         alert('Tabla no implementada');

@@ -77,4 +77,8 @@ urlpatterns = [
     path('api/cargos/move/', views.api_cargo_move, name='api_cargo_move'),
     path('api/familias/<int:pk>/update/', views.api_familia_update, name='api_familia_update'),
 
+    # ---------- CRUD NNivelPreparacion ----------
+    path('api/niveles-preparacion/', views.nivel_preparacion_create, name='nivel_preparacion_create'),
+    path('api/niveles-preparacion/<int:pk>/', views.nivel_preparacion_update, name='nivel_preparacion_update'),
+    path('api/niveles-preparacion/<int:pk>/delete/', views.nivel_preparacion_delete, name='nivel_preparacion_delete'),
 ]
