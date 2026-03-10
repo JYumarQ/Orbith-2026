@@ -462,6 +462,8 @@
     // --- LÓGICA DE SELECCIÓN (CORE) ---
     window.selectUnit = function(item) {
         selectedUnitId = item.dataset.pk;
+        const tipoUnidad = item.dataset.tipo; // Leemos si es DG, DF o UEB
+
         document.querySelectorAll('.nav-card').forEach(c => c.classList.remove('active-unit'));
         item.classList.add('active-unit');
         
@@ -470,10 +472,17 @@
         // Al cambiar unidad, reseteamos orden de deptos
         sortState.dept = { sort: 'alpha', order: 'asc' };
 
-        loadHtmx('#search-dept', "{% url 'htmx_load_departamentos' 0 %}".replace('0', selectedUnitId));
-        
-        let urlCreate = "{% url 'add_dpto' %}?unidad=" + selectedUnitId;
-        enableAddBtn('btn-create-dept', urlCreate);
+        // --- NUEVA LÓGICA DE NEGOCIO: DG vs DF ---
+        if (tipoUnidad === 'DG') {
+            // Si es Dirección General: Bloqueamos botón y NO cargamos HTMX de departamentos
+            disableAddBtn('btn-create-dept');
+            resetPanel('col-departamentos', 'Las Direcciones Generales no tienen departamentos directos.');
+        } else {
+            // Si es DF o UEB: Habilitamos botón y cargamos departamentos
+            let urlCreate = "{% url 'add_dpto' %}?unidad=" + selectedUnitId;
+            enableAddBtn('btn-create-dept', urlCreate);
+            loadHtmx('#search-dept', "{% url 'htmx_load_departamentos' 0 %}".replace('0', selectedUnitId));
+        }
 
         resetPanel('col-cargos', 'Seleccione Depto');
         resetPanel('col-contratos', 'Seleccione Cargo');
@@ -531,7 +540,19 @@
         if (btnPersonal) btnPersonal.dataset.url = item.dataset.urlPersonal;
         
         // Enlazar los nuevos botones
-        if (btnMov) btnMov.dataset.urlSolicitar = item.dataset.urlSolicitar;
+        if (btnMov) {
+            btnMov.dataset.urlSolicitar = item.dataset.urlSolicitar;
+            btnMov.dataset.enMovimiento = item.dataset.enMovimiento;
+            
+            // Cambiar el icono y color visualmente según el estado del contrato
+            if (item.dataset.enMovimiento === 'true') {
+                btnMov.innerHTML = '<i class="fas fa-times-circle text-danger"></i>';
+                btnMov.title = 'Cancelar Movimiento';
+            } else {
+                btnMov.innerHTML = '<i class="fas fa-sync-alt text-warning"></i>';
+                btnMov.title = 'Enviar a Mov. Nómina';
+            }
+        }
         if (btnPdf) btnPdf.setAttribute('href', item.dataset.urlPdf);
         if (btnBaja) {
             btnBaja.dataset.url = item.dataset.urlBaja;
@@ -753,23 +774,30 @@
         const btn = document.getElementById('btn-movimiento');
         if (!btn) return;
         const url = btn.dataset.urlSolicitar;
+        const enMovimiento = btn.dataset.enMovimiento === 'true'; // Leemos el estado
 
         if (!url || url === '#' || url === '') return Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Seleccione un contrato válido.', showConfirmButton: false, timer: 3000 });
 
+        // Textos y colores dinámicos para el SweetAlert
+        const titulo = enMovimiento ? '¿Desea Cancelar el Movimiento de Nómina?' : '¿Desea Permitir un Movimiento de Nómina?';
+        const texto = enMovimiento ? 'El contrato regresará a su estado normal.' : 'El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.';
+        const confirmColor = enMovimiento ? '#d33' : '#ffab00';
+        const confirmText = enMovimiento ? 'Sí, cancelar' : 'Sí, permitir';
+
         Swal.fire({
-            title: '¿Desea Permitir un Movimiento de Nómina?',
-            text: 'El contrato quedará marcado en proceso y se habilitará en la bandeja de movimientos.',
-            icon: 'question', showCancelButton: true, confirmButtonColor: '#ffab00',
-            cancelButtonColor: '#8592a3', confirmButtonText: 'Sí, permitir', cancelButtonText: 'Cancelar'
+            title: titulo,
+            text: texto,
+            icon: 'question', showCancelButton: true, confirmButtonColor: confirmColor,
+            cancelButtonColor: '#8592a3', confirmButtonText: confirmText, cancelButtonText: 'Cerrar'
         }).then((result) => {
             if (result.isConfirmed) {
                 $.ajax({
                     url: url, type: 'POST', headers: { 'X-CSRFToken': '{{ csrf_token }}' }, 
+                    data: { 'cancelar': enMovimiento }, // <-- AQUÍ ENVIAMOS LA ORDEN EXACTA
                     success: function(response) {
                         if (response.success) {
                             Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: response.message, showConfirmButton: false, timer: 3000 });
-                            // MODIFICADO: Llamamos al nuevo actualizador de contratos
-                            document.body.dispatchEvent(new Event('updateContratoList')); 
+                            document.body.dispatchEvent(new Event('updateContratoList')); // Recarga contratos
                         } else Swal.fire('Error', response.message, 'error');
                     },
                     error: () => Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error')

@@ -508,5 +508,57 @@
         toggleCampo(designado, designado_res);
         actualizarEstadoChofer();
         if (window.htmx) htmx.process(formulario);
+
+        // --- 8. LÓGICA INTELIGENTE: BLOQUEO DE TRIDENTE PARA CUADROS ---
+        function revisarTridente() {
+            var rolField = document.getElementById('id_rol');
+            var triSel = document.getElementById('id_tridente');
+            
+            if (rolField && triSel) {
+                var esCuadro = false;
+
+                // Caso A: El Rol es un Select (Selector abierto)
+                if (rolField.tagName === 'SELECT') {
+                    var texto = rolField.options[rolField.selectedIndex]?.text.toUpperCase() || "";
+                    if (texto.includes('CUADRO')) esCuadro = true;
+                } 
+                // Caso B: El Rol es un Input Readonly
+                else {
+                    var valor = rolField.value.toUpperCase();
+                    if (valor.includes('CUADRO')) esCuadro = true;
+                }
+                
+                if (esCuadro) {
+                    triSel.value = ''; 
+                    if(triSel.options[0]) triSel.options[0].text = "-------";
+                    triSel.setAttribute('disabled', 'disabled');
+                    triSel.style.backgroundColor = "#e9ecef"; 
+                    triSel.style.color = "#a1acb8";
+                    triSel.style.cursor = "not-allowed";
+                } else {
+                    if(triSel.options[0]) triSel.options[0].text = "---------";
+                    triSel.removeAttribute('disabled');
+                    triSel.style.backgroundColor = ""; 
+                    triSel.style.color = "";
+                    triSel.style.cursor = "";
+                }
+            }
+        }
+
+        // --- SUSCRIPCIÓN ÚNICA A EVENTOS ---
+        $(document).off('change', '#id_rol').on('change', '#id_rol', revisarTridente);
+        $(document).off('change', '#id_cargo').on('change', '#id_cargo', function() {
+            setTimeout(revisarTridente, 150); // Un pelín más de tiempo para HTMX
+        });
+        
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            if (evt.detail.target.id === 'id_rol' || evt.detail.target.id === 'navs-justified-salario') {
+                revisarTridente();
+            }
+        });
+        
+        // Ejecución inicial
+        revisarTridente();
+
     })();
 </script>

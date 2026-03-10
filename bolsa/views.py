@@ -324,26 +324,41 @@ class AspiranteUpdateView(UpdateView):
         return next_url or reverse_lazy('list_aspir')
 
     def form_valid(self, form):
-        aspirante = form.save()
-        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente (CI: {aspirante.doc_identidad}).')
-        return HttpResponseRedirect(self.get_success_url())
+        # 1. Pausamos el guardado para hacer las validaciones
+        aspirante = form.save(commit=False)
 
-        # Lógica de especialidad según nivel educativo
+        # 2. Lógica de especialidad según nivel educativo
         if aspirante.nivel_educ not in ['NS', 'MS', 'TM']:
             aspirante.especialidad = None
         if aspirante.nivel_educ == 'NS' and not aspirante.especialidad:
             messages.warning(self.request, 'Debe seleccionar una especialidad si el nivel educativo es Nivel Superior')
-        else:
-            messages.success(self.request, f'Aspirante "{aspirante.nombre}" ha sido actualizado correctamente.')
-        # Moderador: solo edición en sus UO
+            
+        # 3. Moderador: solo edición en sus UO
         u = self.request.user
         if getattr(u, 'es_moderador', False):
             permitidas = set(getattr(u, 'unidades').values_list('pk', flat=True))
             if aspirante.unidad_organizativa_id not in permitidas:
                 return HttpResponseForbidden("Fuera de su UO asignada.")
 
-        form.instance = aspirante
-        return super().form_valid(form)
+        # 4. guardamos
+        aspirante.save()
+
+        # 5. Cerramos el modal sin recargar página
+        if self.request.headers.get('HX-Request'):
+            import json
+            from django.http import HttpResponse
+            response = HttpResponse(status=204)
+            response['HX-Trigger'] = json.dumps({
+                'updateContratoList': '', # Actualiza el Gestor de Plantillas
+                'searchFilters': '',      # Actualiza la Lista General de Contratos
+                'showMessage': {'icon': 'success', 'text': f'Datos de "{aspirante.nombre}" actualizados.'},
+                'closeModal': ''
+            })
+            return response
+
+        # Comportamiento tradicional (si no se usa HTMX)
+        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente.')
+        return HttpResponseRedirect(self.get_success_url())
 
 
 # ----------------- BORRAR -----------------

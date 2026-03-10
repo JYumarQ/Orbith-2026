@@ -448,7 +448,22 @@
 
         document.getElementById('btn-edit-contrato').setAttribute('data-url', fila.dataset.urlEditarContrato);
         document.getElementById('btn-edit-personal').setAttribute('data-url', fila.dataset.urlEditarPersonal);
-        document.getElementById('btn-movimiento').setAttribute('data-url-solicitar', fila.dataset.urlSolicitar);
+        const btnMov = document.getElementById('btn-movimiento');
+        btnMov.setAttribute('data-url-solicitar', fila.dataset.urlSolicitar);
+
+        // --- MAGIA DEL ICONO Y COLOR ---
+        const estaEnProceso = fila.getAttribute('data-en-proceso') === 'true';
+        if (estaEnProceso) {
+            btnMov.innerHTML = '<i class="fas fa-times-circle"></i>';
+            btnMov.classList.remove('btn-outline-warning');
+            btnMov.classList.add('btn-outline-danger');
+            btnMov.title = 'Cancelar Movimiento';
+        } else {
+            btnMov.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            btnMov.classList.remove('btn-outline-danger');
+            btnMov.classList.add('btn-outline-warning');
+            btnMov.title = 'Enviar a Mov. Nomina';
+        }
         document.getElementById('btn-pdf').setAttribute('href', fila.dataset.urlPdf);
 
         const btnBaja = document.getElementById('btn-baja');
@@ -464,6 +479,14 @@
         if (toolbar) {
             toolbar.classList.add('toolbar-disabled');
             toolbar.classList.remove('toolbar-active');
+        }
+        // Restaurar el botón a su estado original
+        const btnMov = document.getElementById('btn-movimiento');
+        if (btnMov) {
+            btnMov.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            btnMov.classList.remove('btn-outline-danger');
+            btnMov.classList.add('btn-outline-warning');
+            btnMov.title = 'Enviar a Mov. Nomina';
         }
     }
 

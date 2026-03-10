@@ -50,7 +50,11 @@
         </td>
 
         <td>
-            {{ c.tridente }}
+            {% if "Cuadro" in c.rol.tipo or "Cuadro" in c.cargo.rol.tipo %}
+                <span class="text-muted opacity-50">-------</span>
+            {% else %}
+                {{ c.tridente|default:'<span class="text-muted opacity-50">-------</span>'|safe }}
+            {% endif %}
         </td>
 
         <td>

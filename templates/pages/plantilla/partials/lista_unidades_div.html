@@ -2,9 +2,11 @@
     <div id="unit-{{ u.pk }}" class="card mb-0 border-bottom nav-card unit-card"
          data-pk="{{ u.pk }}"
          data-desc="{{ u.descripcion }}"
+         data-tipo="{{ u.tipo }}" 
          data-url-edit="{% url 'updt_uniorg' u.pk %}"
          data-url-del="{% url 'del_uniorg' u.pk %}"
          onclick="selectUnit(this)"
+         ondblclick="if(this.dataset.tipo === 'DG') toggleHijas('{{ u.pk }}')"
          hx-get="{% url 'htmx_load_departamentos' u.pk %}"
          hx-target="#col-departamentos"
          hx-swap="innerHTML"
@@ -34,7 +36,11 @@
                 </div>
                 <div class="col-2 text-end">
                     <span class="badge bg-label-primary" style="font-size: 0.65rem;">
-                        <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;"></i>{{ u.total_dptos }}
+                        {% if u.tipo == 'DG' %}
+                            <i class="fas fa-project-diagram me-1" style="font-size: 0.6rem;" title="Direcciones Funcionales"></i>{{ u.direcciones_hijas.count }}
+                        {% else %}
+                            <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;" title="Departamentos"></i>{{ u.total_dptos }}
+                        {% endif %}
                     </span>
                 </div>
             </div>
@@ -57,6 +63,7 @@
                 <div id="unit-{{ hija.pk }}" class="card mb-0 border-bottom nav-card unit-card"
                      data-pk="{{ hija.pk }}"
                      data-desc="{{ hija.descripcion }}"
+                     data-tipo="{{ hija.tipo }}"
                      data-url-edit="{% url 'updt_uniorg' hija.pk %}"
                      data-url-del="{% url 'del_uniorg' hija.pk %}"
                      onclick="selectUnit(this)"

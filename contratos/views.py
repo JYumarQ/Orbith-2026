@@ -716,6 +716,10 @@ class ContratoUpdateView(UpdateView):
         if self.object.cargo and self.object.cargo.rol:
             self.object.rol = self.object.cargo.rol
             
+        # --- LIMPIEZA AUTOMÁTICA DE TRIDENTE ---
+        if self.object.rol and "Cuadro" in self.object.rol.tipo:
+            self.object.tridente = None
+            
         self.object.save()
         
         # MAGIA HTMX: Respondemos directamente con las órdenes para el frontend

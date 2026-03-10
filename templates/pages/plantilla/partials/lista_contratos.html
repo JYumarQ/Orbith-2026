@@ -12,7 +12,8 @@
          data-url-baja="{% url 'del_contrato' c.pk %}"
          data-expediente="{{ c.no_expediente }}"
          data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}"
-         data-url-historico="{% url 'historico_trabajador' c.aspirante.pk %}">
+         data-url-historico="{% url 'historico_trabajador' c.aspirante.pk %}"
+         data-en-movimiento="{% if c.en_proceso_movimiento %}true{% else %}false{% endif %}">
         
         <div class="d-flex align-items-center">
             

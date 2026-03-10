@@ -5,12 +5,12 @@
             <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
         </div>
         <div class="modal-body">
-            <form method="POST"
-                class="swal-confirm"
-                action="{% url 'updt_aspir' object.pk %}"
-                id="formEditarAspirante"
-                data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?"
-                >
+            <form hx-post="{% url 'updt_aspir' object.pk %}" 
+                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                  hx-target="closest .modal-content"
+                  hx-swap="innerHTML"
+                  hx-confirm="¿Estás seguro de guardar los cambios del aspirante?"
+                  id="formEditarAspirante">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
                 <div class="row g-3">
