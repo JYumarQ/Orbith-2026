@@ -703,6 +703,19 @@
         }
     });
 
+    // --- CÓDIGO NUEVO PARA RECARGAR CONTRATOS ---
+    document.body.addEventListener('updateContratoList', () => { 
+        if (selectedCargoId) {
+            htmx.ajax('GET', "{% url 'htmx_load_contratos' 0 %}".replace('0', selectedCargoId), { 
+                target: '#col-contratos', indicator: '#col-contratos', 
+                values: { sort: sortState.contrato.sort, order: sortState.contrato.order, q: document.getElementById('search-personal')?.value || '' }
+            }); 
+        }
+    });
+    // ---------------------------------------------
+
+    // Mensajes Toast
+
     document.body.addEventListener('updateContratoList', () => { 
         if (selectedCargoId) {
             htmx.ajax('GET', "{% url 'htmx_load_contratos' 0 %}".replace('0', selectedCargoId), { 

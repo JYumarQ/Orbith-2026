@@ -200,23 +200,20 @@
                     const textoRol = opt.text.toUpperCase();
                     let mostrar = false;
 
-                    // --- REGLAS DE NEGOCIO ---
-                    // 1. Si es Cuadro Directivo (CDI) o Ejecutivo (CEJ)
+                    // --- REGLAS DE NEGOCIO (Lógica Estricta por Categoría) ---
+                    
+                    // 1. Si la Categoría es Cuadro (CDI o CEJ), el único rol posible es Cuadro
                     if (cat === 'CDI' || cat === 'CEJ') {
                         if (textoRol.includes('CUADRO')) mostrar = true;
                     } 
-                    // 2. Si NO es Cuadro, depende del Grupo Escala
+                    
+                    // 2. Si la Categoría NO es Cuadro (Técnico, Operario, etc.), JAMÁS se muestra Cuadro
                     else {
-                        if (grupo === 'XX' || grupo === 'XXI') {
-                            if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) mostrar = true;
-                        } 
-                        else if (grupo === 'XXII' || grupo === 'XXIII' || grupo === 'XXIV') {
+                        // Sub-regla: XXII, XXIII y XXIV solo pueden ser Decisorios
+                        if (grupo === 'XXII' || grupo === 'XXIII' || grupo === 'XXIV') {
                             if (textoRol.includes('DECISORIO')) mostrar = true;
                         } 
-                        else if (grupo === 'XXV') {
-                            if (textoRol.includes('CUADRO')) mostrar = true;
-                        }
-                        // 3. PARA EL RESTO DE GRUPOS (XIX, XVIII, etc.)
+                        // Para absolutamente todo el resto de los grupos (del I al XXI)
                         else {
                             if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) {
                                 mostrar = true;

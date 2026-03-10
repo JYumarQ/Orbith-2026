@@ -713,21 +713,24 @@ class ContratoUpdateView(UpdateView):
     def form_valid(self, form):
         self.object = form.save(commit=False)
         
-        # ASIGNACIÓN AUTOMÁTICA (Por si cambió de cargo)
         if self.object.cargo and self.object.cargo.rol:
             self.object.rol = self.object.cargo.rol
             
         self.object.save()
         
-        messages.success(self.request, 'Contrato actualizado correctamente.')
-
-        # RESPUESTA AJAX (ÉXITO)
-        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({
-                'form_is_valid': True,
-                'message': 'Contrato actualizado correctamente.',
-                'success_url': str(self.success_url)
+        # MAGIA HTMX: Respondemos directamente con las órdenes para el frontend
+        if self.request.headers.get('HX-Request'):
+            import json
+            from django.http import HttpResponse
+            response = HttpResponse(status=204) # 204 indica éxito silencioso (no dibuja HTML)
+            response['HX-Trigger'] = json.dumps({
+                'updateContratoList': '', # Dispara la recarga de la columna 4
+                'showMessage': {'icon': 'success', 'text': 'Contrato actualizado.'}, # Muestra el Toast
+                'closeModal': '' # Cierra el modal automáticamente
             })
+            return response
+
+        messages.success(self.request, 'Contrato actualizado correctamente.')
         return super(UpdateView, self).form_valid(form)
 
     def form_invalid(self, form):
