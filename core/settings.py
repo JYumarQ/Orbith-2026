@@ -141,6 +141,8 @@ else:
     # Producción
     ALLOWED_HOSTS = ['orbith.eleccmg.une.cu', 'localhost']  # sin "https://"
 
+    CSRF_TRUSTED_ORIGINS = ['https://orbith.eleccmg.une.cu']
+
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
     SESSION_COOKIE_SECURE = True
