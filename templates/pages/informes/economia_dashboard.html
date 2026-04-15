@@ -1,0 +1,161 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Informes de Economía{% endblock %}
+
+{% block content %}
+<style>
+    /* Colores sutiles para diferenciar las áreas de la tabla */
+    .bg-plantilla { background-color: rgba(105, 108, 255, 0.05); }
+    .bg-determinado { background-color: rgba(3, 195, 236, 0.05); }
+    .bg-adiestramiento { background-color: rgba(255, 171, 0, 0.05); }
+    .bg-total { background-color: rgba(113, 221, 55, 0.05); }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y">
+    
+    <div class="d-flex align-items-center mb-4 gap-3">
+        <h4 class="fw-bold py-3 m-0">
+            <span class="text-muted fw-light">Informes /</span> Economía
+        </h4>
+        <span class="badge bg-label-success fs-6 shadow-sm"><i class="bx bx-time-five me-1"></i> Datos en Tiempo Real</span>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-3">
+            <div class="row align-items-center">
+                <div class="col-md-4 mb-3 mb-md-0">
+                    <div class="input-group input-group-merge shadow-none border" style="border-radius: 8px;">
+                        <span class="input-group-text bg-transparent border-0"><i class="bx bx-search text-muted"></i></span>
+                        <input type="text" id="buscador-informes" class="form-control border-0 shadow-none" placeholder="Buscar informe...">
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center gap-2 overflow-auto pb-1" style="white-space: nowrap;">
+                        <a href="{% url 'informe_economia' %}" class="btn btn-primary btn-sm fw-semibold rounded-pill px-3 shadow-sm informe-btn">
+                            <i class="bx bx-trending-up me-1"></i> Consolidado F. Trabajo
+                        </a>
+                        
+                        <a href="{% url 'informe_trabajadores_ueb' %}" class="btn btn-label-secondary btn-sm fw-semibold rounded-pill px-3 informe-btn">
+                            <i class="bx bx-map-pin me-1"></i> Trabajadores x UEB
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                
+                <div class="card-header border-bottom bg-transparent py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <div>
+                        <h5 class="mb-1 text-primary fw-bold">Consolidado de la Fuerza de Trabajo</h5>
+                        <small class="text-muted">
+                            <i class="bx bx-calendar me-1"></i> Periodo actual: <strong class="text-dark">
+                            {% if mes_actual == '1' %}Enero{% elif mes_actual == '2' %}Febrero{% elif mes_actual == '3' %}Marzo{% elif mes_actual == '4' %}Abril{% elif mes_actual == '5' %}Mayo{% elif mes_actual == '6' %}Junio{% elif mes_actual == '7' %}Julio{% elif mes_actual == '8' %}Agosto{% elif mes_actual == '9' %}Septiembre{% elif mes_actual == '10' %}Octubre{% elif mes_actual == '11' %}Noviembre{% elif mes_actual == '12' %}Diciembre{% endif %} {{ anno_actual }}
+                            </strong>
+                        </small>
+                    </div>
+                    
+                    <form id="form-exportar" class="d-flex align-items-center gap-2 m-0" hx-get="{% url 'informe_economia' %}" hx-target="#tbody-consolidado" hx-trigger="change">
+                        <input type="hidden" name="mes" value="{{ mes_actual }}">
+                        <input type="hidden" name="anno" value="{{ anno_actual }}">
+                        
+                        <div class="input-group shadow-sm" style="width: auto; border: 1px solid #696cff; border-radius: 6px; overflow: hidden;">
+                            <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
+                            <select class="form-select border-0 shadow-none bg-white text-primary fw-bold" name="ueb" style="min-width: 280px; cursor: pointer;">
+                                <option value="">Empresa Eléctrica (Consolidado Total)</option>
+                                {% for unidad in unidades %}
+                                    <option value="{{ unidad.pk }}" {% if ueb_actual == unidad.pk|stringformat:"s" %}selected{% endif %}>{{ unidad.descripcion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="d-flex gap-2 ms-2">
+                            <button type="button" onclick="descargarPDF()" class="btn btn-outline-danger fw-bold shadow-sm d-flex align-items-center px-3">
+                                <i class="bx bxs-file-pdf me-2"></i> PDF
+                            </button>
+                            <button type="button" onclick="descargarWord()" class="btn btn-primary fw-bold shadow-sm d-flex align-items-center px-3">
+                                <i class="bx bxs-file-doc me-2"></i> Word
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-responsive text-nowrap mt-2 pb-3">
+                    <table class="table text-center align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" class="text-start bg-lighter border-end">Cargo u Ocupación</th>
+                                <th colspan="4" class="text-primary bg-plantilla border-end border-bottom-0"><i class="bx bx-user-check me-1"></i>Plantilla</th>
+                                <th colspan="2" class="text-info bg-determinado border-end border-bottom-0"><i class="bx bx-user-plus me-1"></i>Determinado</th>
+                                <th colspan="2" class="text-warning bg-adiestramiento border-end border-bottom-0"><i class="bx bx-medal me-1"></i>Adiestramiento</th>
+                                <th colspan="2" class="text-success bg-total border-bottom-0"><i class="bx bx-line-chart me-1"></i>Total</th>
+                            </tr>
+                            <tr class="text-muted">
+                                <th class="bg-plantilla border-end-0">Aprob.</th>
+                                <th class="bg-plantilla border-end-0">Cubierta</th>
+                                <th class="bg-plantilla border-end-0">Vacante</th>
+                                <th class="bg-plantilla text-primary fw-bold border-end">Mujeres</th>
+                                
+                                <th class="bg-determinado border-end-0">Contratos</th>
+                                <th class="bg-determinado text-info fw-bold border-end">Mujeres</th>
+                                
+                                <th class="bg-adiestramiento border-end-0">Adiestrados</th>
+                                <th class="bg-adiestramiento text-warning fw-bold border-end">Mujeres</th>
+                                
+                                <th class="bg-total border-end-0">Total</th>
+                                <th class="bg-total text-success fw-bold">Mujeres</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-consolidado">
+                            {% include 'pages/informes/partials/tabla_consolidado.html' %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 1. Exportar Word
+function descargarWord() {
+    const form = document.getElementById('form-exportar');
+    const params = new URLSearchParams(new FormData(form)).toString();
+    window.location.href = "{% url 'exportar_consolidado_word' %}?" + params;
+}
+
+// Exportar PDF
+function descargarPDF() {
+    const form = document.getElementById('form-exportar');
+    const ueb = form.querySelector('[name="ueb"]').value;
+    window.location.href = "{% url 'exportar_consolidado_pdf' %}?ueb=" + ueb;
+}
+
+// 2. Buscador en tiempo real de los informes
+document.addEventListener('DOMContentLoaded', function() {
+    const buscador = document.getElementById('buscador-informes');
+    const botonesInforme = document.querySelectorAll('.informe-btn');
+
+    if (buscador) {
+        buscador.addEventListener('input', function(e) {
+            const textoBuscado = e.target.value.toLowerCase();
+            
+            botonesInforme.forEach(btn => {
+                const nombreInforme = btn.textContent.toLowerCase();
+                // Si el nombre del informe incluye el texto, quitamos la clase oculta (d-none)
+                if (nombreInforme.includes(textoBuscado)) {
+                    btn.classList.remove('d-none');
+                } else {
+                    btn.classList.add('d-none');
+                }
+            });
+        });
+    }
+});
+</script>
+
+{% endblock %}

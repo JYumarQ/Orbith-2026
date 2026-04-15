@@ -1,58 +1,52 @@
-/* --- MEJORAS VISUALES CARGOS --- */
+/* ==========================================================================
+   1. MEJORAS VISUALES CARGOS (Tu código original)
+   ========================================================================== */
 
-/* 1. Cursor de manito en toda la fila (Feedback de interactividad) */
+/* Cursor de manito en toda la fila (Feedback de interactividad) */
 #cargos-tbody tr {
     cursor: pointer;
     transition: background-color 0.1s;
 }
 
-/* 2. MODO EDICIÓN EXPLÍCITO (Cajas Blancas y Bordes Activos) */
-/* Forzamos el estilo "Focus" permanentemente en los inputs de la tabla */
+/* MODO EDICIÓN EXPLÍCITO (Cajas Blancas y Bordes Activos) */
 #cargos-tbody .form-control,
 #cargos-tbody .form-select {
-    background-color: #fff !important;       /* Fondo blanco puro */
-    border: 1px solid #696cff !important;    /* Borde Violeta/Azul Primario */
-    box-shadow: 0 0 0 0.1rem rgba(105, 108, 255, 0.15) !important; /* Brillo suave */
-    color: #566a7f;                          /* Texto oscuro */
+    background-color: #fff !important;       
+    border: 1px solid #696cff !important;    
+    box-shadow: 0 0 0 0.1rem rgba(105, 108, 255, 0.15) !important; 
+    color: #566a7f;                          
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
 }
 
-/* Ajuste específico para que el Checkbox se vea centrado y elegante */
+/* Ajuste específico para Checkbox centrado */
 #cargos-tbody .form-check-input {
     border: 1px solid #696cff;
     width: 1.2em;
     height: 1.2em;
-    margin-top: 0; /* Centrado vertical */
+    margin-top: 0; 
     cursor: pointer;
 }
 
-
-/* --- ESTILOS PARA LA GESTIÓN DE CARGOS Y NOMENCLADORES --- */
-
-/* 1. Fila seleccionada (Resaltado azul suave) */
+/* Fila seleccionada (Resaltado azul suave) */
 .table-active-row > td {
     background-color: rgba(105, 108, 255, 0.16) !important;
     color: #696cff !important;
     font-weight: 600;
 }
 
-/* 2. Barra de Herramientas (Toolbar) */
-/* Estado Desactivado (Opaco y sin clics) */
+/* Barra de Herramientas (Toolbar) */
 .toolbar-disabled {
     opacity: 0.5;
     pointer-events: none;
     transition: opacity 0.2s ease-in-out;
 }
-
-/* Estado Activado (Visible) */
 .toolbar-active {
     opacity: 1;
     pointer-events: auto;
 }
 
-/* 3. Inputs invisibles (Para edición en línea limpia) */
-/* Quita bordes y fondo para que parezca texto normal hasta que lo editas */
+/* Inputs invisibles (Para edición en línea limpia) */
 .input-edit-desc, 
 .input-edit-cat, 
 .input-edit-grupo, 
@@ -64,14 +58,195 @@
     width: 100%;
     transition: all 0.2s;
 }
-
-/* Al hacer foco, que parezca un input normal */
 .input-edit-desc:focus, 
 .input-edit-cat:focus, 
 .input-edit-grupo:focus, 
 .input-edit-salario:focus {
-    border-color: #696cff; /* Color primario */
+    border-color: #696cff;
     background-color: #fff;
     outline: 0;
     box-shadow: 0 0 0 0.25rem rgba(105, 108, 255, 0.25);
 }
+
+
+/* ==========================================================================
+   2. ESTILOS MODERNOS GENERALES (UTILERÍA TIPO TAILWIND)
+   ========================================================================== */
+.bg-slate-50 { background-color: #f8fafc !important; }
+.text-slate-800 { color: #1e293b !important; }
+.text-slate-700 { color: #334155 !important; }
+.text-slate-500 { color: #64748b !important; }
+.text-slate-400 { color: #94a3b8 !important; }
+
+/* Cabecera Principal de Secciones */
+.dashboard-header {
+    background-color: #ffffff;
+    padding: 1.5rem;
+    border-radius: 1.5rem;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+}
+
+.icon-box-main {
+    width: 3rem; height: 3rem;
+    background-color: #4f46e5;
+    border-radius: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
+    font-size: 1.25rem;
+}
+
+/* Colores de Iconos por Tarjeta */
+.icon-rose { background-color: #fff1f2; color: #f43f5e; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+.icon-blue { background-color: #eff6ff; color: #3b82f6; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+.icon-amber { background-color: #fffbeb; color: #f59e0b; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+.icon-emerald { background-color: #ecfdf5; color: #10b981; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+.icon-indigo { background-color: #eef2ff; color: #6366f1; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+
+.icon-purple { background-color: #f3e8ff; color: #a855f7; padding: 0.6rem; border-radius: 0.6rem; font-size: 1rem; display: inline-flex;}
+/* ==========================================================================
+   3. ACORDEÓN: LABORALES Y PROFESIONALES
+   ========================================================================== */
+.grid-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.section-card {
+    background-color: #ffffff;
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    padding: 1.25rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease-in-out;
+}
+.section-card:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: #c7d2fe;
+}
+
+.card-header-flex {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+/* Botón Añadir Moderno */
+.btn-add-modern {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    font-size: 0.75rem; font-weight: 700;
+    color: #4f46e5; background-color: #eef2ff;
+    padding: 0.4rem 0.8rem; border-radius: 9999px;
+    border: none; transition: all 0.2s;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.btn-add-modern:hover { color: #3730a3; background-color: #e0e7ff; transform: scale(0.98); }
+.btn-add-modern:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Tablas Modernas */
+.table-container-modern {
+    border-radius: 0.75rem;
+    border: 1px solid #f8fafc;
+    overflow: hidden;
+}
+.table-modern { width: 100%; font-size: 0.75rem; text-align: left; border-collapse: separate; border-spacing: 0; margin: 0; }
+.table-modern thead { background-color: #f8fafc; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.table-modern th { padding: 0.75rem 1rem; border-bottom: none; }
+.table-modern td { padding: 0.75rem 1rem; border-top: 1px solid #f1f5f9; font-weight: 600; color: #334155; vertical-align: middle; }
+.table-modern tbody tr { transition: background-color 0.2s; }
+.table-modern tbody tr:hover { background-color: #f8fafc; }
+
+/* Botones de acción en tabla */
+.btn-action-modern {
+    background: transparent; border: none; color: #cbd5e1; padding: 0.25rem 0.5rem; border-radius: 0.25rem; transition: color 0.2s;
+}
+.btn-action-modern:hover { color: #4f46e5; }
+
+
+/* ==========================================================================
+   4. ACORDEÓN: TERRITORIAL (MAESTRO-DETALLE GRID)
+   ========================================================================== */
+
+/* Ocultar cabeceras de tabla antiguas */
+#provincias-table thead, 
+#municipios-table thead { display: none !important; }
+
+/* Convertir el tbody en un Grid moderno */
+#provincias-tbody, 
+#municipios-tbody {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+    padding: 0.5rem;
+}
+
+/* Transformar las filas (tr) en Tarjetas seleccionables */
+#provincias-tbody tr, 
+#municipios-tbody tr {
+    display: flex; align-items: center; justify-content: flex-start;
+    background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 1rem;
+    padding: 0.85rem 1rem; cursor: pointer; transition: all 0.2s ease;
+    margin: 0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+#provincias-tbody tr:hover, 
+#municipios-tbody tr:hover {
+    background: #ffffff; border-color: #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}
+
+/* Limpiar celdas y ocultar columnas viejas (Acciones) */
+#provincias-tbody td, 
+#municipios-tbody td { border: none; padding: 0; background: transparent; }
+
+#provincias-tbody td.nombre-cell, 
+#municipios-tbody td.nombre-cell {
+    font-weight: 700; color: #334155; font-size: 0.85rem; flex-grow: 1;
+}
+
+/* Esconde cualquier otra celda (Mantiene HTMX funcionando invisiblemente) */
+#provincias-tbody td:not(.nombre-cell), 
+#municipios-tbody td:not(.nombre-cell) {
+    display: none !important; 
+}
+
+/* Estados Seleccionados (Índigo y Azul) */
+#provincias-tbody tr.selected-indigo {
+    background: rgba(79, 70, 229, 0.05); border-color: #4f46e5; box-shadow: 0 0 0 1.5px #4f46e5;
+}
+#provincias-tbody tr.selected-indigo td.nombre-cell { color: #4338ca; }
+
+#municipios-tbody tr.selected-blue {
+    background: rgba(37, 99, 235, 0.05); border-color: #2563eb; box-shadow: 0 0 0 1.5px #2563eb;
+}
+#municipios-tbody tr.selected-blue td.nombre-cell { color: #1d4ed8; }
+
+/* Botones de Cabecera Modernos (Acciones Top) */
+.header-actions-box { display: flex; align-items: center; gap: 0.4rem; }
+
+.btn-action-top {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 0.6rem;
+    border: 1px solid transparent; background: #f8fafc; color: #cbd5e1;
+    transition: all 0.2s; cursor: not-allowed;
+}
+
+/* Activos de Provincia (Índigo/Rojo) */
+.btn-action-top.active-prov.add { background: #eef2ff; color: #4f46e5; cursor: pointer; border-color: #e0e7ff; }
+.btn-action-top.active-prov.add:hover { background: #4f46e5; color: white; }
+.btn-action-top.active-prov.edit { background: #eff6ff; color: #3b82f6; cursor: pointer; }
+.btn-action-top.active-prov.edit:hover { background: #3b82f6; color: white; }
+.btn-action-top.active-prov.delete { background: #fff1f2; color: #f43f5e; cursor: pointer; }
+.btn-action-top.active-prov.delete:hover { background: #f43f5e; color: white; }
+
+/* Activos de Municipio (Azul/Rojo) */
+.btn-action-top.active-muni.add { background: #e0f2fe; color: #0284c7; cursor: pointer; border-color: #bae6fd; }
+.btn-action-top.active-muni.add:hover { background: #0284c7; color: white; }
+.btn-action-top.active-muni.edit { background: #eff6ff; color: #3b82f6; cursor: pointer; }
+.btn-action-top.active-muni.edit:hover { background: #3b82f6; color: white; }
+.btn-action-top.active-muni.delete { background: #fff1f2; color: #f43f5e; cursor: pointer; }
+.btn-action-top.active-muni.delete:hover { background: #f43f5e; color: white; }
+

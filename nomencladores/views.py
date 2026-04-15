@@ -4,18 +4,18 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from .models import NCargo, NProvincia, NMunicipio, NHorario, NJornada, NCausaAltaBaja, NCondicionLaboralAnormal
-from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm
+from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm, NGrupoEscalaForm, NTipoUnidadOrganizativaForm
 from django.urls import reverse_lazy
 from django.contrib import messages, admin
 from django.db import transaction
-from nomencladores.models import NSalario, NRol, NTridente, NGrupoEscala, NEspecialidad
-from django.http import JsonResponse
+from nomencladores.models import NSalario, NRol, NTridente, NGrupoEscala, NEspecialidad, NTipoContrato, NMotivoContrato
+from django.http import JsonResponse, HttpResponse
 import json
 from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Q, Count, ProtectedError
 from django.core.paginator import Paginator
-from .models import NFamiliaCargo, NNivelPreparacion
+from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
@@ -174,76 +174,67 @@ def eliminar_salarios_grupo(request, grupo_id):
 @transaction.atomic
 def editar_salarios_grupo(request, grupo_id):
     grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
-    roles = NRol.objects.all()
-    tridentes = NTridente.objects.all()
-    
     salarios_existentes = NSalario.objects.filter(grupo_escala=grupo)
     
-    # Mapa para búsqueda rápida: "rol_ID_tridente_ID" o "rol_ID_None"
-    mapa_montos = {}
-    for s in salarios_existentes:
-        t_id = s.tridente.id if s.tridente else 'None'
-        key = f"{s.rol.id}_{t_id}"
-        mapa_montos[key] = s.monto
-
     if request.method == 'POST':
         try:
-            for rol in roles:
-                if rol.es_cuadro:
-                    field_name = f'monto_{rol.id}_cuadro'
-                    monto_str = request.POST.get(field_name, '').strip()
-                    monto = float(monto_str) if monto_str else 0
-                    
-                    NSalario.objects.update_or_create(
-                        grupo_escala=grupo, rol=rol, tridente=None,
-                        defaults={'monto': monto}
-                    )
-                else:
-                    for tridente in tridentes:
-                        field_name = f'monto_{rol.id}_{tridente.id}'
-                        monto_str = request.POST.get(field_name, '').strip()
-                        monto = float(monto_str) if monto_str else 0
-                        
-                        NSalario.objects.update_or_create(
-                            grupo_escala=grupo, rol=rol, tridente=tridente,
-                            defaults={'monto': monto}
-                        )
-
+            # Replicamos la misma lógica perfecta de guardado que en la creación
+            NSalario.objects.filter(grupo_escala=grupo).delete()
+            
+            if grupo.es_cuadro:
+                monto_c = request.POST.get('salario_cuadro')
+                if monto_c:
+                    NSalario.objects.create(grupo_escala=grupo, rol=None, tridente=None, monto=monto_c)
+            
+            if grupo.tiene_rol:
+                for key, value in request.POST.items():
+                    if key.startswith('salario_') and value:
+                        parts = key.split('_')
+                        if len(parts) == 3: 
+                            NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
+                            
             messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
-
+            
         except Exception as e:
             messages.error(request, f"Error al guardar: {e}")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
     
-    else:
-        form = EditarSalariosForm(grupo_label=str(grupo))
-
-    # Construir estructura para el template
-    matriz_html = []
-    for rol in roles:
-        fila = {'rol': rol}
-        
-        if rol.es_cuadro:
-            # Recuperar monto único
-            key = f"{rol.id}_None"
-            fila['monto_unico'] = mapa_montos.get(key, 0)
+    # --- GET: Preparar datos para rellenar el modal de edición ---
+    form = EditarSalariosForm(initial={'grupo_nombre': str(grupo)})
+    tridentes = NTridente.objects.all().order_by('tipo')
+    roles = grupo.roles.all().order_by('tipo') if grupo.tiene_rol else []
+    
+    # Mapeamos los montos existentes
+    mapa_montos = {}
+    for s in salarios_existentes:
+        # Si no tiene rol ni tridente, es el salario de cuadro
+        if not s.rol and not s.tridente:
+            mapa_montos['cuadro'] = s.monto
         else:
-            # Recuperar lista de tridentes
-            fila['celdas'] = []
+            # Es un salario de matriz
+            r_id = s.rol.id if s.rol else 'None'
+            t_id = s.tridente.id if s.tridente else 'None'
+            mapa_montos[f"{r_id}_{t_id}"] = s.monto
+            
+    # Construimos la matriz para el HTML
+    matriz_html = []
+    if grupo.tiene_rol:
+        for rol in roles:
+            fila = {'rol': rol, 'celdas': []}
             for tridente in tridentes:
                 key = f"{rol.id}_{tridente.id}"
                 fila['celdas'].append({
                     'tridente_id': tridente.id,
-                    'valor': mapa_montos.get(key, 0)
+                    'valor': mapa_montos.get(key, '') 
                 })
-        
-        matriz_html.append(fila)
+            matriz_html.append(fila)
 
     return render(request, 'pages/catalogos/nsalario/edit_salario_modal.html', {
         'form': form,
         'grupo': grupo,
         'tridentes': tridentes,
+        'monto_cuadro': mapa_montos.get('cuadro', ''),
         'matriz_html': matriz_html
     })
 
@@ -303,53 +294,53 @@ class NMunicipioInline(admin.TabularInline):
 @login_required
 @transaction.atomic
 def crear_salarios_por_grupo(request):
-    form = RegistrarSalariosForm(request.POST or None)
-    roles = NRol.objects.all()
-    tridentes = NTridente.objects.all()
-
-    if request.method == 'POST' and form.is_valid():
-        grupo_escala = form.cleaned_data['grupo_escala']
+    if request.method == 'POST':
+        grupo_id = request.POST.get('grupo_escala')
+        grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
         
-        try:
-            for rol in roles:
-                if rol.es_cuadro:
-                    # LÓGICA ROL CUADRO: Solo un monto, sin tridente
-                    field_name = f'monto_{rol.id}_cuadro'
-                    monto_str = request.POST.get(field_name, '0').strip()
-                    monto = float(monto_str) if monto_str else 0
-                    
-                    NSalario.objects.update_or_create(
-                        grupo_escala=grupo_escala,
-                        rol=rol,
-                        tridente=None, # Sin tridente
-                        defaults={'monto': monto}
-                    )
-                else:
-                    # LÓGICA ROL NORMAL: 3 Tridentes
-                    for tridente in tridentes:
-                        field_name = f'monto_{rol.id}_{tridente.id}'
-                        monto_str = request.POST.get(field_name, '0').strip()
-                        monto = float(monto_str) if monto_str else 0
-                        
-                        NSalario.objects.update_or_create(
-                            grupo_escala=grupo_escala,
-                            rol=rol,
-                            tridente=tridente,
-                            defaults={'monto': monto}
-                        )
-            
-            messages.success(request, f"Salarios para {grupo_escala.nivel} registrados correctamente.")
-            return redirect(reverse_lazy('parametros') + '?tab=salario')
+        NSalario.objects.filter(grupo_escala=grupo).delete()
         
-        except ValueError as e:
-            messages.error(request, f"Error de valor: {str(e)}")
-        except Exception as e:
-            messages.error(request, f"Error inesperado: {str(e)}")
+        if grupo.es_cuadro:
+            monto_c = request.POST.get('salario_cuadro')
+            if monto_c:
+                NSalario.objects.create(grupo_escala=grupo, rol=None, tridente=None, monto=monto_c)
+        
+        if grupo.tiene_rol:
+            for key, value in request.POST.items():
+                if key.startswith('salario_') and value:
+                    parts = key.split('_')
+                    if len(parts) == 3:
+                        NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
+        
+        messages.success(request, f"Configuración salarial del Grupo {grupo.nivel} guardada correctamente.")
+        return redirect(reverse_lazy('parametros') + '?tab=salario')
+    
+    # --- RESPUESTA GET REPARADA E INTELIGENTE ---
+    form = RegistrarSalariosForm()
+    
+    # 1. ORDENAR ROLES PERSONALIZADO: Decisorio, Fundamental, Apoyo
+    roles_db = NRol.objects.all()
+    orden_deseado = {"Decisorio": 1, "Fundamental": 2, "Apoyo": 3}
+    # Ordenamos usando el diccionario. Si hay uno nuevo, se va al final (4)
+    roles = sorted(roles_db, key=lambda r: orden_deseado.get(r.tipo, 4))
+    
+    tridentes = NTridente.objects.all().order_by('tipo')
+    
+    # 2. MAPA SÚPER INTELIGENTE (Ahora incluye los roles permitidos)
+    grupos_info = {}
+    for g in NGrupoEscala.objects.prefetch_related('roles'):
+        grupos_info[g.id] = {
+            'es_cuadro': g.es_cuadro,
+            'tiene_rol': g.tiene_rol,
+            # Extraemos los IDs de los roles que tú le marcaste a este grupo
+            'roles_permitidos': list(g.roles.values_list('id', flat=True)) 
+        }
     
     return render(request, 'pages/catalogos/nsalario/add_salario.html', {
         'form': form,
         'roles': roles,
-        'tridentes': tridentes
+        'tridentes': tridentes,
+        'grupos_json': json.dumps(grupos_info)
     })
 
 def obtener_grupo(request, id):
@@ -357,13 +348,20 @@ def obtener_grupo(request, id):
     return JsonResponse({'es_cuadro': grupo.es_cuadro})
 
 def tabla_salarios_modal(request):
-    grupo_id = request.GET.get('grupo')
+    grupo_id = request.GET.get('grupo_escala')
+    if not grupo_id:
+        return HttpResponse("")
+    
     grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
-    roles = NRol.objects.all()
-    tridentes = NTridente.objects.all()
-    return render(request, 'modals/tabla_rol_tridente.html', {
+    tridentes = NTridente.objects.all().order_by('tipo')
+    
+    # Pasamos los roles SOLO si el grupo tiene la bandera encendida
+    roles = grupo.roles.all().order_by('tipo') if grupo.tiene_rol else []
+    
+    return render(request, 'nomencladores/partials/tabla_salarios_dinamica.html', {
+        'grupo': grupo,
         'roles': roles,
-        'tridentes': tridentes
+        'tridentes': tridentes,
     })
 
 def cargar_esp(request):
@@ -422,29 +420,35 @@ def tridente_delete(request, pk):
 
 # ---------- CRUD NRol ----------
 @csrf_exempt
-@require_POST
+@require_http_methods(["POST"])
 def rol_create(request):
     data = json.loads(request.body)
     tipo = data.get('tipo', '').strip()
-    es_cuadro = data.get('es_cuadro', False)
-    if not tipo:
+    
+    if not tipo: 
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NRol.objects.create(tipo=tipo, es_cuadro=es_cuadro)
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo, 'es_cuadro': obj.es_cuadro})
+        
+    # Ya no pasamos el es_cuadro
+    obj = NRol.objects.create(tipo=tipo)
+    
+    # Devolvemos solo lo que existe
+    return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 @csrf_exempt
 @require_http_methods(["PUT"])
 def rol_update(request, pk):
-    obj = NRol.objects.get(pk=pk)
+    obj = get_object_or_404(NRol, pk=pk)
     data = json.loads(request.body)
     tipo = data.get('tipo', '').strip()
-    es_cuadro = data.get('es_cuadro', False)
-    if not tipo:
+    
+    if not tipo: 
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+        
     obj.tipo = tipo
-    obj.es_cuadro = es_cuadro
+    # Eliminamos obj.es_cuadro = data.get('es_cuadro')
     obj.save()
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo, 'es_cuadro': obj.es_cuadro})
+    
+    return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -1024,3 +1028,225 @@ def nivel_preparacion_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
     except RestrictedError:
         return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)
+    
+
+
+# ---------- CRUD Tipo de Contrato ----------
+@csrf_exempt
+@require_POST
+def tipo_contrato_create(request):
+    data = json.loads(request.body)
+    descripcion = data.get('nombre', '').strip() 
+    ocupa_plaza = data.get('ocupa_plaza', False)
+    requiere_motivo = data.get('requiere_motivo', False)
+    
+    if not descripcion:
+        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    
+    obj = NTipoContrato.objects.create(
+        descripcion=descripcion.title(), 
+        ocupa_plaza=ocupa_plaza,
+        requiere_motivo=requiere_motivo
+    )
+    return JsonResponse({
+        'id': obj.id, 'nombre': obj.descripcion, 
+        'ocupa_plaza': obj.ocupa_plaza, 'requiere_motivo': obj.requiere_motivo
+    })
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def tipo_contrato_update(request, pk):
+    obj = get_object_or_404(NTipoContrato, pk=pk)
+    data = json.loads(request.body)
+    descripcion = data.get('nombre', '').strip()
+    
+    if not descripcion:
+        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    
+    obj.descripcion = descripcion.title()
+    # Los switches se guardan solos con sus funciones toggle, así que solo editamos el nombre
+    obj.save()
+    
+    return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def tipo_contrato_delete(request, pk):
+    try:
+        obj = NTipoContrato.objects.get(pk=pk)
+        obj.delete()
+        return JsonResponse({'success': True})
+    except NTipoContrato.DoesNotExist:
+        return JsonResponse({'error': 'El tipo de contrato ya no existe o fue eliminado.'}, status=404)
+    except RestrictedError:
+        return JsonResponse({'error': 'No se puede eliminar porque está siendo usado en un contrato real.'}, status=409)
+    except Exception as e:
+        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
+
+@csrf_exempt
+@require_POST
+def tipo_contrato_toggle_plaza(request, pk):
+    obj = get_object_or_404(NTipoContrato, pk=pk)
+    data = json.loads(request.body)
+    obj.ocupa_plaza = data.get('ocupa_plaza', False)
+    obj.save()
+    return JsonResponse({'success': True})
+
+@csrf_exempt
+@require_POST
+def tipo_contrato_toggle_motivo(request, pk):
+    obj = get_object_or_404(NTipoContrato, pk=pk)
+    data = json.loads(request.body)
+    obj.requiere_motivo = data.get('requiere_motivo', False)
+    obj.save()
+    return JsonResponse({'success': True})
+
+# ---------- CRUD Motivo de Contrato ----------
+@csrf_exempt
+@require_POST
+def motivo_contrato_create(request):
+    data = json.loads(request.body)
+    nombre = data.get('nombre', '').strip()
+    if not nombre: return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    obj = NMotivoContrato.objects.create(descripcion=nombre.title())
+    return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
+
+@csrf_exempt
+@require_http_methods(["PUT"])
+def motivo_contrato_update(request, pk):
+    obj = get_object_or_404(NMotivoContrato, pk=pk)
+    data = json.loads(request.body)
+    nombre = data.get('nombre', '').strip()
+    if not nombre: return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+    obj.descripcion = nombre.title(); obj.save()
+    return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def motivo_contrato_delete(request, pk):
+    try:
+        obj = NMotivoContrato.objects.get(pk=pk)
+        obj.delete()
+        return JsonResponse({'success': True})
+    except NMotivoContrato.DoesNotExist:
+        return JsonResponse({'error': 'El motivo de contrato ya no existe o fue eliminado.'}, status=404)
+    except RestrictedError:
+        return JsonResponse({'error': 'No se puede eliminar porque está siendo usado en un contrato real.'}, status=409)
+    except Exception as e:
+        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
+
+@csrf_exempt
+def tipo_contrato_info(request, pk):
+    try:
+        tc = NTipoContrato.objects.get(pk=pk)
+        return JsonResponse({
+            'descripcion': tc.descripcion,
+            'requiere_motivo': tc.requiere_motivo
+        })
+    except NTipoContrato.DoesNotExist:
+        return JsonResponse({'error': 'No encontrado'}, status=404)
+    
+
+def grupo_escala_modal(request, pk=None):
+    """Devuelve el HTML del formulario para el modal (Crear o Editar)"""
+    instance = get_object_or_404(NGrupoEscala, pk=pk) if pk else None
+    form = NGrupoEscalaForm(instance=instance)
+    
+    return render(request, 'nomencladores/partials/modal_grupo_form.html', {
+        'form': form,
+        'instance': instance
+    })
+
+@require_POST
+def grupo_escala_save(request, pk=None):
+    instance = get_object_or_404(NGrupoEscala, pk=pk) if pk else None
+    form = NGrupoEscalaForm(request.POST, instance=instance)
+    
+    if form.is_valid():
+        # form.save() en un ModelForm con ManyToMany se encarga de todo automáticamente
+        grupo = form.save()
+        return JsonResponse({'success': True})
+    
+    return JsonResponse({'success': False, 'errors': form.errors.as_json()}, status=400)
+
+@login_required
+def municipios_provincia_tabla(request, prov_id):
+    # Buscamos los municipios de esa provincia específica
+    municipios = NMunicipio.objects.filter(provincia_id=prov_id).order_by('nombre')
+    
+    # Devolvemos un pequeño HTML solo con las filas de la tabla
+    return render(request, 'nomencladores/partials/municipios_table_rows.html', {
+        'municipios_filtrados': municipios
+    })
+
+@require_POST
+@login_required
+def guardar_tipo_unidad(request):
+    tipo_id = request.POST.get('id')
+    instance = get_object_or_404(NTipoUnidadOrganizativa, id=tipo_id) if tipo_id else None
+    
+    # Capturamos el padre que envía el selector del modal
+    padre_id = request.POST.get('tipo_padre_id') 
+    
+    form = NTipoUnidadOrganizativaForm(request.POST, instance=instance)
+    
+    if form.is_valid():
+        tipo = form.save(commit=False)
+        
+        # REGLA 1: Si es subunidad, obligatoriamente hereda el color y el padre
+        if tipo.es_subunidad and padre_id:
+            try:
+                padre = NTipoUnidadOrganizativa.objects.get(id=padre_id)
+                tipo.tipo_padre = padre
+                tipo.color = padre.color
+            except NTipoUnidadOrganizativa.DoesNotExist:
+                pass
+                
+        # REGLA 2: Si NO es subunidad (es Principal o Normal), NO puede tener padre.
+        # El color lo tomará directamente del formulario (request.POST).
+        elif not tipo.es_subunidad:
+            tipo.tipo_padre = None
+        
+        tipo.save()
+        
+        return JsonResponse({
+            'success': True,
+            'tipo': {
+                'id': tipo.id,
+                'descripcion': tipo.descripcion,
+                'es_temporal': tipo.es_temporal,
+                'es_principal': tipo.es_principal,
+                'es_subunidad': tipo.es_subunidad,
+                'color': tipo.color or '',
+                'tipo_padre_id': tipo.tipo_padre_id if tipo.tipo_padre else '' 
+            }
+        })
+    
+    # Si falla, mandamos los errores del form
+    return JsonResponse({'success': False, 'error': "Revise los datos. Es posible que el nombre ya exista."}, status=400)
+
+@require_POST
+@login_required
+def eliminar_tipo_unidad(request, pk):
+    try:
+        tipo = get_object_or_404(NTipoUnidadOrganizativa, pk=pk)
+        
+        # PROTECCIÓN 1: No borrar si tiene subunidades
+        if tipo.es_principal:
+            hijas = NTipoUnidadOrganizativa.objects.filter(tipo_padre=tipo)
+            if hijas.exists():
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'No se puede eliminar esta Unidad Principal porque tiene subunidades que dependen de ella.'
+                })
+            
+        tipo.delete()
+        return JsonResponse({'success': True})
+        
+    except ProtectedError:
+        # PROTECCIÓN 2: No borrar si ya está en uso en otra tabla
+        return JsonResponse({
+            'success': False, 
+            'error': 'No se puede eliminar porque hay Unidades Organizativas reales que están usando este Tipo.'
+        })
+        

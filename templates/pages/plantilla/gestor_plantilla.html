@@ -3,6 +3,58 @@
 
 {% block content %}
 <style>
+
+    /* --- ESTILOS MODERNOS TIPO TAILWIND --- */
+    .bg-slate-50 { background-color: #F8FAFC !important; }
+    
+    .modern-card {
+        background-color: #ffffff;
+        border-radius: 0.75rem; /* rounded-xl */
+        padding: 1rem;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+        transition: all 0.2s ease-in-out;
+        border: none;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid var(--card-color, #cbd5e1);
+    }
+
+    .modern-card:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+        transform: translateY(-1px);
+    }
+
+    /* Borde de selección azul (ring-2) */
+    .modern-card.active-unit {
+        box-shadow: 0 0 0 2px #6366f1, 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* Tipografía y Badges */
+    .text-slate-800 { color: #1e293b !important; }
+    .text-slate-500 { color: #64748b !important; }
+    .text-slate-400 { color: #94a3b8 !important; }
+
+    .badge-modern {
+        font-size: 0.65rem;
+        font-weight: 600;
+        padding: 0.25rem 0.4rem;
+        border-radius: 0.25rem;
+        letter-spacing: 0.025em;
+    }
+    
+    .bg-slate-100 { background-color: #f1f5f9 !important; }
+    
+    /* El contador azul clarito */
+    .badge-indigo {
+        background-color: #eef2ff !important;
+        color: #6366f1 !important;
+        font-weight: 700;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.65rem;
+    }
     
     /* --- 1. AJUSTES DE ESTRUCTURA Y SCROLL (4 FILAS) --- */
     .dashboard-container {
@@ -44,6 +96,11 @@
         box-shadow: none !important;
         cursor: pointer; /* <--- IMPORTANTE: ESTO AGREGA LA MANITO */
         transition: all 0.2s ease-in-out; /* Suaviza el hover */
+        
+        user-select: none; 
+        -webkit-user-select: none; /* Safari */
+        -moz-user-select: none;    /* Firefox */
+        -ms-user-select: none;
     }
 
     /* Forzar contenido en una línea (row) */
@@ -131,7 +188,7 @@
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none" 
                         onclick="sortColumn('unit', 'alpha', this)" title="Ordenar alfabéticamente">
                         <span class="badge bg-label-warning p-1"><i class="fas fa-building small"></i></span>
-                        <span class="fw-bold text-uppercase small text-muted">1. Unidades Organizativas</span>
+                        <span class="fw-bold text-uppercase small text-black">1. Unidades Organizativas</span>
                         <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon" style="font-size: 0.7rem;"></i>
                     </div>
                     <div class="d-flex align-items-center gap-1">
@@ -168,7 +225,7 @@
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                         onclick="sortColumn('dept', 'alpha', this)" title="Ordenar alfabéticamente">
                         <span class="badge bg-label-primary p-1"><i class="fas fa-sitemap small"></i></span>
-                        <span class="fw-bold text-uppercase small text-muted">2. Departamentos</span>
+                        <span class="fw-bold text-uppercase small text-black">2. Departamentos</span>
                         <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon" style="font-size: 0.7rem;"></i>
                     </div>
                     <div class="d-flex align-items-center gap-1">
@@ -202,7 +259,7 @@
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                         onclick="sortColumn('cargo', 'alpha', this)" title="Ordenar por Nombre">
                         <span class="badge bg-label-info p-1"><i class="fas fa-briefcase small"></i></span>
-                        <span class="fw-bold text-uppercase small text-muted">3. Cargos</span>
+                        <span class="fw-bold text-uppercase small text-black">3. Cargos</span>
                         <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon" style="font-size: 0.7rem;"></i>
                     </div>
                     <div class="d-flex align-items-center gap-1">
@@ -243,7 +300,7 @@
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                          onclick="sortColumn('contrato', 'alpha', this)" title="Ordenar alfabéticamente">
                         <span class="badge bg-label-success p-1"><i class="fas fa-users small"></i></span>
-                        <span class="fw-bold text-uppercase small text-muted">4. Contratos</span>
+                        <span class="fw-bold text-uppercase small text-black">4. Contratos</span>
                         <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon" style="font-size: 0.7rem;"></i>
                     </div>
                     
@@ -462,7 +519,7 @@
     // --- LÓGICA DE SELECCIÓN (CORE) ---
     window.selectUnit = function(item) {
         selectedUnitId = item.dataset.pk;
-        const tipoUnidad = item.dataset.tipo; // Leemos si es DG, DF o UEB
+        const esPrincipal = item.dataset.esPrincipal; // Ahora lee 'true' o 'false'
 
         document.querySelectorAll('.nav-card').forEach(c => c.classList.remove('active-unit'));
         item.classList.add('active-unit');
@@ -472,13 +529,13 @@
         // Al cambiar unidad, reseteamos orden de deptos
         sortState.dept = { sort: 'alpha', order: 'asc' };
 
-        // --- NUEVA LÓGICA DE NEGOCIO: DG vs DF ---
-        if (tipoUnidad === 'DG') {
-            // Si es Dirección General: Bloqueamos botón y NO cargamos HTMX de departamentos
+        // --- LÓGICA DE NEGOCIO DINÁMICA ---
+        if (esPrincipal === 'true') {
+            // Si es Unidad Principal: Bloqueamos botón y NO cargamos HTMX de departamentos
             disableAddBtn('btn-create-dept');
-            resetPanel('col-departamentos', 'Las Direcciones Generales no tienen departamentos directos.');
+            resetPanel('col-departamentos', 'Las Unidades Principales no tienen departamentos directos.');
         } else {
-            // Si es DF o UEB: Habilitamos botón y cargamos departamentos
+            // Si es Subunidad o Normal: Habilitamos botón y cargamos departamentos
             let urlCreate = "{% url 'add_dpto' %}?unidad=" + selectedUnitId;
             enableAddBtn('btn-create-dept', urlCreate);
             loadHtmx('#search-dept', "{% url 'htmx_load_departamentos' 0 %}".replace('0', selectedUnitId));

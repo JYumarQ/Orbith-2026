@@ -261,6 +261,10 @@
                         <label class="form-label" for="baja_nombre">Trabajador</label> 
                         <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
                     </div>
+                    <div class="col-md-12 mt-2">
+                        <label class="form-label" for="baja_actividad">Actividad que realizaba</label> 
+                        <input type="text" id="baja_actividad" class="form-control fw-bold text-primary" readonly style="background-color: #f5f5f9;">
+                    </div>
                 </div>
 
                 <hr class="my-3">
@@ -268,19 +272,35 @@
                 <form id="formBajaContrato">
                     <input type="hidden" id="baja_contrato_id"> 
                     <input type="hidden" id="baja_url_post">    
-                    <div class="mb-3">
-                        <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
-                        <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha" name="fecha_baja" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="baja_fecha_efectiva" class="form-label">Fecha de Documento <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha_efectiva" name="fecha_efectiva" class="form-control" required>
+                        </div>
                     </div>
 
                     <div class="mb-3">
                         <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
-                        <select id="baja_causa" name="causa_baja" class="form-select">
+                        <select id="baja_causa" name="causa_baja" class="form-select" required>
                             <option value="">Seleccione una causa...</option>
                             {% for causa in causas_baja %}
                                 <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+
+                    <div class="mb-3 border-top pt-3 mt-3">
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input" type="checkbox" id="switchCobroSistema">
+                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema" style="margin-top: 2px;">
+                                Cobró sistema de pago
+                            </label>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -471,6 +491,7 @@
         btnBaja.dataset.url = fila.dataset.urlBaja; // La URL del DeleteView
         btnBaja.dataset.expediente = fila.dataset.expediente; // Asegúrate de agregar esto en el <tr>
         btnBaja.dataset.nombre = fila.dataset.nombre; // Asegúrate de agregar esto en el <tr>
+        btnBaja.dataset.cargo = fila.dataset.cargo;
     }
 
     function deseleccionarTodo() {
@@ -512,6 +533,7 @@
         // 1. Cargar datos en el modal
         document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
         document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
+        document.getElementById('baja_actividad').value = btn.dataset.cargo || '';
         document.getElementById('baja_url_post').value = url;
 
         // Limpiar campos editables
@@ -523,27 +545,27 @@
     }
 
     function validarYConfirmarBaja() {
-        // 1. Validación
-        const fecha = document.getElementById('baja_fecha').value;
-        const causa = document.getElementById('baja_causa').value;
-        const url = document.getElementById('baja_url_post').value;
-
-        if (!fecha || !causa) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Campos incompletos',
-                text: 'Por favor, seleccione una fecha y una causa de baja.',
-                confirmButtonColor: '#696cff'
-            });
+        const form = document.getElementById('formBajaContrato');
+        
+        // 1. DISPARAR VALIDACIÓN NATIVA HTML5 ("Completa este campo")
+        if (!form.checkValidity()) {
+            form.reportValidity();
             return;
         }
 
-        // 2. SweetAlert de Confirmación (La original, pero ahora llamada manualmente)
-        $('#modalBajaContrato').modal('hide'); // Ocultamos el modal de formulario primero
+        // 2. CAPTURAR DATOS
+        const fechaBaja = document.getElementById('baja_fecha').value;
+        const fechaEfectiva = document.getElementById('baja_fecha_efectiva').value;
+        const causa = document.getElementById('baja_causa').value;
+        const url = document.getElementById('baja_url_post').value;
+        const cobroSistema = document.getElementById('switchCobroSistema').checked;
+
+        // 3. SWEETALERT DE CONFIRMACIÓN
+        $('#modalBajaContrato').modal('hide'); 
 
         Swal.fire({
             title: '¿Está seguro de dar de baja este contrato?',
-            text: "Esta acción registrará la baja en el sistema.",
+            text: "Esta acción registrará la baja y generará el movimiento de nómina.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
@@ -552,51 +574,54 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                enviarBajaAlBackend(url, fecha, causa);
+                // Pasamos todas las variables correctamente a la función
+                enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema);
             } else {
-                // Si cancela el SweetAlert, volvemos a mostrar el modal por si quiere corregir algo
                 $('#modalBajaContrato').modal('show');
             }
         });
     }
 
-    function enviarBajaAlBackend(url, fecha, causa) {
-        // Usamos HTMX para enviar la petición manualmente y mantener la consistencia
-        // O usamos jQuery AJAX. Dado que el proyecto usa ambos, jQuery es más explícito aquí para pasar datos extra.
-
+    function enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema) {
         $.ajax({
             url: url,
             type: 'POST',
             data: {
-                'fecha_baja': fecha,
+                'fecha_baja': fechaBaja,
+                'fecha_efectiva': fechaEfectiva, // Va hacia views.py como fecha_efectiva
                 'causa_baja': causa,
-                'csrfmiddlewaretoken': '{{ csrf_token }}' // Django CSRF
+                'cobro_sistema_pago': cobroSistema, 
+                'csrfmiddlewaretoken': '{{ csrf_token }}' 
             },
             success: function(response) {
-                // Si todo sale bien
                 Swal.fire({
-                    icon: 'success',
                     title: 'Baja procesada',
-                    showConfirmButton: false,
-                    timer: 1500
+                    text: '¿Desea exportar el documento de movimiento de nómina ahora?',
+                    icon: 'success',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-file-pdf me-1"></i> Exportar PDF',
+                    cancelButtonText: 'Cerrar',
+                    customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed && response.pdf_url) {
+                        window.open(response.pdf_url, '_blank');
+                    }
+                    triggerSearch(); // Refrescar tabla
                 });
-                // Recargamos la tabla disparando el evento de HTMX del buscador
-                triggerSearch();
             },
             error: function(xhr) {
-                // EXTRAEMOS EL MENSAJE INTELIGENTE DE DJANGO
                 let mensajeError = 'No se pudo procesar la baja debido a un error de conexión.';
-                
                 if (xhr.responseJSON && xhr.responseJSON.message) {
                     mensajeError = xhr.responseJSON.message;
                 }
-
-                // Mostramos el mensaje exacto al usuario
                 Swal.fire({
                     title: 'No se puede procesar',
                     text: mensajeError,
                     icon: 'error',
                     confirmButtonColor: '#696cff'
+                }).then(() => {
+                    $('#modalBajaContrato').modal('show'); // Reabre el modal si hay error
                 });
             }
         });

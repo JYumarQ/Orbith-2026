@@ -1,0 +1,35 @@
+{% for categoria, valores in datos_tabla.items %}
+<tr>
+    <td class="text-start fw-bold bg-lighter border-end">{{ categoria }}</td>
+    <td class="border-end-0 fs-6">{{ valores.aprob }}</td>
+    <td class="border-end-0 fw-semibold fs-6">{{ valores.cub }}</td>
+    <td class="border-end-0 text-warning fs-6">{{ valores.vac }}</td>
+    <td class="fw-bold text-primary border-end bg-plantilla fs-6">{{ valores.p_muj }}</td>
+    
+    <td class="border-end-0 fs-6">{{ valores.d_tot }}</td>
+    <td class="fw-bold text-info border-end bg-determinado fs-6">{{ valores.d_muj }}</td>
+    
+    <td class="border-end-0 fs-6">{{ valores.a_tot }}</td>
+    <td class="fw-bold text-warning border-end bg-adiestramiento fs-6">{{ valores.a_muj }}</td>
+    
+    <td class="fw-bold text-dark border-end-0 bg-total fs-6">{{ valores.t_tot }}</td>
+    <td class="fw-bold text-success bg-total fs-6">{{ valores.t_muj }}</td>
+</tr>
+{% endfor %}
+
+<tr class="bg-dark text-white fw-bold text-uppercase fs-6">
+    <td class="text-start border-end border-secondary text-white">Totales</td>
+    <td class="border-end-0 text-white">{{ totales.aprob }}</td>
+    <td class="border-end-0 text-white">{{ totales.cub }}</td>
+    <td class="border-end-0 text-warning">{{ totales.vac }}</td>
+    <td class="border-end border-secondary text-primary">{{ totales.p_muj }}</td>
+    
+    <td class="border-end-0 text-white">{{ totales.d_tot }}</td>
+    <td class="border-end border-secondary text-info">{{ totales.d_muj }}</td>
+    
+    <td class="border-end-0 text-white">{{ totales.a_tot }}</td>
+    <td class="border-end border-secondary text-warning">{{ totales.a_muj }}</td>
+    
+    <td class="border-end-0 text-white">{{ totales.t_tot }}</td>
+    <td class="text-success">{{ totales.t_muj }}</td>
+</tr>

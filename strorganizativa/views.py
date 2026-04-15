@@ -3,11 +3,11 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from .models import CargoPlantilla, Departamento, UnidadOrganizativa
 from .forms import CargoPlantillaForm, DepartamentoForm, UnidadOrganizativaForm
-from nomencladores.models import NCargo, NCausaAltaBaja
+from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Q, ProtectedError, Count, RestrictedError, Sum
+from django.db.models import Case, When, Value, IntegerField, Q, ProtectedError, Count, RestrictedError, Sum
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
 import json
@@ -294,9 +294,8 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
         return kwargs
     
     def get_initial(self):
-        """Pre-selecciona la unidad organizativa si viene en la URL"""
         initial = super().get_initial()
-        unidad_id = self.request.GET.get('unidad') # Capturamos el ?unidad=ID
+        unidad_id = self.request.GET.get('unidad')
         if unidad_id:
             initial['unidad_organizativa'] = unidad_id
         return initial
@@ -307,7 +306,8 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
             response = HttpResponse(status=204)
             triggers = {
                 'closeModal': True,
-                'updateDeptList': True, # <--- OJO: Trigger específico
+                'updateDeptList': True,
+                'updateUnitList': True, # <--- SOLUCIÓN: Obliga a actualizar los contadores
                 'showMessage': {'icon': 'success', 'text': 'Departamento creado correctamente'}
             }
             response['HX-Trigger'] = json.dumps(triggers)
@@ -327,6 +327,7 @@ class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
             triggers = {
                 'closeModal': True,
                 'updateDeptList': True,
+                'updateUnitList': True, # <--- SOLUCIÓN: Obliga a actualizar los contadores
                 'showMessage': {'icon': 'success', 'text': 'Departamento actualizado correctamente'}
             }
             response['HX-Trigger'] = json.dumps(triggers)
@@ -407,15 +408,18 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
     model = UnidadOrganizativa
     form_class = UnidadOrganizativaForm
     template_name = 'pages/uniorg/add_uniorg.html'
-    success_url = reverse_lazy('gestor_plantilla') # Fallback por si falla JS
+    success_url = reverse_lazy('gestor_plantilla') 
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        dg = UnidadOrganizativa.objects.filter(tipo='DG').first()
-        context['dg_grupo_nomina'] = dg.grupo_nomina if dg else ''
+        import json
+        # Le enviamos al frontend qué tipos son subunidades y qué grupo de nómina tiene cada padre
+        context['tipos_info'] = json.dumps({t.id: {'es_subunidad': t.es_subunidad} for t in NTipoUnidadOrganizativa.objects.all()})
+        context['padres_info'] = json.dumps({p.pk: p.grupo_nomina for p in UnidadOrganizativa.objects.filter(tipo__es_principal=True)})
         return context
 
     def form_valid(self, form):
+        # ... (Mantén tu código actual del form_valid)
         self.object = form.save()
         if self.request.headers.get('HX-Request'):
             response = HttpResponse(status=204)
@@ -436,21 +440,22 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        dg = UnidadOrganizativa.objects.filter(tipo='DG').exclude(pk=self.object.pk).first()
-        context['dg_grupo_nomina'] = dg.grupo_nomina if dg else ''
+        import json
+        padres_qs = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exclude(pk=self.object.pk)
+        context['tipos_info'] = json.dumps({t.id: {'es_subunidad': t.es_subunidad} for t in NTipoUnidadOrganizativa.objects.all()})
+        context['padres_info'] = json.dumps({p.pk: p.grupo_nomina for p in padres_qs})
         return context
-
+    
     def form_valid(self, form):
         self.object = form.save()
-        if self.request.headers.get('HX-Request'):
+        
+        if self.request.htmx:
+            # 204 significa "Todo salió bien, no devuelvas HTML que rompa la pantalla"
             response = HttpResponse(status=204)
-            triggers = {
-                'closeModal': True,
-                'updateUnitList': True,
-                'showMessage': {'icon': 'success', 'text': 'Unidad actualizada correctamente'}
-            }
-            response['HX-Trigger'] = json.dumps(triggers)
+            # Aquí disparamos la recarga de la lista, cerramos el modal y mostramos el toast
+            response['HX-Trigger'] = 'updateUnitList, closeModal, showMessage'
             return response
+            
         return super().form_valid(form)
 
 class UnidadOrganizativaDeleteView(DeleteView):
@@ -472,52 +477,53 @@ class UnidadOrganizativaDeleteView(DeleteView):
 # 1. VISTA CONTENEDOR Y COLUMNA 1 (UNIDADES)
 @login_required
 def gestor_plantilla_view(request):
-    # 1. ¿Existe alguna Dirección General en la empresa?
-    existe_dg = UnidadOrganizativa.objects.filter(tipo='DG').exists()
+    # 1. Verificamos si el sistema debe comportarse como un acordeón
+    hay_unidad_principal = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exists()
 
-    # 2. Filtro base (Traemos todas sin ocultar todavía)
+    # 2. Base de datos con optimización de conteo
     if request.user.is_superuser:
         unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamento'))
     else:
         unidades = request.user.unidades.annotate(total_dptos=Count('departamento'))
 
-    # 3. Lógica dinámica de visibilidad (Tu nueva regla)
-    if existe_dg:
-        # Si hay DG, ocultamos a las "hijas" para que vivan dentro del acordeón
-        unidades = unidades.filter(padre__isnull=True)
-    # Si NO hay DG, no filtramos nada, permitiendo que las DF se vean en la lista principal
+    # 2. LÓGICA DE ORDENAMIENTO PERSONALIZADO (El "Peso" de la Unidad)
+    # Asignamos: 1 (Principal), 3 (Temporal), 2 (Cualquier otra normal)
+    unidades = unidades.annotate(
+        jerarquia_visual=Case(
+            When(tipo__es_principal=True, then=Value(1)),
+            When(tipo__descripcion__icontains='temporal', then=Value(3)),
+            default=Value(2),
+            output_field=IntegerField()
+        )
+    )
 
-    # 4. Búsqueda
+    # 3. Control de visibilidad para el Gestor de Plantilla
+    if hay_unidad_principal:
+        # Si hay una unidad raíz, las subunidades solo se ven dentro del desplegable
+        unidades = unidades.filter(padre__isnull=True)
+
+    # 4. Búsqueda y Ordenamiento
     q = request.GET.get('q')
     if q:
         unidades = unidades.filter(descripcion__icontains=q)
 
-    # 5. Lógica de Ordenamiento (Columna 1)
-    # Default: grupo_nomina (numérico)
     sort_by = request.GET.get('sort', 'grupo_nomina') 
     order = request.GET.get('order', 'asc')
     
-    if sort_by == 'alpha':
-        # Orden alfabético (descripcion)
-        field = 'descripcion'
-    else:
-        # Por defecto numérico (grupo_nomina)
-        field = 'grupo_nomina'
-        
-    if order == 'desc':
-        field = f'-{field}'
-        
-    unidades = unidades.order_by(field)
+    # Sintaxis limpia para el campo de orden
+    field = 'descripcion' if sort_by == 'alpha' else 'grupo_nomina'
+    if order == 'desc': field = f'-{field}'
+    
+    unidades = unidades.order_by('jerarquia_visual', field)
 
+    # 5. Respuestas HTMX o Render normal
+    context = {'unidades': unidades, 'q': q}
+    
     if request.htmx:
-        return render(request, 'pages/plantilla/partials/lista_unidades_div.html', {
-            'unidades': unidades, 'q': q
-        })
+        return render(request, 'pages/plantilla/partials/lista_unidades_div.html', context)
 
-    return render(request, 'pages/plantilla/gestor_plantilla.html', {
-        'unidades': unidades,
-        'causas_baja': NCausaAltaBaja.objects.filter(alta=False)
-    })
+    context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
+    return render(request, 'pages/plantilla/gestor_plantilla.html', context)
 
 
 # 2. COLUMNA 2 (DEPARTAMENTOS)
@@ -563,9 +569,10 @@ def htmx_load_cargos(request, dpto_id):
     if q:
         cargos = cargos.filter(ncargo__descripcion__icontains=q)
 
+    # NUEVO: Se actualiza la consulta (Query) para buscar dentro de la descripción del tipo
     cargos = cargos.select_related('ncargo', 'rol').annotate(
-        count_ind=Count('calta', filter=Q(calta__tipo='IND')),
-        count_cont=Count('calta', filter=~Q(calta__tipo='IND'))
+        count_ind=Count('calta', filter=Q(calta__tipo__descripcion__icontains='INDETERMINADO')),
+        count_cont=Count('calta', filter=~Q(calta__tipo__descripcion__icontains='INDETERMINADO'))
     )
 
     # Ordenamiento Dinámico

@@ -7,11 +7,11 @@ from django.views.generic import ListView, CreateView, DeleteView, UpdateView, V
 from django.core.paginator import Paginator
 from django.conf import settings
 from bolsa.models import Aspirante
-from .models import CAlta, CBaja
+from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
 from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from configuracion.models import Configuracion
 from django.template.loader import get_template
 from django.db.models import Q, ProtectedError, Value
@@ -761,7 +761,7 @@ class ContratoDeleteView(DeleteView):
 
     def post(self, request, *args, **kwargs):
         # Asegúrate de tener este import arriba del todo en el archivo:
-        from datetime import datetime
+        
         
         # 1. Recuperar el objeto de forma segura
         try:
@@ -771,7 +771,9 @@ class ContratoDeleteView(DeleteView):
 
         # 2. Obtener datos del formulario
         fecha_baja_str = request.POST.get('fecha_baja')
+        fecha_efectiva_str = request.POST.get('fecha_efectiva')
         causa_id = request.POST.get('causa_baja')
+        cobro_sistema = request.POST.get('cobro_sistema_pago') == 'true'
 
         if not fecha_baja_str or not causa_id:
             return JsonResponse({'success': False, 'message': 'Faltan datos obligatorios: Fecha de Baja o Causa.'}, status=400)
@@ -779,13 +781,14 @@ class ContratoDeleteView(DeleteView):
         # 3. Convertir fecha para validar
         try:
             fecha_baja = datetime.strptime(fecha_baja_str, '%Y-%m-%d').date()
+            fecha_efectiva = datetime.strptime(fecha_efectiva_str, '%Y-%m-%d').date()
         except (ValueError, TypeError):
              return JsonResponse({'success': False, 'message': 'Formato de fecha inválido.'}, status=400)
 
         # =================================================================
         # VALIDACIÓN CRONOLÓGICA (La Barrera)
         # =================================================================
-        from .models import TMovimiento
+        
         
         # A. Buscar último movimiento registrado
         ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
@@ -831,6 +834,21 @@ class ContratoDeleteView(DeleteView):
                     unidad_nueva="---"
                 )
                 
+                nuevo_movimiento = TMovimiento.objects.create(
+                    aspirante=contrato.aspirante,
+                    no_expediente=contrato.no_expediente,
+                    contrato=None, # Ya no hay contrato activo
+                    fecha_efectiva=fecha_efectiva, # NUEVA FECHA AQUÍ
+                    tipo_movimiento="Baja",
+                    
+                    cargo_anterior=cargo_final,
+                    cargo_nuevo="---",
+                    salario_anterior=salario_final,
+                    salario_nuevo=0,
+                    unidad_anterior=unidad_final,
+                    unidad_nueva="---"
+                )
+
                 # A. Crear el registro histórico (CBaja)
                 CBaja.objects.create(
                     aspirante=contrato.aspirante,
@@ -842,10 +860,26 @@ class ContratoDeleteView(DeleteView):
                     fecha_baja=fecha_baja,
                     causa_baja_id=causa_id,
                     fecha_alta=contrato.fecha_alta,
-                    tridente=contrato.tridente
+                    tridente=contrato.tridente,
+                    cobro_sistema_pago=cobro_sistema,
+                    actividad_realizada=cargo_final
                 )
                 # B. Eliminar el contrato activo
                 contrato.delete()
+
+            # URL del PDF usando el PK del nuevo movimiento
+            pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': nuevo_movimiento.pk})
+
+            # Si llegamos aquí, todo salió bien
+            return JsonResponse({
+                'success': True, 
+                'message': 'Contrato dado de baja y archivado correctamente.',
+                'pdf_url': pdf_url
+            })
+
+        except Exception as e:
+            # Captura cualquier error (Integridad, Modelo, etc.) y evita el crash del servidor
+            print(f"ERROR AL DAR BAJA: {e}")
 
             # Si llegamos aquí, todo salió bien
             return JsonResponse({
@@ -931,7 +965,7 @@ class MovimientoUpdateView(UpdateView):
             # =================================================================
             # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
             # =================================================================
-            from .models import TMovimiento
+            
             
             # Buscamos si hay movimientos previos
             ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
@@ -1093,15 +1127,23 @@ def abreviar_cargo_inteligente(texto_cargo):
 # --- LA VISTA DEFINITIVA (Sustituye a ModeloMovimientoPDFView) ---
 class ModeloMovimientoDocxView(View):
     def get(self, request, *args, **kwargs):
-        from .models import CAlta, TMovimiento
+        from .models import CAlta, CBaja, TMovimiento
         
-        contrato = get_object_or_404(CAlta, pk=kwargs['pk'])
-        mov = TMovimiento.objects.filter(contrato=contrato).order_by('-id').first()
+        # 1. Buscar el MOVIMIENTO, no el contrato activo. El PK que llega es de TMovimiento.
+        mov = get_object_or_404(TMovimiento, pk=kwargs['pk'])
         
-        # --- CORRECCIÓN PARA PYLANCE ---
-        if not mov:
-            return HttpResponse("Error: No se encontró el movimiento de nómina.", status=404)
-        # -------------------------------
+        # 2. Intentar obtener el contrato activo. 
+        # Si es Alta o Movimiento normal, mov.contrato existe. 
+        # Si es Baja, mov.contrato es None, así que buscamos en el historial (CBaja).
+        registro_contrato = mov.contrato
+        if not registro_contrato:
+            registro_contrato = CBaja.objects.filter(
+                aspirante=mov.aspirante, 
+                no_expediente=mov.no_expediente
+            ).order_by('-id').first()
+            
+        if not registro_contrato:
+            return HttpResponse("Error: No se encontró la información del contrato o baja asociada.", status=404)
 
         hoy = datetime.now()
         
@@ -1112,8 +1154,9 @@ class ModeloMovimientoDocxView(View):
         except FileNotFoundError:
             return HttpResponse(f"Error: No se encuentra la plantilla en {template_path}", status=500)
 
-        # Lógica de Cargo
-        cargo_texto = contrato.cargo.ncargo.descripcion if contrato.cargo else "-"
+        # Lógica de Cargo usando el registro_contrato (CAlta o CBaja)
+        cargo_obj = registro_contrato.cargo
+        cargo_texto = cargo_obj.ncargo.descripcion if cargo_obj else "-"
         cargo_abreviado = abreviar_cargo_inteligente(cargo_texto)
         
         if len(cargo_abreviado) > 35:
@@ -1123,10 +1166,13 @@ class ModeloMovimientoDocxView(View):
         else:
             cargo_final = cargo_abreviado
 
-        # Contexto (Con protecciones para valores None)
+        # Definir UEB inteligentemente (Si en el mov dice "---" por ser baja, tomamos la anterior)
+        ueb_mostrar = mov.unidad_nueva if mov.unidad_nueva and mov.unidad_nueva != "---" else mov.unidad_anterior
+
+        # Contexto
         context = {
-            'ueb': mov.unidad_nueva if mov.unidad_nueva else (contrato.cargo.departamento.unidad_organizativa.descripcion if contrato.cargo else ""),
-            'doc_id': f"{mov.pk:06d}", # Pylance ya sabe que mov no es None
+            'ueb': ueb_mostrar or (cargo_obj.departamento.unidad_organizativa.descripcion if cargo_obj else ""),
+            'doc_id': f"{mov.pk:06d}",
             'd': hoy.strftime("%d"),
             'm': hoy.strftime("%m"),
             'a': hoy.strftime("%y"),
@@ -1139,19 +1185,18 @@ class ModeloMovimientoDocxView(View):
             'em': mov.fecha_efectiva.strftime("%m") if mov.fecha_efectiva else "-",
             'ea': mov.fecha_efectiva.strftime("%Y") if mov.fecha_efectiva else "-",
             
-            'nombre': contrato.aspirante.nombre,
-            'ap1': contrato.aspirante.papellido,
-            'ap2': contrato.aspirante.sapellido,
-            'exp': contrato.no_expediente,
+            'nombre': mov.aspirante.nombre,
+            'ap1': mov.aspirante.papellido,
+            'ap2': mov.aspirante.sapellido,
+            'exp': mov.no_expediente,
             
-            # Usamos getattr para métodos mágicos de Django que Pylance no ve
-            'cat': getattr(contrato.cargo.ncargo, 'get_cat_ocupacional_display')() if contrato.cargo else "-",
+            'cat': getattr(cargo_obj.ncargo, 'get_cat_ocupacional_display')() if cargo_obj else "-",
             'cargo': cargo_final,
-            'area': contrato.cargo.departamento.descripcion if contrato.cargo else "-",
+            'area': cargo_obj.departamento.descripcion if cargo_obj else "-",
             
             'sal_ant': mov.salario_anterior if mov.salario_anterior is not None else 0,
-            'rol_nue': contrato.cargo.rol.tipo if (contrato.cargo and contrato.cargo.rol) else "-",
-            'tri_nue': contrato.tridente if contrato.tridente else "-",
+            'rol_nue': cargo_obj.rol.tipo if (cargo_obj and cargo_obj.rol) else "-",
+            'tri_nue': registro_contrato.tridente if registro_contrato.tridente else "-",
             'sal_nue': mov.salario_nuevo if mov.salario_nuevo is not None else 0,
             
             'observaciones': mov.observaciones or ""
@@ -1162,7 +1207,7 @@ class ModeloMovimientoDocxView(View):
         doc.save(buffer)
         buffer.seek(0)
         
-        filename = f"Movimiento_{contrato.no_expediente}.docx"
+        filename = f"Movimiento_{mov.no_expediente}.docx"
         
         response = HttpResponse(
             buffer.getvalue(),
@@ -1178,80 +1223,76 @@ class ModeloMovimientoDocxView(View):
 
 def cargar_salario(request):
     cargo_id      = request.GET.get('cargo')
+    # Ya no capturamos rol_id porque viene como texto desde el HTML
     tridente_id   = request.GET.get('tridente')
     tipo_salario  = request.GET.get('tipo_salario')
     es_movimiento = request.GET.get('es_movimiento') 
 
     context = {
         'salario': 0.00, 'tarifa': 0, 'extras': 0,
-        'nuevo_rol': '', 'nuevo_grupo': '', # Variables para actualizar los inputs
-        'mostrar_tridente': False, # Bandera para habilitar visualmente el tridente
-        'es_movimiento': es_movimiento == '1' # Detecta si estamos en modo movimiento
+        'nuevo_rol': '', 'nuevo_grupo': '', 
+        'mostrar_tridente': False, 
+        'es_movimiento': es_movimiento == '1',
+        'es_cuadro_flag': False
     }
 
     if cargo_id:
         try:
+            # 1. Cargamos el cargo con sus relaciones
             cargo = CargoPlantilla.objects.select_related('ncargo').get(id=cargo_id)
-
             grupo_obj = cargo.ncargo.grupo_escala
-            rol_obj = cargo.rol
+            rol_obj = cargo.rol  # <--- AQUÍ YA TENEMOS EL ROL REAL (Ej: Fundamental)
             
-            # Datos extra para el contexto
-            context['nueva_cat'] = getattr(cargo.ncargo, 'get_cat_ocupacional_display')()
-            context['nuevo_rol'] = rol_obj.tipo if rol_obj else "Cuadro"
+            # 2. DETERMINAMOS SI ES CUADRO
+            cat_nombre = cargo.ncargo.get_cat_ocupacional_display()
+            categorias_cuadro = ["Cuadro Ejecutivo", "Cuadro Directivo", "CEJ", "CDI"]
+            es_cuadro_por_cat = cat_nombre in categorias_cuadro or cargo.ncargo.cat_ocupacional in categorias_cuadro
+            
+            context['es_cuadro_flag'] = es_cuadro_por_cat
+            context['nueva_cat'] = cat_nombre
+            context['nuevo_rol'] = rol_obj.tipo if rol_obj else ("Cuadro" if es_cuadro_por_cat else "-")
             context['nuevo_grupo'] = grupo_obj.nivel if grupo_obj else "-"
             
             monto = 0.00
 
-            # --- ESCENARIO A: SALARIO FIJO ---
+            # --- ESCENARIO A: SALARIO FIJO DEL CARGO ---
             if tipo_salario == 'FIJ':
-                # Si es Fijo, tomamos el salario base del cargo directamente
                 monto = float(cargo.ncargo.salario_basico)
-                context['mostrar_tridente'] = False # No se muestra el tridente para salario fijo
+                context['mostrar_tridente'] = False
             
-            # --- ESCENARIO B: SALARIO DINÁMICO ---
+            # --- ESCENARIO B: SALARIO DINÁMICO DE LA TABLA ---
             else:
                 salario_obj = None
                 
-                # 1. REGLA UNIVERSAL DEL CUADRO: Si es Cuadro, NUNCA lleva tridente
-                if not rol_obj or rol_obj.tipo == "Cuadro":
+                if es_cuadro_por_cat:
                     context['mostrar_tridente'] = False
                     salario_obj = NSalario.objects.filter(
                         grupo_escala=grupo_obj,
-                        rol=rol_obj,
-                        tridente__isnull=True # <--- BLOQUEO DE SEGURIDAD: Fuerza a buscar el valor único sin tridente
+                        rol__isnull=True,
+                        tridente__isnull=True
                     ).first()
-                    
-                    if not salario_obj: # Fallback
-                         salario_obj = NSalario.objects.filter(
-                             grupo_escala=grupo_obj, 
-                             rol__isnull=True, 
-                             tridente__isnull=True
-                         ).first()
-
-                # 2. REGLA PARA LOS DEMÁS ROLES (Apoyo, Fundamental, Decisorio)
                 else:
                     nivel_num = nivel_romano_a_int(grupo_obj.nivel) if grupo_obj else 0
                     
-                    # EXCEPCIÓN GRUPOS XXII al XXIV: En estos grupos solo el "Decisorio" tiene tridente y dinero.
-                    if 22 <= nivel_num <= 24 and rol_obj.tipo != "Decisorio":
+                    if 22 <= nivel_num <= 24 and (rol_obj and rol_obj.tipo != "Decisorio"):
                         context['mostrar_tridente'] = False
-                        salario_obj = None # Obliga a que sea 0.00 porque no hay Apoyo/Fundamental
+                        salario_obj = None 
                     else:
-                        # Si es un grupo I-XXI o es Decisorio en XXII-XXIV, habilitamos tridente
                         context['mostrar_tridente'] = True 
-                        if tridente_id:
+                        
+                        # ---> AQUÍ ESTÁ LA CORRECCIÓN <---
+                        # Usamos rol_obj (que ya viene de la BD) en vez del rol_id del HTML
+                        if tridente_id and rol_obj: 
                             salario_obj = NSalario.objects.filter(
                                 grupo_escala=grupo_obj,
-                                rol=rol_obj,
+                                rol=rol_obj,  # Pasamos el objeto directamente
                                 tridente_id=tridente_id
                             ).first()
                 
-                # Asignación final del monto si se encontró el registro
                 if salario_obj and salario_obj.monto:
                     monto = float(salario_obj.monto)
 
-            # Cálculos Finales
+            # --- CÁLCULOS FINALES ---
             if monto > 0:
                 config = Configuracion.objects.first()
                 fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
@@ -1263,10 +1304,8 @@ def cargar_salario(request):
                 })
                 
         except Exception as e:
-            print(f"Error calculando: {e}")
-            pass
+            print(f"Error calculando salario: {e}")
 
-    # Usamos la plantilla parcial para devolver los datos
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
 # =========================================================================
 # VISTA WIZARD FASE 3: Finalizar Contrato y (Opcional) Movimiento
@@ -1393,7 +1432,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
         generar_movimiento = request.POST.get('generar_movimiento') == 'true'
         from django.urls import reverse
         from django.utils import timezone
-        from .models import TMovimiento
+       
         
         try:
             with transaction.atomic():

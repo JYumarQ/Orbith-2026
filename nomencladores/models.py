@@ -15,10 +15,11 @@ class NTridente(Base):
     def __str__(self):
         return f"Tridente {self.tipo}"
 
+# nomencladores/models.py
+
 class NRol(Base):
-    
     tipo = models.CharField(max_length=50)    
-    es_cuadro = models.BooleanField(default=False, verbose_name="Es Cuadro")
+    # Se eliminó el campo es_cuadro de aquí
 
     class Meta:
         verbose_name = ("NRol")
@@ -28,9 +29,19 @@ class NRol(Base):
         return self.tipo
 
 class NGrupoEscala(Base):
-
     nivel = models.CharField(max_length=8, unique=True)
     
+    # --- NUEVOS CAMPOS ---
+    es_cuadro = models.BooleanField(default=False, verbose_name="Es Cuadro")
+    tiene_rol = models.BooleanField(default=True, verbose_name="Tiene Rol")
+    
+    # Relación para seleccionar qué roles aplican a este grupo
+    roles = models.ManyToManyField(
+        NRol, 
+        blank=True, 
+        related_name="grupos_escala",
+        verbose_name="Roles que aplican"
+    )
 
     class Meta:
         verbose_name = ("NGrupoEscala")
@@ -82,22 +93,30 @@ class NSalario(Base):
             return f"{self.grupo_escala} - {self.rol} - {self.tridente}: ${self.monto}"
         return f"Salario {self.pk}"
         
-
-
-class NFamiliaCargo(Base):
-    nombre = models.CharField(max_length=100, unique=True)
-    descripcion = models.TextField(blank=True, null=True)
+class NTipoFamilia(Base):
+    nombre = models.CharField(max_length=100, unique=True, verbose_name="Tipo de Familia")
 
     class Meta:
-        verbose_name = "Familia de Cargos"
-        verbose_name_plural = "Familias de Cargos"
+        verbose_name = "Tipo de Familia"
+        verbose_name_plural = "Tipos de Familias"
 
     def __str__(self):
         return self.nombre
 
+class NFamiliaCargo(Base):
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.TextField(blank=True, null=True)
+    tipo_familia = models.ForeignKey(NTipoFamilia, on_delete=models.CASCADE, related_name='familias')
+    class Meta:
+        verbose_name = "Familia de Cargos"
+        verbose_name_plural = "Familias de Cargos"
+        unique_together = ('nombre', 'tipo_familia')
+
+    def __str__(self):
+        return f"{self.nombre} ({self.tipo_familia.nombre})"
+
 
 class NCargo(Base):
-
     descripcion = models.CharField(max_length=150)
     cat_ocupacional = models.CharField(max_length=20, choices=[
         ('TEC', 'Técnico'),
@@ -109,7 +128,8 @@ class NCargo(Base):
     ])
     grupo_escala = models.ForeignKey(NGrupoEscala, on_delete=models.RESTRICT)
 
-    familia = models.ForeignKey(NFamiliaCargo, null=True, blank=True, on_delete=models.SET_NULL, related_name='cargos')
+    # ¡LA MAGIA OCURRE AQUÍ! ELIMINAMOS EL FOREIGN KEY Y USAMOS MANY-TO-MANY
+    familias = models.ManyToManyField(NFamiliaCargo, blank=True, related_name='cargos')
     
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2)
 
@@ -223,3 +243,44 @@ class NNivelPreparacion(Base):
 
     def __str__(self):
         return self.nombre
+
+class NTipoContrato(Base):
+    descripcion = models.CharField(max_length=50, unique=True, verbose_name="Descripción")
+    ocupa_plaza = models.BooleanField(default=False, verbose_name="¿Ocupa Plaza en Plantilla?")
+    # NUEVO SWITCH
+    requiere_motivo = models.BooleanField(default=False, verbose_name="¿Requiere Motivo?") 
+
+    class Meta:
+        verbose_name = "Tipo de Contrato"
+        verbose_name_plural = "Tipos de Contratos"
+
+    def __str__(self):
+        return self.descripcion
+
+# NUEVO NOMENCLADOR
+class NMotivoContrato(Base):
+    descripcion = models.CharField(max_length=100, unique=True, verbose_name="Descripción")
+    
+    class Meta:
+        verbose_name = "Motivo de Contrato"
+        verbose_name_plural = "Motivos de Contratos"
+
+    def __str__(self):
+        return self.descripcion
+
+class NTipoUnidadOrganizativa(Base):
+    descripcion = models.CharField(max_length=150, unique=True, verbose_name="Tipo de Unidad")
+    es_temporal = models.BooleanField(default=False, verbose_name="Es temporal")
+    es_principal = models.BooleanField(default=False, verbose_name="Unidad Principal")
+    es_subunidad = models.BooleanField(default=False, verbose_name="Subunidad")
+    tipo_padre = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subtipos', verbose_name="Tipo Principal (Padre)")
+
+    # Aquí guardaremos el código HEX del color (ej. #FF5733)
+    color = models.CharField(max_length=20, blank=True, null=True, verbose_name="Color de Jerarquía")
+
+    class Meta:
+        verbose_name = "Tipo de Unidad Organizativa"
+        verbose_name_plural = "Tipos de Unidades Organizativas"
+
+    def __str__(self):
+        return self.descripcion

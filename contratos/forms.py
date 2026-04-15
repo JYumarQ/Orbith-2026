@@ -70,7 +70,7 @@ class CAltaForm(forms.ModelForm):
             
         model = CAlta        
         fields = (
-            'no_expediente', 'tipo', 'fecha_alta', 'duracion', 'cargo', 'reg_militar',
+            'no_expediente', 'tipo', 'motivo', 'fecha_alta', 'duracion', 'cargo', 'reg_militar',
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 'funcionario', 'designado', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
@@ -79,6 +79,7 @@ class CAltaForm(forms.ModelForm):
         labels = {
             'no_expediente': 'Exp. Laboral', 
             'tipo': 'Tipo de Contrato',
+            'motivo' : 'Motivo de Contrato',
             'fecha_alta': 'F. de Contratación',
             'duracion': 'D. de Contrato',
             'reg_militar': 'Registro Militar',
@@ -102,6 +103,7 @@ class CAltaForm(forms.ModelForm):
         widgets = {
             'no_expediente': forms.TextInput(attrs={'class':'form-control'}), 
             'tipo': forms.Select(attrs={'class':'form-select'}),
+            'motivo': forms.Select(attrs={'class':'form-select', 'id': 'id_motivo', 'disabled': 'disabled'}),
             'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled'}),
             'duracion': forms.NumberInput(attrs={'class':'form-control', 'disabled': 'disabled'}),
             'reg_militar': forms.Select(attrs={'class':'form-select'}),
@@ -240,8 +242,9 @@ class CAltaForm(forms.ModelForm):
                 # Regla 2: En los Grupos XXII al XXIV, solo el rol "Decisorio" puede guardarse con tridente.
                 cleaned_data['tridente'] = None
 
-        # --- VALIDACIÓN DE CAPACIDAD (Tu código original intacto) ---
-        if cargo and tipo_contrato == 'IND':
+        # --- VALIDACIÓN DE CAPACIDAD ---
+        # NUEVO: Verificamos si el tipo de contrato elegido ocupa plaza
+        if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
             check_capacity = True
             
             # Si estamos editando y el cargo es el mismo, no validamos (ya ocupa la plaza)

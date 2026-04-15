@@ -289,10 +289,7 @@
       const tabla = document.getElementById('tabla_salarios');
       const inputsTabla = tabla ? Array.from(tabla.querySelectorAll('input')) : [];
 
-      if (!toggle || !inputMonto || !tabla) {
-        console.log('Algún elemento no se ha encontrado.');
-        return;
-      }
+      
 
       // Función para actualizar la vista dependiendo del toggle
       function actualizarVista() {

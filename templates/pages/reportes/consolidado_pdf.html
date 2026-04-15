@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: a4 landscape;
+            margin: 1cm;
+        }
+        body { 
+            font-family: Helvetica, Arial, sans-serif; 
+            font-size: 13px; 
+            color: #333;
+        }
+        /* Encabezados */
+        .title-main { font-size: 20px; font-weight: bold; color: #212529; margin-bottom: 5px; } 
+        .title-sub { font-size: 15px; font-weight: bold; color: #693eb6; margin-bottom: 15px; } 
+        
+        .header-table { width: 100%; margin-bottom: 15px; }
+        .header-table td { border: none; padding: 0; }
+        
+        .unidad-label { font-weight: bold; font-size: 15px; color: #000; } 
+        .unidad-val { font-weight: bold; font-size: 15px; color: #e25e13; }
+        .fecha-val { font-weight: bold; font-size: 15px; text-align: right; }
+
+        /* Tabla Principal */
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .data-table th, .data-table td { 
+            border: 1px solid #000; 
+            /* Relleno súper ajustado para que no crezcan las celdas a lo alto */
+            padding: 4px; 
+            text-align: center; 
+            vertical-align: middle;
+        }
+        .data-table th { font-weight: bold; font-size: 11px; } 
+        
+        .data-table tbody td { font-size: 14px; } 
+        
+        .col-cargo { width: 16%; text-align: left; font-weight: bold; font-size: 13px; }
+
+        /* Colores de Columnas (Texto) */
+        .c-red { color: #d32f2f; font-weight: bold; }
+        .c-purple { color: #693eb6; font-weight: bold; }
+        .c-orange { color: #e25e13; font-weight: bold; }
+        
+        /* Fila de Totales */
+        .bg-total-dark { background-color: #1b2330; color: #ffffff; font-weight: bold; }
+        .bg-total-orange { background-color: #e25e13; color: #ffffff; font-weight: bold; }
+
+        /* Resumen Inferior */
+        .summary-table { width: 90%; margin: 0 auto; border-collapse: collapse; }
+        .summary-table td { padding: 8px; font-size: 15px; font-weight: bold; border: none; vertical-align: middle; }
+        .bg-sum-1 { background-color: #f0f4f8; color: #475f7b; text-align: right; width: 30%; }
+        .bg-sum-2 { background-color: #f4f0ff; color: #693eb6; text-align: right; width: 30%; }
+        
+    </style>
+</head>
+<body>
+
+    <div class="title-main">CONSOLIDADO POR CATEGORÍA OCUPACIONAL</div>
+    <div class="title-sub">SISTEMA ORBITH - RECURSOS HUMANOS</div>
+
+    <table class="header-table">
+        <tr>
+            <td style="width: 70%; text-align: left;">
+                <span class="unidad-label">Unidad Organizativa: </span>
+                <span class="unidad-val">{{ ueb }}</span>
+            </td>
+            <td class="fecha-val" style="width: 30%;">
+                Mes: {{ mes }} | Año: {{ anno }}
+            </td>
+        </tr>
+    </table>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th rowspan="2" class="col-cargo" style="background-color: #f0f4f8; color: #475f7b;">Cargo u<br>Ocupación</th>
+                <th colspan="4" style="background-color: #fafafa;"><span style="font-size: 16px;">Plantilla</span></th>
+                <th colspan="2" style="background-color: #fafafa;"><span style="font-size: 16px;">Determinado</span></th>
+                <th colspan="2" style="background-color: #fafafa;"><span style="font-size: 16px;">Adiestramiento</span></th>
+                <th colspan="2" style="background-color: #fafafa;"><span style="font-size: 16px;">Total</span></th>
+            </tr>
+            <tr style="background-color: #ffffff;">
+                <th>APROBADA</th>
+                <th>CUBIERTA</th>
+                <th>VACANTE</th>
+                <th class="c-red">MUJERES</th>
+                
+                <th>CONTRATOS</th>
+                <th class="c-purple">MUJERES</th>
+                
+                <th>ADIESTRADOS</th>
+                <th class="c-purple">MUJERES</th>
+                
+                <th>TOTAL</th>
+                <th class="c-orange">MUJERES</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="col-cargo">Obreros</td>
+                <td>{{ datos.Obreros.aprob }}</td><td>{{ datos.Obreros.cub }}</td><td>{{ datos.Obreros.vac }}</td><td class="c-red">{{ datos.Obreros.p_muj }}</td>
+                <td>{{ datos.Obreros.d_tot }}</td><td class="c-purple">{{ datos.Obreros.d_muj }}</td>
+                <td>{{ datos.Obreros.a_tot }}</td><td class="c-purple">{{ datos.Obreros.a_muj }}</td>
+                <td style="font-weight: bold;">{{ datos.Obreros.t_tot }}</td><td class="c-orange">{{ datos.Obreros.t_muj }}</td>
+            </tr>
+            <tr>
+                <td class="col-cargo">Técnico</td>
+                <td>{{ datos.Técnico.aprob }}</td><td>{{ datos.Técnico.cub }}</td><td>{{ datos.Técnico.vac }}</td><td class="c-red">{{ datos.Técnico.p_muj }}</td>
+                <td>{{ datos.Técnico.d_tot }}</td><td class="c-purple">{{ datos.Técnico.d_muj }}</td>
+                <td>{{ datos.Técnico.a_tot }}</td><td class="c-purple">{{ datos.Técnico.a_muj }}</td>
+                <td style="font-weight: bold;">{{ datos.Técnico.t_tot }}</td><td class="c-orange">{{ datos.Técnico.t_muj }}</td>
+            </tr>
+            <tr>
+                <td class="col-cargo">Cuadro</td>
+                <td>{{ datos.Cuadro.aprob }}</td><td>{{ datos.Cuadro.cub }}</td><td>{{ datos.Cuadro.vac }}</td><td class="c-red">{{ datos.Cuadro.p_muj }}</td>
+                <td>{{ datos.Cuadro.d_tot }}</td><td class="c-purple">{{ datos.Cuadro.d_muj }}</td>
+                <td>{{ datos.Cuadro.a_tot }}</td><td class="c-purple">{{ datos.Cuadro.a_muj }}</td>
+                <td style="font-weight: bold;">{{ datos.Cuadro.t_tot }}</td><td class="c-orange">{{ datos.Cuadro.t_muj }}</td>
+            </tr>
+            <tr>
+                <td class="col-cargo">Servicio</td>
+                <td>{{ datos.Servicio.aprob }}</td><td>{{ datos.Servicio.cub }}</td><td>{{ datos.Servicio.vac }}</td><td class="c-red">{{ datos.Servicio.p_muj }}</td>
+                <td>{{ datos.Servicio.d_tot }}</td><td class="c-purple">{{ datos.Servicio.d_muj }}</td>
+                <td>{{ datos.Servicio.a_tot }}</td><td class="c-purple">{{ datos.Servicio.a_muj }}</td>
+                <td style="font-weight: bold;">{{ datos.Servicio.t_tot }}</td><td class="c-orange">{{ datos.Servicio.t_muj }}</td>
+            </tr>
+            <tr>
+                <td class="col-cargo">Administrativo</td>
+                <td>{{ datos.Administrativo.aprob }}</td><td>{{ datos.Administrativo.cub }}</td><td>{{ datos.Administrativo.vac }}</td><td class="c-red">{{ datos.Administrativo.p_muj }}</td>
+                <td>{{ datos.Administrativo.d_tot }}</td><td class="c-purple">{{ datos.Administrativo.d_muj }}</td>
+                <td>{{ datos.Administrativo.a_tot }}</td><td class="c-purple">{{ datos.Administrativo.a_muj }}</td>
+                <td style="font-weight: bold;">{{ datos.Administrativo.t_tot }}</td><td class="c-orange">{{ datos.Administrativo.t_muj }}</td>
+            </tr>
+            
+            <tr class="bg-total-dark">
+                <td class="col-cargo">TOTAL:</td>
+                <td>{{ totales.aprob }}</td><td>{{ totales.cub }}</td><td>{{ totales.vac }}</td><td>{{ totales.p_muj }}</td>
+                <td>{{ totales.d_tot }}</td><td>{{ totales.d_muj }}</td>
+                <td>{{ totales.a_tot }}</td><td>{{ totales.a_muj }}</td>
+                <td>{{ totales.t_tot }}</td><td class="bg-total-orange">{{ totales.t_muj }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <table class="summary-table">
+        <tr>
+            <td class="bg-sum-1">TOTAL DE TRABAJADORES</td>
+            <td style="text-align: left; width: 20%; color: #000;"><span style="font-size: 24px;">{{ totales.t_tot }}</span></td>
+            
+            <td class="bg-sum-2">DE ELLOS MUJERES</td>
+            <td style="text-align: left; width: 20%; color: #693eb6;"><span style="font-size: 24px;">{{ totales.t_muj }}</span></td>
+        </tr>
+    </table>
+
+</body>
+</html>

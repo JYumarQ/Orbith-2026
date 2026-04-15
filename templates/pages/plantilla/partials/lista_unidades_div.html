@@ -2,42 +2,43 @@
     <div id="unit-{{ u.pk }}" class="card mb-0 border-bottom nav-card unit-card"
          data-pk="{{ u.pk }}"
          data-desc="{{ u.descripcion }}"
-         data-tipo="{{ u.tipo }}" 
+         data-es-principal="{{ u.tipo.es_principal|yesno:'true,false' }}" 
          data-url-edit="{% url 'updt_uniorg' u.pk %}"
          data-url-del="{% url 'del_uniorg' u.pk %}"
          onclick="selectUnit(this)"
-         ondblclick="if(this.dataset.tipo === 'DG') toggleHijas('{{ u.pk }}')"
+         ondblclick="if(this.dataset.esPrincipal === 'true') toggleHijas('{{ u.pk }}')"
          hx-get="{% url 'htmx_load_departamentos' u.pk %}"
          hx-target="#col-departamentos"
          hx-swap="innerHTML"
          hx-indicator="#col-departamentos"
-         style="cursor: pointer; position: relative;">
+         style="cursor: pointer; position: relative; border-left: 5px solid {{ u.tipo.color|default:'#cbd5e1' }} !important;">
          
         <div class="card-body p-2 d-flex align-items-center">
-            <div class="me-3 text-secondary opacity-50" style="width: 20px; text-align: center;">
-                <i class="fas fa-building"></i>
+            
+            <div class="me-3 rounded d-flex align-items-center justify-content-center bg-label-primary text-primary" style="width: 32px; height: 32px;">
+                <i class="fas fa-building" style="font-size: 0.95rem;"></i>
             </div>
 
-            <div class="row flex-grow-1 m-0 align-items-center gx-2">
-                <div class="col-6">
+            <div class="row flex-grow-1 m-0 align-items-center gx-2" style="width: 100%;">
+                <div class="col-4">
                     <h6 class="mb-0 fw-bold text-dark text-truncate" title="{{ u.descripcion }}" style="font-size: 0.85rem;">
                         {{ u.descripcion }}
                     </h6>
                 </div>
                 <div class="col-2">
-                    <span class="badge bg-label-secondary border px-1 text-truncate w-100 text-center" style="font-size: 0.65rem;" title="Grupo de Nómina">
-                        GN: {{ u.grupo_nomina }}
+                    <span class="badge bg-label-secondary border px-1 w-100 text-center text-dark" style="font-size: 0.65rem; color: #383b40 !important; font-weight: 700;" title="Grupo de Nómina">
+                        GN: {{ u.grupo_nomina|default:"-" }}
                     </span>
                 </div>
-                <div class="col-2">
-                    <small class="text-muted fw-bold text-truncate d-block" style="font-size: 0.7rem;">
-                        {{ u.tipo }}
+                <div class="col-4">
+                    <small class="text-dark fw-bold d-block text-wrap" style="font-size: 0.7rem; line-height: 1.1;">
+                        {{ u.tipo.descripcion }}
                     </small>
                 </div>
                 <div class="col-2 text-end">
                     <span class="badge bg-label-primary" style="font-size: 0.65rem;">
-                        {% if u.tipo == 'DG' %}
-                            <i class="fas fa-project-diagram me-1" style="font-size: 0.6rem;" title="Direcciones Funcionales"></i>{{ u.direcciones_hijas.count }}
+                        {% if u.tipo.es_principal %}
+                            <i class="fas fa-project-diagram me-1" style="font-size: 0.6rem;" title="Subunidades"></i>{{ u.direcciones_hijas.count }}
                         {% else %}
                             <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;" title="Departamentos"></i>{{ u.total_dptos }}
                         {% endif %}
@@ -46,7 +47,7 @@
             </div>
 
             {% if u.direcciones_hijas.all %}
-                <div class="ms-2 p-2" onclick="toggleHijas('{{ u.pk }}'); event.stopPropagation();" title="Desplegar Direcciones Funcionales" style="z-index: 10;">
+                <div class="ms-2 p-2" onclick="toggleHijas('{{ u.pk }}'); event.stopPropagation();" title="Desplegar Subunidades" style="z-index: 10;">
                     <i id="icon-toggle-{{ u.pk }}" class="fas fa-chevron-down text-primary" style="font-size: 0.9rem; transition: transform 0.3s;"></i>
                 </div>
             {% else %}
@@ -58,40 +59,43 @@
     </div>
 
     {% if u.direcciones_hijas.all %}
-        <div id="hijas-{{ u.pk }}" class="hijas-container" style="display: none; background-color: #f8fafc; border-left: 3px solid #696cff;">
+        <div id="hijas-{{ u.pk }}" class="hijas-container" style="display: none; background-color: #f8fafc;">
             {% for hija in u.direcciones_hijas.all %}
                 <div id="unit-{{ hija.pk }}" class="card mb-0 border-bottom nav-card unit-card"
                      data-pk="{{ hija.pk }}"
                      data-desc="{{ hija.descripcion }}"
-                     data-tipo="{{ hija.tipo }}"
+                     data-es-principal="{{ hija.tipo.es_principal|yesno:'true,false' }}"
                      data-url-edit="{% url 'updt_uniorg' hija.pk %}"
                      data-url-del="{% url 'del_uniorg' hija.pk %}"
-                     onclick="selectUnit(this)"
+                     onclick="event.stopPropagation(); selectUnit(this);"
                      hx-get="{% url 'htmx_load_departamentos' hija.pk %}"
                      hx-target="#col-departamentos"
                      hx-swap="innerHTML"
                      hx-indicator="#col-departamentos"
-                     style="cursor: pointer; padding-left: 1.5rem !important;"> 
+                     style="cursor: pointer; 
+                            margin-left: 10px; /* <--- Desplazamiento a la derecha */
+                            border-left: 5px solid {{ hija.tipo.color|default:'#cbd5e1' }} !important;">
                      
-                     <div class="card-body p-2 d-flex align-items-center">
-                        <div class="me-3 text-primary opacity-50" style="width: 20px; text-align: center;">
-                            <i class="fas fa-level-up-alt fa-rotate-90"></i> 
+                    <div class="card-body p-2 d-flex align-items-center">
+                        
+                        <div class="me-3 rounded d-flex align-items-center justify-content-center bg-label-secondary text-secondary" style="width: 32px; height: 32px;">
+                            <i class="fas fa-level-up-alt fa-rotate-90" style="font-size: 0.95rem;"></i> 
                         </div>
 
-                        <div class="row flex-grow-1 m-0 align-items-center gx-2">
-                            <div class="col-6">
+                        <div class="row flex-grow-1 m-0 align-items-center gx-2" style="width: 100%;">
+                            <div class="col-4">
                                 <h6 class="mb-0 fw-bold text-dark text-truncate" title="{{ hija.descripcion }}" style="font-size: 0.85rem;">
                                     {{ hija.descripcion }}
                                 </h6>
                             </div>
                             <div class="col-2">
-                                <span class="badge bg-label-secondary border px-1 text-truncate w-100 text-center" style="font-size: 0.65rem;">
-                                    GN: {{ hija.grupo_nomina }}
+                                <span class="badge bg-label-secondary border px-1 w-100 text-center text-dark" style="font-size: 0.65rem; color: #383b40 !important; font-weight: 700;">
+                                    GN: {{ hija.grupo_nomina|default:"-" }}
                                 </span>
                             </div>
-                            <div class="col-2">
-                                <small class="text-muted fw-bold text-truncate d-block" style="font-size: 0.7rem;">
-                                    {{ hija.tipo }}
+                            <div class="col-4">
+                                <small class="text-dark fw-bold d-block text-wrap" style="font-size: 0.7rem; line-height: 1.1;">
+                                    {{ hija.tipo.descripcion }}
                                 </small>
                             </div>
                             <div class="col-2 text-end">

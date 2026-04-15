@@ -23,6 +23,13 @@
         <a> {{ c.cant_cubierta }} </a>
         <br />
     </td>
+    <td class="text-center">
+        {% if c.puesto_clave %}
+            <i class="fas fa-check-circle text-success fs-5" title="Es puesto clave"></i>
+        {% else %}
+            <i class="fas fa-times-circle text-danger fs-5" title="No es puesto clave"></i>
+        {% endif %}
+    </td>
     <td class="project-actions text-center">
         <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_cargo' c.id %}')"
         >
@@ -40,6 +47,6 @@
     {% endfor %} 
     {% else %}
     <tr>
-    <td colspan="5">No hay registros disponibles.</td>
+    <td colspan="7">No hay registros disponibles.</td>
 </tr>
 {% endif %}

@@ -6,6 +6,16 @@ from django.urls import path, include
 from usuarios.views import CustomLoginView
 
 urlpatterns = [
+
+    path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
+    
+    path('informes/economia/', dashboard_views.InformeEconomiaView.as_view(), name='informe_economia'),
+    path('informes/economia/exportar-word/', dashboard_views.ExportarConsolidadoWordView.as_view(), name='exportar_consolidado_word'),
+    path('informes/economia/exportar-pdf/', dashboard_views.ExportarConsolidadoPDFView.as_view(), name='exportar_consolidado_pdf'),
+
+    path('informes/economia/trabajadores-ueb/', dashboard_views.InformeTrabajadoresUEBView.as_view(), name='informe_trabajadores_ueb'),
+    path('informes/economia/trabajadores-ueb/exportar-word/', dashboard_views.ExportarResumenUEBWordView.as_view(), name='exportar_resumen_ueb_word'),
+
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     path('admin/', admin.site.urls),
     path('bolsa/', include('bolsa.urls')),

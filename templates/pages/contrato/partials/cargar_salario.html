@@ -17,53 +17,53 @@
 {% endif %}
 
 <script>
-    // 1. Identificamos en qué formulario estamos trabajando
+    // 1. Identificamos en qué formulario estamos (Alta o Movimiento)
     var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
     
     if (formActivo) {
-        // 2. Buscamos el Tridente de forma segura (Abarcando Contrato y Movimiento)
-        var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('[name="tridente"]');
+        var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('#mov_tridente');
         
         if (selTridente) {
-            // Evaluamos la decisión del Backend (True/False)
-            var debeMostrarTridente = "{{ mostrar_tridente }}" === "True";
+            // 2. Leemos la orden suprema del backend
+            var mostrarTridente = "{{ mostrar_tridente|yesno:'true,false' }}" === "true";
 
-            if (!debeMostrarTridente) {
-                // MODO CUADRO (O Apoyo/Fundamental sin fondos): Bloqueamos y vaciamos el tridente
+            if (!mostrarTridente) {
+                // BLOQUEO ABSOLUTO (Es Cuadro, o Salario Fijo, o excepción XXII-XXIV)
+                selTridente.value = ''; 
+                if(selTridente.options[0]) selTridente.options[0].text = "-------";
                 selTridente.disabled = true;
-                selTridente.value = ""; // Vaciamos el valor internamente
+                selTridente.style.backgroundColor = "#e9ecef"; 
+                selTridente.style.color = "#a1acb8";
+                selTridente.style.cursor = "not-allowed";
                 
-                // Si usas Select2 (Librería de búsqueda en selects)
+                // Limpieza para Select2 si se está usando
                 if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
                     $(selTridente).val(null).trigger('change.select2');
                 }
             } else {
-                // MODO NORMAL (Fundamental, Decisorio, Apoyo): Habilitamos el tridente
+                // HABILITADO (Modo normal de matriz)
+                if(selTridente.options[0]) selTridente.options[0].text = "---------";
                 selTridente.disabled = false;
+                selTridente.style.backgroundColor = ""; 
+                selTridente.style.color = "";
+                selTridente.style.cursor = "";
                 
-                // Si usas Select2
                 if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
                     $(selTridente).trigger('change.select2');
                 }
             }
         }
 
-        // 3. Sincronización robusta de los datos de Rol y Grupo Ocultos
-        var inputRol = formActivo.querySelector('#id_rol') || formActivo.querySelector('#mov_rol');
+        // 3. Sincronización de inputs de solo lectura (Movimientos)
+        var inputRol = formActivo.querySelector('#mov_rol');
         if(inputRol) inputRol.value = "{{ nuevo_rol }}";
 
-        var inputGrupo = formActivo.querySelector('#id_grupo_escala') || formActivo.querySelector('#mov_grupo');
+        var inputGrupo = formActivo.querySelector('#mov_grupo');
         if(inputGrupo) inputGrupo.value = "{{ nuevo_grupo }}";
 
         // 4. Actualización de dineros
-        if(formActivo.querySelector('#salarioEscala')) {
-            formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
-        }
-        if(formActivo.querySelector('#tarifaHoraria')) {
-            formActivo.querySelector('#tarifaHoraria').value = "{{ tarifa }}";
-        }
-        if(formActivo.querySelector('#tarifaExtras')) {
-            formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";
-        }
+        if(formActivo.querySelector('#salarioEscala')) formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
+        if(formActivo.querySelector('#tarifaHoraria')) formActivo.querySelector('#tarifaHoraria').value = "{{ tarifa }}";
+        if(formActivo.querySelector('#tarifaExtras')) formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";
     }
 </script>

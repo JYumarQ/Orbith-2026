@@ -7,7 +7,7 @@ from import_export.admin import ImportExportModelAdmin
 from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
-    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad
+    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad, NTipoUnidadOrganizativa
 )
 
 
@@ -99,6 +99,11 @@ class NCargoAdmin(admin.ModelAdmin):
         )
         # CORRECCIÓN 2: Ruta exacta a tu archivo existente
         return render(request, "pages/catalogos/ncargo/admin_import_form.html", context)
+
+@admin.register(NTipoUnidadOrganizativa)
+class NTipoUnidadAdmin(admin.ModelAdmin):
+    list_display = ('descripcion', 'es_principal', 'es_subunidad', 'es_temporal')
+    search_fields = ('descripcion',)
 
 # Resto de modelos
 admin.site.register(NTridente)

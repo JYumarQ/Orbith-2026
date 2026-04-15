@@ -1,94 +1,74 @@
 from django.db import models
 from notificaciones.models import Notificacion
 from django.contrib.contenttypes.models import ContentType
-from nomencladores.models import NCargo, NRol, NNivelPreparacion
+from nomencladores.models import NCargo, NRol, NNivelPreparacion, NTipoUnidadOrganizativa
 from auditoria.models import Base
 from django.core.exceptions import ValidationError
 from django.db.models import Max
 
 # Create your models here.
 class UnidadOrganizativa(Base):
-
-    # 1. Renombramos la llave primaria para no perder los departamentos que ya existen
+    # 1. Identificador único personalizado
     codigo_interno = models.IntegerField(primary_key=True, verbose_name="Código Interno")
     
-    # 2. El verdadero Grupo de Nómina (Permite nulos inicialmente para no chocar al crear Direcciones Funcionales)
+    # 2. Grupo de Nómina (Heredable)
     grupo_nomina = models.IntegerField(null=True, blank=True, verbose_name="Grupo de Nómina")
     
     descripcion = models.CharField(max_length=150, blank=False, null=False)
-    tipo = models.CharField(max_length=50, choices=[
-        ('UEB','UEB'),
-        ('DF','Dirección Funcional'),
-        ('DG','Dirección General')
-    ])
-
-    # 3. El campo de jerarquía
+    
+    # 3. Relación con Nomencladores Dinámicos
+    tipo = models.ForeignKey(
+        NTipoUnidadOrganizativa, 
+        on_delete=models.RESTRICT, 
+        verbose_name="Tipo de Unidad"
+    )
+    
+    # 4. Relación Jerárquica
     padre = models.ForeignKey(
         'self', 
         on_delete=models.CASCADE, 
         null=True, 
         blank=True, 
         related_name='direcciones_hijas',
-        verbose_name='Pertenece a (Oficina Central)'
+        verbose_name='Pertenece a'
     )
 
     class Meta:
         verbose_name = ("Unidad Organizativa")
         verbose_name_plural = ("Unidades Organizativas")
-        # --- LA REGLA ESTRICTA DE BASE DE DATOS ---
-        constraints = [
-            models.UniqueConstraint(
-                fields=['grupo_nomina'], 
-                condition=~models.Q(tipo='DF'), # "Que sea único SIEMPRE Y CUANDO el tipo no sea DF"
-                name='unique_grupo_nomina_excepto_df'
-            )
-        ]
 
     def clean(self):
         super().clean()
-        
-        # --- LA LÓGICA AUTOMÁTICA DE NEGOCIO ---
-        if self.tipo == 'DF':
-            # Buscamos la DG, EXCLUYENDO a la unidad actual para que no se auto-asigne si la estás editando
-            padre_dg = UnidadOrganizativa.objects.filter(tipo='DG').exclude(pk=self.pk).first()
+        # LÓGICA DE HERENCIA AL CREAR/EDITAR
+        if self.tipo and self.tipo.es_subunidad:
+            # Busca automáticamente a quién debe pertenecer (Unidad con es_principal=True)
+            unidad_raiz = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exclude(pk=self.pk).first()
             
-            if padre_dg:
-                self.padre = padre_dg
-                self.grupo_nomina = padre_dg.grupo_nomina
+            if unidad_raiz:
+                self.padre = unidad_raiz
+                self.grupo_nomina = unidad_raiz.grupo_nomina
             else:
-                # Si no hay DG creada, permitimos que se cree "huérfana" temporalmente
                 self.padre = None 
         else:
-            # Si es UEB o Dirección General, nos aseguramos de que no tenga padre
             self.padre = None
-            
             if not self.grupo_nomina:
-                raise ValidationError({'grupo_nomina': 'Este campo es obligatorio para las UEB y la Dirección General.'})
-            
+                raise ValidationError({'grupo_nomina': 'Este campo es obligatorio para Unidades Principales o Normales.'})
+
     def save(self, *args, **kwargs):
-        # 1. Asignación automática del Código Interno
+        # Asignación de ID si es nuevo
         if not self.codigo_interno:
             from django.db.models import Max
             ultimo_codigo = UnidadOrganizativa.objects.aggregate(Max('codigo_interno'))['codigo_interno__max']
             self.codigo_interno = (ultimo_codigo or 0) + 1
             
-        self.clean() 
-        super().save(*args, **kwargs) # Guardamos los cambios en la base de datos
+        self.clean()
+        super().save(*args, **kwargs)
 
-        # --- LÓGICA DE LAZOS FAMILIARES ---
-        
-        # A) Si la unidad fue degradada y ya no es Dirección General: Desheredar hijas
-        if self.tipo != 'DG':
-            self.direcciones_hijas.all().update(padre=None)
-            
-        # B) Si la unidad acaba de ser creada/editada como Dirección General: Adoptar huérfanas
-        elif self.tipo == 'DG':
-            # Buscamos en la base de datos todas las DFs que no tengan padre asignado
-            # y las actualizamos al instante poniéndoles esta DG como padre y copiando la nómina
-            UnidadOrganizativa.objects.filter(tipo='DF', padre__isnull=True).update(
-                padre=self,
-                grupo_nomina=self.grupo_nomina
-            )
+        # --- SINCRONIZACIÓN EN CASCADA ---
+        # Si esta unidad es Principal, forzamos la actualización de todas sus hijas
+        if self.tipo and self.tipo.es_principal:
+            # Esto soluciona tu problema: actualiza el GN de todas las subunidades de golpe
+            self.direcciones_hijas.all().update(grupo_nomina=self.grupo_nomina)
 
     def __str__(self):
         return self.descripcion
@@ -114,6 +94,7 @@ class CargoPlantilla(Base):
     cant_aprobada = models.IntegerField()
     cant_cubierta = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
+    puesto_clave = models.BooleanField(default=False, verbose_name='Puesto Clave')
 
     class Meta:
         verbose_name = ("Cargo")
@@ -142,16 +123,16 @@ class CargoPlantilla(Base):
         """Cuenta solo los contratos INDETERMINADOS (Plantilla Oficial)"""
         if hasattr(self, 'count_ind'): 
             return self.count_ind
-        # CORRECCIÓN: Usar 'self.calta' en lugar de 'self.calta_set'
-        return self.calta.filter(tipo='IND').count()
+        # NUEVO: Busca la palabra 'INDETERMINADO' dentro del nomenclador
+        return self.calta.filter(tipo__descripcion__icontains='INDETERMINADO').count()
 
     @property
     def plazas_contrato(self):
         """Cuenta el resto de contratos (Determinados, Adiestramiento, etc)"""
         if hasattr(self, 'count_cont'): 
             return self.count_cont
-        # CORRECCIÓN: Usar 'self.calta' en lugar de 'self.calta_set'
-        return self.calta.exclude(tipo='IND').count()
+        # NUEVO: Excluye los que tienen la palabra 'INDETERMINADO'
+        return self.calta.exclude(tipo__descripcion__icontains='INDETERMINADO').count()
 
     def __str__(self):
         return self.ncargo.descripcion

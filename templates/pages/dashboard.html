@@ -204,7 +204,7 @@
 
 
             {% for c in contratos|slice:":5" %}
-              {% if c.tipo != 'IND' %}
+              {% if "INDETERMINADO" not in c.tipo.descripcion|upper %}
                 <li class="list-group-item d-flex align-items-center">
                   <i class="bx bx-alarm-exclamation text-danger fs-4 me-2"></i>
                   <span>Vence: <b>{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}</b></span>

@@ -53,9 +53,13 @@
                                     </small>
 
                                 </div>
-                                <div class="col-md-9">
+                                <div class="col-md-4">
                                     {{ form.tipo.label }}  
                                     {{ form.tipo }}
+                                </div>
+                                <div class="col-md-5">
+                                    {{ form.motivo.label }}  
+                                    {{ form.motivo }}
                                 </div>
                                 <div class="col-md-6">
                                     {{ form.fecha_alta.label }}  
@@ -319,17 +323,58 @@
         // --- 3. Funciones de Lógica del Negocio (Existentes) ---
         function actualizarEstadoContrato() {
             if (!tipo || !f_contrato) return;
-            
-            if(tipo.value === 'IND'){
-                f_contrato.removeAttribute('disabled');
-                if(duracion) duracion.setAttribute('disabled', 'disabled');
-            } else if(['DET', 'EAD', 'MOT'].includes(tipo.value)){
-                f_contrato.removeAttribute('disabled');
-                if(duracion) duracion.removeAttribute('disabled');
-            } else {
+            var motivo = formulario.querySelector('#id_motivo');
+            var tipoId = tipo.value;
+
+            // Si el select está vacío (-------)
+            if (!tipoId) {
                 f_contrato.setAttribute('disabled', 'disabled');
                 if(duracion) duracion.setAttribute('disabled', 'disabled');
+                if(motivo) { motivo.setAttribute('disabled', 'disabled'); motivo.value = ''; }
+                return;
             }
+
+            // CAMBIO CLAVE 1: Usamos la etiqueta dinámica de Django para no fallar nunca con la URL
+            var apiUrl = "{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId);
+
+            // Consultar a tu API
+            fetch(apiUrl)
+            .then(response => {
+                if (!response.ok) throw new Error("Error HTTP: " + response.status);
+                return response.json();
+            })
+            .then(data => {
+                // Para que puedas revisar en la consola de tu navegador si llega True o False
+                console.log("Respuesta de Base de Datos -> ¿Requiere motivo?:", data.requiere_motivo); 
+                
+                var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
+                f_contrato.removeAttribute('disabled');
+                
+                // 1. Lógica de Fechas
+                if (desc.includes('INDETERMINADO')) {
+                    if(duracion) { duracion.setAttribute('disabled', 'disabled'); duracion.value = ''; }
+                } else {
+                    if(duracion) duracion.removeAttribute('disabled');
+                }
+
+                // 2. Lógica del Motivo
+                if (data.requiere_motivo === true) {
+                    if(motivo) motivo.removeAttribute('disabled');
+                } else {
+                    if(motivo) {
+                        motivo.setAttribute('disabled', 'disabled');
+                        motivo.value = ''; 
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Fallo en la API del contrato:', err);
+                
+                // CAMBIO CLAVE 2: Sistema Anti-bloqueos. 
+                // Si la conexión falla, te abrimos los campos a la fuerza para que puedas seguir trabajando.
+                if(motivo) motivo.removeAttribute('disabled');
+                if(duracion) duracion.removeAttribute('disabled');
+            });
         }
 
         function toggleCampo(checkElement, resElement) {
@@ -509,56 +554,7 @@
         actualizarEstadoChofer();
         if (window.htmx) htmx.process(formulario);
 
-        // --- 8. LÓGICA INTELIGENTE: BLOQUEO DE TRIDENTE PARA CUADROS ---
-        function revisarTridente() {
-            var rolField = document.getElementById('id_rol');
-            var triSel = document.getElementById('id_tridente');
-            
-            if (rolField && triSel) {
-                var esCuadro = false;
-
-                // Caso A: El Rol es un Select (Selector abierto)
-                if (rolField.tagName === 'SELECT') {
-                    var texto = rolField.options[rolField.selectedIndex]?.text.toUpperCase() || "";
-                    if (texto.includes('CUADRO')) esCuadro = true;
-                } 
-                // Caso B: El Rol es un Input Readonly
-                else {
-                    var valor = rolField.value.toUpperCase();
-                    if (valor.includes('CUADRO')) esCuadro = true;
-                }
-                
-                if (esCuadro) {
-                    triSel.value = ''; 
-                    if(triSel.options[0]) triSel.options[0].text = "-------";
-                    triSel.setAttribute('disabled', 'disabled');
-                    triSel.style.backgroundColor = "#e9ecef"; 
-                    triSel.style.color = "#a1acb8";
-                    triSel.style.cursor = "not-allowed";
-                } else {
-                    if(triSel.options[0]) triSel.options[0].text = "---------";
-                    triSel.removeAttribute('disabled');
-                    triSel.style.backgroundColor = ""; 
-                    triSel.style.color = "";
-                    triSel.style.cursor = "";
-                }
-            }
-        }
-
-        // --- SUSCRIPCIÓN ÚNICA A EVENTOS ---
-        $(document).off('change', '#id_rol').on('change', '#id_rol', revisarTridente);
-        $(document).off('change', '#id_cargo').on('change', '#id_cargo', function() {
-            setTimeout(revisarTridente, 150); // Un pelín más de tiempo para HTMX
-        });
         
-        document.body.addEventListener('htmx:afterSwap', function(evt) {
-            if (evt.detail.target.id === 'id_rol' || evt.detail.target.id === 'navs-justified-salario') {
-                revisarTridente();
-            }
-        });
-        
-        // Ejecución inicial
-        revisarTridente();
 
     })();
 </script>

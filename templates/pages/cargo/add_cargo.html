@@ -87,11 +87,18 @@
                         {{ form.cant_cubierta }} 
                     </div>
                     
-                    <div class="col-12 mt-2">
-                        <div class="form-check form-switch">
+                    <div class="col-md-6 d-flex flex-column justify-content-end ps-3 pb-1"> 
+                        <div class="form-check form-switch mb-2">
                             {{ form.activo }}
-                            <label class="form-check-label" for="{{ form.activo.id_for_label }}">
-                                Activo (Se calcula según Cant. Aprobada)
+                            <label class="form-check-label text-primary" for="{{ form.activo.id_for_label }}">
+                                Activo
+                            </label>
+                        </div>
+
+                        <div class="form-check form-switch">
+                            {{ form.puesto_clave }}
+                            <label class="form-check-label text-primary cursor-pointer" for="{{ form.puesto_clave.id_for_label }}">
+                                Puesto Clave
                             </label>
                         </div>
                     </div>

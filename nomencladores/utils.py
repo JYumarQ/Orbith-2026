@@ -99,7 +99,6 @@ def importar_cargos_excel(archivo, estrategia):
                         'cat_ocupacional': cat_codigo,
                         'grupo_escala': grupo_obj,
                         'salario_basico': salario_val,
-                        'activo': True
                     }
                 )
 

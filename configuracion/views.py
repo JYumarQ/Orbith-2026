@@ -4,7 +4,7 @@ from django.contrib import messages
 from .models import Configuracion
 from .forms import ConfiguracionForm
 from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, NHorario, NJornada, \
-    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo, NNivelPreparacion
+    NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo, NNivelPreparacion, NTipoContrato, NMotivoContrato, NTipoUnidadOrganizativa
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -67,6 +67,7 @@ class ParametrosGeneralesView(FormView):
 
         context['salarios'] = salarios
         context['active_tab'] = self.request.GET.get('tab', 'parametros')
+        context['tipos_unidades'] = NTipoUnidadOrganizativa.objects.all()
         context['tridentes'] = NTridente.objects.all()
         context['roles'] = NRol.objects.all()
         context['grupos'] = NGrupoEscala.objects.all()
@@ -78,6 +79,8 @@ class ParametrosGeneralesView(FormView):
         context['condiciones'] = NCondicionLaboralAnormal.objects.all()
         context['especialidades'] = NEspecialidad.objects.all()
         context['niveles_preparacion'] = NNivelPreparacion.objects.all()
+        context['tipos_contrato'] = NTipoContrato.objects.all().order_by('descripcion')
+        context['motivos_contrato'] = NMotivoContrato.objects.all().order_by('descripcion')
         context['cargos'] = NCargo.objects.all()
         context['cargos_sin_familia'] = NCargo.objects.filter(
             familia__isnull=True, 

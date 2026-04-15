@@ -1,0 +1,44 @@
+<div class="modal-header">
+    <h5 class="modal-title">{% if instance %}Editar{% else %}Nuevo{% endif %} Grupo de Escala</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<form id="form-grupo-escala" action="{% if instance %}{% url 'grupo_escala_save_edit' instance.pk %}{% else %}{% url 'grupo_escala_save' %}{% endif %}">
+    {% csrf_token %}
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">{{ form.nivel.label }}</label>
+            {{ form.nivel }}
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-6">
+                <div class="form-check form-switch">
+                    {{ form.es_cuadro }}
+                    <label class="form-check-label" for="{{ form.es_cuadro.id_for_label }}">¿Es Cuadro?</label>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="form-check form-switch">
+                    {{ form.tiene_rol }}
+                    <label class="form-check-label" for="{{ form.tiene_rol.id_for_label }}">¿Tiene Rol?</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-3 border-top pt-3">
+            <label class="form-label d-block fw-bold mb-2">Seleccione los Roles que aplican:</label>
+            <div class="d-flex flex-wrap gap-3" id="roles-container">
+                {% for checkbox in form.roles %}
+                    <div class="form-check">
+                        {{ checkbox.tag }}
+                        <label class="form-check-label">{{ checkbox.choice_label }}</label>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+    </div>
+</form>

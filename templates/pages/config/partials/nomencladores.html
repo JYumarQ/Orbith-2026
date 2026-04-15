@@ -10,139 +10,103 @@
   <div class="accordion" id="accordionNomencladores">
 
     <!-- 1. Estructura Organizativa -->
-    <div class="accordion-item">
+    <div class="accordion-item border-0 bg-transparent mb-2">
       <h2 class="accordion-header" id="headingEstructura">
-        <button class="accordion-button" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseEstructura" aria-expanded="true">
-          <i class="fas fa-sitemap me-2"></i>Estructura Organizativa
+        <button class="accordion-button rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseEstructura" aria-expanded="true" style="background-color: #fff;">
+          <i class="fas fa-sitemap me-2" style="color: #4f46e5;"></i>
+          <span class="fw-bold text-slate-800">Estructura Organizativa</span>
         </button>
       </h2>
-      <div id="collapseEstructura" class="accordion-collapse collapse show"
-           data-bs-parent="#accordionNomencladores">
-        <div class="accordion-body">
-          <div class="row g-4">
-          <!-- CARGOS -->
-            <div class="col-12 mb-4">
-              <div class="card" id="card-cargos">
-                <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2 py-3">
+      <div id="collapseEstructura" class="accordion-collapse collapse show" data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body bg-lighter p-4">
   
-                  <div class="d-flex align-items-center gap-3 flex-grow-1">
-                    
-                    <div id="cargos-toolbar-actions" class="d-flex gap-2 toolbar-disabled">
-                      <button type="button" class="btn btn-sm btn-outline-primary" id="btn-editar-cargo" title="Editar seleccionado">
-                        <i class="fas fa-pencil-alt"></i>
-                      </button>
-                      <button type="button" class="btn btn-sm btn-outline-danger" id="btn-eliminar-cargo" title="Eliminar seleccionado">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </div>
-
-                    <div id="cargos-toolbar-editing" class="d-flex gap-2 d-none">
-                      <button type="button" class="btn btn-sm btn-primary" id="btn-guardar-cargo">
-                        <i class="fas fa-save me-1"></i> Guardar
-                      </button>
-                      <button type="button" class="btn btn-sm btn-secondary" id="btn-cancelar-cargo">
-                        <i class="fas fa-times me-1"></i> Cancelar
-                      </button>
-                    </div>
-
-                    <div class="input-group input-group-merge" style="max-width: 250px;">
-                      <span class="input-group-text border-0 ps-2 bg-transparent"><i class="fas fa-search text-muted"></i></span>
-                      <input type="text" id="search-cargos-input" class="form-control border-0 shadow-none bg-transparent" placeholder="Buscar cargo...">
-                    </div>
-
-                  </div>
-
-                  <div class="ms-auto">
-                    <button class="btn btn-primary" id="btn-add-cargo">
-                      <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Añadir</span>
-                    </button>
-                  </div>
-
+          <div class="card shadow-none border mb-4">
+            <div class="card-header border-bottom d-flex justify-content-between align-items-center bg-label-primary py-3">
+              <div class="d-flex align-items-center gap-3">
+                <div class="avatar avatar-sm bg-white rounded d-flex align-items-center justify-content-center border border-primary">
+                  <i class="fas fa-sitemap text-primary"></i>
                 </div>
-
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="cargos-table" style="table-layout: fixed; width: 100%;">
-                    <thead>
-                      <tr>
-                        <th style="width: 61%; cursor: pointer;" onclick="ordenarCargos('descripcion')">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <span>Descripción</span> <i class="fas fa-sort text-muted" id="icon-descripcion"></i>
-                          </div>
-                        </th>
-                        <th style="width: 17%; cursor: pointer;" onclick="ordenarCargos('cat')">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <span>Cat. Ocupacional</span> <i class="fas fa-sort text-muted" id="icon-cat"></i>
-                          </div>
-                        </th>
-                        <th style="width: 12%; cursor: pointer;" onclick="ordenarCargos('grupo')">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <span>G. Escala</span> <i class="fas fa-sort text-muted" id="icon-grupo"></i>
-                          </div>
-                        </th>
-                        <th style="width: 10%; cursor: pointer;" onclick="ordenarCargos('salario')">
-                          <div class="d-flex justify-content-between align-items-center">
-                            <span>Salario</span> <i class="fas fa-sort text-muted" id="icon-salario"></i>
-                          </div>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody id="cargos-tbody">
-                      {% for c in cargos %}
-                      <tr data-id="{{ c.id }}" 
-                          data-cat="{{ c.cat_ocupacional }}" 
-                          data-grupo="{{ c.grupo_escala.id }}" 
-                          data-salario="{{ c.salario_basico|stringformat:'.2f' }}"
-                          data-activo="{{ c.activo|yesno:'true,false' }}"
-                          onclick="seleccionarCargo(this)">
-                          
-                        <td class="desc-cell align-middle">{{ c.descripcion }}</td>
-                        <td class="cat-cell text-center align-middle">{{ c.get_cat_ocupacional_display }}</td>
-                        <td class="grupo-cell text-center align-middle">{{ c.grupo_escala.nivel }}</td>
-                        <td class="salario-cell text-center align-middle">${{ c.salario_basico }}</td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div class="card-footer border-top p-3">
-                    <nav aria-label="Cargos paginación">
-                      <ul class="pagination justify-content-center m-0" id="cargos-paginator"></ul>
-                    </nav>
-                </div>
+                <h6 class="mb-0 fw-bold text-primary">Tipos de Unidad Organizativa</h6>
               </div>
+              <button class="btn btn-primary btn-sm d-flex align-items-center gap-2" onclick="abrirModalTipoUnidad()">
+                <i class="fas fa-plus"></i> Nuevo Tipo
+              </button>
             </div>
-            <!-- Tridentes -->
+            
+            <div class="table-responsive">
+              <table class="table table-hover align-middle m-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="text-uppercase" style="font-size: 0.75rem;">Tipo</th>
+                    <th class="text-uppercase text-center" style="font-size: 0.75rem;">Temporal</th>
+                    <th class="text-uppercase text-center" style="font-size: 0.75rem;">Jerarquía</th>
+                    <th class="text-uppercase text-center" style="font-size: 0.75rem;">Color</th>
+                    <th class="text-uppercase text-center" style="font-size: 0.75rem;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-tipos-unidad" class="table-border-bottom-0">
+                  {% for tu in tipos_unidades %}
+                  <tr id="tu-row-{{ tu.id }}">
+                    <td class="fw-semibold text-heading">{{ tu.descripcion }}</td>
+                    <td class="text-center">
+                      {% if tu.es_temporal %}
+                        <span class="badge bg-label-warning px-3 rounded-pill">Sí</span>
+                      {% else %}
+                        <span class="badge bg-label-secondary px-3 rounded-pill">No</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if tu.es_principal %}<span class="badge bg-label-primary px-3 rounded-pill me-1">Principal</span>{% endif %}
+                      {% if tu.es_subunidad %}<span class="badge bg-label-info px-3 rounded-pill">Subunidad</span>{% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if tu.color %}
+                        <span style="display:inline-block; width:20px; height:20px; background-color:{{ tu.color }}; border-radius:4px; border:1px solid #d9dee3;"></span>
+                      {% else %} <span class="text-muted">-</span> {% endif %}
+                    </td>
+                    <td class="text-center">
+                      <div class="d-flex justify-content-center gap-2">
+                        <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill edit-btn" onclick="editarTipoUnidad({{ tu.id }}, '{{ tu.descripcion|escapejs }}', {{ tu.es_temporal|yesno:'true,false' }}, {{ tu.es_principal|yesno:'true,false' }}, {{ tu.es_subunidad|yesno:'true,false' }}, '{{ tu.color|default:'' }}', '{{ tu.tipo_padre_id|default:'' }}')" title="Editar">
+                          <i class="fas fa-pencil-alt text-info"></i>
+                        </button>
+                        <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill delete-btn" onclick="eliminarTipoUnidad({{ tu.id }})" title="Eliminar">
+                          <i class="fas fa-trash text-danger"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="row g-4 mb-4">
+            
             <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Tridentes</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="tridentes-table">
+              <div class="card shadow-none border h-100">
+                <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm bg-label-warning rounded d-flex align-items-center justify-content-center">
+                      <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h6 class="mb-0 fw-bold">Tridentes</h6>
+                  </div>
+                  <button class="btn btn-sm btn-primary btn-icon shadow-sm rounded add-row-btn" data-table="tridentes-table">
                     <i class="fas fa-plus"></i>
                   </button>
                 </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="tridentes-table">
-                    <thead>
-                      <tr>
-                        <th>Tipo</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
+                <div class="card-body p-0 overflow-auto">
+                  <table class="table table-hover table-borderless align-middle m-0" id="tridentes-table">
                     <tbody id="tridentes-tbody">
                       {% for t in tridentes %}
-                      <tr data-id="{{ t.id }}">
-                        <td class="tipo-cell">{{ t.tipo }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
+                      <tr data-id="{{ t.id }}" class="border-bottom">
+                        <td class="tipo-cell fw-medium text-heading ps-3">{{ t.tipo }}</td>
+                        <td class="text-end pe-3" style="width: 80px;">
+                          <div class="d-flex justify-content-end gap-1">
+                            <button class="btn btn-xs btn-icon btn-text-secondary edit-btn"><i class="fas fa-pencil-alt text-muted"></i></button>
+                            <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn"><i class="fas fa-trash text-muted"></i></button>
                           </div>
                         </td>
                       </tr>
@@ -153,38 +117,29 @@
               </div>
             </div>
 
-            <!-- Roles -->
             <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Roles</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="roles-table">
+              <div class="card shadow-none border h-100">
+                <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm bg-label-success rounded d-flex align-items-center justify-content-center">
+                      <i class="fas fa-users"></i>
+                    </div>
+                    <h6 class="mb-0 fw-bold">Roles</h6>
+                  </div>
+                  <button class="btn btn-sm btn-primary btn-icon shadow-sm rounded add-row-btn" data-table="roles-table">
                     <i class="fas fa-plus"></i>
                   </button>
                 </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="roles-table">
-                    <thead>
-                      <tr>
-                        <th>Tipo</th>
-                        <th style="width: 100px;" class="text-center">Es Cuadro</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
+                <div class="card-body p-0 overflow-auto">
+                  <table class="table table-hover table-borderless align-middle m-0" id="roles-table">
                     <tbody id="roles-tbody">
                       {% for r in roles %}
-                      <tr data-id="{{ r.id }}">
-                        <td class="tipo-cell">{{ r.tipo }}</td>
-                        <td class="es-cuadro-cell text-center">{{ r.es_cuadro|yesno:"Sí,No" }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
+                      <tr data-id="{{ r.id }}" class="border-bottom">
+                        <td class="tipo-cell fw-medium text-heading ps-3">{{ r.tipo }}</td>
+                        <td class="text-end pe-3" style="width: 80px;">
+                          <div class="d-flex justify-content-end gap-1">
+                            <button class="btn btn-xs btn-icon btn-text-secondary edit-btn"><i class="fas fa-pencil-alt text-muted"></i></button>
+                            <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn"><i class="fas fa-trash text-muted"></i></button>
                           </div>
                         </td>
                       </tr>
@@ -195,37 +150,30 @@
               </div>
             </div>
 
-            <!-- Grupos Escala -->
             <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Grupos Escala</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="grupos-table">
+              <div class="card shadow-none border h-100 d-flex flex-column">
+                <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm bg-label-info rounded d-flex align-items-center justify-content-center">
+                      <i class="fas fa-chart-bar"></i>
+                    </div>
+                    <h6 class="mb-0 fw-bold">G. Escala</h6>
+                  </div>
+                  <button class="btn btn-sm btn-primary btn-icon shadow-sm rounded" onclick="abrirModalGrupo()">
                     <i class="fas fa-plus"></i>
                   </button>
                 </div>
-                <div id="grupos-paginate-container">
-                  <div class="table-responsive">
-                    <table class="table table-hover mb-0" id="grupos-table">
-                      <thead>
-                        <tr>
-                          <th style="width: 100px;">Nivel</th>
-                          <th style="width: 120px;" class="text-center">Acciones</th>
-                        </tr>
-                      </thead>
+                <div class="card-body p-0 d-flex flex-column" id="grupos-paginate-container">
+                  <div class="table-responsive flex-grow-1">
+                    <table class="table table-hover table-borderless align-middle m-0" id="grupos-table">
                       <tbody id="grupos-tbody">
                         {% for g in grupos %}
-                        <tr data-id="{{ g.id }}">
-                          <td class="nivel-cell">{{ g.nivel }}</td>
-                          <td class="text-center">
-                            <div class="btn-group btn-group-sm">
-                              <button class="btn btn-sm edit-btn" title="Editar">
-                                <i class="fas fa-pencil-alt"></i>
-                              </button>
-                              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                                <i class="fas fa-trash"></i>
-                              </button>
+                        <tr data-id="{{ g.id }}" class="border-bottom">
+                          <td class="nivel-cell fw-medium text-heading ps-3">Nivel <span class="badge bg-label-secondary ms-1">{{ g.nivel }}</span></td>
+                          <td class="text-end pe-3" style="width: 80px;">
+                            <div class="d-flex justify-content-end gap-1">
+                              <button class="btn btn-xs btn-icon btn-text-secondary edit-btn"><i class="fas fa-pencil-alt text-muted"></i></button>
+                              <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn"><i class="fas fa-trash text-muted"></i></button>
                             </div>
                           </td>
                         </tr>
@@ -233,398 +181,903 @@
                       </tbody>
                     </table>
                   </div>
-
-                  <!-- Paginador Sneat (pequeño, centrado, con iconos) -->
-                  <nav aria-label="Grupos Escala paginación">
-                    <ul class="pagination pagination-sm justify-content-center mt-3"
-                        id="grupos-paginator"></ul>
-                  </nav>
+                  <div class="border-top pt-2 pb-2 d-flex justify-content-center bg-lighter">
+                    <nav aria-label="Grupos Escala paginación">
+                      <ul class="pagination pagination-sm m-0" id="grupos-paginator"></ul>
+                    </nav>
+                  </div>
                 </div>
               </div>
             </div>
-          </div><!-- /row -->
-        </div><!-- /accordion-body -->
+          </div>
+
+          <div class="card shadow-none border" id="card-cargos">
+            <div class="card-header border-bottom d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 py-3 bg-transparent">
+              <div class="d-flex align-items-center gap-3">
+                <div class="avatar avatar-md bg-label-primary rounded d-flex align-items-center justify-content-center">
+                  <i class="fas fa-briefcase fs-5"></i>
+                </div>
+                <div>
+                  <h5 class="mb-0 fw-bold text-heading">Listado de Cargos</h5>
+                  <small class="text-muted">Gestión de puestos y escalas salariales</small>
+                </div>
+              </div>
+
+              <div class="d-flex flex-wrap flex-md-nowrap align-items-center gap-3 ms-lg-auto">
+                <div class="input-group input-group-merge shadow-sm" style="min-width: 200px; max-width: 250px;">
+                  <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                  <input type="text" id="search-cargos-input" class="form-control border-start-0" placeholder="Buscar cargo...">
+                </div>
+
+                <div id="cargos-toolbar-actions" class="btn-group toolbar-disabled shadow-sm">
+                  <button type="button" class="btn btn-outline-secondary btn-icon bg-white" id="btn-editar-cargo" title="Editar seleccionado">
+                    <i class="fas fa-pencil-alt"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-danger btn-icon bg-white" id="btn-eliminar-cargo" title="Eliminar seleccionado">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+
+                <div id="cargos-toolbar-editing" class="btn-group d-none shadow-sm">
+                  <button type="button" class="btn btn-primary" id="btn-guardar-cargo">
+                    <i class="fas fa-save me-1"></i> Guardar
+                  </button>
+                  <button type="button" class="btn btn-outline-secondary bg-white" id="btn-cancelar-cargo">
+                    Cancelar
+                  </button>
+                </div>
+
+                <button class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2" id="btn-add-cargo">
+                  <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Añadir Cargo</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0" id="cargos-table" style="table-layout: fixed;">
+                <thead class="bg-lighter">
+                  <tr>
+                    <th style="width: 50%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('descripcion')">
+                      <div class="d-flex justify-content-between align-items-center text-muted fw-semibold" style="font-size: 0.75rem;">
+                        <span>Descripción</span> <i class="fas fa-sort" id="icon-descripcion"></i>
+                      </div>
+                    </th>
+                    <th style="width: 20%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('cat')">
+                      <div class="d-flex justify-content-center align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                        <span>Categoría</span> <i class="fas fa-sort" id="icon-cat"></i>
+                      </div>
+                    </th>
+                    <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('grupo')">
+                      <div class="d-flex justify-content-center align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                        <span>Nivel</span> <i class="fas fa-sort" id="icon-grupo"></i>
+                      </div>
+                    </th>
+                    <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('salario')">
+                      <div class="d-flex justify-content-end align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                        <span>Salario</span> <i class="fas fa-sort" id="icon-salario"></i>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="cargos-tbody" class="table-border-bottom-0">
+                  {% for c in cargos %}
+                  <tr data-id="{{ c.id }}" 
+                      data-cat="{{ c.cat_ocupacional }}" 
+                      data-grupo="{{ c.grupo_escala.id }}" 
+                      data-salario="{{ c.salario_basico|stringformat:'.2f' }}"
+                      data-activo="{{ c.activo|yesno:'true,false' }}"
+                      style="cursor: pointer;"
+                      onclick="seleccionarCargo(this)">
+                      
+                    <td class="desc-cell fw-semibold text-heading text-truncate">{{ c.descripcion }}</td>
+                    <td class="cat-cell text-center">
+                      <span class="badge bg-label-dark px-3 rounded-pill">
+                        {{ c.get_cat_ocupacional_display }}
+                      </span>
+                    </td>
+                    <td class="grupo-cell text-center fw-bold text-muted">{{ c.grupo_escala.nivel }}</td>
+                    <td class="salario-cell text-end fw-bold text-success">${{ c.salario_basico }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card-footer border-top bg-transparent d-flex justify-content-center pt-3 pb-3">
+                <nav aria-label="Cargos paginación">
+                  <ul class="pagination m-0" id="cargos-paginator"></ul>
+                </nav>
+            </div>
+          </div>
+
+          <div class="modal fade" id="modalTipoUnidad" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-lighter border-bottom p-4">
+                  <h5 class="modal-title fw-bold"><i class="fas fa-edit text-primary me-2"></i>Gestión de Tipo de Unidad</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                  <form id="formTipoUnidad">
+                    {% csrf_token %}
+                    <input type="hidden" name="id" id="tu_id">
+                    
+                    <div class="mb-4">
+                      <label class="form-label fw-semibold">Descripción del Tipo</label>
+                      <input type="text" name="descripcion" id="tu_descripcion" class="form-control" required placeholder="Ej: Dirección General, UEB...">
+                    </div>
+                    
+                    <div class="form-check form-switch mb-4">
+                      <input class="form-check-input" type="checkbox" name="es_temporal" id="tu_temporal">
+                      <label class="form-check-label fw-semibold">Unidad Temporal</label>
+                    </div>
+
+                    <div class="divider">
+                      <div class="divider-text text-uppercase text-muted fw-bold" style="font-size: 0.75rem;">Configuración Jerárquica</div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                      <div class="col-6">
+                        <div class="border rounded p-3 h-100 bg-lighter">
+                          <div class="form-check m-0">
+                            <input class="form-check-input" type="checkbox" name="es_principal" id="tu_principal">
+                            <label class="form-check-label fw-medium text-dark">Unidad Principal</label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-6">
+                        <div class="border rounded p-3 h-100 bg-lighter">
+                          <div class="form-check m-0">
+                            <input class="form-check-input" type="checkbox" name="es_subunidad" id="tu_subunidad">
+                            <label class="form-check-label fw-medium text-dark">Subunidad</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="zona_color_principal" class="mb-2 d-none p-3 bg-label-primary rounded border border-primary border-opacity-25">
+                      <label class="form-label fw-bold text-primary"><i class="fas fa-palette me-2"></i>Color Identificativo</label>
+                      <input type="color" name="color" id="color_picker" class="form-control form-control-color w-100 border-0 shadow-sm" title="Elige un color base">
+                    </div>
+
+                    <div id="zona_color_subunidad" class="mb-2 d-none p-3 bg-label-info rounded border border-info border-opacity-25">
+                      <label class="form-label fw-bold text-info"><i class="fas fa-sitemap me-2"></i>Subordinada a:</label>
+                      <select id="tipo_padre_selector" class="form-select border-0 shadow-sm">
+                        <option value="">Seleccione a quién pertenece...</option>
+                        {% for p in tipos_unidades %}
+                            {% if p.es_principal %}
+                              <option value="{{ p.id }}">{{ p.descripcion }}</option>
+                            {% endif %}
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </form>
+                </div>
+                <div class="modal-footer bg-lighter border-top p-3">
+                  <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="button" class="btn btn-primary shadow-sm" onclick="guardarTipoUnidad()">Guardar Cambios</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div><!-- /collapse -->
     </div><!-- /accordion-item -->
 
     <!-- 2. Territorial -->
-    <div class="accordion-item">
+    <div class="accordion-item border-0 bg-transparent mb-2">
       <h2 class="accordion-header" id="headingTerritorial">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseTerritorial">
-          <i class="fas fa-map-marker-alt me-2"></i>Territorial
+        <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseTerritorial" style="background-color: #fff;">
+          <i class="fas fa-map-marker-alt me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">División Territorial</span>
         </button>
       </h2>
-      <div id="collapseTerritorial" class="accordion-collapse collapse"
-           data-bs-parent="#accordionNomencladores">
-        <div class="accordion-body">
-          <div class="row g-4">
-            <!-- Provincias -->
-            <div class="col-md-6">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Provincias</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="provincias-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="provincias-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody id="provincias-tbody">
-                      {% for p in provincias %}
-                      <tr data-id="{{ p.id }}">
-                        <td class="nombre-cell">{{ p.nombre }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                    <!-- Paginador Provincias -->
-                    <nav aria-label="Provincias paginación">
-                      <ul class="pagination pagination-sm justify-content-center mt-3"
-                          id="provincias-paginator"></ul>
-                    </nav>
-                </div>
-              </div>
-            </div>
+      <div id="collapseTerritorial" class="accordion-collapse collapse" data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body px-0 pt-4 pb-0">
+          
+          <div class="bg-slate-50 p-4 font-sans rounded-4 border">
+              <div class="row g-4 m-0">
+                
+                <div class="col-lg-6 ps-0">
+                  <div class="bg-white rounded-4 border p-4 shadow-sm h-100 d-flex flex-column">
+                    
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="icon-indigo"><i class="fas fa-map-marked-alt"></i></div>
+                        <div>
+                          <h6 class="m-0 fw-bold text-slate-800 text-uppercase">Provincias</h6>
+                          <small class="text-slate-400 fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">NIVEL 1</small>
+                        </div>
+                      </div>
+                      
+                      <div class="header-actions-box">
+                        <button class="btn-action-top active-prov add" title="Añadir Provincia" onclick="crudTerritorial('provincias', 'POST')">
+                          <i class="fas fa-plus"></i>
+                        </button>
+                        <div class="vr mx-1 opacity-25"></div>
+                        <button id="btn-edit-prov" class="btn-action-top" disabled title="Editar Provincia" onclick="crudTerritorial('provincias', 'PUT')">
+                          <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button id="btn-del-prov" class="btn-action-top" disabled title="Eliminar Provincia" onclick="crudTerritorial('provincias', 'DELETE')">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
 
-            <!-- Municipios -->
-            <div class="col-md-6">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span id="municipios-card-title">Municipios</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="municipios-table" disabled>
-                    <i class="fas fa-plus"></i>
-                  </button>
+                    <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
+                      <table class="w-100" id="provincias-table">
+                        <thead><tr><th>Nombre</th></tr></thead>
+                        <tbody id="provincias-tbody">
+                          {% for p in provincias %}
+                          <tr data-id="{{ p.id }}" 
+                              hx-get="{% url 'municipios_provincia_tabla' p.id %}" 
+                              hx-target="#municipios-tbody"
+                              hx-swap="innerHTML"
+                              onclick="seleccionarProvincia(this)">
+                            <td class="nombre-cell"><i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>{{ p.nombre }}</td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="municipios-table">
-                    <thead>
-                      <tr>
-                        <th style="width: 400px;">Nombre</th>
-                        <th style="width: 300px;">Provincia</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody id="municipios-tbody">
-                      {% for m in municipios %}
-                      <tr data-id="{{ m.id }}" data-provincia-id="{{ m.provincia.id }}">
-                        <td class="nombre-cell">{{ m.nombre }}</td>
-                        <td class="provincia-cell">{{ m.provincia.nombre }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                <!-- Paginador Municipios -->
-                <nav aria-label="Municipios paginación">
-                  <ul class="pagination pagination-sm justify-content-center mt-3"
-                      id="municipios-paginator"></ul>
-                </nav>
+
+                <div class="col-lg-6 pe-0">
+                  <div class="bg-white rounded-4 border p-4 shadow-sm h-100 d-flex flex-column">
+                    
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="icon-blue"><i class="fas fa-location-arrow"></i></div>
+                        <div>
+                          <h6 class="m-0 fw-bold text-slate-800 text-uppercase">Municipios</h6>
+                          <small id="sub-muni" class="text-slate-400 fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">SELECCIONE PROVINCIA</small>
+                        </div>
+                      </div>
+                      
+                      <div class="header-actions-box">
+                        <button id="btn-add-muni" class="btn-action-top" disabled title="Añadir Municipio" onclick="crudTerritorial('municipios', 'POST')">
+                          <i class="fas fa-plus"></i>
+                        </button>
+                        <div class="vr mx-1 opacity-25"></div>
+                        <button id="btn-edit-muni" class="btn-action-top" disabled title="Editar Municipio" onclick="crudTerritorial('municipios', 'PUT')">
+                          <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button id="btn-del-muni" class="btn-action-top" disabled title="Eliminar Municipio" onclick="crudTerritorial('municipios', 'DELETE')">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
+                      <table class="w-100" id="municipios-table">
+                        <thead><tr><th>Nombre</th></tr></thead>
+                        <tbody id="municipios-tbody">
+                          <tr id="muni-empty-state" style="grid-column: 1 / -1; display: flex; flex-direction: column; background: transparent; border: none; box-shadow: none; cursor: default;">
+                            <td class="text-center py-5 opacity-50 w-100">
+                              <i class="fas fa-map-marked-alt fs-1 text-slate-400 mb-3"></i>
+                              <p class="fw-bold text-slate-500 m-0">Seleccione una provincia.</p>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
+
               </div>
-            </div>
-          </div><!-- /row -->
-        </div><!-- /accordion-body -->
-      </div><!-- /collapse -->
+          </div>
+        </div>
+      </div>
     </div><!-- /accordion-item -->
 
     <!-- 3. Tiempo de Trabajo (abreviado) -->
-    <div class="accordion-item">
-      <h2 class="accordion-header" id="headingTiempo">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseTiempo">
-          <i class="fas fa-clock me-2"></i>Tiempo de Trabajo
-        </button>
-      </h2>
-      <div id="collapseTiempo" class="accordion-collapse collapse"
-           data-bs-parent="#accordionNomencladores">
-        <div class="accordion-body">
-          <div class="row g-4">
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Horarios</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="horarios-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
+    <div class="accordion-item border-0 bg-transparent mb-2">
+    <h2 class="accordion-header" id="headingTiempo">
+      <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+              data-bs-target="#collapseTiempo" style="background-color: #fff;">
+        <i class="fas fa-clock me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">Tiempo de Trabajo</span>
+      </button>
+    </h2>
+    <div id="collapseTiempo" class="accordion-collapse collapse" data-bs-parent="#accordionNomencladores">
+      <div class="accordion-body px-0 pt-4 pb-0">
+        
+        <div class="bg-slate-50 p-4 font-sans rounded-4 border">
+            
+            <div class="dashboard-header mb-4">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="icon-box-main">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div>
+                        <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Tiempo de Trabajo</h4>
+                        <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de Horarios, Jornadas y Causas de Alta/Baja</p>
+                    </div>
                 </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="horarios-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th style="width: 55px;" class="text-center">Desde</th>
-                        <th style="width: 55px;" class="text-center">Hasta</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for h in horarios %}
-                      <tr data-id="{{ h.id }}">
-                        <td>{{ h.descripcion }}</td>
-                        <td class="text-center">{{ h.hora_inicio|time:"H:i" }}</td>
-                        <td class="text-center">{{ h.hora_fin|time:"H:i" }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
-                            </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             </div>
 
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Jornadas</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="jornadas-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="jornadas-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Horas</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for j in jornadas %}
-                      <tr data-id="{{ j.id }}">
-                        <td>{{ j.tipo }}</td>
-                        <td>{{ j.horario|default:"—" }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
+            <div class="row g-4 m-0">
+              
+                <div class="col-lg-4 ps-0">
+                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(59, 130, 246, 0.4);">
+                        <div class="card-header-flex">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="icon-blue"><i class="fas fa-clock"></i></div>
+                                <div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Horarios</h6>
+                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">TURNOS Y HORAS</small>
+                                </div>
+                            </div>
+                            <button class="btn-add-modern add-row-btn" data-table="horarios-table" title="Añadir">
+                                <i class="fas fa-plus"></i>
                             </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                        </div>
+                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                            <table class="table-modern" id="horarios-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th class="text-center">Desde</th>
+                                        <th class="text-center">Hasta</th>
+                                        <th class="text-center" style="width: 70px;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for h in horarios %}
+                                    <tr data-id="{{ h.id }}">
+                                        <td class="nombre-cell">{{ h.descripcion }}</td>
+                                        <td class="text-center desde-cell font-monospace text-slate-500">{{ h.hora_inicio|time:"H:i" }}</td>
+                                        <td class="text-center hasta-cell font-monospace text-slate-500">{{ h.hora_fin|time:"H:i" }}</td>
+                                        <td class="text-center">
+                                            <div class="d-flex justify-content-center gap-1">
+                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
 
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Causas Alta/Baja</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn"
-                          data-table="causas-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="causas-table">
-                    <thead>
-                      <tr>
-                        <th style="width: 130px;">Descripción</th>
-                        <th style="width: 100px;">Alta</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for c in causas %}
-                      <tr data-id="{{ c.id }}">
-                        <td>{{ c.descripcion }}</td>
-                        <td>{{ c.alta|yesno:"Sí,No" }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar">
-                              <i class="fas fa-pencil-alt"></i>
+                <div class="col-lg-4 px-lg-2 px-0">
+                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(245, 158, 11, 0.4);">
+                        <div class="card-header-flex">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="icon-amber"><i class="fas fa-calendar-alt"></i></div>
+                                <div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Jornadas</h6>
+                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">CARGA HORARIA</small>
+                                </div>
+                            </div>
+                            <button class="btn-add-modern add-row-btn" data-table="jornadas-table" title="Añadir">
+                                <i class="fas fa-plus"></i>
                             </button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar">
-                              <i class="fas fa-trash"></i>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
+                        </div>
+                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                            <table class="table-modern" id="jornadas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th>Horas</th>
+                                        <th class="text-center" style="width: 70px;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for j in jornadas %}
+                                    <tr data-id="{{ j.id }}">
+                                        <td class="tipo-cell fw-bold">{{ j.tipo }}</td>
+                                        <td class="horas-cell">{{ j.horario|default:"—" }}</td>
+                                        <td class="text-center">
+                                            <div class="d-flex justify-content-center gap-1">
+                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div><!-- /row -->
-        </div><!-- /accordion-body -->
-      </div><!-- /collapse -->
-    </div><!-- /accordion-item -->
 
-    <!-- 4. Laborales y Profesionales -->
-    <div class="accordion-item">
+                <div class="col-lg-4 pe-0">
+                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(147, 51, 234, 0.4);">
+                        <div class="card-header-flex">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="icon-purple"><i class="fas fa-user-check"></i></div>
+                                <div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Causas</h6>
+                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">MOTIVOS DE CAMBIO</small>
+                                </div>
+                            </div>
+                            <button class="btn-add-modern add-row-btn" data-table="causas-table" title="Añadir">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                            <table class="table-modern" id="causas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Descripción</th>
+                                        <th class="text-center">Alta</th>
+                                        <th class="text-center" style="width: 70px;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for c in causas %}
+                                    <tr data-id="{{ c.id }}">
+                                        <td class="desc-cell">{{ c.descripcion }}</td>
+                                        <td class="alta-cell text-center fw-bold {% if c.alta %}text-success{% else %}text-danger{% endif %}">{{ c.alta|yesno:"Sí,No" }}</td>
+                                        <td class="text-center">
+                                            <div class="d-flex justify-content-center gap-1">
+                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+      </div>
+    </div>
+</div><!-- /accordion-item -->
+
+    <div class="accordion-item border-0 bg-transparent mb-2">
       <h2 class="accordion-header" id="headingLaboral">
-        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseLaboral">
-          <i class="fas fa-tools me-2"></i>Laborales y Profesionales
+        <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseLaboral" style="background-color: #fff;">
+          <i class="fas fa-tools me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">Laborales y Profesionales</span>
         </button>
       </h2>
       <div id="collapseLaboral" class="accordion-collapse collapse"
            data-bs-parent="#accordionNomencladores">
-        <div class="accordion-body">
-          <div class="row g-4">
-            
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Condiciones Laborales Anormales</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="condiciones-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="condiciones-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th>Tarifa Hora</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for c in condiciones %}
-                      <tr data-id="{{ c.id }}">
-                        <td>{{ c.nombre }}</td>
-                        <td>{{ c.tarifa_hora }} CUP</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-                          </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
+        <div class="accordion-body px-0 pt-4 pb-0">
+          
+          <div class="bg-slate-50 p-4 font-sans rounded-4 border" style="min-height: 500px;">
+              
+              <div class="dashboard-header mb-4">
+                  <div class="d-flex align-items-center gap-3">
+                      <div class="icon-box-main">
+                          <i class="fas fa-wrench"></i>
+                      </div>
+                      <div>
+                          <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
+                          <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de condiciones, contratos y especialidades</p>
+                      </div>
+                  </div>
               </div>
-            </div>
 
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Especialidades</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="especialidades-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="especialidades-table">
-                    <thead>
-                      <tr>
-                        <th>Nombre</th>
-                        <th style="width: 120px;">Educ. Superior</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for e in especialidades %}
-                      <tr data-id="{{ e.id }}">
-                        <td class="nombre-cell">{{ e.nombre }}</td>
-                        <td class="educ-cell text-center">{{ e.educ_superior|yesno:"Sí,No" }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+              <div class="grid-dashboard">
+                  
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
                           </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+                          <button class="btn-add-modern add-row-btn" data-table="condiciones-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="condiciones-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nombre</th>
+                                      <th class="text-end">Tarifa Hora</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for c in condiciones %}
+                                  <tr data-id="{{ c.id }}">
+                                      <td class="nombre-cell">{{ c.nombre }}</td>
+                                      <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
 
-            <div class="col-md-4">
-              <div class="card">
-                <div class="card-header d-flex justify-content-between">
-                  <span>Niveles de Preparación</span>
-                  <button class="btn btn-sm btn-outline-primary add-row-btn" data-table="niveles-preparacion-table">
-                    <i class="fas fa-plus"></i>
-                  </button>
-                </div>
-                <div class="table-responsive">
-                  <table class="table table-hover mb-0" id="niveles-preparacion-table">
-                    <thead>
-                      <tr>
-                        <th>Nivel</th>
-                        <th style="width: 120px;" class="text-center">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {% for np in niveles_preparacion %}
-                      <tr data-id="{{ np.id }}">
-                        <td class="nombre-cell">{{ np.nombre }}</td>
-                        <td class="text-center">
-                          <div class="btn-group btn-group-sm">
-                            <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-blue"><i class="fas fa-clipboard-list"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Especialidades</h6>
                           </div>
-                        </td>
-                      </tr>
-                      {% endfor %}
-                    </tbody>
-                  </table>
-                </div>
+                          <button class="btn-add-modern add-row-btn" data-table="especialidades-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="especialidades-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nombre</th>
+                                      <th class="text-center" style="width: 100px;">Educ. Sup.</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for e in especialidades %}
+                                  <tr data-id="{{ e.id }}">
+                                      <td class="nombre-cell">{{ e.nombre }}</td>
+                                      <td class="educ-cell text-center">
+                                          {% if e.educ_superior %}
+                                              <span class="badge bg-label-success" style="font-size: 0.65rem;">SÍ</span>
+                                          {% else %}
+                                              <span class="badge bg-label-secondary" style="font-size: 0.65rem;">NO</span>
+                                          {% endif %}
+                                      </td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-amber"><i class="fas fa-graduation-cap"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Niveles de Prep.</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="niveles-preparacion-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="niveles-preparacion-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nivel</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for np in niveles_preparacion %}
+                                  <tr data-id="{{ np.id }}">
+                                      <td class="nombre-cell">{{ np.nombre }}</td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
               </div>
-            </div>
+              
+              <div class="grid-dashboard mt-4">
+                  
+                  <div class="section-card m-0">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-emerald"><i class="fas fa-file-signature"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Tipos de Contrato</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="tipocontrato-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="tipocontrato-table">
+                              <thead>
+                                  <tr>
+                                      <th>Descripción</th>
+                                      <th class="text-center">Ocupa Plaza</th>
+                                      <th class="text-center">Requiere Motivo</th>
+                                      <th class="text-end" style="width: 100px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for tc in tipos_contrato %}
+                                  <tr data-id="{{ tc.id }}">
+                                      <td class="nombre-cell fw-bold">{{ tc.descripcion }}</td>
+                                      <td class="text-center">
+                                          <input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.ocupa_plaza %}checked{% endif %}>
+                                      </td>
+                                      <td class="text-center">
+                                          <input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.requiere_motivo %}checked{% endif %}>
+                                      </td>
+                                      <td class="text-end">
+                                          <div class="d-flex justify-content-end gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="section-card m-0">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-indigo"><i class="fas fa-tags"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Motivos (Determinado)</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="motivocontrato-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="motivocontrato-table">
+                              <thead>
+                                  <tr>
+                                      <th>Descripción</th>
+                                      <th class="text-end" style="width: 100px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for m in motivos_contrato %}
+                                  <tr data-id="{{ m.id }}">
+                                      <td class="nombre-cell">{{ m.descripcion }}</td>
+                                      <td class="text-end">
+                                          <div class="d-flex justify-content-end gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+              </div>
 
           </div>
         </div>
       </div>
     </div>
 
-  </div><!-- /accordion -->
-</div><!-- /tab-pane -->
+  </div>
+</div>
+
+<div class="modal fade" id="modalGrupoEscala" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div id="modal-content-grupo" class="modal-content">
+            </div>
+    </div>
+</div>
 
 <script>
 
+  function abrirModalGrupo(id = null) {
+      let url = id ? `/nomencladores/modal/grupo/${id}/` : '/nomencladores/modal/grupo/';
+      fetch(url)
+          .then(res => res.text())
+          .then(html => {
+              document.getElementById('modal-content-grupo').innerHTML = html;
+              const modal = new bootstrap.Modal(document.getElementById('modalGrupoEscala'));
+              modal.show();
+              initLogicModal(); // Iniciar los switches
+          });
+  }
+
+  function initLogicModal() {
+      // 1. CAPTURAR ELEMENTOS DEL MODAL
+      const checkCuadro = document.getElementById('id_es_cuadro');
+      const checkRol = document.getElementById('id_tiene_rol');
+      const rolesCheckboxes = document.querySelectorAll('#roles-container input[type="checkbox"]');
+      const form = document.getElementById('form-grupo-escala');
+
+      // 2. LÓGICA DE LOS SWITCHES (Solución al Error 3)
+      const updateRolesState = () => {
+          if(rolesCheckboxes.length > 0) {
+              rolesCheckboxes.forEach(chk => {
+                  chk.disabled = !checkRol.checked;
+              });
+          }
+      };
+
+      if (checkCuadro && checkRol) {
+          checkCuadro.addEventListener('change', function() {
+              // Si apagas "Es Cuadro" y "Tiene Rol" también está apagado -> Enciende "Tiene Rol"
+              if (!this.checked && !checkRol.checked) {
+                  checkRol.checked = true; 
+              }
+              updateRolesState();
+          });
+
+          checkRol.addEventListener('change', function() {
+              // Si apagas "Tiene Rol" y "Es Cuadro" también está apagado -> Enciende "Es Cuadro"
+              if (!this.checked && !checkCuadro.checked) {
+                  checkCuadro.checked = true; 
+              }
+              updateRolesState();
+          });
+          
+          // Ejecutar al abrir para bloquear/desbloquear los roles correctamente
+          updateRolesState();
+      }
+
+      // 3. LÓGICA DE GUARDAR (Solución a Errores 1 y 2)
+      if (form) {
+          form.onsubmit = function(e) {
+              e.preventDefault(); // Evitamos que el navegador recargue a lo loco
+              const formData = new FormData(form);
+              const url = form.getAttribute('action'); // Leemos la URL que pusimos en el HTML
+
+              // Conseguimos el token directamente del formulario para evitar errores
+              const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+
+              fetch(url, {
+                  method: 'POST',
+                  body: formData,
+                  headers: { 'X-CSRFToken': csrfToken }
+              })
+              .then(res => res.json())
+              .then(data => {
+                  if (data.success) {
+                      // Éxito: Forzamos la redirección a la pestaña correcta
+                      window.location.href = "?tab=nomencladores";
+                  } else {
+                      alert("Revise los campos. Es posible que el Nivel ya exista.");
+                  }
+              })
+              .catch(err => alert("Error al conectar con el servidor: " + err));
+          };
+      }
+  }
+
+
+  /* ==========================================================================
+   NUEVA LÓGICA: TERRITORIAL (MAESTRO-DETALLE)
+   ========================================================================== */
+  let stateGeo = { provId: null, provName: '', muniId: null, muniName: '' };
+
+  function seleccionarProvincia(tr) {
+      // Limpiar visualmente
+      document.querySelectorAll('#provincias-tbody tr').forEach(r => r.classList.remove('selected-indigo'));
+      tr.classList.add('selected-indigo');
+      
+      // Guardar estado
+      stateGeo.provId = tr.dataset.id;
+      stateGeo.provName = tr.querySelector('.nombre-cell').textContent.trim();
+
+      // Habilitar botones de Provincia
+      document.getElementById('btn-edit-prov').classList.add('active-prov', 'edit');
+      document.getElementById('btn-edit-prov').disabled = false;
+      document.getElementById('btn-del-prov').classList.add('active-prov', 'delete');
+      document.getElementById('btn-del-prov').disabled = false;
+
+      // Preparar entorno para Municipios
+      stateGeo.muniId = null;
+      document.getElementById('sub-muni').textContent = stateGeo.provName.toUpperCase();
+      document.getElementById('btn-add-muni').classList.add('active-muni', 'add');
+      document.getElementById('btn-add-muni').disabled = false;
+      
+      desactivarBotonesMuni();
+  }
+
+  // Detectar clics en municipios (Delegación de eventos porque HTMX los inyecta)
+  document.addEventListener('click', e => {
+      const muniRow = e.target.closest('#municipios-tbody tr:not(#muni-empty-state)');
+      if (muniRow) {
+          document.querySelectorAll('#municipios-tbody tr').forEach(r => r.classList.remove('selected-blue'));
+          muniRow.classList.add('selected-blue');
+          
+          stateGeo.muniId = muniRow.dataset.id;
+          stateGeo.muniName = muniRow.querySelector('.nombre-cell').textContent.trim();
+
+          // Habilitar botones de Municipio
+          document.getElementById('btn-edit-muni').classList.add('active-muni', 'edit');
+          document.getElementById('btn-edit-muni').disabled = false;
+          document.getElementById('btn-del-muni').classList.add('active-muni', 'delete');
+          document.getElementById('btn-del-muni').disabled = false;
+      }
+  });
+
+  function desactivarBotonesMuni() {
+      document.getElementById('btn-edit-muni').classList.remove('active-muni', 'edit');
+      document.getElementById('btn-edit-muni').disabled = true;
+      document.getElementById('btn-del-muni').classList.remove('active-muni', 'delete');
+      document.getElementById('btn-del-muni').disabled = true;
+  }
+
+  // Gestión CRUD con popups elegantes (Evita romper el diseño Grid con inputs feos)
+  function crudTerritorial(entidad, metodo) {
+      const esProv = entidad === 'provincias';
+      const idObj = esProv ? stateGeo.provId : stateGeo.muniId;
+      const nomObj = esProv ? stateGeo.provName : stateGeo.muniName;
+      
+      const urlBase = `/nomencladores/api/${entidad}/`;
+      const url = metodo === 'POST' ? urlBase : (metodo === 'DELETE' ? `${urlBase}${idObj}/delete/` : `${urlBase}${idObj}/`);
+      
+      if (metodo === 'DELETE') {
+          Swal.fire({
+              title: `¿Eliminar ${esProv ? 'Provincia' : 'Municipio'}?`,
+              text: "Esta acción no se puede deshacer.",
+              icon: 'warning', showCancelButton: true,
+              confirmButtonColor: '#f43f5e', confirmButtonText: 'Sí, eliminar'
+          }).then(res => {
+              if(res.isConfirmed) {
+                  fetch(url, { method: 'DELETE', headers: {'X-CSRFToken': '{{ csrf_token }}'} })
+                  .then(async r => {
+                      const d = await r.json();
+                      if(!r.ok) throw new Error(d.error);
+                      
+                      document.querySelector(`#${entidad}-tbody tr[data-id="${idObj}"]`).remove();
+                      if(esProv) {
+                          document.getElementById('btn-edit-prov').disabled = true;
+                          document.getElementById('btn-del-prov').disabled = true;
+                          // Restaurar empty state
+                          document.getElementById('municipios-tbody').innerHTML = '<tr id="muni-empty-state" style="grid-column: 1 / -1; display: flex; flex-direction: column; background: transparent; border: none; box-shadow: none;"><td class="text-center py-5 opacity-50 w-100"><i class="fas fa-map-marked-alt fs-1 text-slate-400 mb-3"></i><p class="fw-bold text-slate-500 m-0">Seleccione una provincia.</p></td></tr>';
+                      } else {
+                          desactivarBotonesMuni();
+                      }
+                      Swal.fire({icon: 'success', title: 'Eliminado', showConfirmButton: false, timer: 1500});
+                  }).catch(err => Swal.fire('No se puede eliminar', err.message, 'warning'));
+              }
+          });
+      } else {
+          Swal.fire({
+              title: metodo === 'POST' ? `Añadir ${esProv ? 'Provincia' : 'Municipio'}` : `Editar ${esProv ? 'Provincia' : 'Municipio'}`,
+              input: 'text', inputValue: metodo === 'PUT' ? nomObj : '',
+              showCancelButton: true, confirmButtonText: 'Guardar',
+              inputValidator: (value) => { if (!value) return 'El nombre es obligatorio' }
+          }).then(res => {
+              if(res.isConfirmed) {
+                  const payload = { nombre: res.value };
+                  if (!esProv && metodo === 'POST') payload.provincia_id = stateGeo.provId;
+                  
+                  fetch(url, {
+                      method: metodo, 
+                      headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                      body: JSON.stringify(payload)
+                  }).then(async r => {
+                      const d = await r.json();
+                      if(!r.ok) throw new Error(d.error);
+                      
+                      if (esProv) {
+                          if (metodo === 'PUT') {
+                              document.querySelector(`#provincias-tbody tr[data-id="${idObj}"] .nombre-cell`).innerHTML = `<i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>${d.nombre}`;
+                              stateGeo.provName = d.nombre;
+                              document.getElementById('sub-muni').textContent = d.nombre.toUpperCase();
+                          } else { window.location.reload(); }
+                      } else {
+                          document.querySelector(`#provincias-tbody tr[data-id="${stateGeo.provId}"]`).click(); // Recargar vía HTMX
+                      }
+                      Swal.fire({icon: 'success', title: 'Guardado', showConfirmButton: false, timer: 1500});
+                  }).catch(err => Swal.fire('Error', err.message, 'error'));
+              }
+          });
+      }
+  }
 
     /* ----------  HELPERS GENERALES  ---------- */
   function cancelAllInsertRows() {
@@ -1151,23 +1604,20 @@
 
   async function guardarRol(row) {
     const tipo = row.querySelector('.input-tipo').value.trim();
-    const esCuadro = row.querySelector('.input-es-cuadro').checked; // NUEVO
 
     if (!tipo) return alert('Campo obligatorio');
     try {
       const res = await fetch("/nomencladores/api/roles/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ tipo, es_cuadro: esCuadro }) // ENVIAR CAMPO
+        body: JSON.stringify({ tipo }) 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       
-      // RECONSTRUIR FILA CON COLUMNA EXTRA
       row.outerHTML = `
         <tr data-id="${data.id}">
           <td class="tipo-cell">${data.tipo}</td>
-          <td class="es-cuadro-cell text-center">${data.es_cuadro ? 'Sí' : 'No'}</td>
           <td class="text-center">
             <div class="btn-group btn-group-sm">
               <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
@@ -1231,7 +1681,7 @@
             </div>
           </td>
         </tr>`;
-      paginateProvincias();
+      
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -1261,7 +1711,7 @@
             </div>
           </td>
         </tr>`;
-      paginateMunicipios();
+      
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -1435,6 +1885,58 @@
     }
   }
 
+  async function guardarTipoContrato(row) {
+    const desc = row.querySelector('.input-desc').value.trim();
+    const ocupa = row.querySelector('.input-ocupa').checked;
+    const motivo = row.querySelector('.input-motivo').checked;
+    if (!desc) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/tipo_contrato/create/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell ps-3">${data.nombre}</td>
+          <td class="text-center align-middle"><input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="${data.id}" ${data.ocupa_plaza ? 'checked' : ''}></td>
+          <td class="text-center align-middle"><input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="${data.id}" ${data.requiere_motivo ? 'checked' : ''}></td>
+          <td class="text-center pe-3 align-middle">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) { alert('Error: ' + err.message); }
+  }
+
+  async function guardarMotivoContrato(row) {
+    const desc = row.querySelector('.input-desc').value.trim();
+    if (!desc) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre: desc })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell ps-3">${data.nombre}</td>
+          <td class="text-center pe-3 align-middle">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) { alert('Error: ' + err.message); }
+  }
+
   /* ----------  PAGINACIÓN GRUPOS ESCALA  ---------- */
   function paginateGrupos() {
     const tbody = document.querySelector('#grupos-tbody');
@@ -1504,118 +2006,7 @@
   }
 
   /* ----------  PAGINACIÓN PROVINCIAS  ---------- */
-  function paginateProvincias() {
-    const tbody = document.querySelector('#provincias-tbody');
-    const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
-    const total = rows.length;
-    const pages = Math.ceil(total / PROVINCIAS_PER_PAGE);
-
-    rows.forEach((tr, idx) => {
-      tr.style.display = (idx >= (provinciasCurrentPage - 1) * PROVINCIAS_PER_PAGE &&
-                          idx <  provinciasCurrentPage * PROVINCIAS_PER_PAGE)
-                          ? '' : 'none';
-    });
-
-    const paginator = document.getElementById('provincias-paginator');
-    if (!paginator) return;
-
-    paginator.innerHTML = '';
-    const prevLi = document.createElement('li');
-    prevLi.className = 'page-item prev' + (provinciasCurrentPage === 1 ? ' disabled' : '');
-    prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
-    prevLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (provinciasCurrentPage > 1) { provinciasCurrentPage--; paginateProvincias(); }
-    });
-    paginator.appendChild(prevLi);
-
-    const delta = 1, gap = pages > 5;
-    const range = [];
-    for (let i = 1; i <= pages; i++) {
-      if (i === 1 || i === pages || (i >= provinciasCurrentPage - delta && i <= provinciasCurrentPage + delta)) range.push(i);
-    }
-    let last = 0;
-    range.forEach(num => {
-      if (gap && last && num - last > 1) {
-        const dots = document.createElement('li');
-        dots.className = 'page-item disabled';
-        dots.innerHTML = '<span class="page-link">…</span>';
-        paginator.appendChild(dots);
-      }
-      const li = document.createElement('li');
-      li.className = 'page-item' + (num === provinciasCurrentPage ? ' active' : '');
-      li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
-      li.addEventListener('click', e => { e.preventDefault(); provinciasCurrentPage = num; paginateProvincias(); });
-      paginator.appendChild(li);
-      last = num;
-    });
-
-    const nextLi = document.createElement('li');
-    nextLi.className = 'page-item next' + (provinciasCurrentPage === pages ? ' disabled' : '');
-    nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
-    nextLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (provinciasCurrentPage < pages) { provinciasCurrentPage++; paginateProvincias(); }
-    });
-    paginator.appendChild(nextLi);
-  }
-
-  /* ----------  PAGINACIÓN MUNICIPIOS  ---------- */
-  function paginateMunicipios() {
-    const tbody = document.querySelector('#municipios-tbody');
-    const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
-    const total = rows.length;
-    const pages = Math.ceil(total / MUNICIPIOS_PER_PAGE);
-
-    rows.forEach((tr, idx) => {
-      tr.style.display = (idx >= (municipiosCurrentPage - 1) * MUNICIPIOS_PER_PAGE &&
-                          idx <  municipiosCurrentPage * MUNICIPIOS_PER_PAGE)
-                          ? '' : 'none';
-    });
-
-    const paginator = document.getElementById('municipios-paginator');
-    if (!paginator) return;
-
-    paginator.innerHTML = '';
-    const prevLi = document.createElement('li');
-    prevLi.className = 'page-item prev' + (municipiosCurrentPage === 1 ? ' disabled' : '');
-    prevLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-left"></i></a>`;
-    prevLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (municipiosCurrentPage > 1) { municipiosCurrentPage--; paginateMunicipios(); }
-    });
-    paginator.appendChild(prevLi);
-
-    const delta = 1, gap = pages > 5;
-    const range = [];
-    for (let i = 1; i <= pages; i++) {
-      if (i === 1 || i === pages || (i >= municipiosCurrentPage - delta && i <= municipiosCurrentPage + delta)) range.push(i);
-    }
-    let last = 0;
-    range.forEach(num => {
-      if (gap && last && num - last > 1) {
-        const dots = document.createElement('li');
-        dots.className = 'page-item disabled';
-        dots.innerHTML = '<span class="page-link">…</span>';
-        paginator.appendChild(dots);
-      }
-      const li = document.createElement('li');
-      li.className = 'page-item' + (num === municipiosCurrentPage ? ' active' : '');
-      li.innerHTML = `<a class="page-link" href="#">${num}</a>`;
-      li.addEventListener('click', e => { e.preventDefault(); municipiosCurrentPage = num; paginateMunicipios(); });
-      paginator.appendChild(li);
-      last = num;
-    });
-
-    const nextLi = document.createElement('li');
-    nextLi.className = 'page-item next' + (municipiosCurrentPage === pages ? ' disabled' : '');
-    nextLi.innerHTML = `<a class="page-link" href="#"><i class="tf-icon bx bx-chevron-right"></i></a>`;
-    nextLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (municipiosCurrentPage < pages) { municipiosCurrentPage++; paginateMunicipios(); }
-    });
-    paginator.appendChild(nextLi);
-  }
+  
 
   /* ----------  EDICIÓN INLINE (Resto de tablas)  ---------- */
   document.addEventListener('click', e => {
@@ -1627,67 +2018,15 @@
 
     // NOTA: Cargos ahora se gestiona arriba con funciones específicas
 
-    /* ----------  EDICIÓN GRUPOS ESCALA  ---------- */
-    /* ----------  EDICIÓN GRUPOS ESCALA (MODIFICADO) ---------- */
-    if (tableId === 'grupos-table') {
-      const nivelCell = tr.querySelector('td:nth-child(1)');
-      const actionCell = tr.querySelector('td:nth-child(2)'); // Ahora es el índice 2
-
-      const oldNivel = nivelCell.textContent.trim();
-      const originalButtons = actionCell.innerHTML;
-
-      nivelCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nivel" value="${oldNivel}">`;
-
-      actionCell.innerHTML = `
-        <div class="btn-group btn-group-sm">
-          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
-          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
-        </div>`;
-
-      let actionTaken = false;
-      const finishEdit = (save = false) => {
-        if (actionTaken) return;
-        actionTaken = true;
-
-        if (save) {
-          const newNivel = nivelCell.querySelector('.input-edit-nivel').value.trim();
-          if (!newNivel) { alert('El campo Nivel es obligatorio'); actionTaken = false; return; }
-
-          fetch(`/nomencladores/api/grupos/${tr.dataset.id}/`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ nivel: newNivel }) // SOLO NIVEL
-          })
-            .then(r => r.json())
-            .then(d => {
-              nivelCell.textContent = d.nivel;
-              actionCell.innerHTML = originalButtons;
-              paginateGrupos(); 
-            })
-            .catch(err => alert(err));
-        } else {
-          nivelCell.textContent = oldNivel;
-          actionCell.innerHTML = originalButtons;
-        }
-      };
-
-      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
-      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
-      return; 
-    }
-
-    /* ----------  EDICIÓN ROLES (NUEVO) ---------- */
-    if (tableId === 'roles-table') {
+    /* ----------  EDICIÓN TRIDENTES  ---------- */
+    if (tableId === 'tridentes-table') {
       const tipoCell = tr.querySelector('td:nth-child(1)');
-      const esCuadroCell = tr.querySelector('td:nth-child(2)');
-      const actionCell = tr.querySelector('td:nth-child(3)');
-
       const oldTipo = tipoCell.textContent.trim();
-      const oldEsCuadro = esCuadroCell.textContent.trim() === 'Sí';
+
+      const actionCell = tr.querySelector('td:nth-child(2)');
       const originalButtons = actionCell.innerHTML;
 
       tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
-      esCuadroCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-es-cuadro" ${oldEsCuadro ? 'checked' : ''}>`;
 
       actionCell.innerHTML = `
         <div class="btn-group btn-group-sm">
@@ -1702,25 +2041,86 @@
 
         if (save) {
           const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
-          const newEsCuadro = esCuadroCell.querySelector('.input-edit-es-cuadro').checked;
+          if (!newTipo) { alert('El campo Tipo es obligatorio'); actionTaken = false; return; }
+
+          fetch(`/nomencladores/api/tridentes/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ tipo: newTipo })
+          })
+            .then(async r => {
+                if(!r.ok) {
+                    const data = await r.json();
+                    throw new Error(data.error || 'Error al actualizar el tridente');
+                }
+                return r.json();
+            })
+            .then(d => {
+              tipoCell.textContent = d.tipo;
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => {
+                alert(err.message);
+                tipoCell.textContent = oldTipo;
+                actionCell.innerHTML = originalButtons;
+            });
+        } else {
+          tipoCell.textContent = oldTipo;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return; 
+    }
+
+    /* ----------  EDICIÓN GRUPOS ESCALA (MODAL) ---------- */
+    if (tableId === 'grupos-table') {
+      // En lugar de editar en la tabla, abrimos el modal pasándole el ID de la fila
+      abrirModalGrupo(tr.dataset.id);
+      return; 
+    }
+
+    /* ----------  EDICIÓN ROLES (Limpio) ---------- */
+    if (tableId === 'roles-table') {
+      const tipoCell = tr.querySelector('td:nth-child(1)');
+      const actionCell = tr.querySelector('td:nth-child(2)');
+
+      const oldTipo = tipoCell.textContent.trim();
+      const originalButtons = actionCell.innerHTML;
+
+      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+
+        if (save) {
+          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
 
           if (!newTipo) { alert('Campo obligatorio'); actionTaken = false; return; }
 
           fetch(`/nomencladores/api/roles/${tr.dataset.id}/`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ tipo: newTipo, es_cuadro: newEsCuadro })
+            body: JSON.stringify({ tipo: newTipo })
           })
           .then(r => r.json())
           .then(d => {
             tipoCell.textContent = d.tipo;
-            esCuadroCell.textContent = d.es_cuadro ? 'Sí' : 'No';
             actionCell.innerHTML = originalButtons;
           })
           .catch(err => alert(err));
         } else {
           tipoCell.textContent = oldTipo;
-          esCuadroCell.textContent = oldEsCuadro ? 'Sí' : 'No';
           actionCell.innerHTML = originalButtons;
         }
       };
@@ -1820,6 +2220,48 @@
         } else {
           nombreCell.textContent = oldNombre;
           actionCell.innerHTML   = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN TIPOS Y MOTIVOS DE CONTRATO  ---------- */
+    if (tableId === 'tipocontrato-table' || tableId === 'motivocontrato-table') {
+      const descCell = tr.querySelector('.nombre-cell');
+      const oldDesc = descCell.textContent.trim();
+      const actionCell = tr.querySelector('td:last-child');
+      const originalButtons = actionCell.innerHTML;
+
+      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+          if (!newDesc) { alert('Campo obligatorio'); return; }
+          const endpoint = tableId === 'tipocontrato-table' ? 'tipo_contrato' : 'motivo_contrato';
+          
+          fetch(`/nomencladores/api/${endpoint}/${tr.dataset.id}/update/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newDesc }) 
+          }).then(r => r.json()).then(d => {
+              descCell.textContent = d.nombre;
+              actionCell.innerHTML = originalButtons;
+          }).catch(err => alert(err));
+        } else {
+          descCell.textContent = oldDesc;
+          actionCell.innerHTML = originalButtons;
         }
       };
 
@@ -2112,7 +2554,6 @@
     const id = tr.dataset.id;
     const tableId = tr.closest('table').id;
     
-    // Cargos ya se gestiona con btn-eliminar-cargo, lo saltamos si acaso
     if(tableId === 'cargos-table') return;
 
     let endpoint = '';
@@ -2127,6 +2568,8 @@
     else if (tableId === 'condiciones-table') endpoint = 'condiciones';
     else if (tableId === 'especialidades-table') endpoint = 'especialidades';
     else if (tableId === 'niveles-preparacion-table') endpoint = 'niveles-preparacion';
+    else if (tableId === 'tipocontrato-table') endpoint = 'tipo_contrato';
+    else if (tableId === 'motivocontrato-table') endpoint = 'motivo_contrato';
     else return;
 
     Swal.fire({
@@ -2156,8 +2599,12 @@
           method: 'DELETE',
           headers: { 'X-CSRFToken': csrftoken }
         })
-          .then(r => {
-            if (!r.ok) throw new Error("Error al eliminar");
+          .then(async r => {
+            if (!r.ok) {
+                // Atrapamos el error JSON que viene del servidor (status 400)
+                const data = await r.json();
+                throw new Error(data.error || "Error al eliminar");
+            }
             return r.json();
           })
           .then(() => {
@@ -2165,9 +2612,10 @@
             Swal.fire({ icon: 'success', title: 'Eliminado', text: 'Registro eliminado con éxito.', timer: 1000, showConfirmButton: false });
             if (tableId === 'grupos-table') paginateGrupos();
           })
-          .catch(res => res.json().then(data => {
-            Swal.fire('Error', data.error || 'Error desconocido', 'error');
-          }))
+          .catch(err => {
+            // Mostramos el mensaje correctamente en el popup de SweetAlert
+            Swal.fire('No se puede eliminar', err.message, 'warning');
+          });
       }
     });
   });
@@ -2205,7 +2653,7 @@
         case 'roles-table':
           row.innerHTML = `
             <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
-            <td class="text-center"><input type="checkbox" class="form-check-input input-es-cuadro"></td> <td class="text-center">
+            <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
                 <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
@@ -2331,6 +2779,30 @@
             </td>`;
           break;
 
+        case 'tipocontrato-table':
+          row.innerHTML = `
+            <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-ocupa cursor-pointer"></td>
+            <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-motivo cursor-pointer"></td>
+            <td class="text-center pe-3 align-middle">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'motivocontrato-table':
+          row.innerHTML = `
+            <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="text-center pe-3 align-middle">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
         default:
           row.innerHTML = `<td colspan="2">Sin definir</td>`;
       }
@@ -2400,47 +2872,248 @@
       case 'niveles-preparacion-table':
         await guardarNivelPreparacion(row);
         break;
+      case 'tipocontrato-table':
+        await guardarTipoContrato(row);
+        break;
+      case 'motivocontrato-table':
+        await guardarMotivoContrato(row);
+        break;
       default:
         alert('Tabla no implementada');
     }
   });
 
-  /* ----------  SELECCIONAR PROVINCIA ACTIVA  ---------- */
-  let provinciaActiva = null;
+  
 
-  document.addEventListener('click', e => {
-    const filaProv = e.target.closest('#provincias-table tbody tr');
-    if (!filaProv) return;
-
-    document.querySelectorAll('#provincias-table tbody tr').forEach(f => f.classList.remove('active'));
-    filaProv.classList.add('active');
-
-    provinciaActiva = {
-      id: filaProv.dataset.id,
-      nombre: filaProv.querySelector('.nombre-cell').textContent.trim()
-    };
-
-    document.getElementById('municipios-card-title').textContent = `Provincia ${provinciaActiva.nombre} / Municipios`;
-    const btnMunicipio = document.querySelector('[data-table="municipios-table"]');
-    if (btnMunicipio) btnMunicipio.disabled = false;
-
-    filtrarMunicipiosPorProvincia(provinciaActiva.id);
-  });
-
-  function filtrarMunicipiosPorProvincia(provinciaId) {
-    const tbody = document.getElementById('municipios-tbody');
-    tbody.dataset.provinciaId = provinciaId;
-    const filas = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
-    filas.forEach(fila => {
-      fila.style.display = fila.dataset.provinciaId === provinciaId ? '' : 'none';
-    });
-    municipiosCurrentPage = 1;
-    paginateMunicipios();
-  }
+  
 
   /* ----------  INICIALIZAR TODO  ---------- */
-  paginateProvincias();
-  paginateMunicipios();
+  
+  
   paginateGrupos();
   paginateCargos();
+
+  
+
+  /* ---------- 3. GUARDAR SWITCH DE OCUPA PLAZA AUTOMÁTICAMENTE ---------- */
+  document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('toggle-ocupa-plaza')) {
+          let id = e.target.dataset.id;
+          let isChecked = e.target.checked;
+          
+          fetch(`/nomencladores/api/tipo_contrato/${id}/toggle_plaza/`, {
+              method: 'POST',
+              headers: {
+                  'X-CSRFToken': csrftoken, 
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({'ocupa_plaza': isChecked})
+          })
+          .then(async response => {
+              if(!response.ok) {
+                  alert('Error al guardar el estado de ocupación de plaza.');
+                  e.target.checked = !isChecked; 
+              }
+          });
+      }
+  });
+
+  /* ---------- GUARDAR SWITCH REQUIERE MOTIVO ---------- */
+  document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('toggle-requiere-motivo')) {
+          fetch(`/nomencladores/api/tipo_contrato/${e.target.dataset.id}/toggle_motivo/`, {
+              method: 'POST',
+              headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 'requiere_motivo': e.target.checked })
+          });
+      }
+  });
+
+  /* ---------- RESALTAR PROVINCIA SELECCIONADA ---------- */
+  function resaltarProvincia(fila) {
+      // Le quitamos la clase "table-active" a todas las filas hermanas
+      let filas = fila.parentNode.querySelectorAll('tr');
+      filas.forEach(f => f.classList.remove('table-active', 'bg-label-primary'));
+      
+      // Se la ponemos a la fila que el usuario clickeó
+      fila.classList.add('table-active', 'bg-label-primary');
+  }
+
+  
+  // 1. ABRIR EL MODAL (PARA CREAR NUEVO)
+  function abrirModalTipoUnidad() {
+    document.getElementById('formTipoUnidad').reset();
+    document.getElementById('tu_id').value = '';
+    
+    // Por defecto no hay nada marcado (es tipo Normal), así que mostramos color
+    document.getElementById('zona_color_principal').classList.remove('d-none');
+    document.getElementById('zona_color_subunidad').classList.add('d-none');
+    
+    var myModal = new bootstrap.Modal(document.getElementById('modalTipoUnidad'));
+    myModal.show();
+  }
+
+  // 2. ABRIR EL MODAL (PARA EDITAR)
+  function editarTipoUnidad(id, descripcion, es_temporal, es_principal, es_subunidad, color, padre_id) {
+    document.getElementById('formTipoUnidad').reset();
+    document.getElementById('tu_id').value = id;
+    document.getElementById('tu_descripcion').value = descripcion;
+    document.getElementById('tu_temporal').checked = es_temporal;
+    
+    document.getElementById('tu_principal').checked = es_principal;
+    document.getElementById('tu_subunidad').checked = es_subunidad;
+
+    // Lógica para mostrar la zona correcta al editar
+    if (es_subunidad) {
+        document.getElementById('zona_color_principal').classList.add('d-none');
+        document.getElementById('zona_color_subunidad').classList.remove('d-none');
+        document.getElementById('tipo_padre_selector').value = padre_id || '';
+    } else {
+        // Aplica para Unidad Principal y Unidad Normal
+        document.getElementById('zona_color_principal').classList.remove('d-none');
+        document.getElementById('zona_color_subunidad').classList.add('d-none');
+        document.getElementById('color_picker').value = color || '#000000';
+    }
+
+    var myModal = new bootstrap.Modal(document.getElementById('modalTipoUnidad'));
+    myModal.show();
+  }
+
+  // 3. LÓGICA DE LOS CHECKS (Ocultar/Mostrar paneles)
+  function actualizarZonasUnidad() {
+    const isSubunidad = document.getElementById('tu_subunidad').checked;
+    if (isSubunidad) {
+      document.getElementById('zona_color_principal').classList.add('d-none');
+      document.getElementById('zona_color_subunidad').classList.remove('d-none');
+    } else {
+      document.getElementById('zona_color_principal').classList.remove('d-none');
+      document.getElementById('zona_color_subunidad').classList.add('d-none');
+    }
+  }
+
+  document.getElementById('tu_principal').addEventListener('change', function() {
+    if(this.checked) document.getElementById('tu_subunidad').checked = false;
+    actualizarZonasUnidad();
+  });
+
+  document.getElementById('tu_subunidad').addEventListener('change', function() {
+    if(this.checked) document.getElementById('tu_principal').checked = false;
+    actualizarZonasUnidad();
+  });
+
+  // 4. GUARDAR EL TIPO (CREAR O EDITAR)
+  function guardarTipoUnidad() {
+    const esSubunidad = document.getElementById('tu_subunidad').checked;
+    const padreId = document.getElementById('tipo_padre_selector').value;
+
+    // VALIDACIÓN ESTRICTA
+    if (esSubunidad && (!padreId || padreId.trim() === '')) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Falta información',
+            text: 'Debe seleccionar la Unidad Principal a la que pertenece esta subunidad.'
+        });
+        return; // Detiene la ejecución
+    }
+
+    const form = document.getElementById('formTipoUnidad');
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+
+    const formData = new FormData(form);
+    
+    // Si NO es subunidad (es principal o normal), mandamos el color. Si es subunidad, mandamos el padre.
+    if(!esSubunidad) {
+        formData.append('color', document.getElementById('color_picker').value);
+    } else {
+        formData.append('tipo_padre_id', document.getElementById('tipo_padre_selector').value);
+    }
+
+    fetch('{% url "guardar_tipo_unidad" %}', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(async response => {
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            Swal.fire({ icon: 'success', title: '¡Guardado!', showConfirmButton: false, timer: 1500 });
+            $('#modalTipoUnidad').modal('hide');
+            
+            const tbody = document.getElementById('tbody-tipos-unidad');
+            let trId = 'tu-row-' + data.tipo.id;
+            let tr = document.getElementById(trId);
+            let isNew = false;
+            
+            if (!tr) {
+                tr = document.createElement('tr');
+                tr.id = trId;
+                isNew = true;
+            }
+
+            // CORRECCIÓN: Cuadro de color sólido
+            let colorBadge = data.tipo.color ? `<span style="display:inline-block; width:20px; height:20px; background-color:${data.tipo.color}; border-radius:4px; border:1px solid #ccc;"></span>` : '-';
+            
+            let badges = '';
+            if(data.tipo.es_principal) badges += '<span class="badge bg-primary me-1">Principal</span>';
+            if(data.tipo.es_subunidad) badges += '<span class="badge bg-info">Subunidad</span>';
+
+            // ATENCIÓN: Se incluyen los parámetros en el botón editar al renderizar por JS
+            let strDesc = data.tipo.descripcion.replace(/'/g, "\\'");
+            let btnEdit = `<button class="btn btn-sm btn-info me-1" onclick="editarTipoUnidad(${data.tipo.id}, '${strDesc}', ${data.tipo.es_temporal}, ${data.tipo.es_principal}, ${data.tipo.es_subunidad}, '${data.tipo.color}', '${data.tipo.tipo_padre_id || ''}')"><i class="fas fa-pencil-alt"></i></button>`;
+            let btnDel = `<button class="btn btn-sm btn-danger" onclick="eliminarTipoUnidad(${data.tipo.id})"><i class="fas fa-trash"></i></button>`;
+
+            tr.innerHTML = `
+                <td class="fw-bold">${data.tipo.descripcion}</td>
+                <td class="text-center">${data.tipo.es_temporal ? '<span class="badge bg-label-warning">Sí</span>' : '<span class="badge bg-label-secondary">No</span>'}</td>
+                <td class="text-center">${badges}</td>
+                <td class="text-center">${colorBadge}</td>
+                <td class="text-center">${btnEdit} ${btnDel}</td>
+            `;
+
+            if (isNew && tbody) { tbody.appendChild(tr); }
+            
+        } else {
+            let errorText = 'Se encontraron los siguientes errores:\\n';
+            if(data.errors) {
+                for(let field in data.errors) {
+                    errorText += `- ${field}: ${data.errors[field][0]}\\n`;
+                }
+            } else if (data.error) {
+                errorText = data.error;
+            }
+            Swal.fire('No se pudo guardar', errorText, 'warning');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+    });
+  }
+
+  // 5. ELIMINAR EL TIPO
+  function eliminarTipoUnidad(id) {
+      Swal.fire({
+          title: '¿Eliminar este tipo?', icon: 'warning', showCancelButton: true,
+          confirmButtonColor: '#d33', cancelButtonColor: '#8592a3', confirmButtonText: 'Sí, eliminar'
+      }).then((result) => {
+          if (result.isConfirmed) {
+              let url = '{% url "eliminar_tipo_unidad" 0 %}'.replace('0', id);
+              fetch(url, {
+                  method: 'POST',
+                  headers: { 'X-CSRFToken': '{{ csrf_token }}', 'X-Requested-With': 'XMLHttpRequest' }
+              })
+              .then(response => response.json())
+              .then(data => {
+                  if(data.success) {
+                      Swal.fire({ icon: 'success', title: '¡Eliminado!', showConfirmButton: false, timer: 1500 });
+                      const tr = document.getElementById('tu-row-' + id);
+                      if (tr) tr.remove();
+                  } else {
+                      Swal.fire('No se puede eliminar', data.error, 'error');
+                  }
+              });
+          }
+      });
+  }
 </script>

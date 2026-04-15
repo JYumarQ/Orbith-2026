@@ -3,8 +3,9 @@ from dataclasses import fields
 from pyexpat import model
 from django import forms
 from django.forms import widgets
-from .models import NCargo, NGrupoEscala, NRol, NTridente
+from .models import NCargo, NGrupoEscala, NRol, NTridente, NTipoUnidadOrganizativa
 from django.db.models import Count
+from django.urls import reverse_lazy
 
 
 #CARGO
@@ -27,19 +28,33 @@ class NCargoForm(forms.ModelForm):
         }
         
 class NGrupoEscalaForm(forms.ModelForm):
-    
     class Meta:
         model = NGrupoEscala
-        fields = ('nivel',)
+        fields = ('nivel', 'es_cuadro', 'tiene_rol', 'roles')
         widgets = {
-            'nivel': forms.TextInput(attrs={'class': 'form-control'}),
+            'nivel': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: I, II, XIX...'}),
+            'es_cuadro': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'tiene_rol': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+            'roles': forms.CheckboxSelectMultiple(attrs={'class': 'list-unstyled d-flex flex-wrap gap-3'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenamos los roles alfabéticamente
+        self.fields['roles'].queryset = NRol.objects.all().order_by('tipo')
+        
+        # NUEVO: Si el grupo es nuevo (no tiene ID aún), marcamos todos los roles por defecto
+        if not self.instance.pk:
+            self.fields['roles'].initial = NRol.objects.all()
         
 class RegistrarSalariosForm(forms.Form):
     grupo_escala = forms.ModelChoiceField(
         queryset=NGrupoEscala.objects.none(),
-        widget=forms.Select(attrs={'class': 'form-select'}),
-        label="Grupo Escala"
+        label="Grupo Escala",
+        empty_label="Seleccione un Grupo...",
+        widget=forms.Select(attrs={
+            'class': 'form-select select2'
+        })
     )
     
     def __init__(self, *args, **kwargs):
@@ -50,9 +65,9 @@ class RegistrarSalariosForm(forms.Form):
         ).filter(salario_count__gte=9)
         
         # 1. Obtener el queryset filtrado (exactamente como estaba)
-        queryset_filtrado = NGrupoEscala.objects.exclude(
-            id__in=used_groups.values_list('id', flat=True)
-        )
+        queryset_filtrado = NGrupoEscala.objects.annotate(
+            num_salarios=Count('nsalario')
+        ).filter(num_salarios=0)
         
         # 2. ¡NUEVO! Convertir a lista y ordenar en Python usando tu helper del modelo
         lista_ordenada = sorted(list(queryset_filtrado), key=lambda g: g.valor_numerico)
@@ -96,3 +111,15 @@ class EditarSalariosForm(forms.Form):
         grupo_label = kwargs.pop('grupo_label', '')
         super().__init__(*args, **kwargs)
         self.fields['grupo_nombre'].initial = grupo_label
+
+class NTipoUnidadOrganizativaForm(forms.ModelForm):
+    class Meta:
+        model = NTipoUnidadOrganizativa
+        fields = ['descripcion', 'es_temporal', 'es_principal', 'es_subunidad', 'color']
+        widgets = {
+            'descripcion': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
+            'es_temporal': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'es_principal': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'check_principal'}),
+            'es_subunidad': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'check_subunidad'}),
+            'color': forms.TextInput(attrs={'class': 'form-control', 'id': 'input_color'}),
+        }

@@ -82,6 +82,16 @@
         </a>
       </li>
 
+      <li class="menu-header small text-uppercase">
+        <span class="menu-header-text">Informes</span>
+      </li>
+      <li class="menu-item {% if request.resolver_match.url_name == 'informe_economia' %} active {% endif %} ">
+        <a href="{% url 'informe_economia' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-bar-chart-alt-2"></i>
+          <div data-i18n="Basic">Economía</div>
+        </a>
+      </li>
+
       <!--<li class="menu-header small text-uppercase">
         <span class="menu-header-text">Solicitudes</span>
       </li>

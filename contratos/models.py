@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.db import models
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla
-from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol
+from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
 from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
@@ -19,12 +19,21 @@ class ContratoBase(Base):
         verbose_name="No. Expediente"
     )
     #?CONTRATO
-    tipo = models.CharField(max_length=50, choices=[
-        ('IND', 'Indeterminado'), 
-        ('DET', 'Determinado'),
-        ('EAD', 'En Adiestramiento'), 
-        ('MOT', 'Movimiento Temporal')
-    ])
+    tipo = models.ForeignKey(
+        NTipoContrato, 
+        on_delete=models.RESTRICT, 
+        null=True,  # Para que no de error la migración inicial
+        blank=True,
+        verbose_name="Tipo de Contrato"
+    )
+
+    motivo = models.ForeignKey(
+        NMotivoContrato,
+        on_delete=models.RESTRICT,
+        null=True,
+        blank=True,
+        verbose_name="Motivo de Contrato"
+    )
     
     cargo = models.ForeignKey(CargoPlantilla, on_delete=models.RESTRICT, blank=True, null= True)
     
@@ -209,9 +218,9 @@ class CAlta(ContratoBase):
             if es_nuevo:
                 self.actualizar_aspirante(self.aspirante.doc_identidad)
                 
-                # Solo sumamos plaza si es contrato INDETERMINADO y tiene cargo
-                if self.tipo == 'IND' and self.cargo:
-                    self.actualizar_plantilla(self.cargo.pk)
+                # Solo sumamos plaza si el tipo de contrato está marcado como que ocupa plaza
+            if self.tipo and self.tipo.ocupa_plaza and self.cargo:
+                self.actualizar_plantilla(self.cargo.pk)
             
             super().save(*args, **kwargs)
             
@@ -221,8 +230,8 @@ class CAlta(ContratoBase):
 
     def delete(self, *args, **kwargs):
         try:
-            # 1. Liberar plaza (Si era Indeterminado y tenía cargo)
-            if self.tipo == 'IND' and self.cargo:
+            # 1. Liberar plaza (Si el contrato ocupaba plaza y tenía cargo)
+            if self.tipo and self.tipo.ocupa_plaza and self.cargo:
                 try:
                     cargo_obj = CargoPlantilla.objects.get(pk=self.cargo.pk)
                     if cargo_obj.cant_cubierta > 0:
@@ -255,7 +264,8 @@ class CBaja(ContratoBase):
 
     fecha_baja = models.DateField(null=True, blank=True)
     fecha_alta = models.DateField(null=True, blank=True) # Necesario para guardar el historial
-    
+    fecha_documento = models.DateField(null=True, blank=True, verbose_name="Fecha de documento")
+
     tridente = models.ForeignKey(
         NTridente,
         on_delete=models.RESTRICT,
@@ -268,6 +278,24 @@ class CBaja(ContratoBase):
         on_delete=models.RESTRICT,
         null=True, 
         blank=True
+    )
+
+    cobro_sistema_pago = models.BooleanField(
+        default=False, 
+        verbose_name="¿Cobró sistema de pago?"
+    )
+
+    actividad_realizada = models.CharField(
+        max_length=255, 
+        null=True, 
+        blank=True, 
+        verbose_name="Actividad que realizaba"
+    )
+
+    fecha_documento = models.DateField(
+        null=True, 
+        blank=True, 
+        verbose_name="Fecha de documento"
     )
     
     # Asumo que 'observaciones' viene de 'Base', si no, agrégalo aquí también.

@@ -126,14 +126,14 @@
     <p><strong>CONVIENEN</strong></p>
     <p><strong>PRIMERO:</strong> Que el presente contrato se suscribe por:</p>
     <p>
-        {% if contrato.tipo == 'IND' %}
+        {% if "INDETERMINADO" in contrato.tipo.descripcion|upper %}
             <u> x </u>  
         {% else %}
             __
         {% endif %}
         Tiempo Indeterminado</p>
     <p>
-        {% if contrato.tipo == 'DET' %}
+        {% if "DETERMINADO" in contrato.tipo.descripcion|upper %}
             <u> x </u>  
         {% else %}
             __

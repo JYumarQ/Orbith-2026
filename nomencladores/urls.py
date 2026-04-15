@@ -36,11 +36,18 @@ urlpatterns = [
     path('api/provincias/<int:pk>/', admin_required(views.provincia_update), name='provincia-update'),
     path('api/provincias/<int:pk>/delete/', admin_required(views.provincia_delete), name='provincia-delete'),
 
+    # ---------- MODAL Y GUARDADO DE GRUPOS (NUEVO) ----------
+    path('modal/grupo/', views.grupo_escala_modal, name='grupo_escala_modal'),
+    path('modal/grupo/<int:pk>/', views.grupo_escala_modal, name='grupo_escala_modal_edit'),
+    path('api/grupos/save/', views.grupo_escala_save, name='grupo_escala_save'),
+    path('api/grupos/<int:pk>/save/', views.grupo_escala_save, name='grupo_escala_save_edit'),
 
     # CRUD NMunicipio
     path('api/municipios/', admin_required(views.municipio_create), name='municipio-create'),
     path('api/municipios/<int:pk>/', admin_required(views.municipio_update), name='municipio-update'),
     path('api/municipios/<int:pk>/delete/', admin_required(views.municipio_delete), name='municipio-delete'),
+    path('api/provincia/<int:prov_id>/municipios_tabla/', views.municipios_provincia_tabla, name='municipios_provincia_tabla'),
+    
     # ---------- TIEMPO DE TRABAJO ----------
     path('api/horarios/',          views.horario_create,  name='horario_create'),
     path('api/horarios/<int:pk>/', views.horario_update,  name='horario_update'),
@@ -81,4 +88,23 @@ urlpatterns = [
     path('api/niveles-preparacion/', views.nivel_preparacion_create, name='nivel_preparacion_create'),
     path('api/niveles-preparacion/<int:pk>/', views.nivel_preparacion_update, name='nivel_preparacion_update'),
     path('api/niveles-preparacion/<int:pk>/delete/', views.nivel_preparacion_delete, name='nivel_preparacion_delete'),
+
+    # ---------- CRUD Tipo de Contrato ----------
+    path('api/tipo_contrato/create/', views.tipo_contrato_create, name='tipo_contrato_create'),
+    path('api/tipo_contrato/<int:pk>/update/', views.tipo_contrato_update, name='tipo_contrato_update'),
+    path('api/tipo_contrato/<int:pk>/delete/', views.tipo_contrato_delete, name='tipo_contrato_delete'),
+    path('api/tipo_contrato/<int:pk>/toggle_plaza/', views.tipo_contrato_toggle_plaza, name='tipo_contrato_toggle_plaza'),
+    path('api/tipo_contrato/<int:pk>/toggle_motivo/', views.tipo_contrato_toggle_motivo, name='tipo_contrato_toggle_motivo'),
+    
+    # ---------- CRUD Motivo de Contrato ----------
+    path('api/motivo_contrato/create/', views.motivo_contrato_create, name='motivo_contrato_create'),
+    path('api/motivo_contrato/<int:pk>/update/', views.motivo_contrato_update, name='motivo_contrato_update'),
+    path('api/motivo_contrato/<int:pk>/delete/', views.motivo_contrato_delete, name='motivo_contrato_delete'),
+
+    path('api/tipo_contrato/<int:pk>/info/', views.tipo_contrato_info, name='tipo_contrato_info'),
+
+    # ---------- CRUD Tipos de Unidad Organizativa ----------
+    path('api/tipo_unidad/guardar/', views.guardar_tipo_unidad, name='guardar_tipo_unidad'),
+    path('api/tipo_unidad/<int:pk>/eliminar/', views.eliminar_tipo_unidad, name='eliminar_tipo_unidad'),
+
 ]

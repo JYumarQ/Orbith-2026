@@ -16,51 +16,54 @@
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table table-bordered text-center align-middle">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="text-uppercase fw-bold text-start ps-3">Rol</th>
-                                {% for t in tridentes %}
-                                    <th class="fw-bold">{{ t.tipo }}</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for fila in matriz_html %}
+                    
+                    {% if grupo.es_cuadro %}
+                        <div class="card shadow-none border border-primary mb-4 bg-label-primary">
+                            <div class="card-body text-center">
+                                <label class="form-label fw-bold text-primary"><i class="fas fa-user-tie me-2"></i>Salario Básico para Cuadros</label>
+                                <div class="input-group input-group-lg mx-auto" style="max-width: 300px;">
+                                    <span class="input-group-text bg-white border-primary border-end-0 fw-bold text-muted">$</span>
+                                    <input type="number" step="0.01" name="salario_cuadro" 
+                                           class="form-control text-center input-salario border-primary border-start-0 fw-bold text-primary" 
+                                           placeholder="0.00"
+                                           value="{{ monto_cuadro|stringformat:'.2f' }}">
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if grupo.tiene_rol %}
+                        <label class="form-label fw-bold mb-3"><i class="fas fa-users me-2"></i>Matriz Salarial para el resto de Categorías</label>
+                        <table class="table table-bordered text-center align-middle bg-white">
+                            <thead class="table-light">
                                 <tr>
-                                    <td class="fw-bold text-start ps-3" style="font-size: 1.05rem;">
-                                        {{ fila.rol.tipo }}
-                                        {% if fila.rol.es_cuadro %}
-                                            <span class="badge bg-label-primary ms-1" style="font-size: 0.6em;">CUADRO</span>
-                                        {% endif %}
-                                    </td>
-                                    
-                                    {% if fila.rol.es_cuadro %}
-                                        <td colspan="{{ tridentes|length }}" class="bg-light">
-                                            <div class="input-group mx-auto" style="max-width: 200px;">
-                                                <span class="input-group-text border-0 bg-transparent fw-bold text-muted">$</span>
-                                                <input type="number" step="0.01" 
-                                                       name="monto_{{ fila.rol.id }}_cuadro" 
-                                                       class="form-control text-center input-salario fw-bold text-primary"
-                                                       placeholder="0.00"
-                                                       value="{{ fila.monto_unico|stringformat:'.2f' }}"> 
-                                            </div>
+                                    <th class="text-uppercase fw-bold text-start ps-3">Rol</th>
+                                    {% for t in tridentes %}
+                                        <th class="fw-bold">{{ t.tipo }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for fila in matriz_html %}
+                                    <tr>
+                                        <td class="fw-bold text-start ps-3" style="font-size: 1.05rem;">
+                                            {{ fila.rol.tipo }}
                                         </td>
-                                    {% else %}
                                         {% for celda in fila.celdas %}
                                             <td class="p-1">
                                                 <input type="number" step="0.01" 
-                                                       name="monto_{{ fila.rol.id }}_{{ celda.tridente_id }}" 
+                                                       name="salario_{{ fila.rol.id }}_{{ celda.tridente_id }}" 
                                                        class="form-control text-center input-salario"
                                                        placeholder="-"
-                                                       value="{{ celda.valor|stringformat:'.2f' }}"> 
+                                                       value="{{ celda.valor|stringformat:'.2f' }}">
                                             </td>
                                         {% endfor %}
-                                    {% endif %}
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% endif %}
+
                 </div>
             </div>
             <div class="modal-footer">
@@ -71,36 +74,17 @@
     </div>
 </div>
 
-<script>
-    var checkCuadro = document.getElementById('{{ form.es_para_cuadro.id_for_label }}');
-    var divCuadro = document.getElementById('div_monto_cuadro');
-    
-    if(checkCuadro){
-        checkCuadro.addEventListener('change', function(){
-            if(this.checked){
-                divCuadro.classList.remove('d-none');
-                const input = divCuadro.querySelector('input');
-                if(input) input.focus();
-            } else {
-                divCuadro.classList.add('d-none');
-            }
-        });
-    }
-</script>
-
 <style>
-    /* CLASE PERSONALIZADA PARA TAMAÑO INTERMEDIO */
     .input-salario {
-        height: 42px;         /* Más alto que el normal (38px) pero menos que el gigante (50px) */
-        font-size: 1.1rem;    /* Números claros y legibles */
-        font-weight: 600;     /* Negrita */
-        min-width: 90px;      /* Ancho mínimo para que no se rompa */
+        height: 42px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        min-width: 90px;
         color: #566a7f;
     }
-    
     .input-salario:focus {
         border-color: #696cff;
-        box-shadow: 0 0 0 0.2rem rgba(105, 108, 255, 0.15); /* Sombra suave */
+        box-shadow: 0 0 0 0.2rem rgba(105, 108, 255, 0.15);
         color: #696cff;
     }
 </style>
