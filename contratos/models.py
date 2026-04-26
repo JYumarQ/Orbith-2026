@@ -46,6 +46,10 @@ class ContratoBase(Base):
         
     #?CHOFER
     profesional = models.BooleanField(default=False)
+
+    #?MISION
+    mision = models.BooleanField(default=False, verbose_name="Misión")
+    pais = models.CharField(max_length=100, null=True, blank=True, verbose_name="País")
     
     
     class Meta:
@@ -203,27 +207,39 @@ class CAlta(ContratoBase):
     
     
 
+    @property
+    def salario_total(self):
+        """ ALIAS MÁGICO: Evita que el frontend falle al pedir 'salario_total' """
+        return self.calcular_salario_escala()
+    
+    @property
+    def fecha_ultima_accion(self):
+        """Devuelve la fecha del último evento. (fecha_alta garantizada por validación)"""
+        from .models import TMovimiento
+        ultimo_mov = TMovimiento.objects.filter(
+            aspirante=self.aspirante, 
+            no_expediente=self.no_expediente
+        ).order_by('-fecha_efectiva').first()
+        
+        return ultimo_mov.fecha_efectiva if ultimo_mov else self.fecha_alta
+    
     def save(self, *args, **kwargs):
         try:
-            # CORRECCIÓN CRÍTICA:
-            # Como 'no_expediente' es PK manual, self.pk NUNCA es None.
-            # Usamos self._state.adding para saber si es una inserción real (Create) o edición (Update).
             es_nuevo = self._state.adding
             
-            # Asignar tridente por defecto
-            if not self.tridente:
+            # EL ESCUDO: Asignación y Limpieza real en base de datos
+            if self.tipo_salario == 'DIN' and not self.tridente:
+                from nomencladores.models import NTridente
                 self.tridente = NTridente.objects.filter(tipo='I').first()
+            elif self.tipo_salario == 'FIJ':
+                self.tridente = None # Obligamos a que el fijo sea NULL
             
-            # Ejecutar lógica SOLO si es una inserción nueva en la BD
             if es_nuevo:
                 self.actualizar_aspirante(self.aspirante.doc_identidad)
-                
-                # Solo sumamos plaza si el tipo de contrato está marcado como que ocupa plaza
-            if self.tipo and self.tipo.ocupa_plaza and self.cargo:
-                self.actualizar_plantilla(self.cargo.pk)
+                if self.tipo and self.tipo.ocupa_plaza and self.cargo:
+                    self.actualizar_plantilla(self.cargo.pk)
             
             super().save(*args, **kwargs)
-            
         except Exception as e:
             print(f"Error al guardar el contrato: {e}")
             raise
@@ -282,7 +298,12 @@ class CBaja(ContratoBase):
 
     cobro_sistema_pago = models.BooleanField(
         default=False, 
-        verbose_name="¿Cobró sistema de pago?"
+        verbose_name="Cobró sistema de pago"
+    )
+
+    completar_cargo = models.BooleanField(
+        default=True, 
+        verbose_name="Completar cargo"
     )
 
     actividad_realizada = models.CharField(
@@ -297,6 +318,11 @@ class CBaja(ContratoBase):
         blank=True, 
         verbose_name="Fecha de documento"
     )
+
+    observaciones = models.TextField(
+        blank=True, 
+        null=True, 
+        verbose_name="Observaciones de la Baja")
     
     # Asumo que 'observaciones' viene de 'Base', si no, agrégalo aquí también.
 
@@ -318,21 +344,43 @@ class TMovimiento(models.Model):
     fecha_movimiento = models.DateField(auto_now_add=True)
     fecha_efectiva = models.DateField()
     
-    # Guardamos strings para que la historia no cambie si se borran los cargos del nomenclador
     cargo_anterior = models.CharField(max_length=255)
     cargo_nuevo = models.CharField(max_length=255)
-    
     salario_anterior = models.DecimalField(max_digits=10, decimal_places=2)
     salario_nuevo = models.DecimalField(max_digits=10, decimal_places=2)
 
     unidad_anterior = models.CharField(max_length=255, null=True, blank=True)
     unidad_nueva = models.CharField(max_length=255, null=True, blank=True)
     
-    tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")
-    usuario = models.CharField(max_length=100, null=True, blank=True) # Opcional: quién lo hizo
+    # -------------------------------------------------------------
+    # NUEVOS CAMPOS AÑADIDOS PARA HISTORIAL INMUTABLE (FOTO EXACTA)
+    # -------------------------------------------------------------
+    departamento_anterior = models.CharField(max_length=255, null=True, blank=True)
+    departamento_nuevo = models.CharField(max_length=255, null=True, blank=True)
+    
+    grupo_escala_anterior = models.CharField(max_length=50, null=True, blank=True)
+    grupo_escala_nuevo = models.CharField(max_length=50, null=True, blank=True)
+    
+    cat_ocupacional_anterior = models.CharField(max_length=150, null=True, blank=True)
+    cat_ocupacional_nuevo = models.CharField(max_length=150, null=True, blank=True)
+    
+    tipo_salario_anterior = models.CharField(max_length=50, null=True, blank=True)
+    tipo_salario_nuevo = models.CharField(max_length=50, null=True, blank=True)
 
+    rol_anterior = models.CharField(max_length=150, null=True, blank=True)
+    rol_nuevo = models.CharField(max_length=150, null=True, blank=True)
+    
+    tridente_anterior = models.CharField(max_length=50, null=True, blank=True)
+    tridente_nuevo = models.CharField(max_length=50, null=True, blank=True)
+    # -------------------------------------------------------------
+
+    tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")
+    usuario = models.CharField(max_length=100, null=True, blank=True) 
     fecha_solicitud = models.DateField(null=True, blank=True, verbose_name="Fecha de Solicitud")
     observaciones = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_efectiva']
 
     class Meta:
         ordering = ['-fecha_efectiva']

@@ -41,4 +41,8 @@ urlpatterns = [
     path('ajax/datos_previos/', login_required(views.obtener_datos_previos), name='obtener_datos_previos'),
 
     path('ajax/cargar_roles/', login_required(views.cargar_roles), name='cargar_roles'),
+
+    path('ajax/historico/detalle/<int:pk>/', login_required(views.movimiento_detalle_readonly), name='movimiento_detalle_readonly'),
+    path('exportar/historico/pdf/<int:aspirante_id>/', login_required(views.ExportarHistoricoPDFView.as_view()), name='exportar_historico_pdf'),
+
 ]

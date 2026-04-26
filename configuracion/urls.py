@@ -9,4 +9,6 @@ urlpatterns = [
     path('parametros/', login_required(views.ParametrosGeneralesView.as_view()), name='parametros'),
     path('configuracion/actualizar-salario/', login_required(views.actualizar_salario), name="actualizar_salario"),
     
-    ]
+    # NUEVA RUTA FAMILIAS
+    path('familias-cargo/', login_required(views.FamiliasCargoView.as_view()), name='familias_cargo'),
+]

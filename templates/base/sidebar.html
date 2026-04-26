@@ -35,6 +35,13 @@
               <div data-i18n="Basic">Parámetros Generales</div>
             </a>
           </li>
+          
+          <li class="menu-item {% if request.resolver_match.url_name == 'familias_cargo' %} active {% endif %} ">
+            <a href="{% url 'familias_cargo' %}" class="menu-link">
+              <i class="menu-icon tf-icons bx bx-group"></i>
+              <div data-i18n="Basic">Familias de Cargos</div>
+            </a>
+          </li>
 
           <li class="menu-item {% if request.resolver_match.url_name == 'list_usuarios' %} active {% endif %} ">
             <a href="{% url 'list_usuarios' %}" class="menu-link">

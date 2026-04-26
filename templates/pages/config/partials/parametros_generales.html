@@ -1,140 +1,403 @@
-<!--PARAMETROS GENERALES-->
+<style>
+    /* Estilos replicados del diseño React/Tailwind */
+    .bg-slate-50 { background-color: #F8FAFC !important; }
+    
+    .modern-card-xl {
+        background-color: #ffffff;
+        border-radius: 2.5rem;
+        padding: 2rem;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .modern-card-xl:hover {
+        border-color: #c7d2fe;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Estilos para los Inputs Modernos con Icono */
+    .modern-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .modern-input-wrapper .icon-container {
+        position: absolute;
+        left: 1rem;
+        color: #94a3b8;
+        transition: color 0.2s ease;
+        z-index: 4;
+    }
+
+    .modern-input-wrapper:focus-within .icon-container {
+        color: #6366f1; /* Indigo-500 */
+    }
+
+    .modern-input-wrapper input, 
+    .modern-input-wrapper select {
+        width: 100%;
+        padding: 0.75rem 1rem 0.75rem 3rem; /* Espacio para el icono a la izquierda */
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+        color: #334155;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .modern-input-wrapper input:focus, 
+    .modern-input-wrapper select:focus {
+        outline: none;
+        border-color: #6366f1;
+        box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    }
+
+    .modern-label {
+        font-size: 0.65rem;
+        font-weight: 900;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-left: 0.25rem;
+        margin-bottom: 0.35rem;
+        display: block;
+    }
+
+    /* Títulos de las tarjetas */
+    .card-subtitle {
+        font-size: 0.875rem;
+        font-weight: 900;
+        color: #1e293b;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Logo Uploader */
+    .logo-uploader {
+        width: 10rem;
+        height: 10rem;
+        background-color: #f8fafc;
+        border: 2px dashed #e2e8f0;
+        border-radius: 2rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        position: relative;
+    }
+    
+    .logo-uploader:hover {
+        background-color: rgba(238, 242, 255, 0.5);
+        border-color: #c7d2fe;
+        transform: scale(1.05);
+    }
+    
+    .logo-uploader input[type="file"] {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    /* Banner info */
+    .info-banner {
+        background-color: #eef2ff;
+        border: 1px solid #e0e7ff;
+        border-radius: 1rem;
+        padding: 1rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .sector-toggle {
+        position: relative;
+        display: flex;
+        background-color: #f1f5f9; /* slate-100 */
+        border-radius: 1rem;
+        height: 46px; /* Altura igual a los inputs modernos */
+        padding: 4px;
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    /* Ocultamos el checkbox feo por defecto de Django */
+    .sector-toggle input[type="checkbox"] {
+        display: none; 
+    }
+    
+    .sector-option {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #94a3b8; /* slate-400 */
+        z-index: 2;
+        transition: color 0.3s ease;
+    }
+    
+    /* El fondo blanco que se desliza */
+    .sector-slider {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: calc(50% - 4px);
+        height: calc(100% - 8px);
+        background-color: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 1;
+    }
+    
+    /* Cuando es Presupuestado (True) */
+    .sector-toggle input[type="checkbox"]:checked ~ .sector-slider {
+        transform: translateX(100%);
+    }
+    .sector-toggle input[type="checkbox"]:checked ~ .opt-presup {
+        color: #6366f1; /* Indigo-500 */
+    }
+    
+    /* Cuando es Empresarial (False) */
+    .sector-toggle input[type="checkbox"]:not(:checked) ~ .opt-emp {
+        color: #6366f1; /* Indigo-500 */
+    }
+</style>
+
 <div class="tab-pane fade {% if active_tab == 'parametros' %}show active{% endif %}" id="navs-justified-parametros" role="tabpanel">
-  <div class="row mb-3">
-    <div class="col-12">
-      <div class="alert alert-primary d-flex align-items-center" role="alert">
-        <i class="fas fa-info-circle me-2"></i>
-        <div>Configure los parámetros generales de su empresa u organización.</div>
-      </div>
+    
+    <div class="max-w-5xl mx-auto pb-4">
+        
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4 mt-2">
+            <div>
+                <h3 class="fw-bold text-dark mb-1 d-flex align-items-center gap-2">Configuración de la Empresa</h3>
+                <p class="text-muted small fw-medium mb-0">Gestione los parámetros base y la identidad visual de su organización.</p>
+            </div>
+        </div>
+
+        <div class="info-banner mb-5 shadow-sm">
+            <div class="bg-white text-primary p-2 rounded-3 shadow-sm d-flex align-items-center justify-content-center">
+                <i class="fas fa-info-circle fs-5"></i>
+            </div>
+            <p class="small text-primary fw-medium mb-0 mt-1">
+                Estos parámetros afectan el cálculo de nómina y la generación de reportes oficiales. 
+                Asegúrese de que la información coincida con los registros legales de la entidad.
+            </p>
+        </div>
+
+        <form method="post" id="form-parametros" class="swal-confirm" data-confirm-text="¿Estás seguro de guardar los cambios?" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="active_tab" value="parametros">
+
+            <div class="row g-4">
+                
+                <div class="col-md-6">
+                    <div class="modern-card-xl h-100">
+                        <div class="card-subtitle">
+                            <i class="fas fa-building text-primary"></i> Identidad Corporativa
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="modern-label">{{ form.nombre_empresa.label }}</label>
+                            <div class="modern-input-wrapper">
+                                <div class="icon-container"><i class="fas fa-building"></i></div>
+                                {{ form.nombre_empresa }}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="modern-label">{{ form.org_superior.label }}</label>
+                            <div class="modern-input-wrapper">
+                                <div class="icon-container"><i class="fas fa-globe"></i></div>
+                                {{ form.org_superior }}
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-12 col-xl-6">
+                                <label class="modern-label">{{ form.rama.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-briefcase"></i></div>
+                                    {{ form.rama }}
+                                </div>
+                            </div>
+                            
+                            <div class="col-12 col-xl-6">
+                                <label class="modern-label">Sector</label>
+                                <label class="sector-toggle w-100">
+                                    {{ form.unidad_presup }} 
+                                    <div class="sector-slider"></div>
+                                    <div class="sector-option opt-emp">Empresarial</div>
+                                    <div class="sector-option opt-presup">Presupuestado</div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="modern-card-xl h-100">
+                        <div class="card-subtitle">
+                            <i class="fas fa-map-marker-alt text-danger"></i> Contacto y Ubicación
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="modern-label">{{ form.correo.label }}</label>
+                            <div class="modern-input-wrapper">
+                                <div class="icon-container"><i class="fas fa-envelope"></i></div>
+                                {{ form.correo }}
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="modern-label">{{ form.telefono.label }}</label>
+                            <div class="modern-input-wrapper">
+                                <div class="icon-container"><i class="fas fa-phone"></i></div>
+                                {{ form.telefono }}
+                            </div>
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="modern-label">{{ form.direccion.label }}</label>
+                            <div class="modern-input-wrapper">
+                                <div class="icon-container"><i class="fas fa-map-pin"></i></div>
+                                {{ form.direccion }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="modern-card-xl h-100">
+                        <div class="card-subtitle">
+                            <i class="fas fa-clock text-warning"></i> Operación y Cálculo
+                        </div>
+                        
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <label class="modern-label">{{ form.moneda_local.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-wallet"></i></div>
+                                    {{ form.moneda_local }}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="modern-label">{{ form.periodo.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-calendar-alt"></i></div>
+                                    {{ form.periodo }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <label class="modern-label">Fondo (Horas)</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-stopwatch"></i></div>
+                                    {{ form.fondo_tiempo_calc_tarif }}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="modern-label" title="Porcentaje Horas Extras">Extras (%) Ej: 0.25</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-percentage"></i></div>
+                                    {{ form.porcentaje_horas_extras }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="modern-card-xl h-100 d-flex flex-column align-items-center justify-content-center text-center">
+                        <div class="card-subtitle align-self-start w-100">
+                            <i class="fas fa-image text-success"></i> Logo Institucional
+                        </div>
+                        
+                        <div class="logo-uploader mt-2" onclick="document.getElementById('id_logo').click();" style="cursor: pointer; position: relative; overflow: hidden;">
+                            
+                            <img id="logo-preview" 
+                                 src="{% if form.instance.logo %}{{ form.instance.logo.url }}{% endif %}" 
+                                 style="width: 100%; height: 100%; object-fit: contain; position: absolute; top: 0; left: 0; {% if not form.instance.logo %}display: none;{% endif %}" 
+                                 alt="Vista previa del logo">
+
+                            <div id="logo-default-state" class="d-flex flex-column align-items-center {% if form.instance.logo %}d-none{% endif %}">
+                                <div class="bg-white p-3 rounded-4 shadow-sm text-muted mb-2">
+                                    <i class="fas fa-cloud-upload-alt fs-4"></i>
+                                </div>
+                                <p class="modern-label mb-0 text-dark">Subir Imagen</p>
+                                <p class="small text-muted mb-0" style="font-size: 0.65rem;">PNG, JPG hasta 2MB</p>
+                            </div>
+                            
+                            <div class="d-none">
+                                {{ form.logo }}
+                            </div>
+                        </div>
+                        
+                        <button type="button" class="btn btn-link text-primary mt-3 small fw-bold text-decoration-underline">
+                            Eliminar logo actual
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="mt-5 p-4 bg-dark rounded-pill d-flex flex-column flex-md-row align-items-center justify-content-between shadow-lg">
+                <div class="d-flex align-items-center gap-3 text-white mb-3 mb-md-0 ms-3">
+                    <div class="bg-white bg-opacity-10 p-2 rounded-3 text-info">
+                        <i class="fas fa-database fs-5"></i>
+                    </div>
+                    <div>
+                        <p class="fw-bold mb-0 small">Respaldo Automático</p>
+                        <p class="text-white-50 mb-0" style="font-size: 0.75rem;">Sus cambios afectan directamente el cálculo de nóminas futuras.</p>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-light text-dark fw-bold rounded-pill px-4 py-2 me-2">
+                    <i class="fas fa-save me-2 text-primary"></i> Confirmar y Guardar
+                </button>
+            </div>
+        </form>
+        <script>
+          document.addEventListener("DOMContentLoaded", function() {
+              const logoInput = document.getElementById('id_logo');
+              const logoPreview = document.getElementById('logo-preview');
+              const defaultState = document.getElementById('logo-default-state');
+              
+              if(logoInput) {
+                  logoInput.addEventListener('change', function(e) {
+                      // Verificamos si el usuario realmente seleccionó un archivo
+                      if (e.target.files && e.target.files[0]) {
+                          const reader = new FileReader();
+                          
+                          // Cuando el archivo termine de leerse...
+                          reader.onload = function(evento) {
+                              // Le pasamos la imagen al src del tag <img>
+                              logoPreview.src = evento.target.result;
+                              // Mostramos la imagen
+                              logoPreview.style.display = 'block';
+                              // Ocultamos la nube y los textos
+                              defaultState.classList.remove('d-flex');
+                              defaultState.classList.add('d-none');
+                          }
+                          
+                          // Ordenamos leer el archivo como una URL de datos (Base64)
+                          reader.readAsDataURL(e.target.files[0]);
+                      }
+                  });
+              }
+          });
+        </script>
     </div>
-  </div>
-
-  <form method="post"
-    class="swal-confirm"
-    data-confirm-text="¿Estás seguro de guardar los cambios?"
-    enctype="multipart/form-data"
-    >
-      {% csrf_token %}
-      <input type="hidden" name="active_tab" value="parametros">
-
-      <div class="row g-3">
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.nombre_empresa.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-building"></i></span>
-              {{form.nombre_empresa}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.org_superior.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-sitemap"></i></span>
-              {{form.org_superior}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.rama.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-code-branch"></i></span>
-              {{form.rama}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.unidad_presup.label_tag}}
-            <div class="d-flex align-items-center form-check form-switch mt-2">
-              {{form.unidad_presup}}
-              <span class="ms-2">Empresarial / Presupuestado</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.moneda_local.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-money-bill-wave"></i></span>
-              {{form.moneda_local}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.periodo.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-              {{form.periodo}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.fondo_tiempo_calc_tarif.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-clock"></i></span>
-              {{form.fondo_tiempo_calc_tarif}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.correo.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-              {{form.correo}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.telefono.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-phone"></i></span>
-              {{form.telefono}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.direccion.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-map-marker-alt"></i></span>
-              {{form.direccion}}
-            </div>
-          </div>
-        </div>
-
-        <div class="col-md-6">
-          <div class="form-group mb-3">
-            {{form.logo.label_tag}}
-            <div class="input-group">
-              <span class="input-group-text"><i class="fas fa-image"></i></span>
-              {{form.logo}}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="row mt-4">
-        <div class="col-12 d-flex justify-content-center">
-          <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save me-2"></i>Guardar
-          </button>
-        </div>
-      </div>
-  </form>
 </div>

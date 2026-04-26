@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="light-style layout-menu-fixed" dir="ltr" data-theme="theme-default">
+<html lang="es" class="light-style layout-menu-fixed" dir="ltr" data-theme="theme-default">
 <head>
     {% load static %}
     <meta charset="UTF-8">
@@ -15,110 +15,55 @@
     <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2-bootstrap-5-theme.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/select2-sneat-fix.css' %}"> <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
+    <link rel="stylesheet" href="{% static 'css/select2-sneat-fix.css' %}"> 
+    <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
     <link rel="stylesheet" href="{% static 'css/all.min.css' %}">
 
     {% block extra_head %}{% endblock %}
 
     <style>
-        .swal2-container {
-            z-index: 99999 !important;
-        }
+        /* — ORDEN DE CAPAS (Z-INDEX) — */
+        .swal2-container { z-index: 99999 !important; }
+        .modal-backdrop { z-index: 1040 !important; }
+        .modal { z-index: 1050 !important; }
+        .modal[style*="z-index: 3000"] { z-index: 3000 !important; }
+
+        /* — LÓGICA DE SIDEBAR (TU DISEÑO ORIGINAL) — */
         @media (min-width: 1200px) {
-            /* 1. Encoger la barra lateral */
-            html.menu-colapsado .layout-menu { 
-                width: 3rem !important; 
-            }
-            html.menu-colapsado .layout-page { 
-                padding-left: 3rem !important; 
-            }
-            
-            /* 2. REPARAR EL BOTÓN SOLAPADO */
-            html.menu-colapsado .app-brand {
-                justify-content: center !important;
-                padding: 1.5rem 0 !important;
-                display: flex !important;
-            }
-            html.menu-colapsado .layout-menu-toggle { 
-                position: static !important; /* Quita el flotado para que no se salga de la barra */
-                margin: 0 !important;
-                transform: rotate(180deg) !important; 
-                display: block !important;
-            }
-            
-            /* 3. ELIMINAR EL LOGO (Funcionó bien) */
-            html.menu-colapsado .app-brand-link { 
-                display: none !important; 
-            }
-
-            /* 4. RESCATAR Y CENTRAR LOS ICONOS */
-            html.menu-colapsado #layout-menu .menu-inner {
-                padding: 0 !important; /* Quita el espacio base de la lista */
-            }
-            html.menu-colapsado #layout-menu .menu-item {
-                width: 100% !important; 
-                margin: 0 !important; /* <-- ESTO MATA EL EMPUJE A LA DERECHA */
-            }
-            html.menu-colapsado #layout-menu .menu-link { 
-                justify-content: center !important; 
-                margin: 0 !important; /* <-- Quita los márgenes fantasma */
-                padding: 0.8rem 0 !important; /* Solo dejamos espacio arriba y abajo */
-                width: 100% !important;
-            }
-            html.menu-colapsado #layout-menu .menu-icon { 
-                margin: 0 !important; 
-                font-size: 1.5rem !important; 
-                display: block !important; 
-                visibility: visible !important;
-                opacity: 1 !important;
-            }
-            
-            /* 5. OCULTAR LOS TEXTOS */
-            html.menu-colapsado .menu-link > div, 
-            html.menu-colapsado .menu-header { 
-                display: none !important; 
-            }
-
-            /* 6. ELIMINAR LA HAMBURGUESA INTRUSA DE LA NAVBAR */
-            html.menu-colapsado .layout-page .layout-menu-toggle {
-                display: none !important;
-            }
+            html.menu-colapsado .layout-menu { width: 3rem !important; }
+            html.menu-colapsado .layout-page { padding-left: 3rem !important; }
+            html.menu-colapsado .app-brand { justify-content: center !important; padding: 1.5rem 0 !important; display: flex !important; }
+            html.menu-colapsado .layout-menu-toggle { position: static !important; margin: 0 !important; transform: rotate(180deg) !important; display: block !important; }
+            html.menu-colapsado .app-brand-link { display: none !important; }
+            html.menu-colapsado #layout-menu .menu-inner { padding: 0 !important; }
+            html.menu-colapsado #layout-menu .menu-item { width: 100% !important; margin: 0 !important; }
+            html.menu-colapsado #layout-menu .menu-link { justify-content: center !important; margin: 0 !important; padding: 0.8rem 0 !important; width: 100% !important; }
+            html.menu-colapsado #layout-menu .menu-icon { margin: 0 !important; font-size: 1.5rem !important; display: block !important; visibility: visible !important; opacity: 1 !important; }
+            html.menu-colapsado .menu-link > div, html.menu-colapsado .menu-header { display: none !important; }
+            html.menu-colapsado .layout-page .layout-menu-toggle { display: none !important; }
         }
         
-        /* Transiciones suaves */
         .layout-menu, .layout-page, .layout-menu-toggle {
             transition: all 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
         }
     </style>
 
     <script>
-        // 1. RECUPERAR MEMORIA: Esto se ejecuta al instante de abrir cualquier página
-        // Si el usuario lo dejó colapsado en la página anterior, lo encogemos antes de que se dibuje
+        /* Recuperar estado antes de pintar el DOM */
         if (localStorage.getItem('estadoSidebarOrbith') === 'colapsado' && window.innerWidth >= 1200) {
             document.documentElement.classList.add('menu-colapsado');
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Capturamos el botón específico de escritorio
             const btnColapsar = document.querySelector('.layout-menu-toggle.d-xl-block');
-            
             if(btnColapsar) {
                 btnColapsar.addEventListener('click', function(e) {
-                    // Solo actuar en pantallas grandes
                     if (window.innerWidth >= 1200) {
                         e.preventDefault();
-                        e.stopImmediatePropagation(); // Anulamos el bloqueo de Sneat
-                        
-                        // 2. ALTERNAR EL MENÚ
+                        e.stopImmediatePropagation();
                         const htmlTag = document.documentElement;
                         htmlTag.classList.toggle('menu-colapsado');
-                        
-                        // 3. GUARDAR EN MEMORIA: Anotamos la decisión del usuario
-                        if (htmlTag.classList.contains('menu-colapsado')) {
-                            localStorage.setItem('estadoSidebarOrbith', 'colapsado');
-                        } else {
-                            localStorage.setItem('estadoSidebarOrbith', 'expandido');
-                        }
+                        localStorage.setItem('estadoSidebarOrbith', htmlTag.classList.contains('menu-colapsado') ? 'colapsado' : 'expandido');
                     }
                 });
             }
@@ -126,191 +71,124 @@
     </script>
 </head>
 <body>
-    <!-- Layout wrapper -->
     <div class="layout-wrapper layout-content-navbar">
       <div class="layout-container">
-        <!-- Menu -->
-
         {% include 'base/sidebar.html' %}
+
         <div class="layout-page">
-           
             {% include 'base/navbar.html' %}
-            
             {% include 'base/scripts.html' %}
             
             {% block content %}{% endblock %}
 
             {% include 'base/footer.html' %}
-            
         </div>
       </div>
-
       <div class="layout-overlay layout-menu-toggle"></div>
-    
     </div>
-    
 
-    <!-- Toasts container -->
-<div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 1080;"></div>
+    <div id="djangoMessages" class="d-none">
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="msg" data-tags="{{ msg.tags|default_if_none:'info' }}">{{ msg|escape }}</div>
+        {% endfor %}
+      {% endif %}
+    </div>
 
+    <script src="{% static 'js/sweetalert2.js' %}"></script>
+    <script>
+      /* Sistema unificado: reemplaza el código largo de creación de Toasts */
+      document.addEventListener('DOMContentLoaded', function() {
+        const hidden = document.getElementById('djangoMessages');
+        if (!hidden || !window.Swal) return;
 
-<!-- MENSAJES DJANGO (ocultos para evitar problemas del linter dentro de <script>) -->
-<div id="djangoMessages" class="d-none">
-  {% if messages %}
-    {% for msg in messages %}
-      <div class="msg" data-tags="{{ msg.tags|default_if_none:'info' }}">{{ msg|escape }}</div>
-    {% endfor %}
-  {% endif %}
-</div>
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const toastContainer = document.getElementById('toastContainer');
-    const hidden = document.getElementById('djangoMessages');
-    if (!hidden) return;
-    hidden.querySelectorAll('.msg').forEach(function(node) {
-      const text = (node.textContent || '').trim();
-      const tags = node.dataset.tags || 'info';
+        hidden.querySelectorAll('.msg').forEach(function(node) {
+          const text = (node.textContent || '').trim();
+          const tags = node.dataset.tags || 'info';
+          
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: (tags.includes('error') || tags.includes('danger')) ? 'error' : 'success',
+            title: text,
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            background: '#fff',
+            color: '#697a8d',
+            customClass: { popup: 'border shadow-lg' }
+          });
+          node.remove();
+        });
+        hidden.innerHTML = '';
+      });
+    </script>
 
-      const toastEl = document.createElement('div');
-      toastEl.className = 'bs-toast toast fade';
-      if (tags) toastEl.classList.add('bg-' + tags);
-      toastEl.setAttribute('role', 'alert');
-      toastEl.setAttribute('aria-live', 'assertive');
-      toastEl.setAttribute('aria-atomic', 'true');
+    <script>
+        /* 1. Limpieza de fondos para evitar pantalla azul */
+        $(document).on('hidden.bs.modal', '.modal', function () {
+            if ($('.modal.show').length === 0) {
+                $('.modal-backdrop').remove();
+                $('body').removeClass('modal-open').css('overflow', '');
+            }
+        });
 
-      const now = new Date();
-      const hh = String(now.getHours()).padStart(2,'0');
-      const mm = String(now.getMinutes()).padStart(2,'0');
+        /* 2. Confirmación universal de formularios */
+        document.addEventListener('submit', function (e) {
+            const form = e.target;
+            if (!form.matches('form.swal-confirm')) return;
+            e.preventDefault();
 
-      toastEl.innerHTML = `
-        <div class="toast-header">
-          <i class="fas fa-bell me-2"></i>
-          <div class="me-auto fw-semibold">Notificación</div>
-          <small>${hh}:${mm}</small>
-          <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-        </div>
-        <div class="toast-body"></div>
-      `;
-      toastEl.querySelector('.toast-body').textContent = text;
-      toastContainer.appendChild(toastEl);
+            Swal.fire({
+                title: '¿Estás seguro?',
+                text: form.dataset.confirmText || '¿Deseas continuar?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Confirmar',
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    confirmButton: 'btn btn-primary px-4 me-2',
+                    cancelButton: 'btn btn-secondary px-4'
+                },
+                buttonsStyling: false
+            }).then(result => {
+                if (result.isConfirmed) form.submit();
+            });
+        });
 
-      const bsToast = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 });
-      bsToast.show();
-    });
-  });
-</script>
+        /* 3. Confirmación universal de eliminación */
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a.btn-eliminar');
+            if (!link || link.hasAttribute('hx-delete')) return;
 
+            e.preventDefault();
+            Swal.fire({
+                title: '¿Confirmar eliminación?',
+                text: "Esta acción no se puede deshacer.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar',
+                customClass: {
+                    confirmButton: 'btn btn-danger px-4 me-2',
+                    cancelButton: 'btn btn-secondary px-4'
+                },
+                buttonsStyling: false
+            }).then(result => {
+                if (result.isConfirmed) window.location.href = link.href;
+            });
+        });
+    </script>
 
+    <script src="{% static 'js/ui-toasts.js' %}"></script>
+    <script src="{% static 'vendor/js/htmx.min.js' %}"></script>
+    <script>
+      document.body.addEventListener('htmx:configRequest', function (e) {
+        var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+        if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
+      });
+    </script>
 
-
-
-<!-- sweetalert2 -->
-<script src="{% static 'js/sweetalert2.js' %}"></script>
-<script>
-  document.addEventListener('submit', function (e) {
-    const form = e.target;
-    if (!form.matches('form.swal-confirm')) return;
-    e.preventDefault();
-
-    Swal.fire({
-      title: '¿Estás seguro?',
-      text: form.dataset.confirmText || '¿Deseas continuar?',
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Guardar',
-      cancelButtonText: 'Cancelar',
-      reverseButtons: true,
-      width: '28rem',
-      background: '#fff',
-      color: '#697a8d',
-      iconColor: '#696cff',
-      buttonsStyling: false,
-      customClass: {
-        popup: 'border rounded-3 shadow-lg p-3',
-        title: 'fs-4 text-dark fw-semibold',
-        htmlContainer: 'text-muted fs-6',
-        actions: 'd-flex justify-content-center gap-3 mt-3',
-        confirmButton: 'btn btn-primary px-4',
-        cancelButton: 'btn btn-secondary px-4'
-      },
-      didOpen: () => {
-        const container = document.querySelector('.swal2-container');
-        const backdrop = document.querySelector('.swal2-backdrop');
-        if (container) container.style.zIndex = 2000;
-        if (backdrop) backdrop.style.zIndex = 1500;
-      }
-    }).then(result => {
-      if (result.isConfirmed) {
-        form.submit();
-      }
-    });
-  });
-</script>
-
-<!--ELIMINAR-->
-<script>
-  document.addEventListener('click', function(e) {
-    const eliminarLink = e.target.closest('a.btn-eliminar');
-    if (!eliminarLink) return;
-
-    // Evitar doble confirmación si el enlace usa HTMX
-    if (
-      eliminarLink.hasAttribute('hx-delete') ||
-      eliminarLink.hasAttribute('hx-post')   ||
-      eliminarLink.hasAttribute('hx-put')    ||
-      eliminarLink.hasAttribute('hx-get')
-    ){
-      return;
-    }
-
-    e.preventDefault();
-    const url = eliminarLink.href;
-
-    Swal.fire({
-      title: '¿Estás seguro?',
-      text: "No podrás revertir esta acción.",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: 'Sí, eliminar',
-      cancelButtonText: 'Cancelar',
-      reverseButtons: true,
-      width: '28rem',
-      background: '#fff',
-      color: '#697a8d',
-      iconColor: '#dc3545',
-      buttonsStyling: false,
-      customClass: {
-        popup: 'border rounded-3 shadow-lg p-3',
-        title: 'fs-4 text-dark fw-semibold',
-        htmlContainer: 'text-muted fs-6',
-        actions: 'd-flex justify-content-center gap-3 mt-3',
-        confirmButton: 'btn btn-danger px-4',
-        cancelButton: 'btn btn-secondary px-4'
-      }
-    }).then((result) => {
-      if (result.isConfirmed) {
-        window.location.href = url;
-      }
-    });
-  });
-</script>
-
-
-
-<!-- sweetalert2 -->
-
-<!-- Incluye tu ui-toasts.js después de cargar Bootstrap JS -->
-<script src="{% static 'js/ui-toasts.js' %}"></script>
-
-<script src="{% static 'vendor/js/htmx.min.js' %}"></script>
-<script>
-  document.body.addEventListener('htmx:configRequest', function (e) {
-    var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
-    if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
-  });
-</script>
-
-{% block extra_scripts %}{% endblock %}
-
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

@@ -14,6 +14,7 @@ class Configuracion(Base):
     moneda_local = models.CharField(max_length=10, default='CUP')
     periodo = models.PositiveIntegerField(default=15, validators=[MinValueValidator(7)], null=False, blank=False)
     fondo_tiempo_calc_tarif = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('190.6'), null=False, blank=False)
+    porcentaje_horas_extras = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.25'), null=False, blank=False, verbose_name="Porcentaje Horas Extras")
     correo = models.EmailField(null=True, blank=True)
     telefono = models.CharField(max_length=20, blank=True, null=True)
     direccion = models.TextField(max_length=200, blank=True, null=True)

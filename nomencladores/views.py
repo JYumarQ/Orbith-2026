@@ -15,7 +15,7 @@ from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Count, ProtectedError
 from django.core.paginator import Paginator
-from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa
+from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa, NTipoFamilia
 
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
@@ -925,14 +925,17 @@ def cargo_delete(request, pk):
 @require_POST
 @login_required
 def api_familia_create(request):
-    """Crea una nueva familia"""
+    """Crea una nueva familia vinculada a un Tipo de Familia"""
     try:
         data = json.loads(request.body)
         nombre = data.get('nombre', '').strip()
-        if not nombre:
-            return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+        tipo_id = data.get('tipo_familia_id')
         
-        familia = NFamiliaCargo.objects.create(nombre=nombre)
+        if not nombre or not tipo_id:
+            return JsonResponse({'error': 'Nombre y Tipo son obligatorios'}, status=400)
+        
+        tipo_familia = get_object_or_404(NTipoFamilia, pk=tipo_id)
+        familia = NFamiliaCargo.objects.create(nombre=nombre, tipo_familia=tipo_familia)
         return JsonResponse({'id': familia.id, 'nombre': familia.nombre})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -959,10 +962,9 @@ def api_familia_update(request, pk):
 @require_POST
 @login_required
 def api_familia_delete(request, pk):
-    """Elimina una familia y libera los cargos (SET_NULL automático)"""
+    """Elimina una familia (las relaciones M2M se eliminan automáticamente)"""
     try:
         familia = get_object_or_404(NFamiliaCargo, pk=pk)
-        # Eliminamos la restricción. Al borrar, los cargos pasan a familia=None automáticamente.
         familia.delete()
         return JsonResponse({'success': True})
     except Exception as e:
@@ -973,24 +975,46 @@ def api_familia_delete(request, pk):
 @require_POST
 @login_required
 def api_cargo_move(request):
-    """Mueve un cargo a una familia (o lo saca si familia_id es null)"""
+    """Mueve un cargo entre familias respetando el contexto del Tipo de Familia"""
     try:
         data = json.loads(request.body)
         cargo_id = data.get('cargo_id')
         familia_id = data.get('familia_id') # Puede ser None (para desasignar)
+        tipo_id = data.get('tipo_familia_id')
 
         cargo = get_object_or_404(NCargo, pk=cargo_id)
+        tipo = get_object_or_404(NTipoFamilia, pk=tipo_id)
         
+        # 1. Quitar el cargo de cualquier familia que sea del MISMO TIPO actual
+        familias_del_tipo = cargo.familias.filter(tipo_familia=tipo)
+        cargo.familias.remove(*familias_del_tipo)
+        
+        # 2. Si se movió a una familia (no a la lista de pendientes), añadir la nueva
         if familia_id:
-            familia = get_object_or_404(NFamiliaCargo, pk=familia_id)
-            cargo.familia = familia
-        else:
-            cargo.familia = None
+            nueva_familia = get_object_or_404(NFamiliaCargo, pk=familia_id)
+            cargo.familias.add(nueva_familia)
             
-        cargo.save()
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
+    
+@login_required
+def api_get_contexto_familias(request):
+    """Devuelve el fragmento HTML de familias y cargos pendientes según el Tipo seleccionado"""
+    tipo_id = request.GET.get('tipo_id')
+    if not tipo_id:
+        return HttpResponse('<div class="text-center p-5">Seleccione un Tipo de Familia</div>')
+    
+    tipo = get_object_or_404(NTipoFamilia, pk=tipo_id)
+    familias = NFamiliaCargo.objects.filter(tipo_familia=tipo).prefetch_related('cargos').order_by('-id')
+    
+    # Cargos que NO están en ninguna familia DE ESTE TIPO
+    cargos_pendientes = NCargo.objects.exclude(familias__tipo_famil=tipo).order_by('descripcion')
+    
+    return render(request, 'pages/config/partials/familias_content.html', {
+        'familias': familias,
+        'cargos_sin_familia': cargos_pendientes,
+    })
     
 
 # ---------- CRUD NNivelPreparacion ----------
@@ -1250,3 +1274,41 @@ def eliminar_tipo_unidad(request, pk):
             'error': 'No se puede eliminar porque hay Unidades Organizativas reales que están usando este Tipo.'
         })
         
+
+# ---------- CRUD NTipoFamilia (Para el Modal) ----------
+@csrf_exempt
+@require_POST
+@login_required
+def tipo_familia_create(request):
+    try:
+        data = json.loads(request.body)
+        nombre = data.get('nombre', '').strip()
+        tf_id = data.get('id') # Capturamos el ID si existe
+        
+        if not nombre:
+            return JsonResponse({'error': 'El nombre es obligatorio'}, status=400)
+            
+        if tf_id:
+            # Si hay ID, estamos EDITANDO
+            obj = get_object_or_404(NTipoFamilia, pk=tf_id)
+            obj.nombre = nombre.title()
+            obj.save()
+        else:
+            # Si NO hay ID, estamos CREANDO
+            obj = NTipoFamilia.objects.create(nombre=nombre.title())
+            
+        return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@login_required
+def tipo_familia_delete(request, pk):
+    try:
+        NTipoFamilia.objects.get(pk=pk).delete()
+        return JsonResponse({'success': True})
+    except NTipoFamilia.DoesNotExist:
+        return JsonResponse({'error': 'No encontrado'}, status=404)
+    except RestrictedError:
+        return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)

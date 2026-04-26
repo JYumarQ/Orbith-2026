@@ -1,5 +1,12 @@
+{% extends 'base/base.html' %}
 {% load static %}
 
+{% block title %}Familias de Cargos{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-xxl flex-grow-1 container-p-y">
+        <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Configuración /</span> Familias de Cargos</h4>
 <style>
     .familia-column {
         height: calc(100vh - 220px);
@@ -30,19 +37,34 @@
     }
 </style>
 
-<div class="tab-pane fade {% if active_tab == 'familias' %}show active{% endif %}" id="navs-justified-familias" role="tabpanel">
+
+
+
     
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 p-3 bg-white rounded shadow-sm border gap-3">
-        <div class="d-flex align-items-center gap-3">
-            <div class="p-2 bg-label-primary rounded">
-                <i class="fas fa-layer-group fs-4"></i>
+        
+        <div class="d-flex flex-column gap-2">
+            <div class="d-flex align-items-center gap-3">
+                <div class="p-2 bg-label-primary rounded">
+                    <i class="fas fa-layer-group fs-4"></i>
+                </div>
+                <div class="d-none d-md-block">
+                    <h5 class="mb-0 fw-bold text-primary">Familias de Cargos</h5>
+                </div>
             </div>
-            <div class="d-none d-md-block">
-                <h5 class="mb-0 fw-bold text-primary">Familias de Cargos</h5>
+            <div class="input-group input-group-sm shadow-sm">
+                <span class="input-group-text bg-primary text-white border-0"><i class="bx bx-filter-alt"></i></span>
+                <select id="select-tipo-familia" class="form-select form-select-sm border-primary" onchange="recargarContextoFamilias()" style="min-width: 180px;">
+                    {% for tipo in tipos_familia %}
+                        <option value="{{ tipo.id }}" {% if tipo == tipo_actual %}selected{% endif %}>{{ tipo.nombre }}</option>
+                    {% empty %}
+                        <option value="">No hay tipos creados</option>
+                    {% endfor %}
+                </select>
             </div>
         </div>
 
-        <div class="flex-grow-1 mx-md-4" style="max-width: 600px; min-width: 300px;">
+        <div class="flex-grow-1 mx-md-4" style="max-width: 500px; min-width: 250px;">
             <div class="input-group">
                 <span class="input-group-text bg-light border-end-0 text-primary">
                     <i class="fas fa-plus-circle"></i>
@@ -82,108 +104,132 @@
         </div>
     </div>
 
-    <div class="row g-4 h-100">
-        
-        <div class="col-md-4 col-lg-3">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-header bg-white border-bottom p-3 sticky-top zindex-1">
-                    <h6 class="text-muted fw-bold text-uppercase small mb-2">
-                        <i class="fas fa-box-open me-1"></i> Sin Clasificar
-                    </h6>
-                    <div class="input-group input-group-merge">
-                        <span class="input-group-text border-0 ps-2 bg-light"><i class="fas fa-search small"></i></span>
-                        <input type="text" id="search-cargos" class="form-control border-0 bg-light shadow-none" placeholder="Buscar cargo...">
-                    </div>
-                </div>
-                
-                <div class="card-body p-2 bg-light familia-column" id="unassigned-list">
-                    {% for cargo in cargos_sin_familia %}
-                        <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
-                            <div class="card-body p-2 d-flex justify-content-between align-items-center">
-                                <span class="small fw-semibold text-dark text-truncate cargo-desc" 
-                                      title="{{ cargo.descripcion }}" style="max-width: 75%;">
-                                    {{ cargo.descripcion }}
-                                </span>
-                                <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu" 
-                                        onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
-                                    <i class="fas fa-share-square text-primary"></i>
-                                </button>
-                                <div class="div-x d-none">
-                                    <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
-                                       onclick="removeFromFamily(this, {{ cargo.id }})" 
-                                       title="Devolver a lista"></i>
-                                </div>
-                            </div>
-                        </div>
-                    {% empty %}
-                        <div class="text-center mt-5 opacity-50 empty-msg">
-                            <i class="fas fa-check-circle fs-1 mb-2"></i>
-                            <p class="small">¡Todo clasificado!</p>
-                        </div>
-                    {% endfor %}
+<div class="row g-4 h-100">
+    
+    <div class="col-md-4 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom p-3 sticky-top zindex-1">
+                <h6 class="text-muted fw-bold text-uppercase small mb-2">
+                    <i class="fas fa-box-open me-1"></i> Sin Clasificar
+                </h6>
+                <div class="input-group input-group-merge">
+                    <span class="input-group-text border-0 ps-2 bg-light"><i class="fas fa-search small"></i></span>
+                    <input type="text" id="search-cargos" class="form-control border-0 bg-light shadow-none" placeholder="Buscar cargo...">
                 </div>
             </div>
-        </div>
-
-        <div class="col-md-8 col-lg-9">
-            <div class="row g-3" id="families-container">
-                {% for familia in familias %}
-                    <div class="col-md-6 col-xl-4 family-wrapper" id="family-wrapper-{{ familia.id }}">
-                        <div class="card h-100 shadow-sm border">
-                            <div class="card-header family-header p-3 d-flex justify-content-between align-items-center">
-                                <div class="d-flex align-items-center gap-2 text-white" style="flex: 1; min-width: 0;">
-                                    <i class="fas fa-folder"></i>
-                                    <span class="fw-bold text-truncate family-name" style="max-width: 85%;" title="{{ familia.nombre }}">
-                                        {{ familia.nombre }}
-                                    </span>
-                                    <span class="badge bg-white text-primary rounded-pill small count-badge">{{ familia.cargos.count }}</span>
-                                </div>
-                                
-                                <div class="d-flex gap-1">
-                                    <button class="btn btn-sm btn-icon btn-action-family" 
-                                            onclick="editFamily({{ familia.id }}, '{{ familia.nombre|escapejs }}')" 
-                                            title="Editar Nombre">
-                                        <i class="fas fa-pencil-alt"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-icon btn-action-family btn-delete-family" 
-                                            onclick="deleteFamily({{ familia.id }})" 
-                                            title="Eliminar Familia">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <div class="card-body p-2 bg-light family-droppable" 
-                                 data-family-id="{{ familia.id }}" 
-                                 style="min-height: 150px; max-height: 300px; overflow-y: auto;">
-                                
-                                {% for cargo in familia.cargos.all %}
-                                    <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
-                                        <div class="card-body p-2 d-flex justify-content-between align-items-center">
-                                            <span class="small fw-semibold text-dark text-truncate cargo-desc" 
-                                                  title="{{ cargo.descripcion }}" style="max-width: 75%;">
-                                                {{ cargo.descripcion }}
-                                            </span>
-                                            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu d-none" 
-                                                    onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
-                                                <i class="fas fa-share-square text-primary"></i>
-                                            </button>
-                                            <div class="div-x">
-                                                <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
-                                                   onclick="removeFromFamily(this, {{ cargo.id }})" 
-                                                   title="Devolver a lista"></i>
-                                            </div>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                                
+            
+            <div class="card-body p-2 bg-light familia-column" id="unassigned-list">
+                {% for cargo in cargos_sin_familia %}
+                    <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
+                        <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                            <span class="small fw-semibold text-dark text-truncate cargo-desc" 
+                                    title="{{ cargo.descripcion }}" style="max-width: 75%;">
+                                {{ cargo.descripcion }}
+                            </span>
+                            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu" 
+                                    onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
+                                <i class="fas fa-share-square text-primary"></i>
+                            </button>
+                            <div class="div-x d-none">
+                                <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
+                                    onclick="removeFromFamily(this, {{ cargo.id }})" 
+                                    title="Devolver a lista"></i>
                             </div>
                         </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center mt-5 opacity-50 empty-msg">
+                        <i class="fas fa-check-circle fs-1 mb-2"></i>
+                        <p class="small">¡Todo clasificado!</p>
                     </div>
                 {% endfor %}
             </div>
         </div>
     </div>
+
+    <div class="col-md-8 col-lg-9">
+        <div class="row g-3" id="families-container">
+            {% for familia in familias %}
+                <div class="col-md-6 col-xl-4 family-wrapper" id="family-wrapper-{{ familia.id }}">
+                    <div class="card h-100 shadow-sm border">
+                        <div class="card-header family-header p-3 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center gap-2 text-white" style="flex: 1; min-width: 0;">
+                                <i class="fas fa-folder"></i>
+                                <span class="fw-bold text-truncate family-name" style="max-width: 85%;" title="{{ familia.nombre }}">
+                                    {{ familia.nombre }}
+                                </span>
+                                <span class="badge bg-white text-primary rounded-pill small count-badge">{{ familia.cargos.count }}</span>
+                            </div>
+                            
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-icon btn-action-family" 
+                                        onclick="editFamily({{ familia.id }}, '{{ familia.nombre|escapejs }}')" 
+                                        title="Editar Nombre">
+                                    <i class="fas fa-pencil-alt"></i>
+                                </button>
+                                <button class="btn btn-sm btn-icon btn-action-family btn-delete-family" 
+                                        onclick="deleteFamily({{ familia.id }})" 
+                                        title="Eliminar Familia">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body p-2 bg-light family-droppable" 
+                                data-family-id="{{ familia.id }}" 
+                                style="min-height: 150px; max-height: 300px; overflow-y: auto;">
+                            
+                            {% for cargo in familia.cargos.all %}
+                                <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
+                                    <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                                        <span class="small fw-semibold text-dark text-truncate cargo-desc" 
+                                                title="{{ cargo.descripcion }}" style="max-width: 75%;">
+                                            {{ cargo.descripcion }}
+                                        </span>
+                                        <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu d-none" 
+                                                onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
+                                            <i class="fas fa-share-square text-primary"></i>
+                                        </button>
+                                        <div class="div-x">
+                                            <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
+                                                onclick="removeFromFamily(this, {{ cargo.id }})" 
+                                                title="Devolver a lista"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal_list_tipos_familia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Gestión de Tipos de Familia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group mb-3">
+          <input type="text" id="input_nuevo_tipo_familia" class="form-control" placeholder="Nombre del nuevo tipo (Ej: Especialidades)">
+          <button class="btn btn-primary" type="button" onclick="crearTipoFamilia()">Agregar</button>
+        </div>
+        <ul class="list-group" id="lista_tipos_familia">
+          {% for tipo in tipos_familia %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ tipo.nombre }}
+            <button class="btn btn-sm btn-danger" onclick="eliminarTipoFamilia({{ tipo.id }})"><i class="bx bx-trash"></i></button>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -278,10 +324,16 @@
     };
 
     function moverCargoAPI(cargoId, familiaId) {
+        const tipoId = document.getElementById('select-tipo-familia').value; // <-- Obtenemos el Tipo de Familia actual
+        
         fetch("{% url 'api_cargo_move' %}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-            body: JSON.stringify({ cargo_id: cargoId, familia_id: familiaId })
+            body: JSON.stringify({ 
+                cargo_id: cargoId, 
+                familia_id: familiaId,
+                tipo_familia_id: tipoId // <-- Lo enviamos al servidor
+            })
         }).catch(err => console.error(err));
     }
 
@@ -333,10 +385,15 @@
         const nombre = inputCreate.value.trim();
         if(!nombre) return;
 
+        const tipoId = document.getElementById('select-tipo-familia').value;
+
         fetch("{% url 'api_familia_create' %}", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-            body: JSON.stringify({ nombre: nombre })
+            body: JSON.stringify({ 
+                nombre: nombre,
+                tipo_familia_id: tipoId 
+            })
         })
         .then(r => r.json())
         .then(data => {
@@ -472,4 +529,74 @@
             if (emptyMsg) emptyMsg.remove();
         }
     }
+
+    // --- NUEVAS FUNCIONES PARA TIPOS DE FAMILIA ---
+
+    // 1. Recargar la página con el nuevo contexto
+    function recargarContextoFamilias() {
+        const tipoId = document.getElementById('select-tipo-familia').value;
+        if (tipoId) {
+            // Redirigimos a la misma página pero pasándole el ID del tipo seleccionado
+            // Asumiendo que la vista principal puede procesar este GET parameter (o simplemente usando HTMX si lo prefieres)
+            window.location.href = "?tab=familias&tipo_id=" + tipoId; 
+        }
+    }
+
+    // 2. Crear un nuevo Tipo de Familia desde el Modal
+    function crearTipoFamilia() {
+        const nombre = document.getElementById('input_nuevo_tipo_familia').value.trim();
+        if (!nombre) {
+            Swal.fire('Error', 'El nombre no puede estar vacío', 'warning');
+            return;
+        }
+
+        fetch('/nomencladores/api/tipos-familia/create/', { // <-- Necesitamos crear esta URL en urls.py
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}'
+            },
+            body: JSON.stringify({ nombre: nombre })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.id) {
+                Swal.fire('¡Éxito!', 'Tipo de Familia creado', 'success').then(() => {
+                    window.location.reload();
+                });
+            } else {
+                Swal.fire('Error', data.error, 'error');
+            }
+        });
+    }
+
+    // 3. Eliminar un Tipo de Familia
+    function eliminarTipoFamilia(id) {
+        Swal.fire({
+            title: '¿Estás seguro?',
+            text: "Se eliminará este tipo y se desvincularán las familias que tenga.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                fetch(`/nomencladores/api/tipos-familia/${id}/delete/`, { // <-- URL en urls.py
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        Swal.fire('Error', data.error, 'error');
+                    }
+                });
+            }
+        });
+    }
 </script>
+
+</div> </div> {% endblock %}

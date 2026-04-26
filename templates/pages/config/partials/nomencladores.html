@@ -84,7 +84,7 @@
 
           <div class="row g-4 mb-4">
             
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="card shadow-none border h-100">
                 <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
                   <div class="d-flex align-items-center gap-3">
@@ -117,7 +117,7 @@
               </div>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="card shadow-none border h-100">
                 <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
                   <div class="d-flex align-items-center gap-3">
@@ -150,7 +150,7 @@
               </div>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="card shadow-none border h-100 d-flex flex-column">
                 <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
                   <div class="d-flex align-items-center gap-3">
@@ -189,6 +189,40 @@
                 </div>
               </div>
             </div>
+
+            <div class="col-md-3">
+              <div class="card shadow-none border h-100 d-flex flex-column">
+                <div class="card-header border-bottom bg-transparent d-flex justify-content-between align-items-center py-3">
+                  <div class="d-flex align-items-center gap-3">
+                    <div class="avatar avatar-sm bg-label-secondary rounded d-flex align-items-center justify-content-center">
+                      <i class="bx bx-collection"></i>
+                    </div>
+                    <h6 class="mb-0 fw-bold">Tipos Familia</h6>
+                  </div>
+                  <button class="btn btn-sm btn-primary btn-icon shadow-sm rounded" data-bs-toggle="modal" data-bs-target="#modalFormTipoFamilia">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+                <div class="card-body p-0 overflow-auto">
+                  <table class="table table-hover table-borderless align-middle m-0" id="tipos-familia-table">
+                    <tbody id="tipos-familia-tbody">
+                      {% for tf in tipos_familia %}
+                      <tr data-id="{{ tf.id }}" class="border-bottom">
+                        <td class="tipo-cell fw-medium text-heading ps-3">{{ tf.nombre }}</td>
+                        <td class="text-end pe-3" style="width: 80px;">
+                          <div class="d-flex justify-content-end gap-1">
+                            <button class="btn btn-xs btn-icon btn-text-secondary edit-btn" onclick="editarTipoFamilia({{ tf.id }}, '{{ tf.nombre|escapejs }}')"><i class="fas fa-pencil-alt text-muted"></i></button>
+                            <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn" onclick="eliminarTipoFamilia({{ tf.id }})"><i class="fas fa-trash text-muted"></i></button>
+                          </div>
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <div class="card shadow-none border" id="card-cargos">
@@ -872,6 +906,28 @@
         <div id="modal-content-grupo" class="modal-content">
             </div>
     </div>
+</div>
+
+<div class="modal fade" id="modalFormTipoFamilia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-lighter border-bottom p-4">
+        <h5 class="modal-title fw-bold"><i class="bx bx-collection text-primary me-2"></i>Tipo de Familia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <input type="hidden" id="tf_id">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nombre del Tipo</label>
+          <input type="text" id="tf_nombre" class="form-control" placeholder="Ej: Especialidades, Técnicos...">
+        </div>
+      </div>
+      <div class="modal-footer bg-lighter border-top p-3">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary shadow-sm" onclick="guardarTipoFamilia()">Guardar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -3113,6 +3169,74 @@
                       Swal.fire('No se puede eliminar', data.error, 'error');
                   }
               });
+          }
+      });
+  }
+
+  
+  function editarTipoFamilia(id, nombre) {
+      document.getElementById('tf_id').value = id;
+      document.getElementById('tf_nombre').value = nombre;
+      var myModal = new bootstrap.Modal(document.getElementById('modalFormTipoFamilia'));
+      myModal.show();
+  }
+
+  // Limpiar el modal cuando se cierra (Para que al dar en "+" no edite por error el último)
+  document.getElementById('modalFormTipoFamilia').addEventListener('hidden.bs.modal', function () {
+      document.getElementById('tf_id').value = '';
+      document.getElementById('tf_nombre').value = '';
+  });
+
+  function guardarTipoFamilia() {
+      const nombre = document.getElementById('tf_nombre').value.trim();
+      const id = document.getElementById('tf_id').value;
+      
+      if (!nombre) {
+          Swal.fire('Error', 'El nombre es obligatorio', 'warning');
+          return;
+      }
+
+      fetch('/nomencladores/api/tipos-familia/create/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+          body: JSON.stringify({ nombre: nombre, id: id })
+      })
+      .then(res => res.json())
+      .then(data => {
+          if (data.id) {
+              // Recargar forzando la vista en la pestaña Nomencladores
+              window.location.href = "?tab=nomencladores";
+          } else {
+              Swal.fire('Error', data.error, 'error');
+          }
+      });
+  }
+
+  // Función para eliminar
+  function eliminarTipoFamilia(id) {
+      Swal.fire({
+          title: '¿Estás seguro?',
+          text: "Se eliminará este tipo y se desvincularán las familias que tenga.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#8592a3',
+          confirmButtonText: 'Sí, eliminar'
+      }).then((result) => {
+          if (result.isConfirmed) {
+              fetch(`/nomencladores/api/tipos-familia/${id}/delete/`, {
+                  method: 'DELETE',
+                  headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+              })
+              .then(res => res.json())
+              .then(data => {
+                  if (data.success) {
+                      // Recargar forzando la vista en la pestaña Nomencladores
+                      window.location.href = "?tab=nomencladores";
+                  } else {
+                      Swal.fire('Error', data.error || 'Error al eliminar', 'error');
+                  }
+              }).catch(err => console.error('Error:', err));
           }
       });
   }

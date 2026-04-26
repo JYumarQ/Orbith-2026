@@ -6,11 +6,10 @@
         </div>
         <div class="modal-body">
             <form hx-post="{% url 'updt_aspir' object.pk %}" 
-                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                  hx-target="closest .modal-content"
-                  hx-swap="innerHTML"
-                  hx-confirm="¿Estás seguro de guardar los cambios del aspirante?"
-                  id="formEditarAspirante">
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                hx-target="closest .modal-content"
+                hx-swap="innerHTML"
+                id="formEditarAspirante">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
                 <div class="row g-3">
@@ -119,13 +118,17 @@
             if(!nivel) return;
             var valorNivel = nivel.value;
 
-            
-
             // Habilitar Grado solo en NS
             if (valorNivel === 'NS') {
                 grado.removeAttribute('disabled');
             } else {
                 grado.setAttribute('disabled', 'disabled');
+                grado.value = ''; // <--- ESTA ES LA LÍNEA MÁGICA QUE LO VACÍA
+                
+                // Si usas Select2 en este campo en el futuro, esto asegura que también se limpie visualmente:
+                if ($(grado).hasClass('select2-hidden-accessible')) {
+                    $(grado).trigger('change.select2');
+                }
             }
         }
         
@@ -288,6 +291,9 @@
 
         // --- 3. INTERCEPTAR ENVÍO ---
         formulario.addEventListener('submit', function(e) {
+            e.preventDefault(); 
+            e.stopImmediatePropagation(); 
+
             // Verificar si queda algo mal o vacío
             var ciError = ciInput && ciInput.value.length !== 11;
             var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
@@ -296,9 +302,6 @@
             var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
 
             if (ciError || hayVacios || hayRojos) {
-                e.preventDefault(); 
-                e.stopImmediatePropagation(); 
-
                 Swal.fire({
                     title: 'Atención',
                     text: 'Revise los campos resaltados.',
@@ -306,7 +309,28 @@
                     confirmButtonText: 'OK',
                     customClass: { confirmButton: 'btn btn-primary' }
                 });
+                return; // Si hay errores, frenamos aquí.
             }
+
+            // Si todo está bien, lanzamos TU SweetAlert de confirmación
+            Swal.fire({
+                title: '¿Confirmar cambios?',
+                text: "¿Estás seguro de guardar los cambios del aspirante?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, guardar',
+                cancelButtonText: 'Cancelar',
+                customClass: { 
+                    confirmButton: 'btn btn-primary me-3', 
+                    cancelButton: 'btn btn-secondary' 
+                },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Si dice que sí, le decimos a HTMX que procese el envío manualmente
+                    htmx.trigger(formulario, 'htmx:submit');
+                }
+            });
         });
         
         // Observador de Municipio (Para HTMX)

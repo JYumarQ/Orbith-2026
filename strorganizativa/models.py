@@ -91,10 +91,33 @@ class CargoPlantilla(Base):
     departamento = models.ForeignKey(Departamento, on_delete=models.RESTRICT)
     rol = models.ForeignKey(NRol, verbose_name=('Nomenclador de Rol'), on_delete=models.RESTRICT, null=True, blank=True)
     nivel_preparacion = models.ForeignKey(NNivelPreparacion, verbose_name=('Nivel de Preparación'), on_delete=models.RESTRICT, null=True, blank=True)
-    cant_aprobada = models.IntegerField()
+    cant_aprobada = models.IntegerField(default=0)
     cant_cubierta = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
     puesto_clave = models.BooleanField(default=False, verbose_name='Puesto Clave')
+
+    @property
+    def cant_cubierta_real(self):
+        """
+        Cuenta la cantidad de personas REALMENTE activas en este cargo.
+        Filtra por los contratos de alta (CAlta) cuyo aspirante esté 'ACTIVO'.
+        """
+        from contratos.models import CAlta
+        # Contamos solo contratos vigentes donde el trabajador no sea baja
+        return CAlta.objects.filter(
+            cargo=self, 
+            aspirante__estado='ACTIVO'
+        ).count()
+    
+    def refrescar_conteo_plazas(self):
+        """Sincroniza el campo de la base de datos con la realidad"""
+        self.cant_cubierta = self.cant_cubierta_real
+        self.save(update_fields=['cant_cubierta'])
+
+    @property
+    def disponibilidad(self):
+        """Calcula las plazas libres restando las reales de las aprobadas"""
+        return max(0, self.cant_aprobada - self.cant_cubierta_real)
 
     class Meta:
         verbose_name = ("Cargo")

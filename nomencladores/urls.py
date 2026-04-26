@@ -83,6 +83,11 @@ urlpatterns = [
     path('api/familias/<int:pk>/delete/', views.api_familia_delete, name='api_familia_delete'),
     path('api/cargos/move/', views.api_cargo_move, name='api_cargo_move'),
     path('api/familias/<int:pk>/update/', views.api_familia_update, name='api_familia_update'),
+    path('api/familias/contexto/', views.api_get_contexto_familias, name='api_get_contexto_familias'),
+
+    # ---------- CRUD Tipo Familia ----------
+    path('api/tipos-familia/create/', views.tipo_familia_create, name='tipo_familia_create'),
+    path('api/tipos-familia/<int:pk>/delete/', views.tipo_familia_delete, name='tipo_familia_delete'),
 
     # ---------- CRUD NNivelPreparacion ----------
     path('api/niveles-preparacion/', views.nivel_preparacion_create, name='nivel_preparacion_create'),

@@ -3,7 +3,7 @@ from dataclasses import fields
 from pyexpat import model
 from django import forms
 from django.forms import widgets
-from .models import NCargo, NGrupoEscala, NRol, NTridente, NTipoUnidadOrganizativa
+from .models import NCargo, NGrupoEscala, NRol, NTridente, NTipoUnidadOrganizativa, NTipoFamilia, NFamiliaCargo
 from django.db.models import Count
 from django.urls import reverse_lazy
 
@@ -123,3 +123,17 @@ class NTipoUnidadOrganizativaForm(forms.ModelForm):
             'es_subunidad': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'check_subunidad'}),
             'color': forms.TextInput(attrs={'class': 'form-control', 'id': 'input_color'}),
         }
+
+
+class NTipoFamiliaForm(forms.ModelForm):
+    class Meta:
+        model = NTipoFamilia
+        fields = ['nombre']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Especialidades, Grupos de Reporte...'}),
+        }
+
+class NFamiliaCargoForm(forms.ModelForm):
+    class Meta:
+        model = NFamiliaCargo
+        fields = ['nombre', 'descripcion', 'tipo_familia']

@@ -6,12 +6,9 @@
         </div>
         <div class="modal-body">
             <!-- Cargar el formulario del cargo aquí -->
-            <form hx-post="{% url 'updt_contrato' object.pk %}" 
-                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                  hx-target="#modal_generic"
-                  hx-swap="innerHTML"
-                  hx-confirm="¿Estás seguro de guardar los cambios del contrato?"
-                  id="contratoForm">
+            <form action="{% url 'updt_contrato' object.pk %}" 
+                method="POST" 
+                id="contratoForm">
                 {% csrf_token %}
                 
                 <div class="nav-align-top mb-4">
@@ -142,6 +139,23 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="col-md-12">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch mb-2 mt-4">
+                                                {{ form.mision }}
+                                                <label class="form-check-label" for="id_mision">
+                                                    {{ form.mision.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ form.pais.label }}  
+                                            {{ form.pais }}
+                                        </div>
+                                    </div>
+                                </div>
                                 
                                 <div class="col-md-4">
                                     {{ form.fecha_vence_lic.label }}
@@ -251,37 +265,55 @@
 </div>
 
 <script>
-    (function() { // Función autoejecutable para aislar variables y evitar conflictos
+    (function() { 
         var formulario = document.getElementById('contratoForm');
+        if (!formulario) return;
 
-        // Selectores Seguros
+        // Selectores
         var tipo = formulario.querySelector('#id_tipo');
         var f_contrato = formulario.querySelector('#id_fecha_alta'); 
         var duracion = formulario.querySelector('#id_duracion');
-
         var c_formal = formulario.querySelector('#id_c_formal');
         var c_formal_res = formulario.querySelector('#id_c_formal_res');
-
         var funcionario = formulario.querySelector('#id_funcionario');
         var funcionario_res = formulario.querySelector('#id_funcionario_res');
-
         var designado = formulario.querySelector('#id_designado');
         var designado_res = formulario.querySelector('#id_designado_res');
-        
         var chofer = formulario.querySelector('#id_profesional');
-        // Selectores de fechas de licencia (ajustados a posibles nombres de Django)
         var fv_lic = formulario.querySelector('#id_fecha_vence_lic') || formulario.querySelector('#id_fv_lic');
         var fv_rec = formulario.querySelector('#id_fecha_vence_recal') || formulario.querySelector('#id_fv_rec');
         var fv_seg = formulario.querySelector('#id_fecha_vence_seg') || formulario.querySelector('#id_fv_seg');
-
-        // --- Funciones de Lógica ---
+        var mision = formulario.querySelector('#id_mision');
+        var pais = formulario.querySelector('#id_pais');
         
+        // --- NUEVOS SELECTORES (Para Tridente) ---
+        var tipo_salario = formulario.querySelector('#id_tipo_salario');
+        var tridente = formulario.querySelector('#id_tridente');
+
+        // --- LÓGICA DE TRIDENTE Y SALARIO FIJO ---
+        function actualizarTridente() {
+            if (!tipo_salario || !tridente) return;
+            
+            // Obtenemos el valor y el texto de la opción seleccionada
+            var valor = tipo_salario.value;
+            var texto = tipo_salario.options[tipo_salario.selectedIndex] ? tipo_salario.options[tipo_salario.selectedIndex].text.toUpperCase() : "";
+
+            // Si es FIJO (FIJ), limpiamos y bloqueamos
+            if (valor === 'FIJ' || texto.includes('FIJO')) {
+                tridente.value = ""; // Borramos el "I" o cualquier valor previo
+                $(tridente).val("").trigger('change'); // Si usas Select2, esto lo limpia visualmente
+                tridente.setAttribute('disabled', 'disabled');
+            } else {
+                tridente.removeAttribute('disabled');
+            }
+        }
+
+        // Lógica de Contrato
         function actualizarEstadoContrato() {
             if (!tipo || !f_contrato) return;
             var motivo = formulario.querySelector('#id_motivo');
             var tipoId = tipo.value;
 
-            // Si el select está vacío (-------)
             if (!tipoId) {
                 f_contrato.setAttribute('disabled', 'disabled');
                 if(duracion) duracion.setAttribute('disabled', 'disabled');
@@ -289,30 +321,23 @@
                 return;
             }
 
-            // CAMBIO CLAVE 1: Usamos la etiqueta dinámica de Django para no fallar nunca con la URL
             var apiUrl = "{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId);
 
-            // Consultar a tu API
             fetch(apiUrl)
             .then(response => {
                 if (!response.ok) throw new Error("Error HTTP: " + response.status);
                 return response.json();
             })
             .then(data => {
-                // Para que puedas revisar en la consola de tu navegador si llega True o False
-                console.log("Respuesta de Base de Datos -> ¿Requiere motivo?:", data.requiere_motivo); 
-                
                 var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
                 f_contrato.removeAttribute('disabled');
                 
-                // 1. Lógica de Fechas
                 if (desc.includes('INDETERMINADO')) {
                     if(duracion) { duracion.setAttribute('disabled', 'disabled'); duracion.value = ''; }
                 } else {
                     if(duracion) duracion.removeAttribute('disabled');
                 }
 
-                // 2. Lógica del Motivo
                 if (data.requiere_motivo === true) {
                     if(motivo) motivo.removeAttribute('disabled');
                 } else {
@@ -323,10 +348,6 @@
                 }
             })
             .catch(err => {
-                console.error('Fallo en la API del contrato:', err);
-                
-                // CAMBIO CLAVE 2: Sistema Anti-bloqueos. 
-                // Si la conexión falla, te abrimos los campos a la fuerza para que puedas seguir trabajando.
                 if(motivo) motivo.removeAttribute('disabled');
                 if(duracion) duracion.removeAttribute('disabled');
             });
@@ -344,7 +365,6 @@
         function actualizarEstadoChofer() {
             if (!chofer) return;
             var enable = chofer.checked;
-            
             [fv_lic, fv_rec, fv_seg].forEach(campo => {
                 if (campo) {
                     enable ? campo.removeAttribute('disabled') : campo.setAttribute('disabled', 'disabled');
@@ -352,27 +372,291 @@
             });
         }
 
-        // --- Asignación de Eventos ---
-
+        // Asignación de Eventos
         if (tipo) tipo.addEventListener('change', actualizarEstadoContrato);
-        
         if (c_formal) c_formal.addEventListener('change', function() { toggleCampo(c_formal, c_formal_res); });
-        
         if (funcionario) funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionario_res); });
-        
         if (designado) designado.addEventListener('change', function() { toggleCampo(designado, designado_res); });
-        
         if (chofer) chofer.addEventListener('change', actualizarEstadoChofer);
+        if (mision) mision.addEventListener('change', function() { toggleCampo(mision, pais); });
+        
+        // Evento de Tridente
+        if (tipo_salario) tipo_salario.addEventListener('change', actualizarTridente);
 
-        // --- EJECUCIÓN INICIAL (CRÍTICO) ---
-        // Esto asegura que al abrir el modal, los campos estén correctos según los datos guardados
+        // --- EJECUCIÓN INICIAL AL ABRIR EL MODAL ---
+        // --- INICIALIZACIÓN ---
         actualizarEstadoContrato();
         toggleCampo(c_formal, c_formal_res);
         toggleCampo(funcionario, funcionario_res);
         toggleCampo(designado, designado_res);
         actualizarEstadoChofer();
-
+        toggleCampo(mision, pais);
         
+        // 1. Bloqueamos el Tridente si es Fijo
+        actualizarTridente(); 
+
+        // 2. DISPARADOR DE SALARIO (CORREGIDO PARA HTMX)
+        setTimeout(function() {
+            if (tipo_salario) {
+                // Creamos un evento 'change' nativo y real del navegador
+                var eventoNativo = new Event('change', { bubbles: true });
+                tipo_salario.dispatchEvent(eventoNativo);
+                
+                // Como respaldo, le damos la orden directa a HTMX
+                if (window.htmx) {
+                    htmx.trigger(tipo_salario, 'change');
+                }
+            }
+        }, 300); 
+
+        // --- ENVÍO AJAX CONTROLADO (CON CHIVATOS) ---
+        $(formulario).on('submit', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            console.log("CHIVATO 1: Formulario interceptado correctamente. Mostrando alerta de confirmación...");
+
+            Swal.fire({
+                title: '¿Confirmar cambios?',
+                text: "¿Deseas actualizar este contrato?",
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, guardar',
+                cancelButtonText: 'Cancelar',
+                customClass: { confirmButton: 'btn btn-primary me-3', cancelButton: 'btn btn-secondary' },
+                buttonsStyling: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    console.log("CHIVATO 2: Usuario confirmó. Habilitando Tridente y preparando AJAX...");
+                    
+                    if (tridente) tridente.removeAttribute('disabled');
+
+                    $.ajax({
+                        url: formulario.action,
+                        type: 'POST',
+                        data: $(formulario).serialize(),
+                        success: function(data) {
+                            console.log("CHIVATO 3: Tipo de respuesta:", typeof data);
+                            
+                            // Determinamos si es éxito basándonos en JSON o HTML
+                            var esExito = false;
+                            
+                            if (typeof data === 'object') {
+                                // Si el backend envía JSON (Como en add_contrato)
+                                esExito = (data.form_is_valid === true || data.success === true);
+                            } else if (typeof data === 'string') {
+                                // Si el backend envía HTML (Comportamiento clásico de HTMX/UpdateView)
+                                // Si el HTML devuelto NO tiene campos inválidos ni alertas de error, asumimos que guardó bien
+                                if (data.indexOf('is-invalid') === -1 && data.indexOf('errorlist') === -1) {
+                                    esExito = true;
+                                }
+                            }
+
+                            if (esExito) {
+                                console.log("CHIVATO 4: ÉXITO. Cerrando modal y limpiando pantalla...");
+                                
+                                // Cierre Brutal
+                                const modalActual = document.getElementById('editar_empl');
+                                if (modalActual) {
+                                    modalActual.classList.remove('show');
+                                    modalActual.style.display = 'none';
+                                    modalActual.innerHTML = '';
+                                }
+                                $('.modal-backdrop').remove();
+                                $('body').removeClass('modal-open').css({'overflow': '', 'padding-right': ''});
+
+                                // Lógica de Wizard o Recarga
+                                if (typeof data === 'object' && data.redirect_to_wizard) {
+                                    setTimeout(function() {
+                                        $.get(data.redirect_to_wizard, function(html) {
+                                            $('#modalMovimientoContrato').remove(); 
+                                            $('body').append(html);
+                                            const wiz = new bootstrap.Modal(document.getElementById('modalMovimientoContrato'));
+                                            wiz.show();
+                                            $('#modalMovimientoContrato').on('hidden.bs.modal', function () { $(this).remove(); });
+                                        });
+                                    }, 100);
+                                } else {
+                                    console.log("CHIVATO 5: Recargando la tabla...");
+                                    window.location.reload();
+                                }
+                            } else {
+                                console.log("CHIVATO ERROR: Formulario inválido. Repintando HTML con errores.");
+                                actualizarTridente(); // Restaurar el campo gris si hubo error
+                                
+                                if (typeof data === 'object' && data.error_popup) {
+                                    Swal.fire('Atención', data.error_popup, 'error');
+                                }
+                                
+                                var modalContent = $(formulario).closest('.modal').find('.modal-content');
+                                
+                                // Extraemos el HTML ya sea del JSON o del String directo
+                                var nuevoHtml = (typeof data === 'object') ? (data.html_form || '') : data;
+                                
+                                // Si el servidor mandó toda la página, sacamos solo el pedazo del modal
+                                var contenidoExtraido = $(nuevoHtml).find('.modal-content').html();
+                                modalContent.html(contenidoExtraido || nuevoHtml);
+                                
+                                if (window.htmx) htmx.process(modalContent[0]);
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.error("CHIVATO FALLO AJAX:", status, error);
+                            actualizarTridente(); 
+                            Swal.fire('Error', 'Ha ocurrido un error de conexión con el servidor.', 'error');
+                        }
+                    });
+                } else {
+                    console.log("CHIVATO: Usuario canceló la acción de guardado.");
+                }
+            });
+        });
 
     })();
+
+    // =======================================================
+    // MOTOR VISUAL DE VALIDACIÓN UNIVERSAL ORBITH (BLINDADO)
+    // =======================================================
+    function iniciarValidacionOrbith() {
+        const $form = $('#contratoForm');
+        const $btnSubmit = $('button[type="submit"]');
+        if (!$form.length) return;
+
+        // 1. SOLUCIÓN JORNADA: Se eliminó 'jornada' de la lista
+        const reglas = {
+            numericos: ['no_expediente', 'exp_laboral', 'maestria', 'doctorado'],
+            obligatorios: ['no_expediente', 'exp_laboral', 'tipo', 'unidad', 'departamento', 'cargo', 'tipo_salario', 'fecha_alta', 'reg_militar']
+        };
+
+        let tiposRequierenMotivo = [];
+        const $tipoInput = $form.find('[name="tipo"]');
+        if ($tipoInput.length && $tipoInput.attr('data-requiere-motivo')) {
+            tiposRequierenMotivo = JSON.parse($tipoInput.attr('data-requiere-motivo'));
+        }
+
+        function pintarBorde(input, esValido) {
+            if (!input) return;
+            let $elementoVisual = $(input);
+            
+            // Soporte Select2
+            if ($elementoVisual.hasClass('select2-hidden-accessible')) {
+                const $select2 = $elementoVisual.next('.select2-container').find('.select2-selection');
+                if ($select2.length) $elementoVisual = $select2;
+            }
+
+            if ($elementoVisual.length) {
+                if (esValido) {
+                    $elementoVisual.removeClass('border-warning').addClass('border-success');
+                } else {
+                    $elementoVisual.removeClass('border-success').addClass('border-warning');
+                }
+            }
+            evaluarBoton();
+        }
+
+        function evaluarBoton() {
+            const errores = $form.find('.border-warning').length;
+            if ($btnSubmit.length) $btnSubmit.prop('disabled', errores > 0);
+        }
+
+        // --- DELEGACIÓN DE EVENTOS (LA SOLUCIÓN PARA HTMX) ---
+        // Al poner el evento en $form, sobrevive aunque HTMX recargue los campos
+
+        // Filtro Numérico Estricto
+        $form.on('input', 'input', function() {
+            const name = this.name;
+            if (reglas.numericos.includes(name)) {
+                this.value = this.value.replace(/[^0-9]/g, ''); 
+                let valido = this.value.trim() !== '';
+                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
+                pintarBorde(this, valido);
+            }
+        });
+
+        // Validación de Selectores
+        $form.on('change', 'select, input', function() {
+            const name = this.name;
+            let valido = this.value.trim() !== '';
+
+            // Lógica Condicional: Tridente
+            if (name === 'tipo_salario') {
+                const $tridente = $form.find('[name="tridente"]');
+                if ($tridente.length) {
+                    if (this.value === 'FIJ') {
+                        $tridente.prop('disabled', true);
+                        $tridente.val('');
+                        if ($tridente.hasClass('select2-hidden-accessible')) {
+                            $tridente.trigger('change.select2');
+                            $tridente.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
+                        } else {
+                            $tridente.removeClass('border-warning border-success');
+                        }
+                    } else {
+                        $tridente.prop('disabled', false);
+                        pintarBorde($tridente[0], $tridente.val().trim() !== "");
+                    }
+                }
+            }
+
+            // Lógica Condicional: Motivo
+            if (name === 'tipo') {
+                const $motivo = $form.find('[name="motivo"]');
+                if ($motivo.length) {
+                    const necesitaMotivo = tiposRequierenMotivo.includes(parseInt(this.value));
+                    if (necesitaMotivo) {
+                        $motivo.prop('disabled', false);
+                        pintarBorde($motivo[0], $motivo.val().trim() !== "");
+                    } else {
+                        $motivo.prop('disabled', true);
+                        $motivo.val('');
+                        if ($motivo.hasClass('select2-hidden-accessible')) {
+                            $motivo.trigger('change.select2');
+                            $motivo.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
+                        } else {
+                            $motivo.removeClass('border-warning border-success');
+                        }
+                    }
+                }
+            }
+
+            // 2. SOLUCIÓN MOTIVO/TRIDENTE NARANJA: 
+            // Ahora si el campo que cambió es motivo o tridente, TAMBIÉN se valida y se pinta
+            if (reglas.obligatorios.includes(name) || name === 'motivo' || name === 'tridente') {
+                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
+                
+                // Solo pintamos si el campo no está deshabilitado
+                if (!$(this).prop('disabled')) {
+                    pintarBorde(this, valido);
+                }
+            }
+        });
+
+        // Inicialización Inteligente
+        setTimeout(() => {
+            reglas.obligatorios.forEach(name => {
+                const $el = $form.find(`[name="${name}"]`);
+                if ($el.length) {
+                    let esValido = $el.val() && $el.val().trim() !== '';
+                    if (name === 'no_expediente') esValido = parseInt($el.val() || 0) > 0;
+                    pintarBorde($el[0], esValido);
+                }
+            });
+
+            // Disparamos dependencias
+            $form.find('[name="tipo_salario"]').trigger('change');
+            $form.find('[name="tipo"]').trigger('change');
+        }, 500);
+
+        // --- RECONEXIÓN HTMX ---
+        // Si HTMX inyecta nuevos campos, obligamos al sistema a repasar las validaciones
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            if ($form[0].contains(event.target)) {
+                setTimeout(() => {
+                    $form.find('[name="tipo_salario"]').trigger('change');
+                }, 100);
+            }
+        });
+    }
+
+    iniciarValidacionOrbith();
 </script>

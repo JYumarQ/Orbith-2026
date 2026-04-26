@@ -14,6 +14,7 @@
             
             data-url-baja="{% url 'del_contrato' c.pk %}"
             data-expediente="{{ c.no_expediente }}"
+            data-fecha-limite="{{ c.fecha_ultima_accion|date:'Y-m-d' }}"
             data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}"
             data-cargo="{{ c.cargo.ncargo.descripcion|default:'---' }}"
         >

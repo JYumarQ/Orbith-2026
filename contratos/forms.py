@@ -2,8 +2,8 @@ from django import forms
 from django.urls import reverse_lazy
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
-from nomencladores.models import NRol
-
+from nomencladores.models import NRol, NTipoContrato
+import json
 
 class CAltaForm(forms.ModelForm):
     
@@ -74,7 +74,8 @@ class CAltaForm(forms.ModelForm):
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 'funcionario', 'designado', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
-            'maestria', 'doctorado', 'cnci', 'instructor', 'jubilado_recontratado', 'jornada'
+            'maestria', 'doctorado', 'cnci', 'instructor', 'jubilado_recontratado', 'jornada',
+            'mision', 'pais'
         )
         labels = {
             'no_expediente': 'Exp. Laboral', 
@@ -98,7 +99,9 @@ class CAltaForm(forms.ModelForm):
             'maestria': 'Maetría',
             'cnci': 'CNCI',
             'jubilado_recontratado': 'Jubilado Recontratado',
-            'jornada': 'Jornada Laboral'
+            'jornada': 'Jornada Laboral',
+            'mision': 'Misión',
+            'pais': 'País'
         }
         widgets = {
             'no_expediente': forms.TextInput(attrs={'class':'form-control'}), 
@@ -112,6 +115,7 @@ class CAltaForm(forms.ModelForm):
                 # Tridente también debe recalcular salario si cambia
                 'hx-get': reverse_lazy('cargar_salarios'),
                 'hx-target': '#resultados_salariales',
+                'hx-swap': 'innerHTML',
                 'hx-include': '#id_cargo, #id_tipo_salario', # Solución: Enviar también el tipo de salario
                 'hx-trigger': 'change'
             }),
@@ -129,6 +133,7 @@ class CAltaForm(forms.ModelForm):
                 'class': 'form-select',
                 'hx-get': reverse_lazy('cargar_salarios'),
                 'hx-target': '#resultados_salariales',
+                'hx-swap': 'innerHTML',
                 'hx-include': '#id_cargo, #id_tridente',
                 'hx-trigger': 'change'
             }),
@@ -137,7 +142,9 @@ class CAltaForm(forms.ModelForm):
             'cnci':forms.NumberInput(attrs={'class':'form-control'}),
             'instructor':forms.NumberInput(attrs={'class':'form-control'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
-            'jornada': forms.Select(attrs={'class':'form-select'})
+            'jornada': forms.Select(attrs={'class':'form-select'}),
+            'mision': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mision'}),
+            'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'})
         }
         
     def __init__(self, *args, user = None, **kwargs):
@@ -197,6 +204,10 @@ class CAltaForm(forms.ModelForm):
                         f_dpto.queryset = Departamento.objects.filter(unidad_organizativa=unidad_id)
             except (ValueError, TypeError):
                 pass
+
+        tipos_con_motivo = list(NTipoContrato.objects.filter(requiere_motivo=True).values_list('id', flat=True))
+        if 'tipo' in self.fields:
+            self.fields['tipo'].widget.attrs['data-requiere-motivo'] = json.dumps(tipos_con_motivo)
             
         if "departamento" in self.data:
             try:
@@ -210,6 +221,46 @@ class CAltaForm(forms.ModelForm):
                 pass
                 
         self.fields['reg_militar'].required = True
+
+        # --- EL ESCUDO DEL SERVIDOR ---
+        # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
+        if self.instance and self.instance.pk and self.instance.tipo_salario == 'FIJ':
+            if 'tridente' in self.fields:
+                self.fields['tridente'].widget.attrs['disabled'] = 'disabled'
+                self.fields['tridente'].required = False
+
+    # ---------------------------------------------------------
+    # VALIDACIONES ESTRICTAS DE NEGOCIO (EL ESCUDO)
+    # ---------------------------------------------------------
+    def clean_no_expediente(self):
+        expediente = self.cleaned_data.get('no_expediente')
+        if not expediente:
+            raise forms.ValidationError("El número de expediente es obligatorio.")
+        
+        # Validar que solo contenga números enteros positivos mayores a 0
+        try:
+            exp_num = int(expediente)
+            if exp_num <= 0:
+                raise forms.ValidationError("El expediente debe ser mayor que 0.")
+        except ValueError:
+            raise forms.ValidationError("El expediente solo puede contener números.")
+            
+        return expediente
+
+    def clean(self):
+        cleaned_data = super().clean()
+        tipo_salario = cleaned_data.get('tipo_salario')
+        tridente = cleaned_data.get('tridente')
+
+        # Regla 1: Si es Dinámico, el tridente es OBLIGATORIO
+        if tipo_salario == 'DIN' and not tridente:
+            self.add_error('tridente', "El tridente es obligatorio para un salario dinámico.")
+        
+        # Regla 2: Si es Fijo, forzamos el tridente a None (por seguridad extra)
+        if tipo_salario == 'FIJ':
+            cleaned_data['tridente'] = None
+
+        return cleaned_data
 
     def clean(self):
         cleaned_data = super().clean()
@@ -243,18 +294,17 @@ class CAltaForm(forms.ModelForm):
                 cleaned_data['tridente'] = None
 
         # --- VALIDACIÓN DE CAPACIDAD ---
-        # NUEVO: Verificamos si el tipo de contrato elegido ocupa plaza
         if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
             check_capacity = True
             
-            # Si estamos editando y el cargo es el mismo, no validamos (ya ocupa la plaza)
             if self.instance and self.instance.pk:
                 if self.instance.cargo == cargo:
                     check_capacity = False
             
             if check_capacity:
-                if cargo.cant_cubierta >= cargo.cant_aprobada:
-                    self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta}/{cargo.cant_aprobada}).')
+                # CAMBIO AQUÍ: Usamos cant_cubierta_real
+                if cargo.cant_cubierta_real >= cargo.cant_aprobada:
+                    self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada}).')
         
         return cleaned_data
    
@@ -287,7 +337,7 @@ class MovimientoForm(CAltaForm):
         
         # 1. Bloquear Expediente (Read Only)
         if 'no_expediente' in self.fields:
-            self.fields['no_expediente'].widget.attrs['disabled'] = 'disabled'
+            self.fields['no_expediente'].widget.attrs['readonly'] = 'readonly'
             self.fields['no_expediente'].required = False
         
         # 2. Ocultar o desactivar la fecha_alta original (porque usaremos la efectiva)
@@ -308,3 +358,10 @@ class MovimientoForm(CAltaForm):
                 attrs = self.fields[campo].widget.attrs
                 for hx_attr in ['hx-get', 'hx-target', 'hx-swap', 'hx-trigger', 'hx-include']:
                     attrs.pop(hx_attr, None)
+
+        # --- EL ESCUDO DEL SERVIDOR ---
+        # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
+        if self.instance and self.instance.pk and self.instance.tipo_salario == 'FIJ':
+            if 'tridente' in self.fields:
+                self.fields['tridente'].widget.attrs['disabled'] = 'disabled'
+                self.fields['tridente'].required = False

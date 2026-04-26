@@ -8,7 +8,7 @@ class ConfiguracionForm(forms.ModelForm):
         model = Configuracion
         fields = (
             'nombre_empresa', 'org_superior', 'rama', 'unidad_presup', 'moneda_local' , 'periodo',
-            'fondo_tiempo_calc_tarif' , 'correo', 'telefono', 'direccion', 'logo'
+            'fondo_tiempo_calc_tarif', 'porcentaje_horas_extras', 'correo', 'telefono', 'direccion', 'logo'
         )
         labels = {
             'nombre_empresa': 'Nombre de la Empresa',
@@ -34,8 +34,8 @@ class ConfiguracionForm(forms.ModelForm):
             'correo': forms.EmailInput(attrs={'class':'form-control'}),
             'telefono': forms.TextInput(attrs={'class':'form-control'}),
             'direccion': forms.TextInput(attrs={'class':'form-control', 'rows' : 3}),
-            'logo': forms.FileInput(attrs={'class':'form-control'})           
-            
+            'logo': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),         
+            'porcentaje_horas_extras': forms.NumberInput(attrs={'class':'form-control', 'step': '0.01'}),
         }
         
 

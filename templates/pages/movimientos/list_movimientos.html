@@ -141,7 +141,7 @@
     </div>
 </div>
 
-<div class="modal fade" id="editar_empl" role="dialog"></div>
+<div id="editar_empl"></div>
 
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
 
@@ -238,10 +238,28 @@
 
         if(!url) return;
 
-        // Abrir Modal (Reutilizamos lógica existente)
-        $('#editar_empl').load(url, function(){
-            $(this).modal('show');
-            if (window.htmx) htmx.process($('#movimientoForm')[0]); 
+        // Aseguramos que la pantalla esté limpia antes de cargar
+        $('.modal-backdrop').remove();
+
+        // Cargamos el modal de la forma correcta (como hicimos en contratos)
+        $.get(url, function(html){
+            $('#editar_empl').html(html);
+            
+            const modalNode = document.getElementById('modalMovimientoContrato');
+            if(modalNode) {
+                const modal = new bootstrap.Modal(modalNode);
+                modal.show();
+                
+                // Limpieza absoluta al cerrar
+                $(modalNode).on('hidden.bs.modal', function () {
+                    $('#editar_empl').empty(); 
+                    $('.modal-backdrop').remove();
+                });
+                
+                if (window.htmx) htmx.process(modalNode);
+            }
+        }).fail(function() {
+            Swal.fire('Error', 'No se pudo cargar el formulario.', 'error');
         });
     }
 

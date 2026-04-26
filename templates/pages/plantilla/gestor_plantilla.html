@@ -391,13 +391,23 @@
                         <label class="form-label" for="baja_nombre">Trabajador</label> 
                         <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
                     </div>
+                    <div class="col-md-12 mt-2">
+                        <label class="form-label" for="baja_actividad">Actividad que realizaba</label> 
+                        <input type="text" id="baja_actividad" name="actividad_realizada" class="form-control fw-bold text-primary">
+                    </div>
                 </div>
                 <hr class="my-3">
                 <form id="formBajaContrato">
                     <input type="hidden" id="baja_url_post">    
-                    <div class="mb-3">
-                        <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
-                        <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="baja_fecha_efectiva" class="form-label">Fecha de Documento <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha_efectiva" name="fecha_efectiva" class="form-control">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
@@ -407,6 +417,20 @@
                                 <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
                             {% endfor %}
                         </select>
+                    </div>
+                    <div class="mb-3 border-top pt-3 mt-3">
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input" type="checkbox" id="switchCobroSistema">
+                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema">
+                                Cobró sistema de pago
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input" type="checkbox" id="switchCompletarCargo" checked>
+                            <label class="form-check-label fw-bold ms-2" for="switchCompletarCargo">
+                                Completar cargo
+                            </label>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -871,7 +895,15 @@
         document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
         document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
         document.getElementById('baja_url_post').value = url;
-        document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0];
+        
+        // Limpiamos los nuevos campos para evitar datos viejos pegados
+        document.getElementById('baja_actividad').value = ""; 
+        document.getElementById('switchCobroSistema').checked = false;
+        document.getElementById('switchCompletarCargo').checked = true;
+
+        const hoy = new Date().toISOString().split('T')[0];
+        document.getElementById('baja_fecha').value = hoy;
+        document.getElementById('baja_fecha_efectiva').value = hoy;
         document.getElementById('baja_causa').value = "";
         
         $('#modalBajaContrato').modal('show');
@@ -879,10 +911,16 @@
 
     window.validarYConfirmarBaja = function() {
         const fecha = document.getElementById('baja_fecha').value;
+        const fechaEfectiva = document.getElementById('baja_fecha_efectiva').value;
         const causa = document.getElementById('baja_causa').value;
         const url = document.getElementById('baja_url_post').value;
+        
+        // Capturamos los nuevos campos
+        const cobroSistema = document.getElementById('switchCobroSistema').checked;
+        const completarCargo = document.getElementById('switchCompletarCargo').checked;
+        const actividadRealizada = document.getElementById('baja_actividad').value;
 
-        if (!fecha || !causa) return Swal.fire({ icon: 'warning', title: 'Campos incompletos', text: 'Seleccione fecha y causa.'});
+        if (!fecha || !causa || !fechaEfectiva) return Swal.fire({ icon: 'warning', title: 'Campos incompletos', text: 'Seleccione fechas y causa.'});
 
         $('#modalBajaContrato').modal('hide');
         Swal.fire({
@@ -893,7 +931,15 @@
             if (result.isConfirmed) {
                 $.ajax({
                     url: url, type: 'POST',
-                    data: { 'fecha_baja': fecha, 'causa_baja': causa, 'csrfmiddlewaretoken': '{{ csrf_token }}' },
+                    data: { 
+                        'fecha_baja': fecha, 
+                        'fecha_efectiva': fechaEfectiva,
+                        'causa_baja': causa, 
+                        'cobro_sistema_pago': cobroSistema,
+                        'completar_cargo': completarCargo,
+                        'actividad_realizada': actividadRealizada,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}' 
+                    },
                     success: function() {
                         Swal.fire({ icon: 'success', title: 'Baja procesada', showConfirmButton: false, timer: 1500 });
                         // MODIFICADO: Disparamos AMBOS eventos

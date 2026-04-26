@@ -297,12 +297,17 @@
             if(!nivel) return;
             var valorNivel = nivel.value;
 
-            
-
+            // Habilitar Grado solo en NS
             if (valorNivel === 'NS') {
                 grado.removeAttribute('disabled');
             } else {
                 grado.setAttribute('disabled', 'disabled');
+                grado.value = ''; // <--- ESTA ES LA LÍNEA MÁGICA QUE LO VACÍA
+                
+                // Si usas Select2 en este campo en el futuro, esto asegura que también se limpie visualmente:
+                if ($(grado).hasClass('select2-hidden-accessible')) {
+                    $(grado).trigger('change.select2');
+                }
             }
         }
 

@@ -145,6 +145,23 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <div class="col-md-12">
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch mb-2 mt-4">
+                                                {{ form.mision }}
+                                                <label class="form-check-label" for="id_mision">
+                                                    {{ form.mision.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8">
+                                            {{ form.pais.label }}  
+                                            {{ form.pais }}
+                                        </div>
+                                    </div>
+                                </div>
                                 
                                 <div class="col-md-4">
                                     {{ form.fecha_vence_lic.label }}
@@ -311,6 +328,9 @@
         var fv_lic = formulario.querySelector('#id_fecha_vence_lic') || formulario.querySelector('#id_fv_lic');
         var fv_rec = formulario.querySelector('#id_fecha_vence_recal') || formulario.querySelector('#id_fv_rec');
         var fv_seg = formulario.querySelector('#id_fecha_vence_seg') || formulario.querySelector('#id_fv_seg');
+
+        var mision = formulario.querySelector('#id_mision');
+        var pais = formulario.querySelector('#id_pais');
 
         // --- 2. NUEVOS Selectores para Validación de Expediente ---
         var expInput = formulario.querySelector('#id_no_expediente');
@@ -495,18 +515,38 @@
                 dataType: 'json',
                 success: function(data) {
                     if (data.form_is_valid) {
-                        $('#crear_empl').modal('hide'); 
+                        // 1. EL ANTÍDOTO: Cerrar dinámicamente y limpiar la pantalla azul forzosamente
+                        const modalEl = document.querySelector('.modal.show');
+                        if (modalEl) {
+                            const instance = bootstrap.Modal.getInstance(modalEl);
+                            if (instance) instance.hide();
+                        }
+                        $('.modal-backdrop').remove();
+                        $('body').removeClass('modal-open').css('overflow', '');
+
+                        // 2. Lógica del Wizard (con tus variables originales)
                         if (data.redirect_to_wizard) {
                             $.get(data.redirect_to_wizard, function(html) {
+                                // Aseguramos que exista el contenedor (sin clases de modal para no solapar)
                                 if ($('#editar_empl').length === 0) {
-                                    $('body').append('<div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>');
+                                    $('body').append('<div id="editar_empl"></div>');
                                 }
-                                $('#editar_empl').html(html).modal('show');
+                                
+                                // Inyectamos el HTML recibido
+                                $('#editar_empl').html(html);
+                                
+                                // 3. LA CLAVE: Inicializamos el modal desde su ID interno, no desde el contenedor padre
+                                const wizardModal = new bootstrap.Modal(document.getElementById('modalMovimientoContrato'));
+                                wizardModal.show();
                             });
                         } else {
+                            // Tu redirección original
                             window.location.href = data.success_url || "{% url 'list_aspir' %}";
                         }
+
                     } else {
+                        // --- TU LÓGICA DE ERRORES ORIGINAL (Intacta) ---
+                        
                         // 1. Mostrar Alerta si el servidor mandó mensaje específico
                         if (data.error_popup) {
                             Swal.fire({
@@ -520,12 +560,12 @@
                         }
                         
                         // 2. Repintar formulario (para mostrar campos en rojo)
-                        var modalParent = $(formulario).closest('.modal');
+                        var modalParent = $('#contratoForm').closest('.modal');
                         var modalContent = modalParent.find('.modal-content');
                         var newContent = $(data.html_form).find('.modal-content').html() || data.html_form;
                         modalContent.html(newContent);
                         
-                        // Reactivar HTMX si es necesario
+                        // 3. Reactivar HTMX
                         if (window.htmx) htmx.process(modalContent[0]);
                     }
                 },
@@ -546,15 +586,163 @@
         
         if (chofer) chofer.addEventListener('change', actualizarEstadoChofer);
 
+        if (mision) mision.addEventListener('change', function() { toggleCampo(mision, pais); });
         // --- 7. Inicialización (Para que se vea bien al abrir) ---
         actualizarEstadoContrato();
         toggleCampo(c_formal, c_formal_res);
         toggleCampo(funcionario, funcionario_res);
         toggleCampo(designado, designado_res);
         actualizarEstadoChofer();
+        toggleCampo(mision, pais);
         if (window.htmx) htmx.process(formulario);
 
         
 
     })();
+
+    // =======================================================
+    // MOTOR VISUAL DE VALIDACIÓN UNIVERSAL ORBITH (BLINDADO)
+    // =======================================================
+    function iniciarValidacionOrbith() {
+        const $form = $('#contratoForm');
+        const $btnSubmit = $('button[type="submit"]');
+        if (!$form.length) return;
+
+        // 1. SOLUCIÓN JORNADA: Se eliminó 'jornada' de la lista
+        const reglas = {
+            numericos: ['no_expediente', 'exp_laboral', 'maestria', 'doctorado'],
+            obligatorios: ['no_expediente', 'exp_laboral', 'tipo', 'unidad', 'departamento', 'cargo', 'tipo_salario', 'fecha_alta', 'reg_militar']
+        };
+
+        let tiposRequierenMotivo = [];
+        const $tipoInput = $form.find('[name="tipo"]');
+        if ($tipoInput.length && $tipoInput.attr('data-requiere-motivo')) {
+            tiposRequierenMotivo = JSON.parse($tipoInput.attr('data-requiere-motivo'));
+        }
+
+        function pintarBorde(input, esValido) {
+            if (!input) return;
+            let $elementoVisual = $(input);
+            
+            // Soporte Select2
+            if ($elementoVisual.hasClass('select2-hidden-accessible')) {
+                const $select2 = $elementoVisual.next('.select2-container').find('.select2-selection');
+                if ($select2.length) $elementoVisual = $select2;
+            }
+
+            if ($elementoVisual.length) {
+                if (esValido) {
+                    $elementoVisual.removeClass('border-warning').addClass('border-success');
+                } else {
+                    $elementoVisual.removeClass('border-success').addClass('border-warning');
+                }
+            }
+            evaluarBoton();
+        }
+
+        function evaluarBoton() {
+            const errores = $form.find('.border-warning').length;
+            if ($btnSubmit.length) $btnSubmit.prop('disabled', errores > 0);
+        }
+
+        // --- DELEGACIÓN DE EVENTOS (LA SOLUCIÓN PARA HTMX) ---
+        // Al poner el evento en $form, sobrevive aunque HTMX recargue los campos
+
+        // Filtro Numérico Estricto
+        $form.on('input', 'input', function() {
+            const name = this.name;
+            if (reglas.numericos.includes(name)) {
+                this.value = this.value.replace(/[^0-9]/g, ''); 
+                let valido = this.value.trim() !== '';
+                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
+                pintarBorde(this, valido);
+            }
+        });
+
+        // Validación de Selectores
+        $form.on('change', 'select, input', function() {
+            const name = this.name;
+            let valido = this.value.trim() !== '';
+
+            // Lógica Condicional: Tridente
+            if (name === 'tipo_salario') {
+                const $tridente = $form.find('[name="tridente"]');
+                if ($tridente.length) {
+                    if (this.value === 'FIJ') {
+                        $tridente.prop('disabled', true);
+                        $tridente.val('');
+                        if ($tridente.hasClass('select2-hidden-accessible')) {
+                            $tridente.trigger('change.select2');
+                            $tridente.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
+                        } else {
+                            $tridente.removeClass('border-warning border-success');
+                        }
+                    } else {
+                        $tridente.prop('disabled', false);
+                        pintarBorde($tridente[0], $tridente.val().trim() !== "");
+                    }
+                }
+            }
+
+            // Lógica Condicional: Motivo
+            if (name === 'tipo') {
+                const $motivo = $form.find('[name="motivo"]');
+                if ($motivo.length) {
+                    const necesitaMotivo = tiposRequierenMotivo.includes(parseInt(this.value));
+                    if (necesitaMotivo) {
+                        $motivo.prop('disabled', false);
+                        pintarBorde($motivo[0], $motivo.val().trim() !== "");
+                    } else {
+                        $motivo.prop('disabled', true);
+                        $motivo.val('');
+                        if ($motivo.hasClass('select2-hidden-accessible')) {
+                            $motivo.trigger('change.select2');
+                            $motivo.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
+                        } else {
+                            $motivo.removeClass('border-warning border-success');
+                        }
+                    }
+                }
+            }
+
+            // 2. SOLUCIÓN MOTIVO/TRIDENTE NARANJA: 
+            // Ahora si el campo que cambió es motivo o tridente, TAMBIÉN se valida y se pinta
+            if (reglas.obligatorios.includes(name) || name === 'motivo' || name === 'tridente') {
+                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
+                
+                // Solo pintamos si el campo no está deshabilitado
+                if (!$(this).prop('disabled')) {
+                    pintarBorde(this, valido);
+                }
+            }
+        });
+
+        // Inicialización Inteligente
+        setTimeout(() => {
+            reglas.obligatorios.forEach(name => {
+                const $el = $form.find(`[name="${name}"]`);
+                if ($el.length) {
+                    let esValido = $el.val() && $el.val().trim() !== '';
+                    if (name === 'no_expediente') esValido = parseInt($el.val() || 0) > 0;
+                    pintarBorde($el[0], esValido);
+                }
+            });
+
+            // Disparamos dependencias
+            $form.find('[name="tipo_salario"]').trigger('change');
+            $form.find('[name="tipo"]').trigger('change');
+        }, 500);
+
+        // --- RECONEXIÓN HTMX ---
+        // Si HTMX inyecta nuevos campos, obligamos al sistema a repasar las validaciones
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            if ($form[0].contains(event.target)) {
+                setTimeout(() => {
+                    $form.find('[name="tipo_salario"]').trigger('change');
+                }, 100);
+            }
+        });
+    }
+
+    iniciarValidacionOrbith();
 </script>

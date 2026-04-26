@@ -238,9 +238,9 @@
       <div class="content-backdrop fade"></div>
 </div>
 
-<div class="modal fade" id="editar_empl" role="dialog"></div>
-<div class="modal fade" id="crear_empl" role="dialog"></div>
-<div class="modal fade" id="editar_aspir" role="dialog"></div>
+<div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>
+<div class="modal fade" id="crear_empl" tabindex="-1" aria-hidden="true"></div>
+<div class="modal fade" id="editar_aspir" tabindex="-1" aria-hidden="true"></div>
 
 <div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -263,7 +263,7 @@
                     </div>
                     <div class="col-md-12 mt-2">
                         <label class="form-label" for="baja_actividad">Actividad que realizaba</label> 
-                        <input type="text" id="baja_actividad" class="form-control fw-bold text-primary" readonly style="background-color: #f5f5f9;">
+                        <input type="text" id="baja_actividad" name="actividad_realizada" class="form-control fw-bold text-primary">
                     </div>
                 </div>
 
@@ -271,7 +271,8 @@
 
                 <form id="formBajaContrato">
                     <input type="hidden" id="baja_contrato_id"> 
-                    <input type="hidden" id="baja_url_post">    
+                    <input type="hidden" id="baja_url_post">   
+                    <input type="hidden" id="baja_fecha_limite"> 
                     
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
@@ -285,7 +286,7 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
+                        <label for="baja_causa" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Causa de Baja <span class="text-danger">*</span></label>
                         <select id="baja_causa" name="causa_baja" class="form-select" required>
                             <option value="">Seleccione una causa...</option>
                             {% for causa in causas_baja %}
@@ -294,11 +295,21 @@
                         </select>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="baja_observaciones" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Observaciones</label>
+                        <textarea class="form-control" name="observaciones" id="baja_observaciones" rows="2" placeholder="Detalles adicionales sobre la baja (Opcional)..."></textarea>
+                    </div>
                     <div class="mb-3 border-top pt-3 mt-3">
-                        <div class="form-check form-switch form-switch-lg mb-2">
+                        <div class="form-check form-switch form-switch-lg mb-3">
                             <input class="form-check-input" type="checkbox" id="switchCobroSistema">
-                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema" style="margin-top: 2px;">
+                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema">
                                 Cobró sistema de pago
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input" type="checkbox" id="switchCompletarCargo" checked>
+                            <label class="form-check-label fw-bold ms-2" for="switchCompletarCargo">
+                                Completar cargo
                             </label>
                         </div>
                     </div>
@@ -527,27 +538,99 @@
     function abrirModalBaja() {
         const btn = document.getElementById('btn-baja');
         const url = btn.dataset.url;
+        if (!url) return; 
 
-        if (!url) return; // Si no hay selección, no hace nada
-
-        // 1. Cargar datos en el modal
         document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
         document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
         document.getElementById('baja_actividad').value = btn.dataset.cargo || '';
         document.getElementById('baja_url_post').value = url;
 
-        // Limpiar campos editables
-        document.getElementById('baja_fecha').value = new Date().toISOString().split('T')[0]; // Pone fecha de hoy por defecto
+        // ========================================================
+        // LA SOLUCIÓN: Leer la fecha directamente de la fila activa
+        // ========================================================
+        const filaSeleccionada = document.querySelector('.fila-contrato.table-active-row');
+        const fechaLimiteReal = filaSeleccionada ? filaSeleccionada.getAttribute('data-fecha-limite') : '';
+        
+        const fechaLimiteInput = document.getElementById('baja_fecha_limite');
+        if (fechaLimiteInput) {
+            fechaLimiteInput.value = fechaLimiteReal;
+        }
+        // ========================================================
+
+        const hoy = new Date().toISOString().split('T')[0];
+        document.getElementById('baja_fecha').value = hoy; 
+        document.getElementById('baja_fecha_efectiva').value = hoy;
         document.getElementById('baja_causa').value = "";
 
-        // 2. Mostrar Modal
+        if(document.getElementById('baja_observaciones')) document.getElementById('baja_observaciones').value = "";
+
         $('#modalBajaContrato').modal('show');
+        iniciarValidacionBaja();
+    }
+
+    // =======================================================
+    // MOTOR DE VALIDACIÓN DE BAJAS (CORREGIDO)
+    // =======================================================
+    function iniciarValidacionBaja() {
+        const $form = $('#formBajaContrato');
+        const $btnConfirmar = $('.btn-danger[onclick="validarYConfirmarBaja()"]');
+        
+        const fechaLimiteInput = document.getElementById('baja_fecha_limite');
+        const fechaLimiteStr = fechaLimiteInput ? fechaLimiteInput.value : '';
+        const obligatorios = ['fecha_baja', 'fecha_efectiva', 'causa_baja'];
+
+        function pintarBorde(input, esValido) {
+            let $el = $(input);
+            if (esValido) {
+                $el.removeClass('border-warning').addClass('border-success');
+                $el.parent().find('.error-cronologico').remove();
+            } else {
+                $el.removeClass('border-success').addClass('border-warning');
+            }
+            
+            const errores = $form.find('.border-warning').length;
+            $btnConfirmar.prop('disabled', errores > 0);
+        }
+
+        $form.off('change input').on('change input', 'input, select', function() {
+            const name = this.name;
+            const valor = $(this).val();
+            let noEstaVacio = valor && valor.trim() !== '';
+
+            // 1. LÓGICA ESTRICTA: ¡SOLO PARA LA FECHA DE BAJA!
+            if (name === 'fecha_baja') {
+                if (!noEstaVacio) {
+                    pintarBorde(this, false);
+                } else if (fechaLimiteStr && valor < fechaLimiteStr) {
+                    pintarBorde(this, false);
+                    let $parent = $(this).parent();
+                    if ($parent.find('.error-cronologico').length === 0) {
+                        const fFmt = fechaLimiteStr.split('-').reverse().join('/');
+                        $parent.append(`<small class="text-danger fw-bold error-cronologico mt-1 d-block">Error: No puede ser anterior al ${fFmt}</small>`);
+                    }
+                } else {
+                    pintarBorde(this, true);
+                }
+            } 
+            // 2. LÓGICA NORMAL: Fecha de Documento y Causa (Solo exigen no estar vacíos)
+            else if (obligatorios.includes(name)) {
+                pintarBorde(this, noEstaVacio);
+            }
+        });
+
+        // Autoevaluar al abrir el modal
+        setTimeout(() => {
+            obligatorios.forEach(name => {
+                const $el = $form.find(`[name="${name}"]`);
+                if ($el.length) $el.trigger('change');
+            });
+        }, 200);
     }
 
     function validarYConfirmarBaja() {
         const form = document.getElementById('formBajaContrato');
         
-        // 1. DISPARAR VALIDACIÓN NATIVA HTML5 ("Completa este campo")
+        // 1. DISPARAR VALIDACIÓN NATIVA HTML5
         if (!form.checkValidity()) {
             form.reportValidity();
             return;
@@ -559,6 +642,9 @@
         const causa = document.getElementById('baja_causa').value;
         const url = document.getElementById('baja_url_post').value;
         const cobroSistema = document.getElementById('switchCobroSistema').checked;
+        const completarCargo = document.getElementById('switchCompletarCargo').checked; 
+        const actividadRealizada = document.getElementById('baja_actividad').value; 
+        const observaciones = document.getElementById('baja_observaciones').value; // <--- CAPTURADO
 
         // 3. SWEETALERT DE CONFIRMACIÓN
         $('#modalBajaContrato').modal('hide'); 
@@ -574,23 +660,27 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                // Pasamos todas las variables correctamente a la función
-                enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema);
+                // AQUÍ ES DONDE VA: Pasamos todas las variables, incluyendo 'observaciones'
+                enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema, completarCargo, actividadRealizada, observaciones);
             } else {
                 $('#modalBajaContrato').modal('show');
             }
         });
     }
 
-    function enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema) {
+    // 1. Añadimos 'observaciones' a los parámetros que recibe la función
+    function enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema, completarCargo, actividadRealizada, observaciones) {
         $.ajax({
             url: url,
             type: 'POST',
             data: {
                 'fecha_baja': fechaBaja,
-                'fecha_efectiva': fechaEfectiva, // Va hacia views.py como fecha_efectiva
+                'fecha_efectiva': fechaEfectiva, 
                 'causa_baja': causa,
                 'cobro_sistema_pago': cobroSistema, 
+                'completar_cargo': completarCargo, 
+                'actividad_realizada': actividadRealizada,
+                'observaciones': observaciones, // <--- 2. LO METEMOS EN EL PAQUETE AJAX QUE VA A PYTHON
                 'csrfmiddlewaretoken': '{{ csrf_token }}' 
             },
             success: function(response) {
@@ -599,7 +689,7 @@
                     text: '¿Desea exportar el documento de movimiento de nómina ahora?',
                     icon: 'success',
                     showCancelButton: true,
-                    confirmButtonText: '<i class="fas fa-file-pdf me-1"></i> Exportar PDF',
+                    confirmButtonText: '<i class="fas fa-file-pdf me-1"></i> Exportar',
                     cancelButtonText: 'Cerrar',
                     customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
                     buttonsStyling: false
@@ -626,8 +716,6 @@
             }
         });
     }
-
-    
 
     document.body.addEventListener('htmx:confirm', function(evt) {
         if (evt.target.id === 'btn-baja') {

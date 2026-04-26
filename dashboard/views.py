@@ -93,15 +93,17 @@ class InformeEconomiaView(TemplateView):
         # 1. Obtenemos el ID de la UEB si el usuario seleccionó alguna
         ueb_id = self.request.GET.get('ueb', '')
         
-        # 2. Fechas SIEMPRE en tiempo real (para dejarlas marcadas en los selectores deshabilitados)
+        # 2. Fechas SIEMPRE en tiempo real
+        from datetime import date # Asegúrate de tener este import
         hoy = date.today()
         context['mes_actual'] = str(hoy.month)
         context['anno_actual'] = str(hoy.year)
         context['ueb_actual'] = str(ueb_id)
         
-        context['unidades'] = UnidadOrganizativa.objects.filter(tipo__in=['UEB', 'DG'])
+        # CORRECCIÓN: Filtramos por la descripción del nomenclador
+        context['unidades'] = UnidadOrganizativa.objects.filter(tipo__descripcion__in=['UEB', 'DG'])
         
-        # 3. Calculamos en tiempo real (ya no enviamos mes ni año)
+        # 3. Calculamos en tiempo real
         context['datos_tabla'], context['totales'] = self.calcular_consolidado(ueb_id)
         
         return context
@@ -132,7 +134,7 @@ class InformeEconomiaView(TemplateView):
             unidad_seleccionada = UnidadOrganizativa.objects.filter(pk=ueb_id).first()
             if unidad_seleccionada:
                 unidades_ids = [unidad_seleccionada.pk]
-                if unidad_seleccionada.tipo == 'DG':
+                if unidad_seleccionada.tipo.descripcion == 'DG':
                     hijas_ids = unidad_seleccionada.direcciones_hijas.values_list('pk', flat=True)
                     unidades_ids.extend(hijas_ids)
 
@@ -267,15 +269,16 @@ class ExportarConsolidadoPDFView(InformeEconomiaView):
     
 
 class InformeTrabajadoresUEBView(TemplateView):
-    
     template_name = "pages/informes/informe_ueb.html"
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        from datetime import date
         hoy = date.today()
         context['mes_actual'] = str(hoy.month)
         context['anno_actual'] = str(hoy.year)
 
+        # Llamada correcta al método de la clase
         datos_uebs, total_general, total_mujeres = self.calcular_resumen_uebs()
         
         context['datos_uebs'] = datos_uebs
@@ -290,37 +293,44 @@ class InformeTrabajadoresUEBView(TemplateView):
         return False
 
     def calcular_resumen_uebs(self):
-        # 1. Buscamos todas las UEB creadas en el sistema ordenadas alfabéticamente
-        unidades = UnidadOrganizativa.objects.filter(tipo__in=['UEB', 'DG']).order_by('descripcion')
+        # 1. CORRECCIÓN: Filtramos por el campo descripción del nomenclador
+        unidades = UnidadOrganizativa.objects.filter(
+            tipo__descripcion__in=['UEB', 'DG']
+        ).order_by('descripcion')
         
         datos_uebs = []
         total_general = 0
         total_mujeres = 0
         
-        # 2. Obtenemos todos los contratos activos (optimizando la consulta a la BD)
-        contratos = CAlta.objects.select_related('aspirante', 'cargo__departamento__unidad_organizativa').all()
+        # 2. Optimizamos la consulta cargando también el 'tipo' de la unidad
+        contratos = CAlta.objects.select_related(
+            'aspirante', 
+            'cargo__departamento__unidad_organizativa__tipo'
+        ).all()
         
-        # 3. Recorremos cada UEB dinámicamente
+        # 3. Recorremos cada UEB
         for ueb in unidades:
             unidades_ids = [ueb.pk]
-            if ueb.tipo == 'DG':
+            
+            # CORRECCIÓN: Comparamos la descripción, no el objeto
+            if ueb.tipo.descripcion == 'DG':
                 hijas_ids = ueb.direcciones_hijas.values_list('pk', flat=True)
                 unidades_ids.extend(hijas_ids)
                 
-            # Filtramos los contratos que pertenecen a esta unidad
-            contratos_ueb = [c for c in contratos if c.cargo and c.cargo.departamento.unidad_organizativa_id in unidades_ids]
+            contratos_ueb = [
+                c for c in contratos 
+                if c.cargo and c.cargo.departamento.unidad_organizativa_id in unidades_ids
+            ]
             
             total_ueb = len(contratos_ueb)
             mujeres_ueb = sum(1 for c in contratos_ueb if self.es_mujer(c.aspirante.doc_identidad))
             
-            # Guardamos la fila para la tabla del Word y del HTML
             datos_uebs.append({
                 'nombre': ueb.descripcion,
                 'total': total_ueb,
                 'mujeres': mujeres_ueb
             })
             
-            # Sumamos a los acumulados del documento
             total_general += total_ueb
             total_mujeres += mujeres_ueb
             

@@ -18,16 +18,15 @@ from django.db.models import Q, ProtectedError, Value
 from django.db.models.functions import Concat
 from django.db import transaction
 from xhtml2pdf import pisa
-from datetime import datetime
+from datetime import datetime, timedelta
 from .forms import CAltaForm, MovimientoForm
 from docxtpl import DocxTemplate, RichText
 from io import BytesIO
 import os
 import traceback
 import sys
+import json
 
-# Create your views here.
-    
 #?ONTRATO
 class ContratoListView(ListView):
     model = CAlta
@@ -342,14 +341,12 @@ def validar_plazas_cargo(request):
     
     if cargo_id:
         try:
-            # Buscamos el cargo y sus relaciones para el nombre
             cargo = CargoPlantilla.objects.select_related('ncargo').get(pk=cargo_id)
             
-            # Comprobamos disponibilidad (Solo si es contrato INDETERMINADO normalmente, 
-            # pero aquí validamos disponibilidad general del cargo según tu petición)
-            if cargo.cant_cubierta >= cargo.cant_aprobada:
+            # CAMBIO AQUÍ: Usamos cant_cubierta_real
+            if cargo.cant_cubierta_real >= cargo.cant_aprobada:
                 data['plazas_agotadas'] = True
-                data['mensaje'] = f"El Cargo '{cargo.ncargo.descripcion}' no tiene plazas disponibles ({cargo.cant_cubierta}/{cargo.cant_aprobada})"
+                data['mensaje'] = f"El Cargo '{cargo.ncargo.descripcion}' no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada})"
                 
         except CargoPlantilla.DoesNotExist:
             pass
@@ -382,175 +379,248 @@ def cargar_cargos(request):
     return render(request, 'pages/contrato/partials/options_cargos.html', {'cargos': cargos})
 
 
-def historico_trabajador(request, aspirante_id):
-    from .models import CAlta, CBaja, TMovimiento 
-    from bolsa.models import Aspirante
 
-    # 1. Obtener Aspirante
+def historico_trabajador(request, aspirante_id):
+
     try:
         aspirante = Aspirante.objects.get(pk=aspirante_id)
+        
+        # 1. Buscamos primero en contratos activos
+        contrato_data = CAlta.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_alta').first()
+        
+        # 2. Si no hay contrato activo (está de baja), buscamos en el historial de bajas para recuperar el expediente vitalicio
+        if not contrato_data:
+            contrato_data = CBaja.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_alta').first()
+            
+        exp_num = contrato_data.no_expediente if contrato_data else "---"
         encabezado = {
             'nombre_completo': f"{aspirante.nombre} {aspirante.papellido} {aspirante.sapellido}",
-            'ci': aspirante.doc_identidad
+            'ci': aspirante.doc_identidad,
+            'id': aspirante.id, 
+            'expediente': exp_num
         }
     except Aspirante.DoesNotExist:
         return JsonResponse({'data': [], 'encabezado': {'nombre_completo': 'Desconocido', 'ci': ''}})
 
-    lista_general = []
-
-    # Helper para formatear dinero con 2 decimales
     def fmt_dinero(valor):
-        try:
-            return f"{float(valor):.2f}"
-        except:
-            return "0.00"
+        try: return f"{float(valor):.2f}"
+        except: return "0.00"
 
-    # ---------------------------------------------------------
-    # FUENTE A: Contratos Activos (CAlta)
-    # ---------------------------------------------------------
-    altas = CAlta.objects.filter(aspirante_id=aspirante_id).select_related('cargo__ncargo', 'cargo__departamento__unidad_organizativa')
-    
-    for alta in altas:
-        # LÓGICA INTELIGENTE:
-        # Buscamos si este contrato tiene movimientos.
-        primer_mov = TMovimiento.objects.filter(contrato=alta).order_by('fecha_efectiva').first()
+    hitos = []
+
+    # --- FUNCIÓN AUXILIAR PARA BUSCAR EL ID DEL MOVIMIENTO ---
+    def obtener_id_movimiento(aspirante_id, expediente, tipo_busqueda):
+        # Buscamos en TMovimiento el registro que coincide con este expediente y tipo
+        mov = TMovimiento.objects.filter(
+            aspirante_id=aspirante_id, 
+            no_expediente=expediente, 
+            tipo_movimiento=tipo_busqueda
+        ).first()
+        return mov.pk if mov else None
+
+    # --- FUENTE A: Altas Activas ---
+    altas_activas = CAlta.objects.filter(aspirante_id=aspirante_id)
+    for a in altas_activas:
+        # CORRECCIÓN: Ignorar el movimiento fantasma de "Alta Inicial" para buscar el pasado real
+        mov_id = obtener_id_movimiento(aspirante_id, a.no_expediente, 'Alta Inicial')
+        primer_mov = TMovimiento.objects.filter(contrato=a).exclude(tipo_movimiento='Alta Inicial').order_by('fecha_efectiva').first()
         
-        if primer_mov:
-            # Si hubo movimientos, el "Alta Inicial" era lo que había ANTES del primer movimiento
+        if primer_mov and primer_mov.cargo_anterior != "---":
             cargo_inicial = primer_mov.cargo_anterior
             unidad_inicial = primer_mov.unidad_anterior or "---"
             salario_inicial = primer_mov.salario_anterior
         else:
-            # Si nunca hubo movimientos, el "Alta Inicial" es lo que tiene ahora
-            cargo_inicial = alta.cargo.ncargo.descripcion if alta.cargo else "---"
-            unidad_inicial = alta.cargo.departamento.unidad_organizativa.descripcion if (alta.cargo and alta.cargo.departamento) else "---"
-            salario_inicial = alta.calcular_salario_escala()
+            cargo_inicial = a.cargo.ncargo.descripcion if a.cargo else "---"
+            unidad_inicial = a.cargo.departamento.unidad_organizativa.descripcion if (a.cargo and a.cargo.departamento) else "---"
+            salario_inicial = a.calcular_salario_escala()
 
-        item = {
-            'fecha_orden': alta.fecha_alta,
-            'evento': 'Alta / Recontratación',
-            'expediente': alta.no_expediente,
+        hitos.append({
+            'id': mov_id,
+            'fecha_orden': a.fecha_alta,
+            'fecha_inicio': a.fecha_alta,
+            'evento': 'ALTA_PENDIENTE', 
+            'expediente': a.no_expediente,
             'unidad': unidad_inicial,
             'cargo': cargo_inicial,
-            'salario': fmt_dinero(salario_inicial), # Formato corregido
-            'fecha_inicio': alta.fecha_alta.strftime('%d/%m/%Y') if alta.fecha_alta else "-",
-            'fecha_fin': "Activo",
-            'estado_clase': 'text-success'
-        }
-        lista_general.append(item)
+            'salario': fmt_dinero(salario_inicial),
+            'es_baja': False
+        })
 
-    # ---------------------------------------------------------
-    # FUENTE B: Contratos Cerrados (CBaja)
-    # ---------------------------------------------------------
-    bajas = CBaja.objects.filter(aspirante_id=aspirante_id)
-    
-    for baja in bajas:
-        if baja.fecha_alta:
-            # Misma lógica: Buscamos si hubo movimientos para este expediente viejo
-            # Nota: Al estar de baja, el 'contrato' en TMovimiento es Null, buscamos por expediente
+    # --- FUENTE B: Altas de Contratos Cerrados ---
+    altas_viejas = CBaja.objects.filter(aspirante_id=aspirante_id)
+    for b in altas_viejas:
+        if b.fecha_alta:
+            mov_id_alta = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Alta Inicial')
+            mov_id_baja = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Baja')
+            # CORRECCIÓN: Igual que arriba, ignoramos "Alta Inicial"
             primer_mov_baja = TMovimiento.objects.filter(
                 aspirante_id=aspirante_id, 
-                no_expediente=baja.no_expediente
-            ).order_by('fecha_efectiva').first()
+                no_expediente=b.no_expediente
+            ).exclude(tipo_movimiento='Alta Inicial').order_by('fecha_efectiva').first()
 
-            if primer_mov_baja:
-                # Recuperamos el pasado real
+            if primer_mov_baja and primer_mov_baja.cargo_anterior != "---":
                 cargo_baja_ini = primer_mov_baja.cargo_anterior
                 unidad_baja_ini = primer_mov_baja.unidad_anterior or "---"
-                # Ojo: salario_anterior en TMovimiento es Decimal, salario_basico en Nomenclador es otra cosa.
                 salario_baja_ini = primer_mov_baja.salario_anterior
             else:
-                # Si no hubo movimientos, usamos la foto final de la baja
-                cargo_baja_ini = baja.cargo.ncargo.descripcion if baja.cargo else "---"
-                unidad_baja_ini = "---" 
-                if baja.cargo and baja.cargo.departamento:
-                    unidad_baja_ini = baja.cargo.departamento.unidad_organizativa.descripcion
-                
-                # Intentamos sacar salario básico histórico
-                salario_baja_ini = 0
-                if baja.cargo and baja.cargo.ncargo.salario_basico:
-                    salario_baja_ini = baja.cargo.ncargo.salario_basico
+                cargo_baja_ini = b.cargo.ncargo.descripcion if b.cargo else "---"
+                unidad_baja_ini = b.cargo.departamento.unidad_organizativa.descripcion if (b.cargo and b.cargo.departamento) else "---"
+                salario_baja_ini = b.cargo.ncargo.salario_basico if b.cargo else 0
 
-            item_alta_vieja = {
-                'fecha_orden': baja.fecha_alta,
-                'evento': 'Alta / Recontratación',
-                'expediente': baja.no_expediente,
+            hitos.append({
+                'id': mov_id_alta,
+                'fecha_orden': b.fecha_alta,
+                'fecha_inicio': b.fecha_alta,
+                'evento': 'ALTA_PENDIENTE',
+                'expediente': b.no_expediente,
                 'unidad': unidad_baja_ini,
                 'cargo': cargo_baja_ini,
                 'salario': fmt_dinero(salario_baja_ini),
-                'fecha_inicio': baja.fecha_alta.strftime('%d/%m/%Y'),
-                'fecha_fin': baja.fecha_baja.strftime('%d/%m/%Y') if baja.fecha_baja else "-",
-                'estado_clase': 'text-muted'
-            }
-            lista_general.append(item_alta_vieja)
+                'es_baja': False
+            })
+            
+            # El evento de BAJA explícito
+            hitos.append({
+                'id': mov_id_baja,
+                'fecha_orden': b.fecha_baja,
+                'fecha_inicio': b.fecha_baja,
+                'evento': 'Baja',
+                'expediente': b.no_expediente,
+                'unidad': "---",
+                'cargo': "---",
+                'salario': "---",
+                'es_baja': True
+            })
 
-    # ---------------------------------------------------------
-    # FUENTE C: Movimientos (TMovimiento)
-    # ---------------------------------------------------------
-    movimientos = TMovimiento.objects.filter(aspirante_id=aspirante_id)
+    # --- FUENTE C: Movimientos ---
+    # CORRECCIÓN: Filtramos los movimientos que crea el sistema por detrás ('Baja' y 'Alta Inicial')
+    movimientos = TMovimiento.objects.filter(aspirante_id=aspirante_id).exclude(tipo_movimiento__in=['Baja', 'Alta Inicial'])
     
-    for mov in movimientos:
-        nombre_evento = mov.tipo_movimiento
+    for m in movimientos:
+        tipo = "Movimiento Salario"
+        if m.unidad_anterior != m.unidad_nueva or m.cargo_anterior != m.cargo_nuevo:
+            tipo = "Movimiento Cargo"
+
+        hitos.append({
+            'id': m.pk,
+            'fecha_orden': m.fecha_efectiva,
+            'fecha_inicio': m.fecha_efectiva,
+            'evento': tipo,
+            'expediente': m.no_expediente,
+            'unidad': m.unidad_nueva or "---",
+            'cargo': m.cargo_nuevo,
+            'salario': fmt_dinero(m.salario_nuevo),
+            'es_baja': False
+        })
+
+    # --- ORDENACIÓN Y LÓGICA CRONOLÓGICA ---
+    hitos.sort(key=lambda x: x['fecha_orden'])
+
+    lista_final = []
+    total = len(hitos)
+    primer_alta = True
+    
+    # LA CLAVE: Leer el estado real del trabajador para saber si el último ciclo sigue vivo
+    esta_activo_ahora = (aspirante.estado == 'ACTIVO')
+
+    for i in range(total):
+        item = hitos[i]
         
-        # Refinar nombres
-        if nombre_evento == "Movimiento de Nómina":
-            if mov.unidad_anterior != mov.unidad_nueva:
-                nombre_evento = "Cambio de Unidad"
-            elif mov.cargo_anterior != mov.cargo_nuevo:
-                nombre_evento = "Cambio de Cargo"
-            elif mov.salario_anterior != mov.salario_nuevo:
-                nombre_evento = "Movimiento Salarial"
-
-        clase_css = 'text-warning'
-        if nombre_evento == 'Baja':
-             clase_css = 'text-danger fw-bold'
-
-        item_mov = {
-            'fecha_orden': mov.fecha_efectiva,
-            'evento': nombre_evento,
-            'expediente': mov.no_expediente,
-            'unidad': mov.unidad_nueva if mov.unidad_nueva else "---", 
-            'cargo': mov.cargo_nuevo,
-            'salario': fmt_dinero(mov.salario_nuevo),
-            'fecha_inicio': mov.fecha_efectiva.strftime('%d/%m/%Y'),
-            'fecha_fin': "-", 
-            'estado_clase': clase_css
-        }
-        lista_general.append(item_mov)
-
-    # ---------------------------------------------------------
-    # ORDENAR Y ENCADENAR
-    # ---------------------------------------------------------
-    lista_general.sort(key=lambda x: x['fecha_orden'])
-
-    primer_alta_encontrada = False
-    for item in lista_general:
-        if 'Alta' in item['evento']:
-            if not primer_alta_encontrada:
-                item['evento'] = "Alta Inicial"
-                primer_alta_encontrada = True
+        # 1. Definir si es Alta Inicial o Recontratación
+        if item['evento'] == 'ALTA_PENDIENTE':
+            if primer_alta:
+                item['evento'] = 'Alta Inicial'
+                primer_alta = False
             else:
-                item['evento'] = "Recontratación"
+                item['evento'] = 'Recontratación'
 
-    for i in range(len(lista_general)):
-        item_actual = lista_general[i]
+        # =======================================================
+        # 2. CALCULAR FECHA FIN (SOLUCIÓN DEFINITIVA)
+        # =======================================================
+        if i == total - 1:
+            # Es el último evento de la historia:
+            if item['es_baja']:
+                # Si lo último registrado es una Baja, su estado actual es "En Baja"
+                # El color será rojo porque el evento es 'Baja' (text-danger)
+                item['fecha_fin'] = "Actualidad"
+            else:
+                # Si lo último es un contrato, solo es Actualidad si el aspirante está ACTIVO
+                item['fecha_fin'] = "Actualidad" if esta_activo_ahora else "Cerrado"
+        else:
+            proximo = hitos[i+1]
+            
+            # REGLA A: Contrato (Alta/Mov) seguido por su propia Baja.
+            # El contrato termina el mismo día que se emite la baja.
+            if not item['es_baja'] and proximo['es_baja'] and item['expediente'] == proximo['expediente']:
+                item['fecha_fin'] = proximo['fecha_inicio'].strftime('%d/%m/%Y')
+            
+            # REGLA B: Baja seguida por Recontratación (o Movimiento seguido por otro Movimiento).
+            # El estado anterior termina un día antes de que empiece el nuevo hito.
+            else:
+                fin_dt = proximo['fecha_inicio'] - timedelta(days=1)
+                item['fecha_fin'] = fin_dt.strftime('%d/%m/%Y')
+
+        # 3. Asignar Colores (Solo para la fecha fin)
+        colores = {
+            'Alta Inicial': 'text-success',      # Verde
+            'Recontratación': 'text-primary',    # Azul
+            'Movimiento Salario': 'text-gold',   # Dorado
+            'Movimiento Cargo': 'text-orange',   # Naranja
+            'Baja': 'text-danger'                # Rojo
+        }
+        item['estado_clase'] = colores.get(item['evento'], 'text-muted')
         
-        if item_actual['evento'] == 'Baja':
-            item_actual['fecha_fin'] = item_actual['fecha_inicio']
-            continue
+        # Formatear fecha inicio
+        item['fecha_inicio_str'] = item['fecha_inicio'].strftime('%d/%m/%Y')
+        lista_final.append(item)
 
-        if i < len(lista_general) - 1:
-            siguiente_item = lista_general[i + 1]
-            if item_actual['expediente'] == siguiente_item['expediente']:
-                item_actual['fecha_fin'] = siguiente_item['fecha_inicio']
-                if item_actual['estado_clase'] == 'text-success': 
-                     item_actual['estado_clase'] = 'text-muted'
+    return JsonResponse({'data': lista_final, 'encabezado': encabezado})
 
-    return JsonResponse({
-        'data': lista_general, 
-        'encabezado': encabezado
-    })
+# --- 2. NUEVA VISTA PARA EXPORTAR HISTORIAL COMPLETO (PDF) ---
+class ExportarHistoricoPDFView(View):
+    def get(self, request, aspirante_id):
+        from django.template.loader import get_template
+        from xhtml2pdf import pisa
+        from configuracion.models import Configuracion
+        
+        aspirante = get_object_or_404(Aspirante, pk=aspirante_id)
+        config = Configuracion.objects.first()
+        
+        # Súper truco: Llamamos a tu propia función para reciclar los datos ordenados
+        respuesta = historico_trabajador(request, aspirante_id)
+        datos_historial = json.loads(respuesta.content)['data']
+        
+        context = {
+            'aspirante': aspirante,
+            'config': config,
+            'fecha_hoy': datetime.now(),
+            'historial': datos_historial
+        }
+        
+        template = get_template('pages/reportes/pdf_historico_trabajador.html')
+        html = template.render(context)
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="Historico_{aspirante.doc_identidad}.pdf"'
+        
+        pisa.CreatePDF(html, dest=response)
+        return response
 
+# --- 3. NUEVA VISTA PARA LA CÁPSULA DEL TIEMPO (SOLO LECTURA) ---
+def movimiento_detalle_readonly(request, pk):
+    movimiento = get_object_or_404(TMovimiento, pk=pk)
+    context = {
+        'object': movimiento,
+        'movimiento': movimiento,
+        'aspirante': movimiento.aspirante,
+        'is_readonly': True,
+        
+        # Estas son las variables que el modal busca para la columna DERECHA
+        'initial_rol': movimiento.rol_nuevo,
+        'initial_grupo': movimiento.grupo_escala_nuevo,
+        'initial_cat': movimiento.cat_ocupacional_nuevo,
+        'initial_salario_escala': movimiento.salario_nuevo,
+    }
+    return render(request, 'pages/contrato/movimiento_nomina.html', context)
 
 class ContratoCreateView(CreateView):
     model = CAlta
@@ -675,6 +745,11 @@ class ContratoUpdateView(UpdateView):
             fondo = 190.6
             messages.warning(self.request, "Parámetros de configuración no encontrados. Usando valor por defecto.")
         context['fondo'] = fondo
+
+        if config and config.porcentaje_horas_extras is not None:
+            porcentaje_extra = float(config.porcentaje_horas_extras)
+        else:
+            porcentaje_extra = 0.25
     
         # 2) Si ya tiene cargo y tridente, calculo salario/tarifa/extras
         if contrato.cargo and contrato.tridente:
@@ -692,7 +767,7 @@ class ContratoUpdateView(UpdateView):
                 monto = float(salario_obj.monto)
                 
                 tarifa = round(monto / fondo, 5) if fondo else 0
-                extras = round((tarifa*0.25)+tarifa, 5) 
+                extras = round((tarifa * porcentaje_extra) + tarifa, 5)
                 
                 context['initial_salario_escala'] = round(monto, 2)
                 context['initial_tarifa_horaria'] = tarifa
@@ -726,11 +801,12 @@ class ContratoUpdateView(UpdateView):
         if self.request.headers.get('HX-Request'):
             import json
             from django.http import HttpResponse
-            response = HttpResponse(status=204) # 204 indica éxito silencioso (no dibuja HTML)
+            response = HttpResponse(status=204) # 204 indica éxito silencioso
             response['HX-Trigger'] = json.dumps({
-                'updateContratoList': '', # Dispara la recarga de la columna 4
-                'showMessage': {'icon': 'success', 'text': 'Contrato actualizado.'}, # Muestra el Toast
-                'closeModal': '' # Cierra el modal automáticamente
+                'updateContratoList': '', # Actualiza la columna de Contratos
+                'updateCargoList': '',    # <--- AÑADE ESTA LÍNEA: Actualiza los contadores del Cargo
+                'showMessage': {'icon': 'success', 'text': 'Contrato actualizado.'}, 
+                'closeModal': '' 
             })
             return response
 
@@ -749,12 +825,7 @@ class ContratoUpdateView(UpdateView):
             
         return super().form_invalid(form)
 
-# contratos/views.py
-from django.db import transaction # IMPORTANTE
-from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
-from django.views.generic import DeleteView
-from .models import CAlta, CBaja
+
 
 class ContratoDeleteView(DeleteView):
     model = CAlta
@@ -774,6 +845,10 @@ class ContratoDeleteView(DeleteView):
         fecha_efectiva_str = request.POST.get('fecha_efectiva')
         causa_id = request.POST.get('causa_baja')
         cobro_sistema = request.POST.get('cobro_sistema_pago') == 'true'
+        completar_cargo_val = request.POST.get('completar_cargo') == 'true'
+        actividad_manual = request.POST.get('actividad_realizada')
+        observaciones_texto = request.POST.get('observaciones', '')
+
 
         if not fecha_baja_str or not causa_id:
             return JsonResponse({'success': False, 'message': 'Faltan datos obligatorios: Fecha de Baja o Causa.'}, status=400)
@@ -805,7 +880,7 @@ class ContratoDeleteView(DeleteView):
         # =================================================================
 
         try:
-            # 4. Iniciar Transacción (Si pasó la validación)
+            # 4. Iniciar Transacción
             with transaction.atomic():
                 # A. SALVAR EL HISTORIAL EXISTENTE
                 TMovimiento.objects.filter(contrato=contrato).update(
@@ -813,43 +888,41 @@ class ContratoDeleteView(DeleteView):
                     no_expediente=contrato.no_expediente
                 )
 
-                # 2. CREAR EL NUEVO EVENTO DE "BAJA" EN EL HISTÓRICO
-                # Capturamos datos finales
-                cargo_final = contrato.cargo.ncargo.descripcion if contrato.cargo else "---"
-                unidad_final = contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---"
-                salario_final = contrato.calcular_salario_escala() or 0
+                # B. CAPTURAR DATOS PARA EL HISTÓRICO ANTES DE BORRAR
+                cargo_ant_str = contrato.cargo.ncargo.descripcion if contrato.cargo else "---"
+                unidad_ant_str = contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---"
+                rol_ant_str = contrato.cargo.rol.tipo if (contrato.cargo and contrato.cargo.rol) else "---"
+                tri_ant_str = str(contrato.tridente) if contrato.tridente else "---"
+                salario_ant_val = contrato.calcular_salario_escala() or 0
 
-                TMovimiento.objects.create(
+                # C. CREAR EL ÚNICO MOVIMIENTO DE BAJA (Corrigiendo el error de fechas)
+                # fecha_baja (Modal) = Fecha Efectiva (Cuando se va)
+                # fecha_efectiva (Modal) = Fecha Documento (Cuando se firma)
+                movimiento_baja = TMovimiento.objects.create(
                     aspirante=contrato.aspirante,
                     no_expediente=contrato.no_expediente,
-                    contrato=None, # Ya no hay contrato activo
-                    fecha_efectiva=fecha_baja,
+                    contrato=None, 
+                    fecha_efectiva=fecha_baja,      
+                    fecha_solicitud=fecha_efectiva, 
                     tipo_movimiento="Baja",
+                    observaciones=observaciones_texto, # <--- AQUÍ GUARDAMOS LA OBSERVACIÓN
                     
-                    cargo_anterior=contrato.cargo.ncargo.descripcion if contrato.cargo else "---",
+                    cargo_anterior=cargo_ant_str,
+                    departamento_anterior=contrato.cargo.departamento.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---",
+                    grupo_escala_anterior=contrato.cargo.ncargo.grupo_escala.nivel if (contrato.cargo and contrato.cargo.ncargo.grupo_escala) else "---",
+                    cat_ocupacional_anterior=contrato.cargo.ncargo.get_cat_ocupacional_display() if contrato.cargo else "---",
+                    tipo_salario_anterior=contrato.get_tipo_salario_display() if contrato.tipo_salario else "---",
+                    rol_anterior=rol_ant_str,
+                    tridente_anterior=tri_ant_str,
+                    unidad_anterior=unidad_ant_str,
+                    salario_anterior=salario_ant_val,
+                    
                     cargo_nuevo="---",
-                    salario_anterior=contrato.calcular_salario_escala() or 0,
                     salario_nuevo=0,
-                    unidad_anterior=contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---",
                     unidad_nueva="---"
                 )
                 
-                nuevo_movimiento = TMovimiento.objects.create(
-                    aspirante=contrato.aspirante,
-                    no_expediente=contrato.no_expediente,
-                    contrato=None, # Ya no hay contrato activo
-                    fecha_efectiva=fecha_efectiva, # NUEVA FECHA AQUÍ
-                    tipo_movimiento="Baja",
-                    
-                    cargo_anterior=cargo_final,
-                    cargo_nuevo="---",
-                    salario_anterior=salario_final,
-                    salario_nuevo=0,
-                    unidad_anterior=unidad_final,
-                    unidad_nueva="---"
-                )
-
-                # A. Crear el registro histórico (CBaja)
+                # D. Crear registro histórico en CBaja
                 CBaja.objects.create(
                     aspirante=contrato.aspirante,
                     no_expediente=contrato.no_expediente,
@@ -862,29 +935,35 @@ class ContratoDeleteView(DeleteView):
                     fecha_alta=contrato.fecha_alta,
                     tridente=contrato.tridente,
                     cobro_sistema_pago=cobro_sistema,
-                    actividad_realizada=cargo_final
+                    actividad_realizada=actividad_manual,
+                    observaciones=observaciones_texto,
+                    completar_cargo=completar_cargo_val
                 )
-                # B. Eliminar el contrato activo
+
+                # E. Capturar el cargo antes de borrar el contrato
+                cargo_obj = None
+                if contrato.tipo and contrato.tipo.ocupa_plaza and contrato.cargo:
+                    cargo_obj = contrato.cargo
+
+                # Cambiar estado del aspirante a BAJA
+                if contrato.aspirante:
+                    contrato.aspirante.estado = 'BAJA'
+                    contrato.aspirante.save()
+
+                # F. Borrar contrato
                 contrato.delete()
 
-            # URL del PDF usando el PK del nuevo movimiento
-            pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': nuevo_movimiento.pk})
+                # G. Refrescar el número oficial en la Base de Datos
+                if cargo_obj:
+                    cargo_obj.refrescar_conteo_plazas()
 
-            # Si llegamos aquí, todo salió bien
+            # Usamos el PK del único movimiento creado
+            pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': movimiento_baja.pk})
+
             return JsonResponse({
                 'success': True, 
                 'message': 'Contrato dado de baja y archivado correctamente.',
                 'pdf_url': pdf_url
-            })
-
-        except Exception as e:
-            # Captura cualquier error (Integridad, Modelo, etc.) y evita el crash del servidor
-            print(f"ERROR AL DAR BAJA: {e}")
-
-            # Si llegamos aquí, todo salió bien
-            return JsonResponse({
-                'success': True, 
-                'message': 'Contrato dado de baja y archivado correctamente.'
             })
 
         except Exception as e:
@@ -916,42 +995,35 @@ class MovimientoUpdateView(UpdateView):
         context['contrato_actual'] = contrato
         context['aspirante'] = contrato.aspirante
         
-        # --- LÓGICA DE PRE-CARGA (Lo nuevo) ---
-        # Calculamos datos para la columna IZQUIERDA (Actual) y DERECHA (Inicial)
         if contrato.cargo:
-            # Datos fijos del cargo
-            grupo = contrato.cargo.ncargo.grupo_escala
-            cat = contrato.cargo.ncargo.get_cat_ocupacional_display()
-            rol = contrato.cargo.rol.tipo if contrato.cargo.rol else "Cuadro"
+            # Usamos el método centralizado. ¡Ya no hay lógica duplicada!
+            salario_base = contrato.calcular_salario_escala()
+            context['salario_actual'] = salario_base # Pasa el número real al template
+
+            context['initial_grupo'] = contrato.cargo.ncargo.grupo_escala
+            context['initial_cat'] = contrato.cargo.ncargo.get_cat_ocupacional_display()
+            context['initial_rol'] = contrato.cargo.rol.tipo if contrato.cargo.rol else "Cuadro"
             
-            # Pasamos estos datos para rellenar los inputs al abrir el modal
-            context['initial_grupo'] = grupo
-            context['initial_cat'] = cat
-            context['initial_rol'] = rol
-            
-            # Cálculo de Salario (Si tiene tridente)
-            if contrato.tridente:
-                try:
-                    salario_obj = NSalario.objects.filter(
-                        grupo_escala=contrato.cargo.ncargo.grupo_escala,
-                        rol=contrato.cargo.rol,
-                        tridente=contrato.tridente
-                    ).first()
-                    
-                    if salario_obj:
-                        monto = float(salario_obj.monto)
-                        context['salario_actual'] = monto # Para la Izquierda
-                        
-                        # Para la derecha (Inputs ocultos o visibles de resultados)
-                        config = Configuracion.objects.first()
-                        fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-                        
-                        context['initial_salario_escala'] = round(monto, 2)
-                        context['initial_tarifa_horaria'] = round(monto / fondo, 5) if fondo else 0
-                        context['initial_tarifa_extras'] = round((context['initial_tarifa_horaria']*0.25)+context['initial_tarifa_horaria'], 5)
-                except:
-                    pass
+            if salario_base:
+                monto = float(salario_base)
+                config = Configuracion.objects.first()
+                fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
+                porcentaje_extra = float(config.porcentaje_horas_extras) if config and config.porcentaje_horas_extras else 0.25
+
+                context['initial_salario_escala'] = round(monto, 2)
+                context['initial_tarifa_horaria'] = round(monto / fondo, 5) if fondo else 0
+                context['initial_tarifa_extras'] = round((context['initial_tarifa_horaria'] * porcentaje_extra) + context['initial_tarifa_horaria'], 5)
         
+        # Añadimos la fecha límite cronológica para el JavaScript
+        ultimo_mov = TMovimiento.objects.filter(
+            aspirante=contrato.aspirante,
+            no_expediente=contrato.no_expediente
+        ).order_by('-fecha_efectiva').first()
+        
+        fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+        if fecha_limite:
+            context['fecha_limite_js'] = fecha_limite.strftime('%Y-%m-%d')
+
         return context
     
     # ... (form_valid y form_invalid se quedan igual) ...
@@ -966,9 +1038,11 @@ class MovimientoUpdateView(UpdateView):
             # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
             # =================================================================
             
-            
-            # Buscamos si hay movimientos previos
-            ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
+            # Buscamos si hay movimientos previos usando la ruta segura
+            ultimo_mov = TMovimiento.objects.filter(
+                aspirante=contrato.aspirante,
+                no_expediente=contrato.no_expediente
+            ).order_by('-fecha_efectiva').first()
             
             # La fecha límite es: La del último movimiento, O si no hay, la fecha de Alta original
             fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
@@ -984,26 +1058,32 @@ class MovimientoUpdateView(UpdateView):
                     return self.form_invalid(form)
 
             # =================================================================
+            # PASO 1.5: VALIDACIÓN DE CAMBIOS REALES PARA MOVIMIENTO
+            # =================================================================
+            # Django sabe automáticamente si se modificó algún campo del formulario
+            if not form.has_changed():
+                mensaje = "No se ha aplicado ningún cambio válido. Modifique algún dato para generar un movimiento."
+                
+                if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
+                else:
+                    form.add_error(None, mensaje)
+                    return self.form_invalid(form)
+            
+            # Obtenemos el contrato previo seguro para extraer la historia
+            contrato_previo = CAlta.objects.get(pk=self.object.pk)
+
+            # =================================================================
             # PASO 2: CAPTURAR DATOS PREVIOS (LÓGICA DE NEGOCIO)
             # =================================================================
-            # Como pasamos la validación, ahora sí procedemos a guardar
-            
-            contrato_previo = CAlta.objects.get(pk=self.object.pk)
-            
             cargo_ant = contrato_previo.cargo.ncargo.descripcion if contrato_previo.cargo else "---"
             unidad_ant = contrato_previo.cargo.departamento.unidad_organizativa.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---"
             
-            salario_ant = 0
-            if contrato_previo.cargo:
-                 try:
-                     salario_obj = NSalario.objects.filter(
-                         grupo_escala=contrato_previo.cargo.ncargo.grupo_escala,
-                         rol=contrato_previo.cargo.rol,
-                         tridente=contrato_previo.tridente
-                     ).first()
-                     salario_ant = salario_obj.monto if salario_obj else 0
-                 except:
-                     salario_ant = 0
+            # Aquí capturamos los nuevos campos que debes añadir a tu modelo TMovimiento
+            rol_ant_str = contrato_previo.cargo.rol.tipo if (contrato_previo.cargo and contrato_previo.cargo.rol) else "---"
+            tri_ant_str = str(contrato_previo.tridente) if contrato_previo.tridente else "---"
+            
+            salario_ant = contrato_previo.calcular_salario_escala() or 0
 
             # PASO 3: CAPTURAR DATOS NUEVOS
             cargo_nuevo_obj = form.cleaned_data.get('cargo')
@@ -1019,41 +1099,57 @@ class MovimientoUpdateView(UpdateView):
             # PASO 4: GUARDAR EL HISTÓRICO
             from django.utils import timezone 
             
-            TMovimiento.objects.create(
+            # Extraemos la descripción del Tipo de Salario del formulario
+            tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
+
+            nuevo_mov = TMovimiento.objects.create(
                 contrato=self.object,
                 aspirante=self.object.aspirante,
                 no_expediente=self.object.no_expediente,
                 fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
-
                 fecha_solicitud=fecha_solicitud_dt,
                 observaciones=observaciones_txt,
                 
+                # FOTO DEL PASADO
                 cargo_anterior=cargo_ant,
-                cargo_nuevo=cargo_nue,
+                departamento_anterior=contrato_previo.cargo.departamento.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---",
+                grupo_escala_anterior=contrato_previo.cargo.ncargo.grupo_escala.nivel if (contrato_previo.cargo and contrato_previo.cargo.ncargo.grupo_escala) else "---",
+                cat_ocupacional_anterior=contrato_previo.cargo.ncargo.get_cat_ocupacional_display() if contrato_previo.cargo else "---",
+                tipo_salario_anterior=contrato_previo.get_tipo_salario_display() if contrato_previo.tipo_salario else "---",
+                rol_anterior=rol_ant_str,       
+                tridente_anterior=tri_ant_str,  
                 salario_anterior=salario_ant,
-                salario_nuevo=salario_nue,
                 unidad_anterior=unidad_ant,
+                
+                # FOTO DE LA NUEVA PROPUESTA
+                cargo_nuevo=cargo_nue,
+                departamento_nuevo=cargo_nuevo_obj.departamento.descripcion if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else "---",
+                grupo_escala_nuevo=cargo_nuevo_obj.ncargo.grupo_escala.nivel if (cargo_nuevo_obj and cargo_nuevo_obj.ncargo.grupo_escala) else "---",
+                cat_ocupacional_nuevo=cargo_nuevo_obj.ncargo.get_cat_ocupacional_display() if cargo_nuevo_obj else "---",
+                tipo_salario_nuevo=tipo_sal_nue_val,
+                rol_nuevo=cargo_nuevo_obj.rol.tipo if (cargo_nuevo_obj and cargo_nuevo_obj.rol) else "---",
+                tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
+                salario_nuevo=salario_nue,
                 unidad_nueva=unidad_nue,
                 
                 tipo_movimiento="Movimiento de Nómina"
             )
 
             # PASO 5: ACTUALIZAR CONTRATO
-            # NOTA: NO actualizamos fecha_alta aquí para preservar la antigüedad original
-            
             form.instance.en_proceso_movimiento = False
             self.object = form.save()
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                from django.urls import reverse
+                
 
                 return JsonResponse({
                     'form_is_valid': True, 
                     'message': 'Movimiento registrado correctamente.', 
                     'success_url': str(self.success_url),
-                    'pdf_url': reverse('imprimir_modelo_movimiento', kwargs={'pk': self.object.pk})
+                    # Ahora sí existe 'nuevo_mov'
+                    'pdf_url': reverse('imprimir_modelo_movimiento', kwargs={'pk': nuevo_mov.pk})
                 })
             return super().form_valid(form)
 
@@ -1124,100 +1220,222 @@ def abreviar_cargo_inteligente(texto_cargo):
     return " ".join(palabras_nuevas)
 
 
-# --- LA VISTA DEFINITIVA (Sustituye a ModeloMovimientoPDFView) ---
 class ModeloMovimientoDocxView(View):
-    def get(self, request, *args, **kwargs):
-        from .models import CAlta, CBaja, TMovimiento
-        
-        # 1. Buscar el MOVIMIENTO, no el contrato activo. El PK que llega es de TMovimiento.
-        mov = get_object_or_404(TMovimiento, pk=kwargs['pk'])
-        
-        # 2. Intentar obtener el contrato activo. 
-        # Si es Alta o Movimiento normal, mov.contrato existe. 
-        # Si es Baja, mov.contrato es None, así que buscamos en el historial (CBaja).
-        registro_contrato = mov.contrato
-        if not registro_contrato:
-            registro_contrato = CBaja.objects.filter(
-                aspirante=mov.aspirante, 
-                no_expediente=mov.no_expediente
-            ).order_by('-id').first()
-            
-        if not registro_contrato:
-            return HttpResponse("Error: No se encontró la información del contrato o baja asociada.", status=404)
-
-        hoy = datetime.now()
-        
-        template_path = os.path.join(settings.BASE_DIR, 'templates', 'pages', 'reportes', '13-MOVIMIENTO DE NOMINAS.docx')
+    def get(self, request, pk):
+        # --- FASE 1: RESOLVER 404 ---
+        obj = None
+        es_movimiento_real = True
         
         try:
-            doc = DocxTemplate(template_path)
-        except FileNotFoundError:
-            return HttpResponse(f"Error: No se encuentra la plantilla en {template_path}", status=500)
+            # 1. Asume que enviaron el ID directo del TMovimiento
+            obj = TMovimiento.objects.get(pk=pk)
+        except TMovimiento.DoesNotExist:
+            # 2. LA MAGIA: Si enviaron el ID del Contrato, buscamos su Movimiento asociado
+            movimiento_asociado = TMovimiento.objects.filter(contrato_id=pk).order_by('-id').first()
+            
+            if movimiento_asociado:
+                obj = movimiento_asociado
+            else:
+                # 3. Fallback final por si de verdad no hay movimiento
+                try:
+                    obj = CAlta.objects.get(pk=pk)
+                    es_movimiento_real = False
+                except CAlta.DoesNotExist:
+                    obj = CBaja.objects.filter(pk=pk).first()
+                    if not obj:
+                        return HttpResponse("Error: No se encontró el registro.", status=404)
+                    es_movimiento_real = True
 
-        # Lógica de Cargo usando el registro_contrato (CAlta o CBaja)
-        cargo_obj = registro_contrato.cargo
-        cargo_texto = cargo_obj.ncargo.descripcion if cargo_obj else "-"
-        cargo_abreviado = abreviar_cargo_inteligente(cargo_texto)
+        # Contrato base (CAlta activo). Si es baja, esto será None porque ya se borró.
+        contrato_base = obj.contrato if es_movimiento_real and hasattr(obj, 'contrato') else (obj if not es_movimiento_real else None)
+
+        # --- CONFIGURACIÓN TARIFA ---
+        config = Configuracion.objects.first()
+        fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
+
+        # --- FUNCIONES DE FORMATO LIBRES DE "NONE" ---
+        def obtener_inicial_categoria(cat_str):
+            if not cat_str or str(cat_str) == "None": return ""
+            cat = str(cat_str).upper()
+            if "OPERARIO" in cat: return "O"
+            if "TÉCNICO" in cat or "TECNICO" in cat: return "T"
+            if "CUADRO" in cat: return "C"
+            if "SERVICIOS" in cat: return "S"
+            if "ADMINISTRATIVO" in cat: return "A"
+            return cat[0]
+
+        def romano_a_arabigo(tri_obj):
+            if not tri_obj or str(tri_obj) in ["None", "---"]: return ""
+            t = str(tri_obj).upper()
+            if "III" in t: return "3"
+            if "II" in t: return "2"
+            if "I" in t: return "1"
+            return t
+
+        # --- DETECCIÓN DE BAJA ---
+        t_mov_str = str(getattr(obj, 'tipo_movimiento', "Alta Inicial" if not es_movimiento_real else "")).upper()
+        es_alta = "ALTA" in t_mov_str
+        es_baja = "BAJA" in t_mov_str
+        es_movimiento = "MOVIMIENTO" in t_mov_str
+
+        # Para las Bajas, necesitamos el registro histórico (CBaja) para sacar el Departamento y Categoría exactos
+        baja_record = CBaja.objects.filter(no_expediente=obj.no_expediente).order_by('-id').first() if es_baja else None
         
-        if len(cargo_abreviado) > 35:
-            cargo_final = RichText(cargo_abreviado, size=14)
-        elif len(cargo_abreviado) > 25:
-            cargo_final = RichText(cargo_abreviado, size=16)
+        # El cargo de referencia (De donde sacamos dpto, ueb, categoria)
+        cargo_ref = baja_record.cargo if (es_baja and baja_record) else (contrato_base.cargo if contrato_base else None)
+
+        # --- LÓGICA DE DATOS SUPERIORES (UEB, Categoria, Cargo, Area) ---
+        if es_baja:
+            ueb_val = getattr(obj, 'unidad_anterior', "")
+            if not ueb_val or ueb_val == "---":
+                ueb_val = cargo_ref.departamento.unidad_organizativa.descripcion if cargo_ref else ""
+            
+            cargo_texto = getattr(obj, 'cargo_anterior', "")
+            if not cargo_texto or cargo_texto == "---":
+                cargo_texto = cargo_ref.ncargo.descripcion if cargo_ref else ""
+                
         else:
-            cargo_final = cargo_abreviado
+            ueb_val = getattr(obj, 'unidad_nueva', "") if es_movimiento_real else ""
+            if not ueb_val or ueb_val == "---":
+                ueb_val = cargo_ref.departamento.unidad_organizativa.descripcion if cargo_ref else ""
+            
+            cargo_texto = getattr(obj, 'cargo_nuevo', "") if es_movimiento_real else ""
+            if not cargo_texto or cargo_texto == "---":
+                cargo_texto = cargo_ref.ncargo.descripcion if cargo_ref else ""
 
-        # Definir UEB inteligentemente (Si en el mov dice "---" por ser baja, tomamos la anterior)
-        ueb_mostrar = mov.unidad_nueva if mov.unidad_nueva and mov.unidad_nueva != "---" else mov.unidad_anterior
+        # Área y Categoría
+        area_val = getattr(obj, 'departamento_nuevo', None) if es_movimiento_real else ""
+        if not area_val or area_val == "---":
+            area_val = cargo_ref.departamento.descripcion if cargo_ref else ""
 
-        # Contexto
+        cat_str = getattr(obj, 'cat_ocupacional_nuevo', None) if es_movimiento_real else ""
+        if not cat_str or cat_str == "---":
+            cat_str = cargo_ref.ncargo.get_cat_ocupacional_display() if cargo_ref and hasattr(cargo_ref.ncargo, 'get_cat_ocupacional_display') else ""
+        
+        cat_val = obtener_inicial_categoria(cat_str)
+
+        # Extracción segura del Rol
+        rol_n = getattr(obj, 'rol_nuevo', "") if es_movimiento_real else ""
+        if not rol_n or rol_n == "---":
+            rol_n = contrato_base.cargo.rol.tipo if contrato_base and contrato_base.cargo and getattr(contrato_base.cargo, 'rol', None) else ""
+
+        # Ajuste de tamaño de texto para Cargo
+        if len(cargo_texto) > 35:
+            cargo_final = RichText(cargo_texto, size=14)
+        elif len(cargo_texto) > 25:
+            cargo_final = RichText(cargo_texto, size=16)
+        else:
+            cargo_final = cargo_texto
+
+        # --- LÓGICA DE SALARIOS BASE ---
+        salario_base_num = float(getattr(obj, 'salario_nuevo', 0) or 0) if es_movimiento_real else float(contrato_base.calcular_salario_escala() or 0)
+        tarifa_base_num = salario_base_num / fondo if fondo else 0
+        salario_str = f"{salario_base_num:.2f} ({tarifa_base_num:.5f})" if salario_base_num > 0 else ""
+
+        # --- OTROS Y TOTAL ---
+        suma_otros_num = 0
+        if contrato_base:
+            suma_otros_num = (
+                float(getattr(contrato_base, 'maestria', 0) or 0) +
+                float(getattr(contrato_base, 'doctorado', 0) or 0) +
+                float(getattr(contrato_base, 'instructor', 0) or 0) +
+                float(getattr(contrato_base, 'cnci', 0) or 0)
+            )
+
+        if suma_otros_num > 0:
+            tarifa_otros_num = suma_otros_num / fondo if fondo else 0
+            otros_str = f"{suma_otros_num:.2f} ({tarifa_otros_num:.5f})"
+        else:
+            otros_str = ""
+        
+        total_num = salario_base_num + suma_otros_num
+        tarifa_total_num = total_num / fondo if fondo else 0
+        total_str = f"{total_num:.2f} ({tarifa_total_num:.5f})" if total_num > 0 else ""
+
+        # --- LÓGICA DE FECHAS ---
+        f_sol = getattr(obj, 'fecha_solicitud', None)
+        fecha_ref = f_sol if f_sol else (getattr(obj, 'fecha_efectiva', None) or getattr(obj, 'fecha_alta', datetime.now()))
+        fecha_efectiva = getattr(obj, 'fecha_efectiva', None) or getattr(obj, 'fecha_alta', datetime.now())
+
+        # --- CONSTRUCCIÓN DEL CONTEXTO PARA EL WORD ---
         context = {
-            'ueb': ueb_mostrar or (cargo_obj.departamento.unidad_organizativa.descripcion if cargo_obj else ""),
-            'doc_id': f"{mov.pk:06d}",
-            'd': hoy.strftime("%d"),
-            'm': hoy.strftime("%m"),
-            'a': hoy.strftime("%y"),
+            'doc_id': f"{obj.pk:06d}" if es_movimiento_real and not es_alta else "", 
+            'ueb': ueb_val,
             
-            'x_alta': "X" if "Alta" in (mov.tipo_movimiento or "") else "",
-            'x_baja': "X" if "Baja" in (mov.tipo_movimiento or "") else "",
-            'x_mov':  "X" if "Movimiento" in (mov.tipo_movimiento or "") else "",
+            'd': fecha_ref.strftime("%d"), 'm': fecha_ref.strftime("%m"), 'a': fecha_ref.strftime("%y"),
+            'ed': fecha_efectiva.strftime("%d"), 'em': fecha_efectiva.strftime("%m"), 'ea': fecha_efectiva.strftime("%Y"),
             
-            'ed': mov.fecha_efectiva.strftime("%d") if mov.fecha_efectiva else "-",
-            'em': mov.fecha_efectiva.strftime("%m") if mov.fecha_efectiva else "-",
-            'ea': mov.fecha_efectiva.strftime("%Y") if mov.fecha_efectiva else "-",
+            'x_alta': "X" if es_alta else "",
+            'x_baja': "X" if es_baja else "",
+            'x_mov':  "X" if es_movimiento else "",
             
-            'nombre': mov.aspirante.nombre,
-            'ap1': mov.aspirante.papellido,
-            'ap2': mov.aspirante.sapellido,
-            'exp': mov.no_expediente,
+            'nombre': obj.aspirante.nombre, 'ap1': obj.aspirante.papellido, 'ap2': obj.aspirante.sapellido, 'exp': obj.no_expediente,
             
-            'cat': getattr(cargo_obj.ncargo, 'get_cat_ocupacional_display')() if cargo_obj else "-",
+            'cat': cat_val,
             'cargo': cargo_final,
-            'area': cargo_obj.departamento.descripcion if cargo_obj else "-",
+            'area': area_val,
             
-            'sal_ant': mov.salario_anterior if mov.salario_anterior is not None else 0,
-            'rol_nue': cargo_obj.rol.tipo if (cargo_obj and cargo_obj.rol) else "-",
-            'tri_nue': registro_contrato.tridente if registro_contrato.tridente else "-",
-            'sal_nue': mov.salario_nuevo if mov.salario_nuevo is not None else 0,
+            # --- FILA "A:" (COMPLETAMENTE VACÍA SI ES BAJA) ---
+            'rol_nue': "" if es_baja else rol_n,
+            'tri_nue': "" if es_baja else romano_a_arabigo(getattr(obj, 'tridente_nuevo', contrato_base.tridente if contrato_base else "")),
+            'sal_nue': "" if es_baja else salario_str,
+            'otros': "" if es_baja else otros_str,
+            'total_sal': "" if es_baja else total_str,
             
-            'observaciones': mov.observaciones or ""
+            'observaciones': getattr(obj, 'observaciones', "") or getattr(obj, 'motivo_movimiento', ""),
         }
 
-        doc.render(context)
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
-        
-        filename = f"Movimiento_{mov.no_expediente}.docx"
-        
-        response = HttpResponse(
-            buffer.getvalue(),
-            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        
-        return response
+        # --- FILA "DE:" (HISTÓRICO) ---
+        if es_movimiento_real:
+            sal_ant_num = float(getattr(obj, 'salario_anterior', 0) or 0)
+            tarifa_ant_num = sal_ant_num / fondo if fondo else 0
+            
+            # Usamos los pagos extras del registro de baja si es baja, o del contrato actual si es mov
+            base_ant = baja_record if es_baja else contrato_base
+            suma_otros_ant = 0
+            if base_ant:
+                suma_otros_ant = (
+                    float(getattr(base_ant, 'maestria', 0) or 0) + float(getattr(base_ant, 'doctorado', 0) or 0) +
+                    float(getattr(base_ant, 'instructor', 0) or 0) + float(getattr(base_ant, 'cnci', 0) or 0)
+                )
 
+            if suma_otros_ant > 0:
+                tarifa_otros_ant = suma_otros_ant / fondo if fondo else 0
+                otros_ant_str = f"{suma_otros_ant:.2f} ({tarifa_otros_ant:.5f})"
+            else:
+                otros_ant_str = ""
 
+            total_ant_num = sal_ant_num + suma_otros_ant
+            tarifa_total_ant = total_ant_num / fondo if fondo else 0
+            total_ant_str = f"{total_ant_num:.2f} ({tarifa_total_ant:.5f})" if total_ant_num > 0 else ""
+
+            # Extraemos el Rol asegurándonos de que si viene la palabra "None" la borre
+            rol_ant_bd = str(getattr(obj, 'rol_anterior', ""))
+            
+            context.update({
+                'rol_ant': "" if rol_ant_bd == "None" else rol_ant_bd,
+                'tri_ant': romano_a_arabigo(getattr(obj, 'tridente_anterior', "")),
+                'sal_ant': f"{sal_ant_num:.2f} ({tarifa_ant_num:.5f})" if sal_ant_num > 0 else "",
+                'otros_ant': otros_ant_str,
+                'total_ant': total_ant_str,
+            })
+
+        # --- GENERACIÓN DEL DOCUMENTO ---
+        try:
+            template_path = os.path.join(settings.BASE_DIR, 'templates', 'pages', 'reportes', '13-MOVIMIENTO DE NOMINAS.docx')
+            doc = DocxTemplate(template_path)
+            doc.render(context)
+            
+            buffer = BytesIO()
+            doc.save(buffer)
+            buffer.seek(0)
+            
+            filename = f"Movimiento_{obj.no_expediente}.docx"
+            response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        except Exception as e:
+            return HttpResponse(f"Error al generar el documento: {str(e)}", status=500)
 # 2. ACTUALIZA ESTA FUNCIÓN (Agregamos el retorno de textos para OOB)
 # contratos/views.py
 
@@ -1425,6 +1643,26 @@ def finalizar_contrato_wizard(request, aspirante_id):
             'initial_tarifa_horaria': i_tarifa, 
             'initial_tarifa_extras': i_extras,
         }
+
+        # =========================================================
+        # LA MAGIA DEL WIZARD: Inyectar la fecha límite a la Fase 3
+        # =========================================================
+        
+        
+        ultima_baja = CBaja.objects.filter(aspirante_id=aspirante.id).order_by('-fecha_baja').first()
+        ultimo_mov = TMovimiento.objects.filter(aspirante_id=aspirante.id).order_by('-fecha_efectiva').first()
+        
+        fechas_pasadas = []
+        if ultima_baja and ultima_baja.fecha_baja: 
+            fechas_pasadas.append(ultima_baja.fecha_baja)
+        if ultimo_mov and ultimo_mov.fecha_efectiva: 
+            fechas_pasadas.append(ultimo_mov.fecha_efectiva)
+        
+        if fechas_pasadas:
+            fecha_limite = max(fechas_pasadas)
+            context['fecha_limite_js'] = fecha_limite.strftime('%Y-%m-%d')
+        # =========================================================
+
         return render(request, "pages/contrato/movimiento_nomina.html", context)
 
     # POST: Ejecutar el guardado en Base de Datos
@@ -1444,6 +1682,17 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     cargo_obj = CargoPlantilla.objects.get(pk=contrato.cargo_id)
                     if cargo_obj.rol:
                         contrato.rol = cargo_obj.rol
+                
+                # --- LA CURA CONTRA FECHAS ERRÓNEAS EN RECONTRATACIÓN ---
+                # IMPERATIVO: Siempre mandará la fecha validada de la UI, ignorando la caché del borrador
+                fecha_ui = request.POST.get('fecha_efectiva')
+                if fecha_ui:
+                    from datetime import datetime
+                    contrato.fecha_alta = datetime.strptime(fecha_ui, '%Y-%m-%d').date()
+                elif not contrato.fecha_alta:
+                    from django.utils import timezone
+                    contrato.fecha_alta = timezone.now().date()
+
                 contrato.save() # Guardado Físico
 
                 pdf_url = ""
@@ -1456,6 +1705,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         cargo_nuevo = form.cleaned_data.get('cargo')
                         salario_nue = float(request.POST.get('salarioEscala', 0))
                         
+                        tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
                         TMovimiento.objects.create(
                             contrato=contrato,
                             aspirante=aspirante,
@@ -1463,12 +1713,21 @@ def finalizar_contrato_wizard(request, aspirante_id):
                             fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
                             fecha_solicitud=form.cleaned_data.get('fecha_solicitud'),
                             observaciones=form.cleaned_data.get('observaciones', ''),
+                            
                             cargo_anterior="---",
-                            cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
                             salario_anterior=0,
-                            salario_nuevo=salario_nue,
                             unidad_anterior="---",
+                            
+                            cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
+                            departamento_nuevo=cargo_nuevo.departamento.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
+                            grupo_escala_nuevo=cargo_nuevo.ncargo.grupo_escala.nivel if (cargo_nuevo and cargo_nuevo.ncargo.grupo_escala) else "---",
+                            cat_ocupacional_nuevo=cargo_nuevo.ncargo.get_cat_ocupacional_display() if cargo_nuevo else "---",
+                            tipo_salario_nuevo=tipo_sal_nue_val,
+                            rol_nuevo=cargo_nuevo.rol.tipo if (cargo_nuevo and cargo_nuevo.rol) else "---",
+                            tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
+                            salario_nuevo=salario_nue,
                             unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
+                            
                             tipo_movimiento="Alta Inicial"
                         )
                         form.instance.en_proceso_movimiento = False

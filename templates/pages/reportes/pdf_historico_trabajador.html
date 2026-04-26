@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Histórico de Trabajador</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 2cm;
+            @frame footer {
+                -pdf-frame-content: footerContent;
+                bottom: 1cm;
+                margin-left: 2cm;
+                margin-right: 2cm;
+                height: 1cm;
+            }
+        }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #333; }
+        .header-table { width: 100%; margin-bottom: 20px; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }
+        .logo { width: 100px; height: auto; }
+        .title { text-align: right; color: #0056b3; font-size: 16pt; font-weight: bold; }
+        
+        .info-box { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; margin-bottom: 20px; }
+        .info-title { font-weight: bold; font-size: 12pt; margin-bottom: 5px; color: #222; }
+        .info-text { margin: 0; font-size: 10pt; }
+
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .data-table th { background-color: #0056b3; color: white; padding: 8px; text-align: left; font-size: 9pt; text-transform: uppercase; }
+        .data-table td { border-bottom: 1px solid #eee; padding: 8px; font-size: 9pt; }
+        
+        .estado-verde { color: #059669; font-weight: bold; }
+        .estado-rojo { color: #e11d48; font-weight: bold; }
+        .estado-normal { color: #333; }
+        
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td style="width: 30%;">
+                {% if config.logo %}
+                    <img src="{{ config.logo.path }}" class="logo" alt="Logo">
+                {% else %}
+                    <strong>{{ config.nombre_empresa|default:"Nuestra Empresa" }}</strong>
+                {% endif %}
+            </td>
+            <td style="width: 70%;" class="title">
+                HISTÓRICO LABORAL
+            </td>
+        </tr>
+    </table>
+
+    <div class="info-box">
+        <div class="info-title">{{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }}</div>
+        <div class="info-text">
+            <strong>Documento de Identidad:</strong> {{ aspirante.doc_identidad }}<br>
+            <strong>Fecha de Emisión:</strong> {{ fecha_hoy|date:"d/m/Y H:i" }}
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Evento</th>
+                <th class="text-center">Exp.</th>
+                <th>Cargo</th>
+                <th class="text-right">Salario</th>
+                <th class="text-center">Inicio</th>
+                <th class="text-center">Fin</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in historial %}
+            <tr>
+                <td><strong>{{ item.evento }}</strong></td>
+                <td class="text-center">{{ item.expediente }}</td>
+                <td>
+                    {{ item.cargo }}<br>
+                    <span style="font-size: 7pt; color: #666;">{{ item.unidad }}</span>
+                </td>
+                <td class="text-right">${{ item.salario }}</td>
+                <td class="text-center">{{ item.fecha_inicio_str }}</td>
+                <td class="text-center">
+                    {% if item.fecha_fin == 'Actualidad' %}
+                        <span class="estado-verde">Actualidad</span>
+                    {% elif item.evento == 'Baja' %}
+                        <span class="estado-rojo">{{ item.fecha_fin }}</span>
+                    {% else %}
+                        <span class="estado-normal">{{ item.fecha_fin }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center">No hay historial registrado para este trabajador.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="footerContent" style="text-align: right; font-size: 8pt; color: #777;">
+        Página <pdf:pagenumber> de <pdf:pagecount> | Generado por el Sistema Orbith
+    </div>
+
+</body>
+</html>
