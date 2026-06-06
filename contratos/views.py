@@ -1441,7 +1441,6 @@ class ModeloMovimientoDocxView(View):
 
 def cargar_salario(request):
     cargo_id      = request.GET.get('cargo')
-    # Ya no capturamos rol_id porque viene como texto desde el HTML
     tridente_id   = request.GET.get('tridente')
     tipo_salario  = request.GET.get('tipo_salario')
     es_movimiento = request.GET.get('es_movimiento') 
@@ -1459,7 +1458,7 @@ def cargar_salario(request):
             # 1. Cargamos el cargo con sus relaciones
             cargo = CargoPlantilla.objects.select_related('ncargo').get(id=cargo_id)
             grupo_obj = cargo.ncargo.grupo_escala
-            rol_obj = cargo.rol  # <--- AQUÍ YA TENEMOS EL ROL REAL (Ej: Fundamental)
+            rol_obj = cargo.rol  
             
             # 2. DETERMINAMOS SI ES CUADRO
             cat_nombre = cargo.ncargo.get_cat_ocupacional_display()
@@ -1468,7 +1467,8 @@ def cargar_salario(request):
             
             context['es_cuadro_flag'] = es_cuadro_por_cat
             context['nueva_cat'] = cat_nombre
-            context['nuevo_rol'] = rol_obj.tipo if rol_obj else ("Cuadro" if es_cuadro_por_cat else "-")
+            # AQUÍ LA CORRECCIÓN: Si no hay rol, se queda en "-", sin inventar "Cuadro"
+            context['nuevo_rol'] = rol_obj.tipo if rol_obj else "-"
             context['nuevo_grupo'] = grupo_obj.nivel if grupo_obj else "-"
             
             monto = 0.00
@@ -1498,12 +1498,10 @@ def cargar_salario(request):
                     else:
                         context['mostrar_tridente'] = True 
                         
-                        # ---> AQUÍ ESTÁ LA CORRECCIÓN <---
-                        # Usamos rol_obj (que ya viene de la BD) en vez del rol_id del HTML
                         if tridente_id and rol_obj: 
                             salario_obj = NSalario.objects.filter(
                                 grupo_escala=grupo_obj,
-                                rol=rol_obj,  # Pasamos el objeto directamente
+                                rol=rol_obj,
                                 tridente_id=tridente_id
                             ).first()
                 

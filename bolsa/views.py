@@ -10,6 +10,8 @@ from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
 from nomencladores.models import NProvincia
 
+from django.views.decorators.cache import never_cache
+
 from .models import Aspirante
 from .forms import AspiranteForm
 from usuarios.decorators import write_required
@@ -39,15 +41,7 @@ class AspiranteListView(ListView):
     template_name = "pages/aspirante/list_aspir.html"
 
     def get_queryset(self):
-        # FILTRO CORREGIDO
-        # Ordenamos por -id para garantizar la fecha de registro (más recientes primero)
-        qs = Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
-        u = self.request.user
-        if getattr(u, 'es_moderador', False):
-            # Usamos getattr para evitar error de tipado en 'unidades'
-            ids_permitidos = getattr(u, 'unidades').values_list('pk', flat=True)
-            qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
-        return qs
+        return Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -82,6 +76,7 @@ class AspiranteListView(ListView):
         context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
         return context
 
+@never_cache
 def search_aspirantes(request):
     # Obtenemos todos los parámetros
     query = request.GET.get('filter_aspirante', '').strip()
@@ -99,10 +94,7 @@ def search_aspirantes(request):
     qs = Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
 
     # Filtro de seguridad (Moderador)
-    u = request.user
-    if getattr(u, 'es_moderador', False):
-        ids_permitidos = u.unidades.values_list('pk', flat=True)
-        qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
+    
 
     # --- APLICAR NUEVOS FILTROS ---
     if provincia_id:
@@ -158,13 +150,7 @@ class BajaListView(ListView):
     template_name = "pages/aspirante/list_aspir.html" # Reutilizamos el template
 
     def get_queryset(self):
-        # SOLO BAJAS
-        qs = Aspirante.objects.filter(estado='BAJA').order_by('-id')
-        u = self.request.user
-        if getattr(u, 'es_moderador', False):
-            ids_permitidos = getattr(u,'unidades').values_list('pk', flat=True)
-            qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
-        return qs
+        return Aspirante.objects.filter(estado='BAJA').order_by('-id')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -195,14 +181,12 @@ class BajaListView(ListView):
 
 
 # 4. NUEVO: Búsqueda de Bajas
+@never_cache
 def search_bajas(request):
     query = request.GET.get('filter_aspirante', '').strip() # Usamos mismo nombre de input para no tocar template
     qs = Aspirante.objects.filter(estado='BAJA').order_by('-id')
 
-    u = request.user
-    if getattr(u, 'es_moderador', False):
-        ids_permitidos = u.unidades.values_list('pk', flat=True)
-        qs = qs.filter(unidad_organizativa_id__in=ids_permitidos)
+    
 
     # Filtro de texto (Buscador Inteligente)
     if query:
@@ -281,25 +265,48 @@ class AspiranteCreateView(CreateView):
         kwargs['user'] = self.request.user   # pasar user al form (para limitar UO si es moderador)
         return kwargs
 
-    def form_invalid(self, form):
-        # útil en desarrollo
-        print("Errores del formulario:", form.errors)
-        return super().form_invalid(form)
-
+    # En AspiranteCreateView:
     def form_valid(self, form):
-        u = self.request.user
-        # Moderador: solo en sus UO
-        if getattr(u, 'es_moderador', False):
-            permitidas = set(getattr(u, 'unidades').values_list('pk', flat=True))
-            if not form.instance.unidad_organizativa_id:
-                form.add_error('unidad_organizativa', 'Debe seleccionar una UO.')
-                return self.form_invalid(form)
-            if form.instance.unidad_organizativa_id not in permitidas:
-                return HttpResponseForbidden("Fuera de su UO asignada.")
+        # Eliminamos la validación de unidad_organizativa porque los Aspirantes no pertenecen a ninguna UO
         self.object = form.save(commit=False)
         nombre = self.object.nombre
         messages.success(self.request, f'Aspirante "{nombre}" ha sido creado correctamente.')
         return super().form_valid(form)
+
+# En AspiranteUpdateView:
+    def form_valid(self, form):
+        # 1. Pausamos el guardado para hacer las validaciones
+        aspirante = form.save(commit=False)
+
+        # 2. Lógica de especialidad según nivel educativo
+        if aspirante.nivel_educ not in ['NS', 'MS', 'TM']:
+            aspirante.especialidad = None
+        if aspirante.nivel_educ == 'NS' and not aspirante.especialidad:
+            messages.warning(self.request, 'Debe seleccionar una especialidad si el nivel educativo es Nivel Superior')
+            
+        # 3. Guardamos directamente
+        aspirante.save()
+        
+        # ---> LA LÍNEA CLAVE PARA EVITAR EL ERROR <---
+        self.object = aspirante
+
+        # 4. Cerramos el modal sin recargar página (HTMX)
+        if self.request.headers.get('HX-Request'):
+            import json
+            from django.http import HttpResponse
+            response = HttpResponse(status=204)
+            
+            # CORRECCIÓN: Mandamos un texto simple para que list_aspir.html no colapse
+            response['HX-Trigger'] = json.dumps({
+                'updateContratoList': '', 
+                'searchFilters': '',      
+                'closeModal': '',
+                'showMessage': f'Datos de "{aspirante.nombre}" guardados correctamente.'
+            })
+            return response
+
+        messages.success(self.request, f'Aspirante "{aspirante.nombre}" creado correctamente.')
+        return HttpResponseRedirect(self.get_success_url())
 
 
 # ----------------- EDITAR -----------------
@@ -332,29 +339,15 @@ class AspiranteUpdateView(UpdateView):
             aspirante.especialidad = None
         if aspirante.nivel_educ == 'NS' and not aspirante.especialidad:
             messages.warning(self.request, 'Debe seleccionar una especialidad si el nivel educativo es Nivel Superior')
-            
-        # 3. Moderador: solo edición en sus UO
-        u = self.request.user
-        if getattr(u, 'es_moderador', False):
-            permitidas = set(getattr(u, 'unidades').values_list('pk', flat=True))
-            if aspirante.unidad_organizativa_id not in permitidas:
-                return HttpResponseForbidden("Fuera de su UO asignada.")
 
-        # 4. guardamos
+        # 3. Guardamos
         aspirante.save()
+        self.object = aspirante # Por seguridad, actualizamos la instancia en la vista
 
-        # 5. Cerramos el modal sin recargar página
-        if self.request.headers.get('HX-Request'):
-            import json
-            from django.http import HttpResponse
-            response = HttpResponse(status=204)
-            response['HX-Trigger'] = json.dumps({
-                'updateContratoList': '', # Actualiza el Gestor de Plantillas
-                'searchFilters': '',      # Actualiza la Lista General de Contratos
-                'showMessage': {'icon': 'success', 'text': f'Datos de "{aspirante.nombre}" actualizados.'},
-                'closeModal': ''
-            })
-            return response
+        # 4. Retornamos usando el flujo normal de Django (Recarga la página)
+        form.instance = aspirante
+        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente.')
+        return super().form_valid(form)
 
         # Comportamiento tradicional (si no se usa HTMX)
         messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente.')

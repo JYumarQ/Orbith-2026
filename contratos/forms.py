@@ -44,7 +44,7 @@ class CAltaForm(forms.ModelForm):
     )
 
     rol = forms.CharField(
-        label='Rol de Pago',
+        label='Rol',
         required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
@@ -220,7 +220,8 @@ class CAltaForm(forms.ModelForm):
             except (ValueError, TypeError):
                 pass
                 
-        self.fields['reg_militar'].required = True
+        if 'reg_militar' in self.fields:
+            self.fields['reg_militar'].required = True
 
         # --- EL ESCUDO DEL SERVIDOR ---
         # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
@@ -249,60 +250,42 @@ class CAltaForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        cargo = cleaned_data.get('cargo')
+        
+        # Obtener tipo_contrato del form, o de la instancia si estamos en un movimiento
+        tipo_contrato = cleaned_data.get('tipo')
+        if not tipo_contrato and self.instance:
+            tipo_contrato = getattr(self.instance, 'tipo', None)
+            
         tipo_salario = cleaned_data.get('tipo_salario')
         tridente = cleaned_data.get('tridente')
 
-        # Regla 1: Si es Dinámico, el tridente es OBLIGATORIO
-        if tipo_salario == 'DIN' and not tridente:
-            self.add_error('tridente', "El tridente es obligatorio para un salario dinámico.")
-        
-        # Regla 2: Si es Fijo, forzamos el tridente a None (por seguridad extra)
-        if tipo_salario == 'FIJ':
+        # --- 1. LÓGICA UNIFICADA DEL TRIDENTE ---
+        es_cuadro = False
+        if cargo and cargo.ncargo and cargo.ncargo.cat_ocupacional:
+            cat_nombre = str(cargo.ncargo.cat_ocupacional).upper()
+            # Validamos si es cuadro por su categoría ocupacional
+            if "CUADRO" in cat_nombre or cat_nombre in ["CEJ", "CDI"]:
+                es_cuadro = True
+
+        es_fijo = (tipo_salario == 'FIJ')
+
+        # REGLA DE ORO: Si es Fijo O es Cuadro, el Tridente se anula.
+        if es_cuadro or es_fijo:
             cleaned_data['tridente'] = None
+        else:
+            # Si es Dinámico y NO es Cuadro, es estrictamente obligatorio.
+            if not tridente:
+                self.add_error('tridente', "El tridente es obligatorio para un salario dinámico en este cargo.")
 
-        return cleaned_data
-
-    def clean(self):
-        cleaned_data = super().clean()
-        cargo = cleaned_data.get('cargo')
-        tipo_contrato = cleaned_data.get('tipo')
-
-        # --- MÓDULO 3: VALIDACIÓN Y LIMPIEZA ESTRICTA DE TRIDENTE ---
-        if cargo:
-            rol_obj = cargo.rol
-            es_cuadro = rol_obj and rol_obj.tipo.strip() == "Cuadro"
-            
-            # Convertimos el nivel romano a número para aplicar las reglas
-            mapa = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100}
-            nivel_num = 0
-            if cargo.ncargo and cargo.ncargo.grupo_escala:
-                romano = cargo.ncargo.grupo_escala.nivel
-                prev = 0
-                for c in reversed(romano.upper().strip()):
-                    val = mapa.get(c, 0)
-                    if val < prev: nivel_num -= val
-                    else: nivel_num += val
-                    prev = val
-            
-            # REGLAS DE ORO: Forzamos el tridente a None (NULL en la BD) si no corresponde
-            if es_cuadro:
-                # Regla 1: Un "Cuadro" NUNCA se guarda con tridente, no importa el grupo.
-                cleaned_data['tridente'] = None
-                
-            elif 22 <= nivel_num <= 24 and (not rol_obj or rol_obj.tipo.strip() != "Decisorio"):
-                # Regla 2: En los Grupos XXII al XXIV, solo el rol "Decisorio" puede guardarse con tridente.
-                cleaned_data['tridente'] = None
-
-        # --- VALIDACIÓN DE CAPACIDAD ---
+        # --- 2. VALIDACIÓN DE CAPACIDAD (Intacta) ---
         if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
             check_capacity = True
-            
             if self.instance and self.instance.pk:
                 if self.instance.cargo == cargo:
                     check_capacity = False
             
             if check_capacity:
-                # CAMBIO AQUÍ: Usamos cant_cubierta_real
                 if cargo.cant_cubierta_real >= cargo.cant_aprobada:
                     self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada}).')
         
@@ -330,7 +313,8 @@ class MovimientoForm(CAltaForm):
 
     class Meta(CAltaForm.Meta):
         # Mantenemos los campos pero añadimos fecha_efectiva
-        fields = CAltaForm.Meta.fields + ('fecha_efectiva', 'fecha_solicitud', 'observaciones')
+        fields = ('unidad', 'departamento', 'cargo', 'tipo_salario', 'tridente', 
+                  'fecha_efectiva', 'fecha_solicitud', 'observaciones')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -5,11 +5,11 @@
             <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
         </div>
         <div class="modal-body">
-            <form hx-post="{% url 'updt_aspir' object.pk %}" 
-                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                hx-target="closest .modal-content"
-                hx-swap="innerHTML"
-                id="formEditarAspirante">
+            <form method="POST"
+                class="swal-confirm"
+                action="{% url 'updt_aspir' object.pk %}"
+                id="aspiranteForm"
+                data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
                 <div class="row g-3">
@@ -20,6 +20,9 @@
                     <div class="col-md-3">
                         {{ form.sexo.label_tag }}  
                         {{ form.sexo }}
+                        <small id="warning_sexo" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
+                            <i class="fas fa-exclamation-triangle"></i> No coincide CI.
+                        </small>
                     </div>
                     <div class="col-md-5">
                         {{ form.nombre.label_tag }}  
@@ -107,55 +110,34 @@
 
 <script>
     (function() {
-        var formulario = document.getElementById('formEditarAspirante');
-        var ciInput = formulario.querySelector('#id_doc_identidad');
-        // --- 1. LÓGICA ORIGINAL: Dependencias de Nivel Educativo ---
+        var formulario = document.getElementById('aspiranteForm');
+        if (!formulario) return;
+
+        // Selectores
         var nivel = formulario.querySelector('#id_nivel_educ');
         var espec = formulario.querySelector('#id_especialidad');
         var grado = formulario.querySelector('#id_grado_cientifico');
-
-        function actualizarCampos() {
-            if(!nivel) return;
-            var valorNivel = nivel.value;
-
-            // Habilitar Grado solo en NS
-            if (valorNivel === 'NS') {
-                grado.removeAttribute('disabled');
-            } else {
-                grado.setAttribute('disabled', 'disabled');
-                grado.value = ''; // <--- ESTA ES LA LÍNEA MÁGICA QUE LO VACÍA
-                
-                // Si usas Select2 en este campo en el futuro, esto asegura que también se limpie visualmente:
-                if ($(grado).hasClass('select2-hidden-accessible')) {
-                    $(grado).trigger('change.select2');
-                }
-            }
-        }
-        
-        if(nivel) nivel.addEventListener('change', actualizarCampos);
-        // Ejecutamos esto al inicio para que se ajuste a los datos cargados
-        actualizarCampos(); 
-
-
-        // --- 2. LÓGICA NUEVA: Validaciones y Semáforo ---
-        
-        // Selectores
-        
+        var ciInput = formulario.querySelector('#id_doc_identidad');
         var movilInput = formulario.querySelector('#id_movil_personal');
+        
+        // Selectores de Sexo
+        var sexInput = formulario.querySelector('#id_sexo');
+        var warningSexo = formulario.querySelector('#warning_sexo');
+
         const initialMovil = movilInput ? movilInput.value.trim() : "";
         var timer = null;
 
-        // Configuración idéntica a "Crear"
+        // Configuración de campos
         const configCampos = {
-            'id_doc_identidad': { tipo: 'ci',      mensaje: 'Inserte solo dígitos numéricos', esCI: true },
+            'id_doc_identidad': { tipo: 'ci', mensaje: 'Inserte solo dígitos numéricos', esCI: true },
             'id_sexo':          { tipo: 'select' },
             'id_nombre':        { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
             'id_papellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
             'id_sapellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
             'id_movil_personal':{ tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
             'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
-            'id_provincia':     { tipo: 'select' },
-            'id_municipio':     { tipo: 'select' },
+            'id_provincia':     { tipo: 'select' }, 
+            'id_municipio':     { tipo: 'select' },  
             'id_raza':          { tipo: 'select' }
         };
 
@@ -165,7 +147,6 @@
             texto:    /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜçÇ\-\s]/g
         };
 
-        // Función Auxiliar: Validar fechas del CI (Mes/Día)
         function validarLogicaCI(input) {
             let val = input.value;
             if (val.length < 4) return; 
@@ -173,28 +154,30 @@
             const mes = parseInt(val.substring(2, 4));
             if (val.length >= 4 && (mes < 1 || mes > 12)) {
                 input.value = val.substring(0, 2); 
-                mostrarError(input, "Mes inválido (01-12)");
+                mostrarErrorFlotante(input, "Mes inválido (01-12)");
                 return;
             }
             if (val.length >= 6) {
                 const dia = parseInt(val.substring(4, 6));
-                let max = 31;
-                if ([4, 6, 9, 11].includes(mes)) max = 30;
-                if (mes === 2) max = 29;
-                if (dia < 1 || dia > max) {
+                let maxDias = 31;
+                if ([4, 6, 9, 11].includes(mes)) maxDias = 30;
+                if (mes === 2) maxDias = 29;
+
+                if (dia < 1 || dia > maxDias) {
                     input.value = val.substring(0, 4); 
-                    mostrarError(input, "Día inválido para este mes");
+                    mostrarErrorFlotante(input, "Día inválido para este mes");
+                    return;
                 }
             }
         }
 
-        function mostrarError(input, msg) {
+        function mostrarErrorFlotante(input, msg) {
             input.setCustomValidity(msg);
             input.reportValidity();
         }
 
         function actualizarEstilo(input, cfg) {
-            input.classList.remove('border-warning', 'is-invalid', 'is-valid');
+            input.classList.remove('border-warning', 'is-invalid', 'is-valid', 'border-success');
             const valor = input.value.trim();
 
             if (!valor) {
@@ -208,32 +191,34 @@
             input.classList.add('is-valid');
         }
 
-        // Inicializar validaciones
+        // Aplicar lógica a los campos
         for (const [id, cfg] of Object.entries(configCampos)) {
             const input = formulario.querySelector('[id="' + id + '"]');
             if (!input) continue;
 
             if (cfg.tipo !== 'select') {
                 input.addEventListener('input', function() {
-                    this.setCustomValidity("");
+                    this.setCustomValidity(""); 
+                    const valorAntes = this.value;
                     const tipoPatron = (cfg.tipo === 'ci') ? 'numeros' : cfg.tipo;
-                    const patron = patrones[tipoPatron];
+                    const patron = patrones[tipoPatron]; 
+
+                    if (patron.test(valorAntes)) {
+                        this.value = valorAntes.replace(patron, '');
+                        mostrarErrorFlotante(this, cfg.mensaje);
+                    } 
                     
-                    if (patron.test(this.value)) {
-                        this.value = this.value.replace(patron, '');
-                        mostrarError(this, cfg.mensaje);
-                    }
                     if (cfg.tipo === 'ci') validarLogicaCI(this);
                     actualizarEstilo(this, cfg);
                 });
 
-                input.addEventListener('blur', function() {
-                    this.setCustomValidity(""); 
-                });
+                input.addEventListener('blur', function() { this.setCustomValidity(""); });
 
                 if (cfg.capitalizar) {
                     input.addEventListener('blur', function() {
-                        if (this.value) this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, m => m.toUpperCase());
+                        if (this.value) {
+                            this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, match => match.toUpperCase());
+                        }
                         actualizarEstilo(this, cfg);
                     });
                 }
@@ -242,24 +227,69 @@
                     actualizarEstilo(this, cfg);
                     if (id === 'id_provincia') {
                         setTimeout(() => {
-                             const muni = document.getElementById('id_municipio');
+                             const muni = formulario.querySelector('#id_municipio');
                              if(muni) actualizarEstilo(muni, configCampos['id_municipio']);
                         }, 200); 
                     }
                 });
-                $(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
+                if (window.jQuery) {
+                    $(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
+                }
             }
-            // Estado inicial (Pintará verde si ya tiene datos cargados de la BD)
-            actualizarEstilo(input, cfg);
+            actualizarEstilo(input, cfg); 
         }
 
-        // Validación Servidor para Móvil (Solo si cambió)
+        // --- MAGIA: AUTOCOMPLETADO INTELIGENTE DEL CI ---
+        if (ciInput) {
+            ciInput.addEventListener('input', function() {
+                var val = this.value;
+
+                // Validación de Longitud para activar Magia
+                if (val.length !== 11) {
+                    if (warningSexo) warningSexo.classList.add('d-none');
+                    return; 
+                }
+
+                if (sexInput) {
+                    var digito10 = parseInt(val.charAt(9));
+                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
+                    
+                    sexInput.value = sexoCalculado;
+                    sexInput.classList.remove('border-warning', 'is-invalid');
+                    sexInput.classList.add('is-valid');
+                    
+                    if (warningSexo) warningSexo.classList.add('d-none');
+                    
+                    if (window.jQuery && $(sexInput).hasClass('select2-hidden-accessible')) {
+                        $(sexInput).trigger('change.select2');
+                    }
+                }
+            });
+        }
+
+        // --- VALIDACIÓN SUAVE DE SEXO (SI EL USUARIO LO CAMBIA) ---
+        if (sexInput && ciInput) {
+            sexInput.addEventListener('change', function() {
+                var valCI = ciInput.value;
+                if (valCI.length === 11) {
+                    var digito10 = parseInt(valCI.charAt(9));
+                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
+                    
+                    if (this.value && this.value !== sexoCalculado) {
+                        if (warningSexo) warningSexo.classList.remove('d-none');
+                    } else {
+                        if (warningSexo) warningSexo.classList.add('d-none');
+                    }
+                }
+            });
+        }
+
+        // Validación de Móvil
         if (movilInput) {
             movilInput.addEventListener('input', function() {
                 var val = this.value.trim();
                 var errExist = formulario.querySelector('#error_movil_exist');
 
-                // Si es su propio número, es válido
                 if (val === initialMovil) {
                     if (errExist) errExist.classList.add('d-none');
                     this.classList.remove('is-invalid');
@@ -271,6 +301,7 @@
 
                 clearTimeout(timer);
                 timer = setTimeout(function() {
+                    // Nota: Asegúrate de tener la URL correcta en fetch. Aquí asumo la ruta absoluta validando ID.
                     fetch("/bolsa/validar_datos/?movil=" + val)
                     .then(response => response.json())
                     .then(data => {
@@ -289,63 +320,51 @@
             });
         }
 
-        // --- 3. INTERCEPTAR ENVÍO ---
-        formulario.addEventListener('submit', function(e) {
-            e.preventDefault(); 
-            e.stopImmediatePropagation(); 
+        // Lógica de Selectores Anidados
+        function actualizarCampos() {
+            if(!nivel) return;
+            var valorNivel = nivel.value;
+            if (valorNivel === 'NS') {
+                grado.removeAttribute('disabled');
+            } else {
+                grado.setAttribute('disabled', 'disabled');
+                grado.value = ''; 
+                if (window.jQuery && $(grado).hasClass('select2-hidden-accessible')) {
+                    $(grado).trigger('change.select2');
+                }
+            }
+        }
+        if(nivel) nivel.addEventListener('change', actualizarCampos);
+        actualizarCampos();
 
-            // Verificar si queda algo mal o vacío
-            var ciError = ciInput && ciInput.value.length !== 11;
-            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
+        // -------------------------------------------------------------
+        // ENVÍO TRADICIONAL + VALIDACIÓN ESTRICTA
+        // -------------------------------------------------------------
+        formulario.addEventListener('submit', function(e) {
+            var elCiExist = formulario.querySelector('#error_ci_exist');
             var elMovil = formulario.querySelector('#error_movil_exist');
-            var movilError = elMovil && !elMovil.classList.contains('d-none');
+            var tieneErrorCiExist = elCiExist && !elCiExist.classList.contains('d-none');
+            var tieneErrorMovil = elMovil && !elMovil.classList.contains('d-none');
+            var longitudIncorrecta = ciInput && ciInput.value.length !== 11;
+            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
             var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
 
-            if (ciError || hayVacios || hayRojos) {
+            if (tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios || hayRojos) {
+                e.preventDefault(); 
+                e.stopImmediatePropagation(); 
+
                 Swal.fire({
                     title: 'Atención',
-                    text: 'Revise los campos resaltados.',
+                    text: 'Revise los campos resaltados en rojo o amarillo.',
                     icon: 'warning',
                     confirmButtonText: 'OK',
-                    customClass: { confirmButton: 'btn btn-primary' }
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
                 });
-                return; // Si hay errores, frenamos aquí.
+                return;
             }
-
-            // Si todo está bien, lanzamos TU SweetAlert de confirmación
-            Swal.fire({
-                title: '¿Confirmar cambios?',
-                text: "¿Estás seguro de guardar los cambios del aspirante?",
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, guardar',
-                cancelButtonText: 'Cancelar',
-                customClass: { 
-                    confirmButton: 'btn btn-primary me-3', 
-                    cancelButton: 'btn btn-secondary' 
-                },
-                buttonsStyling: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Si dice que sí, le decimos a HTMX que procese el envío manualmente
-                    htmx.trigger(formulario, 'htmx:submit');
-                }
-            });
         });
         
-        // Observador de Municipio (Para HTMX)
-        const obs = new MutationObserver(function() {
-            const muni = document.getElementById('id_municipio');
-            if (muni) {
-                actualizarEstilo(muni, configCampos['id_municipio']);
-                muni.addEventListener('change', function() { actualizarEstilo(this, configCampos['id_municipio']); });
-            }
-        });
-        const muniP = document.getElementById('id_municipio')?.parentNode;
-        if(muniP) obs.observe(muniP, { childList: true });
-
-        if (window.htmx) htmx.process(formulario);
-
+        if (sexInput) sexInput.dispatchEvent(new Event('change'));
     })();
 </script>
-

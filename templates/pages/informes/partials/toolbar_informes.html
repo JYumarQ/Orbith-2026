@@ -1,0 +1,153 @@
+<style>
+    /* Tarjeta principal */
+    .toolbar-card {
+        border-radius: 1.25rem !important; 
+        box-shadow: 0 4px 20px rgba(105, 108, 255, 0.08) !important; 
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    }
+    
+    /* Base para los botones */
+    .btn-export {
+        border-radius: 12px !important; 
+        padding: 0.6rem 1.25rem;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+    }
+    .btn-export:active { transform: scale(0.96); }
+
+    /* Botón PDF (Naranja/Rojo estilo Outline) */
+    .btn-pdf {
+        background-color: transparent;
+        color: #ff3e1d;
+        border: 2px solid #ff3e1d;
+    }
+    .btn-pdf:hover {
+        background-color: #ff3e1d;
+        color: #fff;
+        box-shadow: 0 5px 15px rgba(255, 62, 29, 0.3);
+    }
+
+    /* Botón Word (Azul Degradado) */
+    .btn-word {
+        background: linear-gradient(135deg, #696cff 0%, #4346e3 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 4px 10px rgba(105, 108, 255, 0.3);
+    }
+    .btn-word:hover {
+        box-shadow: 0 6px 15px rgba(105, 108, 255, 0.4);
+        transform: translateY(-2px); 
+        color: white;
+    }
+
+    /* --- ADAPTACIÓN PARA QUE SELECT2 RESPETE TU DISEÑO DE PÍLDORA --- */
+    .select2-container--default .select2-selection--single {
+        background-color: #f8f9fa !important;
+        border: 2px solid transparent !important;
+        border-radius: 50rem !important; 
+        height: auto !important;
+        padding: 0.5rem 1.2rem !important;
+        font-weight: 600 !important;
+        color: #495057 !important;
+        transition: all 0.2s ease;
+    }
+    .select2-container--default.select2-container--open .select2-selection--single,
+    .select2-container--default.select2-container--focus .select2-selection--single {
+        background-color: #ffffff !important;
+        border-color: rgba(105, 108, 255, 0.4) !important;
+        box-shadow: 0 0 0 0.25rem rgba(105, 108, 255, 0.1) !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        color: #495057 !important;
+        line-height: normal !important;
+        padding-left: 0 !important;
+    }
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 100% !important;
+        right: 15px !important;
+    }
+</style>
+
+<div class="card border-0 toolbar-card bg-white mb-4">
+    <div class="card-body p-4 d-flex flex-column flex-xl-row justify-content-between align-items-center gap-4">
+        
+        <div class="text-center text-xl-start flex-shrink-0">
+            <h4 class="fw-bold mb-1 text-dark" style="letter-spacing: -0.5px;">
+                <span class="text-muted fw-light">Informes /</span> 
+                <span class="text-primary">{{ titulo_informe }}</span>
+            </h4>
+            <div class="d-flex align-items-center justify-content-center justify-content-xl-start text-muted small fw-medium mt-2">
+                <div class="bg-label-secondary rounded p-1 me-2 d-flex">
+                    <i class="bx bx-calendar-event" style="color: #FF6600 !important;"></i>
+                </div>
+                <span>Periodo actual: <strong class="text-dark ms-1">
+                    {% if mes_actual == '1' %}Enero{% elif mes_actual == '2' %}Febrero{% elif mes_actual == '3' %}Marzo{% elif mes_actual == '4' %}Abril{% elif mes_actual == '5' %}Mayo{% elif mes_actual == '6' %}Junio{% elif mes_actual == '7' %}Julio{% elif mes_actual == '8' %}Agosto{% elif mes_actual == '9' %}Septiembre{% elif mes_actual == '10' %}Octubre{% elif mes_actual == '11' %}Noviembre{% elif mes_actual == '12' %}Diciembre{% else %}Junio{% endif %} {{ anno_actual|default:"2026" }}
+                </strong></span>
+            </div>
+        </div>
+
+        <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
+            
+            <div style="min-width: 260px; width: 100%; max-width: 350px;">
+                <select id="selector-informes" class="form-select w-100">
+                    <option value="{% url 'informe_economia' %}">Consolidado F. Trabajo</option>
+                    <option value="{% url 'informe_trabajadores_ueb' %}">Trabajadores x UEB</option>
+                    <option value="{% url 'informe_puestos_clave' %}">Resumen Puestos Clave</option>
+                    <option value="{% url 'informe_misiones' %}">Misiones Internacionales</option>
+                    <option value="{% url 'informe_registro_diario' %}">Registro Diario por Trabajadores</option>
+                </select>
+            </div>
+
+            <div class="d-flex gap-2 flex-shrink-0">
+                <button type="button" onclick="descargarPDF()" class="btn btn-export btn-pdf d-flex align-items-center gap-2" title="Exportar a PDF">
+                    <i class="bx bxs-file-pdf fs-5"></i> 
+                    <span>PDF</span>
+                </button>
+                
+                <button type="button" onclick="descargarWord()" class="btn btn-export btn-word d-flex align-items-center gap-2" title="Exportar a Word">
+                    <i class="bx bxs-file-doc fs-5"></i> 
+                    <span>Word</span>
+                </button>
+            </div>
+
+        </div>
+        
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    var $select = $('#selector-informes');
+    var currentPath = window.location.pathname;
+
+    // Autoselección correcta
+    $select.find('option').each(function() {
+        if ($(this).val() === currentPath) $(this).prop('selected', true);
+    });
+
+    // Inicializar Select2
+    $select.select2({ 
+        width: '100%', 
+        minimumResultsForSearch: -1
+    });
+
+    // Redirección
+    $select.on('change', function () {
+        var urlDestino = $(this).val();
+        if (urlDestino && urlDestino !== currentPath) window.location.href = urlDestino;
+    });
+});
+
+// Enlace de las funciones globales
+function descargarPDF() {
+    if (typeof ejecutarPDF === 'function') ejecutarPDF();
+    else Swal.fire('Aviso', 'La exportación a PDF para este informe está en desarrollo.', 'info');
+}
+
+function descargarWord() {
+    if (typeof ejecutarWord === 'function') ejecutarWord();
+    else Swal.fire('Aviso', 'La exportación a Word para este informe está en desarrollo.', 'info');
+}
+</script>

@@ -13,18 +13,20 @@ class NCargoForm(forms.ModelForm):
     
     class Meta:
         model = NCargo
-        fields = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
+        fields = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico', 'puesto_clave')
         labels = {
             'descripcion': 'Descripción', 
             'cat_ocupacional': 'Cat. Ocup.', 
             'grupo_escala': 'Gpo. Escala', 
-            'salario_basico': 'Salario'
+            'salario_basico': 'Salario', 
+            'puesto_clave': 'Puesto Clave'
         }
         widgets = {
             'descripcion': forms.TextInput(attrs={'class':'form-control'}), 
             'cat_ocupacional': forms.Select(attrs={'class':'form-select'}), 
             'grupo_escala': forms.Select(attrs={'class':'form-select'}), 
-            'salario_basico': forms.NumberInput(attrs={'class':'form-control'})
+            'salario_basico': forms.NumberInput(attrs={'class':'form-control'}),
+            'puesto_clave': forms.CheckboxInput(attrs={'class':'form-check-input'})
         }
         
 class NGrupoEscalaForm(forms.ModelForm):

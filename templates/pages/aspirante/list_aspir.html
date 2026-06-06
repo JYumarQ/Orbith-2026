@@ -90,12 +90,12 @@
                 <div class="input-group input-group-merge">
                     <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
                     <input id="search" type="text" class="form-control border-0 shadow-none" 
-                          placeholder="Buscar..." 
-                          name="filter_aspirante"
-                          hx-get="{% url search_url %}" 
-                          hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
-                          hx-target="#filter_aspirantes_results"
-                          hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado">
+                       placeholder="Buscar..." 
+                       name="filter_aspirante"
+                       hx-get="{% url search_url %}" 
+                       hx-trigger="input changed delay:500ms, keyup[key=='Enter'], refreshTable from:body" 
+                       hx-target="#filter_aspirantes_results"
+                       hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado">
                 </div>
             </div>
 
@@ -233,22 +233,31 @@
   <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
   <script type="text/javascript">
     var $ = jQuery.noConflict();
+    
     function abrir_modal_edicion(url){
       $('#editar_aspir').load(url, function(){
         $(this).modal('show');
-        
-      })
+        if (window.htmx) {
+          htmx.process(this); // <-- Seguro e infalible
+        }
+      });
     }
+    
     function abrir_modal_creacion(url){
       $('#crear_aspir').load(url, function(){
         $(this).modal('show');
-        
-      })
+        if (window.htmx) {
+          htmx.process(this); // <-- Seguro e infalible
+        }
+      });
     }
+    
     function abrir_modal_contrato(url){
       $('#crear_contrato').load(url, function(){
         $(this).modal('show');
-        
+        if (window.htmx) {
+          htmx.process(this); // <-- Seguro e infalible
+        }
       });
     }
 
@@ -459,19 +468,7 @@
 
     
 
-    // Escucha el evento 'showMessage' que envía el servidor al eliminar
-    document.body.addEventListener('showMessage', function(evt){
-        // Usamos SweetAlert en modo "Toast"
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: evt.detail.value,
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true
-        });
-    }); // <--- AQUÍ SE CIERRA EL EVENTO showMessage. ¡ESTO FALTABA!
+    
 
     // --- LÓGICA PARA TECLA DELETE ---
     document.addEventListener('keydown', function(e) {

@@ -834,6 +834,7 @@ def cargo_create(request):
     cat_ocupacional = data.get('cat_ocupacional', '').strip()
     grupo_escala_id = data.get('grupo_escala_id')
     salario_basico = data.get('salario_basico', 0)
+    puesto_clave = data.get('puesto_clave', False) # <-- 1. Atrapamos el dato del JS
 
     if not descripcion or not cat_ocupacional or not grupo_escala_id:
         return JsonResponse({'error': 'Complete todos los campos obligatorios'}, status=400)
@@ -844,7 +845,8 @@ def cargo_create(request):
             descripcion=descripcion.title(),
             cat_ocupacional=cat_ocupacional,
             grupo_escala=grupo,
-            salario_basico=float(salario_basico)
+            salario_basico=float(salario_basico),
+            puesto_clave=puesto_clave              # <-- 2. Lo guardamos en la BD
         )
         return JsonResponse({
             'id': obj.id,
@@ -869,6 +871,7 @@ def cargo_update(request, pk):
         cat_ocupacional = data.get('cat_ocupacional', '').strip()
         grupo_escala_id = data.get('grupo_escala_id')
         salario_basico = data.get('salario_basico', 0)
+        puesto_clave = data.get('puesto_clave', False) # <-- 1. Atrapamos el dato
 
         if not descripcion or not cat_ocupacional or not grupo_escala_id:
             return JsonResponse({'error': 'Complete todos los campos obligatorios'}, status=400)
@@ -878,6 +881,7 @@ def cargo_update(request, pk):
         obj.cat_ocupacional = cat_ocupacional
         obj.grupo_escala = grupo
         obj.salario_basico = float(salario_basico)
+        obj.puesto_clave = puesto_clave                # <-- 2. Actualizamos la BD
         obj.save()
 
         return JsonResponse({

@@ -531,7 +531,7 @@
             if (tipoSalarioSelect && window.htmx) {
                 // Forzamos el evento para que HTMX cargue el salario fijo de inmediato
                 htmx.trigger(tipoSalarioSelect, 'change');
-                console.log("CHIVATO: Disparando carga inicial de salario...");
+                
             }
         }, 400); // 400ms es el tiempo ideal para esperar a que el modal se asiente
 
@@ -578,24 +578,7 @@
             const name = this.name;
             let valido = this.value.trim() !== '';
 
-            // 1. Lógica Condicional del Tridente
-            if (name === 'tipo_salario') {
-                const $tridente = $form.find('[name="tridente"]');
-                if ($tridente.length) {
-                    if (this.value === 'FIJ') {
-                        $tridente.prop('disabled', true).val('');
-                        if ($tridente.hasClass('select2-hidden-accessible')) {
-                            $tridente.trigger('change.select2');
-                            $tridente.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
-                        } else {
-                            $tridente.removeClass('border-warning border-success');
-                        }
-                    } else {
-                        $tridente.prop('disabled', false);
-                        pintarBorde($tridente[0], $tridente.val().trim() !== "");
-                    }
-                }
-            }
+            
 
             // 2. Validación Cronológica en Tiempo Real
             if (name === 'fecha_efectiva') {
@@ -615,12 +598,26 @@
                 }
             }
 
-            // Validar obligatorios y Tridente si no está bloqueado
+            // Validar obligatorios (excepto fecha_efectiva que tiene su propia lógica)
             if (obligatorios.includes(name) && name !== 'fecha_efectiva') {
                 pintarBorde(this, valido);
             }
-            if (name === 'tridente' && !$(this).prop('disabled')) {
-                pintarBorde(this, valido);
+            
+            // CURA DEL TRIDENTE PARA MOVIMIENTOS (Limpieza de Select2)
+            if (name === 'tridente') {
+                let $el = $(this);
+                if ($el.prop('disabled') || $el.prop('readonly')) {
+                    // 1. Limpiamos select nativo
+                    $el.removeClass('border-warning is-invalid border-danger');
+                    // 2. Limpiamos la máscara de Select2
+                    if ($el.hasClass('select2-hidden-accessible')) {
+                        $el.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success is-invalid border-danger');
+                    }
+                    // 3. Forzamos a evaluar el botón
+                    evaluarBoton(); 
+                } else {
+                    pintarBorde(this, valido);
+                }
             }
         });
 
@@ -632,10 +629,10 @@
                 if ($el.length) $el.trigger('change');
             });
             
-            // Evaluamos el tridente condicionalmente
+            // Disparamos el tridente para que aplique la nueva lógica de limpieza de Select2
             const $tridente = $form.find('[name="tridente"]');
-            if ($tridente.length && !$tridente.prop('disabled')) {
-                pintarBorde($tridente[0], $tridente.val().trim() !== "");
+            if ($tridente.length) {
+                $tridente.trigger('change');
             }
         }, 500);
     }

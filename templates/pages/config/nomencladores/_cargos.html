@@ -1,0 +1,558 @@
+<div class="card shadow-none border" id="card-cargos">
+    <div class="card-header border-bottom d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 py-3 bg-transparent">
+        <div class="d-flex align-items-center gap-3">
+        <div class="avatar avatar-md bg-label-primary rounded d-flex align-items-center justify-content-center">
+            <i class="fas fa-briefcase fs-5"></i>
+        </div>
+        <div>
+            <h5 class="mb-0 fw-bold text-heading">Listado de Cargos</h5>
+            <small class="text-muted">Gestión de puestos y escalas salariales</small>
+        </div>
+        </div>
+
+        <div class="d-flex flex-wrap flex-md-nowrap align-items-center gap-3 ms-lg-auto">
+        <div class="input-group input-group-merge shadow-sm" style="min-width: 200px; max-width: 250px;">
+            <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="search-cargos-input" class="form-control border-start-0" placeholder="Buscar cargo...">
+        </div>
+
+        <div id="cargos-toolbar-actions" class="btn-group toolbar-disabled shadow-sm">
+            <button type="button" class="btn btn-outline-secondary btn-icon bg-white" id="btn-editar-cargo" title="Editar seleccionado">
+            <i class="fas fa-pencil-alt"></i>
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-icon bg-white" id="btn-eliminar-cargo" title="Eliminar seleccionado">
+            <i class="fas fa-trash"></i>
+            </button>
+        </div>
+
+        <div id="cargos-toolbar-editing" class="btn-group d-none shadow-sm">
+            <button type="button" class="btn btn-primary" id="btn-guardar-cargo">
+            <i class="fas fa-save me-1"></i> Guardar
+            </button>
+            <button type="button" class="btn btn-outline-secondary bg-white" id="btn-cancelar-cargo">
+            Cancelar
+            </button>
+        </div>
+
+        <button class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2" id="btn-add-cargo">
+            <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Añadir Cargo</span>
+        </button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="cargos-table" style="table-layout: fixed;">
+        <thead class="bg-lighter">
+            <tr>
+            <th style="width: 50%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('descripcion')">
+                <div class="d-flex justify-content-between align-items-center text-muted fw-semibold" style="font-size: 0.75rem;">
+                <span>Descripción</span> <i class="fas fa-sort" id="icon-descripcion"></i>
+                </div>
+            </th>
+            <th style="width: 20%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('cat')">
+                <div class="d-flex justify-content-center align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                <span>Categoría</span> <i class="fas fa-sort" id="icon-cat"></i>
+                </div>
+            </th>
+            <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('grupo')">
+                <div class="d-flex justify-content-center align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                <span>Nivel</span> <i class="fas fa-sort" id="icon-grupo"></i>
+                </div>
+            </th>
+            <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('salario')">
+                <div class="d-flex justify-content-end align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
+                <span>Salario</span> <i class="fas fa-sort" id="icon-salario"></i>
+                </div>
+            </th>
+            <th style="width: 10%;" class="text-uppercase text-center">
+                <span class="text-muted fw-semibold" style="font-size: 0.75rem;">P. Clave</span>
+            </th>
+            </tr>
+        </thead>
+        <tbody id="cargos-tbody" class="table-border-bottom-0">
+            {% for c in cargos %}
+            <tr class="fila-cargo"
+            data-id="{{ c.id }}" 
+            data-cat="{{ c.cat_ocupacional }}" 
+            data-grupo="{{ c.grupo_escala.id }}" 
+            data-salario="{{ c.salario_basico|stringformat:'.2f' }}"
+            data-activo="{{ c.activo|yesno:'true,false' }}"
+            data-clave="{{ c.puesto_clave|yesno:'true,false' }}" style="cursor: pointer;"
+            onclick="seleccionarCargo(this)">
+                                
+            <td class="desc-cell fw-semibold text-heading text-truncate">{{ c.descripcion }}</td>
+            <td class="cat-cell text-center">
+                <span class="badge bg-label-dark px-3 rounded-pill">
+                {{ c.get_cat_ocupacional_display }}
+                </span>
+            </td>
+            <td class="grupo-cell text-center fw-bold text-muted">{{ c.grupo_escala.nivel }}</td>
+            <td class="salario-cell text-end fw-bold text-success">${{ c.salario_basico }}</td>
+            <td class="clave-cell text-center">
+                {% if c.puesto_clave %}
+                    <span class="badge bg-label-warning"><i class="fas fa-star"></i></span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </td>
+        </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+
+    <div class="card-footer border-top bg-transparent d-flex justify-content-center pt-3 pb-3">
+        <nav aria-label="Cargos paginación">
+            <ul class="pagination m-0" id="cargos-paginator"></ul>
+        </nav>
+    </div>
+</div>
+
+<script>
+  /* ==========================================================================
+    VARIABLES Y CONSTANTES GLOBALES DE CARGOS
+  ========================================================================== */
+  let cargoSeleccionadoID = null;
+  let modoEdicion = false;
+  const CARGOS_PER_PAGE = 10;
+  let cargosCurrentPage = 1;
+  let cargosSortCol = 'descripcion';
+  let cargosSortAsc = true;
+
+  const CAT_OPTIONS_HTML = `
+      <option value="OPE">Operario</option>
+      <option value="TEC">Técnico</option>
+      <option value="ADM">Administrativo</option>
+      <option value="SER">Servicio</option>
+      <option value="CDI">Cuadro Directivo</option>
+      <option value="CEJ">Cuadro Ejecutivo</option>
+  `;
+
+  let GRUPO_OPTIONS_HTML = '<option value="">-- Gpo. --</option>';
+  {% for g in grupos %}
+      GRUPO_OPTIONS_HTML += `<option value="{{ g.id }}">{{ g.nivel }}</option>`;
+  {% endfor %}
+
+  /* ==========================================================================
+    FUNCIONES DE AYUDA Y ORDENAMIENTO
+  ========================================================================== */
+  function romanToInt(s) {
+      const map = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
+      let result = 0; let prevValue = 0;
+      for (let i = s.length - 1; i >= 0; i--) {
+          const currentValue = map[s[i].toUpperCase()];
+          if (!currentValue) continue; 
+          if (currentValue < prevValue) result -= currentValue;
+          else result += currentValue; 
+          prevValue = currentValue;
+      }
+      return result;
+  }
+
+  function updateSortIcons() {
+    ['descripcion', 'cat', 'grupo', 'salario'].forEach(col => {
+      const icon = document.getElementById('icon-' + col);
+      if (icon) icon.className = 'fas fa-sort float-end mt-1 text-muted';
+    });
+
+    const activeIcon = document.getElementById('icon-' + cargosSortCol);
+    if (activeIcon) {
+      activeIcon.className = cargosSortAsc 
+        ? 'fas fa-sort-up float-end mt-1 text-primary' 
+        : 'fas fa-sort-down float-end mt-1 text-primary';
+    }
+  }
+
+  function ordenarCargos(columna) {
+    if (cargosSortCol === columna) {
+      cargosSortAsc = !cargosSortAsc;
+    } else {
+      cargosSortCol = columna;
+      cargosSortAsc = true;
+    }
+    updateSortIcons();
+    paginateCargos(); 
+  }
+
+  /* ==========================================================================
+    PAGINACIÓN Y BÚSQUEDA
+  ========================================================================== */
+  function paginateCargos() {
+    const tbody = document.querySelector('#cargos-tbody');
+    if (!tbody) return;
+    const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
+
+    // 1. FILTRADO
+    const searchInput = document.getElementById('search-cargos-input');
+    const filterText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+    const visibleRows = rows.filter(row => {
+      const desc = row.querySelector('.desc-cell')?.textContent?.toLowerCase() || '';
+      const match = desc.includes(filterText);
+      row.style.display = match ? '' : 'none'; 
+      return match;
+    });
+
+    // 2. ORDENAMIENTO
+    visibleRows.sort((a, b) => {
+      let valA, valB;
+      switch (cargosSortCol) {
+        case 'salario':
+          valA = parseFloat(a.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
+          valB = parseFloat(b.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
+          return cargosSortAsc ? valA - valB : valB - valA;
+        case 'grupo':
+          valA = romanToInt(a.querySelector('.grupo-cell').textContent.trim());
+          valB = romanToInt(b.querySelector('.grupo-cell').textContent.trim());
+          return cargosSortAsc ? valA - valB : valB - valA;
+        case 'cat':
+          valA = a.querySelector('.cat-cell').textContent.trim();
+          valB = b.querySelector('.cat-cell').textContent.trim();
+          return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        default: // 'descripcion'
+          valA = a.querySelector('.desc-cell').textContent.trim();
+          valB = b.querySelector('.desc-cell').textContent.trim();
+          return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+    });
+
+    visibleRows.forEach(row => tbody.appendChild(row));
+
+    // 3. PAGINACIÓN
+    const total = visibleRows.length;
+    const pages = Math.ceil(total / CARGOS_PER_PAGE);
+
+    if (cargosCurrentPage > pages && pages > 0) cargosCurrentPage = pages;
+    if (cargosCurrentPage < 1) cargosCurrentPage = 1;
+
+    visibleRows.forEach((tr, idx) => {
+      const start = (cargosCurrentPage - 1) * CARGOS_PER_PAGE;
+      const end = cargosCurrentPage * CARGOS_PER_PAGE;
+      if (idx >= start && idx < end) {
+          tr.style.display = ''; 
+      } else {
+          tr.style.display = 'none';
+      }
+    });
+
+    // 4. GENERAR PAGINADOR
+    const paginator = document.getElementById('cargos-paginator');
+    if (!paginator) return;
+    paginator.innerHTML = '';
+    
+    if (total === 0) return;
+
+    const prevLi = document.createElement('li');
+    prevLi.className = 'page-item prev' + (cargosCurrentPage === 1 ? ' disabled' : '');
+    prevLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-left"></i></a>`;
+    prevLi.addEventListener('click', e => {
+      e.preventDefault();
+      if (cargosCurrentPage > 1) { cargosCurrentPage--; paginateCargos(); }
+    });
+    paginator.appendChild(prevLi);
+
+    for (let i = 1; i <= pages; i++) {
+      if (i === 1 || i === pages || (i >= cargosCurrentPage - 1 && i <= cargosCurrentPage + 1)) {
+          const li = document.createElement('li');
+          li.className = 'page-item' + (i === cargosCurrentPage ? ' active' : '');
+          li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+          li.addEventListener('click', e => { e.preventDefault(); cargosCurrentPage = i; paginateCargos(); });
+          paginator.appendChild(li);
+      } else if (paginator.lastChild.textContent !== '...') {
+          const dots = document.createElement('li');
+          dots.className = 'page-item disabled';
+          dots.innerHTML = `<span class="page-link">...</span>`;
+          paginator.appendChild(dots);
+      }
+    }
+
+    const nextLi = document.createElement('li');
+    nextLi.className = 'page-item next' + (cargosCurrentPage === pages ? ' disabled' : '');
+    nextLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-right"></i></a>`;
+    nextLi.addEventListener('click', e => {
+      e.preventDefault();
+      if (cargosCurrentPage < pages) { cargosCurrentPage++; paginateCargos(); }
+    });
+    paginator.appendChild(nextLi);
+    updateSortIcons();
+  }
+
+  /* ==========================================================================
+    CONTROL DE INTERFAZ (UI)
+  ========================================================================== */
+  function seleccionarCargo(tr) {
+    if (modoEdicion) return; 
+
+    document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
+    tr.classList.add('table-active-row');
+    cargoSeleccionadoID = tr.dataset.id;
+    
+    const toolbarActions = document.getElementById('cargos-toolbar-actions');
+    if(toolbarActions){
+        toolbarActions.classList.remove('toolbar-disabled');
+        toolbarActions.classList.add('toolbar-active');
+    }
+  }
+
+  function deseleccionarCargos() {
+    if (modoEdicion) return;
+
+    document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
+    cargoSeleccionadoID = null;
+
+    const toolbarActions = document.getElementById('cargos-toolbar-actions');
+    if(toolbarActions) {
+        toolbarActions.classList.add('toolbar-disabled');
+        toolbarActions.classList.remove('toolbar-active');
+    }
+  }
+
+  function toggleToolbarMode(mode) {
+    const actions = document.getElementById('cargos-toolbar-actions');
+    const editing = document.getElementById('cargos-toolbar-editing');
+    const search = document.getElementById('search-cargos-input');
+    const addBtn = document.getElementById('btn-add-cargo');
+
+    if (mode === 'editing') {
+      if(actions) actions.classList.add('d-none');
+      if(editing) editing.classList.remove('d-none');
+      if(search) search.disabled = true;
+      if(addBtn) addBtn.disabled = true;
+    } else {
+      if(actions) actions.classList.remove('d-none');
+      if(editing) editing.classList.add('d-none');
+      if(search) search.disabled = false;
+      if(addBtn) addBtn.disabled = false;
+      
+      if (!cargoSeleccionadoID && actions) actions.classList.add('toolbar-disabled');
+    }
+  }
+
+  function iniciarEdicionInline(id) {
+    const tr = document.querySelector(`tr.fila-cargo[data-id="${id}"]`);
+    if (!tr) return;
+
+    modoEdicion = true;
+    toggleToolbarMode('editing');
+
+    const descCell = tr.querySelector('.desc-cell');
+    const catCell = tr.querySelector('.cat-cell');
+    const grupoCell = tr.querySelector('.grupo-cell');
+    const salarioCell = tr.querySelector('.salario-cell');
+    const claveCell = tr.querySelector('.clave-cell'); 
+
+    tr.dataset.htmlDesc = descCell.innerHTML;
+    tr.dataset.htmlCat = catCell.innerHTML;
+    tr.dataset.htmlGrupo = grupoCell.innerHTML;
+    tr.dataset.htmlSalario = salarioCell.innerHTML;
+    if(claveCell) tr.dataset.htmlClave = claveCell.innerHTML; 
+
+    const valDesc = descCell.textContent.trim();
+    const valCat = tr.dataset.cat;      
+    const valGrupo = tr.dataset.grupo;  
+    const valSalario = tr.dataset.salario; 
+    const valClave = tr.dataset.clave === 'true' ? 'checked' : ''; 
+
+    descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${valDesc}">`;
+    catCell.innerHTML = `<select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select>`;
+    catCell.querySelector('select').value = valCat; 
+    grupoCell.innerHTML = `<select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select>`;
+    grupoCell.querySelector('select').value = valGrupo; 
+    salarioCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" value="${valSalario}">`;
+    
+    if(claveCell) {
+        claveCell.innerHTML = `
+            <div class="form-check form-switch d-flex justify-content-center m-0">
+                <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox" ${valClave}>
+            </div>`;
+    }
+  }
+
+  /* ==========================================================================
+    EVENT LISTENERS (CLICS Y ACCIONES)
+  ========================================================================== */
+  document.addEventListener("DOMContentLoaded", function() {
+      // Activar el buscador
+      const inputBusqueda = document.getElementById('search-cargos-input');
+      if(inputBusqueda){
+          inputBusqueda.addEventListener('keyup', function() {
+              cargosCurrentPage = 1; 
+              paginateCargos();
+          });
+      }
+
+      // Clic fuera para deseleccionar
+      document.addEventListener('click', function(e) {
+        const clickEnTabla = e.target.closest('#cargos-table');
+        const clickEnToolbar = e.target.closest('#card-cargos .card-header');
+        if (!clickEnTabla && !clickEnToolbar) deseleccionarCargos();
+      });
+
+      // Botón Editar
+      const btnEditarCargo = document.getElementById('btn-editar-cargo');
+      if(btnEditarCargo){
+          btnEditarCargo.addEventListener('click', function() {
+            if (!cargoSeleccionadoID) return;
+            iniciarEdicionInline(cargoSeleccionadoID);
+          });
+      }
+
+      // Botón Añadir (+)
+      const btnAddCargo = document.getElementById('btn-add-cargo');
+      if(btnAddCargo){
+          btnAddCargo.addEventListener('click', function() {
+            deseleccionarCargos();
+            modoEdicion = true;
+            toggleToolbarMode('editing');
+
+            const tbody = document.getElementById('cargos-tbody');
+            const tr = document.createElement('tr');
+            tr.className = 'insert-row table-active-row'; 
+            tr.dataset.id = 'new'; 
+            
+            tr.innerHTML = `
+                <td class="desc-cell align-middle"><input type="text" class="form-control form-control-sm input-edit-desc" placeholder="Descripción"></td>
+                <td class="cat-cell text-center align-middle"><select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select></td>
+                <td class="grupo-cell text-center align-middle"><select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select></td> 
+                <td class="salario-cell text-center align-middle"><input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" placeholder="0.00"></td>
+                <td class="clave-cell text-center align-middle">
+                    <div class="form-check form-switch d-flex justify-content-center m-0">
+                        <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox">
+                    </div>
+                </td>
+            `;
+            tbody.insertBefore(tr, tbody.firstChild);
+          });
+      }
+
+      // Botón Cancelar
+      const btnCancelarCargo = document.getElementById('btn-cancelar-cargo');
+      if(btnCancelarCargo){
+          btnCancelarCargo.addEventListener('click', function() {
+            const trInsert = document.querySelector('.insert-row');
+            if (trInsert) trInsert.remove(); 
+
+            const trEdit = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+            if (trEdit && !trInsert) {
+              trEdit.querySelector('.desc-cell').innerHTML = trEdit.dataset.htmlDesc;
+              trEdit.querySelector('.cat-cell').innerHTML = trEdit.dataset.htmlCat;
+              trEdit.querySelector('.grupo-cell').innerHTML = trEdit.dataset.htmlGrupo;
+              trEdit.querySelector('.salario-cell').innerHTML = trEdit.dataset.htmlSalario;
+              if(trEdit.querySelector('.clave-cell')) trEdit.querySelector('.clave-cell').innerHTML = trEdit.dataset.htmlClave;
+            }
+
+            modoEdicion = false;
+            toggleToolbarMode('default');
+            if (cargoSeleccionadoID && trEdit) {
+                trEdit.classList.add('table-active-row');
+            }
+          });
+      }
+
+      // Botón Guardar
+      const btnGuardarCargo = document.getElementById('btn-guardar-cargo');
+      if(btnGuardarCargo){
+          btnGuardarCargo.addEventListener('click', async function() {
+            const tr = document.querySelector('.insert-row') || document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+            if (!tr) return;
+
+            const desc = tr.querySelector('.input-edit-desc').value.trim();
+            const cat = tr.querySelector('.input-edit-cat').value;
+            const grupoId = tr.querySelector('.input-edit-grupo').value;
+            const salario = tr.querySelector('.input-edit-salario').value;
+            const clave = tr.querySelector('.input-edit-clave').checked; 
+
+            if (!desc || !grupoId) {
+                alert("La descripción y el grupo son obligatorios.");
+                return;
+            }
+
+            const payload = {
+                descripcion: desc,
+                cat_ocupacional: cat,
+                grupo_escala_id: grupoId, 
+                salario_basico: salario,
+                puesto_clave: clave 
+            };
+
+            const isNew = tr.dataset.id === 'new';
+            const url = isNew ? '/nomencladores/api/cargos/' : `/nomencladores/api/cargos/${tr.dataset.id}/`;
+            const method = isNew ? 'POST' : 'PUT';
+
+            try {
+                const res = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}' 
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Error al guardar');
+
+                tr.dataset.id = data.id;
+                tr.dataset.cat = data.cat_ocupacional_value; 
+                tr.dataset.grupo = grupoId; 
+                tr.dataset.salario = data.salario_basico;
+                tr.dataset.clave = clave ? 'true' : 'false'; 
+                tr.classList.remove('insert-row');
+                tr.classList.add('fila-cargo');
+                tr.onclick = function() { seleccionarCargo(this); }; 
+
+                tr.querySelector('.desc-cell').textContent = data.descripcion;
+                tr.querySelector('.cat-cell').textContent = data.cat_ocupacional; 
+                tr.querySelector('.grupo-cell').textContent = data.grupo_escala; 
+                tr.querySelector('.salario-cell').textContent = `$${data.salario_basico}`;
+                if(tr.querySelector('.clave-cell')) {
+                    tr.querySelector('.clave-cell').innerHTML = clave ? '<span class="badge bg-label-warning"><i class="fas fa-star"></i></span>' : '<span class="text-muted">-</span>';
+                }
+
+                modoEdicion = false;
+                toggleToolbarMode('default');
+                seleccionarCargo(tr); 
+                paginateCargos(); 
+
+            } catch (error) {
+                alert(error.message);
+            }
+          });
+      }
+
+      // Botón Eliminar
+      const btnEliminarCargo = document.getElementById('btn-eliminar-cargo');
+      if(btnEliminarCargo){
+          btnEliminarCargo.addEventListener('click', function() {
+              if (!cargoSeleccionadoID) return;
+              
+              Swal.fire({
+                  title: '¿Eliminar cargo?', text: "No podrás revertir esto", icon: 'warning',
+                  showCancelButton: true, confirmButtonText: 'Sí, eliminar', confirmButtonColor: '#d33',
+                  cancelButtonText: 'Cancelar', cancelButtonColor: '#3085d6'
+              }).then((result) => {
+                  if (result.isConfirmed) {
+                      fetch(`/nomencladores/api/cargos/${cargoSeleccionadoID}/delete/`, {
+                          method: 'DELETE',
+                          headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                      })
+                      .then(async r => {
+                          let data = {};
+                          try { data = await r.json(); } catch (e) { }
+                          if(!r.ok) throw new Error(data.error || 'Error al eliminar');
+                          return data;
+                      })
+                      .then(() => {
+                          const row = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+                          if(row) row.remove();
+                          deseleccionarCargos();
+                          Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El cargo ha sido eliminado correctamente.', timer: 1500, showConfirmButton: false });
+                          paginateCargos();
+                      })
+                      .catch(err => Swal.fire({ icon: 'warning', title: 'No se puede eliminar', text: err.message }));
+                  }
+              });
+          });
+      }
+  });
+</script>

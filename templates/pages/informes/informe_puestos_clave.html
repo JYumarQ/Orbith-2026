@@ -1,0 +1,203 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% block title %}Panel de Puestos Claves{% endblock %}
+{% block content %}
+<style>
+    .bg-indigo-50 { background-color: #eef2ff !important; } .text-indigo-600 { color: #4f46e5 !important; }
+    .bg-emerald-50 { background-color: #ecfdf5 !important; } .text-emerald-600 { color: #059669 !important; }
+    .bg-orange-50 { background-color: #fff7ed !important; } .text-orange-500 { color: #f97316 !important; }
+    .text-slate-400 { color: #94a3b8 !important; } .text-slate-500 { color: #64748b !important; }
+    .text-slate-600 { color: #475569 !important; } .text-slate-700 { color: #334155 !important; }
+    .text-slate-800 { color: #1e293b !important; } .bg-slate-50 { background-color: #f8fafc !important; }
+    .border-slate-100 { border-color: #f1f5f9 !important; } .border-slate-200 { border-color: #e2e8f0 !important; }
+    .bg-slate-900 { background-color: #0f172a !important; }
+    .tracking-widest { letter-spacing: 0.1em; } .tracking-tighter { letter-spacing: -0.05em; }
+    .fw-black { font-weight: 900 !important; }
+    .border-b-4 { border-bottom-width: 4px !important; border-bottom-style: solid !important; }
+    .border-b-indigo-600 { border-bottom-color: #4f46e5 !important; }
+    .border-b-emerald-500 { border-bottom-color: #10b981 !important; }
+    .border-b-orange-500 { border-bottom-color: #f97316 !important; }
+    .rounded-[1.5rem] { border-radius: 1.5rem !important; }
+    .table-moderna th { border-bottom: 1px solid #f1f5f9 !important; padding: 0.8rem 0.5rem !important; }
+    .table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y" style="background-color: #F4F7FB;">
+    
+    {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Resumen Puestos Clave" %}
+
+    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4">
+        <div class="card-header border-bottom bg-white py-3 d-flex align-items-center flex-wrap gap-3">
+            <div class="me-2">
+                <small class="text-muted fw-bold" style="font-size: 11px;"><i class="bx bx-pulse me-1 text-orange-500"></i>Filtros de Análisis Dinámico</small>
+            </div>
+            
+            <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
+                <div class="input-group shadow-sm" style="width: auto; border: 1px solid #696cff; border-radius: 6px; overflow: hidden;">
+                    <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
+                    <select name="ueb" class="form-select border-0 shadow-none bg-white text-primary fw-bold" onchange="this.form.submit()">
+                        <option value="">Consolidado Provincial</option>
+                        {% for u in unidades %}
+                            <option value="{{ u.pk }}" {% if ueb_actual == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.descripcion }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="input-group shadow-sm me-auto" style="width: auto; border: 1px solid #fd7e14; border-radius: 6px; overflow: hidden;">
+                    <span class="input-group-text bg-white border-0 text-warning"><i class="bx bx-filter-alt"></i></span>
+                    <select name="tipo_familia" class="form-select border-0 shadow-none bg-white text-warning fw-bold" onchange="this.form.submit()">
+                        {% for t in tipos_familia %}
+                            <option value="{{ t.pk }}" {% if tipo_actual == t.pk %}selected{% endif %}>Tipo: {{ t.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+
+        <div class="card-body bg-slate-50 pt-3 pb-2 border-bottom border-slate-200">
+            <div class="row g-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card bg-white py-2 px-3 rounded-3 border-0 border-b-4 border-b-indigo-600 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 bg-indigo-50 text-indigo-600 rounded"><i class="bx bx-award fs-6"></i></div>
+                            <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Plantilla</span>
+                        </div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1">{{ stats.aprobada }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card bg-white py-2 px-3 rounded-3 border-0 border-b-4 border-b-emerald-500 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 bg-emerald-50 text-emerald-600 rounded"><i class="bx bx-user-check fs-6"></i></div>
+                            <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Cubierta</span>
+                        </div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1">{{ stats.cubierta }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card bg-white py-2 px-3 rounded-3 border-0 border-b-4 border-b-orange-500 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 bg-orange-50 text-orange-500 rounded"><i class="bx bx-user-minus fs-6"></i></div>
+                            <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Vacante</span>
+                        </div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1">{{ stats.vacante }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-3">
+                    <div class="card py-2 px-3 rounded-3 border-0 shadow-sm text-white position-relative" style="background: linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%);">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 rounded text-white" style="background-color: rgba(255,255,255,0.1);"><i class="bx bx-pulse fs-6"></i></div>
+                            <span class="fw-black text-uppercase tracking-widest" style="font-size: 9px; color: #e0e7ff;">Eficiencia</span>
+                        </div>
+                        <div class="d-flex align-items-baseline gap-1">
+                            <span class="fs-3 fw-black lh-1">{{ stats.porcentaje }}</span>
+                            <span class="fs-6 fw-bold opacity-75">%</span>
+                        </div>
+                        <div class="progress mt-1 w-100 rounded-pill shadow-inner" style="height: 3px; background-color: rgba(255,255,255,0.2);">
+                            <div class="progress-bar" role="progressbar" style="width: {{ stats.porcentaje }}%; background-color: #fb923c;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-moderna w-100 text-start border-collapse mb-0">
+                <thead>
+                    <tr class="bg-slate-50 border-slate-100">
+                        <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Cargo u Ocupación</th>
+                        <th colspan="4" class="text-center text-indigo-600 fw-black text-uppercase tracking-widest px-2" style="font-size: 11px; background-color: rgba(238, 242, 255, 0.5); border-left: 1px solid rgba(224, 231, 255, 0.5); border-right: 1px solid rgba(224, 231, 255, 0.5);">Plantilla Autorizada</th>
+                        <th colspan="3" class="text-center text-orange-500 fw-black text-uppercase tracking-widest px-2" style="font-size: 11px; background-color: rgba(255, 247, 237, 0.5);">Contratos / Otros</th>
+                    </tr>
+                    <tr class="bg-white border-slate-100">
+                        <th class="px-4 py-2 text-slate-400 fw-bold text-uppercase tracking-tighter" style="font-size: 10px;">Descripción Detallada</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(238, 242, 255, 0.2);">Aprob.</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(238, 242, 255, 0.2);">Cub.</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(238, 242, 255, 0.2);">Vac.</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(238, 242, 255, 0.2); border-right: 1px solid rgba(238, 242, 255, 0.5);">% Efic.</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(255, 247, 237, 0.2);">Det.</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(255, 247, 237, 0.2);">Mujeres</th>
+                        <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(255, 247, 237, 0.2);">Adie.</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for familia in datos_familias %}
+                        <tr style="background-color: rgba(248, 250, 252, 0.9);">
+                            <td class="px-4 py-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-pill" style="width: 5px; height: 18px; background-color: #4f46e5;"></div>
+                                    <span class="fw-black text-uppercase tracking-widest" style="font-size: 13px; color: #312e81;">{{ familia.nombre }}</span>
+                                </div>
+                            </td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.aprob }}</td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600" style="font-size: 20px;">{{ familia.subtotales.cub }}</td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500" style="font-size: 20px;">{{ familia.subtotales.vac }}</td>
+                            <td class="px-2 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 fw-black rounded-3" style="font-size: 11px; padding: 0.3rem 0.5rem;">{{ familia.subtotales.porc }}%</span></td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.det }}</td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.muj }}</td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.adiest }}</td>
+                        </tr>
+                        {% for p in familia.puestos %}
+                            <tr>
+                                <td class="px-4 py-1 ps-5">
+                                    <div class="d-flex flex-column">
+                                        <span class="fw-bold text-slate-700" style="font-size: 13px;">{{ p.nombre }}</span>
+                                        
+                                    </div>
+                                </td>
+                                <td class="px-2 py-1 text-center font-monospace text-slate-500" style="font-size: 18px;">{{ p.aprob }}</td>
+                                <td class="px-2 py-1 text-center"><span class="badge bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem;">{{ p.cub }}</span></td>
+                                <td class="px-2 py-1 text-center"><span class="badge {% if p.vac > 0 %}bg-orange-50 text-orange-500 border-orange-100{% else %}bg-transparent text-slate-400{% endif %} rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem; border: 1px solid transparent;">{{ p.vac }}</span></td>
+                                <td class="px-2 py-1 text-center" style="border-right: 1px solid rgba(238, 242, 255, 0.5);">
+                                    <div class="d-flex flex-column align-items-center justify-content-center gap-1">
+                                        <div class="progress rounded-pill shadow-none" style="width: 48px; height: 3px; background-color: #f1f5f9;">
+                                            <div class="progress-bar {% if p.porc >= 80 %}bg-success{% elif p.porc >= 50 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ p.porc }}%"></div>
+                                        </div>
+                                        <span class="fw-black text-slate-400" style="font-size: 10px;">{{ p.porc }}%</span>
+                                    </div>
+                                </td>
+                                <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.det }}</td>
+                                <td class="px-2 py-1 text-center"><span class="fw-bold {% if p.muj > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}" style="font-size: 18px;">{{ p.muj }}</span></td>
+                                <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.adiest }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center py-4 text-slate-400 fw-bold">No hay datos registrados para esta selección.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="bg-slate-900 py-3 px-4 text-white d-flex flex-wrap justify-content-center gap-5" style="border-top: 5px solid #f97316;">
+            <div class="d-flex flex-column align-items-center gap-1">
+                <div class="d-flex align-items-center gap-1" style="color: #818cf8;">
+                    <i class="bx bx-group"></i><span class="fw-black text-uppercase" style="font-size: 9px; letter-spacing: 0.1em;">Mujeres en Puestos</span>
+                </div>
+                <span class="fw-black lh-1" style="font-size: 1.8rem;">{{ stats.muj }}</span>
+            </div>
+            <div class="border-end border-light opacity-25" style="width: 1px; height: 35px;"></div>
+            <div class="d-flex flex-column align-items-center gap-1">
+                <div class="d-flex align-items-center gap-1" style="color: #f59e0b;">
+                    <i class="bx bx-trending-up"></i><span class="fw-black text-uppercase" style="font-size: 9px; letter-spacing: 0.1em;">Adiestramiento</span>
+                </div>
+                <span class="fw-black lh-1" style="font-size: 1.8rem;">{{ stats.adiest }}</span>
+            </div>
+            <div class="border-end border-light opacity-25" style="width: 1px; height: 35px;"></div>
+            <div class="d-flex flex-column align-items-center gap-1">
+                <div class="d-flex align-items-center gap-1" style="color: #60a5fa;">
+                    <i class="bx bx-time"></i><span class="fw-black text-uppercase" style="font-size: 9px; letter-spacing: 0.1em;">Determinados</span>
+                </div>
+                <span class="fw-black lh-1" style="font-size: 1.8rem;">{{ stats.det }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function ejecutarWord() {
+        window.location.href = "{% url 'exportar_puestos_clave_word' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
+    }
+    function ejecutarPDF() {
+        window.location.href = "{% url 'exportar_puestos_clave_pdf' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
+    }
+</script>
+{% endblock %}

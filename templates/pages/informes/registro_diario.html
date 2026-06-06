@@ -1,0 +1,601 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Registro Diario por Trabajadores{% endblock %}
+
+{% block content %}
+<style>
+    /* Estilos de alta fidelidad adaptados a Sneat */
+    .bg-indigo-50 { background-color: #eef2ff !important; }
+    .text-indigo-600 { color: #4f46e5 !important; }
+    .bg-emerald-50 { background-color: #ecfdf5 !important; }
+    .text-emerald-600 { color: #059669 !important; }
+    .bg-orange-50 { background-color: #fff7ed !important; }
+    .text-orange-500 { color: #f97316 !important; }
+    .bg-pink-50 { background-color: #fdf2f8 !important; }
+    .text-pink-600 { color: #db2777 !important; }
+    
+    .card-moderna { border-radius: 1.5rem; border: 1px solid #f1f5f9; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+    .table-indicadores th { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; border-bottom: 2px solid #f1f5f9; padding: 1rem; }
+    .table-indicadores td { padding: 0.8rem 1rem; vertical-align: middle; border-bottom: 1px solid #f8fafc; }
+    .table-indicadores tr:hover { background-color: rgba(248, 250, 252, 0.8); }
+    
+    .fila-categoria td { font-weight: 800; font-size: 0.9rem; color: #334155; }
+    .fila-sub td { font-size: 0.75rem; color: #64748b; padding-left: 2.5rem !important; }
+    
+    /* ESTILO PARA EL NUEVO BOTÓN AÑADIR PLAN */
+    .btn-edit-plan {
+        background-color: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 159, 67, 0.6);
+        color: #ff9f43;
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        padding: 0.4rem 1rem;
+        border-radius: 50rem;
+        font-size: 0.7rem;
+        transition: all 0.3s ease;
+    }
+    .btn-edit-plan:hover {
+        background-color: #ff9f43;
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(255, 159, 67, 0.4);
+    }
+
+    .chart-container {
+        position: relative;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 250px; /* Ajusta esto según necesites */
+    }
+    canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    .canvas-container {
+        position: relative;
+        height: 300px; /* Altura mayor */
+        width: 100%;
+    }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y" style="background-color: #f8fafc;">
+
+    {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Registro Diario por Trabajadores" %}
+
+    <div class="card card-moderna mb-4 bg-white">
+        <div class="card-header py-3 d-flex align-items-center flex-wrap gap-3">
+            <div class="me-2">
+                <small class="text-muted fw-bold" style="font-size: 11px;"><i class="bx bx-filter-alt me-1 text-primary"></i>Filtros de Análisis</small>
+            </div>
+            
+            <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
+                <div class="input-group shadow-sm" style="width: auto; border: 1px solid #696cff; border-radius: 6px; overflow: hidden;">
+                    <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
+                    <select name="ueb" class="form-select border-0 shadow-none bg-white text-primary fw-bold" onchange="this.form.submit()">
+                        <option value="">Provincia Completa</option>
+                        {% for u in unidades %}
+                            <option value="{{ u.pk }}" {% if ueb_actual == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.descripcion }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        
+        <div class="col-lg-7">
+            <div class="card card-moderna bg-white h-100">
+                <div class="card-header bg-slate-50 border-bottom d-flex justify-content-between align-items-center py-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bx bx-list-ol text-primary fs-4"></i>
+                        <h6 class="m-0 fw-black text-dark text-uppercase" style="font-size: 0.8rem; letter-spacing: 1px;">Indicadores Oficiales</h6>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-indicadores w-100 m-0">
+                        <thead>
+                            <tr>
+                                <th>Indicadores de Control</th>
+                                <th class="text-end">Trabajadores</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Obreros</td>
+                                <td class="text-end text-dark fs-5" id="val-obreros">{{ datos.Obreros.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-obreros-fem">{{ datos.Obreros.muj }}</td>
+                            </tr>
+
+                            <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Técnicos</td>
+                                <td class="text-end text-dark fs-5" id="val-tecnicos">{{ datos.Técnicos.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-tecnicos-fem">{{ datos.Técnicos.muj }}</td>
+                            </tr>
+
+                            <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Administrativos</td>
+                                <td class="text-end text-dark fs-5" id="val-admin">{{ datos.Administrativos.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-admin-fem">{{ datos.Administrativos.muj }}</td>
+                            </tr>
+
+                            <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Servicios</td>
+                                <td class="text-end text-dark fs-5" id="val-servicios">{{ datos.Servicios.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-servicios-fem">{{ datos.Servicios.muj }}</td>
+                            </tr>
+
+                            <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Dirigentes / Cuadros</td>
+                                <td class="text-end text-dark fs-5" id="val-dirigentes">{{ datos.Dirigentes.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-dirigentes-fem">{{ datos.Dirigentes.muj }}</td>
+                            </tr>
+
+                            <tr class="bg-orange-50 border-top border-warning border-2">
+                                <td class="py-3"><span class="fw-black text-dark text-uppercase"><i class="bx bxs-group text-warning fs-5 me-2"></i>Total Trabajadores Físicos</span></td>
+                                <td class="text-end text-warning fw-black fs-4" id="total-trabajadores">0</td>
+                            </tr>
+                            <tr class="fila-sub bg-orange-50 bg-opacity-50">
+                                <td><i class="bx bx-subdirectory-right text-warning me-1"></i> De Ellos: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold" id="total-trabajadores-fem">0</td>
+                            </tr>
+
+                            <tr class="fila-categoria border-top border-2">
+                                <td class="text-danger"><i class="bx bxs-minus-circle me-1"></i>Deducciones</td>
+                                <td class="text-end text-danger fw-bold" id="val-deducciones">0</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td class="text-danger"><i class="bx bx-subdirectory-right me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end text-pink-600" id="val-deducciones-fem">0</td>
+                            </tr>
+
+                            <tr class="fila-sub">
+                                <td class="fw-bold">Cumpliendo Obligaciones Estatales y Sociales</td>
+                                <td class="text-end fw-bold" id="val-obligaciones">0</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end text-pink-600" id="val-obligaciones-fem">0</td>
+                            </tr>
+
+                            <tr class="fila-sub">
+                                <td class="fw-bold">Subsidios</td>
+                                <td class="text-end fw-bold" id="val-subsidios">0</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end text-pink-600" id="val-subsidios-fem">0</td>
+                            </tr>
+
+                            <tr class="fila-sub">
+                                <td class="fw-bold">Licencia de Maternidad</td>
+                                <td class="text-end fw-bold" id="val-maternidad">0</td>
+                            </tr>
+
+                            <tr class="fila-sub">
+                                <td class="fw-bold">Licencia Sin Sueldo</td>
+                                <td class="text-end fw-bold" id="val-sin-sueldo">0</td>
+                            </tr>
+
+                            <tr class="fila-sub">
+                                <td class="fw-bold">Cumpliendo Misión Internacional</td>
+                                <td class="text-end fw-bold" id="val-misiones">{{ datos.Misiones.tot }}</td>
+                            </tr>
+                            <tr class="fila-sub">
+                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end text-pink-600" id="val-misiones-fem">{{ datos.Misiones.muj }}</td>
+                            </tr>
+
+                            <tr class="bg-indigo-50 border-top border-primary border-2">
+                                <td class="py-3"><span class="fw-black text-dark text-uppercase"><i class="bx bx-calculator text-primary fs-5 me-2"></i>Promedio de Trabajadores</span></td>
+                                <td class="text-end text-primary fw-black fs-4" id="total-promedio">0</td>
+                            </tr>
+                            <tr class="fila-sub bg-indigo-50">
+                                <td><i class="bx bx-subdirectory-right text-primary me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end text-pink-600 fw-bold" id="total-promedio-fem">0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5 d-flex flex-column gap-4">
+            
+            <div class="card card-moderna border-0 text-white overflow-hidden" style="background: linear-gradient(135deg, #003399 0%, #001a4d 100%);">
+                <i class="bx bxs-pie-chart-alt-2 position-absolute" style="font-size: 150px; right: -30px; bottom: -30px; opacity: 0.05;"></i>
+                
+                <div class="card-body p-4 position-relative z-index-1">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <h6 class="m-0 text-white fw-bold text-uppercase tracking-widest"><i class="bx bx-line-chart text-warning me-2"></i>Eficiencia del Plan</h6>
+                            
+                            <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                                <input class="form-check-input mt-0" type="checkbox" role="switch" id="switchModoPlan" onchange="window.toggleModoPlan()" style="cursor: pointer; width: 2.5em; height: 1.25em;">
+                                <label class="form-check-label text-white fw-bold" for="switchModoPlan" style="font-size: 0.75rem; cursor: pointer; letter-spacing: 0.5px;" id="labelModoPlan">OFICIAL</label>
+                            </div>
+                        </div>
+                        
+                        <button type="button" id="btn-edit-plan" class="btn btn-edit-plan d-flex align-items-center d-none" onclick="window.habilitarEdicionPlan()">
+                            <i class="bx bx-edit-alt me-1"></i> AÑADIR PLAN
+                        </button>
+                    </div>
+
+                    <div class="row g-3 text-center mb-4">
+                        <div class="col-6 col-sm-3">
+                            <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Plan</p>
+                                
+                                <div id="plan-container" class="fs-4 fw-black text-white">
+                                    {{ plan_editable|default:"0" }}
+                                </div>
+                                
+                                <input type="number" id="input-plan" class="form-control text-center fw-bold text-dark d-none" value="{{ plan_editable|default:'0' }}" style="background-color: #ffffff; border-radius: 8px; padding: 0.2rem; font-size: 1.1rem; border: 2px solid #ff6600;" onblur="window.guardarPlan()" onkeypress="if(event.key === 'Enter') this.blur()">
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-sm-3">
+                            <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Real</p>
+                                <div class="fs-4 fw-black text-white" id="resumen-real">0</div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-sm-3">
+                            <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Cumpl. %</p>
+                                <div class="fs-4 fw-black text-warning" id="resumen-porcentaje">0%</div>
+                            </div>
+                        </div>
+
+                        <div class="col-6 col-sm-3">
+                            <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
+                                <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Dif.</p>
+                                <div class="fs-4 fw-black text-danger" id="resumen-diferencia">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="fw-bold" style="color: rgba(255,255,255,0.8);">Avance</small>
+                            <small class="fw-black text-white" id="progress-text">0%</small>
+                        </div>
+                        <div class="progress" style="height: 6px; background-color: rgba(255,255,255,0.1);">
+                            <div id="progress-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-moderna border-0 text-white flex-grow-1" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.08);">
+                <div class="card-body p-3">
+                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #94a3b8;"><i class="bx bx-bar-chart-alt text-primary me-2"></i>Distribución Ocupacional</h6>
+                    <!-- AQUÍ ESTÁ LA MAGIA DEL TAMAÑO: height a 350px -->
+                    <div style="position: relative; height: 350px; width: 100%;">
+                        <canvas id="chartCategorias"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card card-moderna border-0 text-white flex-grow-1" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.08);">
+                <div class="card-body p-3">
+                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #94a3b8;"><i class="bx bx-male-female text-pink-600 me-2"></i>Participación por Sexo</h6>
+                    <!-- AQUÍ TAMBIÉN: height a 350px -->
+                    <div style="position: relative; height: 350px; width: 100%;">
+                        <canvas id="chartSexo"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Asignación explícita al objeto window para evadir choques de variables con HTMX o base.html
+    window.rd_csrftoken = '{{ csrf_token }}';
+    window.rd_mesFiltro = '{{ mes_actual }}';
+    window.rd_annoFiltro = '{{ anno_actual }}';
+    window.rd_uebFiltro = '{{ ueb_actual }}';
+    window.rd_familiaFiltro = '{{ tipo_actual }}';
+
+    // 1. Identificador único para guardar en LocalStorage (PERMANENTE en el navegador)
+    var planKey = 'plan_simulado_' + (window.rd_uebFiltro || 'provincial');
+
+    // 2. Control de los Dos Planes
+    window.plan_oficial_db = parseInt("{{ plan_editable|default:'0' }}", 10) || 0; // El real de la BD
+    
+    // Recuperamos el simulado permanente, si no hay, copiamos el oficial
+    var planGuardado = localStorage.getItem(planKey);
+    window.plan_simulado = planGuardado !== null ? parseInt(planGuardado, 10) : window.plan_oficial_db;
+
+    // Arrancamos siempre en Modo OFICIAL
+    window.rd_planActual = window.plan_oficial_db;
+
+    // 3. LA MAGIA DEL SWITCH
+    window.toggleModoPlan = function() {
+        var isSimulacion = document.getElementById('switchModoPlan').checked;
+        var label = document.getElementById('labelModoPlan');
+        var btnEdit = document.getElementById('btn-edit-plan');
+        var inputPlan = document.getElementById('input-plan');
+        var planContainer = document.getElementById('plan-container');
+
+        if (isSimulacion) {
+            label.textContent = 'SIMULADO';
+            label.classList.replace('text-white', 'text-warning');
+            btnEdit.classList.remove('d-none');
+            window.rd_planActual = window.plan_simulado;
+        } else {
+            label.textContent = 'OFICIAL';
+            label.classList.replace('text-warning', 'text-white');
+            btnEdit.classList.add('d-none');
+            inputPlan.classList.add('d-none');
+            planContainer.classList.remove('d-none');
+            window.rd_planActual = window.plan_oficial_db;
+        }
+
+        planContainer.textContent = window.rd_planActual;
+        window.calcularMatematica();
+    };
+
+    window.habilitarEdicionPlan = function() {
+        document.getElementById('plan-container').classList.add('d-none');
+        var input = document.getElementById('input-plan');
+        input.classList.remove('d-none');
+        input.value = window.plan_simulado;
+        input.focus();
+        input.select();
+    };
+
+    window.guardarPlan = function() {
+        var input = document.getElementById('input-plan');
+        var nuevoValor = parseInt(input.value, 10) || 0;
+        
+        // localStorage hace que sobreviva a F5 y a cerrar la pestaña
+        localStorage.setItem(planKey, nuevoValor);
+        window.plan_simulado = nuevoValor;
+        window.rd_planActual = window.plan_simulado;
+
+        // Ocultar input y actualizar UI
+        input.classList.add('d-none');
+        var container = document.getElementById('plan-container');
+        container.classList.remove('d-none');
+        container.textContent = window.rd_planActual;
+        
+        window.calcularMatematica();
+    };
+
+    window.formatNum = function(num) { return new Intl.NumberFormat('es-ES').format(num); };
+
+    window.getNum = function(id) {
+        var el = document.getElementById(id);
+        if (!el) return 0;
+        var val = parseInt(el.textContent.replace(/\D/g, ''), 10);
+        return isNaN(val) ? 0 : val;
+    };
+
+    window.calcularMatematica = function() {
+        try {
+            var obreros = window.getNum('val-obreros');
+            var tecnicos = window.getNum('val-tecnicos');
+            var admin = window.getNum('val-admin');
+            var servicios = window.getNum('val-servicios');
+            var dirigentes = window.getNum('val-dirigentes');
+
+            var f_obreros = window.getNum('val-obreros-fem');
+            var f_tecnicos = window.getNum('val-tecnicos-fem');
+            var f_admin = window.getNum('val-admin-fem');
+            var f_servicios = window.getNum('val-servicios-fem');
+            var f_dirigentes = window.getNum('val-dirigentes-fem');
+
+            var misiones = window.getNum('val-misiones');
+            var misiones_fem = window.getNum('val-misiones-fem');
+            var obligaciones = window.getNum('val-obligaciones');
+            var obligaciones_fem = window.getNum('val-obligaciones-fem');
+            var subsidios = window.getNum('val-subsidios');
+            var subsidios_fem = window.getNum('val-subsidios-fem');
+            var maternidad = window.getNum('val-maternidad');
+            var sin_sueldo = window.getNum('val-sin-sueldo');
+
+            var total = obreros + tecnicos + admin + servicios + dirigentes;
+            var total_fem = f_obreros + f_tecnicos + f_admin + f_servicios + f_dirigentes;
+
+            document.getElementById('total-trabajadores').textContent = window.formatNum(total);
+            document.getElementById('total-trabajadores-fem').textContent = window.formatNum(total_fem);
+
+            // 1. Calcular las Deducciones (Solo Subsidios + Maternidad + Sin Sueldo)
+            var deducciones = subsidios + maternidad + sin_sueldo;
+            var deducciones_fem = subsidios_fem + maternidad + sin_sueldo;
+
+            if(document.getElementById('val-deducciones')) {
+                document.getElementById('val-deducciones').textContent = window.formatNum(deducciones);
+                document.getElementById('val-deducciones-fem').textContent = window.formatNum(deducciones_fem);
+            }
+
+            // 2. Calcular el Promedio (Total Físicos - Deducciones). Misiones y Obligaciones NO se restan.
+            var real = total - deducciones;
+            var real_fem = total_fem - deducciones_fem;
+
+            document.getElementById('total-promedio').textContent = window.formatNum(real);
+            if(document.getElementById('total-promedio-fem')) {
+                document.getElementById('total-promedio-fem').textContent = window.formatNum(real_fem);
+            }
+            
+            // 3. Tarjeta REAL en Eficiencia del Plan (Muestra el Promedio)
+            document.getElementById('resumen-real').textContent = window.formatNum(real);
+
+            // 4. Eficiencia del Plan (Compara el Promedio 'real' contra el Plan Actual)
+            var porcentaje = 0;
+            var diferencia = 0;
+            if (window.rd_planActual > 0) {
+                porcentaje = (real / window.rd_planActual) * 100;
+                diferencia = real - window.rd_planActual;
+            }
+
+            document.getElementById('resumen-porcentaje').textContent = porcentaje.toFixed(2) + '%';
+            document.getElementById('progress-text').textContent = porcentaje.toFixed(2) + '%';
+            document.getElementById('resumen-diferencia').textContent = diferencia > 0 ? '+' + diferencia : diferencia;
+            
+            var colorBarra = porcentaje >= 100 ? 'bg-success' : 'bg-warning';
+            if (porcentaje < 80) colorBarra = 'bg-danger';
+            
+            var progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = Math.min(porcentaje, 100) + '%';
+            progressBar.className = 'progress-bar ' + colorBarra;
+
+            window.actualizarGraficos([obreros, tecnicos, admin, servicios, dirigentes], total_fem, Math.max(0, total - total_fem));
+
+        } catch (error) {
+            console.error("Error en cálculos matemáticos:", error);
+        }
+    };
+
+    window.actualizarGraficos = function(datosCat, totalMujeres, totalHombres) {
+
+        if (typeof Chart === 'undefined') return;
+
+        try {
+            if (window.chartCategorias?.destroy) {
+                window.chartCategorias.destroy();
+            }
+
+            if (window.chartSexo?.destroy) {
+                window.chartSexo.destroy();
+            }
+        } catch (e) {
+            console.warn('Error destruyendo gráficos anteriores', e);
+        }
+
+        var totalSexo = totalMujeres + totalHombres;
+
+        var porcMujeres = totalSexo > 0
+            ? ((totalMujeres / totalSexo) * 100).toFixed(1)
+            : 0;
+
+        var porcHombres = totalSexo > 0
+            ? ((totalHombres / totalSexo) * 100).toFixed(1)
+            : 0;
+
+        // GRÁFICO 1: Distribución Ocupacional
+        var ctx = document.getElementById('chartCategorias').getContext('2d');
+        window.chartCategorias = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Obreros', 'Técnicos', 'Admin.', 'Servicios', 'Dirigentes'],
+                datasets: [{
+                    data: datosCat,
+                    backgroundColor: '#ff6600',
+                    borderRadius: 6,
+                    barThickness: 25 // Barras más gruesas
+                }]
+            },
+            options: {
+                indexAxis: 'y', 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: { enabled: true }
+                },
+                scales: {
+                    // TAMAÑO DE LETRAS AUMENTADO AQUÍ (de 10 a 14 y de 12 a 15)
+                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 14 } } },
+                    y: { grid: { display: false }, ticks: { color: '#ffffff', font: { size: 15, weight: 'bold' } } }
+                }
+            }
+        });
+
+        // TU PLUGIN PERSONALIZADO INTOCABLE (Solo le aumentamos el tamaño de la letra)
+        const donutLabelsPlugin = {
+            id: 'donutLabelsPlugin',
+            afterDraw(chart) {
+                const {ctx} = chart;
+                chart.data.datasets.forEach((dataset, i) => {
+                    const meta = chart.getDatasetMeta(i);
+                    meta.data.forEach((element, index) => {
+                        const value = dataset.data[index];
+                        const total = dataset.data.reduce((a,b)=>a+b,0);
+                        const percent = total > 0
+                            ? ((value / total) * 100).toFixed(1) + '%'
+                            : '0%';
+
+                        const position = element.tooltipPosition();
+                        ctx.save();
+                        ctx.fillStyle = '#ffffff';
+                        // LETRA MÁS GRANDE EN EL CENTRO DEL PASTEL (de 12px a 16px)
+                        ctx.font = 'bold 16px Arial'; 
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(percent, position.x, position.y);
+                        ctx.restore();
+                    });
+                });
+            }
+        };
+
+        // GRÁFICO 2: Participación por Sexo
+        var ctx2 = document.getElementById('chartSexo').getContext('2d');
+        window.chartSexo = new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                // AQUÍ SE AÑADIÓ LA CANTIDAD FÍSICA JUNTO AL PORCIENTO
+                labels: [
+                    'Mujeres: ' + totalMujeres + ' (' + porcMujeres + '%)',
+                    'Hombres: ' + totalHombres + ' (' + porcHombres + '%)'
+                ],
+                datasets: [{
+                    data: [totalMujeres, totalHombres],
+                    backgroundColor: [
+                        '#ec4899',
+                        '#003399'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            plugins: [donutLabelsPlugin], // Registramos tu plugin
+            options: {
+                responsive: true, 
+                maintainAspectRatio: false, 
+                cutout: '65%', // Reducido de 70% a 65% para que el "anillo" sea más grueso
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        // TAMAÑO DE LETRAS AUMENTADO EN LA LEYENDA (de 12 a 15)
+                        labels: { color: '#ffffff', font: { size: 15, weight: 'bold' }, padding: 20 } 
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                var label = context.label || '';
+                                return ' ' + label; // Simplificado porque el label ya trae toda la info
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    };
+
+    // Lanzar inmediatamente
+    setTimeout(window.calcularMatematica, 300);
+</script>
+{% endblock %}

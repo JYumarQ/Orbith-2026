@@ -192,20 +192,23 @@
                                     {{ form.tipo_salario }}
                                 </div>
                                 <div class="col-md-6">
+                                    Categoría Ocupacional
+                                    <input type="text" id="id_cat_ocupacional" class="form-control" readonly placeholder="---">
+                                </div>
+
+                                <div class="col-md-4">
                                     {{ form.grupo_escala.label }} 
                                     {{ form.grupo_escala }}
                                 </div>
-
-                                <div class="col-md-6">
-                                    {{ form.rol.label }} 
+                                <div class="col-md-4">
+                                    Rol 
                                     {{ form.rol }}
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     {{ form.tridente.label }}  
                                     {{ form.tridente }}
                                 </div>
 
-                                
                                 <div class="col-12">
                                     <div class="row g-3 mt-2 p-3 border rounded bg-light" id="resultados_salariales">
                                         <div class="col-md-4">
@@ -664,25 +667,7 @@
             const name = this.name;
             let valido = this.value.trim() !== '';
 
-            // Lógica Condicional: Tridente
-            if (name === 'tipo_salario') {
-                const $tridente = $form.find('[name="tridente"]');
-                if ($tridente.length) {
-                    if (this.value === 'FIJ') {
-                        $tridente.prop('disabled', true);
-                        $tridente.val('');
-                        if ($tridente.hasClass('select2-hidden-accessible')) {
-                            $tridente.trigger('change.select2');
-                            $tridente.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
-                        } else {
-                            $tridente.removeClass('border-warning border-success');
-                        }
-                    } else {
-                        $tridente.prop('disabled', false);
-                        pintarBorde($tridente[0], $tridente.val().trim() !== "");
-                    }
-                }
-            }
+            
 
             // Lógica Condicional: Motivo
             if (name === 'tipo') {
@@ -706,12 +691,21 @@
             }
 
             // 2. SOLUCIÓN MOTIVO/TRIDENTE NARANJA: 
-            // Ahora si el campo que cambió es motivo o tridente, TAMBIÉN se valida y se pinta
             if (reglas.obligatorios.includes(name) || name === 'motivo' || name === 'tridente') {
                 if (name === 'no_expediente') valido = parseInt(this.value) > 0;
                 
-                // Solo pintamos si el campo no está deshabilitado
-                if (!$(this).prop('disabled')) {
+                let $el = $(this);
+                if ($el.prop('disabled') || $el.prop('readonly')) {
+                    // 1. Limpiamos el select nativo
+                    $el.removeClass('border-warning is-invalid border-danger');
+                    // 2. Limpiamos el componente visual de Select2 (Esta era la falla)
+                    if ($el.hasClass('select2-hidden-accessible')) {
+                        $el.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success is-invalid border-danger');
+                    }
+                    // 3. Forzamos a evaluar el botón ahora que quitamos el error
+                    evaluarBoton();
+                } else {
+                    // Si está activo, lo evaluamos normal
                     pintarBorde(this, valido);
                 }
             }

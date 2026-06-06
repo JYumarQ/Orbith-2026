@@ -94,7 +94,6 @@ class CargoPlantilla(Base):
     cant_aprobada = models.IntegerField(default=0)
     cant_cubierta = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
-    puesto_clave = models.BooleanField(default=False, verbose_name='Puesto Clave')
 
     @property
     def cant_cubierta_real(self):

@@ -6,17 +6,17 @@ from django.urls import path, include
 from usuarios.views import CustomLoginView
 
 urlpatterns = [
-
+    # DASHBOARD PRINCIPAL
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     
-    path('informes/economia/', dashboard_views.InformeEconomiaView.as_view(), name='informe_economia'),
-    path('informes/economia/exportar-word/', dashboard_views.ExportarConsolidadoWordView.as_view(), name='exportar_consolidado_word'),
-    path('informes/economia/exportar-pdf/', dashboard_views.ExportarConsolidadoPDFView.as_view(), name='exportar_consolidado_pdf'),
+    # ---------------------------------------------------------
+    # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)
+    # ---------------------------------------------------------
+    path('informes/', include('informes.urls')),
 
-    path('informes/economia/trabajadores-ueb/', dashboard_views.InformeTrabajadoresUEBView.as_view(), name='informe_trabajadores_ueb'),
-    path('informes/economia/trabajadores-ueb/exportar-word/', dashboard_views.ExportarResumenUEBWordView.as_view(), name='exportar_resumen_ueb_word'),
-
-    path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
+    # ---------------------------------------------------------
+    # MÓDULOS DE LA APLICACIÓN
+    # ---------------------------------------------------------
     path('admin/', admin.site.urls),
     path('bolsa/', include('bolsa.urls')),
     path('contrato/', include('contratos.urls')),
@@ -26,15 +26,14 @@ urlpatterns = [
     path('notificaciones/', include('notificaciones.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),
+    
+    # SISTEMA DE AUTENTICACIÓN
     path('accounts/login/', CustomLoginView.as_view(), name='login'),
-
-    
-    
     path('accounts/', include('django.contrib.auth.urls'))
-        
+
 ]
 
-
+# CONFIGURACIÓN PARA ARCHIVOS ESTÁTICOS Y MULTIMEDIA EN DESARROLLO
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

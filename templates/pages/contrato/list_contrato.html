@@ -333,24 +333,33 @@
 <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
 <script>
     var $ = jQuery.noConflict();
-
-    function abrir_modal_edicion(url) {
-        $('#editar_empl').load(url, function() {
-            $(this).modal('show');
-            if (window.htmx) htmx.process($('#contratoForm')[0]);
-        });
+    
+    function abrir_modal_edicion(url){
+      $('#editar_empl').load(url, function(){
+        $(this).modal('show');
+        if (window.htmx) {
+          htmx.process(this); // <-- Seguro e infalible
+        }
+      });
     }
-
-    function abrir_modal_aspir(url) {
-        $('#editar_aspir').load(url, function() {
-            $(this).modal('show');
-            if (window.htmx) htmx.process($('#formEditarAspirante')[0]);
-        });
+    
+    function abrir_modal_creacion(url){
+      $('#crear_empl').load(url, function(){
+        $(this).modal('show');
+        if (window.htmx) {
+          htmx.process(this); // <-- Lo agregamos por si acaso hay HTMX adentro
+        }
+      });
     }
-
-   
-
-
+    
+    function abrir_modal_aspir(url){
+      $('#editar_aspir').load(url, function(){
+        $(this).modal('show');
+        if (window.htmx) {
+          htmx.process(this); // <-- Seguro e infalible
+        }
+      });
+    }
     let currentSort = '';
     let currentOrder = 'asc';
 

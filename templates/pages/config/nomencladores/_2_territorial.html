@@ -1,0 +1,298 @@
+<div class="accordion-item border-0 bg-transparent mb-2">
+      <h2 class="accordion-header" id="headingTerritorial">
+        <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseTerritorial" style="background-color: #fff;">
+          <i class="fas fa-map-marker-alt me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">División Territorial</span>
+        </button>
+      </h2>
+      <div id="collapseTerritorial" class="accordion-collapse collapse" data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body px-0 pt-4 pb-0">
+          
+          <div class="bg-slate-50 p-4 font-sans rounded-4 border">
+              <div class="row g-4 m-0">
+                
+                <div class="col-lg-6 ps-0">
+                  <div class="bg-white rounded-4 border p-4 shadow-sm h-100 d-flex flex-column">
+                    
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="icon-indigo"><i class="fas fa-map-marked-alt"></i></div>
+                        <div>
+                          <h6 class="m-0 fw-bold text-slate-800 text-uppercase">Provincias</h6>
+                          <small class="text-slate-400 fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">NIVEL 1</small>
+                        </div>
+                      </div>
+                      
+                      <div class="header-actions-box">
+                        <button class="btn-action-top active-prov add" title="Añadir Provincia" onclick="crudTerritorial('provincias', 'POST')">
+                          <i class="fas fa-plus"></i>
+                        </button>
+                        <div class="vr mx-1 opacity-25"></div>
+                        <button id="btn-edit-prov" class="btn-action-top" disabled title="Editar Provincia" onclick="crudTerritorial('provincias', 'PUT')">
+                          <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button id="btn-del-prov" class="btn-action-top" disabled title="Eliminar Provincia" onclick="crudTerritorial('provincias', 'DELETE')">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
+                      <table class="w-100" id="provincias-table">
+                        <thead><tr><th>Nombre</th></tr></thead>
+                        <tbody id="provincias-tbody">
+                          {% for p in provincias %}
+                          <tr data-id="{{ p.id }}" 
+                              hx-get="{% url 'municipios_provincia_tabla' p.id %}" 
+                              hx-target="#municipios-tbody"
+                              hx-swap="innerHTML"
+                              onclick="seleccionarProvincia(this)">
+                            <td class="nombre-cell"><i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>{{ p.nombre }}</td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-lg-6 pe-0">
+                  <div class="bg-white rounded-4 border p-4 shadow-sm h-100 d-flex flex-column">
+                    
+                    <div class="d-flex align-items-center justify-content-between mb-4">
+                      <div class="d-flex align-items-center gap-3">
+                        <div class="icon-blue"><i class="fas fa-location-arrow"></i></div>
+                        <div>
+                          <h6 class="m-0 fw-bold text-slate-800 text-uppercase">Municipios</h6>
+                          <small id="sub-muni" class="text-slate-400 fw-bold" style="font-size: 0.65rem; letter-spacing: 1px;">SELECCIONE PROVINCIA</small>
+                        </div>
+                      </div>
+                      
+                      <div class="header-actions-box">
+                        <button id="btn-add-muni" class="btn-action-top" disabled title="Añadir Municipio" onclick="crudTerritorial('municipios', 'POST')">
+                          <i class="fas fa-plus"></i>
+                        </button>
+                        <div class="vr mx-1 opacity-25"></div>
+                        <button id="btn-edit-muni" class="btn-action-top" disabled title="Editar Municipio" onclick="crudTerritorial('municipios', 'PUT')">
+                          <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button id="btn-del-muni" class="btn-action-top" disabled title="Eliminar Municipio" onclick="crudTerritorial('municipios', 'DELETE')">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
+                      <table class="w-100" id="municipios-table">
+                        <thead><tr><th>Nombre</th></tr></thead>
+                        <tbody id="municipios-tbody">
+                          <tr id="muni-empty-state" style="grid-column: 1 / -1; display: flex; flex-direction: column; background: transparent; border: none; box-shadow: none; cursor: default;">
+                            <td class="text-center py-5 opacity-50 w-100">
+                              <i class="fas fa-map-marked-alt fs-1 text-slate-400 mb-3"></i>
+                              <p class="fw-bold text-slate-500 m-0">Seleccione una provincia.</p>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+          </div>
+        </div>
+    </div>
+</div>
+<script>
+
+/* ==========================================================================
+   NUEVA LÓGICA: TERRITORIAL (MAESTRO-DETALLE)
+   ========================================================================== */
+  let stateGeo = { provId: null, provName: '', muniId: null, muniName: '' };
+
+  function seleccionarProvincia(tr) {
+      // Limpiar visualmente
+      document.querySelectorAll('#provincias-tbody tr').forEach(r => r.classList.remove('selected-indigo'));
+      tr.classList.add('selected-indigo');
+      
+      // Guardar estado
+      stateGeo.provId = tr.dataset.id;
+      stateGeo.provName = tr.querySelector('.nombre-cell').textContent.trim();
+
+      // Habilitar botones de Provincia
+      document.getElementById('btn-edit-prov').classList.add('active-prov', 'edit');
+      document.getElementById('btn-edit-prov').disabled = false;
+      document.getElementById('btn-del-prov').classList.add('active-prov', 'delete');
+      document.getElementById('btn-del-prov').disabled = false;
+
+      // Preparar entorno para Municipios
+      stateGeo.muniId = null;
+      document.getElementById('sub-muni').textContent = stateGeo.provName.toUpperCase();
+      document.getElementById('btn-add-muni').classList.add('active-muni', 'add');
+      document.getElementById('btn-add-muni').disabled = false;
+      
+      desactivarBotonesMuni();
+  }
+
+  // Detectar clics en municipios (Delegación de eventos porque HTMX los inyecta)
+  document.addEventListener('click', e => {
+      const muniRow = e.target.closest('#municipios-tbody tr:not(#muni-empty-state)');
+      if (muniRow) {
+          document.querySelectorAll('#municipios-tbody tr').forEach(r => r.classList.remove('selected-blue'));
+          muniRow.classList.add('selected-blue');
+          
+          stateGeo.muniId = muniRow.dataset.id;
+          stateGeo.muniName = muniRow.querySelector('.nombre-cell').textContent.trim();
+
+          // Habilitar botones de Municipio
+          document.getElementById('btn-edit-muni').classList.add('active-muni', 'edit');
+          document.getElementById('btn-edit-muni').disabled = false;
+          document.getElementById('btn-del-muni').classList.add('active-muni', 'delete');
+          document.getElementById('btn-del-muni').disabled = false;
+      }
+  });
+
+  function desactivarBotonesMuni() {
+      document.getElementById('btn-edit-muni').classList.remove('active-muni', 'edit');
+      document.getElementById('btn-edit-muni').disabled = true;
+      document.getElementById('btn-del-muni').classList.remove('active-muni', 'delete');
+      document.getElementById('btn-del-muni').disabled = true;
+  }
+
+  // Gestión CRUD con popups elegantes (Evita romper el diseño Grid con inputs feos)
+  function crudTerritorial(entidad, metodo) {
+      const esProv = entidad === 'provincias';
+      const idObj = esProv ? stateGeo.provId : stateGeo.muniId;
+      const nomObj = esProv ? stateGeo.provName : stateGeo.muniName;
+      
+      const urlBase = `/nomencladores/api/${entidad}/`;
+      const url = metodo === 'POST' ? urlBase : (metodo === 'DELETE' ? `${urlBase}${idObj}/delete/` : `${urlBase}${idObj}/`);
+      
+      if (metodo === 'DELETE') {
+          Swal.fire({
+              title: `¿Eliminar ${esProv ? 'Provincia' : 'Municipio'}?`,
+              text: "Esta acción no se puede deshacer.",
+              icon: 'warning', showCancelButton: true,
+              confirmButtonColor: '#f43f5e', confirmButtonText: 'Sí, eliminar'
+          }).then(res => {
+              if(res.isConfirmed) {
+                  fetch(url, { method: 'DELETE', headers: {'X-CSRFToken': '{{ csrf_token }}'} })
+                  .then(async r => {
+                      const d = await r.json();
+                      if(!r.ok) throw new Error(d.error);
+                      
+                      document.querySelector(`#${entidad}-tbody tr[data-id="${idObj}"]`).remove();
+                      if(esProv) {
+                          document.getElementById('btn-edit-prov').disabled = true;
+                          document.getElementById('btn-del-prov').disabled = true;
+                          // Restaurar empty state
+                          document.getElementById('municipios-tbody').innerHTML = '<tr id="muni-empty-state" style="grid-column: 1 / -1; display: flex; flex-direction: column; background: transparent; border: none; box-shadow: none;"><td class="text-center py-5 opacity-50 w-100"><i class="fas fa-map-marked-alt fs-1 text-slate-400 mb-3"></i><p class="fw-bold text-slate-500 m-0">Seleccione una provincia.</p></td></tr>';
+                      } else {
+                          desactivarBotonesMuni();
+                      }
+                      Swal.fire({icon: 'success', title: 'Eliminado', showConfirmButton: false, timer: 1500});
+                  }).catch(err => Swal.fire('No se puede eliminar', err.message, 'warning'));
+              }
+          });
+      } else {
+          Swal.fire({
+              title: metodo === 'POST' ? `Añadir ${esProv ? 'Provincia' : 'Municipio'}` : `Editar ${esProv ? 'Provincia' : 'Municipio'}`,
+              input: 'text', inputValue: metodo === 'PUT' ? nomObj : '',
+              showCancelButton: true, confirmButtonText: 'Guardar',
+              inputValidator: (value) => { if (!value) return 'El nombre es obligatorio' }
+          }).then(res => {
+              if(res.isConfirmed) {
+                  const payload = { nombre: res.value };
+                  if (!esProv && metodo === 'POST') payload.provincia_id = stateGeo.provId;
+                  
+                  fetch(url, {
+                      method: metodo, 
+                      headers: {'Content-Type':'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                      body: JSON.stringify(payload)
+                  }).then(async r => {
+                      const d = await r.json();
+                      if(!r.ok) throw new Error(d.error);
+                      
+                      if (esProv) {
+                          if (metodo === 'PUT') {
+                              document.querySelector(`#provincias-tbody tr[data-id="${idObj}"] .nombre-cell`).innerHTML = `<i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>${d.nombre}`;
+                              stateGeo.provName = d.nombre;
+                              document.getElementById('sub-muni').textContent = d.nombre.toUpperCase();
+                          } else { window.location.reload(); }
+                      } else {
+                          document.querySelector(`#provincias-tbody tr[data-id="${stateGeo.provId}"]`).click(); // Recargar vía HTMX
+                      }
+                      Swal.fire({icon: 'success', title: 'Guardado', showConfirmButton: false, timer: 1500});
+                  }).catch(err => Swal.fire('Error', err.message, 'error'));
+              }
+          });
+      }
+  }
+
+  async function guardarProvincia(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    if (!nombre) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/provincias/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+      
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function guardarMunicipio(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    const provinciaId = row.closest('tbody').dataset.provinciaId;
+    if (!nombre || !provinciaId) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/municipios/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre, provincia_id: provinciaId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const provinciaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent || '';
+      row.outerHTML = `
+        <tr data-id="${data.id}" data-provincia-id="${data.provincia_id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="provincia-cell">${provinciaName}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+      
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  /* ---------- RESALTAR PROVINCIA SELECCIONADA ---------- */
+  function resaltarProvincia(fila) {
+      // Le quitamos la clase "table-active" a todas las filas hermanas
+      let filas = fila.parentNode.querySelectorAll('tr');
+      filas.forEach(f => f.classList.remove('table-active', 'bg-label-primary'));
+      
+      // Se la ponemos a la fila que el usuario clickeó
+      fila.classList.add('table-active', 'bg-label-primary');
+  }
+</script>

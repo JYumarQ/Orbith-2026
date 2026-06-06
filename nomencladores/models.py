@@ -126,6 +126,8 @@ class NCargo(Base):
         ('CDI', 'Cuadro Directivo'),
         ('CEJ', 'Cuadro Ejecutivo')
     ])
+
+    puesto_clave = models.BooleanField(default=False, verbose_name='Puesto Clave')
     grupo_escala = models.ForeignKey(NGrupoEscala, on_delete=models.RESTRICT)
 
     # ¡LA MAGIA OCURRE AQUÍ! ELIMINAMOS EL FOREIGN KEY Y USAMOS MANY-TO-MANY

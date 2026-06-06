@@ -1,0 +1,367 @@
+<div class="accordion-item border-0 bg-transparent mb-2">
+      <h2 class="accordion-header" id="headingLaboral">
+        <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseLaboral" style="background-color: #fff;">
+          <i class="fas fa-tools me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">Laborales y Profesionales</span>
+        </button>
+      </h2>
+      <div id="collapseLaboral" class="accordion-collapse collapse"
+           data-bs-parent="#accordionNomencladores">
+        <div class="accordion-body px-0 pt-4 pb-0">
+          
+          <div class="bg-slate-50 p-4 font-sans rounded-4 border" style="min-height: 500px;">
+              
+              <div class="dashboard-header mb-4">
+                  <div class="d-flex align-items-center gap-3">
+                      <div class="icon-box-main">
+                          <i class="fas fa-wrench"></i>
+                      </div>
+                      <div>
+                          <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
+                          <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de condiciones, contratos y especialidades</p>
+                      </div>
+                  </div>
+              </div>
+
+              <div class="grid-dashboard">
+                  
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="condiciones-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="condiciones-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nombre</th>
+                                      <th class="text-end">Tarifa Hora</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for c in condiciones %}
+                                  <tr data-id="{{ c.id }}">
+                                      <td class="nombre-cell">{{ c.nombre }}</td>
+                                      <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-blue"><i class="fas fa-clipboard-list"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Especialidades</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="especialidades-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="especialidades-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nombre</th>
+                                      <th class="text-center" style="width: 100px;">Educ. Sup.</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for e in especialidades %}
+                                  <tr data-id="{{ e.id }}">
+                                      <td class="nombre-cell">{{ e.nombre }}</td>
+                                      <td class="educ-cell text-center">
+                                          {% if e.educ_superior %}
+                                              <span class="badge bg-label-success" style="font-size: 0.65rem;">SÍ</span>
+                                          {% else %}
+                                              <span class="badge bg-label-secondary" style="font-size: 0.65rem;">NO</span>
+                                          {% endif %}
+                                      </td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="section-card">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-amber"><i class="fas fa-graduation-cap"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Niveles de Prep.</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="niveles-preparacion-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="niveles-preparacion-table">
+                              <thead>
+                                  <tr>
+                                      <th>Nivel</th>
+                                      <th class="text-center" style="width: 90px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for np in niveles_preparacion %}
+                                  <tr data-id="{{ np.id }}">
+                                      <td class="nombre-cell">{{ np.nombre }}</td>
+                                      <td class="text-center">
+                                          <div class="d-flex justify-content-center gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+              </div>
+              
+              <div class="grid-dashboard mt-4">
+                  
+                  <div class="section-card m-0">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-emerald"><i class="fas fa-file-signature"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Tipos de Contrato</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="tipocontrato-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="tipocontrato-table">
+                              <thead>
+                                  <tr>
+                                      <th>Descripción</th>
+                                      <th class="text-center">Ocupa Plaza</th>
+                                      <th class="text-center">Requiere Motivo</th>
+                                      <th class="text-end" style="width: 100px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for tc in tipos_contrato %}
+                                  <tr data-id="{{ tc.id }}">
+                                      <td class="nombre-cell fw-bold">{{ tc.descripcion }}</td>
+                                      <td class="text-center">
+                                          <input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.ocupa_plaza %}checked{% endif %}>
+                                      </td>
+                                      <td class="text-center">
+                                          <input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.requiere_motivo %}checked{% endif %}>
+                                      </td>
+                                      <td class="text-end">
+                                          <div class="d-flex justify-content-end gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="section-card m-0">
+                      <div class="card-header-flex">
+                          <div class="d-flex align-items-center gap-2">
+                              <div class="icon-indigo"><i class="fas fa-tags"></i></div>
+                              <h6 class="m-0 fw-bold text-slate-800">Motivos (Determinado)</h6>
+                          </div>
+                          <button class="btn-add-modern add-row-btn" data-table="motivocontrato-table">
+                              <i class="fas fa-plus"></i> Añadir
+                          </button>
+                      </div>
+                      <div class="table-container-modern">
+                          <table class="table-modern" id="motivocontrato-table">
+                              <thead>
+                                  <tr>
+                                      <th>Descripción</th>
+                                      <th class="text-end" style="width: 100px;">Acciones</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {% for m in motivos_contrato %}
+                                  <tr data-id="{{ m.id }}">
+                                      <td class="nombre-cell">{{ m.descripcion }}</td>
+                                      <td class="text-end">
+                                          <div class="d-flex justify-content-end gap-1">
+                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                          </div>
+                                      </td>
+                                  </tr>
+                                  {% endfor %}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+              </div>
+
+          </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+  async function guardarCondicion(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    const tarifa = parseFloat(row.querySelector('.input-tarifa').value) || 0;
+    if (!nombre) return alert('Campo nombre obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/condiciones/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre, tarifa_hora: tarifa })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="tarifa-cell">${data.tarifa_hora} CUP</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function guardarEspecialidad(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    const educSup = row.querySelector('.input-educ-superior').checked;
+    if (!nombre) return alert('Campo nombre obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/especialidades/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre, educ_superior: educSup })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="educ-cell text-center">${data.educ_superior ? 'Sí' : 'No'}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function guardarNivelPreparacion(row) {
+    const nombre = row.querySelector('.input-nombre').value.trim();
+    if (!nombre) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/niveles-preparacion/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell">${data.nombre}</td>
+          <td class="text-center">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  }
+
+  async function guardarTipoContrato(row) {
+    const desc = row.querySelector('.input-desc').value.trim();
+    const ocupa = row.querySelector('.input-ocupa').checked;
+    const motivo = row.querySelector('.input-motivo').checked;
+    if (!desc) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/tipo_contrato/create/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell ps-3">${data.nombre}</td>
+          <td class="text-center align-middle"><input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="${data.id}" ${data.ocupa_plaza ? 'checked' : ''}></td>
+          <td class="text-center align-middle"><input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="${data.id}" ${data.requiere_motivo ? 'checked' : ''}></td>
+          <td class="text-center pe-3 align-middle">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) { alert('Error: ' + err.message); }
+  }
+
+  async function guardarMotivoContrato(row) {
+    const desc = row.querySelector('.input-desc').value.trim();
+    if (!desc) return alert('Campo obligatorio');
+    try {
+      const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ nombre: desc })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      row.outerHTML = `
+        <tr data-id="${data.id}">
+          <td class="nombre-cell ps-3">${data.nombre}</td>
+          <td class="text-center pe-3 align-middle">
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
+              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
+            </div>
+          </td>
+        </tr>`;
+    } catch (err) { alert('Error: ' + err.message); }
+  }
+</script>

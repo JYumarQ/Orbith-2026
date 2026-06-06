@@ -23,7 +23,7 @@ class CargoPlantillaForm(forms.ModelForm):
     
     class Meta:
         model = CargoPlantilla
-        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo', 'puesto_clave')
+        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo')
         labels = {
             'ncargo': 'Cargo', 
             'departamento': 'Departamento', 
@@ -32,7 +32,6 @@ class CargoPlantillaForm(forms.ModelForm):
             'cant_aprobada': 'Cantidad Aprobada', 
             'cant_cubierta': 'Cantidad Cubierta', 
             'activo': ' Estado(Automático)',
-            'puesto_clave': 'Puesto Clave'
         }
         widgets = {
             'ncargo': forms.Select(attrs={
@@ -46,7 +45,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'cant_aprobada': forms.NumberInput(attrs={'class': 'form-control'}),
             'cant_cubierta': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class':'form-check-input', 'disabled': 'disabled', 'id': 'id_activo'}),
-            'puesto_clave': forms.CheckboxInput(attrs={'class':'form-check-input cursor-pointer', 'id': 'id_puesto_clave'})
+            
         }
     
     # strorganizativa/forms.py (Corregido)

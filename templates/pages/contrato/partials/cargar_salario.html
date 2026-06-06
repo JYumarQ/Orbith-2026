@@ -12,23 +12,22 @@
         <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ extras }}">
     </div>
 
+    <input id="id_cat_ocupacional" value="{{ nueva_cat }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
     <input id="id_rol" value="{{ nuevo_rol }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
     <input id="id_grupo_escala" value="{{ nuevo_grupo }}" class="form-control" readonly placeholder="---" hx-swap-oob="true">
 {% endif %}
 
 <script>
-    // 1. Identificamos en qué formulario estamos (Alta o Movimiento)
     var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
     
     if (formActivo) {
         var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('#mov_tridente');
         
         if (selTridente) {
-            // 2. Leemos la orden suprema del backend
             var mostrarTridente = "{{ mostrar_tridente|yesno:'true,false' }}" === "true";
 
             if (!mostrarTridente) {
-                // BLOQUEO ABSOLUTO (Es Cuadro, o Salario Fijo, o excepción XXII-XXIV)
+                // BLOQUEO ABSOLUTO
                 selTridente.value = ''; 
                 if(selTridente.options[0]) selTridente.options[0].text = "-------";
                 selTridente.disabled = true;
@@ -36,32 +35,44 @@
                 selTridente.style.color = "#a1acb8";
                 selTridente.style.cursor = "not-allowed";
                 
-                // Limpieza para Select2 si se está usando
-                if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
-                    $(selTridente).val(null).trigger('change.select2');
+                // --- LA CURA PARA EL BORDE AMARILLO ---
+                // 1. Arrancamos las clases de error a la fuerza
+                selTridente.classList.remove('border-warning', 'is-invalid', 'border-danger');
+                
+                // 2. Disparamos un cambio falso para que el Javascript evalúe y habilite el botón Continuar
+                if (window.jQuery) {
+                    if ($(selTridente).hasClass('select2-hidden-accessible')) {
+                        $(selTridente).val(null).trigger('change.select2');
+                    }
+                    $(selTridente).trigger('change'); 
                 }
             } else {
-                // HABILITADO (Modo normal de matriz)
+                // HABILITADO
                 if(selTridente.options[0]) selTridente.options[0].text = "---------";
                 selTridente.disabled = false;
                 selTridente.style.backgroundColor = ""; 
                 selTridente.style.color = "";
                 selTridente.style.cursor = "";
                 
-                if (window.jQuery && $(selTridente).hasClass('select2-hidden-accessible')) {
-                    $(selTridente).trigger('change.select2');
+                if (window.jQuery) {
+                    let $sel = $(selTridente);
+                    if ($sel.hasClass('select2-hidden-accessible')) {
+                        $sel.trigger('change.select2');
+                    }
+                    // ESTO ES NUEVO: Forzamos al JS a que lo ponga amarillo de inmediato si está vacío
+                    $sel.trigger('change'); 
                 }
             }
         }
 
-        // 3. Sincronización de inputs de solo lectura (Movimientos)
+        // Sincronización de inputs de solo lectura (Movimientos)
         var inputRol = formActivo.querySelector('#mov_rol');
         if(inputRol) inputRol.value = "{{ nuevo_rol }}";
 
         var inputGrupo = formActivo.querySelector('#mov_grupo');
         if(inputGrupo) inputGrupo.value = "{{ nuevo_grupo }}";
 
-        // 4. Actualización de dineros
+        // Actualización de dineros
         if(formActivo.querySelector('#salarioEscala')) formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
         if(formActivo.querySelector('#tarifaHoraria')) formActivo.querySelector('#tarifaHoraria').value = "{{ tarifa }}";
         if(formActivo.querySelector('#tarifaExtras')) formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";

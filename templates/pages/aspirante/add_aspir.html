@@ -24,6 +24,9 @@
                     <div class="col-md-3">
                         {{ form.sexo.label_tag }}  
                         {{ form.sexo }}
+                        <small id="warning_sexo" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
+                            <i class="fas fa-exclamation-triangle"></i> No coincide CI.
+                        </small>
                     </div>
 
                     <div class="col-md-5">
@@ -122,6 +125,9 @@
         // Nuevos selectores para validación (Django usa id_ + nombre_campo)
         var ciInput = formulario.querySelector('#id_doc_identidad');
         var movilInput = formulario.querySelector('#id_movil_personal'); // Ajustado a movil_personal
+
+        var sexInput = formulario.querySelector('#id_sexo');
+        var warningSexo = formulario.querySelector('#warning_sexo');
 
         var timer = null;
 
@@ -316,7 +322,7 @@
 
 
 
-        // 1. Validación Carnet Identidad
+        // 1. Validación Carnet Identidad (AUTOCOMPLETADO INTELIGENTE)
         if (ciInput) {
             ciInput.addEventListener('input', function() {
                 var val = this.value;
@@ -324,31 +330,53 @@
                 var errExist = formulario.querySelector('#error_ci_exist');
 
                 // Limpiar estados previos
-                errLen.classList.add('d-none');
-                errExist.classList.add('d-none');
+                if (errLen) errLen.classList.add('d-none');
+                if (errExist) errExist.classList.add('d-none');
                 ciInput.classList.remove('is-invalid', 'is-valid');
 
                 // Validación 1: Longitud (Local)
                 if (val.length !== 11) {
-                    errLen.classList.remove('d-none');
+                    if (errLen) errLen.classList.remove('d-none');
                     ciInput.classList.add('is-invalid');
-                    return; // No consultamos al servidor si la longitud está mal
+                    if (warningSexo) warningSexo.classList.add('d-none'); // Ocultar warning sexo
+                    return; 
                 }
+
+                // --- MAGIA: AUTOCOMPLETAR SEXO ---
+                if (sexInput) {
+                    var digito10 = parseInt(val.charAt(9));
+                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
+                    
+                    sexInput.value = sexoCalculado;
+                    
+                    // Forzar actualización visual a VERDE
+                    sexInput.classList.remove('border-warning', 'is-invalid');
+                    sexInput.classList.add('is-valid');
+                    
+                    if (warningSexo) warningSexo.classList.add('d-none');
+                    
+                    if (window.jQuery && $(sexInput).hasClass('select2-hidden-accessible')) {
+                        $(sexInput).trigger('change.select2');
+                    }
+                }
+                // ---------------------------------
 
                 // Validación 2: Existencia (Servidor)
                 clearTimeout(timer);
                 timer = setTimeout(function() {
-                    fetch("{% url 'validar_datos_aspirante' %}?doc_identidad=" + val)
+                    // Ajustamos URL temporalmente con barra al inicio por seguridad
+                    var fetchUrl = window.location.pathname.includes('updt_aspir') 
+                                   ? "/bolsa/validar_datos/?doc_identidad=" 
+                                   : "{% url 'validar_datos_aspirante' %}?doc_identidad=";
+                                   
+                    fetch(fetchUrl + val)
                     .then(response => response.json())
                     .then(data => {
                         if (data.ci_existe) {
-                            errExist.classList.remove('d-none');
-                            
-                            // AQUÍ ESTÁ LA CORRECCIÓN: Usar mensaje del servidor
-                            if(data.ci_error_msg) {
-                                errExist.innerText = data.ci_error_msg;
+                            if (errExist) {
+                                errExist.classList.remove('d-none');
+                                if(data.ci_error_msg) errExist.innerText = data.ci_error_msg;
                             }
-                            
                             ciInput.classList.add('is-invalid');
                         } else {
                             ciInput.classList.add('is-valid');
@@ -386,39 +414,49 @@
             });
         }
 
-        // 3. Interceptar Envío (SweetAlert de Error)
+        // --- VALIDACIÓN SUAVE DE SEXO ---
+        if (sexInput && ciInput) {
+            sexInput.addEventListener('change', function() {
+                var valCI = ciInput.value;
+                if (valCI.length === 11) {
+                    var digito10 = parseInt(valCI.charAt(9));
+                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
+                    
+                    // Si el usuario pone un sexo que no cuadra con el CI, advertimos.
+                    if (this.value && this.value !== sexoCalculado) {
+                        if (warningSexo) warningSexo.classList.remove('d-none');
+                    } else {
+                        if (warningSexo) warningSexo.classList.add('d-none');
+                    }
+                }
+            });
+        }
+
+        // 3. INTERCEPTAR ENVÍO (Solo Validación)
         formulario.addEventListener('submit', function(e) {
-            // Verificamos si hay algún error visible o clase inválida
-            // Buscamos los elementos dentro del formulario actual
-            var elLen = formulario.querySelector('#error_ci_len');
             var elCiExist = formulario.querySelector('#error_ci_exist');
             var elMovil = formulario.querySelector('#error_movil_exist');
-
-            var tieneErrorLen = elLen && !elLen.classList.contains('d-none');
             var tieneErrorCiExist = elCiExist && !elCiExist.classList.contains('d-none');
             var tieneErrorMovil = elMovil && !elMovil.classList.contains('d-none');
-            
-            // Verificar también si la longitud actual del CI es incorrecta (por si intentan enviar rápido)
             var longitudIncorrecta = ciInput && ciInput.value.length !== 11;
-
             var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
+            var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
 
-            if (tieneErrorLen || tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios) {
+            if (tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios || hayRojos) {
                 e.preventDefault(); // Evita el envío normal
-                e.stopImmediatePropagation(); // Evita que se dispare el otro swal-confirm de éxito
-
+                e.stopImmediatePropagation(); // CRÍTICO: Evita que salte tu cartel global de swal-confirm de éxito
+                
                 Swal.fire({
                     title: 'Atención',
                     text: 'Revise los campos resaltados en rojo o amarillo.',
                     icon: 'warning',
                     confirmButtonText: 'OK',
-                    customClass: {
-                        confirmButton: 'btn btn-primary'
-                    },
+                    customClass: { confirmButton: 'btn btn-primary' },
                     buttonsStyling: false
                 });
             }
-            // Si todo está bien, deja pasar el evento para que lo maneje el script genérico de confirmación
+            // Si la pantalla está perfecta, NO HAGO NADA AQUÍ.
+            // Dejo que el evento fluya naturalmente para que tu script global (.swal-confirm) haga la pregunta y envíe.
         });
         actualizarCampos(); // Ejecutar al inicio
         if (window.htmx) htmx.process(formulario);

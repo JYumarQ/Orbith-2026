@@ -1,0 +1,79 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% block title %}Consolidado de Fuerza de Trabajo{% endblock %}
+{% block content %}
+<style>
+    .bg-plantilla { background-color: rgba(105, 108, 255, 0.05); }
+    .bg-determinado { background-color: rgba(3, 195, 236, 0.05); }
+    .bg-adiestramiento { background-color: rgba(255, 171, 0, 0.05); }
+    .bg-total { background-color: rgba(113, 221, 55, 0.05); }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y">
+    {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Consolidado de la Fuerza de Trabajo" %}
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header border-bottom bg-transparent py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                    <h5 class="mb-0 text-primary fw-bold"><i class="bx bx-filter-alt me-1"></i> Filtro por Unidad</h5>
+                    
+                    <form id="form-exportar" class="m-0" hx-get="{% url 'informe_economia' %}" hx-target="#tbody-consolidado" hx-trigger="change">
+                        <input type="hidden" name="mes" value="{{ mes_actual }}">
+                        <input type="hidden" name="anno" value="{{ anno_actual }}">
+                        <div class="input-group shadow-sm" style="border: 1px solid #696cff; border-radius: 6px;">
+                            <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
+                            <select class="form-select border-0 shadow-none bg-white text-primary fw-bold" name="ueb" style="min-width: 280px; cursor: pointer;">
+                                <option value="">Empresa Eléctrica (Consolidado Total)</option>
+                                {% for unidad in unidades %}
+                                    <option value="{{ unidad.pk }}" {% if ueb_actual == unidad.pk|stringformat:"s" %}selected{% endif %}>{{ unidad.descripcion }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-responsive text-nowrap mt-2 pb-3">
+                    <table class="table text-center align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" class="text-start bg-lighter border-end">Cargo u Ocupación</th>
+                                <th colspan="4" class="text-primary bg-plantilla border-end border-bottom-0"><i class="bx bx-user-check me-1"></i>Plantilla</th>
+                                <th colspan="2" class="text-info bg-determinado border-end border-bottom-0"><i class="bx bx-user-plus me-1"></i>Determinado</th>
+                                <th colspan="2" class="text-warning bg-adiestramiento border-end border-bottom-0"><i class="bx bx-medal me-1"></i>Adiestramiento</th>
+                                <th colspan="2" class="text-success bg-total border-bottom-0"><i class="bx bx-line-chart me-1"></i>Total</th>
+                            </tr>
+                            <tr class="text-muted">
+                                <th class="bg-plantilla border-end-0">Aprob.</th>
+                                <th class="bg-plantilla border-end-0">Cubierta</th>
+                                <th class="bg-plantilla border-end-0">Vacante</th>
+                                <th class="bg-plantilla text-primary fw-bold border-end">Mujeres</th>
+                                <th class="bg-determinado border-end-0">Contratos</th>
+                                <th class="bg-determinado text-info fw-bold border-end">Mujeres</th>
+                                <th class="bg-adiestramiento border-end-0">Adiestrados</th>
+                                <th class="bg-adiestramiento text-warning fw-bold border-end">Mujeres</th>
+                                <th class="bg-total border-end-0">Total</th>
+                                <th class="bg-total text-success fw-bold">Mujeres</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-consolidado">
+                            {% include 'pages/informes/partials/tabla_consolidado.html' %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function ejecutarWord() {
+        const params = new URLSearchParams(new FormData(document.getElementById('form-exportar'))).toString();
+        window.location.href = "{% url 'exportar_consolidado_word' %}?" + params;
+    }
+    function ejecutarPDF() {
+        const ueb = document.querySelector('[name="ueb"]').value;
+        window.location.href = "{% url 'exportar_consolidado_pdf' %}?ueb=" + ueb;
+    }
+</script>
+{% endblock %}

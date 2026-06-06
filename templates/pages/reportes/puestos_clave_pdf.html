@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Consolidado Puestos Claves</title>
+    <style>
+        @page {
+            size: letter landscape;
+            margin: 1cm 1.5cm;
+            margin-top: 4.5cm; /* AUMENTADO: Empuja la tabla hacia abajo para que no choque con el encabezado */
+            margin-bottom: 2cm; 
+
+            @frame header {
+                -pdf-frame-content: header_content;
+                top: 1cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 3.5cm; /* AUMENTADO: Le da suficiente altura para que la librería no lo oculte */
+            }
+
+            @frame footer {
+                -pdf-frame-content: footer_content;
+                bottom: 0.5cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 1cm;
+            }
+        }
+
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 16px; }
+        .uppercase { text-transform: uppercase; }
+        .bold { font-weight: bold; }
+
+        /* ==============================================================
+           AQUÍ PUEDES CAMBIAR MANUALMENTE EL TAMAÑO DE LAS LETRAS
+           (Usa 'pt' para obtener mejores resultados en el PDF)
+        ============================================================== */
+
+        /* 1. TAMAÑOS DE LAS BURBUJAS SUPERIORES */
+        .kpi-title { 
+            font-size: 10pt; /* <-- CAMBIA AQUÍ el tamaño del texto descriptivo superior */
+            margin-bottom: 4px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .kpi-value { 
+            font-size: 22pt; /* <-- CAMBIA AQUÍ el tamaño del número en las burbujas superiores */
+            font-weight: bold; 
+        }
+
+        /* 2. TAMAÑOS DE LAS CABECERAS DE LA TABLA */
+        .th-main {
+            font-size: 10pt; /* <-- CAMBIA AQUÍ el tamaño de los títulos: "Plantilla Autorizada", "Contratos", etc. */
+            font-weight: bold; text-transform: uppercase; text-align: center;
+        }
+        .th-sub {
+            font-size: 9pt; /* <-- CAMBIA AQUÍ el tamaño de: "Aprob.", "Cub.", "Mujeres", etc. */
+            font-weight: bold; text-transform: uppercase; text-align: center;
+        }
+
+        /* ============================================================== */
+
+        /* ESTILOS DE CAJAS Y COLORES */
+        .kpi-table { width: 100%; margin-bottom: 15px; }
+        .kpi-box { padding: 4px; text-align: center; background-color: #f8fafc; }
+        .kpi-box-solid { background-color: #1e3a8a; padding: 4px; text-align: center; color: white; }
+        
+        /* TABLA PRINCIPAL DE DATOS */
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .data-table th { padding: 8px 6px; border: 1px solid #e2e8f0; }
+        
+        .th-main-dark { background-color: #0f172a; color: white; }
+        .th-main-blue { background-color: #1e3a8a; color: white; }
+        .th-main-orange { background-color: #ffedd5; color: #ea580c; }
+        .th-sub-blue { background-color: #e0e7ff; color: #1e3a8a; }
+        .th-sub-orange { background-color: #ffedd5; color: #ea580c; }
+
+        .data-table td { 
+            padding: 2pt 7pt; /* <-- El primer valor (2pt) controla la altura. Menos puntos = fila más delgada */
+            border-bottom: 1px solid #f1f5f9; 
+            text-align: center; 
+            vertical-align: middle; 
+            line-height: 1; /* Mantenlo en 1 para que no haya espacio extra entre líneas */
+        }
+        
+        /* Familias */
+        .row-familia { background-color: #ade5eb; }
+        .row-familia td { 
+            font-weight: bold; 
+            font-size: 15pt; /* Tamaño de los números de los totales por familia */
+        }
+        
+        /* Cargos */
+        .row-cargo td { color: #475569; }
+        .td-cargo-title { text-align: center; font-weight: bold; font-size: 11pt; }
+
+        /* BURBUJAS INFERIORES */
+        .burbujas-title { font-size: 14pt; color: #ea580c; font-weight: bold; text-transform: uppercase; text-align: center; margin-bottom: 8px; text-decoration: underline;}
+        .burbuja-inferior { padding: 6px; text-align: center; background-color: #f8fafc; border-bottom: 3px solid #cbd5e1; }
+        .burbuja-label { font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 2px;}
+        .burbuja-val { font-size: 24pt; font-weight: bold; color: #1e293b;}
+
+    </style>
+</head>
+<body>
+
+    <div id="header_content">
+        <table style="width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px;">
+            <tr>
+                <td style="width: 15%; vertical-align: middle; text-align: center;">
+                    {% if config.logo %}
+                        <img src="{{ config.logo.path }}" width="80" alt="Logo">
+                    {% else %}
+                        <div style="background-color: #1e3a8a; color: white; width: 50px; height: 50px; text-align: center; line-height: 50px; font-weight: bold; border-radius: 8px; font-size: 14px;">
+                            UNE
+                        </div>
+                    {% endif %}
+                </td>
+                <td style="width: 55%; vertical-align: middle; padding-left: 10px;">
+                    <h1 style="color: #1e3a8a; font-size: 18px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        {{ nombre_empresa }}
+                    </h1>
+                    <p style="color: #ea580c; font-size: 10px; font-weight: bold; margin: 0; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;">
+                        Gestión de Capital Humano
+                    </p>
+                </td>
+                <td style="width: 30%; text-align: right; vertical-align: middle;">
+                    <p style="color: #94a3b8; font-size: 10px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        Hoja # <pdf:pagenumber> de <pdf:pagecount>
+                    </p>
+                    <div style="background-color: #f1f5f9; padding: 4px; margin-top: 5px; text-align: center; border-radius: 4px;">
+                        <span style="color: #475569; font-size: 10px; font-weight: bold; text-transform: uppercase;">
+                            Periodo: {{ mes_actual }} / {{ anno_actual }}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="footer_content">
+        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+            <tr>
+                <td style="width: 50%; color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; text-align: left;">
+                    Generado: {{ fecha_generacion }}
+                </td>
+                <td style="width: 50%; color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; text-align: right;">
+                    Orbith System RRHH | Camagüey - 2026
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 12px;">
+        <div style="font-size: 16px; color: #1e3a8a; text-transform: uppercase; font-weight: bold; font-style: italic; text-decoration: underline;">
+            Consolidado de Puestos Claves
+        </div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 4px;">
+            {% if ueb_actual %} Reporte de Unidad Empresarial {% else %} Reporte Estadístico Provincial {% endif %}
+        </div>
+    </div>
+
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-box" style="border-bottom: 3px solid #1e3a8a;">
+                <div class="kpi-title" style="color: #94a3b8;">Plantilla Aprobada</div>
+                <div class="kpi-value" style="color: #1e293b;">{{ stats.aprobada }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #059669;">
+                <div class="kpi-title" style="color: #059669;">Cubierta Activa</div>
+                <div class="kpi-value" style="color: #059669;">{{ stats.cubierta }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #ea580c;">
+                <div class="kpi-title" style="color: #ea580c;">Vacantes Críticas</div>
+                <div class="kpi-value" style="color: #ea580c;">{{ stats.vacante }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box-solid">
+                <div class="kpi-title" style="color: #bfdbfe;">Eficiencia Global</div>
+                <div class="kpi-value" style="color: #ffffff;">{{ stats.porcentaje }}%</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th rowspan="2" class="th-main th-main-dark" style="width: 42%; font-size: 11pt;">Cargo u Ocupación</th>
+                <th colspan="4" class="th-main th-main-blue" style="font-size: 12pt;">Plantilla Autorizada</th>
+<th colspan="3" class="th-main th-main-orange" style="font-size: 12pt;">Contratos y Otros</th>
+            </tr>
+            <tr>
+                <th class="th-sub th-sub-blue">Aprob.</th>
+                <th class="th-sub th-sub-blue">Cub.</th>
+                <th class="th-sub th-sub-blue">Vac.</th>
+                <th class="th-sub th-sub-blue">%</th>
+                <th class="th-sub th-sub-orange">Det.</th>
+                <th class="th-sub th-sub-orange">Mujeres</th>
+                <th class="th-sub th-sub-orange">Adiest.</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for familia in datos_familias %}
+                <tr class="row-familia">
+                    <td align="left" style="color: #1e3a8a; padding-left: 15px;">{{ familia.nombre|upper }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.aprob }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.cub }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.vac }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.porc }}%</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.det }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.muj }}</td>
+                    <td style="color: #1e3a8a;">{{ familia.subtotales.adiest }}</td>
+                </tr>
+                
+                {% for p in familia.puestos %}
+                <tr class="row-cargo">
+                    <td class="td-cargo-title">{{ p.nombre }}</td>
+                    <td class="bold">{{ p.aprob }}</td>
+                    <td class="bold" style="color: #059669;">{{ p.cub }}</td>
+                    <td class="bold" style="color: #ea580c;">{{ p.vac }}</td>
+                    <td class="bold">{{ p.porc }}%</td>
+                    <td class="bold">{{ p.det }}</td>
+                    <td class="bold" style="color: #1e3a8a;">{{ p.muj }}</td>
+                    <td class="bold">{{ p.adiest }}</td>
+                </tr>
+                {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <br>
+
+    <div class="burbujas-title">RESUMEN TOTAL PROVINCIAL</div>
+    
+    <table class="kpi-table">
+        <tr>
+            <td class="burbuja-inferior" style="border-bottom-color: #1e3a8a;">
+                <div class="burbuja-label">Tot. Aprobada</div>
+                <div class="burbuja-val">{{ stats.aprobada }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            
+            <td class="burbuja-inferior" style="border-bottom-color: #059669;">
+                <div class="burbuja-label">Tot. Cubierta</div>
+                <div class="burbuja-val">{{ stats.cubierta }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            
+            <td class="burbuja-inferior" style="border-bottom-color: #ea580c;">
+                <div class="burbuja-label">Tot. Vacantes</div>
+                <div class="burbuja-val">{{ stats.vacante }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            
+            <td class="burbuja-inferior" style="border-bottom-color: #60a5fa;">
+                <div class="burbuja-label">Determinados</div>
+                <div class="burbuja-val">{{ stats.det }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            
+            <td class="burbuja-inferior" style="border-bottom-color: #8b5cf6;">
+                <div class="burbuja-label">Tot. Mujeres</div>
+                <div class="burbuja-val">{{ stats.muj }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            
+            <td class="burbuja-inferior" style="border-bottom-color: #f59e0b;">
+                <div class="burbuja-label">Adiestramiento</div>
+                <div class="burbuja-val">{{ stats.adiest }}</div>
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>

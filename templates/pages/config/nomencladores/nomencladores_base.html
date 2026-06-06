@@ -1,0 +1,932 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'css/nomencladores.css' %}">
+
+<div class="tab-pane fade {% if active_tab == 'nomencladores' %}show active{% endif %}"
+     id="navs-justified-nomencladores" role="tabpanel">
+
+  <div class="accordion" id="accordionNomencladores">
+
+    {% include "pages/config/nomencladores/_1_estructura.html" %}
+
+    {% include "pages/config/nomencladores/_2_territorial.html" %}
+
+    {% include "pages/config/nomencladores/_3_tiempo.html" %}
+
+    {% include "pages/config/nomencladores/_4_laboral.html" %}
+
+  </div>
+</div>
+
+
+<script>
+  /* ----------  EDICIÓN INLINE (Resto de tablas)  ---------- */
+  document.addEventListener('click', e => {
+    const edit = e.target.closest('.edit-btn');
+    if (!edit) return;
+
+    const tr   = edit.closest('tr');
+    const tableId = tr.closest('table').id;
+
+    // NOTA: Cargos ahora se gestiona arriba con funciones específicas
+
+    /* ----------  EDICIÓN TRIDENTES  ---------- */
+    if (tableId === 'tridentes-table') {
+      const tipoCell = tr.querySelector('td:nth-child(1)');
+      const oldTipo = tipoCell.textContent.trim();
+
+      const actionCell = tr.querySelector('td:nth-child(2)');
+      const originalButtons = actionCell.innerHTML;
+
+      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+
+        if (save) {
+          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
+          if (!newTipo) { alert('El campo Tipo es obligatorio'); actionTaken = false; return; }
+
+          fetch(`/nomencladores/api/tridentes/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ tipo: newTipo })
+          })
+            .then(async r => {
+                if(!r.ok) {
+                    const data = await r.json();
+                    throw new Error(data.error || 'Error al actualizar el tridente');
+                }
+                return r.json();
+            })
+            .then(d => {
+              tipoCell.textContent = d.tipo;
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => {
+                alert(err.message);
+                tipoCell.textContent = oldTipo;
+                actionCell.innerHTML = originalButtons;
+            });
+        } else {
+          tipoCell.textContent = oldTipo;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return; 
+    }
+
+    /* ----------  EDICIÓN GRUPOS ESCALA (MODAL) ---------- */
+    if (tableId === 'grupos-table') {
+      // En lugar de editar en la tabla, abrimos el modal pasándole el ID de la fila
+      abrirModalGrupo(tr.dataset.id);
+      return; 
+    }
+
+    /* ----------  EDICIÓN ROLES (Limpio) ---------- */
+    if (tableId === 'roles-table') {
+      const tipoCell = tr.querySelector('td:nth-child(1)');
+      const actionCell = tr.querySelector('td:nth-child(2)');
+
+      const oldTipo = tipoCell.textContent.trim();
+      const originalButtons = actionCell.innerHTML;
+
+      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+
+        if (save) {
+          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
+
+          if (!newTipo) { alert('Campo obligatorio'); actionTaken = false; return; }
+
+          fetch(`/nomencladores/api/roles/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ tipo: newTipo })
+          })
+          .then(r => r.json())
+          .then(d => {
+            tipoCell.textContent = d.tipo;
+            actionCell.innerHTML = originalButtons;
+          })
+          .catch(err => alert(err));
+        } else {
+          tipoCell.textContent = oldTipo;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN ESPECIALIDADES  ---------- */
+    if (tableId === 'especialidades-table') {
+      const nombreCell = tr.querySelector('td:nth-child(1)');
+      const educCell   = tr.querySelector('td:nth-child(2)');
+      const oldNombre  = nombreCell.textContent.trim();
+      const oldEduc    = educCell.textContent.trim() === 'Sí';
+
+      const actionCell = tr.querySelector('td:nth-child(3)');
+      const originalButtons = actionCell.innerHTML;
+
+      nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+      educCell.innerHTML   = `<input type="checkbox" class="form-check-input input-edit-educ" ${oldEduc ? 'checked' : ''}>`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+          const newEduc   = educCell.querySelector('.input-edit-educ').checked;
+          if (!newNombre) { alert('Campo obligatorio'); return; }
+
+          fetch(`/nomencladores/api/especialidades/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newNombre, educ_superior: newEduc })
+          })
+            .then(r => r.json())
+            .then(d => {
+              nombreCell.textContent = d.nombre;
+              educCell.textContent   = d.educ_superior ? 'Sí' : 'No';
+              actionCell.innerHTML   = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          nombreCell.textContent = oldNombre;
+          educCell.textContent   = oldEduc ? 'Sí' : 'No';
+          actionCell.innerHTML   = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN NIVELES DE PREPARACIÓN  ---------- */
+    if (tableId === 'niveles-preparacion-table') {
+      const nombreCell = tr.querySelector('td:nth-child(1)');
+      const oldNombre  = nombreCell.textContent.trim();
+
+      const actionCell = tr.querySelector('td:nth-child(2)');
+      const originalButtons = actionCell.innerHTML;
+
+      nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+          if (!newNombre) { alert('Campo obligatorio'); return; }
+
+          fetch(`/nomencladores/api/niveles-preparacion/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newNombre })
+          })
+            .then(r => r.json())
+            .then(d => {
+              nombreCell.textContent = d.nombre;
+              actionCell.innerHTML   = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          nombreCell.textContent = oldNombre;
+          actionCell.innerHTML   = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN TIPOS Y MOTIVOS DE CONTRATO  ---------- */
+    if (tableId === 'tipocontrato-table' || tableId === 'motivocontrato-table') {
+      const descCell = tr.querySelector('.nombre-cell');
+      const oldDesc = descCell.textContent.trim();
+      const actionCell = tr.querySelector('td:last-child');
+      const originalButtons = actionCell.innerHTML;
+
+      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+          if (!newDesc) { alert('Campo obligatorio'); return; }
+          const endpoint = tableId === 'tipocontrato-table' ? 'tipo_contrato' : 'motivo_contrato';
+          
+          fetch(`/nomencladores/api/${endpoint}/${tr.dataset.id}/update/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newDesc }) 
+          }).then(r => r.json()).then(d => {
+              descCell.textContent = d.nombre;
+              actionCell.innerHTML = originalButtons;
+          }).catch(err => alert(err));
+        } else {
+          descCell.textContent = oldDesc;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN CONDICIONES  ---------- */
+    if (tableId === 'condiciones-table') {
+      const nombreCell = tr.querySelector('td:nth-child(1)');
+      const tarifaCell = tr.querySelector('td:nth-child(2)');
+
+      const oldNombre = nombreCell.textContent.trim();
+      const oldTarifa = parseFloat(tarifaCell.textContent.replace(' CUP', '').trim());
+
+      const actionCell = tr.querySelector('td:nth-child(3)');
+      const originalButtons = actionCell.innerHTML;
+
+      nombreCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-nombre" value="${oldNombre}">`;
+      tarifaCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-tarifa" value="${oldTarifa}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newNombre = nombreCell.querySelector('.input-edit-nombre').value.trim();
+          const newTarifa = parseFloat(tarifaCell.querySelector('.input-edit-tarifa').value);
+          if (!newNombre) { alert('Campo nombre obligatorio'); return; }
+
+          fetch(`/nomencladores/api/condiciones/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newNombre, tarifa_hora: newTarifa })
+          })
+            .then(r => r.json())
+            .then(d => {
+              nombreCell.textContent = d.nombre;
+              tarifaCell.textContent = d.tarifa_hora + ' CUP';
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          nombreCell.textContent = oldNombre;
+          tarifaCell.textContent = oldTarifa + ' CUP';
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN HORARIOS  ---------- */
+    if (tableId === 'horarios-table') {
+      const descCell = tr.querySelector('td:nth-child(1)');
+      const iniCell  = tr.querySelector('td:nth-child(2)');
+      const finCell  = tr.querySelector('td:nth-child(3)');
+
+      const oldDesc = descCell.textContent.trim();
+      const oldIni  = iniCell.textContent.trim();
+      const oldFin  = finCell.textContent.trim();
+
+      const actionCell = tr.querySelector('td:nth-child(4)');
+      const originalButtons = actionCell.innerHTML;
+
+      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      iniCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-ini" value="${oldIni}">`;
+      finCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-fin" value="${oldFin}">`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+          const newIni  = iniCell.querySelector('.input-edit-ini').value.trim();
+          const newFin  = finCell.querySelector('.input-edit-fin').value.trim();
+          if (!newDesc || !newIni || !newFin) { alert('Complete todos los campos'); return; }
+
+          fetch(`/nomencladores/api/horarios/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ descripcion: newDesc, hora_inicio: newIni, hora_fin: newFin })
+          })
+            .then(r => r.json())
+            .then(d => {
+              descCell.textContent = d.descripcion;
+              iniCell.textContent  = d.hora_inicio;
+              finCell.textContent  = d.hora_fin;
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          descCell.textContent = oldDesc;
+          iniCell.textContent  = oldIni;
+          finCell.textContent  = oldFin;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN JORNADAS  ---------- */
+    if (tableId === 'jornadas-table') {
+      const tipoCell = tr.querySelector('td:nth-child(1)');
+      const horaCell = tr.querySelector('td:nth-child(2)');
+
+      const oldTipo = tipoCell.textContent.trim();
+      const oldHoraId = tr.dataset.horarioId || '';
+
+      const actionCell = tr.querySelector('td:nth-child(3)');
+      const originalButtons = actionCell.innerHTML;
+
+      let opts = '<option value="">—</option>';
+      {% for h in horarios %}
+        opts += `<option value="{{ h.id }}" ${oldHoraId == "{{ h.id }}" ? 'selected' : ''}>{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
+      {% endfor %}
+
+      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
+      horaCell.innerHTML = `<select class="form-control form-control-sm input-edit-hora">${opts}</select>`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
+          const newHora = horaCell.querySelector('.input-edit-hora').value;
+          if (!newTipo) { alert('Campo obligatorio'); return; }
+
+          fetch(`/nomencladores/api/jornadas/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ tipo: newTipo, horario: newHora || null })
+          })
+            .then(r => r.json())
+            .then(d => {
+              tipoCell.textContent = d.tipo;
+              horaCell.textContent = d.horario ? `${d.horario}` : '—';
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          tipoCell.textContent = oldTipo;
+          horaCell.textContent = oldHoraId ? horaCell.querySelector(`option[value="${oldHoraId}"]`)?.text || '—' : '—';
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN CAUSAS  ---------- */
+    if (tableId === 'causas-table') {
+      const descCell = tr.querySelector('td:nth-child(1)');
+      const altaCell = tr.querySelector('td:nth-child(2)');
+
+      const oldDesc = descCell.textContent.trim();
+      const oldAlta = altaCell.textContent.trim() === 'Sí';
+
+      const actionCell = tr.querySelector('td:nth-child(3)');
+      const originalButtons = actionCell.innerHTML;
+
+      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      altaCell.innerHTML = `<input type="checkbox" class="form-check-input input-edit-alta" ${oldAlta ? 'checked' : ''}>`;
+
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
+          const newAlta = altaCell.querySelector('.input-edit-alta').checked;
+          if (!newDesc) { alert('Campo obligatorio'); return; }
+
+          fetch(`/nomencladores/api/causas/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ descripcion: newDesc, alta: newAlta })
+          })
+            .then(r => r.json())
+            .then(d => {
+              descCell.textContent = d.descripcion;
+              altaCell.textContent = d.alta ? 'Sí' : 'No';
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          descCell.textContent = oldDesc;
+          altaCell.textContent = oldAlta ? 'Sí' : 'No';
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      return;
+    }
+
+    /* ----------  EDICIÓN PROVINCIAS / MUNICIPIOS  ---------- */
+    if (tableId === 'provincias-table' || tableId === 'municipios-table') {
+      const cell = tr.querySelector('.nombre-cell');
+      const oldVal = cell.textContent.trim();
+
+      const actionCell = tr.querySelector('td.text-center');
+      const originalButtons = actionCell.innerHTML;
+
+      cell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit" value="${oldVal}">`;
+      actionCell.innerHTML = `
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
+          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
+        </div>`;
+
+      let actionTaken = false;
+      const finishEdit = (save = false) => {
+        if (actionTaken) return;
+        actionTaken = true;
+        if (save) {
+          const newVal = cell.querySelector('input').value.trim();
+          if (!newVal) { alert('Campo obligatorio'); return; }
+          const endpoint = tableId === 'provincias-table' ? 'provincias' : 'municipios';
+          fetch(`/nomencladores/api/${endpoint}/${tr.dataset.id}/`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: newVal })
+          })
+            .then(r => r.json())
+            .then(d => {
+              cell.textContent = d.nombre;
+              actionCell.innerHTML = originalButtons;
+            })
+            .catch(err => alert(err));
+        } else {
+          cell.textContent = oldVal;
+          actionCell.innerHTML = originalButtons;
+        }
+      };
+
+      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
+      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
+      cell.querySelector('input').onkeydown = ev => {
+        if (ev.key === 'Enter') finishEdit(true);
+        if (ev.key === 'Escape') finishEdit(false);
+      };
+      cell.querySelector('input').addEventListener('blur', () => {
+        setTimeout(() => { if (!actionTaken) finishEdit(true); }, 150);
+      });
+    }
+  }); // <-- AQUÍ CIERRA EL LISTENER GLOBAL DE EDICIÓN
+
+  /* ----------  ELIMINAR GENERAL (Resto de tablas)  ---------- */
+  document.addEventListener('click', e => {
+    const del = e.target.closest('.delete-btn');
+    if (!del) return;
+
+    const tr = del.closest('tr');
+    const id = tr.dataset.id;
+    const tableId = tr.closest('table').id;
+    
+    if(tableId === 'cargos-table') return;
+
+    let endpoint = '';
+    if (tableId === 'tridentes-table') endpoint = 'tridentes';
+    else if (tableId === 'roles-table') endpoint = 'roles';
+    else if (tableId === 'grupos-table') endpoint = 'grupos';
+    else if (tableId === 'provincias-table') endpoint = 'provincias';
+    else if (tableId === 'municipios-table') endpoint = 'municipios';
+    else if (tableId === 'horarios-table') endpoint = 'horarios';
+    else if (tableId === 'jornadas-table') endpoint = 'jornadas';
+    else if (tableId === 'causas-table') endpoint = 'causas';
+    else if (tableId === 'condiciones-table') endpoint = 'condiciones';
+    else if (tableId === 'especialidades-table') endpoint = 'especialidades';
+    else if (tableId === 'niveles-preparacion-table') endpoint = 'niveles-preparacion';
+    else if (tableId === 'tipocontrato-table') endpoint = 'tipo_contrato';
+    else if (tableId === 'motivocontrato-table') endpoint = 'motivo_contrato';
+    else return;
+
+    Swal.fire({
+      title: '¿Estás seguro?',
+      text: "No podrás revertir esta acción.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Cancelar',
+      reverseButtons: true,
+      width: '28rem',
+      background: '#fff',
+      color: '#697a8d',
+      iconColor: '#dc3545',
+      buttonsStyling: false,
+      customClass: {
+        popup: 'border rounded-3 shadow-lg p-3',
+        title: 'fs-4 text-dark fw-semibold',
+        htmlContainer: 'text-muted fs-6',
+        actions: 'd-flex justify-content-center gap-3 mt-3',
+        confirmButton: 'btn btn-danger px-4',
+        cancelButton: 'btn btn-secondary px-4'
+      }
+    }).then(result => {
+      if (result.isConfirmed) {
+        fetch(`/nomencladores/api/${endpoint}/${id}/delete/`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': csrftoken }
+        })
+          .then(async r => {
+            if (!r.ok) {
+                const data = await r.json();
+                throw new Error(data.error || "Error al eliminar");
+            }
+            return r.json();
+          })
+          .then(() => {
+            tr.remove();
+            Swal.fire({ icon: 'success', title: 'Eliminado', text: 'Registro eliminado con éxito.', timer: 1000, showConfirmButton: false });
+            if (tableId === 'grupos-table') paginateGrupos();
+          })
+          .catch(err => {
+            Swal.fire('No se puede eliminar', err.message, 'warning');
+          });
+      }
+    });
+  });
+
+  /* ----------  BOTÓN “+” GENERAL (Resto de tablas)  ---------- */
+  document.querySelectorAll('.add-row-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelAllInsertRows();
+
+      const tableId = btn.dataset.table;
+      if(tableId === 'cargos-table') return;
+
+      const table   = document.getElementById(tableId);
+      const tbody   = table.querySelector('tbody');
+      if (tbody.querySelector('.insert-row')) return;
+
+      const row = document.createElement('tr');
+      row.className = 'insert-row';
+
+      switch (tableId) {
+        case 'tridentes-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'roles-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'grupos-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nivel" placeholder="Nivel (I, II, III...)"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'provincias-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'municipios-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+            <td class="provincia-cell">—</td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          const provinciaActivaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent?.trim() || '—';
+          const provinciaCell = row.querySelector('td:nth-child(2)');
+          if (provinciaCell) provinciaCell.textContent = provinciaActivaName;
+          break;
+
+        case 'horarios-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-descripcion" placeholder="Nombre"></td>
+            <td><input type="time" class="form-control form-control-sm input-desde text-center"></td>
+            <td><input type="time" class="form-control form-control-sm input-hasta text-center"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'jornadas-table':
+          let horariosOptions = '<option value="">—</option>';
+              {% for h in horarios %}
+                horariosOptions += `<option value="{{ h.id }}">{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
+              {% endfor %}
+
+              row.innerHTML = `
+                <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Nombre"></td>
+                <td>
+                  <select class="form-control form-control-sm input-horas">
+                    ${horariosOptions}
+                  </select>
+                </td>
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm">
+                    <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                    <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+                  </div>
+                </td>`;
+          break;
+
+        case 'causas-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="text-center"><input type="checkbox" class="form-check-input input-alta"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'condiciones-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+            <td><input type="number" step="0.01" class="form-control form-control-sm input-tarifa" placeholder="Tarifa hora"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'especialidades-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre"></td>
+            <td class="text-center"><input type="checkbox" class="form-check-input input-educ-superior"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'niveles-preparacion-table':
+          row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Nombre (Ej. Básico)"></td>
+            <td class="text-center">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'tipocontrato-table':
+          row.innerHTML = `
+            <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-ocupa cursor-pointer"></td>
+            <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-motivo cursor-pointer"></td>
+            <td class="text-center pe-3 align-middle">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        case 'motivocontrato-table':
+          row.innerHTML = `
+            <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="text-center pe-3 align-middle">
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
+                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
+              </div>
+            </td>`;
+          break;
+
+        default:
+          row.innerHTML = `<td colspan="2">Sin definir</td>`;
+      }
+
+      tbody.insertBefore(row, tbody.firstChild);
+
+      const input     = row.querySelector('.input-tipo, .input-nivel, .input-nombre, .input-descripcion, .input-desc, .input-tarifa, .input-educ-superior, .input-descripcion');
+      const saveBtn   = row.querySelector('.save-create-btn');
+      const cancelBtn = row.querySelector('.cancel-btn');
+
+      const check = () => {
+        const val = input?.value?.trim();
+        saveBtn.disabled = !val;
+      };
+      if(input){
+          input.addEventListener('input', check);
+          check();
+          input.focus();
+      }
+
+      cancelBtn.addEventListener('click', () => row.remove());
+    });
+  });
+
+  /* ----------  LISTENER ÚNICO PARA “SALVAR” GENERAL (Resto de tablas)  ---------- */
+  document.addEventListener('click', async e => {
+    const save = e.target.closest('.save-create-btn');
+    if (!save) return;
+
+    const tableId = save.closest('table').id;
+    const row     = save.closest('.insert-row');
+
+    if(tableId === 'cargos-table') return;
+
+    switch (tableId) {
+      case 'tridentes-table':
+        await guardarTridente(row);
+        break;
+      case 'roles-table':
+        await guardarRol(row);
+        break;
+      case 'grupos-table':
+        await guardarGrupo(row);
+        break;
+      case 'provincias-table':
+        await guardarProvincia(row);
+        break;
+      case 'municipios-table':
+        await guardarMunicipio(row);
+        break;
+      case 'horarios-table':
+        await guardarHorario(row);
+        break;
+      case 'jornadas-table':
+        await guardarJornada(row);
+        break;
+      case 'causas-table':
+        await guardarCausa(row);
+        break;
+      case 'condiciones-table':
+        await guardarCondicion(row);
+        break;
+      case 'especialidades-table':
+        await guardarEspecialidad(row);
+        break;
+      case 'niveles-preparacion-table':
+        await guardarNivelPreparacion(row);
+        break;
+      case 'tipocontrato-table':
+        await guardarTipoContrato(row);
+        break;
+      case 'motivocontrato-table':
+        await guardarMotivoContrato(row);
+        break;
+      default:
+        alert('Tabla no implementada');
+    }
+  });
+
+  /* ---------- GUARDAR SWITCH DE OCUPA PLAZA AUTOMÁTICAMENTE ---------- */
+  document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('toggle-ocupa-plaza')) {
+          let id = e.target.dataset.id;
+          let isChecked = e.target.checked;
+          
+          fetch(`/nomencladores/api/tipo_contrato/${id}/toggle_plaza/`, {
+              method: 'POST',
+              headers: {
+                  'X-CSRFToken': csrftoken, 
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({'ocupa_plaza': isChecked})
+          })
+          .then(async response => {
+              if(!response.ok) {
+                  alert('Error al guardar el estado de ocupación de plaza.');
+                  e.target.checked = !isChecked; 
+              }
+          });
+      }
+  });
+
+  /* ---------- GUARDAR SWITCH REQUIERE MOTIVO ---------- */
+  document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('toggle-requiere-motivo')) {
+          fetch(`/nomencladores/api/tipo_contrato/${e.target.dataset.id}/toggle_motivo/`, {
+              method: 'POST',
+              headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 'requiere_motivo': e.target.checked })
+          });
+      }
+  });
+
+  /* ----------  INICIALIZAR TODO  ---------- */
+  document.addEventListener("DOMContentLoaded", function() {
+      if (typeof paginateGrupos === 'function') paginateGrupos();
+      if (typeof paginateCargos === 'function') paginateCargos();
+  });
+</script>

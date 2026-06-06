@@ -1,0 +1,109 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% block title %}Misiones Internacionales{% endblock %}
+{% block content %}
+<style>
+    .bg-indigo-50 { background-color: #eef2ff !important; } .text-indigo-600 { color: #4f46e5 !important; }
+    .bg-emerald-50 { background-color: #ecfdf5 !important; } .text-emerald-600 { color: #059669 !important; }
+    .bg-orange-50 { background-color: #fff7ed !important; } .text-orange-500 { color: #f97316 !important; }
+    .bg-rose-50 { background-color: #fff1f2 !important; } .text-rose-500 { color: #f43f5e !important; } .border-rose-500 { border-bottom-color: #f43f5e !important; }
+    .bg-sky-50 { background-color: #f0f9ff !important; } .text-sky-500 { color: #0ea5e9 !important; } .border-sky-500 { border-bottom-color: #0ea5e9 !important; }
+    .text-slate-400 { color: #94a3b8 !important; } .text-slate-500 { color: #64748b !important; }
+    .text-slate-600 { color: #475569 !important; } .text-slate-700 { color: #334155 !important; }
+    .text-slate-800 { color: #1e293b !important; } .bg-slate-50 { background-color: #f8fafc !important; }
+    .border-slate-100 { border-color: #f1f5f9 !important; } .border-slate-200 { border-color: #e2e8f0 !important; }
+    .tracking-widest { letter-spacing: 0.1em; } .fw-black { font-weight: 900 !important; }
+    .border-b-4 { border-bottom-width: 4px !important; border-bottom-style: solid !important; }
+    .border-b-indigo-600 { border-bottom-color: #4f46e5 !important; }
+    .border-b-emerald-500 { border-bottom-color: #10b981 !important; }
+    .border-b-orange-500 { border-bottom-color: #f97316 !important; }
+    .rounded-[1.5rem] { border-radius: 1.5rem !important; }
+    .table-moderna th { border-bottom: 1px solid #f1f5f9 !important; padding: 0.8rem 0.5rem !important; }
+    .table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y" style="background-color: #F4F7FB;">
+    
+    {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Misiones Internacionales" %}
+
+    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4">
+        
+        <div class="card-body bg-slate-50 pt-3 pb-2 border-bottom border-slate-200">
+            <div class="row g-3">
+                <div class="col-6 col-lg-3">
+                    <div class="card bg-white py-2 px-3 rounded-3 border-0 border-b-4 border-b-indigo-600 shadow-sm h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 bg-indigo-50 text-indigo-600 rounded"><i class="bx bx-globe fs-6"></i></div>
+                            <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Total Misión</span>
+                        </div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1">{{ total_misiones }}</div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-lg-3">
+                    <div class="card bg-white py-2 px-3 rounded-3 border-0 border-b-4 border-b-emerald-500 shadow-sm h-100">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <div class="p-1 bg-emerald-50 text-emerald-600 rounded"><i class="bx bx-dollar-circle fs-6"></i></div>
+                            <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Importe</span>
+                        </div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1">${{ importe_total|floatformat:2 }}</div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-6">
+                    <div class="row g-2 h-100">
+                        <div class="col"><div class="card bg-white py-2 px-2 rounded-3 border-0 border-b-4 border-rose-500 shadow-sm h-100"><div class="text-center mb-1"><span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 8px;">Cuadros</span></div><div class="fs-4 fw-black text-center text-slate-800 lh-1">{{ desglose.Cuadros }}</div></div></div>
+                        <div class="col"><div class="card bg-white py-2 px-2 rounded-3 border-0 border-b-4 border-sky-500 shadow-sm h-100"><div class="text-center mb-1"><span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 8px;">Técnicos</span></div><div class="fs-4 fw-black text-center text-slate-800 lh-1">{{ desglose.Técnicos }}</div></div></div>
+                        <div class="col"><div class="card bg-white py-2 px-2 rounded-3 border-0 border-b-4 border-b-indigo-600 shadow-sm h-100"><div class="text-center mb-1"><span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 8px;">Admin.</span></div><div class="fs-4 fw-black text-center text-slate-800 lh-1">{{ desglose.Administrativos }}</div></div></div>
+                        <div class="col"><div class="card bg-white py-2 px-2 rounded-3 border-0 border-b-4 border-b-orange-500 shadow-sm h-100"><div class="text-center mb-1"><span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 8px;">Servicios</span></div><div class="fs-4 fw-black text-center text-slate-800 lh-1">{{ desglose.Servicios }}</div></div></div>
+                        <div class="col"><div class="card bg-white py-2 px-2 rounded-3 border-0 border-b-4 border-b-emerald-500 shadow-sm h-100"><div class="text-center mb-1"><span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 8px;">Obreros</span></div><div class="fs-4 fw-black text-center text-slate-800 lh-1">{{ desglose.Obreros }}</div></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-moderna w-100 text-start border-collapse mb-0">
+                <thead>
+                    <tr class="bg-slate-50 border-slate-100">
+                        <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Exp. Laboral</th>
+                        <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Nombre y Apellidos</th>
+                        <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Cargo u Ocupación</th>
+                        <th class="px-3 py-3 text-center text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">País</th>
+                        <th class="px-3 py-3 text-center text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Cat.</th>
+                        <th class="px-3 py-3 text-center text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">G. Escala</th>
+                        <th class="px-3 py-3 text-center text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Días</th>
+                        <th class="px-4 py-3 text-end text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Importe</th>
+                    </tr>
+                </thead>
+                <tbody class="border-top-0">
+                    {% for ueb_nombre, trabajadores in uebs.items %}
+                        <tr style="background-color: rgba(248, 250, 252, 0.9);">
+                            <td colspan="8" class="px-4 py-2 border-bottom border-slate-200">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-pill" style="width: 5px; height: 18px; background-color: #4f46e5;"></div>
+                                    <span class="fw-black text-uppercase tracking-widest" style="font-size: 13px; color: #312e81;">{{ ueb_nombre }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                        {% for t in trabajadores %}
+                        <tr>
+                            <td class="px-4 py-2 font-monospace fw-bold text-slate-500" style="font-size: 13px;">{{ t.expediente }}</td>
+                            <td class="px-4 py-2 fw-bold text-slate-700" style="font-size: 13px;">{{ t.nombre }}</td>
+                            <td class="px-4 py-2 text-slate-500" style="font-size: 12px;">{{ t.cargo }}</td>
+                            <td class="px-3 py-2 text-center fw-bold text-indigo-600" style="font-size: 13px;">{{ t.pais }}</td>
+                            <td class="px-3 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-pill fw-bold" style="font-size: 12px;">{{ t.cat_letra }}</span></td>
+                            <td class="px-3 py-2 text-center font-monospace fw-bold text-slate-500" style="font-size: 14px;">{{ t.g_escala }}</td>
+                            <td class="px-3 py-2 text-center font-monospace text-slate-400" style="font-size: 14px;">{{ t.dias }}</td>
+                            <td class="px-4 py-2 text-end font-monospace fw-bold text-slate-800" style="font-size: 14px;">{{ t.importe|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr><td colspan="8" class="text-center py-5"><i class="bx bx-world fs-1 text-slate-300 mb-2"></i><p class="text-slate-400 fw-bold m-0">No hay personal en misión internacional actualmente.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
