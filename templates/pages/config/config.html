@@ -98,35 +98,42 @@
 
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    // Inicializar la pestaña activa según el parámetro de URL
+    
+    // =========================================================================
+    // 1. MEJOR PRÁCTICA BOOTSTRAP 5: MANEJO DE PESTAÑAS (Sustituye al MouseEvent)
+    // =========================================================================
     const urlParams = new URLSearchParams(window.location.search);
-    const activeTab = urlParams.get('tab') || 'parametros';
+    const tabName = urlParams.get('tab') || 'parametros';
     
-    // Activar la pestaña correspondiente si no está activa
-    const tabToActivate = document.getElementById('tab-' + activeTab);
-    if (tabToActivate && !tabToActivate.classList.contains('active')) {
-      // Crear y disparar un evento de clic en la pestaña
-      const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      });
-      tabToActivate.dispatchEvent(clickEvent);
+    const tabToActivate = document.querySelector(`.nav-link[data-bs-target="#navs-justified-${tabName}"]`);
+    
+    // API Nativa de Bootstrap 5 para activar la pestaña sin simular clics falsos
+    if (tabToActivate) {
+        const bsTab = new bootstrap.Tab(tabToActivate);
+        bsTab.show();
     }
-    
-    // Manejar cambios de pestaña para actualizar el campo hidden
-    document.querySelectorAll('.nav-link').forEach(tab => {
-      tab.addEventListener('click', function() {
-        // Obtener el ID de la pestaña (sin el prefijo 'tab-')
-        const tabId = this.id.replace('tab-', '');
-        
-        // Actualizar todos los campos hidden active_tab en los formularios
-        document.querySelectorAll('input[name="active_tab"]').forEach(input => {
-          input.value = tabId;
+
+    // Actualizar la URL de forma elegante al hacer clic en otra pestaña
+    const allTabs = document.querySelectorAll('button[data-bs-toggle="tab"]');
+    allTabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function (event) {
+            const targetId = event.target.getAttribute('data-bs-target');
+            const newTabName = targetId.replace('#navs-justified-', '');
+            
+            // Actualizar URL sin recargar
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?tab=' + newTabName;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            // Actualizar inputs hidden
+            document.querySelectorAll('input[name="active_tab"]').forEach(input => {
+                input.value = newTabName;
+            });
         });
-      });
     });
-    
+
+    // =========================================================================
+    // 2. TU LÓGICA INTACTA: EDICIÓN EN LÍNEA DE SALARIOS
+    // =========================================================================
     document.querySelectorAll(".editable-cell").forEach(cell => {
       cell.addEventListener("click", function () {
         if (this.querySelector("input")) return;
@@ -173,10 +180,8 @@
         cell.innerHTML = parseFloat(oldValue).toFixed(2);
         cell.classList.add("table-danger");
         
-        // Mostrar mensaje de error en la celda
         const errorMsg = document.createElement("div");
         errorMsg.classList.add("invalid-feedback", "d-block");
-        //errorMsg.textContent = "Valor inválido";
         cell.appendChild(errorMsg);
         
         setTimeout(() => {
@@ -209,7 +214,6 @@
         cell.classList.add("table-success");
         setTimeout(() => cell.classList.remove("table-success"), 1000);
         
-        // Si hay una URL de redirección en la respuesta, actualizar la URL sin recargar la página
         if (result.redirect_url) {
           history.pushState({}, '', result.redirect_url);
         }
@@ -217,7 +221,6 @@
         cell.innerHTML = parseFloat(oldValue).toFixed(2);
         cell.classList.add("table-danger");
         
-        // Mostrar mensaje de error en la celda
         const errorMsg = document.createElement("div");
         errorMsg.classList.add("invalid-feedback", "d-block");
         errorMsg.textContent = "Error: " + err.message;

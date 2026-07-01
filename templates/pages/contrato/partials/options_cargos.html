@@ -1,4 +1,8 @@
 <option value="">---------</option>
 {% for c in cargos %}
-    <option value="{{ c.pk }}">{{ c.ncargo.descripcion }} {% if c.consecutivo > 0 %}({{ c.consecutivo }}){% endif %}</option>
+    <option value="{{ c.pk }}" 
+            data-aprobadas="{{ c.cant_aprobada }}" 
+            data-ocupadas="{{ c.plazas_fijas }}">
+        {{ c.ncargo.descripcion }} {% if c.consecutivo > 0 %}({{ c.consecutivo }}){% endif %}
+    </option>
 {% endfor %}

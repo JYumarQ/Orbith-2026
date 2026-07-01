@@ -112,4 +112,6 @@ urlpatterns = [
     path('api/tipo_unidad/guardar/', views.guardar_tipo_unidad, name='guardar_tipo_unidad'),
     path('api/tipo_unidad/<int:pk>/eliminar/', views.eliminar_tipo_unidad, name='eliminar_tipo_unidad'),
 
+    path('api/tipo_contrato/<int:pk>/toggle_adiestrado/', views.toggle_tipo_adiestrado, name='toggle_tipo_adiestrado'),
+
 ]

@@ -26,6 +26,12 @@ import os
 import traceback
 import sys
 import json
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+from datetime import datetime
+
 
 #?ONTRATO
 class ContratoListView(ListView):
@@ -1079,14 +1085,19 @@ class MovimientoUpdateView(UpdateView):
             cargo_ant = contrato_previo.cargo.ncargo.descripcion if contrato_previo.cargo else "---"
             unidad_ant = contrato_previo.cargo.departamento.unidad_organizativa.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---"
             
-            # Aquí capturamos los nuevos campos que debes añadir a tu modelo TMovimiento
             rol_ant_str = contrato_previo.cargo.rol.tipo if (contrato_previo.cargo and contrato_previo.cargo.rol) else "---"
             tri_ant_str = str(contrato_previo.tridente) if contrato_previo.tridente else "---"
-            
             salario_ant = contrato_previo.calcular_salario_escala() or 0
+
+            # --- NUEVO: CAPTURAR TIPO Y MOTIVO ANTERIOR ---
+            tipo_ant_str = contrato_previo.tipo.descripcion if contrato_previo.tipo else "---"
+            motivo_ant_str = contrato_previo.motivo.descripcion if contrato_previo.motivo else "---"
 
             # PASO 3: CAPTURAR DATOS NUEVOS
             cargo_nuevo_obj = form.cleaned_data.get('cargo')
+            tipo_nuevo_obj = form.cleaned_data.get('tipo')
+            motivo_nuevo_obj = form.cleaned_data.get('motivo')
+            duracion_nueva_val = form.cleaned_data.get('duracion')
             
             cargo_nue = cargo_nuevo_obj.ncargo.descripcion if cargo_nuevo_obj else "---"
             unidad_nue = cargo_nuevo_obj.departamento.unidad_organizativa.descripcion if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else "---"
@@ -1120,6 +1131,8 @@ class MovimientoUpdateView(UpdateView):
                 tridente_anterior=tri_ant_str,  
                 salario_anterior=salario_ant,
                 unidad_anterior=unidad_ant,
+                tipo_contrato_anterior=tipo_ant_str, # <--- NUEVO
+                motivo_anterior=motivo_ant_str,      # <--- NUEVO
                 
                 # FOTO DE LA NUEVA PROPUESTA
                 cargo_nuevo=cargo_nue,
@@ -1131,6 +1144,9 @@ class MovimientoUpdateView(UpdateView):
                 tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
                 salario_nuevo=salario_nue,
                 unidad_nueva=unidad_nue,
+                tipo_contrato_nuevo=tipo_nuevo_obj.descripcion if tipo_nuevo_obj else "---", # <--- NUEVO
+                motivo_nuevo=motivo_nuevo_obj.descripcion if motivo_nuevo_obj else "---",   # <--- NUEVO
+                duracion_nueva=duracion_nueva_val,                                           # <--- NUEVO
                 
                 tipo_movimiento="Movimiento de Nómina"
             )
@@ -1523,6 +1539,24 @@ def cargar_salario(request):
             print(f"Error calculando salario: {e}")
 
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
+
+# --- AÑADIR AL FINAL DE views.py ---
+
+def cargar_cargos_contrato(request):
+    """Vista exclusiva para rellenar el select de cargos en modales de Contratos vía HTMX"""
+    id_dpto = request.GET.get('departamento')
+    if id_dpto and id_dpto.isdigit():
+        cargos = CargoPlantilla.objects.filter(
+            departamento_id=id_dpto, 
+            activo=True
+        ).select_related('ncargo').order_by('ncargo__descripcion')
+    else:
+        cargos = CargoPlantilla.objects.none()
+        
+    # Renderiza estrictamente nuestra plantilla con los atributos data-
+    return render(request, 'pages/contrato/partials/options_cargos.html', {'cargos': cargos})
+
+
 # =========================================================================
 # VISTA WIZARD FASE 3: Finalizar Contrato y (Opcional) Movimiento
 # =========================================================================
@@ -1758,3 +1792,70 @@ def finalizar_contrato_wizard(request, aspirante_id):
             import traceback
             traceback.print_exc()
             return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)
+
+def exportar_contratos_excel(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Trabajadores Activos"
+
+    # Estilos
+    negrita_centrado = Font(bold=True, color="FFFFFF")
+    fondo_azul = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+    alineacion_centro = Alignment(horizontal="center", vertical="center")
+
+    # Cabeceras (Se añade "Edad" después de "Carnet de Ident.")
+    cabeceras = [
+        "No. Expediente", "Nombre", "1er Apellido", "2do Apellido",
+        "Unidad Organizativa", "Departamento", "Cargo", "Cat. Ocupacional", "Tipo de Contrato", "Motivo",
+        "Fecha Alta", "Duración (Dias)", "C. Formal", "Funcionario", "Designado",
+        "Chofer Prof.", "Jubilado Recontratado", "Misión", "País Misión", "Reg. Militar",
+        "Grupo Escala", "Rol", "Tridente", "Instructor", "CNCI",
+        "Carnet de Ident.", "Edad", "Sexo", "Raza", "Nivel Educacional", "Especialidad", "Título de Oro",
+        "Grado Científico", "Provincia", "Municipio", "Dirección", "Fijo", "Movil"
+    ]
+    ws.append(cabeceras)
+
+    # Formato cabeceras
+    for col_num, cell in enumerate(ws[1], 1):
+        cell.font = negrita_centrado
+        cell.fill = fondo_azul
+        cell.alignment = alineacion_centro
+        ws.column_dimensions[get_column_letter(col_num)].width = 20
+
+    # Consulta Optimizada
+    contratos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
+        'aspirante', 'aspirante__municipio', 'aspirante__provincia', 'aspirante__especialidad',
+        'tipo', 'motivo', 'cargo', 'cargo__ncargo', 'cargo__ncargo__grupo_escala',
+        'cargo__departamento', 'cargo__departamento__unidad_organizativa', 'rol', 'tridente'
+    ).order_by('cargo__departamento__unidad_organizativa__descripcion', 'aspirante__papellido')
+
+    def si_no(valor): return "Sí" if valor else "No"
+
+    for c in contratos:
+        asp = c.aspirante
+        fila = [
+            c.no_expediente, asp.nombre, asp.papellido, asp.sapellido,
+            getattr(c.cargo.departamento.unidad_organizativa, 'descripcion', '') if c.cargo and c.cargo.departamento else "",
+            getattr(c.cargo.departamento, 'descripcion', '') if c.cargo else "",
+            getattr(c.cargo.ncargo, 'descripcion', '') if c.cargo else "",
+            dict(getattr(c.cargo.ncargo, 'cat_ocupacional_choices', [])).get(getattr(c.cargo.ncargo, 'cat_ocupacional', ''), getattr(c.cargo.ncargo, 'cat_ocupacional', '')) if c.cargo and c.cargo.ncargo else "",
+            getattr(c.tipo, 'descripcion', ''), getattr(c.motivo, 'descripcion', ''),
+            c.fecha_alta.strftime('%d/%m/%Y') if c.fecha_alta else "", c.duracion or "",
+            si_no(c.c_formal), si_no(c.funcionario), si_no(c.designado),
+            si_no(c.profesional), si_no(c.jubilado_recontratado), si_no(c.mision), c.pais or "", c.reg_militar or "",
+            # Grupo Escala
+            getattr(c.cargo.ncargo.grupo_escala, 'nivel', '') if c.cargo and c.cargo.ncargo and getattr(c.cargo.ncargo, 'grupo_escala', None) else "",
+            getattr(c.rol, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
+            c.instructor or 0, c.cnci or 0,
+            # Se inyecta asp.get_edad aquí:
+            asp.doc_identidad, asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(), 
+            asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
+            asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
+            asp.direccion or "", asp.movil_personal or "", asp.fijo_personal or ""
+        ]
+        ws.append(fila)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="Listado_Activos_{datetime.now().strftime("%d_%m_%Y")}.xlsx"'
+    wb.save(response)
+    return response

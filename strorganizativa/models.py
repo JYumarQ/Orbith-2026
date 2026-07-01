@@ -33,9 +33,17 @@ class UnidadOrganizativa(Base):
         verbose_name='Pertenece a'
     )
 
+    # --- NUEVO CAMPO DE JERARQUÍA (ÁMBITO GLOBAL) ---
+    orden_informe = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name="Posición en el Organigrama",
+        unique=True # REGLA 1: PostgreSQL prohíbe repetir el número en toda la tabla
+    )
+
     class Meta:
         verbose_name = ("Unidad Organizativa")
         verbose_name_plural = ("Unidades Organizativas")
+        ordering = ['orden_informe', 'descripcion']
 
     def clean(self):
         super().clean()
@@ -76,11 +84,29 @@ class UnidadOrganizativa(Base):
 class Departamento(Base):
 
     descripcion = models.CharField(max_length=150, blank=False, null=False)
-    unidad_organizativa = models.ForeignKey(UnidadOrganizativa, on_delete=models.RESTRICT)
+    unidad_organizativa = models.ForeignKey(
+        UnidadOrganizativa, 
+        on_delete=models.RESTRICT,
+        related_name='departamentos'
+    )
+
+    # --- NUEVO CAMPO DE JERARQUÍA (ÁMBITO LOCAL) ---
+    orden_informe = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name="Posición dentro de la Unidad"
+    )
 
     class Meta:
         verbose_name = ("Departamento")
         verbose_name_plural = ("Departamentos")
+        ordering = ['orden_informe', 'descripcion'] # Orden local de fábrica
+        constraints = [
+            # REGLA 2: Blindaje SQL. Garantiza que dentro de una misma Unidad no se repita el orden
+            models.UniqueConstraint(
+                fields=['unidad_organizativa', 'orden_informe'], 
+                name='unique_orden_depto_por_unidad'
+            )
+        ]
         
     def __str__(self):
         return f"Dpto. {self.descripcion}"
@@ -115,8 +141,8 @@ class CargoPlantilla(Base):
 
     @property
     def disponibilidad(self):
-        """Calcula las plazas libres restando las reales de las aprobadas"""
-        return max(0, self.cant_aprobada - self.cant_cubierta_real)
+        """Calcula las plazas libres usando SOLO los contratos que ocupan plaza oficial"""
+        return max(0, self.cant_aprobada - self.plazas_fijas)
 
     class Meta:
         verbose_name = ("Cargo")
@@ -142,19 +168,29 @@ class CargoPlantilla(Base):
 
     @property
     def plazas_fijas(self):
-        """Cuenta solo los contratos INDETERMINADOS (Plantilla Oficial)"""
+        """Cuenta SOLO los contratos cuyo tipo tiene el check 'ocupa_plaza=True' y están activos"""
         if hasattr(self, 'count_ind'): 
             return self.count_ind
-        # NUEVO: Busca la palabra 'INDETERMINADO' dentro del nomenclador
-        return self.calta.filter(tipo__descripcion__icontains='INDETERMINADO').count()
+        
+        from contratos.models import CAlta # Importación local anti-bucle
+        return CAlta.objects.filter(
+            cargo=self, 
+            tipo__ocupa_plaza=True, 
+            aspirante__estado='ACTIVO'
+        ).count()
 
     @property
     def plazas_contrato(self):
-        """Cuenta el resto de contratos (Determinados, Adiestramiento, etc)"""
+        """Cuenta los contratos temporales (ocupa_plaza=False) activos"""
         if hasattr(self, 'count_cont'): 
             return self.count_cont
-        # NUEVO: Excluye los que tienen la palabra 'INDETERMINADO'
-        return self.calta.exclude(tipo__descripcion__icontains='INDETERMINADO').count()
+            
+        from contratos.models import CAlta # Importación local anti-bucle
+        return CAlta.objects.filter(
+            cargo=self, 
+            tipo__ocupa_plaza=False, 
+            aspirante__estado='ACTIVO'
+        ).count()
 
     def __str__(self):
         return self.ncargo.descripcion

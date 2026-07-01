@@ -32,4 +32,8 @@ urlpatterns = [
     # ---------------------------------------------------------
     path('registro-diario/', views.RegistroDiarioView.as_view(), name='informe_registro_diario'),
     path('registro-diario/guardar-plan/', views.GuardarPlanDiarioView.as_view(), name='guardar_plan_diario'),
+    path('motivos-contratos/', views.InformeMotivosContratoView.as_view(), name='informe_motivos_contrato'),
+
+
+    
 ]

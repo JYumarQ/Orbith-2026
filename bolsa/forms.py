@@ -38,9 +38,25 @@ class AspiranteForm(forms.ModelForm):
             'movil_personal', 'fijo_personal', 'direccion',
             'provincia', 'municipio', 'codigo_postal',
             'raza', 'grado_cientifico', 'tpantalon', 'tcamisa', 'tzapatos',
-            'nivel_educ', 'especialidad',
+            'nivel_educ', 'especialidad', 'titulo_oro',
         )
 
+        def clean(self):
+            cleaned_data = super().clean()
+            nivel = cleaned_data.get("nivel_educ")
+            titulo_oro = cleaned_data.get("titulo_oro")
+
+            # REGLA DE AUDITORÍA: El Título de Oro es exclusivo para Nivel Superior ('NS')
+            if titulo_oro and nivel != 'NS':
+                self.add_error(
+                    'titulo_oro', 
+                    "Inconsistencia de datos: El Título de Oro solo puede asignarse a graduados de Nivel Superior."
+                )
+                # Forzamos sanitización silenciosa por seguridad
+                cleaned_data['titulo_oro'] = False 
+
+            return cleaned_data
+        
         labels = {
             'doc_identidad': 'Doc. de Identidad',
             'sexo': 'Sexo',
@@ -97,6 +113,8 @@ class AspiranteForm(forms.ModelForm):
             'tpantalon': forms.TextInput(attrs={'class':'form-control'}),
             'tcamisa': forms.TextInput(attrs={'class':'form-control'}),
             'tzapatos': forms.NumberInput(attrs={'class':'form-control'}),
+
+            'titulo_oro': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
         }
 
     def __init__(self, *args, **kwargs):

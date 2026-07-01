@@ -45,4 +45,10 @@ urlpatterns = [
     path('ajax/historico/detalle/<int:pk>/', login_required(views.movimiento_detalle_readonly), name='movimiento_detalle_readonly'),
     path('exportar/historico/pdf/<int:aspirante_id>/', login_required(views.ExportarHistoricoPDFView.as_view()), name='exportar_historico_pdf'),
 
+
+    path('cargar-cargos-contrato/', views.cargar_cargos_contrato, name='cargar_cargos_contrato'),
+
+    #? EXPORTACIONES
+    path('exportar_excel/', login_required(views.exportar_contratos_excel), name='exportar_contratos_excel'),
+
 ]

@@ -10,12 +10,42 @@
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
-                  hx-confirm="¿Estás seguro de guardar una nueva unidad organizativa?"
+                  
                   id="uniorgForm">
                 
                 {% csrf_token %}
                 
-                {{ form.as_p }}
+                <div class="row g-3 mb-3">
+                    <div class="col-12">
+                        <label class="form-label fw-bold">{{ form.tipo.label }}</label>
+                        {{ form.tipo }}
+                    </div>
+                    
+                    <div class="col-12">
+                        <label class="form-label fw-bold">{{ form.padre.label }}</label>
+                        {{ form.padre }}
+                    </div>
+                    
+                    <div class="col-12">
+                        <label class="form-label fw-bold">{{ form.descripcion.label }}</label>
+                        {{ form.descripcion }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-primary">
+                            <i class="fas fa-layer-group me-1"></i> {{ form.grupo_nomina.label }}
+                        </label>
+                        {{ form.grupo_nomina }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-success">
+                            <i class="fas fa-sort-numeric-down me-1"></i> {{ form.orden_informe.label }}
+                        </label>
+                        {{ form.orden_informe }}
+                        <div class="invalid-feedback" id="feedback-orden"></div> 
+                    </div>
+                </div>
                 
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -27,51 +57,94 @@
 </div>
 
 <script>
-    function hacerFormularioInteligente() {
-        const selectTipo = document.getElementById('id_tipo');
-        const selectPadre = document.getElementById('id_padre');
-        const inputNomina = document.getElementById('id_grupo_nomina');
-        
-        if (!selectTipo || !selectPadre || !inputNomina) return;
+(function() {
+    const form = document.getElementById('uniorgForm');
+    if (!form) return;
 
-        // Desempaquetamos los datos que nos mandó la vista de Django
-        const tiposInfo = JSON.parse('{{ tipos_info|safe|default:"{}" }}');
-        const padresInfo = JSON.parse('{{ padres_info|safe|default:"{}" }}');
-        
-        function actualizarEstado() {
-            const tipoId = selectTipo.value;
-            // Verificamos si el tipo seleccionado está marcado como "es_subunidad" en base de datos
-            const isSubunidad = tipoId ? tiposInfo[tipoId]?.es_subunidad : false;
-            
-            if (isSubunidad) {
-                // REGLA: Es Subunidad
-                selectPadre.removeAttribute('disabled'); // Activamos elegir padre
-                
-                inputNomina.setAttribute('readonly', 'readonly'); // Bloqueamos nómina
-                inputNomina.style.backgroundColor = '#e9ecef';
-                
-                // Si ya eligió un padre, copiamos su grupo de nómina
-                if (selectPadre.value && padresInfo[selectPadre.value]) {
-                    inputNomina.value = padresInfo[selectPadre.value];
-                } else {
-                    inputNomina.value = "";
-                    inputNomina.placeholder = "Seleccione Unidad Principal...";
+    const inputOrden = form.querySelector('#id_orden_informe');
+    const currentId = "{{ form.instance.pk|default:'' }}";
+    let timerValidacion = null;
+    let colisionMensaje = '';
+
+    if (!inputOrden) return;
+
+    // 1. VALIDACIÓN SILENCIOSA EN TIEMPO REAL
+    inputOrden.addEventListener('input', function() {
+        const valor = this.value.trim();
+        inputOrden.classList.remove('is-valid', 'is-invalid');
+        colisionMensaje = '';
+
+        if (!valor || parseInt(valor) < 1) return;
+
+        clearTimeout(timerValidacion);
+        timerValidacion = setTimeout(() => {
+            let url = `{% url 'validar_orden_uniorg' %}?orden=${valor}`;
+            if (currentId) url += `&exclude_id=${currentId}`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ocupado) {
+                        inputOrden.classList.add('is-invalid');
+                        colisionMensaje = data.mensaje;
+                    } else {
+                        inputOrden.classList.add('is-valid');
+                    }
+                });
+        }, 300);
+    });
+
+    // 2. CONTROL INTERACTIVO DE HTMX + SWEETALERT
+    form.addEventListener('htmx:confirm', function(e) {
+        if (e.target.id !== 'uniorgForm') return;
+        e.preventDefault(); // Pausamos el envío de HTMX
+
+        const valor = inputOrden.value.trim();
+        const estaOcupado = inputOrden.classList.contains('is-invalid');
+
+        if (estaOcupado) {
+            Swal.fire({
+                title: 'Posición Ocupada',
+                html: `La posición <b>${valor}</b> ya está en uso (${colisionMensaje}).<br><br>¿Desea intercalar esta unidad aquí y <b>desplazar</b> las siguientes un puesto hacia abajo?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffab00',
+                cancelButtonColor: '#8592a3',
+                confirmButtonText: '<i class="fas fa-sort-amount-down"></i> Sí, intercalar y desplazar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
+                    if (!inputOculto) {
+                        inputOculto = document.createElement('input');
+                        inputOculto.type = 'hidden';
+                        inputOculto.name = 'autoriza_desplazamiento';
+                        form.appendChild(inputOculto);
+                    }
+                    inputOculto.value = 'true';
+
+                    e.detail.issueRequest(true); // HTMX reanuda y envía
                 }
-            } else {
-                // REGLA: Es Principal o Normal
-                selectPadre.setAttribute('disabled', 'disabled'); // Bloqueamos el padre
-                selectPadre.value = ""; // Limpiamos el selector
-                
-                inputNomina.removeAttribute('readonly'); // Liberamos nómina
-                inputNomina.style.backgroundColor = '';
-                inputNomina.placeholder = "";
-            }
+            });
+        } else {
+            Swal.fire({
+                title: '¿Confirmar registro?',
+                text: '¿Estás seguro de guardar esta unidad organizativa?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#696cff',
+                cancelButtonColor: '#8592a3',
+                confirmButtonText: 'Sí, guardar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
+                    if (inputOculto) inputOculto.value = 'false';
+
+                    e.detail.issueRequest(true); // HTMX reanuda y envía
+                }
+            });
         }
-        
-        actualizarEstado(); // Ejecutar nada más abrir el modal
-        selectTipo.addEventListener('change', actualizarEstado);
-        selectPadre.addEventListener('change', actualizarEstado);
-    }
-    
-    hacerFormularioInteligente();
+    });
+})();
 </script>

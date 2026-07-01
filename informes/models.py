@@ -1,4 +1,6 @@
 from django.db import models
+from django.conf import settings
+from strorganizativa.models import UnidadOrganizativa
 
 class PlanMensualRegistro(models.Model):
     mes = models.CharField(max_length=2)
@@ -9,3 +11,4 @@ class PlanMensualRegistro(models.Model):
 
     class Meta:
         unique_together = ('mes', 'anno', 'ueb_id', 'familia_id')
+

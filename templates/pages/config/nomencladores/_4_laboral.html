@@ -159,8 +159,9 @@
                               <thead>
                                   <tr>
                                       <th>Descripción</th>
-                                      <th class="text-center">Ocupa Plaza</th>
-                                      <th class="text-center">Requiere Motivo</th>
+                                      <th class="text-center">Plaza</th>
+                                      <th class="text-center">Motivo</th>
+                                      <th class="text-center">Adiestrado</th>
                                       <th class="text-end" style="width: 100px;">Acciones</th>
                                   </tr>
                               </thead>
@@ -173,6 +174,9 @@
                                       </td>
                                       <td class="text-center">
                                           <input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.requiere_motivo %}checked{% endif %}>
+                                      </td>
+                                      <td class="text-center">
+                                          <input class="form-check-input toggle-es-adiestrado cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.es_adiestrado %}checked{% endif %}>
                                       </td>
                                       <td class="text-end">
                                           <div class="d-flex justify-content-end gap-1">
@@ -191,7 +195,7 @@
                       <div class="card-header-flex">
                           <div class="d-flex align-items-center gap-2">
                               <div class="icon-indigo"><i class="fas fa-tags"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Motivos (Determinado)</h6>
+                              <h6 class="m-0 fw-bold text-slate-800">Motivos de Contratos</h6>
                           </div>
                           <button class="btn-add-modern add-row-btn" data-table="motivocontrato-table">
                               <i class="fas fa-plus"></i> Añadir
@@ -202,13 +206,15 @@
                               <thead>
                                   <tr>
                                       <th>Descripción</th>
+                                      <th>Tipo de Contrato</th>
                                       <th class="text-end" style="width: 100px;">Acciones</th>
                                   </tr>
                               </thead>
                               <tbody>
                                   {% for m in motivos_contrato %}
-                                  <tr data-id="{{ m.id }}">
+                                  <tr data-id="{{ m.id }}" data-tipo-id="{{ m.tipo_contrato_id|default:'' }}">
                                       <td class="nombre-cell">{{ m.descripcion }}</td>
+                                      <td class="tipo-cell fw-semibold text-primary">{{ m.tipo_contrato.descripcion|default:"—" }}</td>
                                       <td class="text-end">
                                           <div class="d-flex justify-content-end gap-1">
                                               <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
@@ -317,51 +323,33 @@
     const desc = row.querySelector('.input-desc').value.trim();
     const ocupa = row.querySelector('.input-ocupa').checked;
     const motivo = row.querySelector('.input-motivo').checked;
+    const adiestrado = row.querySelector('.input-adiestrado').checked;
     if (!desc) return alert('Campo obligatorio');
     try {
       const res = await fetch("/nomencladores/api/tipo_contrato/create/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo })
+        body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo, es_adiestrado: adiestrado })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell ps-3">${data.nombre}</td>
-          <td class="text-center align-middle"><input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="${data.id}" ${data.ocupa_plaza ? 'checked' : ''}></td>
-          <td class="text-center align-middle"><input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="${data.id}" ${data.requiere_motivo ? 'checked' : ''}></td>
-          <td class="text-center pe-3 align-middle">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
-            </div>
-          </td>
-        </tr>`;
+      location.reload(); // Recargamos para que el servidor pinte los checks y la tabla de motivos se entere
     } catch (err) { alert('Error: ' + err.message); }
   }
 
   async function guardarMotivoContrato(row) {
     const desc = row.querySelector('.input-desc').value.trim();
-    if (!desc) return alert('Campo obligatorio');
+    const tipo_id = row.querySelector('.input-tipo-contrato').value;
+    if (!desc || !tipo_id) return alert('Todos los campos son obligatorios');
     try {
       const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre: desc })
+        body: JSON.stringify({ nombre: desc, tipo_contrato_id: tipo_id })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell ps-3">${data.nombre}</td>
-          <td class="text-center pe-3 align-middle">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-primary"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
-            </div>
-          </td>
-        </tr>`;
+      location.reload(); // Recargamos para reflejar el texto del tipo asociado correctamente
     } catch (err) { alert('Error: ' + err.message); }
   }
 </script>

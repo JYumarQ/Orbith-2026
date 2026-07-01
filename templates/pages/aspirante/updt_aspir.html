@@ -75,7 +75,15 @@
                     <div class="col-md-6">
                         {{ form.especialidad.label_tag }}  
                         {{ form.especialidad }}
+                        
+                        <div class="form-check form-switch mt-3">
+                            {{ form.titulo_oro }}
+                            <label class="form-check-label fw-bold text-warning" for="{{ form.titulo_oro.id_for_label }}">
+                                <i class="fas fa-medal me-1"></i> {{ form.titulo_oro.label }}
+                            </label>
+                        </div>
                     </div>
+                    
                     <div class="col-md-6">
                         {{ form.grado_cientifico.label_tag }}  
                         {{ form.grado_cientifico }}
@@ -364,6 +372,36 @@
                 return;
             }
         });
+
+        // -------------------------------------------------------------
+        // --- VALIDACIÓN: TÍTULO DE ORO SÓLO PARA NIVEL SUPERIOR ('NS')
+        // -------------------------------------------------------------
+        var nivelEduc = formulario.querySelector('#id_nivel_educ');
+        var tituloOro = formulario.querySelector('#id_titulo_oro');
+
+        function validarTituloOro() {
+            if (!nivelEduc || !tituloOro) return;
+            
+            // Comprobamos si el valor seleccionado es 'NS' (Nivel Superior)
+            if (nivelEduc.value === 'NS') {
+                tituloOro.removeAttribute('disabled');
+            } else {
+                // Si es cualquier otro, lo bloqueamos y le quitamos el check por seguridad
+                tituloOro.setAttribute('disabled', 'disabled');
+                tituloOro.checked = false; 
+            }
+        }
+
+        if (nivelEduc) {
+            // Escuchar cambios nativos
+            nivelEduc.addEventListener('change', validarTituloOro);
+            // Escuchar cambios si el select utiliza jQuery/Select2
+            $(nivelEduc).on('change', validarTituloOro);
+            
+            // Ejecutar al abrir el formulario para evaluar el estado inicial
+            validarTituloOro(); 
+        }
+        // -------------------------------------------------------------
         
         if (sexInput) sexInput.dispatchEvent(new Event('change'));
     })();

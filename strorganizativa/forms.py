@@ -79,7 +79,7 @@ class CargoPlantillaForm(forms.ModelForm):
             # Editar: precargar unidad y departamentos de esa unidad
             self.fields['unidad'].initial = self.instance.departamento.unidad_organizativa
             self.fields['departamento'].queryset = (
-                self.instance.departamento.unidad_organizativa.departamento_set.all().order_by('descripcion')
+                self.instance.departamento.unidad_organizativa.departamentos.all().order_by('descripcion') # <--- Cambiado aquí
             )
         else:
             self.fields['departamento'].queryset = Departamento.objects.none()
@@ -112,12 +112,19 @@ class CargoPlantillaForm(forms.ModelForm):
 class DepartamentoForm(forms.ModelForm):
     class Meta:
         model = Departamento
-        fields = ('descripcion', 'unidad_organizativa')
-        label ={
+        # Movimos 'orden_informe' al final de la lista
+        fields = ('descripcion', 'unidad_organizativa', 'orden_informe') 
+        labels = {
             'descripcion': 'Descripción', 
-            'unidad_organizativa': 'Unidad Organizativa'
+            'unidad_organizativa': 'Unidad Organizativa',
+            'orden_informe': 'Orden de Prioridad'
         }
-        widgets={
+        widgets = {
+            'orden_informe': forms.NumberInput(attrs={
+                'class': 'form-control', 
+                'min': '1', 
+                'placeholder': 'Ej: 1 (Mayor prioridad)'
+            }),
             'descripcion': forms.TextInput(attrs={'class':'form-control'}), 
             'unidad_organizativa': forms.Select(attrs={'class':'form-control'})
         }
@@ -156,13 +163,19 @@ class UnidadOrganizativaForm(forms.ModelForm):
 
     class Meta:
         model = UnidadOrganizativa
-        # ORDEN SOLICITADO: Tipo -> Padre -> Descripcion -> Nomina
-        fields = ['tipo', 'padre', 'descripcion', 'grupo_nomina'] 
+        # Inyectamos 'orden_informe' al principio de la lista
+        fields = ['orden_informe', 'tipo', 'padre', 'descripcion', 'grupo_nomina'] 
         labels = {
+            'orden_informe': 'Orden de Prioridad',
             'grupo_nomina': 'Grupo de Nómina',
             'descripcion': 'Descripción',
         }
         widgets = {
+            'orden_informe': forms.NumberInput(attrs={
+                'class': 'form-control', 
+                'min': '1',
+                'placeholder': 'Ej: 1 (Mayor prioridad)'
+            }),
             'grupo_nomina': forms.NumberInput(attrs={'class': 'form-control', 'id': 'id_grupo_nomina'}),
             'descripcion': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej. Dirección de Recursos Humanos'}),
         }

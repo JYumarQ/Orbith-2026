@@ -7,7 +7,8 @@ from import_export.admin import ImportExportModelAdmin
 from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
-    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad, NTipoUnidadOrganizativa
+    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad, 
+    NTipoUnidadOrganizativa, NTipoContrato, NMotivoContrato # <--- Añadidos aquí
 )
 
 
@@ -110,6 +111,16 @@ admin.site.register(NTridente)
 admin.site.register(NRol)
 admin.site.register(NGrupoEscala)
 admin.site.register(NSalario)
+@admin.register(NTipoContrato)
+class NTipoContratoAdmin(admin.ModelAdmin):
+    list_display = ('descripcion', 'ocupa_plaza', 'requiere_motivo', 'es_adiestrado')
+    list_editable = ('es_adiestrado',) # Permite marcar el check sin entrar al detalle
+
+@admin.register(NMotivoContrato)
+class NMotivoContratoAdmin(admin.ModelAdmin):
+    list_display = ('descripcion', 'tipo_contrato')
+    list_editable = ('tipo_contrato',) # Permite asignar el tipo rápidamente desde la tabla
+    list_filter = ('tipo_contrato',)
 # admin.site.register(NCargo) <--- OJO: Ya está registrado arriba con @admin.register
 admin.site.register(NHorario)
 admin.site.register(NJornada)

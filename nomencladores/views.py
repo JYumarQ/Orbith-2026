@@ -1067,6 +1067,7 @@ def tipo_contrato_create(request):
     descripcion = data.get('nombre', '').strip() 
     ocupa_plaza = data.get('ocupa_plaza', False)
     requiere_motivo = data.get('requiere_motivo', False)
+    es_adiestrado = data.get('es_adiestrado', False)
     
     if not descripcion:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
@@ -1074,7 +1075,8 @@ def tipo_contrato_create(request):
     obj = NTipoContrato.objects.create(
         descripcion=descripcion.title(), 
         ocupa_plaza=ocupa_plaza,
-        requiere_motivo=requiere_motivo
+        requiere_motivo=requiere_motivo,
+        es_adiestrado=es_adiestrado
     )
     return JsonResponse({
         'id': obj.id, 'nombre': obj.descripcion, 
@@ -1135,8 +1137,12 @@ def tipo_contrato_toggle_motivo(request, pk):
 def motivo_contrato_create(request):
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
-    if not nombre: return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NMotivoContrato.objects.create(descripcion=nombre.title())
+    tipo_id = data.get('tipo_contrato_id')
+    
+    if not nombre or not tipo_id: 
+        return JsonResponse({'error': 'Nombre y Tipo de Contrato son obligatorios'}, status=400)
+        
+    obj = NMotivoContrato.objects.create(descripcion=nombre.title(), tipo_contrato_id=tipo_id)
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
 @csrf_exempt
@@ -1145,8 +1151,14 @@ def motivo_contrato_update(request, pk):
     obj = get_object_or_404(NMotivoContrato, pk=pk)
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
+    tipo_id = data.get('tipo_contrato_id')
+    
     if not nombre: return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj.descripcion = nombre.title(); obj.save()
+    
+    obj.descripcion = nombre.title()
+    if tipo_id: obj.tipo_contrato_id = tipo_id
+    obj.save()
+    
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
 @csrf_exempt
@@ -1174,6 +1186,14 @@ def tipo_contrato_info(request, pk):
     except NTipoContrato.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
     
+@csrf_exempt
+@require_POST
+def toggle_tipo_adiestrado(request, pk):
+    obj = get_object_or_404(NTipoContrato, pk=pk)
+    data = json.loads(request.body)
+    obj.es_adiestrado = data.get('es_adiestrado', False)
+    obj.save()
+    return JsonResponse({'success': True})
 
 def grupo_escala_modal(request, pk=None):
     """Devuelve el HTML del formulario para el modal (Crear o Editar)"""

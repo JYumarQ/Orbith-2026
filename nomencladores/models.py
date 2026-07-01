@@ -251,6 +251,7 @@ class NTipoContrato(Base):
     ocupa_plaza = models.BooleanField(default=False, verbose_name="¿Ocupa Plaza en Plantilla?")
     # NUEVO SWITCH
     requiere_motivo = models.BooleanField(default=False, verbose_name="¿Requiere Motivo?") 
+    es_adiestrado = models.BooleanField(default=False, verbose_name="¿Es Adiest?")
 
     class Meta:
         verbose_name = "Tipo de Contrato"
@@ -263,6 +264,14 @@ class NTipoContrato(Base):
 class NMotivoContrato(Base):
     descripcion = models.CharField(max_length=100, unique=True, verbose_name="Descripción")
     
+    tipo_contrato = models.ForeignKey(
+        NTipoContrato, 
+        on_delete=models.RESTRICT, 
+        null=True, 
+        blank=True, 
+        related_name="motivos",
+        verbose_name="Tipo de Contrato Asociado"
+    )
     class Meta:
         verbose_name = "Motivo de Contrato"
         verbose_name_plural = "Motivos de Contratos"

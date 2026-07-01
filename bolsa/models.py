@@ -62,11 +62,12 @@ class Aspirante(Contacto):
         ('TM','Medio Superior (TM)'),
         ('MS','Medio Superior (DG)'),
         ('NS','Nivel Superior'),
-        
-        
     ], blank=True, null= True)
+
+    titulo_oro = models.BooleanField(default=False, verbose_name="Título de Oro")
+
     especialidad = models.ForeignKey(NEspecialidad,null=True, blank=True, on_delete=models.RESTRICT)
-    habilidades = models.TextField(null=True, blank=True)
+    
     contratado = models.BooleanField(null=True, blank=True, default=False)
 
     

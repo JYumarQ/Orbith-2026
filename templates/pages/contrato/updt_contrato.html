@@ -140,6 +140,19 @@
                                     </div>
                                 </div>
 
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_lic.label }}
+                                    {{ form.fecha_vence_lic }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_recal.label }}
+                                    {{ form.fecha_vence_recal }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_seg.label }}
+                                    {{ form.fecha_vence_seg }}
+                                </div>
+
                                 <div class="col-md-12">
                                     <div class="row">
                                         <div class="col-md-4">
@@ -155,19 +168,6 @@
                                             {{ form.pais }}
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_lic.label }}
-                                    {{ form.fecha_vence_lic }}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_recal.label }}
-                                    {{ form.fecha_vence_recal }}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_seg.label }}
-                                    {{ form.fecha_vence_seg }}
                                 </div>
 
                                 <div class="col-md-12">
@@ -267,105 +267,266 @@
 </div>
 
 <script>
-    (function() {
-        // 1. Apuntamos al ID correcto de este formulario
-        var formulario = document.getElementById('contratoForm');
-        if (!formulario) return;
+(function() { 
+    // =========================================================================
+    // 🛡️ BURBUJA IIFE: Aísla las variables para que no colisionen al recargar
+    // =========================================================================
+    
+    var formulario = document.getElementById('contratoForm');
+    if (!formulario) return;
 
-        // 2. Función maestra para habilitar/deshabilitar campos
-        function toggleCampo(checkElement, resElement) {
-            if (!checkElement || !resElement) return;
-            if (checkElement.checked) {
-                resElement.removeAttribute('disabled');
+    // --- 1. LÓGICA DE SWITCHES SIMPLES ---
+    function toggleCampo(checkElement, resElement) {
+        if (!checkElement || !resElement) return;
+        if (checkElement.checked) {
+            resElement.removeAttribute('disabled');
+        } else {
+            resElement.setAttribute('disabled', 'disabled');
+            resElement.value = ''; 
+        }
+    }
+
+    var mision = formulario.querySelector('#id_mision');
+    var pais = formulario.querySelector('#id_pais');
+    if (mision && pais) {
+        mision.addEventListener('change', function() { toggleCampo(mision, pais); });
+        toggleCampo(mision, pais); 
+    }
+
+    var cFormal = formulario.querySelector('#id_c_formal');
+    var cFormalRes = formulario.querySelector('#id_c_formal_res');
+    if(cFormal && cFormalRes) {
+        cFormal.addEventListener('change', function() { toggleCampo(cFormal, cFormalRes); });
+        toggleCampo(cFormal, cFormalRes);
+    }
+
+    var funcionario = formulario.querySelector('#id_funcionario');
+    var funcionarioRes = formulario.querySelector('#id_funcionario_res');
+    if(funcionario && funcionarioRes) {
+        funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionarioRes); });
+        toggleCampo(funcionario, funcionarioRes);
+    }
+
+    var designado = formulario.querySelector('#id_designado');
+    var designadoRes = formulario.querySelector('#id_designado_res');
+    if(designado && designadoRes) {
+        designado.addEventListener('change', function() { toggleCampo(designado, designadoRes); });
+        toggleCampo(designado, designadoRes);
+    }
+
+    // --- 2. LÓGICA CORE: TIPO DE CONTRATO (FECHAS, DURACIÓN, MOTIVO) ---
+    var tipo = formulario.querySelector('#id_tipo');
+    var duracion = formulario.querySelector('#id_duracion');
+    var motivo = formulario.querySelector('#id_motivo');
+    var f_contrato = formulario.querySelector('#id_fecha_alta');
+
+    function actualizarEstadoContrato() {
+        if (!tipo) return;
+        var tipoId = tipo.value;
+
+        // Si el select de Tipo está en blanco
+        if (!tipoId) {
+            if(f_contrato) f_contrato.setAttribute('disabled', 'disabled');
+            if(duracion) { duracion.setAttribute('disabled', 'disabled'); duracion.value = ''; }
+            if(motivo) { motivo.setAttribute('disabled', 'disabled'); motivo.value = ''; }
+            return;
+        }
+
+        // Si HAY un tipo seleccionado, liberamos la fecha INMEDIATAMENTE
+        if(f_contrato) f_contrato.removeAttribute('disabled');
+
+        var apiUrl = "{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId);
+
+        // Consultar API para las reglas de negocio
+        fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+            var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
+            
+            // Duración: Se bloquea solo si es INDETERMINADO
+            if (desc.includes('INDETERMINADO')) {
+                if(duracion) { duracion.setAttribute('disabled', 'disabled'); duracion.value = ''; }
             } else {
-                resElement.setAttribute('disabled', 'disabled');
-                resElement.value = ''; 
-            }
-        }
-
-        // 3. Conectar Switch de MISIÓN -> Campo PAÍS
-        var mision = formulario.querySelector('#id_mision');
-        var pais = formulario.querySelector('#id_pais');
-        if (mision && pais) {
-            mision.addEventListener('change', function() { toggleCampo(mision, pais); });
-            toggleCampo(mision, pais); 
-        }
-
-        // Conectar los otros switches (Calificaciones, Funcionario, etc.)
-        var cFormal = formulario.querySelector('#id_c_formal');
-        var cFormalRes = formulario.querySelector('#id_c_formal_res');
-        if(cFormal && cFormalRes) {
-            cFormal.addEventListener('change', function() { toggleCampo(cFormal, cFormalRes); });
-            toggleCampo(cFormal, cFormalRes);
-        }
-
-        var funcionario = formulario.querySelector('#id_funcionario');
-        var funcionarioRes = formulario.querySelector('#id_funcionario_res');
-        if(funcionario && funcionarioRes) {
-            funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionarioRes); });
-            toggleCampo(funcionario, funcionarioRes);
-        }
-
-        var designado = formulario.querySelector('#id_designado');
-        var designadoRes = formulario.querySelector('#id_designado_res');
-        if(designado && designadoRes) {
-            designado.addEventListener('change', function() { toggleCampo(designado, designadoRes); });
-            toggleCampo(designado, designadoRes);
-        }
-
-        // -------------------------------------------------------------
-        // ENVÍO OFICIAL HTMX + SWEETALERT (RECUPERADO Y CORREGIDO)
-        // -------------------------------------------------------------
-        formulario.addEventListener('htmx:confirm', function(e) {
-            if (e.target.id !== 'contratoForm') return; 
-            e.preventDefault();
-
-            // Verificamos si hay campos obligatorios vacíos (rojos o amarillos)
-            var hayVacios = formulario.querySelectorAll('.border-warning, .is-invalid').length > 0;
-            if (hayVacios) {
-                Swal.fire({
-                    title: 'Atención',
-                    text: 'Revise los campos obligatorios.',
-                    icon: 'warning',
-                    confirmButtonText: 'OK',
-                    customClass: { confirmButton: 'btn btn-primary' },
-                    buttonsStyling: false
-                });
-                return;
+                if(duracion) duracion.removeAttribute('disabled');
             }
 
-            Swal.fire({
-                title: '¿Confirmar cambios?',
-                text: "¿Estás seguro de actualizar los datos de este contrato?",
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Sí, actualizar',
-                cancelButtonText: 'Cancelar',
-                customClass: { confirmButton: 'btn btn-primary me-3', cancelButton: 'btn btn-secondary' },
-                buttonsStyling: false
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    e.detail.issueRequest(true); // HTMX asume el control
+            // Motivo: Se libera si la base de datos lo exige
+            if (data.requiere_motivo === true) {
+                if(motivo) motivo.removeAttribute('disabled');
+            } else {
+                if(motivo) {
+                    motivo.setAttribute('disabled', 'disabled');
+                    motivo.value = ''; 
                 }
+            }
+        })
+        .catch(err => {
+            console.error('Error de red al consultar API:', err);
+            // Sistema de seguridad: si la red falla, habilitamos los campos para no bloquear al Especialista
+            if(duracion) duracion.removeAttribute('disabled');
+            if(motivo) motivo.removeAttribute('disabled');
+        });
+    }
+
+    if (tipo) tipo.addEventListener('change', actualizarEstadoContrato);
+    actualizarEstadoContrato(); // Ejecutamos al abrir el modal para evaluar los datos cargados
+
+
+    // --- 3. LÓGICA DE HTMX Y CERRADO DEL MODAL ---
+    formulario.addEventListener('htmx:confirm', function(e) {
+        if (e.target.id !== 'contratoForm') return; 
+        e.preventDefault();
+
+        var hayVacios = formulario.querySelectorAll('.border-warning, .is-invalid').length > 0;
+        if (hayVacios) {
+            Swal.fire({
+                title: 'Atención',
+                text: 'Revise los campos obligatorios.',
+                icon: 'warning',
+                confirmButtonText: 'OK',
+                customClass: { confirmButton: 'btn btn-primary' },
+                buttonsStyling: false
             });
+            return;
+        }
+
+        Swal.fire({
+            title: '¿Confirmar cambios?',
+            text: "¿Estás seguro de actualizar los datos de este contrato?",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, actualizar',
+            cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'btn btn-primary me-3', cancelButton: 'btn btn-secondary' },
+            buttonsStyling: false
+        }).then((result) => {
+            if (result.isConfirmed) {
+                e.detail.issueRequest(true);
+            }
+        });
+    });
+    
+    formulario.addEventListener('htmx:afterRequest', function(e) {
+        if (e.detail.successful) {
+            const botonCancelar = formulario.closest('.modal-content').querySelector('[data-bs-dismiss="modal"]');
+            if (botonCancelar) botonCancelar.click();
+            
+            setTimeout(() => {
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.paddingRight = '';
+            }, 300);
+        }
+    });
+
+    if (window.htmx) htmx.process(formulario);
+
+
+    // --- 4. MOTOR INTELIGENTE DE PLAZAS (SELECT2) ---
+    // (Ahora están protegidos dentro de la Burbuja)
+    const $cargoSelect = $('#id_cargo');
+    const $tipoSelect = $('#id_tipo');
+    let ocupaPlazaOficial = false;
+
+    function actualizarReglaPlaza() {
+        const valTipo = $tipoSelect.val();
+        const atributoRadar = $tipoSelect.attr('data-ocupa-plaza');
+        const radarPlazas = atributoRadar ? JSON.parse(atributoRadar) : [];
+        
+        ocupaPlazaOficial = valTipo ? radarPlazas.includes(parseInt(valTipo)) : false;
+        
+        if ($cargoSelect.hasClass("select2-hidden-accessible")) {
+            $cargoSelect.select2('destroy');
+        }
+        inicializarSelectCargo();
+        validarCargoCruado();
+    }
+
+    function formatCargoOption(state) {
+        if (!state.id) return state.text; 
+        
+        const $el = $(state.element);
+        const aprobadas = parseInt($el.data('aprobadas')) || 0;
+        const ocupadas = parseInt($el.data('ocupadas')) || 0;
+        const disponibles = aprobadas - ocupadas;
+        const estaLleno = disponibles <= 0;
+        
+        let colorPildora = 'bg-secondary'; 
+        let textoTachado = '';
+        
+        if (ocupaPlazaOficial) {
+            if (estaLleno) {
+                colorPildora = 'bg-danger'; 
+                textoTachado = 'text-decoration-line-through text-muted';
+            } else {
+                colorPildora = 'bg-success'; 
+            }
+        }
+        
+        return $(`
+            <div class="d-flex justify-content-between align-items-center w-100 ${textoTachado}">
+                <span>${state.text}</span>
+                <span class="badge ${colorPildora} rounded-pill" style="font-size: 0.75rem;">
+                    ${ocupadas} / ${aprobadas}
+                </span>
+            </div>
+        `);
+    }
+
+    function inicializarSelectCargo() {
+        $cargoSelect.select2({
+            dropdownParent: $cargoSelect.closest('.modal'), 
+            width: '100%',
+            templateResult: formatCargoOption, 
+            templateSelection: function(state) { return state.text; } 
         });
         
-        // --- LA LLAVE MAESTRA PARA EL CIERRE DEL MODAL ---
-        formulario.addEventListener('htmx:afterRequest', function(e) {
-            if (e.detail.successful) {
-                // Forzar el cierre de cualquier modal abierto
-                const botonCancelar = formulario.closest('.modal-content').querySelector('[data-bs-dismiss="modal"]');
-                if (botonCancelar) botonCancelar.click();
-                
-                setTimeout(() => {
-                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
-                    document.body.classList.remove('modal-open');
-                    document.body.style.paddingRight = '';
-                }, 300);
+        $cargoSelect.on('select2:selecting', function(e) {
+            const $el = $(e.params.args.data.element);
+            const aprobadas = parseInt($el.data('aprobadas')) || 0;
+            const ocupadas = parseInt($el.data('ocupadas')) || 0;
+            
+            if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+                e.preventDefault(); 
+                Swal.fire({
+                    toast: true, position: 'top-end', icon: 'error',
+                    title: 'Cargo sin plazas oficiales disponibles',
+                    showConfirmButton: false, timer: 3000
+                });
             }
         });
+    }
 
-        // Procesar formulario con HTMX al abrir
-        if (window.htmx) htmx.process(formulario);
-    })();
+    function validarCargoCruado() {
+        const valCargo = $cargoSelect.val();
+        const errPlaza = document.getElementById('error_plaza_agotada');
+        
+        if(errPlaza) errPlaza.classList.add('d-none');
+        $cargoSelect.next('.select2-container').find('.select2-selection').removeClass('border-danger');
+
+        if (!valCargo) return;
+
+        const $optionSeleccionada = $cargoSelect.find('option:selected');
+        const aprobadas = parseInt($optionSeleccionada.data('aprobadas')) || 0;
+        const ocupadas = parseInt($optionSeleccionada.data('ocupadas')) || 0;
+
+        if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+            $cargoSelect.val(null).trigger('change.select2'); 
+            
+            if(errPlaza) {
+                errPlaza.textContent = "Este contrato exige una vacante. El cargo seleccionado estaba lleno.";
+                errPlaza.classList.remove('d-none');
+            }
+            $cargoSelect.next('.select2-container').find('.select2-selection').addClass('border-danger');
+        }
+    }
+
+    $tipoSelect.on('change', actualizarReglaPlaza);
+    $cargoSelect.on('change', validarCargoCruado);
+    
+    setTimeout(() => {
+        actualizarReglaPlaza(); 
+    }, 400);
+
+})();
 </script>

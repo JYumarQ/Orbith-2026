@@ -7,7 +7,8 @@ from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Case, When, Value, IntegerField, Q, ProtectedError, Count, RestrictedError, Sum
+from django.db.models import Case, When, Value, IntegerField, Q, ProtectedError, Count, RestrictedError, Sum, F
+from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
 import json
@@ -313,6 +314,19 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            unidad_id = request.POST.get('unidad_organizativa')
+            if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
+                with transaction.atomic():
+                    # Desplazamiento quirúrgico solo en esta unidad
+                    Departamento.objects.filter(
+                        unidad_organizativa_id=int(unidad_id),
+                        orden_informe__gte=int(orden)
+                    ).update(orden_informe=F('orden_informe') + 1)
+        return super().post(request, *args, **kwargs)
 
 class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
     model = Departamento
@@ -333,6 +347,19 @@ class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            unidad_id = request.POST.get('unidad_organizativa')
+            if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
+                with transaction.atomic():
+                    Departamento.objects.filter(
+                        unidad_organizativa_id=int(unidad_id),
+                        orden_informe__gte=int(orden)
+                    ).exclude(pk=self.object.pk).update(orden_informe=F('orden_informe') + 1)
+        return super().post(request, *args, **kwargs)
 
 class DepartamentoDeleteView(DeleteView):
     model = Departamento
@@ -431,6 +458,17 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            if orden and orden.isdigit():
+                with transaction.atomic():
+                    # Empujamos +1 a todos los que estén de esa posición hacia abajo
+                    UnidadOrganizativa.objects.filter(orden_informe__gte=int(orden)).update(
+                        orden_informe=F('orden_informe') + 1
+                    )
+        return super().post(request, *args, **kwargs)
 
 class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
     model = UnidadOrganizativa
@@ -457,6 +495,31 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
             return response
             
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object() # Capturamos qué unidad estamos editando
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            if orden and orden.isdigit():
+                with transaction.atomic():
+                    # 1. EL TRUCO DEL PARQUEO: Movemos la unidad actual a un "limbo" 
+                    # para que no estorbe ni colisione cuando empujemos a los demás
+                    self.object.orden_informe = 999999 
+                    self.object.save(update_fields=['orden_informe'])
+                    
+                    # 2. Buscamos a todos los afectados y los ORDENAMOS DE MAYOR A MENOR
+                    unidades_a_desplazar = UnidadOrganizativa.objects.filter(
+                        orden_informe__gte=int(orden)
+                    ).exclude(pk=self.object.pk).order_by('-orden_informe')
+                    
+                    # 3. Los movemos uno por uno de arriba hacia abajo
+                    for u in unidades_a_desplazar:
+                        u.orden_informe += 1
+                        u.save(update_fields=['orden_informe'])
+                        
+        # 4. Al llamar a super(), el formulario tomará el "orden" del request 
+        # y bajará a la unidad desde el 999999 a su asiento final correcto.
+        return super().post(request, *args, **kwargs)
 
 class UnidadOrganizativaDeleteView(DeleteView):
     model = UnidadOrganizativa
@@ -482,9 +545,9 @@ def gestor_plantilla_view(request):
 
     # 2. Base de datos con optimización de conteo
     if request.user.is_superuser:
-        unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamento'))
+        unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamentos'))
     else:
-        unidades = request.user.unidades.annotate(total_dptos=Count('departamento'))
+        unidades = request.user.unidades.annotate(total_dptos=Count('departamentos'))
 
     # 2. LÓGICA DE ORDENAMIENTO PERSONALIZADO (El "Peso" de la Unidad)
     # Asignamos: 1 (Principal), 3 (Temporal), 2 (Cualquier otra normal)
@@ -507,13 +570,15 @@ def gestor_plantilla_view(request):
     if q:
         unidades = unidades.filter(descripcion__icontains=q)
 
-    sort_by = request.GET.get('sort', 'grupo_nomina') 
+    # CAMBIO: Por defecto, que ordene usando tu campo numérico
+    sort_by = request.GET.get('sort', 'orden_informe') 
     order = request.GET.get('order', 'asc')
     
-    # Sintaxis limpia para el campo de orden
-    field = 'descripcion' if sort_by == 'alpha' else 'grupo_nomina'
+    # Sintaxis limpia: Si piden alfabético usa descripción, si no, usa el orden numérico
+    field = 'descripcion' if sort_by == 'alpha' else 'orden_informe'
     if order == 'desc': field = f'-{field}'
     
+    # Ordenamos primero por jerarquía (Para que la Principal siempre sea la reina) y luego por tu número
     unidades = unidades.order_by('jerarquia_visual', field)
 
     # 5. Respuestas HTMX o Render normal
@@ -571,8 +636,9 @@ def htmx_load_cargos(request, dpto_id):
 
     # NUEVO: Se actualiza la consulta (Query) para buscar dentro de la descripción del tipo
     cargos = cargos.select_related('ncargo', 'rol').annotate(
-        count_ind=Count('calta', filter=Q(calta__tipo__descripcion__icontains='INDETERMINADO')),
-        count_cont=Count('calta', filter=~Q(calta__tipo__descripcion__icontains='INDETERMINADO'))
+        # Filtramos estrictamente por el booleano y nos aseguramos que el trabajador esté activo
+        count_ind=Count('calta', filter=Q(calta__tipo__ocupa_plaza=True, calta__aspirante__estado='ACTIVO')),
+        count_cont=Count('calta', filter=Q(calta__tipo__ocupa_plaza=False, calta__aspirante__estado='ACTIVO'))
     )
 
     # Ordenamiento Dinámico
@@ -651,3 +717,44 @@ def htmx_load_contratos(request, cargo_id):
         'cargo_seleccionado': cargo,
         'q': q
     })
+
+def validar_orden_uniorg(request):
+    orden = request.GET.get('orden')
+    exclude_id = request.GET.get('exclude_id')
+    
+    if not orden or not orden.isdigit():
+        return JsonResponse({'ocupado': False})
+        
+    qs = UnidadOrganizativa.objects.filter(orden_informe=int(orden))
+    if exclude_id and exclude_id.isdigit():
+        qs = qs.exclude(codigo_interno=int(exclude_id)) # Excluimos la propia unidad si estamos editando
+        
+    colision = qs.first()
+    if colision:
+        return JsonResponse({
+            'ocupado': True, 
+            'mensaje': f'Ocupado por "{colision.descripcion}"'
+        })
+    return JsonResponse({'ocupado': False})
+
+
+def validar_orden_dpto(request):
+    orden = request.GET.get('orden')
+    unidad_id = request.GET.get('unidad_id')
+    exclude_id = request.GET.get('exclude_id')
+
+    if not orden or not orden.isdigit() or not unidad_id or not unidad_id.isdigit():
+        return JsonResponse({'ocupado': False})
+
+    # Buscamos colisión estrictamente dentro de la misma Unidad Organizativa
+    qs = Departamento.objects.filter(unidad_organizativa_id=int(unidad_id), orden_informe=int(orden))
+    if exclude_id and exclude_id.isdigit():
+        qs = qs.exclude(id=int(exclude_id))
+
+    colision = qs.first()
+    if colision:
+        return JsonResponse({
+            'ocupado': True, 
+            'mensaje': f'Ocupado por "{colision.descripcion}"'
+        })
+    return JsonResponse({'ocupado': False})

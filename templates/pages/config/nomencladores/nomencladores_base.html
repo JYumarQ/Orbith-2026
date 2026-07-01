@@ -19,6 +19,12 @@
 
 
 <script>
+  // Esta línea es vital para que Django te permita guardar datos
+  const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+  function cancelAllInsertRows() {
+      document.querySelectorAll('.insert-row').forEach(row => row.remove());
+  }
   /* ----------  EDICIÓN INLINE (Resto de tablas)  ---------- */
   document.addEventListener('click', e => {
     const edit = e.target.closest('.edit-btn');
@@ -246,7 +252,23 @@
       const actionCell = tr.querySelector('td:last-child');
       const originalButtons = actionCell.innerHTML;
 
-      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      if (tableId === 'motivocontrato-table') {
+          const tipoCell = tr.querySelector('.tipo-cell');
+          const oldTipoId = tr.dataset.tipoId || '';
+          
+          let opts = '<option value="">Seleccione Tipo...</option>';
+          {% for tc in tipos_contrato %}
+              {% if tc.requiere_motivo %}
+                  opts += `<option value="{{ tc.id }}" ${oldTipoId == "{{ tc.id }}" ? 'selected' : ''}>{{ tc.descripcion }}</option>`;
+              {% endif %}
+          {% endfor %}
+
+          descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+          tipoCell.innerHTML = `<select class="form-select form-select-sm input-edit-tipo">${opts}</select>`;
+      } else {
+          descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
+      }
+
       actionCell.innerHTML = `
         <div class="btn-group btn-group-sm">
           <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
@@ -257,21 +279,45 @@
       const finishEdit = (save = false) => {
         if (actionTaken) return;
         actionTaken = true;
+        
         if (save) {
           const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
-          if (!newDesc) { alert('Campo obligatorio'); return; }
-          const endpoint = tableId === 'tipocontrato-table' ? 'tipo_contrato' : 'motivo_contrato';
+          let payload = { nombre: newDesc };
+          let endpoint = 'tipo_contrato';
           
+          if (tableId === 'motivocontrato-table') {
+              endpoint = 'motivo_contrato';
+              const newTipoId = tr.querySelector('.input-edit-tipo').value;
+              if (!newDesc || !newTipoId) { alert('Todos los campos son obligatorios'); actionTaken = false; return; }
+              payload['tipo_contrato_id'] = newTipoId;
+          } else {
+              if (!newDesc) { alert('Campo obligatorio'); actionTaken = false; return; }
+          }
+
           fetch(`/nomencladores/api/${endpoint}/${tr.dataset.id}/update/`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ nombre: newDesc }) 
-          }).then(r => r.json()).then(d => {
+            body: JSON.stringify(payload)
+          }).then(async r => {
+              if(!r.ok) throw new Error('Error al actualizar');
+              return r.json();
+          }).then(d => {
               descCell.textContent = d.nombre;
+              if (tableId === 'motivocontrato-table') {
+                  const selectElement = tr.querySelector('.input-edit-tipo');
+                  tr.querySelector('.tipo-cell').textContent = selectElement.options[selectElement.selectedIndex].text;
+                  tr.dataset.tipoId = payload.tipo_contrato_id;
+              }
               actionCell.innerHTML = originalButtons;
-          }).catch(err => alert(err));
+          }).catch(err => {
+              alert(err);
+              actionTaken = false; 
+          });
         } else {
           descCell.textContent = oldDesc;
+          if (tableId === 'motivocontrato-table') {
+              tr.querySelector('.tipo-cell').textContent = tr.querySelector('.tipo-cell').textContent;
+          }
           actionCell.innerHTML = originalButtons;
         }
       };
@@ -792,6 +838,7 @@
             <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
             <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-ocupa cursor-pointer"></td>
             <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-motivo cursor-pointer"></td>
+            <td class="text-center align-middle"><input type="checkbox" class="form-check-input input-adiestrado cursor-pointer"></td>
             <td class="text-center pe-3 align-middle">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
@@ -801,8 +848,17 @@
           break;
 
         case 'motivocontrato-table':
+          let tiposOptions = '<option value="">Seleccione Tipo...</option>';
+          {% for tc in tipos_contrato %}
+              {% if tc.requiere_motivo %}
+                  tiposOptions += `<option value="{{ tc.id }}">{{ tc.descripcion }}</option>`;
+              {% endif %}
+          {% endfor %}
           row.innerHTML = `
             <td class="ps-3"><input type="text" class="form-control form-control-sm input-desc" placeholder="Descripción"></td>
+            <td class="align-middle">
+                <select class="form-select form-select-sm input-tipo-contrato">${tiposOptions}</select>
+            </td>
             <td class="text-center pe-3 align-middle">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
@@ -918,8 +974,19 @@
       if (e.target.classList.contains('toggle-requiere-motivo')) {
           fetch(`/nomencladores/api/tipo_contrato/${e.target.dataset.id}/toggle_motivo/`, {
               method: 'POST',
-              headers: { 'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json' },
+              headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' }, // <-- CORREGIDO AQUÍ
               body: JSON.stringify({ 'requiere_motivo': e.target.checked })
+          });
+      }
+  });
+
+  /* ---------- GUARDAR SWITCH ES ADIESTRADO ---------- */
+  document.addEventListener('change', function(e) {
+      if (e.target.classList.contains('toggle-es-adiestrado')) {
+          fetch(`/nomencladores/api/tipo_contrato/${e.target.dataset.id}/toggle_adiestrado/`, {
+              method: 'POST',
+              headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/json' }, // <-- CORREGIDO AQUÍ
+              body: JSON.stringify({ 'es_adiestrado': e.target.checked })
           });
       }
   });

@@ -5,6 +5,29 @@ from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlanti
 from nomencladores.models import NRol, NTipoContrato
 import json
 
+
+class SelectCargosConPlazasWidget(forms.Select):
+    """Widget inteligente que inyecta data-aprobadas y data-ocupadas a las opciones nativas de Django"""
+    def __init__(self, attrs=None, choices=(), mapa_plazas=None):
+        super().__init__(attrs, choices)
+        self.mapa_plazas = mapa_plazas or {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value:
+            try:
+                # --- LA MAGIA CONTRA EL OBJETO OCULTO DE DJANGO ---
+                # value puede ser un ModelChoiceIteratorValue, extraemos el número real así:
+                pk_val = getattr(value, 'value', value) 
+                pk = int(pk_val)
+                
+                if pk in self.mapa_plazas:
+                    info = self.mapa_plazas[pk]
+                    option['attrs']['data-aprobadas'] = info['aprobadas']
+                    option['attrs']['data-ocupadas'] = info['ocupadas']
+            except (ValueError, TypeError):
+                pass
+        return option
 class CAltaForm(forms.ModelForm):
     
     unidad = forms.ModelChoiceField(
@@ -23,7 +46,7 @@ class CAltaForm(forms.ModelForm):
         queryset=Departamento.objects.none(), 
         widget=forms.Select(attrs={
             'class': 'form-select',
-            'hx-get': reverse_lazy('cargar_cargos'),  # <--- URL CORRECTA
+            'hx-get': reverse_lazy('cargar_cargos_contrato'),  # <--- URL CORRECTA
             'hx-target': '#id_cargo',
             'hx-trigger': 'change',
             'required': True
@@ -230,6 +253,33 @@ class CAltaForm(forms.ModelForm):
                 self.fields['tridente'].widget.attrs['disabled'] = 'disabled'
                 self.fields['tridente'].required = False
 
+        # A) Radar de Tipos de Contrato oficiales
+        tipos_plantilla = list(NTipoContrato.objects.filter(ocupa_plaza=True).values_list('id', flat=True))
+        if 'tipo' in self.fields:
+            self.fields['tipo'].widget.attrs['data-ocupa-plaza'] = json.dumps(tipos_plantilla)
+
+        # B) LA CURA DE EDICIÓN: Si el form ya trae cargos precargados, les amarramos el mapa numérico
+        if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
+            cargos_qs = self.fields['cargo'].queryset
+            # Armamos un diccionario ultrarrápido en RAM: { id_cargo: {'aprobadas': 5, 'ocupadas': 4} }
+            mapa = {c.pk: {'aprobadas': c.cant_aprobada, 'ocupadas': c.plazas_fijas} for c in cargos_qs}
+            
+            # Si estamos editando a Juan y su contrato ocupa plaza, le perdonamos su propio espacio (+1 libre)
+            if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):
+                if self.instance.cargo_id in mapa:
+                    mapa[self.instance.cargo_id]['ocupadas'] = max(0, mapa[self.instance.cargo_id]['ocupadas'] - 1)
+
+            # Reemplazamos el widget estándar por nuestro widget hipervitamínico
+            nuevo_widget = SelectCargosConPlazasWidget(
+                attrs={'class': 'form-select select2-cargo'}, 
+                mapa_plazas=mapa
+            )
+            
+            # Le pasamos el listado de opciones del campo original al nuevo widget
+            nuevo_widget.choices = self.fields['cargo'].choices 
+            
+            self.fields['cargo'].widget = nuevo_widget
+
     # ---------------------------------------------------------
     # VALIDACIONES ESTRICTAS DE NEGOCIO (EL ESCUDO)
     # ---------------------------------------------------------
@@ -290,6 +340,8 @@ class CAltaForm(forms.ModelForm):
                     self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada}).')
         
         return cleaned_data
+    
+
    
 
 
@@ -312,9 +364,8 @@ class MovimientoForm(CAltaForm):
     )
 
     class Meta(CAltaForm.Meta):
-        # Mantenemos los campos pero añadimos fecha_efectiva
-        fields = ('unidad', 'departamento', 'cargo', 'tipo_salario', 'tridente', 
-                  'fecha_efectiva', 'fecha_solicitud', 'observaciones')
+        fields = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo', 'duracion', 
+                  'tipo_salario', 'tridente', 'fecha_efectiva', 'fecha_solicitud', 'observaciones')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -349,3 +400,28 @@ class MovimientoForm(CAltaForm):
             if 'tridente' in self.fields:
                 self.fields['tridente'].widget.attrs['disabled'] = 'disabled'
                 self.fields['tridente'].required = False
+
+        # A) Radar de Tipos de Contrato oficiales
+        tipos_plantilla = list(NTipoContrato.objects.filter(ocupa_plaza=True).values_list('id', flat=True))
+        if 'tipo' in self.fields:
+            self.fields['tipo'].widget.attrs['data-ocupa-plaza'] = json.dumps(tipos_plantilla)
+
+        # B) LA CURA DE MOVIMIENTOS:
+        if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
+            cargos_qs = self.fields['cargo'].queryset
+            mapa = {c.pk: {'aprobadas': c.cant_aprobada, 'ocupadas': c.plazas_fijas} for c in cargos_qs}
+            
+            if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):
+                if self.instance.cargo_id in mapa:
+                    mapa[self.instance.cargo_id]['ocupadas'] = max(0, mapa[self.instance.cargo_id]['ocupadas'] - 1)
+
+            # Reemplazamos el widget estándar por nuestro widget hipervitamínico
+            nuevo_widget = SelectCargosConPlazasWidget(
+                attrs={'class': 'form-select select2-cargo'}, 
+                mapa_plazas=mapa
+            )
+            
+            # Le pasamos el listado de opciones del campo original al nuevo widget
+            nuevo_widget.choices = self.fields['cargo'].choices 
+            
+            self.fields['cargo'].widget = nuevo_widget

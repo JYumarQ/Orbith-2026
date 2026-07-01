@@ -196,7 +196,7 @@ class CAlta(ContratoBase):
             return None
         hoy   = timezone.localdate()
         delta = (venc - hoy).days
-        return max(delta, 0)
+        return delta
         
     def get_director(self):
         if self.cargo and self.cargo.ncargo.cat_ocupacional != 'CDI' and self.cargo.ncargo.cat_ocupacional != 'CEJ':
@@ -371,7 +371,14 @@ class TMovimiento(models.Model):
     rol_nuevo = models.CharField(max_length=150, null=True, blank=True)
     
     tridente_anterior = models.CharField(max_length=50, null=True, blank=True)
-    tridente_nuevo = models.CharField(max_length=50, null=True, blank=True)
+    
+    tipo_contrato_anterior = models.CharField(max_length=150, null=True, blank=True)
+    tipo_contrato_nuevo = models.CharField(max_length=150, null=True, blank=True)
+    
+    motivo_anterior = models.CharField(max_length=255, null=True, blank=True)
+    motivo_nuevo = models.CharField(max_length=255, null=True, blank=True)
+    
+    duracion_nueva = models.IntegerField(null=True, blank=True)
     # -------------------------------------------------------------
 
     tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")

@@ -146,6 +146,19 @@
                                     </div>
                                 </div>
 
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_lic.label }}
+                                    {{ form.fecha_vence_lic }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_recal.label }}
+                                    {{ form.fecha_vence_recal }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.fecha_vence_seg.label }}
+                                    {{ form.fecha_vence_seg }}
+                                </div>
+
                                 <div class="col-md-12">
                                     <div class="row">
                                         <div class="col-md-4">
@@ -161,19 +174,6 @@
                                             {{ form.pais }}
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_lic.label }}
-                                    {{ form.fecha_vence_lic }}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_recal.label }}
-                                    {{ form.fecha_vence_recal }}
-                                </div>
-                                <div class="col-md-4">
-                                    {{ form.fecha_vence_seg.label }}
-                                    {{ form.fecha_vence_seg }}
                                 </div>
 
                                 <div class="col-md-12">
@@ -452,42 +452,126 @@
         }
 
 
-        // --- 4.1 NUEVA LÓGICA: Validación de Plazas del Cargo ---
-        $(document).on('change', '#id_cargo', function() {
-            var cargoId = $(this).val(); // Este SIEMPRE debe ir aquí adentro
+        // --- 4.1 MOTOR INTELIGENTE DE PLAZAS (SELECT2) ---
+        const $cargoSelect = $('#id_cargo');
+        const $tipoSelect = $('#id_tipo');
+        let ocupaPlazaOficial = false; // Nuestra bandera
+
+        // A. Función para saber si el contrato actual consume plantilla
+        function actualizarReglaPlaza() {
+            const valTipo = $tipoSelect.val();
+            // Leemos el radar que inyectó Django en forms.py
+            const atributoRadar = $tipoSelect.attr('data-ocupa-plaza');
+            const radarPlazas = atributoRadar ? JSON.parse(atributoRadar) : [];
             
-            // Refrescamos selectores por si HTMX actualizó el DOM
-            cargoInput = document.getElementById('id_cargo');
-            errPlaza = document.getElementById('error_plaza_agotada');
-
-            // Limpieza de estado previo
-            if(errPlaza) {
-                errPlaza.classList.add('d-none');
-                errPlaza.textContent = ""; 
+            // Verificamos si el ID seleccionado está en la lista de los estrictos
+            ocupaPlazaOficial = valTipo ? radarPlazas.includes(parseInt(valTipo)) : false;
+            
+            // Destruimos y recreamos Select2 para forzar que se repinten los colores
+            if ($cargoSelect.hasClass("select2-hidden-accessible")) {
+                $cargoSelect.select2('destroy');
             }
-            if(cargoInput) cargoInput.classList.remove('is-invalid', 'is-valid');
+            inicializarSelectCargo();
+            validarCargoCruado();
+        }
 
-            if (!cargoId) return;
-
-            // Llamada al servidor
-            fetch("{% url 'validar_plazas_cargo' %}?cargo_id=" + cargoId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.plazas_agotadas) {
-                    if(errPlaza) {
-                        errPlaza.textContent = data.mensaje;
-                        errPlaza.classList.remove('d-none');
-                    }
-                    if(cargoInput) cargoInput.classList.add('is-invalid');
+        // B. El "Pintor" de Select2 (Dibuja los Badges)
+        function formatCargoOption(state) {
+            if (!state.id) return state.text; // Opciones por defecto (ej. "---------")
+            
+            const $el = $(state.element);
+            const aprobadas = parseInt($el.data('aprobadas')) || 0;
+            const ocupadas = parseInt($el.data('ocupadas')) || 0;
+            const disponibles = aprobadas - ocupadas;
+            
+            const estaLleno = disponibles <= 0;
+            
+            // Por defecto, si el contrato no ocupa plaza (Ej: Adiestrado), el badge es informativo
+            let colorPildora = 'bg-secondary'; 
+            let textoTachado = '';
+            
+            if (ocupaPlazaOficial) {
+                // Si el contrato ES oficial (Ej: Indeterminado)
+                if (estaLleno) {
+                    colorPildora = 'bg-danger'; // Rojo
+                    textoTachado = 'text-decoration-line-through text-muted';
                 } else {
-                    if(cargoInput) {
-                        cargoInput.classList.remove('is-invalid');
-                        cargoInput.classList.add('is-valid');
-                    }
+                    colorPildora = 'bg-success'; // Verde
                 }
-            })
-            .catch(err => console.error('Error validando Plazas:', err));
-        });
+            }
+            
+            // Maquetación HTML interna del Option
+            return $(`
+                <div class="d-flex justify-content-between align-items-center w-100 ${textoTachado}">
+                    <span>${state.text}</span>
+                    <span class="badge ${colorPildora} rounded-pill" style="font-size: 0.75rem;">
+                        ${ocupadas} / ${aprobadas}
+                    </span>
+                </div>
+            `);
+        }
+
+        // C. Inicializador de Select2
+        function inicializarSelectCargo() {
+            $cargoSelect.select2({
+                dropdownParent: $cargoSelect.closest('.modal'), // Asegura que el buscador no se bloquee
+                width: '100%',
+                templateResult: formatCargoOption, // Dibuja la lista desplegada
+                templateSelection: function(state) { return state.text; } // Dibuja el campo cerrado
+            });
+            
+            // Escudo anti-clics: Impide seleccionar opciones rojas
+            $cargoSelect.on('select2:selecting', function(e) {
+                const $el = $(e.params.args.data.element);
+                const aprobadas = parseInt($el.data('aprobadas')) || 0;
+                const ocupadas = parseInt($el.data('ocupadas')) || 0;
+                
+                if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+                    e.preventDefault(); // Detiene el clic
+                    Swal.fire({
+                        toast: true, position: 'top-end', icon: 'error',
+                        title: 'Cargo sin plazas oficiales disponibles',
+                        showConfirmButton: false, timer: 3000
+                    });
+                }
+            });
+        }
+
+        // D. Protección Anti-Trampas (Si cambian el select de Tipo después de elegir Cargo)
+        function validarCargoCruado() {
+            const valCargo = $cargoSelect.val();
+            const errPlaza = document.getElementById('error_plaza_agotada');
+            
+            // Limpiamos alertas visuales
+            if(errPlaza) errPlaza.classList.add('d-none');
+            $cargoSelect.next('.select2-container').find('.select2-selection').removeClass('border-danger');
+
+            if (!valCargo) return;
+
+            const $optionSeleccionada = $cargoSelect.find('option:selected');
+            const aprobadas = parseInt($optionSeleccionada.data('aprobadas')) || 0;
+            const ocupadas = parseInt($optionSeleccionada.data('ocupadas')) || 0;
+
+            // Si el contrato exige plaza, pero el cargo que estaba seleccionado está lleno...
+            if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+                $cargoSelect.val(null).trigger('change.select2'); // Borramos la selección
+                
+                if(errPlaza) {
+                    errPlaza.textContent = "Este contrato exige una vacante. El cargo seleccionado estaba lleno.";
+                    errPlaza.classList.remove('d-none');
+                }
+                $cargoSelect.next('.select2-container').find('.select2-selection').addClass('border-danger');
+            }
+        }
+
+        // 3. CONECTAMOS LOS CABLES
+        $tipoSelect.on('change', actualizarReglaPlaza);
+        $cargoSelect.on('change', validarCargoCruado);
+        
+        // 4. ARRANQUE INICIAL (Para modo Edición)
+        setTimeout(() => {
+            actualizarReglaPlaza(); 
+        }, 400);
 
 
         // --- 5. NUEVO: Envío AJAX (Evita Crash + Validación Local) ---

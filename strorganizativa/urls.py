@@ -38,5 +38,8 @@ urlpatterns = [
     path('htmx/departamentos/<int:unidad_id>/', views.htmx_load_departamentos, name='htmx_load_departamentos'),
     path('htmx/cargos/<int:dpto_id>/', views.htmx_load_cargos, name='htmx_load_cargos'),
     path('htmx/contratos/<int:cargo_id>/', views.htmx_load_contratos, name='htmx_load_contratos'),
+
+    path('validar-orden-uniorg/', views.validar_orden_uniorg, name='validar_orden_uniorg'),
+    path('validar-orden-dpto/', views.validar_orden_dpto, name='validar_orden_dpto'),
 ]
 

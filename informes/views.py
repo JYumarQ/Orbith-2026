@@ -13,7 +13,7 @@ from django.template.loader import get_template
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
-
+from django.views.generic import TemplateView
 # 3. Librerías de Terceros
 from docxtpl import DocxTemplate
 from xhtml2pdf import pisa
@@ -660,4 +660,151 @@ class GuardarPlanDiarioView(View):
             familia_id=data.get('familia', ''),
             defaults={'valor': int(data.get('valor', 0))}
         )
-        return JsonResponse({'status': 'ok', 'nuevo_valor': plan.valor})
+        return JsonResponse({'status': 'ok', 'nuevo_valor': plan.valor})\
+        
+class InformeMotivosContratoView(TemplateView):
+    template_name = "pages/informes/informe_motivos_contrato.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        hoy = date.today()
+        
+        # 1. LA CONSULTA MAESTRA (Optimizada para extraer el color del Tipo de Unidad)
+        contratos = CAlta.objects.filter(
+            aspirante__estado='ACTIVO',
+            tipo__requiere_motivo=True
+        ).select_related(
+            'aspirante',
+            'cargo__ncargo__grupo_escala',
+            'cargo__departamento__unidad_organizativa__tipo', # <-- Añadido __tipo
+            'tipo',
+            'motivo'
+        ).order_by(
+            'tipo__descripcion',
+            'motivo__descripcion',
+            'cargo__departamento__unidad_organizativa__descripcion',
+            'aspirante__nombre'
+        )
+
+        # 2. VARIABLES DE KPIS 
+        total_contratos = 0
+        total_mujeres = 0
+        total_hombres = 0
+        vencen_critico = 0
+        vencen_alerta = 0
+        vencen_vigente = 0
+        cat_t = cat_o = cat_s = cat_a = cat_c = 0 
+        conteo_motivos = {} 
+        
+        # 3. DICCIONARIO DE AGRUPACIÓN (Con Color Dinámico)
+        datos_agrupados = {}
+
+        for c in contratos:
+            total_contratos += 1
+            
+            # --- SEXO ---
+            if c.aspirante.sexo == 'F': total_mujeres += 1
+            elif c.aspirante.sexo == 'M': total_hombres += 1
+                
+            # --- CATEGORÍA OCUPACIONAL ---
+            cat = c.cargo.ncargo.cat_ocupacional if c.cargo and c.cargo.ncargo else None
+            if cat == 'TEC': cat_t += 1
+            elif cat == 'OPE': cat_o += 1
+            elif cat == 'SER': cat_s += 1
+            elif cat == 'ADM': cat_a += 1
+            elif cat in ['CDI', 'CEJ']: cat_c += 1
+            
+            # --- TIEMPO RESTANTE ---
+            if c.dias_restantes is not None:
+                if c.dias_restantes <= 15: vencen_critico += 1
+                elif c.dias_restantes <= 30: vencen_alerta += 1
+                else: vencen_vigente += 1
+            
+            # --- AGRUPACIÓN ESTRUCTURAL ---
+            tipo_desc = c.tipo.descripcion if c.tipo else "Sin Tipo Asignado"
+            motivo_desc = c.motivo.descripcion if c.motivo else "Sin Motivo Asignado"
+            
+            ueb_obj = c.cargo.departamento.unidad_organizativa if c.cargo and c.cargo.departamento else None
+            ueb_desc = ueb_obj.descripcion if ueb_obj else "Sin Unidad Organizativa"
+            
+            # Extracción del color nativo de la Base de Datos (con un gris de respaldo si no hay)
+            ueb_color = ueb_obj.tipo.color if ueb_obj and ueb_obj.tipo and ueb_obj.tipo.color else "#697a8d"
+            
+            conteo_motivos[motivo_desc] = conteo_motivos.get(motivo_desc, 0) + 1
+            
+            if tipo_desc not in datos_agrupados:
+                datos_agrupados[tipo_desc] = {'total': 0, 'motivos': {}}
+            datos_agrupados[tipo_desc]['total'] += 1
+
+            if motivo_desc not in datos_agrupados[tipo_desc]['motivos']:
+                datos_agrupados[tipo_desc]['motivos'][motivo_desc] = {'total': 0, 'uebs': {}}
+            datos_agrupados[tipo_desc]['motivos'][motivo_desc]['total'] += 1
+
+            # NUEVO: Guardamos el color y la lista de contratos dentro de un diccionario
+            if ueb_desc not in datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs']:
+                datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc] = {
+                    'color': ueb_color,
+                    'contratos': []
+                }
+                
+            datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc]['contratos'].append(c)
+
+        # 4. ORDENAMIENTO DE MOTIVOS Y CATEGORÍAS 
+        conteo_motivos_ordenado = dict(sorted(conteo_motivos.items(), key=lambda item: item[1], reverse=True))
+
+        mayor_motivo_nombre = "Sin Datos"
+        mayor_motivo_count = 0
+        mayor_motivo_porc = 0
+        
+        if conteo_motivos_ordenado:
+            mayor_motivo_nombre = list(conteo_motivos_ordenado.keys())[0]
+            mayor_motivo_count = conteo_motivos_ordenado[mayor_motivo_nombre]
+            mayor_motivo_porc = int((mayor_motivo_count / total_contratos) * 100) if total_contratos > 0 else 0
+
+        lista_motivos = []
+        for m_nom, m_count in conteo_motivos_ordenado.items():
+            m_porc = int((m_count / total_contratos) * 100) if total_contratos > 0 else 0
+            lista_motivos.append({'nombre': m_nom, 'count': m_count, 'porc': m_porc})
+
+        lista_categorias = [
+            {'nombre': '[C] Cuadros', 'count': cat_c},
+            {'nombre': '[T] Técnicos', 'count': cat_t},
+            {'nombre': '[A] Administrativos', 'count': cat_a},
+            {'nombre': '[O] Obreros', 'count': cat_o},
+            {'nombre': '[S] Servicios', 'count': cat_s},
+        ]
+        lista_categorias.sort(key=lambda x: x['count'], reverse=True)
+
+        colores_jerarquia = ['#E63946', '#F4A261', '#E9C46A', '#2A9D8F', '#A8DADC']
+        current_color_idx = 0
+
+        for i, item in enumerate(lista_categorias):
+            if i > 0 and item['count'] < lista_categorias[i-1]['count']:
+                current_color_idx = min(current_color_idx + 1, 4)
+            item['color'] = colores_jerarquia[current_color_idx]
+            item['porc'] = int((item['count'] / total_contratos * 100)) if total_contratos else 0
+
+        porc_mujeres = round((total_mujeres / total_contratos * 100) if total_contratos else 0, 1)
+        porc_hombres = round((total_hombres / total_contratos * 100) if total_contratos else 0, 1)
+
+        # 5. ENVIAR AL CONTEXTO
+        context.update({
+            'datos_agrupados': datos_agrupados,
+            'total_contratos': total_contratos,
+            'total_mujeres': total_mujeres,
+            'total_hombres': total_hombres,
+            'porc_mujeres': porc_mujeres,
+            'porc_hombres': porc_hombres,
+            'categorias_ordenadas': lista_categorias,
+            'lista_motivos': lista_motivos,
+            'vencen_critico': vencen_critico,
+            'vencen_alerta': vencen_alerta,
+            'vencen_vigente': vencen_vigente,
+            'mayor_motivo_nombre': mayor_motivo_nombre,
+            'mayor_motivo_count': mayor_motivo_count,
+            'mayor_motivo_porc': mayor_motivo_porc,
+            'mes_actual': hoy.strftime("%B").capitalize(),
+            'anno_actual': hoy.year,
+        })
+        
+        return context

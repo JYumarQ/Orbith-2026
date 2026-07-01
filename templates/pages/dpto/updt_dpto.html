@@ -10,7 +10,7 @@
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
-                  hx-confirm="¿Estás seguro de guardar los cambios del departamento?"
+                  
                   id="dptoForm">
                 
                 {% csrf_token %}
@@ -27,31 +27,97 @@
 </div>
 
 <script>
-    (function(){
-        const form = document.getElementById('dptoForm'); // OJO: Asegúrate que el ID sea correcto en cada archivo ('dptoForm')
-        if(!form) return;
+(function() {
+    const form = document.getElementById('dptoForm');
+    if (!form) return;
 
-        const selectUnidad = form.querySelector('#id_unidad_organizativa');
-        
-        if(selectUnidad && (selectUnidad.value || selectUnidad.options.selectedIndex !== -1)){
-            // Bloqueo funcional
-            selectUnidad.setAttribute('readonly', 'readonly');
-            selectUnidad.setAttribute('tabindex', '-1'); 
-            
-            // ESTILO VISUAL SUAVE
-            selectUnidad.style.pointerEvents = 'none'; // Necesario para que no se abra el desplegable
-            selectUnidad.style.backgroundColor = '#e9ecef'; // El gris suave de Bootstrap
-            selectUnidad.style.color = '#566a7f';
-            selectUnidad.style.borderColor = '#d9dee3';
-            
-            // Forzamos cursor por defecto (flecha) en lugar de prohibido
-            selectUnidad.style.cursor = 'default'; 
-            
-            selectUnidad.classList.remove('bg-light');
-            
-            // (Solo para updt_dpto.html) Protección extra contra cambios
-            const valorOriginal = selectUnidad.value;
-            selectUnidad.addEventListener('change', function(){ this.value = valorOriginal; });
+    const inputOrden = form.querySelector('#id_orden_informe');
+    const selectUnidad = form.querySelector('#id_unidad_organizativa');
+    const currentId = "{{ form.instance.pk|default:'' }}";
+    let timerValidacion = null;
+    let colisionMensaje = '';
+
+    if (!inputOrden) return;
+
+    function validarAhora() {
+        const valor = inputOrden.value.trim();
+        const unidadId = selectUnidad ? selectUnidad.value : '';
+        inputOrden.classList.remove('is-valid', 'is-invalid');
+        colisionMensaje = '';
+
+        if (!valor || parseInt(valor) < 1 || !unidadId) return;
+
+        clearTimeout(timerValidacion);
+        timerValidacion = setTimeout(() => {
+            let url = `{% url 'validar_orden_dpto' %}?orden=${valor}&unidad_id=${unidadId}`;
+            if (currentId) url += `&exclude_id=${currentId}`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.ocupado) {
+                        inputOrden.classList.add('is-invalid');
+                        colisionMensaje = data.mensaje;
+                    } else {
+                        inputOrden.classList.add('is-valid');
+                    }
+                });
+        }, 300);
+    }
+
+    inputOrden.addEventListener('input', validarAhora);
+    if (selectUnidad) selectUnidad.addEventListener('change', validarAhora);
+
+    form.addEventListener('htmx:confirm', function(e) {
+        if (e.target.id !== 'dptoForm') return;
+        e.preventDefault();
+
+        const valor = inputOrden.value.trim();
+        const estaOcupado = inputOrden.classList.contains('is-invalid');
+
+        if (estaOcupado) {
+            Swal.fire({
+                title: 'Posición Ocupada en esta Unidad',
+                html: `La posición <b>${valor}</b> ya está en uso en esta unidad (${colisionMensaje}).<br><br>¿Desea intercalar este departamento aquí y <b>desplazar</b> los siguientes un puesto hacia abajo?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ffab00',
+                cancelButtonColor: '#8592a3',
+                confirmButtonText: '<i class="fas fa-sort-amount-down"></i> Sí, intercalar y desplazar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
+                    if (!inputOculto) {
+                        inputOculto = document.createElement('input');
+                        inputOculto.type = 'hidden';
+                        inputOculto.name = 'autoriza_desplazamiento';
+                        form.appendChild(inputOculto);
+                    }
+                    inputOculto.value = 'true';
+
+                    e.detail.issueRequest(true);
+                }
+            });
+        } else {
+            Swal.fire({
+                title: '¿Confirmar registro?',
+                text: '¿Estás seguro de guardar este departamento?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#696cff',
+                cancelButtonColor: '#8592a3',
+                confirmButtonText: 'Sí, guardar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
+                    if (inputOculto) inputOculto.value = 'false';
+
+                    e.detail.issueRequest(true);
+                }
+            });
         }
-    })();
+    });
+})();
 </script>
