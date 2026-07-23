@@ -143,19 +143,31 @@
 
         // --- 2. Inicialización Select2 ---
 
-        // Pinta cada opción del desplegable mostrando el Grupo Escala
-        // como tooltip nativo del navegador (igual que en contratos).
+        // Pinta cada opción del desplegable:
+        //  - tooltip con el Grupo Escala
+        //  - gris + "no permitido" si el cargo ya existe en este departamento
         function formatOpcionCargo(state) {
-            // Opción vacía / placeholder: se muestra tal cual
             if (!state.id) return state.text;
 
-            const grupo = $(state.element).data('grupo') || '';
-            if (!grupo) return state.text;
+            const $opcion = $(state.element);
+            const grupo = $opcion.data('grupo') || '';
+            const usado = $opcion.data('usado') === true || $opcion.data('usado') === 'true';
 
-            return $('<span></span>')
-                .attr('title', 'Grupo Escala: ' + grupo)
-                .css('cursor', 'help')
-                .text(state.text);
+            const $texto = $('<span></span>').text(state.text);
+
+            let titulo = grupo ? 'Grupo Escala: ' + grupo : '';
+            if (usado) {
+                titulo = titulo
+                    ? titulo + ' — Ya existe en este departamento'
+                    : 'Ya existe en este departamento';
+                $texto.addClass('text-muted');
+            }
+
+            if (titulo) {
+                $texto.attr('title', titulo).css('cursor', usado ? 'not-allowed' : 'help');
+            }
+
+            return $texto;
         }
 
         try {

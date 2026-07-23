@@ -152,21 +152,24 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
-        # 🔥 Lógica de desplazamiento al crear
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            departamento_id = request.POST.get('departamento')
-            if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
-                with transaction.atomic():
-                    # Desplazar los cargos que tienen orden >= al nuevo
+        # Desplazamiento y guardado en UNA sola transacción, para que la
+        # restricción diferida se compruebe una única vez al confirmar.
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                departamento_id = request.POST.get('departamento')
+                if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
+                    # Liberamos la posición ANTES de que Django valide la unicidad
                     CargoPlantilla.objects.filter(
                         departamento_id=int(departamento_id),
                         orden_informe__gte=int(orden)
                     ).update(orden_informe=F('orden_informe') + 1)
-        return super().post(request, *args, **kwargs)
+
+            return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
-        # LOGGING PROFESIONAL: Esto imprimirá el error exacto en tu terminal (donde corre runserver)
+        # El formulario no es válido: deshacemos el desplazamiento aplicado en post()
+        transaction.set_rollback(True)
         print("❌ ERROR DE VALIDACIÓN EN CARGO:", form.errors)
         return super().form_invalid(form)
 
@@ -215,28 +218,22 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
     
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            departamento_id = request.POST.get('departamento')
-            if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
-                with transaction.atomic():
-                    # 1. Mover el cargo actual a un "limbo" (999999)
-                    self.object.orden_informe = 999999
-                    self.object.save(update_fields=['orden_informe'])
 
-                    # 2. Desplazar los cargos afectados (excepto el actual)
-                    cargos_a_desplazar = CargoPlantilla.objects.filter(
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                departamento_id = request.POST.get('departamento')
+                if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
+                    CargoPlantilla.objects.filter(
                         departamento_id=int(departamento_id),
                         orden_informe__gte=int(orden)
-                    ).exclude(pk=self.object.pk).order_by('-orden_informe')
+                    ).exclude(pk=self.object.pk).update(orden_informe=F('orden_informe') + 1)
 
-                    for c in cargos_a_desplazar:
-                        c.orden_informe += 1
-                        c.save(update_fields=['orden_informe'])
+            return super().post(request, *args, **kwargs)
 
-        # 3. Guardar el cargo con el nuevo orden (el formulario lo hará)
-        return super().post(request, *args, **kwargs)
-
+    def form_invalid(self, form):
+        transaction.set_rollback(True)
+        return super().form_invalid(form)
 
 
 class CargoPlantillaDeleteView(DeleteView):
@@ -340,6 +337,44 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
             initial['unidad_organizativa'] = unidad_id
         return initial
 
+    def get_context_data(self, **kwargs):
+        """
+        Inyecta el objeto UnidadOrganizativa para poder mostrar su descripción
+        en el campo visual de solo lectura. Se busca tanto en POST (re-render
+        del modal si hay errores) como en GET (apertura normal del modal).
+        """
+        context = super().get_context_data(**kwargs)
+        unidad_id = self.request.POST.get('unidad_organizativa') or self.request.GET.get('unidad')
+
+        if unidad_id:
+            try:
+                context['unidad_visual'] = UnidadOrganizativa.objects.get(pk=unidad_id)
+            except (UnidadOrganizativa.DoesNotExist, ValueError, TypeError):
+                pass
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        # Todo dentro de UNA transacción: el desplazamiento y el guardado
+        # deben confirmarse juntos para que la restricción diferida funcione.
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                unidad_id = request.POST.get('unidad_organizativa')
+                if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
+                    # Liberamos la posición ANTES de que Django valide la unicidad
+                    Departamento.objects.filter(
+                        unidad_organizativa_id=int(unidad_id),
+                        orden_informe__gte=int(orden)
+                    ).update(orden_informe=F('orden_informe') + 1)
+
+            return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        # El formulario no es válido: deshacemos el desplazamiento aplicado en post()
+        transaction.set_rollback(True)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         self.object = form.save()
         if self.request.headers.get('HX-Request'):
@@ -347,25 +382,14 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
             triggers = {
                 'closeModal': True,
                 'updateDeptList': True,
-                'updateUnitList': True, # <--- SOLUCIÓN: Obliga a actualizar los contadores
+                'updateUnitList': True,
                 'showMessage': {'icon': 'success', 'text': 'Departamento creado correctamente'}
             }
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
     
-    def post(self, request, *args, **kwargs):
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            unidad_id = request.POST.get('unidad_organizativa')
-            if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
-                with transaction.atomic():
-                    # Desplazamiento quirúrgico solo en esta unidad
-                    Departamento.objects.filter(
-                        unidad_organizativa_id=int(unidad_id),
-                        orden_informe__gte=int(orden)
-                    ).update(orden_informe=F('orden_informe') + 1)
-        return super().post(request, *args, **kwargs)
+    
 
 class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
     model = Departamento
@@ -373,6 +397,25 @@ class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
     template_name = "pages/dpto/updt_dpto.html"
     success_url = reverse_lazy('gestor_plantilla')
 
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                unidad_id = request.POST.get('unidad_organizativa')
+                if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
+                    Departamento.objects.filter(
+                        unidad_organizativa_id=int(unidad_id),
+                        orden_informe__gte=int(orden)
+                    ).exclude(pk=self.object.pk).update(orden_informe=F('orden_informe') + 1)
+
+            return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        transaction.set_rollback(True)
+        return super().form_invalid(form)
+
     def form_valid(self, form):
         self.object = form.save()
         if self.request.headers.get('HX-Request'):
@@ -380,25 +423,14 @@ class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
             triggers = {
                 'closeModal': True,
                 'updateDeptList': True,
-                'updateUnitList': True, # <--- SOLUCIÓN: Obliga a actualizar los contadores
+                'updateUnitList': True,
                 'showMessage': {'icon': 'success', 'text': 'Departamento actualizado correctamente'}
             }
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
     
-    def post(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            unidad_id = request.POST.get('unidad_organizativa')
-            if orden and orden.isdigit() and unidad_id and unidad_id.isdigit():
-                with transaction.atomic():
-                    Departamento.objects.filter(
-                        unidad_organizativa_id=int(unidad_id),
-                        orden_informe__gte=int(orden)
-                    ).exclude(pk=self.object.pk).update(orden_informe=F('orden_informe') + 1)
-        return super().post(request, *args, **kwargs)
+    
 
 class DepartamentoDeleteView(DeleteView):
     model = Departamento

@@ -170,6 +170,41 @@ class CargoPlantillaForm(forms.ModelForm):
             
         ncargo = cleaned_data.get('ncargo')
         rol = cleaned_data.get('rol')
+
+        # --- Un departamento no puede repetir el mismo NCargo ---
+        departamento = cleaned_data.get('departamento')
+        if ncargo and departamento:
+            duplicados = CargoPlantilla.objects.filter(departamento=departamento, ncargo=ncargo)
+            if self.instance.pk:
+                duplicados = duplicados.exclude(pk=self.instance.pk)
+            if duplicados.exists():
+                self.add_error(
+                    'ncargo',
+                    f'El cargo "{ncargo.descripcion}" ya existe en el departamento "{departamento.descripcion}".'
+                )
+
+        # --- La posición de orden no puede repetirse dentro del departamento ---
+        # Si el usuario autorizó desplazar, no hay conflicto que reportar:
+        # la posición se libera en la misma transacción que el guardado.
+        if self.data.get('autoriza_desplazamiento') != 'true':
+            departamento = cleaned_data.get('departamento')
+            orden = cleaned_data.get('orden_informe')
+
+            if departamento and orden is not None:
+                ocupados = CargoPlantilla.objects.filter(
+                    departamento=departamento,
+                    orden_informe=orden
+                )
+                if self.instance.pk:
+                    ocupados = ocupados.exclude(pk=self.instance.pk)
+
+                ocupado = ocupados.select_related('ncargo').first()
+                if ocupado:
+                    self.add_error(
+                        'orden_informe',
+                        f'La posición {orden} ya está ocupada por "{ocupado.ncargo.descripcion}" '
+                        f'en este departamento.'
+                    )
         
         if ncargo:
             # 1. Definimos qué es un Cuadro según tu base de datos
@@ -222,6 +257,43 @@ class DepartamentoForm(forms.ModelForm):
                 self.fields['unidad_organizativa'].queryset = user.unidades.all()
             else:
                 self.fields['unidad_organizativa'].queryset = UnidadOrganizativa.objects.none()
+
+    def _autoriza_desplazamiento(self):
+        """
+        Indica si el usuario confirmó en el SweetAlert que quiere intercalar
+        y desplazar los departamentos siguientes.
+        """
+        return self.data.get('autoriza_desplazamiento') == 'true'
+
+    
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Si el usuario ya autorizó desplazar, no hay conflicto que reportar
+        if self._autoriza_desplazamiento():
+            return cleaned_data
+
+        unidad = cleaned_data.get('unidad_organizativa')
+        orden = cleaned_data.get('orden_informe')
+
+        if unidad and orden is not None:
+            ocupados = Departamento.objects.filter(
+                unidad_organizativa=unidad,
+                orden_informe=orden
+            )
+            if self.instance.pk:
+                ocupados = ocupados.exclude(pk=self.instance.pk)
+
+            ocupado = ocupados.first()
+            if ocupado:
+                self.add_error(
+                    'orden_informe',
+                    f'La posición {orden} ya está ocupada por "{ocupado.descripcion}" '
+                    f'en esta unidad organizativa.'
+                )
+
+        return cleaned_data
+
 
 class SelectTipoNomencladorWidget(forms.Select):
     """Widget que inyecta data-subunidad a las opciones según la BD"""

@@ -101,10 +101,10 @@ class Departamento(Base):
         verbose_name_plural = ("Departamentos")
         ordering = ['orden_informe', 'id'] # Orden local de fábrica
         constraints = [
-            # REGLA 2: Blindaje SQL. Garantiza que dentro de una misma Unidad no se repita el orden
             models.UniqueConstraint(
-                fields=['unidad_organizativa', 'orden_informe'], 
-                name='unique_orden_depto_por_unidad'
+                fields=['unidad_organizativa', 'orden_informe'],
+                name='unique_orden_depto_por_unidad',
+                deferrable=models.Deferrable.DEFERRED,   # ← comprobar al confirmar, no fila por fila
             )
         ]
         
@@ -157,7 +157,8 @@ class CargoPlantilla(Base):
         constraints = [
             models.UniqueConstraint(
                 fields=['departamento', 'orden_informe'],
-                name='unique_orden_cargo_por_departamento'
+                name='unique_orden_cargo_por_departamento',
+                deferrable=models.Deferrable.DEFERRED,  # comprobar al confirmar, no fila por fila
             )
         ]
             

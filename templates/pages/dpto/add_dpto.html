@@ -15,7 +15,43 @@
                 
                 {% csrf_token %}
                 
-                {{ form.as_p }}
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.descripcion.id_for_label }}">Descripción</label>
+                    {{ form.descripcion }}
+                    {% if form.descripcion.errors %}
+                        <div class="text-danger small mt-1 fw-bold">{{ form.descripcion.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                {# Unidad Organizativa: solo lectura, viene fijada por la tarjeta desde la que se abrió el modal #}
+                <div class="mb-3">
+                    <label class="form-label" for="visual_unidad">Unidad Organizativa</label>
+                    {% if unidad_visual %}
+                        <input type="text" id="visual_unidad" class="form-control"
+                               style="background-color: #e9ecef; color: #566a7f;"
+                               value="{{ unidad_visual.descripcion }}" readonly>
+                        <input type="hidden" name="unidad_organizativa" id="id_unidad_organizativa"
+                               value="{{ unidad_visual.pk }}">
+                    {% else %}
+                        {# Respaldo: si el modal se abriera sin unidad en el contexto, se muestra el selector normal #}
+                        {{ form.unidad_organizativa }}
+                    {% endif %}
+                    {% if form.unidad_organizativa.errors %}
+                        <div class="text-danger small mt-1 fw-bold">{{ form.unidad_organizativa.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="{{ form.orden_informe.id_for_label }}">Orden de Prioridad</label>
+                    {{ form.orden_informe }}
+                    {% if form.orden_informe.errors %}
+                        <div class="text-danger small mt-1 fw-bold">{{ form.orden_informe.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger py-2 mb-3">{{ form.non_field_errors.0 }}</div>
+                {% endif %}
                 
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -67,7 +103,8 @@
 
     inputOrden.addEventListener('input', validarAhora);
     if (selectUnidad) selectUnidad.addEventListener('change', validarAhora);
-
+    if (inputOrden.value) validarAhora();
+    
     form.addEventListener('htmx:confirm', function(e) {
         if (e.target.id !== 'dptoForm') return;
         e.preventDefault();

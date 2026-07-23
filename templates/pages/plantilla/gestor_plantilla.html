@@ -457,7 +457,7 @@
     // --- AQUÍ ESTABA EL ERROR: FALTABA ESTE BLOQUE ---
     let sortState = {
         unit: { sort: 'grupo_nomina', order: 'asc' },
-        dept: { sort: 'alpha', order: 'asc' },
+        dept: { sort: 'orden', order: 'asc' },
         cargo: { sort: 'orden', order: 'asc' },
         contrato: { sort: 'alpha', order: 'asc' }
     };
@@ -551,7 +551,7 @@
         activateToolbar('unit', item.dataset);
         
         // Al cambiar unidad, reseteamos orden de deptos
-        sortState.dept = { sort: 'alpha', order: 'asc' };
+        sortState.dept = { sort: 'orden', order: 'asc' };
 
         // --- LÓGICA DE NEGOCIO DINÁMICA ---
         if (esPrincipal === 'true') {
