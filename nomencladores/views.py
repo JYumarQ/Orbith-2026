@@ -15,8 +15,9 @@ from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Count, ProtectedError
 from django.core.paginator import Paginator
-from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa, NTipoFamilia
-
+from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa, NTipoFamilia, NNocturnidad
+from django.core.exceptions import ValidationError
+from decimal import Decimal, ROUND_HALF_UP
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
 ABR_MUNICIPIOS = {
@@ -731,44 +732,117 @@ def causa_delete(request, pk):
 @csrf_exempt
 @require_POST
 def condicion_create(request):
-    data = json.loads(request.body)
-    nombre = data.get('nombre', '').strip()
-    descripcion = data.get('descripcion', '').strip()
-    tarifa = float(data.get('tarifa_hora', 0))
-    if not nombre:
-        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NCondicionLaboralAnormal.objects.create(
-        nombre=nombre.title(),
-        descripcion=descripcion or None,
-        tarifa_hora=tarifa
-    )
-    return JsonResponse({
-        'id': obj.id,
-        'nombre': obj.nombre,
-        'descripcion': obj.descripcion or '',
-        'tarifa_hora': str(obj.tarifa_hora)
-    })
+    try:
+        data = json.loads(request.body)
+        print("📥 tarifa_hora recibido (CREATE):", data.get('tarifa_hora'))
+        print("📥 tipo de tarifa_hora (CREATE):", type(data.get('tarifa_hora')))
+        nombre = data.get('nombre', '').strip()
+        # 🔥 Convertir a Decimal y redondear a 2 decimales
+        tarifa = Decimal(data.get('tarifa_hora', '0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        noct_id = data.get('nocturnidad_id')
+
+        if not nombre:
+            return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+        
+        obj = NCondicionLaboralAnormal(nombre=nombre.title(), tarifa_hora=tarifa)
+        if noct_id:
+            obj.nocturnidad_id = noct_id
+            
+        obj.full_clean() 
+        obj.save()
+        
+        return JsonResponse({'id': obj.id, 'nombre': obj.nombre, 'tarifa_hora': str(obj.tarifa_hora)})
+    except ValidationError as e:
+        error_msg = e.message_dict.get('nocturnidad', [str(e)])[0] if hasattr(e, 'message_dict') and 'nocturnidad' in e.message_dict else str(e)
+        return JsonResponse({'error': error_msg}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_POST
+@login_required
+def nocturnidad_create(request):
+    try:
+        data = json.loads(request.body)
+        codigo = data.get('codigo', '').strip().upper()
+        h_inicio = data.get('hora_inicio')
+        h_fin = data.get('hora_fin')
+        n_id = data.get('id')
+
+        if not codigo or not h_inicio or not h_fin:
+            return JsonResponse({'error': 'Todos los campos son obligatorios'}, status=400)
+
+        if n_id:
+            obj = get_object_or_404(NNocturnidad, pk=n_id)
+            if NNocturnidad.objects.filter(codigo=codigo).exclude(pk=n_id).exists():
+                return JsonResponse({'error': f'El código {codigo} ya existe.'}, status=400)
+            obj.codigo = codigo
+            obj.hora_inicio = h_inicio
+            obj.hora_fin = h_fin
+            obj.save()
+        else:
+            if NNocturnidad.objects.filter(codigo=codigo).exists():
+                return JsonResponse({'error': f'El código {codigo} ya existe.'}, status=400)
+            obj = NNocturnidad.objects.create(codigo=codigo, hora_inicio=h_inicio, hora_fin=h_fin)
+
+        # ----------------------------------------------------------------
+        # LA SOLUCIÓN: Refresca el objeto desde PostgreSQL para que 
+        # los strings "23:00" se conviertan en verdaderos objetos Time.
+        # ----------------------------------------------------------------
+        obj.refresh_from_db()
+
+        return JsonResponse({
+            'id': obj.id, 
+            'codigo': obj.codigo, 
+            'horas': obj.horas
+        })
+    except Exception as e:
+        # Imprimimos el error exacto en consola por si falla otra cosa
+        print(f"Error en nocturnidad_create: {e}") 
+        return JsonResponse({'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@login_required
+def nocturnidad_delete(request, pk):
+    try:
+        NNocturnidad.objects.get(pk=pk).delete()
+        return JsonResponse({'success': True})
+    except ProtectedError:
+        return JsonResponse({'error': 'No se puede eliminar. Está en uso.'}, status=400)
 
 @csrf_exempt
 @require_http_methods(["PUT"])
 def condicion_update(request, pk):
-    obj = get_object_or_404(NCondicionLaboralAnormal, pk=pk)
-    data = json.loads(request.body)
-    nombre = data.get('nombre', '').strip()
-    descripcion = data.get('descripcion', '').strip()
-    tarifa = float(data.get('tarifa_hora', 0))
-    if not nombre:
-        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj.nombre = nombre.title()
-    obj.descripcion = descripcion or None
-    obj.tarifa_hora = tarifa
-    obj.save()
-    return JsonResponse({
-        'id': obj.id,
-        'nombre': obj.nombre,
-        'descripcion': obj.descripcion or '',
-        'tarifa_hora': str(obj.tarifa_hora)
-    })
+    try:
+        obj = get_object_or_404(NCondicionLaboralAnormal, pk=pk)
+        data = json.loads(request.body)
+
+        print("📥 tarifa_hora recibido:", data.get('tarifa_hora'))
+        print("📥 tipo de tarifa_hora:", type(data.get('tarifa_hora')))
+
+        nombre = data.get('nombre', '').strip()
+        # 🔥 Convertir a Decimal y redondear a 2 decimales
+        tarifa = Decimal(data.get('tarifa_hora', '0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        noct_id = data.get('nocturnidad_id')
+
+        if not nombre:
+            return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+            
+        obj.nombre = nombre.title()
+        obj.tarifa_hora = tarifa
+        obj.nocturnidad_id = noct_id if noct_id else None
+        
+        obj.full_clean() 
+        obj.save()
+        
+        return JsonResponse({'id': obj.id, 'nombre': obj.nombre, 'tarifa_hora': str(obj.tarifa_hora)})
+    except ValidationError as e:
+        error_msg = e.message_dict.get('nocturnidad', [str(e)])[0] if hasattr(e, 'message_dict') and 'nocturnidad' in e.message_dict else str(e)
+        return JsonResponse({'error': error_msg}, status=400)
+    except Exception as e:
+        print("❌ Error en backend:", str(e))
+        return JsonResponse({'error': str(e)}, status=400)
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -842,11 +916,11 @@ def cargo_create(request):
     try:
         grupo = NGrupoEscala.objects.get(pk=grupo_escala_id)
         obj = NCargo.objects.create(
-            descripcion=descripcion.title(),
+            descripcion=descripcion,
             cat_ocupacional=cat_ocupacional,
             grupo_escala=grupo,
             salario_basico=float(salario_basico),
-            puesto_clave=puesto_clave              # <-- 2. Lo guardamos en la BD
+            puesto_clave=puesto_clave
         )
         return JsonResponse({
             'id': obj.id,
@@ -877,7 +951,7 @@ def cargo_update(request, pk):
             return JsonResponse({'error': 'Complete todos los campos obligatorios'}, status=400)
 
         grupo = NGrupoEscala.objects.get(pk=grupo_escala_id)
-        obj.descripcion = descripcion.title()
+        obj.descripcion = descripcion
         obj.cat_ocupacional = cat_ocupacional
         obj.grupo_escala = grupo
         obj.salario_basico = float(salario_basico)
@@ -1179,9 +1253,13 @@ def motivo_contrato_delete(request, pk):
 def tipo_contrato_info(request, pk):
     try:
         tc = NTipoContrato.objects.get(pk=pk)
+        # Buscamos solo los motivos que pertenecen a este tipo de contrato específico
+        motivos = list(NMotivoContrato.objects.filter(tipo_contrato=tc).values('id', 'descripcion'))
+        
         return JsonResponse({
             'descripcion': tc.descripcion,
-            'requiere_motivo': tc.requiere_motivo
+            'requiere_motivo': tc.requiere_motivo,
+            'motivos_asociados': motivos  # <-- El frontend usará esto
         })
     except NTipoContrato.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)

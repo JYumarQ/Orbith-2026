@@ -32,6 +32,11 @@
           </label>
         </div>
 
+        <div class="form-check form-switch mb-3">
+          {{ form.es_observador }}
+          <label for="{{ form.es_observador.id_for_label }}" class="form-check-label">{{ form.es_observador.label }}</label>
+        </div>
+
         <div class="mb-3">
           <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
           {{ form.contrato }}
@@ -52,73 +57,158 @@
 </div>
 
 <script>
-  // Mutual exclusión Admin vs Moderador (UX inmediata)
-  document.addEventListener('change', function (e) {
-    if (e.target && e.target.id === 'id_es_admin' && e.target.checked) {
-      const mod = document.getElementById('id_es_moderador');
-      if (mod) mod.checked = false;
-    }
-    if (e.target && e.target.id === 'id_es_moderador' && e.target.checked) {
-      const adm = document.getElementById('id_es_admin');
-      if (adm) adm.checked = false;
-    }
-  });
+  (function() {
+    // ======================================================
+    // FUNCIÓN GLOBAL PARA HABILITAR/DESHABILITAR UNIDADES
+    // ======================================================
+    window.toggleUnidades = function() {
+      console.log('[DEBUG] Ejecutando toggleUnidades...');
+      const $unidades = $('#id_unidades');
+      const isAdmin = $('#id_es_admin').is(':checked');
+      const isModerador = $('#id_es_moderador').is(':checked');
+      const isObservador = $('#id_es_observador').is(':checked');
 
-  // Envío AJAX con confirmación integrada
-  $(document).on('submit', '#formEditarUsuario', function (e) {
-    e.preventDefault();
-    const $form = $(this);
-    const confirmText = $form.data('confirm-text') || '¿Confirmar acción?';
+      console.log('[DEBUG] Admin:', isAdmin, 'Moderador:', isModerador, 'Observador:', isObservador);
 
-    const doAjax = () => {
-      $.ajax({
-        url: $form.attr('action'),
-        type: $form.attr('method'),
-        data: $form.serialize(),
-        dataType: 'json',
-        success: function (data) {
-          if (data.form_is_valid || data.success) {
-            // Cerrar modal
-            $('#editar_usuario').modal('hide');
+      // Primero, eliminar cualquier atributo disabled del select nativo
+      $unidades.removeAttr('disabled');
 
-            // Refrescar la tabla con HTMX
-            if (window.htmx) {
-              htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
-            }
+      // Destruir Select2 si existe
+      if ($unidades.hasClass('select2-hidden-accessible')) {
+        $unidades.select2('destroy');
+      }
 
-            // Ajustes visuales opcionales (si estás dentro del propio modal)
-            if (typeof data.es_admin !== 'undefined') {
-              $('#id_es_admin').prop('checked', !!data.es_admin);
-            }
-            if (typeof data.es_moderador !== 'undefined') {
-              $('#id_es_moderador').prop('checked', !!data.es_moderador);
-            }
-
-            if (window.showToast) showToast(data.message || 'Usuario actualizado', 'success');
-          } else if (data.html_form) {
-            // Reemplazar contenido del modal con el form (errores)
-            $('#editar_usuario .modal-content').html(data.html_form);
-          } else {
-            if (window.showToast) showToast('No se pudo guardar.', 'danger');
-          }
-        },
-        error: function () {
-          if (window.showToast) showToast('Error de red al guardar.', 'danger');
-        }
-      });
+      // Determinar estado y recrear Select2
+      if (isAdmin || isObservador) {
+        // Deshabilitado (Admin u Observador)
+        $unidades.prop('disabled', true);
+        $unidades.select2({
+          dropdownParent: $('#editar_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: true
+        });
+        console.log('[DEBUG] Unidades DESHABILITADAS (Admin u Observador)');
+      } else if (isModerador) {
+        // Habilitado (Moderador)
+        $unidades.prop('disabled', false);
+        $unidades.select2({
+          dropdownParent: $('#editar_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: false
+        });
+        console.log('[DEBUG] Unidades HABILITADAS (Moderador)');
+      } else {
+        // Deshabilitado (Sin rol)
+        $unidades.prop('disabled', true);
+        $unidades.select2({
+          dropdownParent: $('#editar_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: true
+        });
+        console.log('[DEBUG] Unidades DESHABILITADAS (Sin rol)');
+      }
     };
 
-    if (window.Swal && Swal.fire) {
-      Swal.fire({
-        title: 'Confirmar',
-        text: confirmText,
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Sí, guardar',
-        cancelButtonText: 'Cancelar'
-      }).then((r) => { if (r.isConfirmed) doAjax(); });
-    } else {
-      if (confirm(confirmText)) doAjax();
-    }
-  });
+    // ======================================================
+    // MUTUAL EXCLUSIÓN DE ROLES
+    // ======================================================
+    $(document).off('change.rolesEditar').on('change.rolesEditar', 
+      '#id_es_admin, #id_es_moderador, #id_es_observador', 
+      function (e) {
+        const id = e.target.id;
+        if (e.target.checked) {
+          if (id === 'id_es_admin') {
+            $('#id_es_moderador').prop('checked', false);
+            $('#id_es_observador').prop('checked', false);
+          } else if (id === 'id_es_moderador') {
+            $('#id_es_admin').prop('checked', false);
+            $('#id_es_observador').prop('checked', false);
+          } else if (id === 'id_es_observador') {
+            $('#id_es_admin').prop('checked', false);
+            $('#id_es_moderador').prop('checked', false);
+          }
+        }
+        // Actualizar el estado del campo unidades
+        window.toggleUnidades();
+      }
+    );
+
+    // ======================================================
+    // ENVÍO AJAX CON CONFIRMACIÓN
+    // ======================================================
+    $(document).on('submit', '#formEditarUsuario', function (e) {
+      e.preventDefault();
+      const $form = $(this);
+      const confirmText = $form.data('confirm-text') || '¿Confirmar acción?';
+
+      const doAjax = () => {
+        $.ajax({
+          url: $form.attr('action'),
+          type: $form.attr('method'),
+          data: $form.serialize(),
+          dataType: 'json',
+          success: function (data) {
+            if (data.form_is_valid || data.success) {
+              $('#editar_usuario').modal('hide');
+              if (window.htmx) {
+                htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
+              }
+              if (typeof data.es_admin !== 'undefined') {
+                $('#id_es_admin').prop('checked', !!data.es_admin);
+              }
+              if (typeof data.es_moderador !== 'undefined') {
+                $('#id_es_moderador').prop('checked', !!data.es_moderador);
+              }
+              if (window.showToast) showToast(data.message || 'Usuario actualizado', 'success');
+            } else if (data.html_form) {
+              const $modal = $('#editar_usuario');
+              const $newContent = $(data.html_form);
+              $modal.find('.modal-content').empty().append($newContent.find('.modal-content').html());
+              // Inicializar Select2 para los nuevos campos
+              $modal.find('.select2').select2({
+                dropdownParent: $modal,
+                width: '100%',
+                placeholder: 'Buscar...',
+                allowClear: true,
+                theme: 'bootstrap-5'
+              });
+              // Forzar actualización después de recargar
+              setTimeout(function() {
+                window.toggleUnidades();
+              }, 300);
+            } else {
+              if (window.showToast) showToast('No se pudo guardar.', 'danger');
+            }
+          },
+          error: function () {
+            if (window.showToast) showToast('Error de red al guardar.', 'danger');
+          }
+        });
+      };
+
+      if (window.Swal && Swal.fire) {
+        Swal.fire({
+          title: 'Confirmar',
+          text: confirmText,
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonText: 'Sí, guardar',
+          cancelButtonText: 'Cancelar'
+        }).then((r) => {
+          if (r.isConfirmed) doAjax();
+        });
+      } else {
+        if (confirm(confirmText)) doAjax();
+      }
+    });
+  })();
 </script>

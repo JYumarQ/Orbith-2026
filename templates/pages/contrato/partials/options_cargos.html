@@ -2,7 +2,10 @@
 {% for c in cargos %}
     <option value="{{ c.pk }}" 
             data-aprobadas="{{ c.cant_aprobada }}" 
-            data-ocupadas="{{ c.plazas_fijas }}">
+            data-ocupadas="{{ c.plazas_fijas }}"
+            data-grupo="{{ c.ncargo.grupo_escala.nivel|default:'' }}"
+            data-funcionario="{% if c.funcionario %}true{% else %}false{% endif %}"
+            data-designado="{% if c.designado %}true{% else %}false{% endif %}">
         {{ c.ncargo.descripcion }} {% if c.consecutivo > 0 %}({{ c.consecutivo }}){% endif %}
     </option>
 {% endfor %}

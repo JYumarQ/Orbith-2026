@@ -45,8 +45,9 @@
                 <div class="input-group shadow-sm me-auto" style="width: auto; border: 1px solid #fd7e14; border-radius: 6px; overflow: hidden;">
                     <span class="input-group-text bg-white border-0 text-warning"><i class="bx bx-filter-alt"></i></span>
                     <select name="tipo_familia" class="form-select border-0 shadow-none bg-white text-warning fw-bold" onchange="this.form.submit()">
+                        <option value="puestos_clave" {% if tipo_actual == 'puestos_clave' %}selected{% endif %}>⭐ Puestos Clave</option>
                         {% for t in tipos_familia %}
-                            <option value="{{ t.pk }}" {% if tipo_actual == t.pk %}selected{% endif %}>Tipo: {{ t.nombre }}</option>
+                            <option value="{{ t.pk }}" {% if tipo_actual|add:0 == t.pk %}selected{% endif %}>Tipo: {{ t.nombre }}</option>
                         {% endfor %}
                     </select>
                 </div>

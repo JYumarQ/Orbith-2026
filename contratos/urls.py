@@ -51,4 +51,6 @@ urlpatterns = [
     #? EXPORTACIONES
     path('exportar_excel/', login_required(views.exportar_contratos_excel), name='exportar_contratos_excel'),
 
+    path('exportar_contrato/<int:pk>/', login_required(views.ExportarContratoWordView.as_view()), name='exportar_contrato_word')
+
 ]

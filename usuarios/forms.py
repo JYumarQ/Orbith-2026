@@ -2,18 +2,30 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from .models import CustomUser
 from django.contrib.auth.forms import AuthenticationForm
-
+from contratos.models import CAlta
 class CustomUserCreationForm(UserCreationForm):
+
+    contrato = forms.ModelChoiceField(
+        queryset=CAlta.objects.all().order_by('aspirante__nombre', 'aspirante__papellido'),
+        widget=forms.Select(attrs={'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'}),
+        label='Contrato',
+        required=False
+    )
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'es_admin', 'es_moderador', 'contrato', 'unidades')
+        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades')
         labels = {
             'es_admin': 'Es Administrador',
-            'es_moderador': 'Es Moderador'
+            'es_moderador': 'Es Moderador',
+            'es_observador': 'Es Observador'
         }
 
         widgets = {
             'es_admin': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'es_moderador': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'es_observador': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            
+            'unidades': forms.SelectMultiple(attrs={'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -29,6 +41,10 @@ class CustomUserCreationForm(UserCreationForm):
             if 'password' in field_name:
                 field.widget.attrs['type'] = 'password'
 
+        self.fields['contrato'].label_from_instance = lambda obj: (
+            f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
+        )
+
     def clean(self):
         cleaned = super().clean()
     
@@ -38,13 +54,21 @@ class CustomUserCreationForm(UserCreationForm):
         return cleaned
 
 class CustomUserChangeForm(UserChangeForm):
+
+    contrato = forms.ModelChoiceField(
+        queryset=CAlta.objects.all().order_by('aspirante__nombre', 'aspirante__papellido'),
+        widget=forms.Select(attrs={'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'}),
+        label='Contrato',
+        required=False
+    )
     class Meta:
         model = CustomUser
-        fields = ('username', 'es_admin', 'es_moderador', 'contrato', 'unidades')
+        fields = ('username', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades')
 
         labels = {
             'es_admin': 'Es Administrador',
-            'es_moderador': 'Es Moderador'
+            'es_moderador': 'Es Moderador',
+            'es_observador': 'Es Observador'
         }
         
     def clean_username(self):
@@ -59,8 +83,13 @@ class CustomUserChangeForm(UserChangeForm):
         self.fields['username'].widget.attrs.update({'class': 'form-control'})
         self.fields['es_admin'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['es_moderador'].widget.attrs.update({'class': 'form-check-input'})
-        self.fields['contrato'].widget.attrs.update({'class': 'form-select'})
-        self.fields['unidades'].widget.attrs.update({'class': 'form-select', 'multiple': 'multiple'})
+        self.fields['es_observador'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['contrato'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'})
+        self.fields['unidades'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'})
+        self.fields['contrato'].label_from_instance = lambda obj: (
+            f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
+        )
+        
 
     def clean(self):
         cleaned = super().clean()
@@ -113,16 +142,12 @@ class CustomAuthenticationForm(AuthenticationForm):
         cleaned_data = super().clean()
         user = self.get_user()
         
-        # Obtenemos qué botón presionó el usuario desde el HTML
-        tipo_acceso = self.data.get('tipo_acceso') 
-
-        if user is not None and tipo_acceso:
-            # Validación Administrador
-            if tipo_acceso == 'administrador' and not user.es_admin:
-                raise ValidationError("Credenciales válidas, pero no posee privilegios de Administrador.")
-            
-            # Validación Moderador
-            elif tipo_acceso == 'moderador' and not user.es_moderador:
-                raise ValidationError("Credenciales válidas, pero no posee privilegios de Moderador.")
+        if user is not None:
+            # Verificar que el usuario tenga al menos un rol activo
+            if not (user.es_admin or user.es_moderador or user.es_observador):
+                raise ValidationError(
+                    "Tu usuario no tiene un rol asignado. Contacta al administrador.",
+                    code='invalid_login'
+                )
         
         return cleaned_data

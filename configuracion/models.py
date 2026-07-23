@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.db import models
 from django.core.validators import MinValueValidator
 from auditoria.models import Base
+from nomencladores.models import NProvincia
 
 # Create your models here.
 class Configuracion(Base):
@@ -20,7 +21,13 @@ class Configuracion(Base):
     direccion = models.TextField(max_length=200, blank=True, null=True)
     logo = models.ImageField(upload_to='img/empr/', blank=True, null=True)
     
-    
+    provincia_entidad = models.ForeignKey(
+        NProvincia,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Provincia de la Entidad"
+    )
     class Meta:
         verbose_name = ("Configuracion")
         verbose_name_plural = ("Configuraciones")
@@ -33,3 +40,4 @@ class Configuracion(Base):
             raise ValueError('Ya existe una configuracion')
         super().save(*args, **kwargs)
 
+    

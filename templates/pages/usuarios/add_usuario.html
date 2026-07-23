@@ -58,6 +58,13 @@
           </label>
         </div>
 
+        <div class="form-check form-switch mb-3">
+          {{ form.es_observador }}
+          <label for="{{ form.es_observador.id_for_label }}" class="form-check-label">
+            {{ form.es_observador.label }}
+          </label>
+        </div>
+
         <div class="mb-3">
           <label for="{{ form.password1.id_for_label }}" class="form-label">Contraseña</label>
           {{ form.password1 }}
@@ -85,17 +92,106 @@
 
 <script>
   (function() {
-    // 1. Lógica de Admin/Moderador
-    $(document).off('change.roles').on('change.roles', '#id_es_admin, #id_es_moderador', function (e) {
-      if (e.target.id === 'id_es_admin' && e.target.checked) {
-        $('#id_es_moderador').prop('checked', false);
+    // ======================================================
+    // FUNCIÓN GLOBAL PARA HABILITAR/DESHABILITAR UNIDADES
+    // ======================================================
+    window.toggleUnidades = function() {
+      console.log('[DEBUG] Ejecutando toggleUnidades (Creación)...');
+      const $unidades = $('#id_unidades');
+      const isAdmin = $('#id_es_admin').is(':checked');
+      const isModerador = $('#id_es_moderador').is(':checked');
+      const isObservador = $('#id_es_observador').is(':checked');
+
+      console.log('[DEBUG] Admin:', isAdmin, 'Moderador:', isModerador, 'Observador:', isObservador);
+
+      // Primero, eliminar cualquier atributo disabled del select nativo
+      $unidades.removeAttr('disabled');
+
+      // Destruir Select2 si existe
+      if ($unidades.hasClass('select2-hidden-accessible')) {
+        $unidades.select2('destroy');
       }
-      if (e.target.id === 'id_es_moderador' && e.target.checked) {
-        $('#id_es_admin').prop('checked', false);
+
+      // Determinar estado y recrear Select2
+      if (isAdmin || isObservador) {
+        // Deshabilitado (Admin u Observador)
+        $unidades.prop('disabled', true);
+        $unidades.select2({
+          dropdownParent: $('#crear_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: true
+        });
+        console.log('[DEBUG] Unidades DESHABILITADAS (Admin u Observador)');
+      } else if (isModerador) {
+        // Habilitado (Moderador)
+        $unidades.prop('disabled', false);
+        $unidades.select2({
+          dropdownParent: $('#crear_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: false
+        });
+        console.log('[DEBUG] Unidades HABILITADAS (Moderador)');
+      } else {
+        // Deshabilitado (Sin rol)
+        $unidades.prop('disabled', true);
+        $unidades.select2({
+          dropdownParent: $('#crear_usuario'),
+          width: '100%',
+          placeholder: 'Buscar unidades...',
+          allowClear: true,
+          theme: 'bootstrap-5',
+          disabled: true
+        });
+        console.log('[DEBUG] Unidades DESHABILITADAS (Sin rol)');
       }
+    };
+
+    // ======================================================
+    // MUTUAL EXCLUSIÓN DE ROLES Y CONTROL DE UNIDADES
+    // ======================================================
+    $(document).off('change.rolesCrear').on('change.rolesCrear', 
+      '#id_es_admin, #id_es_moderador, #id_es_observador', 
+      function (e) {
+        const id = e.target.id;
+        if (e.target.checked) {
+          if (id === 'id_es_admin') {
+            $('#id_es_moderador').prop('checked', false);
+            $('#id_es_observador').prop('checked', false);
+          } else if (id === 'id_es_moderador') {
+            $('#id_es_admin').prop('checked', false);
+            $('#id_es_observador').prop('checked', false);
+          } else if (id === 'id_es_observador') {
+            $('#id_es_admin').prop('checked', false);
+            $('#id_es_moderador').prop('checked', false);
+          }
+        }
+        // Actualizar el estado del campo unidades
+        window.toggleUnidades();
+      }
+    );
+
+    // ======================================================
+    // EJECUTAR AL MOSTRAR EL MODAL (DESPUÉS DE SELECT2)
+    // ======================================================
+    // El evento se dispara desde list_usuarios.html,
+    // pero lo dejamos como respaldo.
+    $(document).on('shown.bs.modal', '#crear_usuario', function () {
+      console.log('[DEBUG] Modal #crear_usuario mostrado (respaldo)');
+      // Esperar un momento para asegurar que Select2 esté listo
+      setTimeout(function() {
+        window.toggleUnidades();
+      }, 100);
     });
 
-    // 2. Envío AJAX
+    // ======================================================
+    // ENVÍO AJAX CON CONFIRMACIÓN
+    // ======================================================
     $(document).off('submit.userForm').on('submit.userForm', '#userForm', function (e) {
       e.preventDefault();
       const $form = $(this);
@@ -109,20 +205,28 @@
           dataType: 'json',
           success: function (data) {
             if (data.form_is_valid || data.success) {
-              
-              // --- CORRECCIÓN AQUÍ ---
-              // Buscamos el padre con clase .modal y cerramos ESE elemento
-              $('#nuevo_usuario').closest('.modal').modal('hide'); 
-              
+              $('#nuevo_usuario').closest('.modal').modal('hide');
               if (window.htmx) {
                 htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
               }
               if (window.showToast) showToast(data.message || 'Usuario guardado', 'success');
-
             } else if (data.html_form) {
-              // Si hay error, reemplazamos el diálogo. 
-              // Al ser un reemplazo interno, el modal padre sigue abierto.
-              $('#nuevo_usuario').replaceWith(data.html_form);
+              // Reemplazar el contenido del modal (manteniendo el modal padre)
+              const $modal = $('#nuevo_usuario').closest('.modal');
+              const $newContent = $(data.html_form);
+              $('#nuevo_usuario').replaceWith($newContent);
+              // Inicializar Select2 en el nuevo contenido
+              $newContent.find('.select2').select2({
+                dropdownParent: $modal,
+                width: '100%',
+                placeholder: 'Buscar...',
+                allowClear: true,
+                theme: 'bootstrap-5'
+              });
+              // Re-ejecutar la lógica de exclusividad y unidades
+              setTimeout(function() {
+                window.toggleUnidades();
+              }, 200);
             } else {
               if (window.showToast) showToast('No se pudo guardar.', 'danger');
             }
@@ -141,7 +245,9 @@
           showCancelButton: true,
           confirmButtonText: 'Sí, guardar',
           cancelButtonText: 'Cancelar'
-        }).then((r) => { if (r.isConfirmed) doAjax(); });
+        }).then((r) => {
+          if (r.isConfirmed) doAjax();
+        });
       } else {
         if (confirm(confirmText)) doAjax();
       }

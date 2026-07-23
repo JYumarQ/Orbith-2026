@@ -2,6 +2,8 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 from auditoria.models import Base
+from datetime import timedelta
+from django.core.exceptions import ValidationError
 
 #?SALARIO
 class NTridente(Base):
@@ -141,11 +143,51 @@ class NCargo(Base):
 
     def __str__(self):
         return self.descripcion
+    
+class NNocturnidad(Base):
+    codigo = models.CharField(max_length=50, unique=True, verbose_name="Código (Ej: N1)")
+    hora_inicio = models.TimeField(verbose_name="Hora Inicio")
+    hora_fin = models.TimeField(verbose_name="Hora Fin")
+
+    class Meta:
+        verbose_name = "Nocturnidad"
+        verbose_name_plural = "Nocturnidades"
+
+    def __str__(self):
+        return f"{self.codigo} ({self.hora_inicio.strftime('%H:%M')} - {self.hora_fin.strftime('%H:%M')})"
+
+    @property
+    def horas(self):
+        """Calcula las horas derivadas, soportando el cruce de medianoche (Ej: 23:00 a 07:00 = 8h)"""
+        if self.hora_inicio and self.hora_fin:
+            start = timedelta(hours=self.hora_inicio.hour, minutes=self.hora_inicio.minute)
+            end = timedelta(hours=self.hora_fin.hour, minutes=self.hora_fin.minute)
+            
+            if end <= start:
+                end += timedelta(days=1) # Suma 24 horas si cruza la medianoche
+                
+            diff = end - start
+            return round(diff.total_seconds() / 3600, 2)
+        return 0.0
 
 class NCondicionLaboralAnormal(models.Model):
     nombre = models.CharField(max_length=10, unique=True)
     descripcion = models.TextField(max_length=200, blank=True, null=True)
-    tarifa_hora = models.DecimalField(validators=[MinValueValidator(0)], max_digits=7, decimal_places=2, default=Decimal('0'))
+
+    tarifa_hora = models.DecimalField(
+        validators=[MinValueValidator(0)],
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("0")
+    )
+
+    nocturnidad = models.OneToOneField(
+        NNocturnidad,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="condicion"
+    )
 
     class Meta:
         verbose_name = "Condición Laboral Anormal"
@@ -153,6 +195,28 @@ class NCondicionLaboralAnormal(models.Model):
 
     def __str__(self):
         return f"{self.nombre} ({self.tarifa_hora} CUP/h)"
+
+    def clean(self):
+        super().clean()
+
+        if self.nocturnidad:
+            ocupante = (
+                NCondicionLaboralAnormal.objects
+                .filter(nocturnidad=self.nocturnidad)
+                .exclude(pk=self.pk)
+                .first()
+            )
+
+            if ocupante:
+                raise ValidationError({
+                    "nocturnidad":
+                        f'La nocturnidad "{self.nocturnidad.codigo}" '
+                        f'ya está asignada a "{ocupante.nombre}".'
+                })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 #?PARAMETROS GENERALES

@@ -131,20 +131,71 @@ function showToast(message, type = 'success') {
   // 2) Funciones de apertura de modales y búsqueda
   // ---------------------------------------------------
   function abrir_modal_edicion(url) {
-    $('#editar_usuario').load(url, function() {
-      $(this).modal('show');
-    });
+      $('#editar_usuario').load(url, function() {
+          $(this).find('#id_unidades').removeAttr('disabled');
+          $(this).modal('show');
+          // ✅ Eliminamos el setTimeout que llamaba a toggleUnidades aquí
+
+          // Inicializar Select2 y luego actualizar unidades
+          $(this).off('shown.bs.modal').on('shown.bs.modal', function() {
+              const $modal = $(this);
+              $modal.find('#id_contrato').select2({
+                  dropdownParent: $modal,
+                  width: '100%',
+                  placeholder: 'Buscar contrato...',
+                  allowClear: true,
+                  theme: 'bootstrap-5'
+              });
+              $modal.find('#id_unidades').select2({
+                  dropdownParent: $modal,
+                  width: '100%',
+                  placeholder: 'Buscar unidades...',
+                  allowClear: true,
+                  theme: 'bootstrap-5'
+                  // No poner disabled: true/false, dejar que el select nativo decida
+              });
+              // ✅ Ahora Select2 ya está inicializado, llamamos a toggleUnidades
+              if (typeof window.toggleUnidades === 'function') {
+                  window.toggleUnidades();
+              }
+          });
+      });
   }
+
   function abrir_modal_creacion(url) {
-    $('#crear_usuario').load(url, function() {
+      $('#crear_usuario').load(url, function() {
+          $(this).modal('show');
+          // ✅ Eliminamos el setTimeout
+
+          $(this).off('shown.bs.modal').on('shown.bs.modal', function() {
+              const $modal = $(this);
+              $modal.find('#id_contrato').select2({
+                  dropdownParent: $modal,
+                  width: '100%',
+                  placeholder: 'Buscar contrato...',
+                  allowClear: true,
+                  theme: 'bootstrap-5'
+              });
+              $modal.find('#id_unidades').select2({
+                  dropdownParent: $modal,
+                  width: '100%',
+                  placeholder: 'Buscar unidades...',
+                  allowClear: true,
+                  theme: 'bootstrap-5'
+                  // No poner disabled: true/false, dejar que el select nativo decida
+              });
+              if (typeof window.toggleUnidades === 'function') {
+                  window.toggleUnidades();
+              }
+          });
+      });
+  }
+
+  function abrir_modal_cambiar_password(url) {
+    $('#cambiar_password').load(url, function() {
       $(this).modal('show');
     });
   }
-  function abrir_modal_cambiar_password(url) {
-  $('#cambiar_password').load(url, function() {
-    $(this).modal('show');
-  });
-}
 
   function show_hide_search() {
     $('#search_container').toggleClass('d-none');

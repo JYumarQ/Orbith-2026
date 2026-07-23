@@ -2,42 +2,67 @@ from django import forms
 from django.urls import reverse_lazy
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
-from nomencladores.models import NRol, NTipoContrato
+from nomencladores.models import NRol, NTipoContrato, NCondicionLaboralAnormal
 import json
 
+class CLAModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return f"{obj.nombre} | {obj.tarifa_hora}"
 
-class SelectCargosConPlazasWidget(forms.Select):
-    """Widget inteligente que inyecta data-aprobadas y data-ocupadas a las opciones nativas de Django"""
-    def __init__(self, attrs=None, choices=(), mapa_plazas=None):
-        super().__init__(attrs, choices)
-        self.mapa_plazas = mapa_plazas or {}
+class NocturnidadModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        codigo = obj.nocturnidad.codigo if getattr(obj, 'nocturnidad_id', None) else "-"
+        return f"{obj.nombre} | {codigo} | {obj.tarifa_hora}"
 
+class SelectUnidadWidget(forms.Select):
+    """Widget inteligente que inhabilita las Unidades Organizativas que son Padres (sin departamentos)"""
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         if value:
             try:
-                # --- LA MAGIA CONTRA EL OBJETO OCULTO DE DJANGO ---
-                # value puede ser un ModelChoiceIteratorValue, extraemos el número real así:
-                pk_val = getattr(value, 'value', value) 
-                pk = int(pk_val)
-                
-                if pk in self.mapa_plazas:
-                    info = self.mapa_plazas[pk]
-                    option['attrs']['data-aprobadas'] = info['aprobadas']
-                    option['attrs']['data-ocupadas'] = info['ocupadas']
-            except (ValueError, TypeError):
+                pk = int(getattr(value, 'value', value))
+                from strorganizativa.models import UnidadOrganizativa
+                # Consultamos la unidad y verificamos si la relación 'departamentos' está vacía
+                unidad = UnidadOrganizativa.objects.select_related('tipo').get(pk=pk)
+                if unidad.tipo and unidad.tipo.es_principal:
+                    option['attrs']['disabled'] = True
+                    option['attrs']['class'] = 'text-muted bg-light' # Fuerza el color gris en el select
+                    option['label'] = f"📁 {label} (Unidad Principal)"
+            except Exception:
+                pass
+        return option
+    
+class SelectCargosConPlazasWidget(forms.Select):
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if value:
+            try:
+                pk = int(getattr(value, 'value', value))
+                datos = self.mapa_plazas.get(pk)
+                if datos:
+                    option['attrs']['data-aprobadas'] = datos.get('aprobadas', 0)
+                    option['attrs']['data-ocupadas'] = datos.get('ocupadas', 0)
+                    option['attrs']['data-grupo'] = datos.get('grupo', '')
+                    option['attrs']['data-funcionario'] = 'true' if datos.get('funcionario') else 'false'
+                    option['attrs']['data-designado'] = 'true' if datos.get('designado') else 'false'
+                    # 🔥 NUEVO: data-chofer
+                    option['attrs']['data-chofer'] = 'true' if datos.get('chofer') else 'false'
+            except Exception:
                 pass
         return option
 class CAltaForm(forms.ModelForm):
     
+    funcionario = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    designado = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+
     unidad = forms.ModelChoiceField(
         label='Unidad Organizativa',
         queryset=UnidadOrganizativa.objects.all(), 
-        widget=forms.Select(attrs={
+        widget=SelectUnidadWidget(attrs={  # <--- APLICADO AQUÍ
             'class': 'form-select',
-            'hx-get': reverse_lazy('cargar_departamentos'),  # <--- URL CORRECTA
+            'hx-get': reverse_lazy('cargar_departamentos'),  
             'hx-target': '#id_departamento',
-            'hx-trigger': 'change',  # Aseguramos que sea al cambiar
+            'hx-trigger': 'change',  
             'required': True
         }))
 
@@ -87,6 +112,25 @@ class CAltaForm(forms.ModelForm):
             'placeholder': '---'
         })
     )
+
+    cla = CLAModelChoiceField(
+        queryset=NCondicionLaboralAnormal.objects.all().order_by('nombre'),
+        required=False,
+        empty_label="---------",
+        widget=forms.Select(attrs={'class': 'form-select select2-basic'})
+    )
+    nocturnidad_1 = NocturnidadModelChoiceField(
+        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False).order_by('nombre'),
+        required=False,
+        empty_label="---------",
+        widget=forms.Select(attrs={'class': 'form-select select-nocturnidad', 'id': 'id_nocturnidad_1'})
+    )
+    nocturnidad_2 = NocturnidadModelChoiceField(
+        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False).order_by('nombre'),
+        required=False,
+        empty_label="---------",
+        widget=forms.Select(attrs={'class': 'form-select select-nocturnidad', 'id': 'id_nocturnidad_2'})
+    )
     
     
     class Meta:
@@ -95,10 +139,10 @@ class CAltaForm(forms.ModelForm):
         fields = (
             'no_expediente', 'tipo', 'motivo', 'fecha_alta', 'duracion', 'cargo', 'reg_militar',
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
-            'fecha_vence_seg', 'c_formal', 'funcionario', 'designado', 
+            'fecha_vence_seg', 'c_formal', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
-            'maestria', 'doctorado', 'cnci', 'instructor', 'jubilado_recontratado', 'jornada',
-            'mision', 'pais'
+            'maestria', 'doctorado', 'cnci', 'instructor', 'jubilado_recontratado',
+            'mision', 'pais', 'cla', 'nocturnidad_1', 'nocturnidad_2'
         )
         labels = {
             'no_expediente': 'Exp. Laboral', 
@@ -122,7 +166,6 @@ class CAltaForm(forms.ModelForm):
             'maestria': 'Maetría',
             'cnci': 'CNCI',
             'jubilado_recontratado': 'Jubilado Recontratado',
-            'jornada': 'Jornada Laboral',
             'mision': 'Misión',
             'pais': 'País'
         }
@@ -165,7 +208,6 @@ class CAltaForm(forms.ModelForm):
             'cnci':forms.NumberInput(attrs={'class':'form-control'}),
             'instructor':forms.NumberInput(attrs={'class':'form-control'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
-            'jornada': forms.Select(attrs={'class':'form-select'}),
             'mision': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mision'}),
             'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'})
         }
@@ -261,24 +303,33 @@ class CAltaForm(forms.ModelForm):
         # B) LA CURA DE EDICIÓN: Si el form ya trae cargos precargados, les amarramos el mapa numérico
         if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
             cargos_qs = self.fields['cargo'].queryset
-            # Armamos un diccionario ultrarrápido en RAM: { id_cargo: {'aprobadas': 5, 'ocupadas': 4} }
-            mapa = {c.pk: {'aprobadas': c.cant_aprobada, 'ocupadas': c.plazas_fijas} for c in cargos_qs}
             
-            # Si estamos editando a Juan y su contrato ocupa plaza, le perdonamos su propio espacio (+1 libre)
+            mapa = {}
+            for c in cargos_qs:
+                grupo = ""
+                if c.ncargo and hasattr(c.ncargo, 'grupo_escala') and c.ncargo.grupo_escala:
+                    grupo = c.ncargo.grupo_escala.nivel
+
+                es_chofer = getattr(c.ncargo, 'chofer_profesional', False) if c.ncargo else False    
+                
+                mapa[c.pk] = {
+                    'aprobadas': c.cant_aprobada, 
+                    'ocupadas': c.plazas_fijas,
+                    'grupo': grupo,
+                    'funcionario': getattr(c, 'funcionario', False),
+                    'designado': getattr(c, 'designado', False),
+                    'chofer': es_chofer
+                }
+            
             if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):
                 if self.instance.cargo_id in mapa:
                     mapa[self.instance.cargo_id]['ocupadas'] = max(0, mapa[self.instance.cargo_id]['ocupadas'] - 1)
 
-            # Reemplazamos el widget estándar por nuestro widget hipervitamínico
-            nuevo_widget = SelectCargosConPlazasWidget(
-                attrs={'class': 'form-select select2-cargo'}, 
-                mapa_plazas=mapa
-            )
-            
-            # Le pasamos el listado de opciones del campo original al nuevo widget
-            nuevo_widget.choices = self.fields['cargo'].choices 
-            
-            self.fields['cargo'].widget = nuevo_widget
+            # --- LA SOLUCIÓN AL "NO RESULTS FOUND" ---
+            # Inyectamos la clase y el mapa dinámicamente al widget original para no destruir los choices
+            self.fields['cargo'].widget.__class__ = SelectCargosConPlazasWidget
+            self.fields['cargo'].widget.mapa_plazas = mapa
+            self.fields['cargo'].widget.attrs.update({'class': 'form-select select2-cargo'})
 
     # ---------------------------------------------------------
     # VALIDACIONES ESTRICTAS DE NEGOCIO (EL ESCUDO)
@@ -409,19 +460,110 @@ class MovimientoForm(CAltaForm):
         # B) LA CURA DE MOVIMIENTOS:
         if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
             cargos_qs = self.fields['cargo'].queryset
-            mapa = {c.pk: {'aprobadas': c.cant_aprobada, 'ocupadas': c.plazas_fijas} for c in cargos_qs}
+            
+            mapa = {}
+            for c in cargos_qs:
+                grupo = ""
+                if c.ncargo and hasattr(c.ncargo, 'grupo_escala') and c.ncargo.grupo_escala:
+                    grupo = c.ncargo.grupo_escala.nivel
+                
+                mapa[c.pk] = {
+                    'aprobadas': c.cant_aprobada, 
+                    'ocupadas': c.plazas_fijas,
+                    'grupo': grupo
+                }
             
             if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):
                 if self.instance.cargo_id in mapa:
                     mapa[self.instance.cargo_id]['ocupadas'] = max(0, mapa[self.instance.cargo_id]['ocupadas'] - 1)
 
-            # Reemplazamos el widget estándar por nuestro widget hipervitamínico
-            nuevo_widget = SelectCargosConPlazasWidget(
-                attrs={'class': 'form-select select2-cargo'}, 
-                mapa_plazas=mapa
-            )
-            
-            # Le pasamos el listado de opciones del campo original al nuevo widget
-            nuevo_widget.choices = self.fields['cargo'].choices 
-            
-            self.fields['cargo'].widget = nuevo_widget
+            # --- LA SOLUCIÓN AL "NO RESULTS FOUND" ---
+            # Inyectamos la clase y el mapa dinámicamente al widget original para no destruir los choices
+            self.fields['cargo'].widget.__class__ = SelectCargosConPlazasWidget
+            self.fields['cargo'].widget.mapa_plazas = mapa
+            self.fields['cargo'].widget.attrs.update({'class': 'form-select select2-cargo'})
+
+
+class ExportarContratoWordForm(forms.Form):
+    # 1. Firma Cuadro (El queryset se inyecta desde la vista)
+    firma_cuadro = forms.ModelChoiceField(
+        queryset=None, 
+        required=False,
+        empty_label="Seleccione quién firma el contrato...",
+        widget=forms.Select(attrs={'class': 'form-select select2-basic'})
+    )
+
+    # 2. Resolución Salario Escala
+    resolucion_salario_escala = forms.CharField(
+        max_length=14,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'Ej: Res. 12/2023'
+        })
+    )
+
+    # 3. Fecha Efectiva
+    fecha_efectiva = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={
+            'class': 'form-control', 
+            'type': 'date'
+        })
+    )
+
+    # 4. Jornada
+    jornada_texto = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'Ej: Lunes a Viernes'
+        })
+    )
+
+    # 5. Horario
+    horario_texto = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'Ej: 8:00 am a 5:00 pm'
+        })
+    )
+
+    # 6. Sistema de Pago (Texto libre, sin validadores estrictos)
+    sistema_pago = forms.CharField(
+        max_length=30,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'Ej: Pago por Resultado'
+        })
+    )
+
+    # 7. Nocturnidad (Texto libre para la plantilla)
+    nocturnidad_texto = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Ej: 7:00 pm a 11:00 pm'
+        })
+    )
+
+    # 8. Período de Pago
+    periodo_pago = forms.ChoiceField(
+        choices=[('Quincenal', 'Quincenal'), ('Mensual', 'Mensual')],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        # Extraemos el queryset de los cuadros que la Vista haya preparado
+        cuadros_qs = kwargs.pop('cuadros_qs', None)
+        
+        super().__init__(*args, **kwargs)
+
+        # Asignamos el queryset al campo si fue proporcionado
+        if cuadros_qs is not None:
+            self.fields['firma_cuadro'].queryset = cuadros_qs

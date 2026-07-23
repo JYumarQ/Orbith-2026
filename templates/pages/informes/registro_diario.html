@@ -140,12 +140,12 @@
                             </tr>
 
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
-                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Dirigentes / Cuadros</td>
-                                <td class="text-end text-dark fs-5" id="val-dirigentes">{{ datos.Dirigentes.tot }}</td>
+                                <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Cuadros</td>
+                                <td class="text-end text-dark fs-5" id="val-cuadros">{{ datos.Cuadros.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-dirigentes-fem">{{ datos.Dirigentes.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-cuadros-fem">{{ datos.Cuadros.muj }}</td>
                             </tr>
 
                             <tr class="bg-orange-50 border-top border-warning border-2">
@@ -167,32 +167,46 @@
                             </tr>
 
                             <tr class="fila-sub">
-                                <td class="fw-bold">Cumpliendo Obligaciones Estatales y Sociales</td>
-                                <td class="text-end fw-bold" id="val-obligaciones">0</td>
+                                <td class="fw-bold align-middle">Cumpliendo Obligaciones Estatales y Sociales</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-obligaciones" class="form-control form-control-sm text-end fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
                             <tr class="fila-sub">
-                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
-                                <td class="text-end text-pink-600" id="val-obligaciones-fem">0</td>
+                                <td class="align-middle"><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-obligaciones-fem" class="form-control form-control-sm text-end text-pink-600 fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
 
                             <tr class="fila-sub">
-                                <td class="fw-bold">Subsidios</td>
-                                <td class="text-end fw-bold" id="val-subsidios">0</td>
+                                <td class="fw-bold align-middle">Subsidios</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-subsidios" class="form-control form-control-sm text-end fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
                             <tr class="fila-sub">
-                                <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
-                                <td class="text-end text-pink-600" id="val-subsidios-fem">0</td>
+                                <td class="align-middle"><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-subsidios-fem" class="form-control form-control-sm text-end text-pink-600 fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
 
                             <tr class="fila-sub">
-                                <td class="fw-bold">Licencia de Maternidad</td>
-                                <td class="text-end fw-bold" id="val-maternidad">0</td>
+                                <td class="fw-bold align-middle">Licencia de Maternidad</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-maternidad" class="form-control form-control-sm text-end fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
 
                             <tr class="fila-sub">
-                                <td class="fw-bold">Licencia Sin Sueldo</td>
-                                <td class="text-end fw-bold" id="val-sin-sueldo">0</td>
+                                <td class="fw-bold align-middle">Licencia Sin Sueldo</td>
+                                <td class="text-end">
+                                    <input type="number" id="val-sin-sueldo" class="form-control form-control-sm text-end fw-bold input-deduccion ms-auto" min="0" value="0" style="max-width: 80px;">
+                                </td>
                             </tr>
+
+                            
 
                             <tr class="fila-sub">
                                 <td class="fw-bold">Cumpliendo Misión Internacional</td>
@@ -226,15 +240,11 @@
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex align-items-center gap-3">
                             <h6 class="m-0 text-white fw-bold text-uppercase tracking-widest"><i class="bx bx-line-chart text-warning me-2"></i>Eficiencia del Plan</h6>
-                            
-                            <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
-                                <input class="form-check-input mt-0" type="checkbox" role="switch" id="switchModoPlan" onchange="window.toggleModoPlan()" style="cursor: pointer; width: 2.5em; height: 1.25em;">
-                                <label class="form-check-label text-white fw-bold" for="switchModoPlan" style="font-size: 0.75rem; cursor: pointer; letter-spacing: 0.5px;" id="labelModoPlan">OFICIAL</label>
-                            </div>
                         </div>
                         
-                        <button type="button" id="btn-edit-plan" class="btn btn-edit-plan d-flex align-items-center d-none" onclick="window.habilitarEdicionPlan()">
-                            <i class="bx bx-edit-alt me-1"></i> AÑADIR PLAN
+                        <button type="button" id="btn-edit-plan" class="btn btn-outline-warning btn-sm fw-bold d-flex align-items-center" onclick="window.toggleEdicionPlan()">
+                            <i id="icon-edit-plan" class="bx bx-edit-alt me-1"></i> 
+                            <span id="text-edit-plan">EDITAR PLAN</span>
                         </button>
                     </div>
 
@@ -243,11 +253,7 @@
                             <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
                                 <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Plan</p>
                                 
-                                <div id="plan-container" class="fs-4 fw-black text-white">
-                                    {{ plan_editable|default:"0" }}
-                                </div>
-                                
-                                <input type="number" id="input-plan" class="form-control text-center fw-bold text-dark d-none" value="{{ plan_editable|default:'0' }}" style="background-color: #ffffff; border-radius: 8px; padding: 0.2rem; font-size: 1.1rem; border: 2px solid #ff6600;" onblur="window.guardarPlan()" onkeypress="if(event.key === 'Enter') this.blur()">
+                                <input type="number" id="input-plan" class="form-control text-center fw-bold text-white border-0 bg-transparent px-1" value="{{ plan_editable|default:'0' }}" readonly oninput="window.calcularMatematica()" style="font-size: 1.5rem;">
                             </div>
                         </div>
 
@@ -318,70 +324,76 @@
     window.rd_uebFiltro = '{{ ueb_actual }}';
     window.rd_familiaFiltro = '{{ tipo_actual }}';
 
-    // 1. Identificador único para guardar en LocalStorage (PERMANENTE en el navegador)
-    var planKey = 'plan_simulado_' + (window.rd_uebFiltro || 'provincial');
+    // Control de la UI: Cambia entre Modo Edición y Modo Guardado
+    window.toggleEdicionPlan = function() {
+        var input = document.getElementById('input-plan');
+        var btn = document.getElementById('btn-edit-plan');
+        var icon = document.getElementById('icon-edit-plan');
+        var text = document.getElementById('text-edit-plan');
 
-    // 2. Control de los Dos Planes
-    window.plan_oficial_db = parseInt("{{ plan_editable|default:'0' }}", 10) || 0; // El real de la BD
-    
-    // Recuperamos el simulado permanente, si no hay, copiamos el oficial
-    var planGuardado = localStorage.getItem(planKey);
-    window.plan_simulado = planGuardado !== null ? parseInt(planGuardado, 10) : window.plan_oficial_db;
-
-    // Arrancamos siempre en Modo OFICIAL
-    window.rd_planActual = window.plan_oficial_db;
-
-    // 3. LA MAGIA DEL SWITCH
-    window.toggleModoPlan = function() {
-        var isSimulacion = document.getElementById('switchModoPlan').checked;
-        var label = document.getElementById('labelModoPlan');
-        var btnEdit = document.getElementById('btn-edit-plan');
-        var inputPlan = document.getElementById('input-plan');
-        var planContainer = document.getElementById('plan-container');
-
-        if (isSimulacion) {
-            label.textContent = 'SIMULADO';
-            label.classList.replace('text-white', 'text-warning');
-            btnEdit.classList.remove('d-none');
-            window.rd_planActual = window.plan_simulado;
+        if (input.hasAttribute('readonly')) {
+            // PASAR A MODO EDICIÓN
+            input.removeAttribute('readonly');
+            input.classList.remove('text-white', 'border-0', 'bg-transparent');
+            input.classList.add('text-dark', 'bg-white'); // Fondo blanco, letra oscura
+            input.style.border = '2px solid #ff6600';
+            
+            btn.classList.remove('btn-outline-warning');
+            btn.classList.add('btn-warning', 'text-dark');
+            icon.className = 'bx bx-save me-1';
+            text.textContent = 'GUARDAR PLAN';
+            
+            input.focus();
+            input.select();
         } else {
-            label.textContent = 'OFICIAL';
-            label.classList.replace('text-warning', 'text-white');
-            btnEdit.classList.add('d-none');
-            inputPlan.classList.add('d-none');
-            planContainer.classList.remove('d-none');
-            window.rd_planActual = window.plan_oficial_db;
+            // PASAR A MODO GUARDADO
+            input.setAttribute('readonly', 'true');
+            input.classList.remove('text-dark', 'bg-white');
+            input.classList.add('text-white', 'border-0', 'bg-transparent'); // Vuelve a ser texto invisible
+            input.style.border = 'none';
+            
+            btn.classList.remove('btn-warning', 'text-dark');
+            btn.classList.add('btn-outline-warning');
+            icon.className = 'bx bx-edit-alt me-1';
+            text.textContent = 'EDITAR PLAN';
+
+            // Ejecuta el guardado en Base de Datos
+            window.guardarPlanEnBD(input.value);
         }
-
-        planContainer.textContent = window.rd_planActual;
-        window.calcularMatematica();
     };
 
-    window.habilitarEdicionPlan = function() {
-        document.getElementById('plan-container').classList.add('d-none');
-        var input = document.getElementById('input-plan');
-        input.classList.remove('d-none');
-        input.value = window.plan_simulado;
-        input.focus();
-        input.select();
-    };
+    // Envío silencioso a la BD por AJAX
+    window.guardarPlanEnBD = function(nuevoValor) {
+        var btn = document.getElementById('btn-edit-plan');
+        if (btn) btn.style.opacity = '0.5';
 
-    window.guardarPlan = function() {
-        var input = document.getElementById('input-plan');
-        var nuevoValor = parseInt(input.value, 10) || 0;
-        
-        // localStorage hace que sobreviva a F5 y a cerrar la pestaña
-        localStorage.setItem(planKey, nuevoValor);
-        window.plan_simulado = nuevoValor;
-        window.rd_planActual = window.plan_simulado;
-
-        // Ocultar input y actualizar UI
-        input.classList.add('d-none');
-        var container = document.getElementById('plan-container');
-        container.classList.remove('d-none');
-        container.textContent = window.rd_planActual;
-        
-        window.calcularMatematica();
+        fetch("{% url 'guardar_plan_diario' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.rd_csrftoken
+            },
+            body: JSON.stringify({
+                valor: parseInt(nuevoValor, 10) || 0,
+                mes: window.rd_mesFiltro,
+                anno: window.rd_annoFiltro,
+                ueb: window.rd_uebFiltro,
+                familia: window.rd_familiaFiltro
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (btn) btn.style.opacity = '1';
+            if (data.status === 'ok') {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Plan guardado correctamente', showConfirmButton: false, timer: 2000 });
+                }
+            }
+        })
+        .catch(err => {
+            if (btn) btn.style.opacity = '1';
+            console.error('Error guardando plan en BD:', err);
+        });
     };
 
     window.formatNum = function(num) { return new Intl.NumberFormat('es-ES').format(num); };
@@ -389,6 +401,14 @@
     window.getNum = function(id) {
         var el = document.getElementById(id);
         if (!el) return 0;
+        
+        // Si el elemento es un input editable, saca el value
+        if (el.tagName === 'INPUT') {
+            var val = parseInt(el.value, 10);
+            return isNaN(val) ? 0 : val;
+        }
+        
+        // Si es un texto de la BD (como Misiones o Categorías), extrae el textContent
         var val = parseInt(el.textContent.replace(/\D/g, ''), 10);
         return isNaN(val) ? 0 : val;
     };
@@ -399,13 +419,13 @@
             var tecnicos = window.getNum('val-tecnicos');
             var admin = window.getNum('val-admin');
             var servicios = window.getNum('val-servicios');
-            var dirigentes = window.getNum('val-dirigentes');
+            var cuadros = window.getNum('val-cuadros');
 
             var f_obreros = window.getNum('val-obreros-fem');
             var f_tecnicos = window.getNum('val-tecnicos-fem');
             var f_admin = window.getNum('val-admin-fem');
             var f_servicios = window.getNum('val-servicios-fem');
-            var f_dirigentes = window.getNum('val-dirigentes-fem');
+            var f_cuadros = window.getNum('val-cuadros-fem');
 
             var misiones = window.getNum('val-misiones');
             var misiones_fem = window.getNum('val-misiones-fem');
@@ -416,15 +436,15 @@
             var maternidad = window.getNum('val-maternidad');
             var sin_sueldo = window.getNum('val-sin-sueldo');
 
-            var total = obreros + tecnicos + admin + servicios + dirigentes;
-            var total_fem = f_obreros + f_tecnicos + f_admin + f_servicios + f_dirigentes;
+            var total = obreros + tecnicos + admin + servicios + cuadros;
+            var total_fem = f_obreros + f_tecnicos + f_admin + f_servicios + f_cuadros;
 
             document.getElementById('total-trabajadores').textContent = window.formatNum(total);
             document.getElementById('total-trabajadores-fem').textContent = window.formatNum(total_fem);
 
-            // 1. Calcular las Deducciones (Solo Subsidios + Maternidad + Sin Sueldo)
-            var deducciones = subsidios + maternidad + sin_sueldo;
-            var deducciones_fem = subsidios_fem + maternidad + sin_sueldo;
+            // 1. Calcular las Deducciones (Obligaciones + Subsidios + Maternidad + Sin Sueldo. ¡MISIONES EXCLUIDAS!)
+            var deducciones = obligaciones + subsidios + maternidad + sin_sueldo;
+            var deducciones_fem = obligaciones_fem + subsidios_fem + maternidad + sin_sueldo;
 
             if(document.getElementById('val-deducciones')) {
                 document.getElementById('val-deducciones').textContent = window.formatNum(deducciones);
@@ -443,12 +463,15 @@
             // 3. Tarjeta REAL en Eficiencia del Plan (Muestra el Promedio)
             document.getElementById('resumen-real').textContent = window.formatNum(real);
 
-            // 4. Eficiencia del Plan (Compara el Promedio 'real' contra el Plan Actual)
+            // 4. Eficiencia del Plan (Lee directamente del input editable)
+            var inputPlan = document.getElementById('input-plan');
+            var planActual = parseInt(inputPlan.value, 10) || 0;
+            
             var porcentaje = 0;
             var diferencia = 0;
-            if (window.rd_planActual > 0) {
-                porcentaje = (real / window.rd_planActual) * 100;
-                diferencia = real - window.rd_planActual;
+            if (planActual > 0) {
+                porcentaje = (real / planActual) * 100;
+                diferencia = real - planActual;
             }
 
             document.getElementById('resumen-porcentaje').textContent = porcentaje.toFixed(2) + '%';
@@ -462,12 +485,14 @@
             progressBar.style.width = Math.min(porcentaje, 100) + '%';
             progressBar.className = 'progress-bar ' + colorBarra;
 
-            window.actualizarGraficos([obreros, tecnicos, admin, servicios, dirigentes], total_fem, Math.max(0, total - total_fem));
+            window.actualizarGraficos([obreros, tecnicos, admin, servicios, cuadros], total_fem, Math.max(0, total - total_fem));
 
         } catch (error) {
             console.error("Error en cálculos matemáticos:", error);
         }
     };
+
+    
 
     window.actualizarGraficos = function(datosCat, totalMujeres, totalHombres) {
 
@@ -500,7 +525,7 @@
         window.chartCategorias = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['Obreros', 'Técnicos', 'Admin.', 'Servicios', 'Dirigentes'],
+                labels: ['Obreros', 'Técnicos', 'Admin.', 'Servicios', 'Cuadros'],
                 datasets: [{
                     data: datosCat,
                     backgroundColor: '#ff6600',
@@ -594,6 +619,46 @@
             }
         });
     };
+
+    // --- MOTOR DE DEDUCCIONES MANUALES ---
+    window.guardarDeduccionesLocales = function() {
+        var datos = {
+            obl: document.getElementById('val-obligaciones').value,
+            obl_fem: document.getElementById('val-obligaciones-fem').value,
+            sub: document.getElementById('val-subsidios').value,
+            sub_fem: document.getElementById('val-subsidios-fem').value,
+            mat: document.getElementById('val-maternidad').value,
+            sin: document.getElementById('val-sin-sueldo').value
+        };
+        // Guarda ligado a la UEB actual para que no se mezclen si cambian de filtro
+        localStorage.setItem('deducciones_tmp_' + (window.rd_uebFiltro || 'prov'), JSON.stringify(datos));
+        
+        // Dispara la recarga inmediata de tablas, barra de progreso y gráficos
+        window.calcularMatematica();
+    };
+
+    // Restaurar los datos al cargar la página
+    var guardado = localStorage.getItem('deducciones_tmp_' + (window.rd_uebFiltro || 'prov'));
+    if (guardado) {
+        try {
+            var g = JSON.parse(guardado);
+            if (g.obl) document.getElementById('val-obligaciones').value = g.obl;
+            if (g.obl_fem) document.getElementById('val-obligaciones-fem').value = g.obl_fem;
+            if (g.sub) document.getElementById('val-subsidios').value = g.sub;
+            if (g.sub_fem) document.getElementById('val-subsidios-fem').value = g.sub_fem;
+            if (g.mat) document.getElementById('val-maternidad').value = g.mat;
+            if (g.sin) document.getElementById('val-sin-sueldo').value = g.sin;
+        } catch(e) { }
+    }
+
+    // Escuchar cada tecla o clic en las flechitas de los inputs
+    document.querySelectorAll('.input-deduccion').forEach(function(inp) {
+        inp.addEventListener('input', function() {
+            // Evitar que pongan números negativos o lo dejen en blanco crasheando el cálculo
+            if (this.value < 0 || this.value === '') this.value = 0;
+            window.guardarDeduccionesLocales();
+        });
+    });
 
     // Lanzar inmediatamente
     setTimeout(window.calcularMatematica, 300);

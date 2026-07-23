@@ -3,14 +3,14 @@ from django.http import response, HttpResponseRedirect, HttpResponse, JsonRespon
 from django.template.loader import render_to_string
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
-from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View
+from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View, FormView
 from django.core.paginator import Paginator
 from django.conf import settings
 from bolsa.models import Aspirante
 from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
-from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia
+from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia, NTipoContrato
 from django.urls import reverse_lazy, reverse
 from configuracion.models import Configuracion
 from django.template.loader import get_template
@@ -29,10 +29,20 @@ import json
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from datetime import datetime
+from .forms import ExportarContratoWordForm
 
 
+
+CAT_MAP = {
+    'TEC': 'T',
+    'ADM': 'A',
+    'SER': 'S',
+    'OPE': 'O',
+    'CDI': 'C',
+    'CEJ': 'C',
+}
 #?ONTRATO
 class ContratoListView(ListView):
     model = CAlta
@@ -204,10 +214,6 @@ def search_contratos(request):
     if not page_size:
         page_size = '8'
     
-    
-    # Filtros directos del Contrato (o Cargo)
-    # (Si quisieras filtrar por Cargo o Unidad, irían aquí)
-    
     # Filtros del Aspirante asociado
     provincia_id = request.GET.get('provincia')
     municipio_id = request.GET.get('municipio')
@@ -217,8 +223,17 @@ def search_contratos(request):
     raza = request.GET.get('raza')
     grado_cientifico = request.GET.get('grado_cientifico')
 
-    # 2. QuerySet Base
-    qs = CAlta.objects.select_related('aspirante', 'cargo').all().order_by('-fecha_alta')
+    # 2. QuerySet Base con el Grafo Relacional expandido (Corrección N+1)
+    qs = CAlta.objects.select_related(
+        'aspirante', 
+        'cargo',
+        'cargo__departamento',
+        'cargo__ncargo',
+        'cargo__ncargo__grupo_escala',
+        'cargo__rol',
+        'rol',
+        'tridente'
+    ).all().order_by('-fecha_alta')
 
     # 3. Aplicar Filtros "Embudo" (Relación aspirante__)
     if provincia_id:
@@ -246,14 +261,15 @@ def search_contratos(request):
             )
         ).filter(
             Q(no_expediente__icontains=query) |
-            Q(nombre_completo__icontains=query)
+            Q(nombre_completo__icontains=query)|
+            Q(aspirante__doc_identidad__icontains=query)
         )
 
     # 5. ORDENAMIENTO COMPLETO EN EL SERVIDOR (Todas las páginas)
     sort_col = request.GET.get('sort', '')
     order = request.GET.get('order', 'asc')
     
-    # Convertimos el QuerySet a una Lista para poder ordenar por Métodos (Salario) y Jerarquías personalizadas
+    # Convertimos el QuerySet a una Lista. Aquí se ejecuta la única consulta SQL.
     contratos_list = list(qs)
     
     if sort_col:
@@ -269,7 +285,7 @@ def search_contratos(request):
             contratos_list.sort(key=lambda x: getattr(x.cargo.ncargo, 'get_cat_ocupacional_display')() if x.cargo and hasattr(x.cargo, 'ncargo') else "", reverse=reverse_sort)
         elif sort_col == 'grupo':
             def get_grupo_val(c):
-                nivel = c.cargo.ncargo.grupo_escala.nivel if c.cargo and c.cargo.ncargo and c.cargo.ncargo.grupo_escala else ""
+                nivel = c.cargo.ncargo.grupo_escala.nivel if c.cargo and c.cargo.ncargo and hasattr(c.cargo.ncargo, 'grupo_escala') and c.cargo.ncargo.grupo_escala else ""
                 return nivel_romano_a_int(nivel)
             contratos_list.sort(key=get_grupo_val, reverse=reverse_sort)
         elif sort_col == 'rol':
@@ -340,6 +356,7 @@ def solicitar_movimiento_nomina(request, pk):
 
 def validar_plazas_cargo(request):
     cargo_id = request.GET.get('cargo_id', None)
+    tipo_id = request.GET.get('tipo_id', None)
     data = {
         'plazas_agotadas': False,
         'mensaje': ''
@@ -349,15 +366,26 @@ def validar_plazas_cargo(request):
         try:
             cargo = CargoPlantilla.objects.select_related('ncargo').get(pk=cargo_id)
             
-            # CAMBIO AQUÍ: Usamos cant_cubierta_real
+            # 1. Evaluamos la regla de negocio del Tipo de Contrato
+            if tipo_id:
+                try:
+                    tipo_contrato = NTipoContrato.objects.get(pk=tipo_id)
+                    # Si el contrato NO ocupa plaza (Ej: Adiestrado, Determinado), damos luz verde directa
+                    if not tipo_contrato.ocupa_plaza:
+                        return JsonResponse(data)
+                except NTipoContrato.DoesNotExist:
+                    pass
+        
             if cargo.cant_cubierta_real >= cargo.cant_aprobada:
                 data['plazas_agotadas'] = True
-                data['mensaje'] = f"El Cargo '{cargo.ncargo.descripcion}' no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada})"
+                data['mensaje'] = f"El Cargo '{cargo.ncargo.descripcion}' no tiene plazas oficiales disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada})"
                 
         except CargoPlantilla.DoesNotExist:
             pass
             
     return JsonResponse(data)
+            
+    
 
 def cargar_departamentos(request):
     unidad_id = request.GET.get('unidad')
@@ -587,7 +615,6 @@ class ExportarHistoricoPDFView(View):
     def get(self, request, aspirante_id):
         from django.template.loader import get_template
         from xhtml2pdf import pisa
-        from configuracion.models import Configuracion
         
         aspirante = get_object_or_404(Aspirante, pk=aspirante_id)
         config = Configuracion.objects.first()
@@ -803,16 +830,24 @@ class ContratoUpdateView(UpdateView):
             
         self.object.save()
         
+        # ✅ PARA PETICIONES AJAX NORMALES (esto va ANTES del bloque HTMX)
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            from django.http import JsonResponse
+            return JsonResponse({
+                'form_is_valid': True,
+                'success_url': str(self.success_url)
+            })
+        
         # MAGIA HTMX: Respondemos directamente con las órdenes para el frontend
         if self.request.headers.get('HX-Request'):
             import json
             from django.http import HttpResponse
-            response = HttpResponse(status=204) # 204 indica éxito silencioso
+            response = HttpResponse(status=204)
             response['HX-Trigger'] = json.dumps({
-                'updateContratoList': '', # Actualiza la columna de Contratos
-                'updateCargoList': '',    # <--- AÑADE ESTA LÍNEA: Actualiza los contadores del Cargo
-                'showMessage': {'icon': 'success', 'text': 'Contrato actualizado.'}, 
-                'closeModal': '' 
+                'updateContratoList': '',
+                'updateCargoList': '',
+                'showMessage': {'icon': 'success', 'text': 'Contrato actualizado.'},
+                'closeModal': ''
             })
             return response
 
@@ -1238,29 +1273,40 @@ def abreviar_cargo_inteligente(texto_cargo):
 
 class ModeloMovimientoDocxView(View):
     def get(self, request, pk):
+        print(f"[PDF] PK recibido: {pk}")
+        
+        
         # --- FASE 1: RESOLVER 404 ---
         obj = None
-        es_movimiento_real = True
-        
+        es_movimiento_real = False
+
+        # 1. Intentar como CAlta (pk de contrato)
         try:
-            # 1. Asume que enviaron el ID directo del TMovimiento
-            obj = TMovimiento.objects.get(pk=pk)
-        except TMovimiento.DoesNotExist:
-            # 2. LA MAGIA: Si enviaron el ID del Contrato, buscamos su Movimiento asociado
-            movimiento_asociado = TMovimiento.objects.filter(contrato_id=pk).order_by('-id').first()
-            
-            if movimiento_asociado:
-                obj = movimiento_asociado
+            contrato = CAlta.objects.get(pk=pk)
+            # Buscar el movimiento asociado a este contrato (el más reciente)
+            movimiento = TMovimiento.objects.filter(contrato_id=contrato.pk).order_by('-id').first()
+            if movimiento:
+                obj = movimiento
+                es_movimiento_real = True
             else:
-                # 3. Fallback final por si de verdad no hay movimiento
-                try:
-                    obj = CAlta.objects.get(pk=pk)
-                    es_movimiento_real = False
-                except CAlta.DoesNotExist:
-                    obj = CBaja.objects.filter(pk=pk).first()
-                    if not obj:
-                        return HttpResponse("Error: No se encontró el registro.", status=404)
-                    es_movimiento_real = True
+                # Sin movimiento (no debería pasar, porque pdf_url vacío cuando no hay)
+                obj = contrato
+                es_movimiento_real = False
+        except CAlta.DoesNotExist:
+            # 2. Si no es contrato, intentar como TMovimiento directo
+            try:
+                obj = TMovimiento.objects.get(pk=pk)
+                es_movimiento_real = True
+            except TMovimiento.DoesNotExist:
+                # 3. Fallback final a CBaja
+                obj = CBaja.objects.filter(pk=pk).first()
+                if not obj:
+                    return HttpResponse("Error: No se encontró el registro.", status=404)
+                es_movimiento_real = True
+        print(f"[PDF] Objeto encontrado: {obj} (tipo: {type(obj)})")
+        print(f"[PDF] Aspirante: {obj.aspirante.nombre} {obj.aspirante.papellido}")
+        print(f"[PDF] fecha_solicitud: {getattr(obj, 'fecha_solicitud', 'NO_EXISTE')}")
+        print(f"[PDF] observaciones: {getattr(obj, 'observaciones', 'NO_EXISTE')}")
 
         # Contrato base (CAlta activo). Si es baja, esto será None porque ya se borró.
         contrato_base = obj.contrato if es_movimiento_real and hasattr(obj, 'contrato') else (obj if not es_movimiento_real else None)
@@ -1368,30 +1414,54 @@ class ModeloMovimientoDocxView(View):
         tarifa_total_num = total_num / fondo if fondo else 0
         total_str = f"{total_num:.2f} ({tarifa_total_num:.5f})" if total_num > 0 else ""
 
-        # --- LÓGICA DE FECHAS ---
+        # --- LÓGICA DE FECHAS (CORREGIDA) ---
         f_sol = getattr(obj, 'fecha_solicitud', None)
-        fecha_ref = f_sol if f_sol else (getattr(obj, 'fecha_efectiva', None) or getattr(obj, 'fecha_alta', datetime.now()))
         fecha_efectiva = getattr(obj, 'fecha_efectiva', None) or getattr(obj, 'fecha_alta', datetime.now())
+
+        # Fecha de solicitud (puede ser None)
+        if f_sol:
+            d_sol = f_sol.strftime("%d")
+            m_sol = f_sol.strftime("%m")
+            a_sol = f_sol.strftime("%Y")   # ← AÑO COMPLETO 4 DÍGITOS
+        else:
+            d_sol = ""
+            m_sol = ""
+            a_sol = ""
+
+        # Fecha efectiva (siempre presente)
+        ed = fecha_efectiva.strftime("%d")
+        em = fecha_efectiva.strftime("%m")
+        ea = fecha_efectiva.strftime("%Y")   # ← AÑO COMPLETO 4 DÍGITOS
 
         # --- CONSTRUCCIÓN DEL CONTEXTO PARA EL WORD ---
         context = {
             'doc_id': f"{obj.pk:06d}" if es_movimiento_real and not es_alta else "", 
             'ueb': ueb_val,
             
-            'd': fecha_ref.strftime("%d"), 'm': fecha_ref.strftime("%m"), 'a': fecha_ref.strftime("%y"),
-            'ed': fecha_efectiva.strftime("%d"), 'em': fecha_efectiva.strftime("%m"), 'ea': fecha_efectiva.strftime("%Y"),
+            # CABECERA SUPERIOR → FECHA DE SOLICITUD (o vacío)
+            'd': d_sol,
+            'm': m_sol,
+            'a': a_sol,   # ← AÑO DE SOLICITUD (4 dígitos)
+            
+            # BLOQUE INFERIOR → FECHA EFECTIVA
+            'ed': ed,
+            'em': em,
+            'ea': ea,     # ← AÑO DE EFECTIVA (4 dígitos)
             
             'x_alta': "X" if es_alta else "",
             'x_baja': "X" if es_baja else "",
             'x_mov':  "X" if es_movimiento else "",
             
-            'nombre': obj.aspirante.nombre, 'ap1': obj.aspirante.papellido, 'ap2': obj.aspirante.sapellido, 'exp': obj.no_expediente,
+            'nombre': obj.aspirante.nombre,
+            'ap1': obj.aspirante.papellido,
+            'ap2': obj.aspirante.sapellido,
+            'exp': obj.no_expediente,
             
             'cat': cat_val,
             'cargo': cargo_final,
             'area': area_val,
             
-            # --- FILA "A:" (COMPLETAMENTE VACÍA SI ES BAJA) ---
+            # --- FILA "A:" ---
             'rol_nue': "" if es_baja else rol_n,
             'tri_nue': "" if es_baja else romano_a_arabigo(getattr(obj, 'tridente_nuevo', contrato_base.tridente if contrato_base else "")),
             'sal_nue': "" if es_baja else salario_str,
@@ -1726,7 +1796,8 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     contrato.fecha_alta = timezone.now().date()
 
                 contrato.save() # Guardado Físico
-
+                print(f"[WIZARD] Contrato creado con pk: {contrato.pk} - Aspirante: {contrato.aspirante.nombre}")
+                
                 pdf_url = ""
                 
                 # 2. CREAR MOVIMIENTO (Solo si el Caso 2 fue Confirmado)
@@ -1803,7 +1874,7 @@ def exportar_contratos_excel(request):
     fondo_azul = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
     alineacion_centro = Alignment(horizontal="center", vertical="center")
 
-    # Cabeceras (Se añade "Edad" después de "Carnet de Ident.")
+    # Cabeceras (Se añaden las tallas al final)
     cabeceras = [
         "No. Expediente", "Nombre", "1er Apellido", "2do Apellido",
         "Unidad Organizativa", "Departamento", "Cargo", "Cat. Ocupacional", "Tipo de Contrato", "Motivo",
@@ -1811,7 +1882,8 @@ def exportar_contratos_excel(request):
         "Chofer Prof.", "Jubilado Recontratado", "Misión", "País Misión", "Reg. Militar",
         "Grupo Escala", "Rol", "Tridente", "Instructor", "CNCI",
         "Carnet de Ident.", "Edad", "Sexo", "Raza", "Nivel Educacional", "Especialidad", "Título de Oro",
-        "Grado Científico", "Provincia", "Municipio", "Dirección", "Fijo", "Movil"
+        "Grado Científico", "Provincia", "Municipio", "Dirección", "Fijo", "Movil",
+        "Talla Pantalón/Falda", "Talla Camisa/Blusa", "Talla Zapatos" # <--- NUEVAS COLUMNAS
     ]
     ws.append(cabeceras)
 
@@ -1833,12 +1905,17 @@ def exportar_contratos_excel(request):
 
     for c in contratos:
         asp = c.aspirante
+
+        # --- Obtener la categoría mapeada (más claro) ---
+        cat_sigla = getattr(c.cargo.ncargo, 'cat_ocupacional', '') if c.cargo and c.cargo.ncargo else ''
+        cat_valor = CAT_MAP.get(cat_sigla, cat_sigla[:1])  # Si no está en el mapa, usa la primera letra
+
         fila = [
             c.no_expediente, asp.nombre, asp.papellido, asp.sapellido,
             getattr(c.cargo.departamento.unidad_organizativa, 'descripcion', '') if c.cargo and c.cargo.departamento else "",
             getattr(c.cargo.departamento, 'descripcion', '') if c.cargo else "",
             getattr(c.cargo.ncargo, 'descripcion', '') if c.cargo else "",
-            dict(getattr(c.cargo.ncargo, 'cat_ocupacional_choices', [])).get(getattr(c.cargo.ncargo, 'cat_ocupacional', ''), getattr(c.cargo.ncargo, 'cat_ocupacional', '')) if c.cargo and c.cargo.ncargo else "",
+            cat_valor,   # <--- AHORA SÍ SE USA LA VARIABLE
             getattr(c.tipo, 'descripcion', ''), getattr(c.motivo, 'descripcion', ''),
             c.fecha_alta.strftime('%d/%m/%Y') if c.fecha_alta else "", c.duracion or "",
             si_no(c.c_formal), si_no(c.funcionario), si_no(c.designado),
@@ -1847,11 +1924,14 @@ def exportar_contratos_excel(request):
             getattr(c.cargo.ncargo.grupo_escala, 'nivel', '') if c.cargo and c.cargo.ncargo and getattr(c.cargo.ncargo, 'grupo_escala', None) else "",
             getattr(c.rol, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
             c.instructor or 0, c.cnci or 0,
-            # Se inyecta asp.get_edad aquí:
-            asp.doc_identidad, asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(), 
+            asp.doc_identidad, asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
             asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
             asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
-            asp.direccion or "", asp.movil_personal or "", asp.fijo_personal or ""
+            asp.direccion or "", asp.movil_personal or "", asp.fijo_personal or "",
+            # Tallas
+            asp.tpantalon or "",
+            asp.tcamisa or "",
+            asp.tzapatos or ""
         ]
         ws.append(fila)
 
@@ -1859,3 +1939,295 @@ def exportar_contratos_excel(request):
     response['Content-Disposition'] = f'attachment; filename="Listado_Activos_{datetime.now().strftime("%d_%m_%Y")}.xlsx"'
     wb.save(response)
     return response
+
+class ExportarContratoWordView(FormView):
+    template_name = "pages/contrato/exportar_contrato.html" # HTML que crearemos luego
+    form_class = ExportarContratoWordForm
+
+    def _get_contrato_optimizado(self, pk):
+        """ Consulta unificada para evitar N+1 en las relaciones del contrato """
+        try:
+            return CAlta.objects.select_related(
+                'aspirante__municipio',
+                'aspirante__provincia',
+                'aspirante__especialidad',
+                'cargo__departamento__unidad_organizativa',
+                'cargo__ncargo__grupo_escala',
+                'cargo__rol',
+                'tipo',
+                'motivo',
+                'tridente',
+                'cla',
+                'nocturnidad_1__nocturnidad',
+                'nocturnidad_2__nocturnidad'
+            ).get(pk=pk)
+        except CAlta.DoesNotExist:
+            raise Http404("El contrato solicitado no existe.")
+
+    def get_form_kwargs(self):
+        """Inyecta el queryset de cuadros activos al formulario."""
+        kwargs = super().get_form_kwargs()
+
+        from bolsa.models import Aspirante
+
+        kwargs['cuadros_qs'] = (
+            Aspirante.objects.filter(
+                estado='ACTIVO',
+                calta_contratos__cargo__ncargo__cat_ocupacional__in=['CDI', 'CEJ']
+            )
+            .distinct()
+            .order_by('nombre', 'papellido')
+        )
+
+        return kwargs
+
+    def get_initial(self):
+        """ Inicializa el formulario transitorio con datos pre-procesados """
+        initial = super().get_initial()
+        contrato = self._get_contrato_optimizado(self.kwargs['pk'])
+        
+        config = Configuracion.objects.first()
+        
+        if config and config.periodo:
+            initial['periodo_pago'] = 'Quincenal' if config.periodo == 15 else 'Mensual'
+            
+        if contrato.fecha_alta:
+            initial['fecha_efectiva'] = contrato.fecha_alta
+
+        # Extraer textos de nocturnidad
+        textos_noc = []
+        for noc_relation in [contrato.nocturnidad_1, contrato.nocturnidad_2]:
+            if noc_relation and hasattr(noc_relation, 'nocturnidad') and noc_relation.nocturnidad:
+                noc = noc_relation.nocturnidad
+                if noc.hora_inicio and noc.hora_fin:
+                    t_inicio = noc.hora_inicio.strftime('%I:%M %p').lstrip('0')
+                    t_fin = noc.hora_fin.strftime('%I:%M %p').lstrip('0')
+                    textos_noc.append(f"{t_inicio} a {t_fin}")
+
+        if textos_noc:
+            initial['nocturnidad_texto'] = " y ".join(textos_noc)
+
+        return initial
+
+    def get_context_data(self, **kwargs):
+        """ Renderiza la pantalla (Estudio de Exportación) con datos de solo lectura para el usuario """
+        context = super().get_context_data(**kwargs)
+        contrato = self._get_contrato_optimizado(self.kwargs['pk'])
+        context['contrato'] = contrato
+        context['config'] = Configuracion.objects.first()
+        context['provincias'] = NProvincia.objects.all().order_by('nombre')
+
+        # Preparar Grados Científicos para solo lectura
+        grados = []
+        if getattr(contrato, 'maestria', 0) > 0:
+            grados.append(f"Maestría (${contrato.maestria})")
+        if getattr(contrato, 'doctorado', 0) > 0:
+            grados.append(f"Doctorado (${contrato.doctorado})")
+        context['grados_cientificos_texto'] = " • ".join(grados) if grados else "(-)"
+
+        # Cálculos Matemáticos de Salario reutilizando el método del modelo
+        monto_escala = contrato.calcular_salario_escala()
+        context['salario_escala'] = f"{monto_escala:.2f}" if monto_escala else "0.00"
+        context['tarifa_horaria'] = "0.00"
+        
+        config = Configuracion.objects.first()
+        if monto_escala and config and config.fondo_tiempo_calc_tarif:
+            fondo = float(config.fondo_tiempo_calc_tarif)
+            tarifa = round(float(monto_escala) / fondo, 5) if fondo else 0
+            context['tarifa_horaria'] = f"{tarifa:.5f}"
+
+        return context
+
+    def _extraer_fecha_nacimiento(self, doc_identidad):
+        """ Extrae la fecha de nacimiento (dd/mm/yyyy) del Carnet de Identidad Cubano """
+        if not doc_identidad or len(doc_identidad) < 6 or not doc_identidad[:6].isdigit():
+            return "________"
+        try:
+            yy, mm, dd = int(doc_identidad[:2]), int(doc_identidad[2:4]), int(doc_identidad[4:6])
+            hoy = datetime.today()
+            century = 2000 if yy <= hoy.year % 100 else 1900
+            fecha_nac = datetime(year=century + yy, month=mm, day=dd)
+            return fecha_nac.strftime('%d/%m/%Y')
+        except ValueError:
+            return "________"
+
+    def _compilar_contexto_word(self, contrato, cleaned_data, config):
+        """ Consolida todos los datos en un diccionario listo para DocxTpl """
+        
+        # 1. Identificación Cuadro Firmante
+        empleador_nombre = ""
+        empleador_cargo = ""
+        cuadro_aspirante = cleaned_data.get('firma_cuadro')
+        
+        if cuadro_aspirante:
+            empleador_nombre = (
+                f"{cuadro_aspirante.nombre} "
+                f"{cuadro_aspirante.papellido} "
+                f"{cuadro_aspirante.sapellido or ''}"
+            ).strip()
+
+            contrato_actual = (
+                cuadro_aspirante.calta_contratos
+                .filter(cargo__isnull=False)
+                .select_related('cargo', 'cargo__ncargo')
+                .order_by('-fecha_alta')
+                .first()
+            )
+
+            if contrato_actual and contrato_actual.cargo and contrato_actual.cargo.ncargo:
+                empleador_cargo = contrato_actual.cargo.ncargo.descripcion
+
+        # 2. Fechas para el cierre del documento
+        fecha_efectiva = cleaned_data.get('fecha_efectiva')
+        if fecha_efectiva:
+            firma_dia = str(fecha_efectiva.day).zfill(2)
+            meses = {1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 
+                     7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre'}
+            firma_mes = meses.get(fecha_efectiva.month, '').capitalize()
+            firma_anno = str(fecha_efectiva.year)
+        else:
+            firma_dia = firma_mes = firma_anno = ""
+
+        # 3. Matemática Salarial
+        monto_escala = contrato.calcular_salario_escala()
+        salario_escala = f"{monto_escala:.2f}" if monto_escala else ""
+        tarifa_horaria = ""
+        
+        if monto_escala and config and config.fondo_tiempo_calc_tarif:
+            fondo = float(config.fondo_tiempo_calc_tarif)
+            tarifa_horaria = f"{round(float(monto_escala) / fondo, 5):.5f}" if fondo else ""
+
+        # 4. Extracción de Provincia y Municipio (Desde el HTML manual)
+        prov_id = self.request.POST.get('provincia_entidad')
+        muni_id = self.request.POST.get('municipio_entidad')
+        
+        entidad_provincia = ""
+        entidad_municipio = ""
+        
+        if prov_id:
+            from nomencladores.models import NProvincia
+            prov_obj = NProvincia.objects.filter(id=prov_id).first()
+            if prov_obj: entidad_provincia = prov_obj.nombre
+            
+        if muni_id:
+            from nomencladores.models import NMunicipio
+            muni_obj = NMunicipio.objects.filter(id=muni_id).first()
+            if muni_obj: entidad_municipio = muni_obj.nombre
+
+        # 5. Resolución de Nombramiento (Limpiando el "Campo Vacío")
+        res_no = ""
+        if contrato.funcionario and contrato.funcionario_res:
+            res_no = contrato.funcionario_res
+        elif contrato.designado and contrato.designado_res:
+            res_no = contrato.designado_res
+
+        # 6. Construcción Final del Diccionario (Valores por defecto en "" para usar el Subrayado de Word)
+        ctx = {
+            # ENTIDAD Y FIRMANTE
+            'entidad_nombre': (
+                contrato.cargo.departamento.unidad_organizativa.descripcion
+                if contrato.cargo and contrato.cargo.departamento and contrato.cargo.departamento.unidad_organizativa
+                else ""
+            ),
+            'entidad_direccion': config.direccion if config else "",
+            'entidad_rama': config.rama if config else "",
+            'entidad_provincia': entidad_provincia, 
+            'entidad_municipio': entidad_municipio, 
+            'empleador_nombre': empleador_nombre,
+            'empleador_cargo': empleador_cargo,
+
+            # TRABAJADOR
+            'trabajador_nombre': f"{contrato.aspirante.nombre} {contrato.aspirante.papellido} {contrato.aspirante.sapellido or ''}".strip(),
+            'trabajador_ci': contrato.aspirante.doc_identidad,
+            'trabajador_fecha_nacimiento': self._extraer_fecha_nacimiento(contrato.aspirante.doc_identidad).replace('_', ''),
+            'trabajador_profesion': contrato.aspirante.especialidad.nombre if contrato.aspirante.especialidad else "",
+            'trabajador_direccion': contrato.aspirante.direccion or "",
+            'trabajador_provincia': contrato.aspirante.provincia.nombre if contrato.aspirante.provincia else "",
+            'trabajador_municipio': contrato.aspirante.municipio.nombre if contrato.aspirante.municipio else "",
+
+            # CONTRATO (CLÁUSULA PRIMERA Y SEGUNDA)
+            'check_indeterminado': "X" if contrato.tipo and "INDETERMINADO" in contrato.tipo.descripcion.upper() else "",
+            'check_determinado': "X" if contrato.tipo and "INDETERMINADO" not in contrato.tipo.descripcion.upper() else "",
+            'contrato_duracion': f"{contrato.duracion} días." if contrato.duracion else "",
+            'contrato_motivo': contrato.motivo.descripcion if contrato.motivo else "",
+            'cargo_nombre': contrato.cargo.ncargo.descripcion if contrato.cargo else "",
+            'cargo_grupo': contrato.cargo.ncargo.grupo_escala.nivel if contrato.cargo and contrato.cargo.ncargo.grupo_escala else "",
+            
+            # CATEGORÍA OCUPACIONAL
+            'bg_obr': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional == 'OPE' else "",
+            'bg_adm': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional == 'ADM' else "",
+            'bg_ser': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional == 'SER' else "",
+            'bg_tec': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional == 'TEC' else "",
+            'bg_cdi': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional in ['CDI', 'CEJ'] else "",
+
+            # ROLES
+            'check_fundamental': "X" if contrato.rol and 'FUNDAMENTAL' in contrato.rol.tipo.upper() else "",
+            'check_apoyo': "X" if contrato.rol and 'APOYO' in contrato.rol.tipo.upper() else "",
+            'check_decisorio': "X" if contrato.rol and 'DECISORIO' in contrato.rol.tipo.upper() else "",
+            
+            # TRIDENTES
+            'check_t1': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 1 else "",
+            'check_t2': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 2 else "",
+            'check_t3': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 3 else "",
+
+            # SALARIO Y HORARIOS
+            'contrato_jornada': cleaned_data.get('jornada_texto') or "",
+            'contrato_horario': cleaned_data.get('horario_texto') or "",
+            'salario_resolucion': cleaned_data.get('resolucion_salario_escala') or "",
+            'salario_escala': salario_escala,
+            'tarifa_horaria': tarifa_horaria,
+            'importe_total': salario_escala,
+            
+            # ADICIONALES Y PAGOS
+            'pago_cla': f"(${contrato.cla.tarifa_hora})" if contrato.cla else "",
+            'pago_nocturnidad': cleaned_data.get('nocturnidad_texto') or "",
+            'pago_cnci': getattr(contrato, 'cnci', ""),
+            'check_maestria': "X" if getattr(contrato, 'maestria', 0) > 0 else "",
+            'maestria_importe': f"${contrato.maestria}" if getattr(contrato, 'maestria', 0) > 0 else "",
+            'check_doctorado': "X" if getattr(contrato, 'doctorado', 0) > 0 else "",
+            'doctorado_importe': f"${contrato.doctorado}" if getattr(contrato, 'doctorado', 0) > 0 else "",
+            'sistema_pago_texto': cleaned_data.get('sistema_pago') or "",
+            'check_pago_quincenal': "X" if cleaned_data.get('periodo_pago') == 'Quincenal' else "",
+            'check_pago_mensual': "X" if cleaned_data.get('periodo_pago') == 'Mensual' else "",
+            
+            # RESOLUCIONES Y CIERRE
+            'resolucion_nombramiento_no': res_no,
+            'check_es_funcionario': "X" if contrato.funcionario else "",
+            'check_es_designado': "X" if contrato.designado else "",
+            'municipio_firma': entidad_municipio,
+            'firma_dia': firma_dia,
+            'firma_mes': firma_mes,
+            'firma_anno': firma_anno,
+        }
+        return ctx
+
+    def form_valid(self, form):
+        """ Generación y Descarga del Documento Word Binario """
+        contrato = self._get_contrato_optimizado(self.kwargs['pk'])
+        
+        config = Configuracion.objects.first()
+        
+        # Compilar Contexto (Inyectamos form.cleaned_data)
+        context_word = self._compilar_contexto_word(contrato, form.cleaned_data, config)
+        
+        # Localizar plantilla
+        template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'documentos_legales', 'CONTRATO DE TRABAJO 2026.docx')
+        
+        if not os.path.exists(template_path):
+            # Si el archivo fue borrado del disco, lanzamos el 404
+            raise Http404("La plantilla legal oficial no se encuentra en el servidor. Ruta buscada: " + template_path)
+
+        # Inyección a través de DocxTemplate
+        doc = DocxTemplate(template_path)
+        doc.render(context_word)
+        
+        # Preparación de la respuesta HTTP para descarga
+        buffer = BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        
+        filename = f"Contrato_Trabajo_{contrato.aspirante.nombre}_{contrato.aspirante.papellido}.docx"
+        response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        return response

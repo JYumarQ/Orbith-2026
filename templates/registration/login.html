@@ -12,16 +12,7 @@
         /* ==========================================
            1. VARIABLES Y TEMAS DINÁMICOS
            ========================================== */
-        :root {
-            --mod-bg: radial-gradient(circle at top left, #2e1065, #0f172a);
-            --mod-accent: #8b5cf6;
-            --mod-btn: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-            
-            --admin-bg: radial-gradient(circle at top left, #1e3a8a, #020617);
-            --admin-accent: #e65c00; /* Naranja ligeramente más oscuro para que el texto se lea bien */
-            --admin-btn: linear-gradient(135deg, #ff8c42 0%, #e65c00 100%); /* Degradado 100% naranja vibrante, adiós al azul oscuro */
-        }
-
+        /* Fondo fijo morado (Moderador) */
         body {
             margin: 0;
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -29,15 +20,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.3s ease;
+            background: radial-gradient(circle at top left, #2e1065, #0f172a);
+        }
+        /* El botón mantiene el degradado morado */
+        .btn-submit {
+            background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
         }
 
-        body.theme-moderador { background: var(--mod-bg); --current-accent: var(--mod-accent); --current-btn: var(--mod-btn); }
-        body.theme-administrador { background: var(--admin-bg); --current-accent: var(--admin-accent); --current-btn: var(--admin-btn); }
-
         /* ==========================================
-           2. TAMAÑO Y CENTRADO DE LOGOS
-           ========================================== */
+        2. TAMAÑO Y CENTRADO DE LOGOS
+        ========================================== */
         .logo-une { 
             height: 130px; 
             width: auto; 
@@ -86,13 +78,7 @@
             display: flex; flex-direction: column; justify-content: center; 
             color: #ffffff;
         }
-        .role-indicator { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--current-accent); margin-bottom: 2rem; transition: color 0.3s; }
-
-        /* Selector de Roles */
-        .role-selector { display: flex; gap: 0.5rem; padding: 0.4rem; background: rgba(159, 111, 111, 0.05); border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 2rem; }
-        .role-btn { flex: 1; padding: 0.8rem 1rem; border: none; background: transparent; color: #9ca3af; font-weight: 700; border-radius: 0.75rem; cursor: pointer; transition: all 0.3s; }
-        .role-btn.active { background: var(--current-btn); color: #fff; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3); }
-        .role-btn:not(.active):hover { color: #fff; }
+        
 
         /* Inputs */
         .input-group { position: relative; margin-bottom: 1.5rem; }
@@ -106,7 +92,7 @@
         .form-options { display: flex; justify-content: flex-end; margin-bottom: 1.5rem; }
         .form-options a { color: #475569; text-decoration: none; font-size: 0.85rem; font-weight: 700; transition: color 0.2s; }
         .form-options a:hover { color: #0f172a; text-decoration: underline; }
-        .btn-submit { width: 100%; padding: 1.2rem; background: var(--current-btn); border: none; border-radius: 1rem; color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: transform 0.1s; }
+        .btn-submit { width: 100%; padding: 1.2rem; background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); border: none; border-radius: 1rem; color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: transform 0.1s; }
         .btn-submit:active { transform: scale(0.98); }
 
         /* Errores Django */
@@ -121,8 +107,7 @@
     </style>
 </head>
 
-<body id="body-context" class="theme-moderador">
-
+<body id="body-context">
     <div class="login-container">
         <div class="info-panel">
             <div>
@@ -141,18 +126,15 @@
             
             <div style="text-align: center;">
                 <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith Logo" class="logo-orbith">
-                <div id="role-indicator" class="role-indicator">Acceso: Moderador</div>
+                
             </div>
 
-            <div class="role-selector">
-                <button type="button" onclick="setRole('moderador')" id="tab-mod" class="role-btn active">Moderador</button>
-                <button type="button" onclick="setRole('administrador')" id="tab-admin" class="role-btn">Administrador</button>
-            </div>
+            
 
             <form id="formAuthentication" method="POST">
                 {% csrf_token %}
                 
-                <input type="hidden" name="tipo_acceso" id="tipo_acceso" value="moderador">
+                
 
                 {% if form.errors %}
                 <div class="django-error">
@@ -191,28 +173,7 @@
     </div>
 
     <script>
-        function setRole(role) {
-            const body = document.getElementById('body-context');
-            const tabMod = document.getElementById('tab-mod');
-            const tabAdmin = document.getElementById('tab-admin');
-            const roleText = document.getElementById('role-indicator');
-
-            const tipoAccesoInput = document.getElementById('tipo_acceso');
-
-            if (role === 'administrador') {
-                body.className = 'theme-administrador';
-                tabAdmin.classList.add('active');
-                tabMod.classList.remove('active');
-                roleText.innerText = 'Acceso: Administrador';
-                if(tipoAccesoInput) tipoAccesoInput.value = 'administrador';
-            } else {
-                body.className = 'theme-moderador';
-                tabMod.classList.add('active');
-                tabAdmin.classList.remove('active');
-                roleText.innerText = 'Acceso: Moderador';
-                if(tipoAccesoInput) tipoAccesoInput.value = 'moderador';
-            }
-        }
+        
     </script>
 </body>
 </html>

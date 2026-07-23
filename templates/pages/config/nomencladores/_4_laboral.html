@@ -1,355 +1,931 @@
 <div class="accordion-item border-0 bg-transparent mb-2">
-      <h2 class="accordion-header" id="headingLaboral">
-        <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapseLaboral" style="background-color: #fff;">
-          <i class="fas fa-tools me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">Laborales y Profesionales</span>
-        </button>
-      </h2>
-      <div id="collapseLaboral" class="accordion-collapse collapse"
-           data-bs-parent="#accordionNomencladores">
+    <h2 class="accordion-header" id="headingLaboral">
+      <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
+              data-bs-target="#collapseLaboral" style="background-color: #fff;">
+        <i class="fas fa-tools me-2" style="color: #4f46e5;"></i><span class="fw-bold text-slate-800">Laborales y Profesionales</span>
+      </button>
+    </h2>
+    <div id="collapseLaboral" class="accordion-collapse collapse"
+         data-bs-parent="#accordionNomencladores">
         <div class="accordion-body px-0 pt-4 pb-0">
-          
-          <div class="bg-slate-50 p-4 font-sans rounded-4 border" style="min-height: 500px;">
-              
-              <div class="dashboard-header mb-4">
-                  <div class="d-flex align-items-center gap-3">
-                      <div class="icon-box-main">
-                          <i class="fas fa-wrench"></i>
-                      </div>
-                      <div>
-                          <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
-                          <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de condiciones, contratos y especialidades</p>
-                      </div>
-                  </div>
-              </div>
+            
+            <div class="bg-slate-50 p-4 font-sans rounded-4 border" style="min-height: 500px;">
+                
+                <div class="dashboard-header mb-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="icon-box-main">
+                            <i class="fas fa-wrench"></i>
+                        </div>
+                        <div>
+                            <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
+                            <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de condiciones, contratos y especialidades</p>
+                        </div>
+                    </div>
+                </div>
 
-              <div class="grid-dashboard">
-                  
-                  <div class="section-card">
-                      <div class="card-header-flex">
-                          <div class="d-flex align-items-center gap-2">
-                              <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
-                          </div>
-                          <button class="btn-add-modern add-row-btn" data-table="condiciones-table">
-                              <i class="fas fa-plus"></i> Añadir
-                          </button>
-                      </div>
-                      <div class="table-container-modern">
-                          <table class="table-modern" id="condiciones-table">
-                              <thead>
-                                  <tr>
-                                      <th>Nombre</th>
-                                      <th class="text-end">Tarifa Hora</th>
-                                      <th class="text-center" style="width: 90px;">Acciones</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {% for c in condiciones %}
-                                  <tr data-id="{{ c.id }}">
-                                      <td class="nombre-cell">{{ c.nombre }}</td>
-                                      <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
-                                      <td class="text-center">
-                                          <div class="d-flex justify-content-center gap-1">
-                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                <!-- FILA 1: NOCTURNIDAD (50%) Y CONDICIONES LABORALES (50%) -->
+                <div class="row g-4 mb-4">
+                    <!-- Nocturnidad -->
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-main bg-dark text-white"><i class="fas fa-moon"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Nocturnidad</h6>
+                                </div>
+                                <button class="btn-add-modern" onclick="agregarFilaNocturnidad()" title="Añadir">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="tabla-nocturnidad">
+                                    <thead>
+                                        <tr>
+                                            <th>Código</th>
+                                            <th class="text-center">Hora Inicio</th>
+                                            <th class="text-center">Hora Fin</th>
+                                            <th class="text-center">Horas</th>
+                                            <th class="text-center" style="width: 90px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for n in nocturnidades %}
+                                        <tr data-id="{{ n.pk }}">
+                                            <td class="codigo-cell fw-bold">{{ n.codigo }}</td>
+                                            <td class="inicio-cell text-center">{{ n.hora_inicio|time:"g:i A" }}</td>
+                                            <td class="fin-cell text-center">{{ n.hora_fin|time:"g:i A" }}</td>
+                                            <td class="horas-cell text-center text-primary fw-bold">{{ n.horas }}</td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn-action-modern btn-edit-nocturnidad text-secondary" title="Editar">
+                                                        <i class="fas fa-pencil-alt"></i>
+                                                    </button>
+                                                    <button class="btn-action-modern delete-btn text-danger" onclick="eliminarNocturnidad({{ n.pk }})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr id="empty-nocturnidad"><td colspan="5" class="text-center text-muted py-3">No hay nocturnidades registradas</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
-                  <div class="section-card">
-                      <div class="card-header-flex">
-                          <div class="d-flex align-items-center gap-2">
-                              <div class="icon-blue"><i class="fas fa-clipboard-list"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Especialidades</h6>
-                          </div>
-                          <button class="btn-add-modern add-row-btn" data-table="especialidades-table">
-                              <i class="fas fa-plus"></i> Añadir
-                          </button>
-                      </div>
-                      <div class="table-container-modern">
-                          <table class="table-modern" id="especialidades-table">
-                              <thead>
-                                  <tr>
-                                      <th>Nombre</th>
-                                      <th class="text-center" style="width: 100px;">Educ. Sup.</th>
-                                      <th class="text-center" style="width: 90px;">Acciones</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {% for e in especialidades %}
-                                  <tr data-id="{{ e.id }}">
-                                      <td class="nombre-cell">{{ e.nombre }}</td>
-                                      <td class="educ-cell text-center">
-                                          {% if e.educ_superior %}
-                                              <span class="badge bg-label-success" style="font-size: 0.65rem;">SÍ</span>
-                                          {% else %}
-                                              <span class="badge bg-label-secondary" style="font-size: 0.65rem;">NO</span>
-                                          {% endif %}
-                                      </td>
-                                      <td class="text-center">
-                                          <div class="d-flex justify-content-center gap-1">
-                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                    <!-- Condiciones Laborales -->
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
+                                </div>
+                                <button class="btn-add-modern" onclick="agregarFilaCondicion()" title="Añadir">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="condiciones-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th class="text-center">Noct.</th>
+                                            <th class="text-end">Tarifa Hora</th>
+                                            <th class="text-center" style="width: 90px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for c in condiciones %}
+                                        <tr data-id="{{ c.id }}">
+                                            <td class="nombre-cell">{{ c.nombre }}</td>
+                                            <td class="nocturnidad-cell text-center">
+                                                <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="{{ c.nocturnidad_id|default:'' }}" disabled>
+                                                    <option value="">-</option>
+                                                    {% for n in nocturnidades %}
+                                                        <option value="{{ n.pk }}" 
+                                                                {% if c.nocturnidad_id == n.pk %}selected{% endif %}
+                                                                data-codigo="{{ n.codigo }}"
+                                                                data-ocupado-por="{% if n.condicion and n.condicion.id != c.id %}{{ n.condicion.nombre }}{% endif %}">
+                                                            {{ n.codigo }}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </td>
+                                            <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn-action-modern btn-edit-condicion" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                  <div class="section-card">
-                      <div class="card-header-flex">
-                          <div class="d-flex align-items-center gap-2">
-                              <div class="icon-amber"><i class="fas fa-graduation-cap"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Niveles de Prep.</h6>
-                          </div>
-                          <button class="btn-add-modern add-row-btn" data-table="niveles-preparacion-table">
-                              <i class="fas fa-plus"></i> Añadir
-                          </button>
-                      </div>
-                      <div class="table-container-modern">
-                          <table class="table-modern" id="niveles-preparacion-table">
-                              <thead>
-                                  <tr>
-                                      <th>Nivel</th>
-                                      <th class="text-center" style="width: 90px;">Acciones</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {% for np in niveles_preparacion %}
-                                  <tr data-id="{{ np.id }}">
-                                      <td class="nombre-cell">{{ np.nombre }}</td>
-                                      <td class="text-center">
-                                          <div class="d-flex justify-content-center gap-1">
-                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                <!-- FILA 2: CAUSAS ALTA/BAJA (100% ANCHO) -->
+                <div class="row g-4 mb-4">
+                    <div class="col-12">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-purple"><i class="fas fa-user-check"></i></div>
+                                    <div>
+                                        <h6 class="m-0 fw-bold text-slate-800">Causas</h6>
+                                        <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">MOTIVOS DE CAMBIO</small>
+                                    </div>
+                                </div>
+                                <button class="btn-add-modern add-row-btn" data-table="causas-table" title="Añadir">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="causas-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Descripción</th>
+                                            <th class="text-center">Alta</th>
+                                            <th class="text-center" style="width: 70px;">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for c in causas %}
+                                        <tr data-id="{{ c.id }}">
+                                            <td class="desc-cell">{{ c.descripcion }}</td>
+                                            <td class="alta-cell text-center fw-bold {% if c.alta %}text-success{% else %}text-danger{% endif %}">{{ c.alta|yesno:"Sí,No" }}</td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-              </div>
-              
-              <div class="grid-dashboard mt-4">
-                  
-                  <div class="section-card m-0">
-                      <div class="card-header-flex">
-                          <div class="d-flex align-items-center gap-2">
-                              <div class="icon-emerald"><i class="fas fa-file-signature"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Tipos de Contrato</h6>
-                          </div>
-                          <button class="btn-add-modern add-row-btn" data-table="tipocontrato-table">
-                              <i class="fas fa-plus"></i> Añadir
-                          </button>
-                      </div>
-                      <div class="table-container-modern">
-                          <table class="table-modern" id="tipocontrato-table">
-                              <thead>
-                                  <tr>
-                                      <th>Descripción</th>
-                                      <th class="text-center">Plaza</th>
-                                      <th class="text-center">Motivo</th>
-                                      <th class="text-center">Adiestrado</th>
-                                      <th class="text-end" style="width: 100px;">Acciones</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {% for tc in tipos_contrato %}
-                                  <tr data-id="{{ tc.id }}">
-                                      <td class="nombre-cell fw-bold">{{ tc.descripcion }}</td>
-                                      <td class="text-center">
-                                          <input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.ocupa_plaza %}checked{% endif %}>
-                                      </td>
-                                      <td class="text-center">
-                                          <input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.requiere_motivo %}checked{% endif %}>
-                                      </td>
-                                      <td class="text-center">
-                                          <input class="form-check-input toggle-es-adiestrado cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.es_adiestrado %}checked{% endif %}>
-                                      </td>
-                                      <td class="text-end">
-                                          <div class="d-flex justify-content-end gap-1">
-                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                <!-- FILA 3: ESPECIALIDADES (50%) Y NIVELES DE PREPARACIÓN (50%) -->
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-blue"><i class="fas fa-clipboard-list"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Especialidades</h6>
+                                </div>
+                                <button class="btn-add-modern add-row-btn" data-table="especialidades-table">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="especialidades-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nombre</th>
+                                            <th class="text-center" style="width: 100px;">Educ. Sup.</th>
+                                            <th class="text-center" style="width: 90px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for e in especialidades %}
+                                        <tr data-id="{{ e.id }}">
+                                            <td class="nombre-cell">{{ e.nombre }}</td>
+                                            <td class="educ-cell text-center">
+                                                {% if e.educ_superior %}
+                                                    <span class="badge bg-label-success" style="font-size: 0.65rem;">SÍ</span>
+                                                {% else %}
+                                                    <span class="badge bg-label-secondary" style="font-size: 0.65rem;">NO</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
-                  <div class="section-card m-0">
-                      <div class="card-header-flex">
-                          <div class="d-flex align-items-center gap-2">
-                              <div class="icon-indigo"><i class="fas fa-tags"></i></div>
-                              <h6 class="m-0 fw-bold text-slate-800">Motivos de Contratos</h6>
-                          </div>
-                          <button class="btn-add-modern add-row-btn" data-table="motivocontrato-table">
-                              <i class="fas fa-plus"></i> Añadir
-                          </button>
-                      </div>
-                      <div class="table-container-modern">
-                          <table class="table-modern" id="motivocontrato-table">
-                              <thead>
-                                  <tr>
-                                      <th>Descripción</th>
-                                      <th>Tipo de Contrato</th>
-                                      <th class="text-end" style="width: 100px;">Acciones</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {% for m in motivos_contrato %}
-                                  <tr data-id="{{ m.id }}" data-tipo-id="{{ m.tipo_contrato_id|default:'' }}">
-                                      <td class="nombre-cell">{{ m.descripcion }}</td>
-                                      <td class="tipo-cell fw-semibold text-primary">{{ m.tipo_contrato.descripcion|default:"—" }}</td>
-                                      <td class="text-end">
-                                          <div class="d-flex justify-content-end gap-1">
-                                              <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                              <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                          </div>
-                                      </td>
-                                  </tr>
-                                  {% endfor %}
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-amber"><i class="fas fa-graduation-cap"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Niveles de Prep.</h6>
+                                </div>
+                                <button class="btn-add-modern add-row-btn" data-table="niveles-preparacion-table">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="niveles-preparacion-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Nivel</th>
+                                            <th class="text-center" style="width: 90px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for np in niveles_preparacion %}
+                                        <tr data-id="{{ np.id }}">
+                                            <td class="nombre-cell">{{ np.nombre }}</td>
+                                            <td class="text-center">
+                                                <div class="d-flex justify-content-center gap-1">
+                                                    <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-              </div>
+                <!-- FILA 4: TIPOS Y MOTIVOS DE CONTRATO (50/50) -->
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-emerald"><i class="fas fa-file-signature"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Tipos de Contrato</h6>
+                                </div>
+                                <button class="btn-add-modern add-row-btn" data-table="tipocontrato-table">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="tipocontrato-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Descripción</th>
+                                            <th class="text-center">Plaza</th>
+                                            <th class="text-center">Motivo</th>
+                                            <th class="text-center">Adiestrado</th>
+                                            <th class="text-end" style="width: 100px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for tc in tipos_contrato %}
+                                        <tr data-id="{{ tc.id }}">
+                                            <td class="nombre-cell fw-bold">{{ tc.descripcion }}</td>
+                                            <td class="text-center">
+                                                <input class="form-check-input toggle-ocupa-plaza cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.ocupa_plaza %}checked{% endif %}>
+                                            </td>
+                                            <td class="text-center">
+                                                <input class="form-check-input toggle-requiere-motivo cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.requiere_motivo %}checked{% endif %}>
+                                            </td>
+                                            <td class="text-center">
+                                                <input class="form-check-input toggle-es-adiestrado cursor-pointer" type="checkbox" data-id="{{ tc.id }}" {% if tc.es_adiestrado %}checked{% endif %}>
+                                            </td>
+                                            <td class="text-end">
+                                                <div class="d-flex justify-content-end gap-1">
+                                                    <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
 
-          </div>
+                    <div class="col-lg-6">
+                        <div class="section-card h-100 d-flex flex-column m-0">
+                            <div class="card-header-flex">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="icon-indigo"><i class="fas fa-tags"></i></div>
+                                    <h6 class="m-0 fw-bold text-slate-800">Motivos de Contratos</h6>
+                                </div>
+                                <button class="btn-add-modern add-row-btn" data-table="motivocontrato-table">
+                                    <i class="fas fa-plus"></i> Añadir
+                                </button>
+                            </div>
+                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                                <table class="table-modern" id="motivocontrato-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Descripción</th>
+                                            <th>Tipo de Contrato</th>
+                                            <th class="text-end" style="width: 100px;">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for m in motivos_contrato %}
+                                        <tr data-id="{{ m.id }}" data-tipo-id="{{ m.tipo_contrato_id|default:'' }}">
+                                            <td class="nombre-cell">{{ m.descripcion }}</td>
+                                            <td class="tipo-cell fw-semibold text-primary">{{ m.tipo_contrato.descripcion|default:"—" }}</td>
+                                            <td class="text-end">
+                                                <div class="d-flex justify-content-end gap-1">
+                                                    <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
     </div>
 </div>
 
-
 <script>
-  async function guardarCondicion(row) {
-    const nombre = row.querySelector('.input-nombre').value.trim();
-    const tarifa = parseFloat(row.querySelector('.input-tarifa').value) || 0;
-    if (!nombre) return alert('Campo nombre obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/condiciones/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre, tarifa_hora: tarifa })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell">${data.nombre}</td>
-          <td class="tarifa-cell">${data.tarifa_hora} CUP</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
+    // ========================================================
+    // MOTOR EXCLUSIVO PARA CONDICIONES LABORALES (4 COLUMNAS)
+    // ========================================================
+
+    // Clonador dinámico del selector de Nocturnidad
+    function getOpcionesNocturnidad(seleccionado = '') {
+        let opts = '<option value="">-</option>';
+        $('#tabla-nocturnidad tbody tr:not(.fila-edicion):not(#empty-nocturnidad)').each(function() {
+            const id = $(this).attr('data-id');
+            const cod = $(this).find('.codigo-cell').text().trim();
+            // Buscar si esta nocturnidad está ocupada por otra condición
+            let ocupadoPor = '';
+            $('.select-nocturnidad:not(.input-nocturnidad)').each(function() {
+                const $sel = $(this);
+                if ($sel.val() == id) {
+                    const rowId = $sel.closest('tr').attr('data-id');
+                    // Si la fila actual en edición no es la misma, entonces está ocupada
+                    const filaEnEdicion = $('#condiciones-table .fila-edicion');
+                    if (filaEnEdicion.length && filaEnEdicion.attr('data-id') != rowId) {
+                        ocupadoPor = $sel.closest('tr').find('.nombre-cell').text().trim();
+                    }
+                }
+            });
+            opts += `<option value="${id}" ${id == seleccionado ? 'selected' : ''} data-codigo="${cod}" data-ocupado-por="${ocupadoPor}">${cod}</option>`;
+        });
+        return opts;
     }
-  }
 
-  async function guardarEspecialidad(row) {
-    const nombre = row.querySelector('.input-nombre').value.trim();
-    const educSup = row.querySelector('.input-educ-superior').checked;
-    if (!nombre) return alert('Campo nombre obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/especialidades/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre, educ_superior: educSup })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell">${data.nombre}</td>
-          <td class="educ-cell text-center">${data.educ_superior ? 'Sí' : 'No'}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
+    // AÑADIR CONDICIÓN
+    window.agregarFilaCondicion = function() {
+        const html = `
+            <tr class="fila-edicion">
+                <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Ej: Etapa 3"></td>
+                <td class="text-center">
+                    <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;">${getOpcionesNocturnidad()}</select>
+                </td>
+                <td><input type="number" step="0.01" class="form-control form-control-sm input-tarifa text-end" placeholder="0.00"></td>
+                <td class="text-center">
+                    <div class="d-flex justify-content-center gap-1">
+                        <button class="btn-action-modern btn-guardar-condicion text-primary" title="Guardar"><i class="fas fa-save"></i></button>
+                        <button class="btn-action-modern text-secondary" onclick="$(this).closest('tr').remove()" title="Cancelar"><i class="fas fa-times"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        $('#condiciones-table tbody').append(html);
+    };
+
+    // EDITAR CONDICIÓN
+    $(document).on('click', '.btn-edit-condicion', function() {
+        const row = $(this).closest('tr');
+        if (row.hasClass('fila-edicion')) return;
+
+        row.data('original-html', row.html());
+        
+        const nombre = row.find('.nombre-cell').text().trim();
+        const noctVal = row.find('.select-nocturnidad').val() || '';
+        const tarifaText = row.find('.text-end').text().replace('CUP', '').trim();
+        const tarifa = parseFloat(tarifaText) || 0.00;
+
+        row.addClass('fila-edicion').html(`
+            <td><input type="text" class="form-control form-control-sm input-nombre" value="${nombre}"></td>
+            <td class="text-center">
+                <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;">
+                    ${getOpcionesNocturnidad(noctVal)}
+                </select>
+            </td>
+            <td><input type="number" step="0.01" class="form-control form-control-sm input-tarifa text-end" value="${tarifa.toFixed(2)}"></td>
+            <td class="text-center">
+                <div class="d-flex justify-content-center gap-1">
+                    <button class="btn-action-modern btn-guardar-condicion text-primary" title="Guardar"><i class="fas fa-save"></i></button>
+                    <button class="btn-action-modern text-secondary btn-cancelar-condicion" title="Cancelar"><i class="fas fa-times"></i></button>
+                </div>
+            </td>
+        `);
+    });
+
+    $(document).on('click', '.btn-cancelar-condicion', function() {
+        const row = $(this).closest('tr');
+        row.html(row.data('original-html')).removeClass('fila-edicion');
+    });
+
+    // GUARDAR CONDICIÓN EN BD
+    $(document).on('click', '.btn-guardar-condicion', async function() {
+        const row = $(this).closest('tr');
+        const id = row.attr('data-id') || null;
+        const nombre = row.find('.input-nombre').val().trim();
+        
+        // Redondeo a 2 decimales como número (no string)
+        let tarifaRaw = parseFloat(row.find('.input-tarifa').val()) || 0.00;
+        let tarifa = (Math.round(tarifaRaw * 100) / 100).toFixed(2);  // string "12.34"
+        
+        const noct_id = row.find('.input-nocturnidad').val() || null;
+        
+        if (!nombre) return Swal.fire('Atención', 'El nombre es obligatorio', 'warning');
+        
+        // 🔥 VALIDACIÓN FRONTEND: Nocturnidad ocupada
+        if (noct_id) {
+            console.log('noct_id en guardado:', noct_id);
+            let ocupado = false;
+            let ocupadoPor = '';
+            $('.select-nocturnidad:not(.input-nocturnidad)').each(function() {
+                const $sel = $(this);
+                if ($sel.val() == noct_id) {
+                    const rowId = $sel.closest('tr').attr('data-id');
+                    // Si la fila actual está en edición y tiene el mismo id, se permite
+                    if (rowId != id) {
+                        ocupado = true;
+                        ocupadoPor = $sel.closest('tr').find('.nombre-cell').text().trim();
+                    }
+                }
+            });
+            if (ocupado) {
+                return Swal.fire('Atención', `La nocturnidad ya está asignada a "${ocupadoPor}".`, 'warning');
+            }
+        }
+        
+        try {
+            const url = id ? `/nomencladores/api/condiciones/update/${id}/` : "/nomencladores/api/condiciones/";
+            const method = id ? 'PUT' : 'POST';
+            
+            console.log('Enviando al backend:', { 
+                nombre, 
+                tarifa_hora: tarifa,      // Esto es un string
+                nocturnidad_id: noct_id 
+            });
+
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                body: JSON.stringify({ 
+                    nombre, 
+                    tarifa_hora: tarifa,  // ← Número, no string
+                    nocturnidad_id: noct_id 
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Error desconocido');
+            }
+            
+            // Reconstruir la fila
+            row.removeClass('fila-edicion').attr('data-id', data.id).html(`
+                <td class="nombre-cell">${data.nombre}</td>
+                <td class="nocturnidad-cell text-center">
+                    <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="${noct_id || ''}" disabled>
+                        ${getOpcionesNocturnidad(noct_id)}
+                    </select>
+                </td>
+                <td class="text-end font-monospace">${data.tarifa_hora} CUP</td>
+                <td class="text-center">
+                    <div class="d-flex justify-content-center gap-1">
+                        <button class="btn-action-modern btn-edit-condicion text-secondary" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                        <button class="btn-action-modern delete-btn text-danger" title="Eliminar"><i class="fas fa-trash"></i></button>
+                    </div>
+                </td>
+            `);
+            
+            // Refrescar atributos de ocupación en todos los selects
+            $('.select-nocturnidad').each(function() {
+                const $sel = $(this);
+                const val = $sel.val();
+                if (val) {
+                    const $opt = $sel.find(`option[value="${val}"]`);
+                    if ($opt.length) {
+                        // Si esta fila es la que acabamos de guardar, limpiar data-ocupado-por
+                        if ($sel.closest('tr').attr('data-id') == data.id) {
+                            $opt.removeAttr('data-ocupado-por');
+                        }
+                    }
+                }
+            });
+            
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Condición Guardada', showConfirmButton: false, timer: 3000 });
+            
+        } catch (err) {
+            Swal.fire('Error', err.message, 'error');
+        }
+    });
+
+    async function guardarEspecialidad(row) {
+        const nombre = row.querySelector('.input-nombre').value.trim();
+        const educSup = row.querySelector('.input-educ-superior').checked;
+        if (!nombre) return alert('Campo nombre obligatorio');
+        try {
+        const res = await fetch("/nomencladores/api/especialidades/", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre, educ_superior: educSup })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        row.outerHTML = `
+            <tr data-id="${data.id}">
+            <td class="nombre-cell">${data.nombre}</td>
+            <td class="educ-cell text-center">${data.educ_superior ? 'Sí' : 'No'}</td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+            </tr>`;
+        } catch (err) {
+        alert('Error: ' + err.message);
+        }
     }
-  }
 
-  async function guardarNivelPreparacion(row) {
-    const nombre = row.querySelector('.input-nombre').value.trim();
-    if (!nombre) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/niveles-preparacion/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell">${data.nombre}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
+    async function guardarNivelPreparacion(row) {
+        const nombre = row.querySelector('.input-nombre').value.trim();
+        if (!nombre) return alert('Campo obligatorio');
+        try {
+        const res = await fetch("/nomencladores/api/niveles-preparacion/", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        row.outerHTML = `
+            <tr data-id="${data.id}">
+            <td class="nombre-cell">${data.nombre}</td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+            </tr>`;
+        } catch (err) {
+        alert('Error: ' + err.message);
+        }
     }
-  }
 
-  async function guardarTipoContrato(row) {
-    const desc = row.querySelector('.input-desc').value.trim();
-    const ocupa = row.querySelector('.input-ocupa').checked;
-    const motivo = row.querySelector('.input-motivo').checked;
-    const adiestrado = row.querySelector('.input-adiestrado').checked;
-    if (!desc) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/tipo_contrato/create/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo, es_adiestrado: adiestrado })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      location.reload(); // Recargamos para que el servidor pinte los checks y la tabla de motivos se entere
-    } catch (err) { alert('Error: ' + err.message); }
-  }
+    async function guardarTipoContrato(row) {
+        const desc = row.querySelector('.input-desc').value.trim();
+        const ocupa = row.querySelector('.input-ocupa').checked;
+        const motivo = row.querySelector('.input-motivo').checked;
+        const adiestrado = row.querySelector('.input-adiestrado').checked;
+        if (!desc) return alert('Campo obligatorio');
+        try {
+        const res = await fetch("/nomencladores/api/tipo_contrato/create/", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: desc, ocupa_plaza: ocupa, requiere_motivo: motivo, es_adiestrado: adiestrado })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        location.reload(); 
+        } catch (err) { alert('Error: ' + err.message); }
+    }
 
-  async function guardarMotivoContrato(row) {
-    const desc = row.querySelector('.input-desc').value.trim();
-    const tipo_id = row.querySelector('.input-tipo-contrato').value;
-    if (!desc || !tipo_id) return alert('Todos los campos son obligatorios');
-    try {
-      const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre: desc, tipo_contrato_id: tipo_id })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      location.reload(); // Recargamos para reflejar el texto del tipo asociado correctamente
-    } catch (err) { alert('Error: ' + err.message); }
-  }
+    async function guardarMotivoContrato(row) {
+        const desc = row.querySelector('.input-desc').value.trim();
+        const tipo_id = row.querySelector('.input-tipo-contrato').value;
+        if (!desc || !tipo_id) return alert('Todos los campos son obligatorios');
+        try {
+        const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ nombre: desc, tipo_contrato_id: tipo_id })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        location.reload(); 
+        } catch (err) { alert('Error: ' + err.message); }
+    }
+
+    // ==========================================
+    // FUNCION RECUPERADA DE CAUSAS ALTA/BAJAS
+    // ==========================================
+    async function guardarCausa(row) {
+        const desc = row.querySelector('.input-desc').value.trim();
+        const alta = row.querySelector('.input-alta').checked;
+        if (!desc) return alert('Campo obligatorio');
+        try {
+        const res = await fetch("/nomencladores/api/causas/", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+            body: JSON.stringify({ descripcion: desc, alta })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        row.outerHTML = `
+            <tr data-id="${data.id}">
+            <td class="desc-cell">${data.descripcion}</td>
+            <td class="alta-cell text-center fw-bold ${data.alta ? 'text-success' : 'text-danger'}">${data.alta ? 'Sí' : 'No'}</td>
+            <td class="text-center">
+                <div class="btn-group btn-group-sm">
+                <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+            </tr>`;
+        } catch (err) {
+        alert('Error: ' + err.message);
+        }
+    }
+
+    // ==========================================
+    // 1. CÁLCULO EN VIVO DE HORAS DE NOCTURNIDAD (12H AM/PM)
+    // ==========================================
+    // Helper: Convierte componentes de 12 horas a minutos absolutos desde la medianoche
+    function convertToMinutes(hora, min, ampm) {
+        let h = parseInt(hora) || 0;
+        let m = parseInt(min) || 0;
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return h * 60 + m;
+    }
+
+    function calcularHorasNocturnidad(row) {
+        const h1 = $(row).find('.input-inicio-hora').val();
+        const m1 = $(row).find('.input-inicio-min').val();
+        const ampm1 = $(row).find('.input-inicio-ampm').val();
+        
+        const h2 = $(row).find('.input-fin-hora').val();
+        const m2 = $(row).find('.input-fin-min').val();
+        const ampm2 = $(row).find('.input-fin-ampm').val();
+        
+        const $lblHoras = $(row).find('.span-horas');
+
+        if (h1 && h2) {
+            let min1 = convertToMinutes(h1, m1, ampm1);
+            let min2 = convertToMinutes(h2, m2, ampm2);
+
+            if (min2 <= min1) min2 += 24 * 60; // Cruce perfecto de medianoche
+
+            let diff = (min2 - min1) / 60;
+            $lblHoras.text(diff.toFixed(2));
+        } else {
+            $lblHoras.text('0.00');
+        }
+    }
+
+    // Disparador mientras el usuario escribe (campos reales de nocturnidad)
+    $(document).on('input change', 
+        '.input-inicio-hora, .input-inicio-min, .input-inicio-ampm, ' +
+        '.input-fin-hora, .input-fin-min, .input-fin-ampm', 
+        function() {
+            calcularHorasNocturnidad($(this).closest('tr'));
+        }
+    );
+
+    // ==========================================
+    // 2. VALIDACIÓN 1 A 1 EN CONDICIONES LABORALES
+    // ==========================================
+    $(document).on('change', '.select-nocturnidad, .input-nocturnidad', function() {
+        console.log('Evento change disparado en:', this);
+        const $select = $(this);
+        const $selectedOption = $select.find('option:selected');
+        const ocupadoPor = $selectedOption.attr('data-ocupado-por');
+        const codigo = $selectedOption.attr('data-codigo');
+        const prevVal = $select.attr('data-prev-val');
+
+        if (ocupadoPor && ocupadoPor.trim() !== '') {
+            // Si está ocupado, SweetAlert y restauramos el valor previo
+            Swal.fire({
+                icon: 'warning',
+                title: 'Nocturnidad Ocupada',
+                text: `La nocturnidad ${codigo} ya está asignada a la condición laboral "${ocupadoPor}".`,
+                confirmButtonColor: '#4f46e5'
+            });
+            $select.val(prevVal);
+        } else {
+            // Actualizamos memoria
+            $select.attr('data-prev-val', $select.val());
+        }
+    });
+
+    // ==========================================
+    // 3. CRUD NOCTURNIDAD
+    // ==========================================
+    window.agregarFilaNocturnidad = function() {
+        $('#empty-nocturnidad').remove();
+        const html = `
+            <tr class="fila-edicion">
+                <td><input type="text" class="form-control form-control-sm input-codigo text-uppercase" placeholder="Ej: N1"></td>
+                <td>
+                    <div class="d-flex gap-1 align-items-center justify-content-center">
+                        <input type="number" class="form-control form-control-sm input-inicio-hora text-center" min="1" max="12" placeholder="11" style="width: 55px;">:
+                        <input type="number" class="form-control form-control-sm input-inicio-min text-center" min="0" max="59" placeholder="00" value="00" style="width: 55px;">
+                        <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;">
+                            <option value="PM">PM</option>
+                            <option value="AM">AM</option>
+                        </select>
+                    </div>
+                </td>
+                <td>
+                    <div class="d-flex gap-1 align-items-center justify-content-center">
+                        <input type="number" class="form-control form-control-sm input-fin-hora text-center" min="1" max="12" placeholder="7" style="width: 55px;">:
+                        <input type="number" class="form-control form-control-sm input-fin-min text-center" min="0" max="59" placeholder="00" value="00" style="width: 55px;">
+                        <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;">
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                        </select>
+                    </div>
+                </td>
+                <td class="text-center text-primary fw-bold span-horas">0.00</td>
+                <td class="text-center">
+                    <div class="d-flex justify-content-center gap-1">
+                        <button class="btn-action-modern btn-guardar-nocturnidad text-primary" title="Guardar"><i class="fas fa-save"></i></button>
+                        <button class="btn-action-modern text-secondary" onclick="$(this).closest('tr').remove()" title="Cancelar"><i class="fas fa-times"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+        $('#tabla-nocturnidad tbody').append(html);
+        const nuevaFila = $('#tabla-nocturnidad tbody tr:last');
+        calcularHorasNocturnidad(nuevaFila);
+    };
+
+    // ========================================================
+    // GUARDADO ASÍNCRONO SIN RECARGA DE PÁGINA (HTMX STYLE)
+    // ========================================================
+    // Helper: Genera la cadena "HH:MM" de 24 horas requerida de forma estricta por Django
+    function get24hString(hora, min, ampm) {
+        let h = parseInt(hora) || 0;
+        let m = parseInt(min) || 0;
+        if (ampm === 'PM' && h < 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+
+    $(document).on('click', '.btn-guardar-nocturnidad', async function() {
+        const row = $(this).closest('tr');
+        const codigo = row.find('.input-codigo').val().trim();
+        
+        const h1 = row.find('.input-inicio-hora').val();
+        const m1 = row.find('.input-inicio-min').val();
+        const ampm1 = row.find('.input-inicio-ampm').val();
+        
+        const h2 = row.find('.input-fin-hora').val();
+        const m2 = row.find('.input-fin-min').val();
+        const ampm2 = row.find('.input-fin-ampm').val();
+        const id = row.attr('data-id') || null;
+        
+        if(!codigo || !h1 || !h2) return Swal.fire('Atención', 'Todos los campos son obligatorios', 'warning');
+        
+        // Traducimos al vuelo para enviar de forma compatible a Django
+        const hora_inicio = get24hString(h1, m1, ampm1);
+        const hora_fin = get24hString(h2, m2, ampm2);
+        
+        try {
+            const res = await fetch("/nomencladores/api/nocturnidad/create/", { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+                body: JSON.stringify({ id, codigo, hora_inicio, hora_fin })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            // Renderizamos la hora bonita legible para el usuario en el frontend
+            const fmtInicio = `${parseInt(h1)}:${m1.toString().padStart(2, '0')} ${ampm1}`;
+            const fmtFin = `${parseInt(h2)}:${m2.toString().padStart(2, '0')} ${ampm2}`;
+            const computedHoras = row.find('.span-horas').text();
+            
+            // OPERACIÓN EN CALIENTE: Reemplazamos la fila de edición por la fila definitiva
+            row.replaceWith(`
+                <tr data-id="${data.id}">
+                    <td class="codigo-cell fw-bold">${data.codigo}</td>
+                    <td class="inicio-cell text-center">${fmtInicio}</td>
+                    <td class="fin-cell text-center">${fmtFin}</td>
+                    <td class="horas-cell text-center text-primary fw-bold">${computedHoras}</td>
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1">
+                            <button class="btn-action-modern text-secondary" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="btn-action-modern delete-btn text-danger" onclick="eliminarNocturnidad(${data.id})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `);
+
+            // COMPONENTE DINÁMICO: Inyectamos la nueva opción en los dropdowns de Condiciones Laborales activos
+            $('.select-nocturnidad').each(function() {
+                $(this).append(`<option value="${data.id}" data-codigo="${data.codigo}">${data.codigo}</option>`);
+            });
+
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Guardado correctamente', showConfirmButton: false, timer: 3000 });
+
+        } catch (err) {
+            Swal.fire('Error', err.message, 'error');
+        }
+    });
+
+    window.eliminarNocturnidad = async function(id) {
+        const confirm = await Swal.fire({ 
+            title: '¿Eliminar nocturnidad?', 
+            icon: 'warning', 
+            showCancelButton: true, 
+            confirmButtonColor: '#d33', 
+            confirmButtonText: 'Eliminar' 
+        });
+        if (confirm.isConfirmed) {
+            try {
+                const res = await fetch(`/nomencladores/api/nocturnidad/delete/${id}/`, { 
+                    method: 'DELETE', 
+                    headers: { 'X-CSRFToken': csrftoken } 
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error);
+                
+                // 🎯 MAGIA: Borramos la fila y quitamos la opción de los selects SIN RECARGAR
+                $(`tr[data-id='${id}']`).fadeOut(300, function() { $(this).remove(); });
+                $(`.select-nocturnidad option[value='${id}']`).remove();
+                
+                // Si nos quedamos sin datos, mostramos el mensaje de vacío
+                if ($('#tabla-nocturnidad tbody tr').length <= 1) {
+                    $('#tabla-nocturnidad tbody').append('<tr id="empty-nocturnidad"><td colspan="5" class="text-center text-muted py-3">No hay nocturnidades registradas</td></tr>');
+                }
+                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Eliminado', showConfirmButton: false, timer: 3000 });
+            } catch (err) { Swal.fire('Error', err.message, 'error'); }
+        }
+    };
+
+    // ========================================================
+    // EDITAR NOCTURNIDAD EN CALIENTE (SIN RECARGAR)
+    // ========================================================
+    $(document).on('click', '.btn-edit-nocturnidad', function() {
+        const row = $(this).closest('tr');
+        if (row.hasClass('fila-edicion')) return;
+
+        row.data('original-html', row.html()); // Guardamos copia por si cancela
+        
+        const codigo = row.find('.codigo-cell').text().trim();
+        const inicioStr = row.find('.inicio-cell').text().trim();
+        const finStr = row.find('.fin-cell').text().trim();
+        const horas = row.find('.horas-cell').text().trim();
+
+        const parseTime = (str) => {
+            const [time, ampm] = str.split(' ');
+            const [h, m] = time.split(':');
+            return {h, m, ampm};
+        };
+
+        const tInicio = parseTime(inicioStr);
+        const tFin = parseTime(finStr);
+
+        row.addClass('fila-edicion').html(`
+            <td><input type="text" class="form-control form-control-sm input-codigo text-uppercase" value="${codigo}"></td>
+            <td>
+                <div class="d-flex gap-1 align-items-center justify-content-center">
+                    <input type="number" class="form-control form-control-sm input-inicio-hora text-center" min="1" max="12" value="${tInicio.h}" style="width: 55px;">:
+                    <input type="number" class="form-control form-control-sm input-inicio-min text-center" min="0" max="59" value="${tInicio.m}" style="width: 55px;">
+                    <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;">
+                        <option value="AM" ${tInicio.ampm==='AM'?'selected':''}>AM</option>
+                        <option value="PM" ${tInicio.ampm==='PM'?'selected':''}>PM</option>
+                    </select>
+                </div>
+            </td>
+            <td>
+                <div class="d-flex gap-1 align-items-center justify-content-center">
+                    <input type="number" class="form-control form-control-sm input-fin-hora text-center" min="1" max="12" value="${tFin.h}" style="width: 55px;">:
+                    <input type="number" class="form-control form-control-sm input-fin-min text-center" min="0" max="59" value="${tFin.m}" style="width: 55px;">
+                    <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;">
+                        <option value="AM" ${tFin.ampm==='AM'?'selected':''}>AM</option>
+                        <option value="PM" ${tFin.ampm==='PM'?'selected':''}>PM</option>
+                    </select>
+                </div>
+            </td>
+            <td class="text-center text-primary fw-bold span-horas">${horas}</td>
+            <td class="text-center">
+                <div class="d-flex justify-content-center gap-1">
+                    <button class="btn-action-modern btn-guardar-nocturnidad text-primary" title="Guardar"><i class="fas fa-save"></i></button>
+                    <button class="btn-action-modern text-secondary btn-cancelar-nocturnidad" title="Cancelar"><i class="fas fa-times"></i></button>
+                </div>
+            </td>
+        `);
+    });
+
+    // Cancelar edición
+    $(document).on('click', '.btn-cancelar-nocturnidad', function() {
+        const row = $(this).closest('tr');
+        row.html(row.data('original-html')).removeClass('fila-edicion');
+    });
 </script>

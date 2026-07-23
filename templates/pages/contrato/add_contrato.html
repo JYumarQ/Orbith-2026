@@ -1,57 +1,58 @@
+<style>
+    /* Color suave gris azulado para indicar campo pendiente (No es un error) */
+    .input-pendiente {
+        background-color: #ffffff !important; /* Azul/Gris muy claro */
+        border: 1px solid #185db8 !important; 
+        color: #caa914 !important;
+    }
+    .input-pendiente:focus {
+        border-color: #5991d6 !important;
+        box-shadow: 0 0 0 0.2rem rgba(64, 109, 163, 0.25) !important;
+    }
+
+    /* Gris tenue y fondo claro para las opciones que no se pueden seleccionar */
+    select option:disabled {
+        color: #000000 !important;
+        background-color: #9fa4a9 !important;
+        font-style: italic;
+    }
+</style>
+
 <!-- Modal -->
-<div class="modal-dialog" role="document">
+<div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
         <div class="modal-header">
-            <h5 class="modal-title" id="contractModalLabel">Registrar Contrato:  {{aspirante.nombre}} {{aspirante.papellido}} {{aspirante.sapellido}}</h5>
+            <h5 class="modal-title" id="contractModalLabel">Registrar Contrato: {{aspirante.nombre}} {{aspirante.papellido}} {{aspirante.sapellido}}</h5>
         </div>
         <div class="modal-body">
-            <form method="POST"
-                action="{% url 'add_contrato' aspirante.doc_identidad %}" id="contratoForm">                
+            <form method="POST" action="{% url 'add_contrato' aspirante.doc_identidad %}" id="contratoForm">                
                 {% csrf_token %}
-                
                 
                 <div class="nav-align-top mb-4">
                     <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
-                      <li class="nav-item">
-                        <button
-                          type="button"
-                          class="nav-link active"
-                          role="tab"
-                          data-bs-toggle="tab"
-                          data-bs-target="#navs-justified-plantilla"
-                          aria-controls="navs-justified-plantilla"
-                          aria-selected="true"
-                        >
-                          <i class="fas fa-sitemap"></i> Plantilla
-                        </button>
-                      </li>
-                      <li class="nav-item">
-                        <button
-                          type="button"
-                          class="nav-link"
-                          role="tab"
-                          data-bs-toggle="tab"
-                          data-bs-target="#navs-justified-salario"
-                          aria-controls="navs-justified-salario"
-                          aria-selected="false"
-                        >
-                          <i class="fas fa-wallet"></i> Salario
-                        </button>
-                      </li>
+                        <li class="nav-item">
+                            <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#navs-justified-plantilla" aria-controls="navs-justified-plantilla" aria-selected="true">
+                                <i class="fas fa-sitemap"></i> Plantilla
+                            </button>
+                        </li>
+                        <li class="nav-item">
+                            <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#navs-justified-salario" aria-controls="navs-justified-salario" aria-selected="false">
+                                <i class="fas fa-wallet"></i> Salario
+                            </button>
+                        </li>
                     </ul>
+                    
                     <div class="tab-content">
                         
-                        <!--CONTRATO-->
+                        <!-- PESTAÑA: PLANTILLA -->
                         <div class="tab-pane fade show active" id="navs-justified-plantilla" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-3">
                                     {{ form.no_expediente.label }}  
                                     {{ form.no_expediente }}
-
                                     <small id="error_exp_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
-                                        El EXPEDIENTE LABORAL ya existe
+                                        El EXPEDIENTE ya existe
                                     </small>
-
                                 </div>
                                 <div class="col-md-4">
                                     {{ form.tipo.label }}  
@@ -69,6 +70,7 @@
                                     {{ form.duracion.label }}  
                                     {{ form.duracion }}
                                 </div>
+                                
                                 <!--UNIDAD ORGANIZATIVA-->
                                 <div class="col-md-6">
                                     {{ form.unidad.label }}  
@@ -81,17 +83,16 @@
                                 <div class="col-md-12">
                                     {{ form.cargo.label }}  
                                     {{ form.cargo }}
-                                    
-                                    <small id="error_plaza_agotada" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
-                                        </small>
+                                </div>
+                                <div class="mt-1">
+                                    <small id="help-cargo-grupo" class="form-text text-info d-none fw-bold"></small>
                                 </div>
 
-                                
                                 <!--CALIFICACIONES-->
                                 <div class="col-md-4">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.c_formal }}
-                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                        <label class="form-check-label" for="id_c_formal">
                                             {{ form.c_formal.label }}
                                         </label>
                                     </div>
@@ -103,7 +104,7 @@
                                 <div class="col-md-4">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.funcionario }}
-                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                        <label class="form-check-label" for="id_funcionario">
                                             {{ form.funcionario.label }}
                                         </label>
                                     </div>
@@ -115,7 +116,7 @@
                                 <div class="col-md-4">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.designado }}
-                                        <label class="form-check-label" for="flexSwitchCheckDefault">
+                                        <label class="form-check-label" for="id_designado">
                                             {{ form.designado.label }}
                                         </label>
                                     </div>
@@ -180,11 +181,10 @@
                                     {{ form.reg_militar.label }}  
                                     {{ form.reg_militar }}
                                 </div>
-                                
                             </div>
                         </div>
 
-                        <!--SALARIO-->
+                        <!-- PESTAÑA: SALARIO -->
                         <div class="tab-pane fade" id="navs-justified-salario" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-6">
@@ -192,17 +192,17 @@
                                     {{ form.tipo_salario }}
                                 </div>
                                 <div class="col-md-6">
-                                    Categoría Ocupacional
-                                    <input type="text" id="id_cat_ocupacional" class="form-control" readonly placeholder="---">
+                                    <label class="form-label" for="id_cat_ocupacional">Categoría Ocupacional</label>
+                                    <input type="text" name="cat_ocupacional" id="id_cat_ocupacional" value="{{ form.instance.cargo.ncargo.get_cat_ocupacional_display|default:'' }}" class="form-control bg-light" readonly placeholder="---">
                                 </div>
 
                                 <div class="col-md-4">
-                                    {{ form.grupo_escala.label }} 
-                                    {{ form.grupo_escala }}
+                                    <label class="form-label" for="id_grupo_escala">Grupo Escala</label>
+                                    <input type="text" name="grupo_escala" id="id_grupo_escala" value="{{ form.instance.cargo.ncargo.grupo_escala.nivel|default:'' }}" class="form-control bg-light text-center px-1" readonly placeholder="---">
                                 </div>
                                 <div class="col-md-4">
-                                    Rol 
-                                    {{ form.rol }}
+                                    <label class="form-label" for="id_rol">Rol</label>
+                                    <input type="text" name="rol" id="id_rol" value="{{ form.instance.cargo.rol.tipo|default:'' }}" class="form-control bg-light" readonly placeholder="---">
                                 </div>
                                 <div class="col-md-4">
                                     {{ form.tridente.label }}  
@@ -212,52 +212,72 @@
                                 <div class="col-12">
                                     <div class="row g-3 mt-2 p-3 border rounded bg-light" id="resultados_salariales">
                                         <div class="col-md-4">
-                                            <label class="fw-bold text-primary">Salario Escala</label>
+                                            <label for="salarioEscala" class="fw-bold text-primary">Salario Escala</label>
                                             <input class="form-control fw-bold" id="salarioEscala" name="salarioEscala" readonly value="{{ initial_salario_escala }}">
                                         </div>
                                         <div class="col-md-4">
-                                            <label>Tarifa Horaria</label>
+                                            <label for="tarifaHoraria">Tarifa Horaria</label>
                                             <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ initial_tarifa_horaria }}">
                                         </div>
                                         <div class="col-md-4">
-                                            <label>Tarifa Horas Extras</label>
+                                            <label for="tarifaExtras">Tarifa Horas Extras</label>
                                             <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ initial_tarifa_extras }}">
                                         </div>
                                     </div>
                                 </div> 
-                                <div class="col-md-3">
+                                
+                                <div id="disparador-salarios"
+                                    hx-get="{% url 'cargar_salarios' %}"
+                                    hx-trigger="load, actualizarSalarios"
+                                    hx-target="#resultados_salariales"
+                                    hx-swap="innerHTML"
+                                    hx-include="#contratoForm"
+                                    style="display: none;">
+                                </div>
+
+                                <div class="col-md-3 mb-3">
                                     {{ form.maestria.label }}  
                                     {{ form.maestria }}
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-3 mb-3">
                                     {{ form.doctorado.label }}  
                                     {{ form.doctorado }}
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-3 mb-3">
                                     {{ form.instructor.label }}  
                                     {{ form.instructor }}
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-3 mb-3">
                                     {{ form.cnci.label }}  
                                     {{ form.cnci }}
                                 </div>
-                                
-                                <div class="col-md-6">
-                                    {{ form.jornada.label }}  
-                                    {{ form.jornada }}
-                                </div>
 
-                                <div class="col-12">
-                                    
-                                    <div class="d-flex gap-2">
-                                        <div class="flex-fill">{{ form.cla1.label }} {{ form.cla1 }}</div>
-                                        <div class="flex-fill">{{ form.cla2.label }} {{ form.cla2 }}</div>
-                                        <div class="flex-fill">{{ form.cla3.label }} {{ form.cla3 }}</div>
-                                        <div class="flex-fill">{{ form.cla4.label }} {{ form.cla4 }}</div>
-                                        <div class="flex-fill">{{ form.cla5.label }} {{ form.cla5 }}</div>
+                                <!-- CONDICIONES LABORALES ANORMALES Y NOCTURNIDADES -->
+                                <!-- (Movido correctamente a la pestaña de Salario) -->
+                                <div class="col-12 mt-3">
+                                    <div class="row g-3 p-3 bg-slate-50 rounded-3 border">
+                                        
+                                        <div class="col-md-4">
+                                            <label class="form-label text-slate-700 fw-bold" for="id_cla">CLA</label>
+                                            {{ form.cla }}
+                                            {% if form.cla.errors %}<div class="text-danger small mt-1">{{ form.cla.errors.0 }}</div>{% endif %}
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label text-slate-700 fw-bold" for="id_nocturnidad_1">Nocturnidad <span class="text-muted fw-normal">(1)</span></label>
+                                            {{ form.nocturnidad_1 }}
+                                            {% if form.nocturnidad_1.errors %}<div class="text-danger small mt-1">{{ form.nocturnidad_1.errors.0 }}</div>{% endif %}
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label text-slate-700 fw-bold" for="id_nocturnidad_2">Nocturnidad <span class="text-muted fw-normal">(2)</span></label>
+                                            {{ form.nocturnidad_2 }}
+                                            {% if form.nocturnidad_2.errors %}<div class="text-danger small mt-1">{{ form.nocturnidad_2.errors.0 }}</div>{% endif %}
+                                        </div>
+
                                     </div>
                                 </div>
-
+                                <!-- FIN CONDICIONES -->
                                 
                             </div>
                         </div>
@@ -274,276 +294,252 @@
 </div>
 
 <script>
-    (function() { // Función autoejecutable
-        var formulario = document.getElementById('contratoForm');
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        if (evt.detail.elt.id === 'disparador-salarios') {
+            console.log('[DEBUG-ORBITH] 🌐 1. HTMX Request a cargar_salarios INICIADO.');
+        }
+    });
+        
+    window.initOrbithContrato = function() {
+        var $form = $('#contratoForm');
+        var formulario = $form[0];
+        if (!formulario) return;
 
+        const $btnSubmit = $form.find('button[type="submit"]');
 
-        var idAspiranteActual = "{{ aspirante.pk }}"; // Django inyecta el ID aquí
-
-        if (idAspiranteActual) {
-            // Llamamos a la vista que creamos en el paso anterior
+        // 1. RECUPERACIÓN DE DATOS PREVIOS CON FEEDBACK
+        var idAspiranteActual = "{{ aspirante.pk }}";
+        if (idAspiranteActual && !window.datosRecuperados) {
             fetch("{% url 'obtener_datos_previos' %}?aspirante_id=" + idAspiranteActual)
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
                     if (data.existe) {
-                        // Selectores (usando IDs estándar de Django)
-                        var campoExp = formulario.querySelector('#id_no_expediente');
-                        var campoMil = formulario.querySelector('#id_reg_militar');
-
-                        // Rellenar Expediente
-                        if (campoExp) {
-                            campoExp.value = data.no_expediente;
-                            // Efecto visual para que el usuario sepa que se rellenó solo
-                            campoExp.style.backgroundColor = "#e8f0fe"; 
-                            campoExp.setAttribute('title', 'Recuperado del historial anterior');
-                        }
-
-                        // Rellenar Registro Militar
-                        if (campoMil) {
-                            campoMil.value = data.reg_militar;
-                        }
-                        
-                        // Opcional: Mostrar Toast discreto
-                        if(typeof Swal !== 'undefined'){
-                            const Toast = Swal.mixin({toast: true, position: 'top-end', showConfirmButton: false, timer: 3000});
-                            Toast.fire({icon: 'info', title: 'Datos anteriores recuperados'});
+                        var $campoExp = $('#id_no_expediente');
+                        if ($campoExp.length && !$campoExp.val()) {
+                            $campoExp.val(data.no_expediente)
+                                     .css('backgroundColor', '#e8f0fe')
+                                     .attr('title', 'Recuperado del historial');
+                            $('#id_reg_militar').val(data.reg_militar);
+                            if(typeof Swal !== 'undefined') Swal.fire({toast: true, position: 'top-end', icon: 'info', title: 'Datos recuperados', showConfirmButton: false, timer: 3000});
                         }
                     }
-                })
-                .catch(err => console.error('Error recuperando datos:', err));
+                    window.datosRecuperados = true; 
+                }).catch(err => console.error(err));
         }
 
-        // --- 1. Selectores Existentes ---
-        var tipo = formulario.querySelector('#id_tipo');
-        var f_contrato = formulario.querySelector('#id_fecha_alta'); 
-        var duracion = formulario.querySelector('#id_duracion');
+        // 2. SWITCHES Y DEPENDENCIAS
+        function toggleCampo($check, $res) {
+            if (!$check.length || !$res.length) return;
+            $check.is(':checked') ? $res.removeAttr('disabled') : $res.attr('disabled', 'disabled').val('');
+            $res.trigger('change');
+        }
 
-        var c_formal = formulario.querySelector('#id_c_formal');
-        var c_formal_res = formulario.querySelector('#id_c_formal_res');
+        $form.off('change.switches').on('change.switches', '#id_c_formal, #id_mision', function() {
+            if (this.id === 'id_c_formal') toggleCampo($(this), $('#id_c_formal_res'));
+            if (this.id === 'id_mision') toggleCampo($(this), $('#id_pais'));
+        });
 
-        var funcionario = formulario.querySelector('#id_funcionario');
-        var funcionario_res = formulario.querySelector('#id_funcionario_res');
-
-        var designado = formulario.querySelector('#id_designado');
-        var designado_res = formulario.querySelector('#id_designado_res');
         
-        var chofer = formulario.querySelector('#id_profesional');
-        var fv_lic = formulario.querySelector('#id_fecha_vence_lic') || formulario.querySelector('#id_fv_lic');
-        var fv_rec = formulario.querySelector('#id_fecha_vence_recal') || formulario.querySelector('#id_fv_rec');
-        var fv_seg = formulario.querySelector('#id_fecha_vence_seg') || formulario.querySelector('#id_fv_seg');
 
-        var mision = formulario.querySelector('#id_mision');
-        var pais = formulario.querySelector('#id_pais');
+        // 3. TIPO DE CONTRATO
+        $form.off('change.tipo').on('change.tipo', '#id_tipo', function() {
+            var tipoId = $(this).val();
+            var $duracion = $('#id_duracion'), $motivo = $('#id_motivo');
 
-        // --- 2. NUEVOS Selectores para Validación de Expediente ---
-        var expInput = formulario.querySelector('#id_no_expediente');
-        var timerExp = null;
-
-        // Selector para validación de plazas
-        var cargoInput = formulario.querySelector('#id_cargo');
-        var errPlaza = document.getElementById('error_plaza_agotada');
-
-        // --- 3. Funciones de Lógica del Negocio (Existentes) ---
-        function actualizarEstadoContrato() {
-            if (!tipo || !f_contrato) return;
-            var motivo = formulario.querySelector('#id_motivo');
-            var tipoId = tipo.value;
-
-            // Si el select está vacío (-------)
             if (!tipoId) {
-                f_contrato.setAttribute('disabled', 'disabled');
-                if(duracion) duracion.setAttribute('disabled', 'disabled');
-                if(motivo) { motivo.setAttribute('disabled', 'disabled'); motivo.value = ''; }
+                $duracion.attr('disabled', 'disabled').val(''); 
+                $motivo.attr('disabled', 'disabled').empty().append('<option value="">---------</option>');
+                $duracion.trigger('change'); $motivo.trigger('change');
                 return;
             }
 
-            // CAMBIO CLAVE 1: Usamos la etiqueta dinámica de Django para no fallar nunca con la URL
-            var apiUrl = "{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId);
-
-            // Consultar a tu API
-            fetch(apiUrl)
-            .then(response => {
-                if (!response.ok) throw new Error("Error HTTP: " + response.status);
-                return response.json();
-            })
+            fetch("{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId))
+            .then(res => res.json())
             .then(data => {
-                // Para que puedas revisar en la consola de tu navegador si llega True o False
-                console.log("Respuesta de Base de Datos -> ¿Requiere motivo?:", data.requiere_motivo); 
-                
                 var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
-                f_contrato.removeAttribute('disabled');
+                desc.includes('INDETERMINADO') ? $duracion.attr('disabled', 'disabled').val('') : $duracion.removeAttr('disabled');
                 
-                // 1. Lógica de Fechas
-                if (desc.includes('INDETERMINADO')) {
-                    if(duracion) { duracion.setAttribute('disabled', 'disabled'); duracion.value = ''; }
-                } else {
-                    if(duracion) duracion.removeAttribute('disabled');
-                }
-
-                // 2. Lógica del Motivo
-                if (data.requiere_motivo === true) {
-                    if(motivo) motivo.removeAttribute('disabled');
-                } else {
-                    if(motivo) {
-                        motivo.setAttribute('disabled', 'disabled');
-                        motivo.value = ''; 
-                    }
-                }
-            })
-            .catch(err => {
-                console.error('Fallo en la API del contrato:', err);
-                
-                // CAMBIO CLAVE 2: Sistema Anti-bloqueos. 
-                // Si la conexión falla, te abrimos los campos a la fuerza para que puedas seguir trabajando.
-                if(motivo) motivo.removeAttribute('disabled');
-                if(duracion) duracion.removeAttribute('disabled');
-            });
-        }
-
-        function toggleCampo(checkElement, resElement) {
-            if (!checkElement || !resElement) return;
-            if (checkElement.checked) {
-                resElement.removeAttribute('disabled');
-            } else {
-                resElement.setAttribute('disabled', 'disabled');
-            }
-        }
-
-        function actualizarEstadoChofer() {
-            if (!chofer) return;
-            var enable = chofer.checked;
-            
-            [fv_lic, fv_rec, fv_seg].forEach(campo => {
-                if (campo) {
-                    enable ? campo.removeAttribute('disabled') : campo.setAttribute('disabled', 'disabled');
-                }
-            });
-        }
-
-        // --- 4. NUEVA LÓGICA: Validación de Expediente ---
-        if (expInput) {
-            expInput.addEventListener('input', function() {
-                var val = this.value;
-                var errExist = document.getElementById('error_exp_exist');
-                
-                // Limpiar estado visual al escribir
-                if(errExist) errExist.classList.add('d-none');
-                expInput.classList.remove('is-invalid');
-
-                if (val.length < 1) return;
-
-                clearTimeout(timerExp);
-                timerExp = setTimeout(function() {
-                    // Consulta al servidor
-                    fetch("{% url 'validar_datos_contrato' %}?no_expediente=" + val)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.expediente_existe) {
-                            if(errExist) errExist.classList.remove('d-none');
-                            expInput.classList.add('is-invalid');
-                        } else {
-                            expInput.classList.remove('is-invalid');
-                            expInput.classList.add('is-valid');
-                        }
-                    })
-                    .catch(err => console.error('Error validando Expediente:', err));
-                }, 300);
-            });
-        }
-
-
-        // --- 4.1 MOTOR INTELIGENTE DE PLAZAS (SELECT2) ---
-        const $cargoSelect = $('#id_cargo');
-        const $tipoSelect = $('#id_tipo');
-        let ocupaPlazaOficial = false; // Nuestra bandera
-
-        // A. Función para saber si el contrato actual consume plantilla
-        function actualizarReglaPlaza() {
-            const valTipo = $tipoSelect.val();
-            // Leemos el radar que inyectó Django en forms.py
-            const atributoRadar = $tipoSelect.attr('data-ocupa-plaza');
-            const radarPlazas = atributoRadar ? JSON.parse(atributoRadar) : [];
-            
-            // Verificamos si el ID seleccionado está en la lista de los estrictos
-            ocupaPlazaOficial = valTipo ? radarPlazas.includes(parseInt(valTipo)) : false;
-            
-            // Destruimos y recreamos Select2 para forzar que se repinten los colores
-            if ($cargoSelect.hasClass("select2-hidden-accessible")) {
-                $cargoSelect.select2('destroy');
-            }
-            inicializarSelectCargo();
-            validarCargoCruado();
-        }
-
-        // B. El "Pintor" de Select2 (Dibuja los Badges)
-        function formatCargoOption(state) {
-            if (!state.id) return state.text; // Opciones por defecto (ej. "---------")
-            
-            const $el = $(state.element);
-            const aprobadas = parseInt($el.data('aprobadas')) || 0;
-            const ocupadas = parseInt($el.data('ocupadas')) || 0;
-            const disponibles = aprobadas - ocupadas;
-            
-            const estaLleno = disponibles <= 0;
-            
-            // Por defecto, si el contrato no ocupa plaza (Ej: Adiestrado), el badge es informativo
-            let colorPildora = 'bg-secondary'; 
-            let textoTachado = '';
-            
-            if (ocupaPlazaOficial) {
-                // Si el contrato ES oficial (Ej: Indeterminado)
-                if (estaLleno) {
-                    colorPildora = 'bg-danger'; // Rojo
-                    textoTachado = 'text-decoration-line-through text-muted';
-                } else {
-                    colorPildora = 'bg-success'; // Verde
-                }
-            }
-            
-            // Maquetación HTML interna del Option
-            return $(`
-                <div class="d-flex justify-content-between align-items-center w-100 ${textoTachado}">
-                    <span>${state.text}</span>
-                    <span class="badge ${colorPildora} rounded-pill" style="font-size: 0.75rem;">
-                        ${ocupadas} / ${aprobadas}
-                    </span>
-                </div>
-            `);
-        }
-
-        // C. Inicializador de Select2
-        function inicializarSelectCargo() {
-            $cargoSelect.select2({
-                dropdownParent: $cargoSelect.closest('.modal'), // Asegura que el buscador no se bloquee
-                width: '100%',
-                templateResult: formatCargoOption, // Dibuja la lista desplegada
-                templateSelection: function(state) { return state.text; } // Dibuja el campo cerrado
-            });
-            
-            // Escudo anti-clics: Impide seleccionar opciones rojas
-            $cargoSelect.on('select2:selecting', function(e) {
-                const $el = $(e.params.args.data.element);
-                const aprobadas = parseInt($el.data('aprobadas')) || 0;
-                const ocupadas = parseInt($el.data('ocupadas')) || 0;
-                
-                if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
-                    e.preventDefault(); // Detiene el clic
-                    Swal.fire({
-                        toast: true, position: 'top-end', icon: 'error',
-                        title: 'Cargo sin plazas oficiales disponibles',
-                        showConfirmButton: false, timer: 3000
+                $motivo.empty().append('<option value="">---------</option>');
+                if (data.motivos_asociados) {
+                    data.motivos_asociados.forEach(m => {
+                        $motivo.append(new Option(m.descripcion, m.id, false, false));
                     });
                 }
+
+                data.requiere_motivo ? $motivo.removeAttr('disabled') : $motivo.attr('disabled', 'disabled').val('');
+                if ($motivo.hasClass('select2-hidden-accessible')) $motivo.trigger('change.select2');
+                setTimeout(() => { $motivo.trigger('change'); $duracion.trigger('input'); }, 50);
+            }).catch(() => { 
+                $motivo.removeAttr('disabled'); 
+                $duracion.removeAttr('disabled'); 
             });
+        });
+
+        // =======================================================
+        // MOTOR DE DEPENDENCIA: CARGOS (FUNC/DESIG) Y CHOFER MANUAL
+        // =======================================================
+        const $checkFunc = $('#id_funcionario'); 
+        const $checkDesig = $('#id_designado');
+        const $codFunc = $('#id_funcionario_res');
+        const $codDesig = $('#id_designado_res');
+        
+        // Referencias exactas a los campos del Chofer
+        const $checkChofer = $('#id_profesional');
+        const $licencia = $('#id_fv_lic');
+        const $recal = $('#id_fv_rec');
+        const $seguro = $('#id_fv_seg');
+        // BLOQUEO VISUAL Y FÍSICO (SOLO para Funcionario y Designado)
+        if ($checkFunc.length) {
+            $checkFunc.prop('disabled', true).prop('readonly', true);
+            $checkFunc.closest('.form-check').css({'pointer-events': 'none', 'opacity': '0.7'});
+        }
+        if ($checkDesig.length) {
+            $checkDesig.prop('disabled', true).prop('readonly', true);
+            $checkDesig.closest('.form-check').css({'pointer-events': 'none', 'opacity': '0.7'});
+        }
+        // Nota: El switch del Chofer queda libre y clicleable para el usuario
+
+        function evaluarColorCodigo($input) {
+            if ($input.prop('disabled')) return;
+            if ($input.val().trim() === '') {
+                $input.addClass('input-pendiente').removeClass('border-success border-danger is-invalid');
+            } else {
+                $input.addClass('border-success').removeClass('input-pendiente border-danger is-invalid');
+            }
         }
 
-        // D. Protección Anti-Trampas (Si cambian el select de Tipo después de elegir Cargo)
+        function manejarInputCodigo($input, habilitado, esCambioManual, msgTipo) {
+            if (!$input.length) return;
+            if (!habilitado) {
+                if (esCambioManual && $input.val().trim() !== '') {
+                    $input.val('');
+                    // Solo lanza SweetAlert si enviamos un msgTipo (ej: al cambiar el cargo automático)
+                    if (typeof Swal !== 'undefined' && msgTipo) {
+                        Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'Limpieza automática', text: `El nuevo cargo no exige ${msgTipo}.`, showConfirmButton: false, timer: 4500 });
+                    }
+                }
+                $input.prop('disabled', true).removeClass('input-pendiente border-success border-danger is-invalid').css('background-color', '#e9ecef');
+            } else {
+                $input.prop('disabled', false).css('background-color', '#fff');
+                evaluarColorCodigo($input);
+            }
+        }
+
+        // ==========================================
+        // 1. SINCRONIZACIÓN AUTOMÁTICA (Solo Func/Desig)
+        // ==========================================
+        function sincronizarEstadosEspeciales(esCambioManual = true) {
+            const $option = $('#id_cargo').find('option:selected');
+            
+            if (!$option.length || !$option.val()) {
+                if ($checkFunc.length) $checkFunc.prop('checked', false).trigger('change');
+                if ($checkDesig.length) $checkDesig.prop('checked', false).trigger('change');
+                manejarInputCodigo($codFunc, false, esCambioManual, 'Funcionario');
+                manejarInputCodigo($codDesig, false, esCambioManual, 'Designado');
+                return;
+            }
+
+            const isFunc = $option.attr('data-funcionario') === 'true';
+            const isDesig = $option.attr('data-designado') === 'true';
+
+            if ($checkFunc.length) $checkFunc.prop('checked', isFunc).trigger('change');
+            if ($checkDesig.length) $checkDesig.prop('checked', isDesig).trigger('change');
+
+            manejarInputCodigo($codFunc, isFunc, esCambioManual, 'Funcionario');
+            manejarInputCodigo($codDesig, isDesig, esCambioManual, 'Designado');
+        }
+
+        $('#id_cargo').on('change.sincro', function() { sincronizarEstadosEspeciales(true); });
+
+        // ==========================================
+        // 2. CONTROL MANUAL DEL CHOFER PROFESIONAL
+        // ==========================================
+        // Usamos .switches para que se dispare en el arranque inicial unificado
+        $form.off('change.switches_chofer').on('change.switches change', '#id_profesional', function() {
+            let enable = $(this).is(':checked');
+            // Enviamos 'null' como mensaje para que NO salte un SweetAlert molesto cuando el usuario apague el switch a mano
+            manejarInputCodigo($licencia, enable, true, null);
+            manejarInputCodigo($recal, enable, true, null);
+            manejarInputCodigo($seguro, enable, true, null);
+        });
+        
+        // Reactividad en vivo para los colores al escribir
+        $codFunc.add($codDesig).add($licencia).add($recal).add($seguro).on('input change', function() { 
+            evaluarColorCodigo($(this)); 
+        });
+
+        // =======================================================
+        // MOTOR DE EXCLUSIVIDAD PARA NOCTURNIDAD (Nativo)
+        // =======================================================
+        function aplicarExclusividadNocturnidad() {
+            const $n1 = $('#id_nocturnidad_1');
+            const $n2 = $('#id_nocturnidad_2');
+            const val1 = $n1.val();
+            const val2 = $n2.val();
+
+            // 1. Restaurar todas las opciones a su estado normal
+            $n1.find('option').prop('disabled', false).css({'color': '', 'background-color': ''});
+            $n2.find('option').prop('disabled', false).css({'color': '', 'background-color': ''});
+
+            // 2. Bloquear y aplicar gris tenue a la opción cruzada
+            if (val2) {
+                $n1.find(`option[value="${val2}"]`)
+                   .prop('disabled', true)
+                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+            }
+            if (val1) {
+                $n2.find(`option[value="${val1}"]`)
+                   .prop('disabled', true)
+                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+            }
+        }
+
+        $('#id_nocturnidad_1, #id_nocturnidad_2').on('change.exclusividad', function() {
+            aplicarExclusividadNocturnidad();
+        });
+
+        // 4. MOTOR DE PLAZAS (SELECT2 ESTABLE) Y VALIDACIÓN CRUZADA
+        let ocupaPlazaOficial = false;
+        const $cargoSelect = $('#id_cargo');
+
+        function formatCargoOption(state) {
+            if (!state.id) return state.text;
+            const $el = $(state.element);
+            
+            const grupo = $el.data('grupo') || ''; 
+            const aprobadas = parseInt($el.data('aprobadas')) || 0, ocupadas = parseInt($el.data('ocupadas')) || 0;
+            const estaLleno = (aprobadas - ocupadas) <= 0;
+            
+            let color = 'bg-secondary', tachado = '';
+            
+            if (ocupaPlazaOficial) {
+                if (estaLleno) { color = 'bg-danger'; tachado = 'text-decoration-line-through text-muted'; } 
+                else { color = 'bg-success'; }
+            }
+            
+            const textoCargo = grupo
+                ? `<span title="Grupo Escala: ${grupo}" style="cursor: help;">${state.text}</span>`
+                : state.text;
+
+            return $(`<div class="d-flex justify-content-between align-items-center w-100 ${tachado}"><span>${textoCargo}</span><span class="badge ${color} rounded-pill">${ocupadas} / ${aprobadas}</span></div>`);
+        }
+
+        function initSelect2Cargo() {
+            if ($cargoSelect.hasClass("select2-hidden-accessible")) $cargoSelect.select2('destroy');
+            $cargoSelect.select2({ dropdownParent: $cargoSelect.parent(), width: '100%', templateResult: formatCargoOption, templateSelection: s => s.text });
+        }
+        initSelect2Cargo();
+
         function validarCargoCruado() {
             const valCargo = $cargoSelect.val();
-            const errPlaza = document.getElementById('error_plaza_agotada');
+            let $errPlaza = $('#error_plaza_agotada');
             
-            // Limpiamos alertas visuales
-            if(errPlaza) errPlaza.classList.add('d-none');
+            if ($errPlaza.length === 0) {
+                $errPlaza = $('<small id="error_plaza_agotada" class="text-danger fw-bold d-none mt-1"></small>');
+                $cargoSelect.next('.select2-container').after($errPlaza);
+            }
+            
+            $errPlaza.addClass('d-none');
             $cargoSelect.next('.select2-container').find('.select2-selection').removeClass('border-danger');
 
             if (!valCargo) return;
@@ -552,275 +548,224 @@
             const aprobadas = parseInt($optionSeleccionada.data('aprobadas')) || 0;
             const ocupadas = parseInt($optionSeleccionada.data('ocupadas')) || 0;
 
-            // Si el contrato exige plaza, pero el cargo que estaba seleccionado está lleno...
             if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
-                $cargoSelect.val(null).trigger('change.select2'); // Borramos la selección
-                
-                if(errPlaza) {
-                    errPlaza.textContent = "Este contrato exige una vacante. El cargo seleccionado estaba lleno.";
-                    errPlaza.classList.remove('d-none');
-                }
+                $cargoSelect.val(null).trigger('change.select2'); 
+                $errPlaza.html('<i class="fas fa-exclamation-triangle me-1"></i> El tipo de contrato exige vacante. El cargo seleccionado estaba lleno.').removeClass('d-none');
                 $cargoSelect.next('.select2-container').find('.select2-selection').addClass('border-danger');
+                $('#help-cargo-grupo').slideUp(200, function() { $(this).addClass('d-none').html(''); }); 
             }
         }
 
-        // 3. CONECTAMOS LOS CABLES
-        $tipoSelect.on('change', actualizarReglaPlaza);
-        $cargoSelect.on('change', validarCargoCruado);
+        $form.off('change.plaza').on('change.plaza', '#id_tipo', function() {
+            const radar = $(this).attr('data-ocupa-plaza');
+            ocupaPlazaOficial = $(this).val() ? (radar ? JSON.parse(radar).includes(parseInt($(this).val())) : false) : false;
+            initSelect2Cargo(); 
+            validarCargoCruado(); 
+        });
+
+        $cargoSelect.on('select2:selecting', function(e) {
+            const $el = $(e.params.args.data.element);
+            const aprobadas = parseInt($el.data('aprobadas')) || 0, ocupadas = parseInt($el.data('ocupadas')) || 0;
+            if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+                e.preventDefault(); Swal.fire({toast: true, position: 'top-end', icon: 'error', title: 'Cargo sin vacantes', showConfirmButton: false, timer: 3000});
+            }
+        });
         
-        // 4. ARRANQUE INICIAL (Para modo Edición)
-        setTimeout(() => {
-            actualizarReglaPlaza(); 
-        }, 400);
+        $cargoSelect.on('change', validarCargoCruado);
 
+        $form.off('change.cascada').on('change.cascada', '#id_unidad, #id_departamento', function() {
+            $('#id_cargo').empty().trigger('change.select2');
+            if (window.htmx) htmx.trigger('#disparador-salarios', 'actualizarSalarios');
+        });
 
-        // --- 5. NUEVO: Envío AJAX (Evita Crash + Validación Local) ---
-        $(formulario).on('submit', function(e) {
-            e.preventDefault(); 
-            e.stopImmediatePropagation();
+        $cargoSelect.off('change.grupoEscala').on('change.grupoEscala', function() {
+            let $option = $(this).find('option:selected');
+            let grupo = $option.data('grupo');
+            let $helpText = $('#help-cargo-grupo');
 
-            // A) Validación Local (Expediente Duplicado)
-            // Si ya hay error en rojo, no dejamos pasar.
-            var errEl = document.getElementById('error_exp_exist');
-            if (errEl && !errEl.classList.contains('d-none')) {
-                Swal.fire({ 
-                    title: 'Atención', 
-                    text: 'El EXPEDIENTE LABORAL ya existe', 
-                    icon: 'warning',
-                    confirmButtonText: 'OK',
-                    customClass: { confirmButton: 'btn btn-primary' },
-                    buttonsStyling: false
-                });
+            if (grupo) {
+                $helpText.html(`<i class="fas fa-info-circle me-1"></i> Este cargo pertenece al Grupo Escala ${grupo}`)
+                         .removeClass('d-none').hide().slideDown(200);
+            } else {
+                $helpText.slideUp(200, function() { $(this).addClass('d-none').html(''); });
+            }
+        });
+        
+        if ($cargoSelect.val()) {
+            $cargoSelect.trigger('change.grupoEscala');
+        }
+
+        $form.off('change.htmx').on('change.htmx', '#id_cargo, #id_tridente, #id_tipo_salario', function(e, extraParams) {
+            if (extraParams && extraParams.omitirHtmx) {
+                return; 
+            }
+            if (window.htmx) htmx.trigger('#disparador-salarios', 'actualizarSalarios');
+        });
+
+        // 5. EVALUACIÓN DE TRIDENTE Y SALARIOS
+        function evaluarTridente() {
+            const rol = $('#id_rol').val() || '', cat = $('#id_cat_ocupacional').val() || '';
+            const $tridente = $('#id_tridente'), $tipoSalario = $('#id_tipo_salario').val();
+            if (!$tridente.length) return;
+            
+            const esCuadro = rol.toUpperCase().includes('CUADRO') || cat.toUpperCase().includes('CUADRO') || cat.includes('CDI') || cat.includes('CEJ');
+            if (esCuadro || $tipoSalario === 'FIJ') {
+                $tridente.val('').prop('disabled', true);
+            } else {
+                $tridente.prop('disabled', false);
+            }
+            
+            if ($tridente.hasClass('select2-hidden-accessible')) {
+                $tridente.trigger('change.select2');
+            }
+            
+            $tridente.trigger('change', [{ omitirHtmx: true }]);
+        }
+        
+        $('body').off('htmx:afterSwap.salarios').on('htmx:afterSwap.salarios', function(e) {
+            if ($(e.target).attr('id') === 'resultados_salariales') {
+                setTimeout(evaluarTridente, 50);
+            }
+        });
+
+        // 6. VALIDACIÓN VISUAL UNIVERSAL
+        const reglas = {
+            numericos: ['duracion', 'no_expediente'], 
+            obligatorios: [ 'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'fecha_alta', 'duracion', 'unidad', 'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar' ]
+        };
+
+        var timerExp = null;
+        const expedienteOriginal = typeof "{{ form.instance.no_expediente|default:'' }}" !== 'undefined' ? "{{ form.instance.no_expediente|default:'' }}" : ""; 
+
+        $form.off('input.val change.val').on('input.val change.val', 'input, select, textarea', function() {
+            let $el = $(this); let name = this.name;
+            if (!name) return;
+
+            if (reglas.numericos.includes(name)) {
+                let val = $el.val() || '';
+                this.value = val.toString().replace(/[^0-9]/g, '');
+            }
+
+            if (name === 'no_expediente') {
+                let errExist = $('#error_exp_exist');
+                errExist.addClass('d-none'); 
+                $el.removeClass('is-invalid border-danger border-success border-warning'); 
+                clearTimeout(timerExp);
+                
+                if (this.value.length > 0) {
+                    if (typeof expedienteOriginal !== 'undefined' && this.value === expedienteOriginal) {
+                        $el.addClass('border-success');
+                        evaluarBoton();
+                        return;
+                    }
+
+                    timerExp = setTimeout(() => {
+                        fetch("{% url 'validar_datos_contrato' %}?no_expediente=" + this.value)
+                        .then(res => res.json())
+                        .then(data => { 
+                            if (data.expediente_existe) { 
+                                errExist.removeClass('d-none'); 
+                                $el.removeClass('border-success').addClass('is-invalid border-danger'); 
+                            } else {
+                                errExist.addClass('d-none');
+                                $el.removeClass('is-invalid border-danger').addClass('border-success');
+                            }
+                            evaluarBoton(); 
+                        }).catch(err => {
+                            console.error("Error validando expediente:", err);
+                        });
+                    }, 300);
+                }
+            }
+
+            if (reglas.obligatorios.includes(name)) {
+                let esValido = true;
+                if ($el.prop('disabled')) {
+                    $el.removeClass('border-warning border-success is-invalid border-danger');
+                    if ($el.hasClass('select2-hidden-accessible')) $el.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
+                } else {
+                    esValido = this.value.trim() !== '';
+                    if (['duracion', 'no_expediente'].includes(name)) { let num = parseInt(this.value); esValido = (!isNaN(num) && num > 0); }
+                    let $target = $el.hasClass('select2-hidden-accessible') ? $el.next('.select2-container').find('.select2-selection') : $el;
+                    esValido ? $target.removeClass('border-warning').addClass('border-success') : $target.removeClass('border-success').addClass('border-warning');
+                }
+                evaluarBoton();
+            }
+        });
+
+        function evaluarBoton() { 
+            $btnSubmit.prop('disabled', $form.find('.border-warning, .is-invalid').length > 0); 
+        }
+
+        // 7. ENVÍO AJAX ROBUSTO
+        $form.off('submit').on('submit', function(e) {
+            e.preventDefault();
+            
+            $('#id_cargo').prop('disabled', false); 
+            
+            if ($('#error_exp_exist').length && !$('#error_exp_exist').hasClass('d-none')) {
+                Swal.fire({ title: 'Atención', text: 'El EXPEDIENTE LABORAL ya existe', icon: 'warning', customClass: {confirmButton: 'btn btn-primary'} });
                 return;
             }
 
-            // B) Envío al Servidor
             $.ajax({
-                url: formulario.action,
-                type: formulario.method,
-                data: $(formulario).serialize(),
-                dataType: 'json',
+                url: formulario.action, type: formulario.method, data: $form.serialize(), dataType: 'json',
                 success: function(data) {
-                    if (data.form_is_valid) {
-                        // 1. EL ANTÍDOTO: Cerrar dinámicamente y limpiar la pantalla azul forzosamente
+                    if (typeof data === 'object' && data.form_is_valid) {
                         const modalEl = document.querySelector('.modal.show');
-                        if (modalEl) {
-                            const instance = bootstrap.Modal.getInstance(modalEl);
-                            if (instance) instance.hide();
-                        }
-                        $('.modal-backdrop').remove();
-                        $('body').removeClass('modal-open').css('overflow', '');
-
-                        // 2. Lógica del Wizard (con tus variables originales)
+                        if (modalEl) { const instance = bootstrap.Modal.getInstance(modalEl); if (instance) instance.hide(); }
+                        $('.modal-backdrop').remove(); $('body').removeClass('modal-open').css('overflow', '');
+                        
                         if (data.redirect_to_wizard) {
                             $.get(data.redirect_to_wizard, function(html) {
-                                // Aseguramos que exista el contenedor (sin clases de modal para no solapar)
-                                if ($('#editar_empl').length === 0) {
-                                    $('body').append('<div id="editar_empl"></div>');
-                                }
-                                
-                                // Inyectamos el HTML recibido
-                                $('#editar_empl').html(html);
-                                
-                                // 3. LA CLAVE: Inicializamos el modal desde su ID interno, no desde el contenedor padre
-                                const wizardModal = new bootstrap.Modal(document.getElementById('modalMovimientoContrato'));
-                                wizardModal.show();
+                                if ($('#editar_empl').length === 0) $('body').append('<div id="editar_empl"></div>');
+                                $('#editar_empl').html(html); new bootstrap.Modal(document.getElementById('modalMovimientoContrato')).show();
                             });
-                        } else {
-                            // Tu redirección original
-                            window.location.href = data.success_url || "{% url 'list_aspir' %}";
+                        } else { 
+                            window.location.href = data.success_url || "{% url 'list_contrato' %}"; 
                         }
-
-                    } else {
-                        // --- TU LÓGICA DE ERRORES ORIGINAL (Intacta) ---
-                        
-                        // 1. Mostrar Alerta si el servidor mandó mensaje específico
-                        if (data.error_popup) {
-                            Swal.fire({
-                                title: 'No se puede proceder',
-                                text: data.error_popup,
-                                icon: 'error',
-                                confirmButtonText: 'Entendido',
-                                customClass: { confirmButton: 'btn btn-primary' },
-                                buttonsStyling: false
-                            });
-                        }
-                        
-                        // 2. Repintar formulario (para mostrar campos en rojo)
-                        var modalParent = $('#contratoForm').closest('.modal');
-                        var modalContent = modalParent.find('.modal-content');
-                        var newContent = $(data.html_form).find('.modal-content').html() || data.html_form;
-                        modalContent.html(newContent);
-                        
-                        // 3. Reactivar HTMX
-                        if (window.htmx) htmx.process(modalContent[0]);
+                    } 
+                    else if (typeof data === 'object' && !data.form_is_valid) {
+                        if (data.error_popup) Swal.fire({ title: 'Atención', text: data.error_popup, icon: 'error' });
+                        $form.closest('.modal').find('.modal-content').html($(data.html_form).find('.modal-content').html() || data.html_form);
+                        if(typeof window.initOrbithContrato === 'function') window.initOrbithContrato();
                     }
                 },
-                error: function() {
-                    Swal.fire({ title: 'Error', text: 'Error de conexión con el servidor.', icon: 'error' });
-                }
-            });
-        });
-
-        // --- 6. Asignación de Eventos Normales ---
-        if (tipo) tipo.addEventListener('change', actualizarEstadoContrato);
-        
-        if (c_formal) c_formal.addEventListener('change', function() { toggleCampo(c_formal, c_formal_res); });
-        
-        if (funcionario) funcionario.addEventListener('change', function() { toggleCampo(funcionario, funcionario_res); });
-        
-        if (designado) designado.addEventListener('change', function() { toggleCampo(designado, designado_res); });
-        
-        if (chofer) chofer.addEventListener('change', actualizarEstadoChofer);
-
-        if (mision) mision.addEventListener('change', function() { toggleCampo(mision, pais); });
-        // --- 7. Inicialización (Para que se vea bien al abrir) ---
-        actualizarEstadoContrato();
-        toggleCampo(c_formal, c_formal_res);
-        toggleCampo(funcionario, funcionario_res);
-        toggleCampo(designado, designado_res);
-        actualizarEstadoChofer();
-        toggleCampo(mision, pais);
-        if (window.htmx) htmx.process(formulario);
-
-        
-
-    })();
-
-    // =======================================================
-    // MOTOR VISUAL DE VALIDACIÓN UNIVERSAL ORBITH (BLINDADO)
-    // =======================================================
-    function iniciarValidacionOrbith() {
-        const $form = $('#contratoForm');
-        const $btnSubmit = $('button[type="submit"]');
-        if (!$form.length) return;
-
-        // 1. SOLUCIÓN JORNADA: Se eliminó 'jornada' de la lista
-        const reglas = {
-            numericos: ['no_expediente', 'exp_laboral', 'maestria', 'doctorado'],
-            obligatorios: ['no_expediente', 'exp_laboral', 'tipo', 'unidad', 'departamento', 'cargo', 'tipo_salario', 'fecha_alta', 'reg_militar']
-        };
-
-        let tiposRequierenMotivo = [];
-        const $tipoInput = $form.find('[name="tipo"]');
-        if ($tipoInput.length && $tipoInput.attr('data-requiere-motivo')) {
-            tiposRequierenMotivo = JSON.parse($tipoInput.attr('data-requiere-motivo'));
-        }
-
-        function pintarBorde(input, esValido) {
-            if (!input) return;
-            let $elementoVisual = $(input);
-            
-            // Soporte Select2
-            if ($elementoVisual.hasClass('select2-hidden-accessible')) {
-                const $select2 = $elementoVisual.next('.select2-container').find('.select2-selection');
-                if ($select2.length) $elementoVisual = $select2;
-            }
-
-            if ($elementoVisual.length) {
-                if (esValido) {
-                    $elementoVisual.removeClass('border-warning').addClass('border-success');
-                } else {
-                    $elementoVisual.removeClass('border-success').addClass('border-warning');
-                }
-            }
-            evaluarBoton();
-        }
-
-        function evaluarBoton() {
-            const errores = $form.find('.border-warning').length;
-            if ($btnSubmit.length) $btnSubmit.prop('disabled', errores > 0);
-        }
-
-        // --- DELEGACIÓN DE EVENTOS (LA SOLUCIÓN PARA HTMX) ---
-        // Al poner el evento en $form, sobrevive aunque HTMX recargue los campos
-
-        // Filtro Numérico Estricto
-        $form.on('input', 'input', function() {
-            const name = this.name;
-            if (reglas.numericos.includes(name)) {
-                this.value = this.value.replace(/[^0-9]/g, ''); 
-                let valido = this.value.trim() !== '';
-                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
-                pintarBorde(this, valido);
-            }
-        });
-
-        // Validación de Selectores
-        $form.on('change', 'select, input', function() {
-            const name = this.name;
-            let valido = this.value.trim() !== '';
-
-            
-
-            // Lógica Condicional: Motivo
-            if (name === 'tipo') {
-                const $motivo = $form.find('[name="motivo"]');
-                if ($motivo.length) {
-                    const necesitaMotivo = tiposRequierenMotivo.includes(parseInt(this.value));
-                    if (necesitaMotivo) {
-                        $motivo.prop('disabled', false);
-                        pintarBorde($motivo[0], $motivo.val().trim() !== "");
+                error: function(xhr) { 
+                    if (xhr.responseText && xhr.responseText.includes('errorlist')) {
+                        $form.closest('.modal').find('.modal-content').html($(xhr.responseText).find('.modal-content').html() || xhr.responseText);
+                        if(typeof window.initOrbithContrato === 'function') window.initOrbithContrato();
                     } else {
-                        $motivo.prop('disabled', true);
-                        $motivo.val('');
-                        if ($motivo.hasClass('select2-hidden-accessible')) {
-                            $motivo.trigger('change.select2');
-                            $motivo.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success');
-                        } else {
-                            $motivo.removeClass('border-warning border-success');
-                        }
+                        Swal.fire({ title: 'Error', text: 'Error de conexión del servidor o datos inválidos.', icon: 'error' }); 
                     }
-                }
-            }
-
-            // 2. SOLUCIÓN MOTIVO/TRIDENTE NARANJA: 
-            if (reglas.obligatorios.includes(name) || name === 'motivo' || name === 'tridente') {
-                if (name === 'no_expediente') valido = parseInt(this.value) > 0;
-                
-                let $el = $(this);
-                if ($el.prop('disabled') || $el.prop('readonly')) {
-                    // 1. Limpiamos el select nativo
-                    $el.removeClass('border-warning is-invalid border-danger');
-                    // 2. Limpiamos el componente visual de Select2 (Esta era la falla)
-                    if ($el.hasClass('select2-hidden-accessible')) {
-                        $el.next('.select2-container').find('.select2-selection').removeClass('border-warning border-success is-invalid border-danger');
-                    }
-                    // 3. Forzamos a evaluar el botón ahora que quitamos el error
-                    evaluarBoton();
-                } else {
-                    // Si está activo, lo evaluamos normal
-                    pintarBorde(this, valido);
-                }
-            }
-        });
-
-        // Inicialización Inteligente
-        setTimeout(() => {
-            reglas.obligatorios.forEach(name => {
-                const $el = $form.find(`[name="${name}"]`);
-                if ($el.length) {
-                    let esValido = $el.val() && $el.val().trim() !== '';
-                    if (name === 'no_expediente') esValido = parseInt($el.val() || 0) > 0;
-                    pintarBorde($el[0], esValido);
                 }
             });
-
-            // Disparamos dependencias
-            $form.find('[name="tipo_salario"]').trigger('change');
-            $form.find('[name="tipo"]').trigger('change');
-        }, 500);
-
-        // --- RECONEXIÓN HTMX ---
-        // Si HTMX inyecta nuevos campos, obligamos al sistema a repasar las validaciones
-        document.body.addEventListener('htmx:afterSwap', function(event) {
-            if ($form[0].contains(event.target)) {
-                setTimeout(() => {
-                    $form.find('[name="tipo_salario"]').trigger('change');
-                }, 100);
-            }
         });
-    }
 
-    iniciarValidacionOrbith();
+        // =======================================================
+        // ARRANQUE INICIAL UNIFICADO Y LIMPIO
+        // =======================================================
+        $('#id_c_formal, #id_funcionario, #id_designado, #id_mision, #id_profesional').trigger('change.switches');
+        $('#id_tipo').trigger('change.tipo');
+        evaluarTridente();
+        
+        setTimeout(() => { 
+            $('#id_tipo').trigger('change.plaza'); 
+            $('#id_fecha_alta').removeAttr('disabled').trigger('change.val');
+            reglas.obligatorios.forEach(name => { $form.find(`[name="${name}"]`).trigger('change.val'); });
+            
+            // LA CURA DEL ESTILO: Quitamos las clases de Select2 para que se rendericen nativos y hermosos
+            $('#id_cla, #id_nocturnidad_1, #id_nocturnidad_2').removeClass('select2-basic select-nocturnidad');
+            
+            // Sincronizar UI sin mostrar alertas
+            sincronizarEstadosEspeciales(false); 
+            aplicarExclusividadNocturnidad();
+            
+        }, 400);
+    }; // <-- Fin initOrbithContrato
+
+    // Disparamos la función al cargar el HTML
+    $(document).ready(function() { 
+        window.initOrbithContrato(); 
+    });
 </script>

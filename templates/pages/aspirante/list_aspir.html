@@ -105,7 +105,12 @@
                     <i class="fas fa-filter"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
-                    <div class="dropdown-header-custom"><i class="fas fa-map-marker-alt me-1"></i> Ubicación</div>
+                    <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
+                        <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                            <i class="fas fa-undo-alt me-1"></i> Reset
+                        </button>
+                    </div>
                     <div class="mb-2">
                         <label class="small text-muted">Provincia</label>
                         <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
@@ -235,12 +240,18 @@
     var $ = jQuery.noConflict();
     
     function abrir_modal_edicion(url){
-      $('#editar_aspir').load(url, function(){
-        $(this).modal('show');
-        if (window.htmx) {
-          htmx.process(this); // <-- Seguro e infalible
-        }
-      });
+        $('#editar_aspir').load(url, function(){
+            $(this).modal('show');
+            if (window.htmx) {
+                htmx.process(this);
+            }
+            // ✅ GARANTIZAR QUE EL SCRIPT DEL MODAL SE EJECUTE
+            setTimeout(function() {
+                if (typeof window.initOrbithEdicion === 'function') {
+                    window.initOrbithEdicion();
+                }
+            }, 200);
+        });
     }
     
     function abrir_modal_creacion(url){
@@ -490,6 +501,26 @@
             }
         }
     });
+
+    function resetFiltros() {
+        // Limpiar todos los campos de filtro
+        const selects = document.querySelectorAll('.dropdown-menu select');
+        selects.forEach(sel => {
+            // Si el select tiene un valor predeterminado (option vacío), lo seleccionamos
+            const defaultOption = sel.querySelector('option[value=""]');
+            if (defaultOption) {
+                sel.value = '';
+            }
+        });
+        // También limpiar el input de búsqueda principal
+        const searchInput = document.getElementById('search');
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        // Disparar la búsqueda para actualizar la tabla
+        triggerSearch();
+    }
+    
 </script>
 
 {% include 'pages/contrato/partials/modal_historico_include.html' %}

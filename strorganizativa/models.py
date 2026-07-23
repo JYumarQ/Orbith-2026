@@ -99,7 +99,7 @@ class Departamento(Base):
     class Meta:
         verbose_name = ("Departamento")
         verbose_name_plural = ("Departamentos")
-        ordering = ['orden_informe', 'descripcion'] # Orden local de fábrica
+        ordering = ['orden_informe', 'id'] # Orden local de fábrica
         constraints = [
             # REGLA 2: Blindaje SQL. Garantiza que dentro de una misma Unidad no se repita el orden
             models.UniqueConstraint(
@@ -120,18 +120,24 @@ class CargoPlantilla(Base):
     cant_aprobada = models.IntegerField(default=0)
     cant_cubierta = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
-
+    funcionario = models.BooleanField(default=False, verbose_name='Funcionario')
+    designado = models.BooleanField(default=False, verbose_name='Designado')
+    orden_informe = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name="Orden de prioridad"
+    )
+    
     @property
     def cant_cubierta_real(self):
         """
-        Cuenta la cantidad de personas REALMENTE activas en este cargo.
-        Filtra por los contratos de alta (CAlta) cuyo aspirante esté 'ACTIVO'.
+        Cuenta la cantidad de personas REALMENTE activas en este cargo
+        QUE OCUPAN UNA PLAZA OFICIAL (Ej: Indeterminados).
         """
         from contratos.models import CAlta
-        # Contamos solo contratos vigentes donde el trabajador no sea baja
         return CAlta.objects.filter(
             cargo=self, 
-            aspirante__estado='ACTIVO'
+            aspirante__estado='ACTIVO',
+            tipo__ocupa_plaza=True  # <--- EL FILTRO DE ORO
         ).count()
     
     def refrescar_conteo_plazas(self):
@@ -147,6 +153,21 @@ class CargoPlantilla(Base):
     class Meta:
         verbose_name = ("Cargo")
         verbose_name_plural = ("Cargos")
+        ordering = ['orden_informe', 'ncargo__descripcion']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['departamento', 'orden_informe'],
+                name='unique_orden_cargo_por_departamento'
+            )
+        ]
+            
+
+    def clean(self):
+        super().clean()
+        # BLINDAJE DE INTEGRIDAD: Exclusividad mutua absoluta
+        if self.funcionario and self.designado:
+            raise ValidationError("Inconsistencia de datos: Un cargo no puede ser Funcionario y Designado al mismo tiempo.")
+
         
     def save(self, *args, **kwargs):
         # LÓGICA AUTOMÁTICA: Si plazas es 0 -> Inactivo, si > 0 -> Activo

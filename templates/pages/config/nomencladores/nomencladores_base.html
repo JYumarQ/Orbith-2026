@@ -20,7 +20,7 @@
 
 <script>
   // Esta línea es vital para que Django te permita guardar datos
-  const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  var csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 
   function cancelAllInsertRows() {
       document.querySelectorAll('.insert-row').forEach(row => row.remove());

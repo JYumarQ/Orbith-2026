@@ -110,47 +110,7 @@
                     </div>
                 </div>
 
-                <div class="col-lg-4 pe-0">
-                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(147, 51, 234, 0.4);">
-                        <div class="card-header-flex">
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="icon-purple"><i class="fas fa-user-check"></i></div>
-                                <div>
-                                    <h6 class="m-0 fw-bold text-slate-800">Causas</h6>
-                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">MOTIVOS DE CAMBIO</small>
-                                </div>
-                            </div>
-                            <button class="btn-add-modern add-row-btn" data-table="causas-table" title="Añadir">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
-                            <table class="table-modern" id="causas-table">
-                                <thead>
-                                    <tr>
-                                        <th>Descripción</th>
-                                        <th class="text-center">Alta</th>
-                                        <th class="text-center" style="width: 70px;">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for c in causas %}
-                                    <tr data-id="{{ c.id }}">
-                                        <td class="desc-cell">{{ c.descripcion }}</td>
-                                        <td class="alta-cell text-center fw-bold {% if c.alta %}text-success{% else %}text-danger{% endif %}">{{ c.alta|yesno:"Sí,No" }}</td>
-                                        <td class="text-center">
-                                            <div class="d-flex justify-content-center gap-1">
-                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                                <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                
 
             </div>
         </div>
@@ -217,31 +177,5 @@
     }
   }
 
-  async function guardarCausa(row) {
-    const desc = row.querySelector('.input-desc').value.trim();
-    const alta = row.querySelector('.input-alta').checked;
-    if (!desc) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/causas/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ descripcion: desc, alta })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="desc-cell">${data.descripcion}</td>
-          <td class="alta-cell">${data.alta ? 'Sí' : 'No'}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  }
+  
 </script>

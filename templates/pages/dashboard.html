@@ -1,15 +1,14 @@
 {% extends 'base/base.html' %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard RRHH{% endblock %}
 
 {% block content %}
 {% load static %}
-<!-- Content wrapper -->
 <div class="content-wrapper">
   <div class="container-xxl flex-grow-1 container-p-y">
-    <div class="row g-3">
-      {% comment %}<!-- Card Bienvenida Sneat (creativo, disruptivo, SVG decorativo) -->
-      <div class="col-12 mb-3">
+    
+    {% comment %}<div class="row mb-3">
+      <div class="col-12">
         <div class="card h-100 position-relative overflow-hidden" style="background: linear-gradient(90deg, #f8fafc 60%, #f3f4f6 100%); min-height: 150px;">
           <svg width="120" height="120" viewBox="0 0 120 120" fill="none" class="position-absolute end-0 top-0 opacity-25" style="z-index:0;">
             <circle cx="60" cy="60" r="60" fill="#6366f1"/>
@@ -24,358 +23,416 @@
             <img src="{% static 'img/illustrations/man-with-laptop-light.png' %}" height="100" alt="RRHH" class="ms-3 d-none d-md-block" style="filter: drop-shadow(0 4px 12px #6366f133);" />
           </div>
         </div>
-      </div> {% endcomment %}
-      <!-- Métricas clave RRHH (cards creativos, iconos grandes, gradientes, badges) -->
-      <div class="col-12">
-        <div class="row g-3">
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
-              <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">{{ contratos.count }}</div>
-              <span class="badge bg-label-success mb-1">Total</span>
-              <small class="text-muted">Empleados</small>
-            </div>
-          </div>
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
-              <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">132</div>
-              <span class="badge bg-label-primary mb-1">Nuevo</span>
-              <small class="text-muted">Contratos</small>
-            </div>
-          </div>
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
-              <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">$1,250</div>
-              <span class="badge bg-label-warning mb-1">↑</span>
-              <small class="text-muted">Salario Prom.</small>
-            </div>
-          </div>
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
-              <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-user-voice fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">{{ plazas.vacantes }}</div>
-              <span class="badge bg-label-danger mb-1">Alerta</span>
-              <small class="text-muted">Vacantes</small>
-            </div>
-          </div>
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
-              <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-run fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">2.1%</div>
-              <span class="badge bg-label-warning mb-1">Bajo</span>
-              <small class="text-muted">Ausentismo</small>
-            </div>
-          </div>
-          <div class="col-6 col-md-3 col-lg-2">
-            <div class="card text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
-              <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
-              <div class="fw-bold fs-3">{{ dptos.count }}</div>
-              <span class="badge bg-label-info mb-1">Deptos</span>
-              <small class="text-muted">Departamentos</small>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Gráficos creativos y disruptivos -->
-      <!-- Género: barra de progreso animada con avatares -->
-      <div class="col-12 col-md-4 mt-3">
-        <div class="card h-100 shadow border-0 animate__animated animate__fadeInLeft">
-          <div class="card-body d-flex flex-column justify-content-center align-items-center">
-            <h6 class="mb-3">Equilibrio de Género</h6>
-            <div class="w-100 position-relative" style="height: 60px; margin-bottom: 18px;">
-              <div class="d-flex align-items-center justify-content-between w-100" style="height: 60px;">
-                <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;">
-                  <i class="bx bx-male fs-1 text-info" title="Masculino"></i>
-                </span>
-                <div class="flex-grow-1 position-relative" style="height: 60px;">
-                  <div class="d-flex w-100" 
-                      style="height: 60px; background: #f3f4f6; border-radius: 30px; overflow: hidden;">
-                    <!-- Parte hombres -->
-                    <div class="d-flex align-items-center justify-content-center bg-gradient-info"
-                        style="width: {{ generos.porc_hombres }}%; font-size:0.8em;">
-                      <span class="text-white fw-bold">{{ generos.porc_hombres }}%</span>
-                    </div>
-                    <!-- Parte mujeres -->
-                    <div class="d-flex align-items-center justify-content-center bg-gradient-danger"
-                        style="width: {{ generos.porc_mujeres }}%; font-size:0.8em;">
-                      <span class="text-white fw-bold">{{ generos.porc_mujeres }}%</span>
-                    </div>
-                  </div>
-                </div>
-                <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;">
-                  <i class="bx bx-female fs-1 text-danger" title="Femenino"></i>
-                </span>
-              </div>
-              <span class="badge bg-label-info position-absolute start-0 top-100 mt-2" style="font-size: 0.95em;">Masculino</span>
-              <span class="badge bg-label-danger position-absolute end-0 top-100 mt-2" style="font-size: 0.95em;">Femenino</span>
-            </div>
-            <div class="text-center mt-4">
-              <small class="text-muted">Tendencia: <span class="fw-bold text-success">+2% mujeres este mes(calcular)</span></small>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Ocupación: gauge con icono -->
-      <div class="col-12 col-md-4 mt-3">
-        <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp">
-          <div class="card-body text-center">
-            <h6 class="mb-2">Ocupación de Plazas</h6>
-            <div id="plazasGaugeChart" style="height: 120px;"></div>
-            <div class="d-flex align-items-center justify-content-center mt-2 gap-2">
-              <i class="bx bx-user-check fs-3 text-success"></i>
-              <span class="fw-bold text-success" style="font-size:1.3em;">{{ plazas.porc_cubiertas }}</span>
-              <span class="text-muted">ocupadas</span>
-            </div>
-            <div class="d-flex justify-content-center gap-2 mt-1">
-              <span class="badge bg-label-success">{{ plazas.cubiertas }} ocupadas</span>
-              <span class="badge bg-label-secondary">{{ plazas.vacantes }} vacantes</span>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Altas/Bajas: área apilada y mini-métricas -->
-      <div class="col-12 col-md-4 mt-3">
-        <div class="card h-100 shadow border-0 animate__animated animate__fadeInRight">
-          <div class="card-body">
-            <h6 class="mb-2">Altas y Bajas por Mes</h6>
-            <div id="altasBajasAreaChart" style="height: 110px;"></div>
-            <div class="row text-center mt-2">
-              <div class="col-6">
-                <span class="fw-bold text-primary" style="font-size:1.2em;">+12</span>
-                <span class="badge bg-label-primary ms-1">Altas</span>
-              </div>
-              <div class="col-6">
-                <span class="fw-bold text-danger" style="font-size:1.2em;">-3</span>
-                <span class="badge bg-label-danger ms-1">Bajas</span>
-              </div>
-            </div>
-            <div class="text-center mt-1">
-              <small class="text-muted">Tendencia mensual</small>
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- Cards inferiores alineados: Cumpleaños, Avisos, Resumen -->
-      <div class="dashboard-bottom-row mt-3" style="display: flex; gap: 18px;">
-        <div class="card mb-0 shadow border-0 animate__animated animate__fadeInLeft" style="flex:1; min-width:0; height: 370px;">
-          <div class="card-header bg-label-primary d-flex align-items-center">
-            <i class="bx bx-cake fs-3 text-primary me-2"></i>
-            <span class="fw-bold">Próximos Cumpleaños</span>
-          </div>
-          <ul class="list-group list-group-flush">
-            <li class="list-group-item d-flex align-items-center">
-              <img src="https://randomuser.me/api/portraits/men/32.jpg" class="rounded-circle me-2 border border-2 border-primary" width="40" height="40" alt="">
-              <span class="fw-semibold">Carlos Pérez</span>
-              <span class="badge bg-label-info ms-auto animate__animated animate__pulse animate__infinite">21 Jul</span>
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-              <img src="https://randomuser.me/api/portraits/women/44.jpg" class="rounded-circle me-2 border border-2 border-info" width="40" height="40" alt="">
-              <span class="fw-semibold">María López</span>
-              <span class="badge bg-label-info ms-auto animate__animated animate__pulse animate__infinite">23 Jul</span>
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-              <img src="https://randomuser.me/api/portraits/men/45.jpg" class="rounded-circle me-2 border border-2 border-primary" width="40" height="40" alt="">
-              <span class="fw-semibold">Luis Torres</span>
-              <span class="badge bg-label-info ms-auto animate__animated animate__pulse animate__infinite">25 Jul</span>
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-              <img src="https://randomuser.me/api/portraits/women/55.jpg" class="rounded-circle me-2 border border-2 border-info" width="40" height="40" alt="">
-              <span class="fw-semibold">Ana García</span>
-              <span class="badge bg-label-info ms-auto animate__animated animate__pulse animate__infinite">28 Jul</span>
-            </li>
-            <li class="list-group-item d-flex align-items-center">
-              <img src="https://randomuser.me/api/portraits/men/60.jpg" class="rounded-circle me-2 border border-2 border-primary" width="40" height="40" alt="">
-              <span class="fw-semibold">Jorge Díaz</span>
-              <span class="badge bg-label-info ms-auto animate__animated animate__pulse animate__infinite">30 Jul</span>
-            </li>
-          </ul>
-        </div>
-
-
-        <div class="card mb-0 shadow border-0 animate__animated animate__fadeInUp" style="flex:1; min-width:0; height: 370px;">
-          <div class="card-header bg-label-danger d-flex align-items-center">
-            <i class="bx bx-error-circle fs-3 text-danger me-2"></i>
-            <span class="fw-bold">Avisos de Contratos</span>
-          </div>
-          <ul class="list-group list-group-flush">
-
-
-            {% for c in contratos|slice:":5" %}
-              {% if "INDETERMINADO" not in c.tipo.descripcion|upper %}
-                <li class="list-group-item d-flex align-items-center">
-                  <i class="bx bx-alarm-exclamation text-danger fs-4 me-2"></i>
-                  <span>Vence: <b>{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}</b></span>
-                  {% if c.fecha_vencimiento == 0 %}
-                    <span class="badge bg-danger ms-auto animate__animated animate__flash animate__infinite">¡Hoy!</span>
-                  {% else %}
-                    <span class="badge bg-warning text-dark ms-auto animate__animated animate__flash animate__infinite">{{ c.dias_restantes }} días</span>
-                  {% endif %}
-                </li>
-              {% endif %}
-              
-            {% endfor %}
-
-            
-          </ul>
-        </div>
-        <div class="card mb-0 shadow border-0 animate__animated animate__fadeInRight" style="flex:1; min-width:0; height: 370px;">
-          <div class="card-header d-flex align-items-center justify-content-between pb-0">
-            <h6 class="m-0">Resumen de Personal</h6>
-            <span class="badge bg-label-info">Julio 2025</span>
-          </div>
-          <div class="card-body d-flex flex-column justify-content-center align-items-center">
-            <div id="personalPieChart" style="width: 160px; height: 160px; margin-top: 10px;"></div>
-            <div class="d-flex justify-content-center align-items-end gap-4 mt-4 mb-2 w-100">
-              <div class="text-center flex-fill">
-                <div class="icon-circle bg-gradient-warning mb-1 mx-auto"><i class="bx bx-book-content fs-3 text-white"></i></div>
-                <div class="fw-bold fs-5 text-warning">18</div>
-                <small class="text-muted">Capacitaciones</small>
-              </div>
-              <div class="text-center flex-fill">
-                <div class="icon-circle bg-gradient-primary mb-1 mx-auto"><i class="bx bx-timer fs-3 text-white"></i></div>
-                <div class="fw-bold fs-6 text-primary">5.2 años</div>
-                <small class="text-muted">Antigüedad Prom.</small>
-              </div>
-              <div class="text-center flex-fill">
-                <div class="icon-circle bg-gradient-danger mb-1 mx-auto"><i class="bx bx-refresh fs-3 text-white"></i></div>
-                <div class="fw-bold fs-6 text-danger">7.8%</div>
-                <small class="text-muted">Rotación</small>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
+    {% endcomment %}
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
+                <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3">{{ contratos_count }}</div>
+                <span class="badge bg-label-success mb-1">Total</span>
+                <small class="text-muted">Empleados Activos</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
+                <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3">+{{ graficos.altas_total|default:"0" }}</div>
+                <span class="badge bg-label-primary mb-1">Mes Actual</span>
+                <small class="text-muted">Nuevos Contratos</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
+                <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
+                <div class="fw-bold fs-4">${{ resumen_personal.salario_prom }}</div>
+                <span class="badge bg-label-secondary mb-1">Global</span>
+                <small class="text-muted">Salario Prom.</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
+                <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-user-voice fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3">{{ plazas.vacantes }}</div>
+                <span class="badge bg-label-danger mb-1">Alerta</span>
+                <small class="text-muted">Vacantes Libres</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
+                <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-run fs-2 text-white"></i></div>
+                <div class="fw-bold fs-4">Sin Datos</div>
+                <span class="badge bg-label-secondary mb-1">Pendiente</span>
+                <small class="text-muted">Ausentismo</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
+                <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3">{{ dptos_count }}</div>
+                <span class="badge bg-label-info mb-1">Estructura</span>
+                <small class="text-muted">Departamentos</small>
+            </div>
+        </div>
+    </div>
+      
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0 animate__animated animate__fadeInLeft">
+                <div class="card-body d-flex flex-column justify-content-center align-items-center">
+                    <h6 class="mb-4 fw-bold">Equilibrio de Género</h6>
+                    <div class="w-100 position-relative" style="height: 60px; margin-bottom: 18px;">
+                        <div class="d-flex align-items-center justify-content-between w-100" style="height: 60px;">
+                            <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;"><i class="bx bx-male fs-1 text-info"></i></span>
+                            <div class="flex-grow-1 position-relative" style="height: 60px;">
+                                <div class="d-flex w-100" style="height: 60px; background: #f3f4f6; border-radius: 30px; overflow: hidden;">
+                                    <div class="d-flex align-items-center justify-content-center bg-gradient-info" style="width: {{ generos.porc_hombres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                        <span class="text-white fw-bold">{{ generos.hombres }} ({{ generos.porc_hombres|default:'0' }}%)</span>
+                                    </div>
+                                    <div class="d-flex align-items-center justify-content-center bg-gradient-danger" style="width: {{ generos.porc_mujeres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                        <span class="text-white fw-bold">{{ generos.mujeres }} ({{ generos.porc_mujeres|default:'0' }}%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;"><i class="bx bx-female fs-1 text-danger"></i></span>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3"><small class="text-muted">Total: <span class="fw-bold">{{ contratos_count }} activos</span></small></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-8">
+            <div class="card h-100 shadow border-0 animate__animated animate__fadeInRight">
+                <div class="card-header pb-0 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold">Evolución Altas y Bajas</h6>
+                    <div><span class="badge bg-label-primary">+{{ graficos.altas_total|default:"0" }}</span> <span class="badge bg-label-danger">-{{ graficos.bajas_total|default:"0" }}</span></div>
+                </div>
+                <div class="card-body p-0"><div id="altasBajasAreaChart"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
+                <div class="card-header bg-label-primary d-flex align-items-center"><i class="bx bx-cake fs-4 text-primary me-2"></i><span class="fw-bold">Cumpleaños Cercanos</span></div>
+                <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                    {% for c in cumpleannos %}
+                    <li class="list-group-item d-flex align-items-center py-2">
+                        <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
+                        <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
+                        <span class="badge bg-label-primary ms-auto">{% if c.dias == 0 %}¡Hoy!{% else %}{{ c.fecha_str }}{% endif %}</span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center text-muted py-4">No hay cumpleaños en 45 días</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
+              <div class="card-header bg-label-danger d-flex align-items-center">
+                  <i class="bx bx-error-circle fs-4 text-danger me-2"></i>
+                  <span class="fw-bold">Avisos de Contratos</span>
+              </div>
+              <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                  {% for c in avisos_contratos %}
+                  <li class="list-group-item d-flex align-items-center py-2">
+                      <i class="bx bx-time text-danger fs-4 me-2"></i>
+                      <span style="font-size:0.85rem;">
+                          <b>{{ c.nombre }}</b>
+                          <small class="text-muted d-block">{{ c.tipo }}</small>
+                      </span>
+                      
+                      <!-- BADGE CON REGLAS DEL INFORME OFICIAL -->
+                      <span class="badge rounded-pill px-3 py-1 ms-auto 
+                          {% if c.dias < 0 %}bg-danger
+                          {% elif c.dias <= 5 %}bg-danger fw-bold
+                          {% elif c.dias <= 15 %}bg-danger
+                          {% elif c.dias <= 30 %}bg-warning text-dark
+                          {% else %}bg-success{% endif %}" 
+                          style="font-size: 0.75rem;">
+                          
+                          {% if c.dias < 0 %}
+                              <i class="fas fa-exclamation-triangle me-1"></i> Vencido ({{ c.dias }} d)
+                          {% elif c.dias <= 5 %}
+                              <i class="fas fa-exclamation-triangle me-1"></i> {{ c.dias }} días
+                          {% elif c.dias <= 15 %}
+                              {{ c.dias }} días
+                          {% elif c.dias <= 30 %}
+                              {{ c.dias }} días
+                          {% else %}
+                              {{ c.dias }} días
+                          {% endif %}
+                      </span>
+                  </li>
+                  {% empty %}
+                  <li class="list-group-item text-center text-muted py-4">Sin contratos próximos a vencer</li>
+                  {% endfor %}
+              </ul>
+          </div>
+      </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
+                <div class="card-header pb-0"><h6 class="m-0 fw-bold">Indicadores Clave (KPIs)</h6></div>
+                <div class="card-body d-flex flex-column justify-content-evenly pt-3">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-circle bg-gradient-warning me-3" style="width:45px; height:45px;"><i class="bx bx-book-content fs-5 text-white"></i></div>
+                        <div><h5 class="mb-0 fw-bold text-warning">{{ resumen_personal.capacitaciones }}</h5><small class="text-muted">Adiestrados Activos</small></div>
+                    </div>
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="icon-circle bg-gradient-primary me-3" style="width:45px; height:45px;"><i class="bx bx-timer fs-5 text-white"></i></div>
+                        <div><h5 class="mb-0 fw-bold text-primary">{{ resumen_personal.antiguedad }} años</h5><small class="text-muted">Antigüedad Promedio</small></div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="icon-circle bg-gradient-danger me-3" style="width:45px; height:45px;"><i class="bx bx-refresh fs-5 text-white"></i></div>
+                        <div><h5 class="mb-0 fw-bold text-danger">{{ resumen_personal.rotacion }}%</h5><small class="text-muted">Rotación Mensual</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <h6 class="mb-2 fw-bold">Ocupación de Plazas</h6>
+                    <div id="plazasGaugeChart" style="height: 140px;"></div>
+                    <div class="d-flex justify-content-center gap-2 mt-3 flex-wrap">
+                        <span class="badge bg-label-primary">{{ plazas.totales }} Aprob</span>
+                        <span class="badge bg-label-success">{{ plazas.cubiertas }} Ocup</span>
+                        <span class="badge bg-label-secondary">{{ plazas.vacantes }} Vac</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Masa Salarial ($)</h6></div>
+                <div class="card-body pb-0 px-2 d-flex align-items-end"><div id="masaSalarialChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Categoría Ocupacional</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="catOcupacionalDonut" style="width: 100%;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Tipos de Contratos</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="tiposContratoChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Pirámide de Edades</h6></div>
+                <div class="card-body p-0 d-flex justify-content-center align-items-end"><div id="edadesPyramidChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header border-bottom bg-label-warning p-2 text-center">
+                    <h6 class="m-0 fw-bold text-warning"><i class="bx bx-time-five me-1"></i>Radar Jubilaciones</h6>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="nav nav-tabs nav-fill" role="tablist">
+                        <li class="nav-item"><button class="nav-link active py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-pre" style="font-size:0.8rem;">Edad Jubilación Próxima <span class="badge bg-warning text-dark">{{ pre_jubilacion|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-rec" style="font-size:0.8rem;">Edad Jubilación Cumplida <span class="badge bg-secondary">{{ recontratados|length }}</span></button></li>
+                    </ul>
+                    <div class="tab-content p-0 m-0">
+                        <div class="tab-pane fade show active" id="tab-pre">
+                            <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
+                                {% for p in pre_jubilacion %}
+                                <li class="list-group-item px-3 py-2">
+                                    <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge {% if p.sexo == 'F' %}bg-label-danger{% else %}bg-label-info{% endif %}">{{ p.edad }}</span></div>
+                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">Ningún Contrato está próximo de cumplir edad de Jubilación</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="tab-pane fade" id="tab-rec">
+                            <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
+                                {% for p in recontratados %}
+                                <li class="list-group-item px-3 py-2">
+                                    <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge bg-label-secondary">{{ p.edad }}</span></div>
+                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">No hay recontratados.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Nivel Educacional (Aspirantes)</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="educacionalPieChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Nivel Preparación (Plantilla)</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="preparacionPieChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center">
+                    <h6 class="m-0 fw-bold">Distribución por Raza</h6>
+                </div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0">
+                    <div id="razaPieChart" style="width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
   </div>
   <div class="content-backdrop fade"></div>
 </div>
-<!-- Content wrapper -->
 <style>
-.dashboard-bottom-row { display: flex; gap: 24px; }
-.dashboard-bottom-row > .card { flex: 1 1 0; min-width: 0; height: 370px; margin-bottom: 0; }
-@media (max-width: 991px) {
-  .dashboard-bottom-row { flex-direction: column; gap: 0; }
-  .dashboard-bottom-row > .card { margin-bottom: 24px; }
-}
-</style>
-<!-- Scripts para gráficos (ApexCharts) -->
-<!-- Carga local de iconos Boxicons y FontAwesome -->
-
-<script>
-// Ejemplo de inicialización de gráficos personalizados para RRHH
-// Área empleados (más pequeño y con datos visibles)
-var empleadosAreaChart = new ApexCharts(document.querySelector('#empleadosAreaChart'), {
-  series: [{ name: 'Empleados', data: [150, 152, 155, 158, 162, 170, 184] }],
-  chart: { type: 'area', height: 70, sparkline: { enabled: true } },
-  colors: ['#696cff'],
-  fill: { type: 'gradient', gradient: { shadeIntensity: 0.5, opacityFrom: 0.7, opacityTo: 0.2, stops: [0, 100] } },
-  stroke: { curve: 'smooth', width: 2 },
-  xaxis: { categories: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul'], labels: { show: true, style: { fontSize: '10px' } } },
-  yaxis: { show: false, min: 140, max: 200 },
-  dataLabels: { enabled: false },
-  tooltip: { enabled: true }
-});
-empleadosAreaChart.render();
-// Barra de género animada
-setTimeout(function() {
-  document.getElementById('generoProgressBar').style.width = '53%';
-}, 200);
-
-// Gauge ocupación
-var plazasGaugeChart = new ApexCharts(document.querySelector('#plazasGaugeChart'), {
-  series: ['{{ plazas.porc_cubiertas }}'],
-  chart: { type: 'radialBar', height: 120, sparkline: { enabled: true } },
-  colors: ['#22c55e'],
-  plotOptions: {
-    radialBar: {
-      hollow: { size: '70%' },
-      track: { background: '#f3f4f6' },
-      dataLabels: {
-        show: true,
-        value: { fontSize: '22px', color: '#22c55e', fontWeight: 700, offsetY: 8 },
-        name: { show: false }
-      }
-    }
-  },
-  labels: ['Ocupación']
-});
-plazasGaugeChart.render();
-
-// Área apilada altas/bajas
-var altasBajasAreaChart = new ApexCharts(document.querySelector('#altasBajasAreaChart'), {
-  series: [
-    { name: 'Altas', data: [2, 3, 1, 4, 2, 0, 3] },
-    { name: 'Bajas', data: [1, 0, 2, 1, 0, 1, 1] }
-  ],
-  chart: { type: 'area', height: 110, stacked: true, sparkline: { enabled: true } },
-  colors: ['#6366f1', '#ef4444'],
-  fill: { type: 'gradient', gradient: { shadeIntensity: 0.7, opacityFrom: 0.7, opacityTo: 0.2, stops: [0, 100] } },
-  stroke: { curve: 'smooth', width: 2 },
-  xaxis: { categories: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul'], labels: { show: false } },
-  yaxis: { show: false },
-  dataLabels: { enabled: false },
-  legend: { show: false },
-  tooltip: { enabled: true }
-});
-altasBajasAreaChart.render();
-
-// Pie chart para resumen de personal (Capacitaciones, Antigüedad, Rotación)
-var personalPieChart = new ApexCharts(document.querySelector('#personalPieChart'), {
-  series: [18, 5.2, 7.8],
-  chart: { type: 'pie', height: 160 },
-  labels: ['Capacitaciones', 'Antigüedad', 'Rotación'],
-  colors: ['#fbbf24', '#6366f1', '#ef4444'],
-  legend: { show: false },
-  dataLabels: {
-    enabled: false
-  },
-  tooltip: { enabled: true },
-  plotOptions: {
-    pie: {
-      dataLabels: { enabled: false },
-      donut: { size: '0%' }
-    }
-  }
-});
-personalPieChart.render();
-</script>
-<!-- Estilos creativos y animaciones -->
-<style>
-.icon-circle {
-  width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 2px 8px #6366f122; font-size: 2rem;
-}
+/* Estilos globales y animaciones */
+.icon-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px #6366f122; font-size: 2rem; }
 .bg-gradient-primary { background: linear-gradient(135deg, #6366f1 60%, #818cf8 100%) !important; }
 .bg-gradient-info { background: linear-gradient(135deg, #06b6d4 60%, #38bdf8 100%) !important; }
 .bg-gradient-success { background: linear-gradient(135deg, #22c55e 60%, #4ade80 100%) !important; }
 .bg-gradient-danger { background: linear-gradient(135deg, #ef4444 60%, #f87171 100%) !important; }
 .bg-gradient-warning { background: linear-gradient(135deg, #fde68a 60%, #fef9c3 100%) !important; }
 .bg-gradient-secondary { background: linear-gradient(135deg, #64748b 60%, #a5b4fc 100%) !important; }
-.legend-dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
-.bg-info { background: #06b6d4 !important; }
-.bg-danger { background: #ef4444 !important; }
 .bg-label-info { background: #e0f2fe !important; color: #0369a1 !important; }
 .bg-label-success { background: #dcfce7 !important; color: #166534 !important; }
 .bg-label-primary { background: #e0e7ff !important; color: #3730a3 !important; }
 .bg-label-warning { background: #fef9c3 !important; color: #b45309 !important; }
 .bg-label-secondary { background: #f3f4f6 !important; color: #64748b !important; }
 .animate__animated { animation-duration: 1s; animation-fill-mode: both; }
-.animate__infinite { animation-iteration-count: infinite; }
-.animate__pulse { animation-name: pulse; }
-@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
-.animate__flash { animation-name: flash; }
-@keyframes flash { 0%,100%{opacity:1;} 50%{opacity:.4;} }
-.animate__fadeInUp { animation-name: fadeInUp; }
-@keyframes fadeInUp { from { opacity: 0; transform: translate3d(0, 40px, 0); } to { opacity: 1; transform: none; } }
-.animate__fadeInLeft { animation-name: fadeInLeft; }
-@keyframes fadeInLeft { from { opacity: 0; transform: translate3d(-40px, 0, 0); } to { opacity: 1; transform: none; } }
-.animate__fadeInRight { animation-name: fadeInRight; }
-@keyframes fadeInRight { from { opacity: 0; transform: translate3d(40px, 0, 0); } to { opacity: 1; transform: none; } }
-.btn-gradient-primary { background: linear-gradient(90deg, #6366f1 60%, #818cf8 100%); color: #fff; border: none; }
-.btn-gradient-primary:hover { background: linear-gradient(90deg, #818cf8 60%, #6366f1 100%); color: #fff; }
+.animate__fadeInUp { animation-name: fadeInUp; } @keyframes fadeInUp { from { opacity: 0; transform: translate3d(0, 40px, 0); } to { opacity: 1; transform: none; } }
+.animate__fadeInLeft { animation-name: fadeInLeft; } @keyframes fadeInLeft { from { opacity: 0; transform: translate3d(-40px, 0, 0); } to { opacity: 1; transform: none; } }
+.animate__fadeInRight { animation-name: fadeInRight; } @keyframes fadeInRight { from { opacity: 0; transform: translate3d(40px, 0, 0); } to { opacity: 1; transform: none; } }
 .text-gradient { background: linear-gradient(90deg, #6366f1 60%, #3730a3 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 </style>
+
+<script>
+(function() {
+    // FUNCIÓN SEGURA PARA INICIALIZAR GRÁFICOS (Evita que uno malo rompa al resto)
+    function renderChartSafely(selector, options) {
+        let el = document.querySelector(selector);
+        if (el) { try { new ApexCharts(el, options).render(); } catch (e) { console.error("Error en " + selector, e); } }
+    }
+
+    // 1. Plazas
+    const porcCubiertas = parseFloat('{{ plazas.porc_cubiertas|default:"0" }}'.replace(',', '.')) || 0;
+    renderChartSafely('#plazasGaugeChart', {
+        series: [porcCubiertas], chart: { type: 'radialBar', height: 160, sparkline: { enabled: true } },
+        colors: ['#22c55e'], plotOptions: { radialBar: { hollow: { size: '65%' }, track: { background: '#f3f4f6' }, dataLabels: { value: { fontSize: '20px', color: '#22c55e', fontWeight: 700, offsetY: 5, formatter: function(val) { return val + '%'; } }, name: { show: false } } } }
+    });
+
+    // 2. Altas y Bajas
+    renderChartSafely('#altasBajasAreaChart', {
+        series: [{ name: 'Altas', data: {{ graficos.altas|safe|default:"[]" }} }, { name: 'Bajas', data: {{ graficos.bajas|safe|default:"[]" }} }],
+        chart: { type: 'area', height: 170, stacked: true, toolbar: { show: false }, parentHeightOffset: 0 },
+        colors: ['#6366f1', '#ef4444'], fill: { type: 'gradient', gradient: { shadeIntensity: 0.7, opacityFrom: 0.7, opacityTo: 0.2 } },
+        stroke: { curve: 'smooth', width: 2 },
+        grid: { show: false, padding: { left: 15, right: 15, top: 0, bottom: -10 } },
+        xaxis: { categories: {{ graficos.meses|safe|default:"[]" }}, labels: { show: true, style: { fontSize: '11px', colors: '#94a3b8', fontWeight: 600 }, offsetY: -5 }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false } },
+        yaxis: { show: false }, dataLabels: { enabled: false }, legend: { show: false }, tooltip: { enabled: true }
+    });
+
+    // 3. Masa Salarial
+    renderChartSafely('#masaSalarialChart', {
+        series: [{ name: 'Masa Salarial ($)', data: {{ ms_data|safe|default:"[]" }} }],
+        chart: { type: 'bar', height: 200, toolbar: { show: false } },
+        colors: ['#14b8a6'],
+        plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
+        dataLabels: { enabled: false }, 
+        xaxis: { categories: {{ ms_labels|safe|default:"[]" }}, labels: { show: true, rotate: -45, style: { fontSize: '9px' } } },
+        yaxis: { show: false }, tooltip: { y: { formatter: function (val) { return "$" + val.toLocaleString(); } } }
+    });
+
+    // 4. Categoría Ocupacional
+    renderChartSafely('#catOcupacionalDonut', {
+        series: {{ cat_ocupacional|safe|default:"[]" }},
+        chart: { type: 'donut', height: 230 },
+        labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
+        colors: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'],
+        plotOptions: { donut: { size: '60%' } }, dataLabels: { enabled: false }, legend: { position: 'bottom', fontSize: '10px' }
+    });
+
+    // 5. Pirámide Edades
+    const datosM = {{ edades_m|safe|default:"[0,0,0,0,0,0]" }}.map(x => -x);
+    renderChartSafely('#edadesPyramidChart', {
+        series: [{ name: 'Hombres', data: datosM }, { name: 'Mujeres', data: {{ edades_f|safe|default:"[0,0,0,0,0,0]" }} }],
+        chart: { type: 'bar', height: 220, stacked: true, toolbar: { show: false } },
+        colors: ['#0ea5e9', '#f43f5e'],
+        plotOptions: { bar: { horizontal: true, barHeight: '75%' } },
+        dataLabels: { enabled: false },
+        xaxis: { categories: ['18-25', '26-35', '36-45', '46-55', '56-65', '66+'], labels: { formatter: function(val) { return Math.abs(Math.round(val)); }, style: {fontSize: '9px'} } },
+        yaxis: { labels: { style: {fontSize: '10px'} } },
+        legend: { position: 'top', fontSize: '10px', markers: { width: 8, height: 8 } },
+        tooltip: { y: { formatter: function (val) { return Math.abs(val) + " pers."; } } }
+    });
+
+    // 6. Tipos de Contrato
+    renderChartSafely('#tiposContratoChart', {
+        series: {{ tipos_contrato_data|safe|default:"[]" }},
+        chart: { type: 'donut', height: 230 },
+        labels: {{ tipos_contrato_labels|safe|default:"[]" }},
+        colors: ['#8b5cf6', '#3b82f6', '#f43f5e', '#10b981', '#f59e0b', '#64748b'],
+        plotOptions: { donut: { size: '60%' } }, dataLabels: { enabled: false }, legend: { position: 'bottom', fontSize: '10px' }
+    });
+
+    // 7. Educacional
+    renderChartSafely('#educacionalPieChart', {
+        series: {{ nivel_educ_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
+        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' }, dataLabels: { enabled: false }
+    });
+
+    // 8. Preparación
+    renderChartSafely('#preparacionPieChart', {
+        series: {{ nivel_prep_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
+        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' }, dataLabels: { enabled: false }
+    });
+
+    // 9. Distribución por Raza (Pie Chart)
+    renderChartSafely('#razaPieChart', {
+        series: {{ raza_data|safe|default:"[]" }},
+        chart: { type: 'pie', height: 230 },
+        labels: {{ raza_labels|safe|default:"[]" }},
+        colors: ['#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#64748b'],
+        legend: { position: 'bottom', fontSize: '10px' },
+        dataLabels: { 
+            enabled: true,
+            // Muestra el Porcentaje en la tajada del pastel
+            formatter: function (val) {
+                return Math.round(val) + "%";
+            },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        tooltip: { 
+            enabled: true,
+            y: {
+                // Muestra la cantidad en Números Enteros al pasar el ratón
+                formatter: function(val) {
+                    return val + " personas";
+                }
+            }
+        }
+    });
+})();
+</script>
 {% endblock %}

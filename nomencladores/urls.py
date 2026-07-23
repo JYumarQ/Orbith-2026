@@ -63,6 +63,7 @@ urlpatterns = [
 
     # ---------- LABORALES Y PROFESIONALES ----------
     path('api/condiciones/', views.condicion_create, name='condicion_create'),
+    path('api/condiciones/update/<int:pk>/', views.condicion_update, name='condicion_update'),
     path('api/condiciones/<int:pk>/', views.condicion_update, name='condicion_update'),
     path('api/condiciones/<int:pk>/delete/', views.condicion_delete, name='condicion_delete'),
 
@@ -113,5 +114,9 @@ urlpatterns = [
     path('api/tipo_unidad/<int:pk>/eliminar/', views.eliminar_tipo_unidad, name='eliminar_tipo_unidad'),
 
     path('api/tipo_contrato/<int:pk>/toggle_adiestrado/', views.toggle_tipo_adiestrado, name='toggle_tipo_adiestrado'),
+
+    path('api/nocturnidad/create/', views.nocturnidad_create, name='nocturnidad_create'),
+    path('api/nocturnidad/delete/<int:pk>/', views.nocturnidad_delete, name='nocturnidad_delete'),
+
 
 ]

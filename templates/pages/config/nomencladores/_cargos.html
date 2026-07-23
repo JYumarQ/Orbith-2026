@@ -56,7 +56,7 @@
             </th>
             <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('grupo')">
                 <div class="d-flex justify-content-center align-items-center gap-2 text-muted fw-semibold" style="font-size: 0.75rem;">
-                <span>Nivel</span> <i class="fas fa-sort" id="icon-grupo"></i>
+                <span>G. Escala</span> <i class="fas fa-sort" id="icon-grupo"></i>
                 </div>
             </th>
             <th style="width: 15%; cursor: pointer;" class="text-uppercase" onclick="ordenarCargos('salario')">
@@ -109,450 +109,450 @@
 </div>
 
 <script>
-  /* ==========================================================================
-    VARIABLES Y CONSTANTES GLOBALES DE CARGOS
-  ========================================================================== */
-  let cargoSeleccionadoID = null;
-  let modoEdicion = false;
-  const CARGOS_PER_PAGE = 10;
-  let cargosCurrentPage = 1;
-  let cargosSortCol = 'descripcion';
-  let cargosSortAsc = true;
+    /* ==========================================================================
+        VARIABLES Y CONSTANTES GLOBALES DE CARGOS
+    ========================================================================== */
+    let cargoSeleccionadoID = null;
+    let modoEdicion = false;
+    const CARGOS_PER_PAGE = 10;
+    let cargosCurrentPage = 1;
+    let cargosSortCol = 'descripcion';
+    let cargosSortAsc = true;
 
-  const CAT_OPTIONS_HTML = `
-      <option value="OPE">Operario</option>
-      <option value="TEC">Técnico</option>
-      <option value="ADM">Administrativo</option>
-      <option value="SER">Servicio</option>
-      <option value="CDI">Cuadro Directivo</option>
-      <option value="CEJ">Cuadro Ejecutivo</option>
-  `;
+    const CAT_OPTIONS_HTML = `
+        <option value="OPE">Operario</option>
+        <option value="TEC">Técnico</option>
+        <option value="ADM">Administrativo</option>
+        <option value="SER">Servicio</option>
+        <option value="CDI">Cuadro Directivo</option>
+        <option value="CEJ">Cuadro Ejecutivo</option>
+    `;
 
-  let GRUPO_OPTIONS_HTML = '<option value="">-- Gpo. --</option>';
-  {% for g in grupos %}
-      GRUPO_OPTIONS_HTML += `<option value="{{ g.id }}">{{ g.nivel }}</option>`;
-  {% endfor %}
+    let GRUPO_OPTIONS_HTML = '<option value="">-- Gpo. --</option>';
+    {% for g in grupos %}
+        GRUPO_OPTIONS_HTML += `<option value="{{ g.id }}">{{ g.nivel }}</option>`;
+    {% endfor %}
 
-  /* ==========================================================================
-    FUNCIONES DE AYUDA Y ORDENAMIENTO
-  ========================================================================== */
-  function romanToInt(s) {
-      const map = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
-      let result = 0; let prevValue = 0;
-      for (let i = s.length - 1; i >= 0; i--) {
-          const currentValue = map[s[i].toUpperCase()];
-          if (!currentValue) continue; 
-          if (currentValue < prevValue) result -= currentValue;
-          else result += currentValue; 
-          prevValue = currentValue;
-      }
-      return result;
-  }
-
-  function updateSortIcons() {
-    ['descripcion', 'cat', 'grupo', 'salario'].forEach(col => {
-      const icon = document.getElementById('icon-' + col);
-      if (icon) icon.className = 'fas fa-sort float-end mt-1 text-muted';
-    });
-
-    const activeIcon = document.getElementById('icon-' + cargosSortCol);
-    if (activeIcon) {
-      activeIcon.className = cargosSortAsc 
-        ? 'fas fa-sort-up float-end mt-1 text-primary' 
-        : 'fas fa-sort-down float-end mt-1 text-primary';
-    }
-  }
-
-  function ordenarCargos(columna) {
-    if (cargosSortCol === columna) {
-      cargosSortAsc = !cargosSortAsc;
-    } else {
-      cargosSortCol = columna;
-      cargosSortAsc = true;
-    }
-    updateSortIcons();
-    paginateCargos(); 
-  }
-
-  /* ==========================================================================
-    PAGINACIÓN Y BÚSQUEDA
-  ========================================================================== */
-  function paginateCargos() {
-    const tbody = document.querySelector('#cargos-tbody');
-    if (!tbody) return;
-    const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
-
-    // 1. FILTRADO
-    const searchInput = document.getElementById('search-cargos-input');
-    const filterText = searchInput ? searchInput.value.toLowerCase().trim() : '';
-
-    const visibleRows = rows.filter(row => {
-      const desc = row.querySelector('.desc-cell')?.textContent?.toLowerCase() || '';
-      const match = desc.includes(filterText);
-      row.style.display = match ? '' : 'none'; 
-      return match;
-    });
-
-    // 2. ORDENAMIENTO
-    visibleRows.sort((a, b) => {
-      let valA, valB;
-      switch (cargosSortCol) {
-        case 'salario':
-          valA = parseFloat(a.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
-          valB = parseFloat(b.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
-          return cargosSortAsc ? valA - valB : valB - valA;
-        case 'grupo':
-          valA = romanToInt(a.querySelector('.grupo-cell').textContent.trim());
-          valB = romanToInt(b.querySelector('.grupo-cell').textContent.trim());
-          return cargosSortAsc ? valA - valB : valB - valA;
-        case 'cat':
-          valA = a.querySelector('.cat-cell').textContent.trim();
-          valB = b.querySelector('.cat-cell').textContent.trim();
-          return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        default: // 'descripcion'
-          valA = a.querySelector('.desc-cell').textContent.trim();
-          valB = b.querySelector('.desc-cell').textContent.trim();
-          return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-      }
-    });
-
-    visibleRows.forEach(row => tbody.appendChild(row));
-
-    // 3. PAGINACIÓN
-    const total = visibleRows.length;
-    const pages = Math.ceil(total / CARGOS_PER_PAGE);
-
-    if (cargosCurrentPage > pages && pages > 0) cargosCurrentPage = pages;
-    if (cargosCurrentPage < 1) cargosCurrentPage = 1;
-
-    visibleRows.forEach((tr, idx) => {
-      const start = (cargosCurrentPage - 1) * CARGOS_PER_PAGE;
-      const end = cargosCurrentPage * CARGOS_PER_PAGE;
-      if (idx >= start && idx < end) {
-          tr.style.display = ''; 
-      } else {
-          tr.style.display = 'none';
-      }
-    });
-
-    // 4. GENERAR PAGINADOR
-    const paginator = document.getElementById('cargos-paginator');
-    if (!paginator) return;
-    paginator.innerHTML = '';
-    
-    if (total === 0) return;
-
-    const prevLi = document.createElement('li');
-    prevLi.className = 'page-item prev' + (cargosCurrentPage === 1 ? ' disabled' : '');
-    prevLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-left"></i></a>`;
-    prevLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (cargosCurrentPage > 1) { cargosCurrentPage--; paginateCargos(); }
-    });
-    paginator.appendChild(prevLi);
-
-    for (let i = 1; i <= pages; i++) {
-      if (i === 1 || i === pages || (i >= cargosCurrentPage - 1 && i <= cargosCurrentPage + 1)) {
-          const li = document.createElement('li');
-          li.className = 'page-item' + (i === cargosCurrentPage ? ' active' : '');
-          li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
-          li.addEventListener('click', e => { e.preventDefault(); cargosCurrentPage = i; paginateCargos(); });
-          paginator.appendChild(li);
-      } else if (paginator.lastChild.textContent !== '...') {
-          const dots = document.createElement('li');
-          dots.className = 'page-item disabled';
-          dots.innerHTML = `<span class="page-link">...</span>`;
-          paginator.appendChild(dots);
-      }
+    /* ==========================================================================
+        FUNCIONES DE AYUDA Y ORDENAMIENTO
+    ========================================================================== */
+    function romanToInt(s) {
+        const map = { 'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000 };
+        let result = 0; let prevValue = 0;
+        for (let i = s.length - 1; i >= 0; i--) {
+            const currentValue = map[s[i].toUpperCase()];
+            if (!currentValue) continue; 
+            if (currentValue < prevValue) result -= currentValue;
+            else result += currentValue; 
+            prevValue = currentValue;
+        }
+        return result;
     }
 
-    const nextLi = document.createElement('li');
-    nextLi.className = 'page-item next' + (cargosCurrentPage === pages ? ' disabled' : '');
-    nextLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-right"></i></a>`;
-    nextLi.addEventListener('click', e => {
-      e.preventDefault();
-      if (cargosCurrentPage < pages) { cargosCurrentPage++; paginateCargos(); }
-    });
-    paginator.appendChild(nextLi);
-    updateSortIcons();
-  }
+    function updateSortIcons() {
+        ['descripcion', 'cat', 'grupo', 'salario'].forEach(col => {
+        const icon = document.getElementById('icon-' + col);
+        if (icon) icon.className = 'fas fa-sort float-end mt-1 text-muted';
+        });
 
-  /* ==========================================================================
-    CONTROL DE INTERFAZ (UI)
-  ========================================================================== */
-  function seleccionarCargo(tr) {
-    if (modoEdicion) return; 
-
-    document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
-    tr.classList.add('table-active-row');
-    cargoSeleccionadoID = tr.dataset.id;
-    
-    const toolbarActions = document.getElementById('cargos-toolbar-actions');
-    if(toolbarActions){
-        toolbarActions.classList.remove('toolbar-disabled');
-        toolbarActions.classList.add('toolbar-active');
+        const activeIcon = document.getElementById('icon-' + cargosSortCol);
+        if (activeIcon) {
+        activeIcon.className = cargosSortAsc 
+            ? 'fas fa-sort-up float-end mt-1 text-primary' 
+            : 'fas fa-sort-down float-end mt-1 text-primary';
+        }
     }
-  }
 
-  function deseleccionarCargos() {
-    if (modoEdicion) return;
-
-    document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
-    cargoSeleccionadoID = null;
-
-    const toolbarActions = document.getElementById('cargos-toolbar-actions');
-    if(toolbarActions) {
-        toolbarActions.classList.add('toolbar-disabled');
-        toolbarActions.classList.remove('toolbar-active');
+    function ordenarCargos(columna) {
+        if (cargosSortCol === columna) {
+        cargosSortAsc = !cargosSortAsc;
+        } else {
+        cargosSortCol = columna;
+        cargosSortAsc = true;
+        }
+        updateSortIcons();
+        paginateCargos(); 
     }
-  }
 
-  function toggleToolbarMode(mode) {
-    const actions = document.getElementById('cargos-toolbar-actions');
-    const editing = document.getElementById('cargos-toolbar-editing');
-    const search = document.getElementById('search-cargos-input');
-    const addBtn = document.getElementById('btn-add-cargo');
+    /* ==========================================================================
+        PAGINACIÓN Y BÚSQUEDA
+    ========================================================================== */
+    function paginateCargos() {
+        const tbody = document.querySelector('#cargos-tbody');
+        if (!tbody) return;
+        const rows  = Array.from(tbody.querySelectorAll('tr:not(.insert-row)'));
 
-    if (mode === 'editing') {
-      if(actions) actions.classList.add('d-none');
-      if(editing) editing.classList.remove('d-none');
-      if(search) search.disabled = true;
-      if(addBtn) addBtn.disabled = true;
-    } else {
-      if(actions) actions.classList.remove('d-none');
-      if(editing) editing.classList.add('d-none');
-      if(search) search.disabled = false;
-      if(addBtn) addBtn.disabled = false;
-      
-      if (!cargoSeleccionadoID && actions) actions.classList.add('toolbar-disabled');
+        // 1. FILTRADO
+        const searchInput = document.getElementById('search-cargos-input');
+        const filterText = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+        const visibleRows = rows.filter(row => {
+        const desc = row.querySelector('.desc-cell')?.textContent?.toLowerCase() || '';
+        const match = desc.includes(filterText);
+        row.style.display = match ? '' : 'none'; 
+        return match;
+        });
+
+        // 2. ORDENAMIENTO
+        visibleRows.sort((a, b) => {
+        let valA, valB;
+        switch (cargosSortCol) {
+            case 'salario':
+            valA = parseFloat(a.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
+            valB = parseFloat(b.querySelector('.salario-cell').textContent.replace('$', '').trim()) || 0;
+            return cargosSortAsc ? valA - valB : valB - valA;
+            case 'grupo':
+            valA = romanToInt(a.querySelector('.grupo-cell').textContent.trim());
+            valB = romanToInt(b.querySelector('.grupo-cell').textContent.trim());
+            return cargosSortAsc ? valA - valB : valB - valA;
+            case 'cat':
+            valA = a.querySelector('.cat-cell').textContent.trim();
+            valB = b.querySelector('.cat-cell').textContent.trim();
+            return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            default: // 'descripcion'
+            valA = a.querySelector('.desc-cell').textContent.trim();
+            valB = b.querySelector('.desc-cell').textContent.trim();
+            return cargosSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        });
+
+        visibleRows.forEach(row => tbody.appendChild(row));
+
+        // 3. PAGINACIÓN
+        const total = visibleRows.length;
+        const pages = Math.ceil(total / CARGOS_PER_PAGE);
+
+        if (cargosCurrentPage > pages && pages > 0) cargosCurrentPage = pages;
+        if (cargosCurrentPage < 1) cargosCurrentPage = 1;
+
+        visibleRows.forEach((tr, idx) => {
+        const start = (cargosCurrentPage - 1) * CARGOS_PER_PAGE;
+        const end = cargosCurrentPage * CARGOS_PER_PAGE;
+        if (idx >= start && idx < end) {
+            tr.style.display = ''; 
+        } else {
+            tr.style.display = 'none';
+        }
+        });
+
+        // 4. GENERAR PAGINADOR
+        const paginator = document.getElementById('cargos-paginator');
+        if (!paginator) return;
+        paginator.innerHTML = '';
+        
+        if (total === 0) return;
+
+        const prevLi = document.createElement('li');
+        prevLi.className = 'page-item prev' + (cargosCurrentPage === 1 ? ' disabled' : '');
+        prevLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-left"></i></a>`;
+        prevLi.addEventListener('click', e => {
+        e.preventDefault();
+        if (cargosCurrentPage > 1) { cargosCurrentPage--; paginateCargos(); }
+        });
+        paginator.appendChild(prevLi);
+
+        for (let i = 1; i <= pages; i++) {
+        if (i === 1 || i === pages || (i >= cargosCurrentPage - 1 && i <= cargosCurrentPage + 1)) {
+            const li = document.createElement('li');
+            li.className = 'page-item' + (i === cargosCurrentPage ? ' active' : '');
+            li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+            li.addEventListener('click', e => { e.preventDefault(); cargosCurrentPage = i; paginateCargos(); });
+            paginator.appendChild(li);
+        } else if (paginator.lastChild.textContent !== '...') {
+            const dots = document.createElement('li');
+            dots.className = 'page-item disabled';
+            dots.innerHTML = `<span class="page-link">...</span>`;
+            paginator.appendChild(dots);
+        }
+        }
+
+        const nextLi = document.createElement('li');
+        nextLi.className = 'page-item next' + (cargosCurrentPage === pages ? ' disabled' : '');
+        nextLi.innerHTML = `<a class="page-link" href="#"><i class="fas fa-chevron-right"></i></a>`;
+        nextLi.addEventListener('click', e => {
+        e.preventDefault();
+        if (cargosCurrentPage < pages) { cargosCurrentPage++; paginateCargos(); }
+        });
+        paginator.appendChild(nextLi);
+        updateSortIcons();
     }
-  }
 
-  function iniciarEdicionInline(id) {
-    const tr = document.querySelector(`tr.fila-cargo[data-id="${id}"]`);
-    if (!tr) return;
+    /* ==========================================================================
+        CONTROL DE INTERFAZ (UI)
+    ========================================================================== */
+    function seleccionarCargo(tr) {
+        if (modoEdicion) return; 
 
-    modoEdicion = true;
-    toggleToolbarMode('editing');
-
-    const descCell = tr.querySelector('.desc-cell');
-    const catCell = tr.querySelector('.cat-cell');
-    const grupoCell = tr.querySelector('.grupo-cell');
-    const salarioCell = tr.querySelector('.salario-cell');
-    const claveCell = tr.querySelector('.clave-cell'); 
-
-    tr.dataset.htmlDesc = descCell.innerHTML;
-    tr.dataset.htmlCat = catCell.innerHTML;
-    tr.dataset.htmlGrupo = grupoCell.innerHTML;
-    tr.dataset.htmlSalario = salarioCell.innerHTML;
-    if(claveCell) tr.dataset.htmlClave = claveCell.innerHTML; 
-
-    const valDesc = descCell.textContent.trim();
-    const valCat = tr.dataset.cat;      
-    const valGrupo = tr.dataset.grupo;  
-    const valSalario = tr.dataset.salario; 
-    const valClave = tr.dataset.clave === 'true' ? 'checked' : ''; 
-
-    descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${valDesc}">`;
-    catCell.innerHTML = `<select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select>`;
-    catCell.querySelector('select').value = valCat; 
-    grupoCell.innerHTML = `<select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select>`;
-    grupoCell.querySelector('select').value = valGrupo; 
-    salarioCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" value="${valSalario}">`;
-    
-    if(claveCell) {
-        claveCell.innerHTML = `
-            <div class="form-check form-switch d-flex justify-content-center m-0">
-                <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox" ${valClave}>
-            </div>`;
+        document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
+        tr.classList.add('table-active-row');
+        cargoSeleccionadoID = tr.dataset.id;
+        
+        const toolbarActions = document.getElementById('cargos-toolbar-actions');
+        if(toolbarActions){
+            toolbarActions.classList.remove('toolbar-disabled');
+            toolbarActions.classList.add('toolbar-active');
+        }
     }
-  }
 
-  /* ==========================================================================
-    EVENT LISTENERS (CLICS Y ACCIONES)
-  ========================================================================== */
-  document.addEventListener("DOMContentLoaded", function() {
-      // Activar el buscador
-      const inputBusqueda = document.getElementById('search-cargos-input');
-      if(inputBusqueda){
-          inputBusqueda.addEventListener('keyup', function() {
-              cargosCurrentPage = 1; 
-              paginateCargos();
-          });
-      }
+    function deseleccionarCargos() {
+        if (modoEdicion) return;
 
-      // Clic fuera para deseleccionar
-      document.addEventListener('click', function(e) {
-        const clickEnTabla = e.target.closest('#cargos-table');
-        const clickEnToolbar = e.target.closest('#card-cargos .card-header');
-        if (!clickEnTabla && !clickEnToolbar) deseleccionarCargos();
-      });
+        document.querySelectorAll('#cargos-tbody tr').forEach(f => f.classList.remove('table-active-row'));
+        cargoSeleccionadoID = null;
 
-      // Botón Editar
-      const btnEditarCargo = document.getElementById('btn-editar-cargo');
-      if(btnEditarCargo){
-          btnEditarCargo.addEventListener('click', function() {
-            if (!cargoSeleccionadoID) return;
-            iniciarEdicionInline(cargoSeleccionadoID);
-          });
-      }
+        const toolbarActions = document.getElementById('cargos-toolbar-actions');
+        if(toolbarActions) {
+            toolbarActions.classList.add('toolbar-disabled');
+            toolbarActions.classList.remove('toolbar-active');
+        }
+    }
 
-      // Botón Añadir (+)
-      const btnAddCargo = document.getElementById('btn-add-cargo');
-      if(btnAddCargo){
-          btnAddCargo.addEventListener('click', function() {
-            deseleccionarCargos();
-            modoEdicion = true;
-            toggleToolbarMode('editing');
+    function toggleToolbarMode(mode) {
+        const actions = document.getElementById('cargos-toolbar-actions');
+        const editing = document.getElementById('cargos-toolbar-editing');
+        const search = document.getElementById('search-cargos-input');
+        const addBtn = document.getElementById('btn-add-cargo');
 
-            const tbody = document.getElementById('cargos-tbody');
-            const tr = document.createElement('tr');
-            tr.className = 'insert-row table-active-row'; 
-            tr.dataset.id = 'new'; 
-            
-            tr.innerHTML = `
-                <td class="desc-cell align-middle"><input type="text" class="form-control form-control-sm input-edit-desc" placeholder="Descripción"></td>
-                <td class="cat-cell text-center align-middle"><select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select></td>
-                <td class="grupo-cell text-center align-middle"><select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select></td> 
-                <td class="salario-cell text-center align-middle"><input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" placeholder="0.00"></td>
-                <td class="clave-cell text-center align-middle">
-                    <div class="form-check form-switch d-flex justify-content-center m-0">
-                        <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox">
-                    </div>
-                </td>
-            `;
-            tbody.insertBefore(tr, tbody.firstChild);
-          });
-      }
+        if (mode === 'editing') {
+        if(actions) actions.classList.add('d-none');
+        if(editing) editing.classList.remove('d-none');
+        if(search) search.disabled = true;
+        if(addBtn) addBtn.disabled = true;
+        } else {
+        if(actions) actions.classList.remove('d-none');
+        if(editing) editing.classList.add('d-none');
+        if(search) search.disabled = false;
+        if(addBtn) addBtn.disabled = false;
+        
+        if (!cargoSeleccionadoID && actions) actions.classList.add('toolbar-disabled');
+        }
+    }
 
-      // Botón Cancelar
-      const btnCancelarCargo = document.getElementById('btn-cancelar-cargo');
-      if(btnCancelarCargo){
-          btnCancelarCargo.addEventListener('click', function() {
-            const trInsert = document.querySelector('.insert-row');
-            if (trInsert) trInsert.remove(); 
+    function iniciarEdicionInline(id) {
+        const tr = document.querySelector(`tr.fila-cargo[data-id="${id}"]`);
+        if (!tr) return;
 
-            const trEdit = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
-            if (trEdit && !trInsert) {
-              trEdit.querySelector('.desc-cell').innerHTML = trEdit.dataset.htmlDesc;
-              trEdit.querySelector('.cat-cell').innerHTML = trEdit.dataset.htmlCat;
-              trEdit.querySelector('.grupo-cell').innerHTML = trEdit.dataset.htmlGrupo;
-              trEdit.querySelector('.salario-cell').innerHTML = trEdit.dataset.htmlSalario;
-              if(trEdit.querySelector('.clave-cell')) trEdit.querySelector('.clave-cell').innerHTML = trEdit.dataset.htmlClave;
-            }
+        modoEdicion = true;
+        toggleToolbarMode('editing');
 
-            modoEdicion = false;
-            toggleToolbarMode('default');
-            if (cargoSeleccionadoID && trEdit) {
-                trEdit.classList.add('table-active-row');
-            }
-          });
-      }
+        const descCell = tr.querySelector('.desc-cell');
+        const catCell = tr.querySelector('.cat-cell');
+        const grupoCell = tr.querySelector('.grupo-cell');
+        const salarioCell = tr.querySelector('.salario-cell');
+        const claveCell = tr.querySelector('.clave-cell'); 
 
-      // Botón Guardar
-      const btnGuardarCargo = document.getElementById('btn-guardar-cargo');
-      if(btnGuardarCargo){
-          btnGuardarCargo.addEventListener('click', async function() {
-            const tr = document.querySelector('.insert-row') || document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
-            if (!tr) return;
+        tr.dataset.htmlDesc = descCell.innerHTML;
+        tr.dataset.htmlCat = catCell.innerHTML;
+        tr.dataset.htmlGrupo = grupoCell.innerHTML;
+        tr.dataset.htmlSalario = salarioCell.innerHTML;
+        if(claveCell) tr.dataset.htmlClave = claveCell.innerHTML; 
 
-            const desc = tr.querySelector('.input-edit-desc').value.trim();
-            const cat = tr.querySelector('.input-edit-cat').value;
-            const grupoId = tr.querySelector('.input-edit-grupo').value;
-            const salario = tr.querySelector('.input-edit-salario').value;
-            const clave = tr.querySelector('.input-edit-clave').checked; 
+        const valDesc = descCell.textContent.trim();
+        const valCat = tr.dataset.cat;      
+        const valGrupo = tr.dataset.grupo;  
+        const valSalario = tr.dataset.salario; 
+        const valClave = tr.dataset.clave === 'true' ? 'checked' : ''; 
 
-            if (!desc || !grupoId) {
-                alert("La descripción y el grupo son obligatorios.");
-                return;
-            }
+        descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${valDesc}">`;
+        catCell.innerHTML = `<select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select>`;
+        catCell.querySelector('select').value = valCat; 
+        grupoCell.innerHTML = `<select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select>`;
+        grupoCell.querySelector('select').value = valGrupo; 
+        salarioCell.innerHTML = `<input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" value="${valSalario}">`;
+        
+        if(claveCell) {
+            claveCell.innerHTML = `
+                <div class="form-check form-switch d-flex justify-content-center m-0">
+                    <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox" ${valClave}>
+                </div>`;
+        }
+    }
 
-            const payload = {
-                descripcion: desc,
-                cat_ocupacional: cat,
-                grupo_escala_id: grupoId, 
-                salario_basico: salario,
-                puesto_clave: clave 
-            };
+    /* ==========================================================================
+        EVENT LISTENERS (CLICS Y ACCIONES)
+    ========================================================================== */
+    document.addEventListener("DOMContentLoaded", function() {
+        // Activar el buscador
+        const inputBusqueda = document.getElementById('search-cargos-input');
+        if(inputBusqueda){
+            inputBusqueda.addEventListener('keyup', function() {
+                cargosCurrentPage = 1; 
+                paginateCargos();
+            });
+        }
 
-            const isNew = tr.dataset.id === 'new';
-            const url = isNew ? '/nomencladores/api/cargos/' : `/nomencladores/api/cargos/${tr.dataset.id}/`;
-            const method = isNew ? 'POST' : 'PUT';
+        // Clic fuera para deseleccionar
+        document.addEventListener('click', function(e) {
+            const clickEnTabla = e.target.closest('#cargos-table');
+            const clickEnToolbar = e.target.closest('#card-cargos .card-header');
+            if (!clickEnTabla && !clickEnToolbar) deseleccionarCargos();
+        });
 
-            try {
-                const res = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': '{{ csrf_token }}' 
-                    },
-                    body: JSON.stringify(payload)
-                });
+        // Botón Editar
+        const btnEditarCargo = document.getElementById('btn-editar-cargo');
+        if(btnEditarCargo){
+            btnEditarCargo.addEventListener('click', function() {
+                if (!cargoSeleccionadoID) return;
+                iniciarEdicionInline(cargoSeleccionadoID);
+            });
+        }
 
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || 'Error al guardar');
+        // Botón Añadir (+)
+        const btnAddCargo = document.getElementById('btn-add-cargo');
+        if(btnAddCargo){
+            btnAddCargo.addEventListener('click', function() {
+                deseleccionarCargos();
+                modoEdicion = true;
+                toggleToolbarMode('editing');
 
-                tr.dataset.id = data.id;
-                tr.dataset.cat = data.cat_ocupacional_value; 
-                tr.dataset.grupo = grupoId; 
-                tr.dataset.salario = data.salario_basico;
-                tr.dataset.clave = clave ? 'true' : 'false'; 
-                tr.classList.remove('insert-row');
-                tr.classList.add('fila-cargo');
-                tr.onclick = function() { seleccionarCargo(this); }; 
+                const tbody = document.getElementById('cargos-tbody');
+                const tr = document.createElement('tr');
+                tr.className = 'insert-row table-active-row'; 
+                tr.dataset.id = 'new'; 
+                
+                tr.innerHTML = `
+                    <td class="desc-cell align-middle"><input type="text" class="form-control form-control-sm input-edit-desc" placeholder="Descripción"></td>
+                    <td class="cat-cell text-center align-middle"><select class="form-select form-select-sm input-edit-cat">${CAT_OPTIONS_HTML}</select></td>
+                    <td class="grupo-cell text-center align-middle"><select class="form-select form-select-sm input-edit-grupo">${GRUPO_OPTIONS_HTML}</select></td> 
+                    <td class="salario-cell text-center align-middle"><input type="number" step="0.01" class="form-control form-control-sm input-edit-salario" placeholder="0.00"></td>
+                    <td class="clave-cell text-center align-middle">
+                        <div class="form-check form-switch d-flex justify-content-center m-0">
+                            <input class="form-check-input input-edit-clave cursor-pointer" type="checkbox">
+                        </div>
+                    </td>
+                `;
+                tbody.insertBefore(tr, tbody.firstChild);
+            });
+        }
 
-                tr.querySelector('.desc-cell').textContent = data.descripcion;
-                tr.querySelector('.cat-cell').textContent = data.cat_ocupacional; 
-                tr.querySelector('.grupo-cell').textContent = data.grupo_escala; 
-                tr.querySelector('.salario-cell').textContent = `$${data.salario_basico}`;
-                if(tr.querySelector('.clave-cell')) {
-                    tr.querySelector('.clave-cell').innerHTML = clave ? '<span class="badge bg-label-warning"><i class="fas fa-star"></i></span>' : '<span class="text-muted">-</span>';
+        // Botón Cancelar
+        const btnCancelarCargo = document.getElementById('btn-cancelar-cargo');
+        if(btnCancelarCargo){
+            btnCancelarCargo.addEventListener('click', function() {
+                const trInsert = document.querySelector('.insert-row');
+                if (trInsert) trInsert.remove(); 
+
+                const trEdit = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+                if (trEdit && !trInsert) {
+                trEdit.querySelector('.desc-cell').innerHTML = trEdit.dataset.htmlDesc;
+                trEdit.querySelector('.cat-cell').innerHTML = trEdit.dataset.htmlCat;
+                trEdit.querySelector('.grupo-cell').innerHTML = trEdit.dataset.htmlGrupo;
+                trEdit.querySelector('.salario-cell').innerHTML = trEdit.dataset.htmlSalario;
+                if(trEdit.querySelector('.clave-cell')) trEdit.querySelector('.clave-cell').innerHTML = trEdit.dataset.htmlClave;
                 }
 
                 modoEdicion = false;
                 toggleToolbarMode('default');
-                seleccionarCargo(tr); 
-                paginateCargos(); 
+                if (cargoSeleccionadoID && trEdit) {
+                    trEdit.classList.add('table-active-row');
+                }
+            });
+        }
 
-            } catch (error) {
-                alert(error.message);
-            }
-          });
-      }
+        // Botón Guardar
+        const btnGuardarCargo = document.getElementById('btn-guardar-cargo');
+        if(btnGuardarCargo){
+            btnGuardarCargo.addEventListener('click', async function() {
+                const tr = document.querySelector('.insert-row') || document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+                if (!tr) return;
 
-      // Botón Eliminar
-      const btnEliminarCargo = document.getElementById('btn-eliminar-cargo');
-      if(btnEliminarCargo){
-          btnEliminarCargo.addEventListener('click', function() {
-              if (!cargoSeleccionadoID) return;
-              
-              Swal.fire({
-                  title: '¿Eliminar cargo?', text: "No podrás revertir esto", icon: 'warning',
-                  showCancelButton: true, confirmButtonText: 'Sí, eliminar', confirmButtonColor: '#d33',
-                  cancelButtonText: 'Cancelar', cancelButtonColor: '#3085d6'
-              }).then((result) => {
-                  if (result.isConfirmed) {
-                      fetch(`/nomencladores/api/cargos/${cargoSeleccionadoID}/delete/`, {
-                          method: 'DELETE',
-                          headers: { 'X-CSRFToken': '{{ csrf_token }}' }
-                      })
-                      .then(async r => {
-                          let data = {};
-                          try { data = await r.json(); } catch (e) { }
-                          if(!r.ok) throw new Error(data.error || 'Error al eliminar');
-                          return data;
-                      })
-                      .then(() => {
-                          const row = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
-                          if(row) row.remove();
-                          deseleccionarCargos();
-                          Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El cargo ha sido eliminado correctamente.', timer: 1500, showConfirmButton: false });
-                          paginateCargos();
-                      })
-                      .catch(err => Swal.fire({ icon: 'warning', title: 'No se puede eliminar', text: err.message }));
-                  }
-              });
-          });
-      }
-  });
+                const desc = tr.querySelector('.input-edit-desc').value.trim();
+                const cat = tr.querySelector('.input-edit-cat').value;
+                const grupoId = tr.querySelector('.input-edit-grupo').value;
+                const salario = tr.querySelector('.input-edit-salario').value;
+                const clave = tr.querySelector('.input-edit-clave').checked; 
+
+                if (!desc || !grupoId) {
+                    alert("La descripción y el grupo son obligatorios.");
+                    return;
+                }
+
+                const payload = {
+                    descripcion: desc,
+                    cat_ocupacional: cat,
+                    grupo_escala_id: grupoId, 
+                    salario_basico: salario,
+                    puesto_clave: clave 
+                };
+
+                const isNew = tr.dataset.id === 'new';
+                const url = isNew ? '/nomencladores/api/cargos/' : `/nomencladores/api/cargos/${tr.dataset.id}/`;
+                const method = isNew ? 'POST' : 'PUT';
+
+                try {
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}' 
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'Error al guardar');
+
+                    tr.dataset.id = data.id;
+                    tr.dataset.cat = data.cat_ocupacional_value; 
+                    tr.dataset.grupo = grupoId; 
+                    tr.dataset.salario = data.salario_basico;
+                    tr.dataset.clave = clave ? 'true' : 'false'; 
+                    tr.classList.remove('insert-row');
+                    tr.classList.add('fila-cargo');
+                    tr.onclick = function() { seleccionarCargo(this); }; 
+
+                    tr.querySelector('.desc-cell').textContent = data.descripcion;
+                    tr.querySelector('.cat-cell').textContent = data.cat_ocupacional; 
+                    tr.querySelector('.grupo-cell').textContent = data.grupo_escala; 
+                    tr.querySelector('.salario-cell').textContent = `$${data.salario_basico}`;
+                    if(tr.querySelector('.clave-cell')) {
+                        tr.querySelector('.clave-cell').innerHTML = clave ? '<span class="badge bg-label-warning"><i class="fas fa-star"></i></span>' : '<span class="text-muted">-</span>';
+                    }
+
+                    modoEdicion = false;
+                    toggleToolbarMode('default');
+                    seleccionarCargo(tr); 
+                    paginateCargos(); 
+
+                } catch (error) {
+                    alert(error.message);
+                }
+            });
+        }
+
+        // Botón Eliminar
+        const btnEliminarCargo = document.getElementById('btn-eliminar-cargo');
+        if(btnEliminarCargo){
+            btnEliminarCargo.addEventListener('click', function() {
+                if (!cargoSeleccionadoID) return;
+                
+                Swal.fire({
+                    title: '¿Eliminar cargo?', text: "No podrás revertir esto", icon: 'warning',
+                    showCancelButton: true, confirmButtonText: 'Sí, eliminar', confirmButtonColor: '#d33',
+                    cancelButtonText: 'Cancelar', cancelButtonColor: '#3085d6'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch(`/nomencladores/api/cargos/${cargoSeleccionadoID}/delete/`, {
+                            method: 'DELETE',
+                            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+                        })
+                        .then(async r => {
+                            let data = {};
+                            try { data = await r.json(); } catch (e) { }
+                            if(!r.ok) throw new Error(data.error || 'Error al eliminar');
+                            return data;
+                        })
+                        .then(() => {
+                            const row = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
+                            if(row) row.remove();
+                            deseleccionarCargos();
+                            Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El cargo ha sido eliminado correctamente.', timer: 1500, showConfirmButton: false });
+                            paginateCargos();
+                        })
+                        .catch(err => Swal.fire({ icon: 'warning', title: 'No se puede eliminar', text: err.message }));
+                    }
+                });
+            });
+        }
+    });
 </script>

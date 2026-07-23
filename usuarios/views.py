@@ -10,9 +10,10 @@ from django.urls import reverse_lazy
 from django.db.models import Q
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.views import LoginView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 
-
-class UsuarioListView(ListView):
+class UsuarioListView(LoginRequiredMixin, ListView):
     model = CustomUser
     template_name = "pages/usuarios/list_usuarios.html"
 
@@ -25,7 +26,7 @@ class UsuarioListView(ListView):
         context['form'] = CustomUserCreationForm()  
         return context
 
-
+@login_required
 def search_usuarios(request):
     query = request.GET.get('filter_usuario', '')
     
@@ -39,6 +40,7 @@ def search_usuarios(request):
 
 User = get_user_model()
 
+@login_required
 def validar_username(request):
     username = request.GET.get('username', None)
     user_id = request.GET.get('user_id')  # <-- NUEVO
@@ -53,7 +55,7 @@ def validar_username(request):
     }
     return JsonResponse(data)
 
-class CustomUserCreateView(CreateView):
+class CustomUserCreateView(LoginRequiredMixin, CreateView):
     model = CustomUser
     form_class = CustomUserCreationForm
     template_name = 'pages/usuarios/add_usuario.html'
@@ -83,7 +85,7 @@ class CustomUserCreateView(CreateView):
             return JsonResponse({'form_is_valid': False, 'html_form': html}, status=200)
         return super().form_invalid(form)
 
-class CustomUserUpdateView(UpdateView):
+class CustomUserUpdateView(LoginRequiredMixin, UpdateView):
     model = CustomUser
     form_class = CustomUserChangeForm
     template_name = 'pages/usuarios/updt_usuario.html'
@@ -113,7 +115,7 @@ class CustomUserUpdateView(UpdateView):
             return JsonResponse({'form_is_valid': False, 'html_form': html}, status=200)
         return super().form_invalid(form)
 
-class CambiarPasswordView(FormView):
+class CambiarPasswordView(LoginRequiredMixin, FormView):
     template_name = 'pages/usuarios/partials/cambiar_password_form.html'
     form_class = CustomPasswordChangeForm
     
@@ -171,7 +173,7 @@ class CambiarPasswordView(FormView):
 
         return self.render_to_response(self.get_context_data(form=form))
 
-class CustomUserDeleteView(DeleteView):
+class CustomUserDeleteView(LoginRequiredMixin, DeleteView):
     def get(self, request, *args, **kwargs):
         usuario = get_object_or_404(CustomUser, pk=kwargs['pk'])
         usuario.delete()

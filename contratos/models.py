@@ -7,6 +7,7 @@ from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
 from auditoria.models import Base
+from django.core.exceptions import ValidationError
 
 
 #?CONTRATO
@@ -67,8 +68,7 @@ class CAlta(ContratoBase):
     
      #?CALIFICACION
     c_formal = models.BooleanField(default=False)    
-    funcionario = models.BooleanField(default=False)    
-    designado = models.BooleanField(default=False)    
+    
     c_formal_res = models.TextField(max_length=7, null=True, blank=True)    
     funcionario_res = models.TextField(max_length=7, null=True, blank=True)    
     designado_res = models.TextField(max_length=7, null=True, blank=True)
@@ -95,16 +95,33 @@ class CAlta(ContratoBase):
         )
     maestria = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
     doctorado = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
-    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=5, decimal_places=2, null=True, blank=True)
+    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=6, decimal_places=2, null=True, blank=True)
     instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
     
-    cla1 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla2 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla3 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla4 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
-    cla5 = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
     
     jornada = models.ForeignKey(NJornada, blank=True, null=True, on_delete=models.RESTRICT)
+
+    cla = models.ForeignKey(
+        'nomencladores.NCondicionLaboralAnormal', 
+        on_delete=models.RESTRICT, 
+        null=True, blank=True, 
+        related_name='contratos_cla',
+        verbose_name="Condición Laboral Anormal (CLA)"
+    )
+    nocturnidad_1 = models.ForeignKey(
+        'nomencladores.NCondicionLaboralAnormal', 
+        on_delete=models.RESTRICT, 
+        null=True, blank=True, 
+        related_name='contratos_noct1',
+        verbose_name="Nocturnidad 1"
+    )
+    nocturnidad_2 = models.ForeignKey(
+        'nomencladores.NCondicionLaboralAnormal', 
+        on_delete=models.RESTRICT, 
+        null=True, blank=True, 
+        related_name='contratos_noct2',
+        verbose_name="Nocturnidad 2"
+    )
 
     fecha_vence_lic = models.DateField(null=True, blank=True)
     fecha_vence_recal = models.DateField(null=True, blank=True)
@@ -115,6 +132,24 @@ class CAlta(ContratoBase):
     jubilado_recontratado = models.BooleanField(default=False)
     en_proceso_movimiento = models.BooleanField(default=False, verbose_name="En Proceso de Movimiento")
 
+    def clean(self):
+        super().clean()
+        
+        # 1. Regla de Exclusividad: No pueden ser iguales
+        if self.nocturnidad_1 and self.nocturnidad_2:
+            if self.nocturnidad_1_id == self.nocturnidad_2_id:
+                raise ValidationError({
+                    'nocturnidad_2': "Las dos nocturnidades seleccionadas deben ser diferentes."
+                })
+
+        # 2. Blindaje de Seguridad (Lógica limpia)
+        for campo in ['nocturnidad_1', 'nocturnidad_2']:
+            condicion = getattr(self, campo)
+            # Comprobación directa y optimizada
+            if condicion and condicion.nocturnidad_id is None:
+                raise ValidationError({
+                    campo: f"La condición '{condicion.nombre}' no tiene una nocturnidad configurada."
+                })
     class Meta:
         verbose_name = ("Alta")
         verbose_name_plural = ("Altas")
@@ -182,6 +217,14 @@ class CAlta(ContratoBase):
                 return None
         except Exception as e:
             return None
+        
+    @property
+    def funcionario(self):
+        return self.cargo.funcionario if self.cargo else False
+
+    @property
+    def designado(self):
+        return self.cargo.designado if self.cargo else False
     
     @property
     def fecha_vencimiento(self):
@@ -371,6 +414,7 @@ class TMovimiento(models.Model):
     rol_nuevo = models.CharField(max_length=150, null=True, blank=True)
     
     tridente_anterior = models.CharField(max_length=50, null=True, blank=True)
+    tridente_nuevo = models.CharField(max_length=50, null=True, blank=True)
     
     tipo_contrato_anterior = models.CharField(max_length=150, null=True, blank=True)
     tipo_contrato_nuevo = models.CharField(max_length=150, null=True, blank=True)

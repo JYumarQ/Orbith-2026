@@ -150,6 +150,20 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
             response['HX-Trigger'] = json.dumps(triggers)
             return response
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        # 🔥 Lógica de desplazamiento al crear
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            departamento_id = request.POST.get('departamento')
+            if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
+                with transaction.atomic():
+                    # Desplazar los cargos que tienen orden >= al nuevo
+                    CargoPlantilla.objects.filter(
+                        departamento_id=int(departamento_id),
+                        orden_informe__gte=int(orden)
+                    ).update(orden_informe=F('orden_informe') + 1)
+        return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
         # LOGGING PROFESIONAL: Esto imprimirá el error exacto en tu terminal (donde corre runserver)
@@ -198,6 +212,30 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
             return response
             
         return super().form_valid(form)
+    
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        if request.POST.get('autoriza_desplazamiento') == 'true':
+            orden = request.POST.get('orden_informe')
+            departamento_id = request.POST.get('departamento')
+            if orden and orden.isdigit() and departamento_id and departamento_id.isdigit():
+                with transaction.atomic():
+                    # 1. Mover el cargo actual a un "limbo" (999999)
+                    self.object.orden_informe = 999999
+                    self.object.save(update_fields=['orden_informe'])
+
+                    # 2. Desplazar los cargos afectados (excepto el actual)
+                    cargos_a_desplazar = CargoPlantilla.objects.filter(
+                        departamento_id=int(departamento_id),
+                        orden_informe__gte=int(orden)
+                    ).exclude(pk=self.object.pk).order_by('-orden_informe')
+
+                    for c in cargos_a_desplazar:
+                        c.orden_informe += 1
+                        c.save(update_fields=['orden_informe'])
+
+        # 3. Guardar el cargo con el nuevo orden (el formulario lo hará)
+        return super().post(request, *args, **kwargs)
 
 
 
@@ -250,7 +288,7 @@ class DepartamentoListView(ListView):
         unidad_id = self.kwargs.get('unidad_id')
         if unidad_id:
             qs = qs.filter(unidad_organizativa__grupo_nomina=unidad_id)
-        return qs
+        return qs.order_by('orden_informe', 'id')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -276,6 +314,7 @@ def cargar_dptos(request):
                 unidad_organizativa_id=id_unidad,
                 unidad_organizativa__in=request.user.unidades.all()
             )
+        dptos = dptos.order_by('orden_informe', 'id')
     else:
         dptos = Departamento.objects.none()
     return render(request,
@@ -393,6 +432,7 @@ def search_dpto_view(request):
             Q(descripcion__icontains=query) |
             Q(unidad_organizativa__descripcion__icontains=query)
         )
+    results = results.order_by('orden_informe', 'id')
 
     return render(request,
                   'pages/dpto/partials/filter_dptos_list.html',
@@ -601,21 +641,35 @@ def htmx_load_departamentos(request, unidad_id):
     if q:
         dptos = dptos.filter(descripcion__icontains=q)
 
-    # Ordenamiento
-    sort_by = request.GET.get('sort', 'alpha')
+    # ====================================================
+    # 🔥 ORDENAMIENTO CORREGIDO
+    # ====================================================
+    sort_by = request.GET.get('sort', 'orden')  # 'orden' por defecto
     order = request.GET.get('order', 'asc')
-    
-    # En Dptos solo tenemos orden alfabético por ahora
-    field = 'descripcion'
-    if order == 'desc':
-        field = '-descripcion'
 
+    # Construir el orden según los parámetros
+    if sort_by == 'alpha':
+        field = 'descripcion'
+    else:
+        field = 'orden_informe'
+
+    if order == 'desc':
+        field = f'-{field}'
+
+    # Anotaciones (agregar estadísticas)
     dptos = dptos.annotate(
         total_cargos=Count('cargoplantilla'),
         total_plazas=Sum('cargoplantilla__cant_aprobada'),
         activos=Count('cargoplantilla', filter=Q(cargoplantilla__activo=True)),
         inactivos=Count('cargoplantilla', filter=Q(cargoplantilla__activo=False))
-    ).order_by(field)
+    )
+
+    # Aplicar orden
+    if sort_by == 'alpha':
+        dptos = dptos.order_by(field)
+    else:
+        # Si ordenamos por prioridad, usamos id como desempate
+        dptos = dptos.order_by(field, 'id')
 
     return render(request, 'pages/plantilla/partials/lista_departamentos.html', {
         'departamentos': dptos,
@@ -634,31 +688,31 @@ def htmx_load_cargos(request, dpto_id):
     if q:
         cargos = cargos.filter(ncargo__descripcion__icontains=q)
 
-    # NUEVO: Se actualiza la consulta (Query) para buscar dentro de la descripción del tipo
+    # Anotaciones para estadísticas
     cargos = cargos.select_related('ncargo', 'rol').annotate(
-        # Filtramos estrictamente por el booleano y nos aseguramos que el trabajador esté activo
         count_ind=Count('calta', filter=Q(calta__tipo__ocupa_plaza=True, calta__aspirante__estado='ACTIVO')),
         count_cont=Count('calta', filter=Q(calta__tipo__ocupa_plaza=False, calta__aspirante__estado='ACTIVO'))
     )
 
-    # Ordenamiento Dinámico
-    sort_by = request.GET.get('sort', 'alpha') # 'alpha' o 'estado'
+    # 🔥 ORDENAMIENTO CORREGIDO (con soporte para 'orden', 'alpha', 'estado')
+    sort_by = request.GET.get('sort', 'orden')  # 'orden' por defecto
     order = request.GET.get('order', 'asc')
 
     if sort_by == 'estado':
-        # Activos primero (True > False en Python, pero queremos True primero en DESC)
-        # En DB boolean: False=0, True=1.
-        # ASC: Inactivo primero. DESC: Activo primero.
         if order == 'asc':
-            cargos = cargos.order_by('activo', 'ncargo__descripcion') # Inactivos arriba
+            cargos = cargos.order_by('activo', 'ncargo__descripcion')  # Inactivos primero
         else:
-            cargos = cargos.order_by('-activo', 'ncargo__descripcion') # Activos arriba
-    else:
-        # Alfabético por nombre de cargo
+            cargos = cargos.order_by('-activo', 'ncargo__descripcion') # Activos primero
+    elif sort_by == 'alpha':
+        field = 'ncargo__descripcion'
         if order == 'desc':
-            cargos = cargos.order_by('-ncargo__descripcion')
-        else:
-            cargos = cargos.order_by('ncargo__descripcion')
+            field = f'-{field}'
+        cargos = cargos.order_by(field)
+    else:  # 'orden' (prioridad)
+        field = 'orden_informe'
+        if order == 'desc':
+            field = f'-{field}'
+        cargos = cargos.order_by(field, 'id')  # desempate por id
 
     return render(request, 'pages/plantilla/partials/lista_cargos.html', {
         'cargos': cargos,
@@ -756,5 +810,25 @@ def validar_orden_dpto(request):
         return JsonResponse({
             'ocupado': True, 
             'mensaje': f'Ocupado por "{colision.descripcion}"'
+        })
+    return JsonResponse({'ocupado': False})
+
+def validar_orden_cargo(request):
+    orden = request.GET.get('orden')
+    departamento_id = request.GET.get('departamento_id')
+    exclude_id = request.GET.get('exclude_id')
+
+    if not orden or not orden.isdigit() or not departamento_id or not departamento_id.isdigit():
+        return JsonResponse({'ocupado': False})
+
+    qs = CargoPlantilla.objects.filter(departamento_id=int(departamento_id), orden_informe=int(orden))
+    if exclude_id and exclude_id.isdigit():
+        qs = qs.exclude(pk=int(exclude_id))
+
+    colision = qs.first()
+    if colision:
+        return JsonResponse({
+            'ocupado': True,
+            'mensaje': f'Ocupado por "{colision.ncargo.descripcion}"'
         })
     return JsonResponse({'ocupado': False})

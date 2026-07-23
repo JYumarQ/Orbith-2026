@@ -41,5 +41,6 @@ urlpatterns = [
 
     path('validar-orden-uniorg/', views.validar_orden_uniorg, name='validar_orden_uniorg'),
     path('validar-orden-dpto/', views.validar_orden_dpto, name='validar_orden_dpto'),
+    path('validar_orden_cargo/', views.validar_orden_cargo, name='validar_orden_cargo'),
 ]
 

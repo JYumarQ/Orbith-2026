@@ -8,7 +8,7 @@
          data-url-contrato="{% url 'updt_contrato' c.pk %}"
          data-url-personal="{% url 'updt_aspir' c.aspirante.pk %}"
          data-url-solicitar="{% url 'solicitar_movimiento' c.pk %}"
-         data-url-pdf="{% url 'imprimir_modelo_movimiento' c.pk %}"
+         data-url-pdf="{% url 'exportar_contrato_word' c.pk %}"
          data-url-baja="{% url 'del_contrato' c.pk %}"
          data-expediente="{{ c.no_expediente }}"
          data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}"

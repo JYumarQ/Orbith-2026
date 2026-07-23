@@ -17,6 +17,8 @@
             data-fecha-limite="{{ c.fecha_ultima_accion|date:'Y-m-d' }}"
             data-nombre="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}"
             data-cargo="{{ c.cargo.ncargo.descripcion|default:'---' }}"
+
+            data-url-exportar="{% url 'exportar_contrato_word' c.pk %}"
         >
         
         

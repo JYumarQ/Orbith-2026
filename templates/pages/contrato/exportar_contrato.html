@@ -1,0 +1,395 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Orbith | Asistente de Exportación Legal{% endblock %}
+
+{% block content %}
+
+<style>
+    /* 🔥 NEGRITA PARA TODOS LOS CAMPOS DE SOLO LECTURA (COLUMNA DERECHA) */
+    .datos-orbith .form-control-plaintext {
+        font-weight: 600 !important;
+        color: #1e1e2f !important;
+    }
+
+    /* 🔥 NEGRITA PARA LOS CAMPOS EDITABLES (COLUMNA IZQUIERDA) */
+    .parametros-doc .form-control,
+    .parametros-doc .form-select,
+    .parametros-doc .form-control-plaintext {
+        font-weight: 600 !important;
+        color: #1e1e2f !important;
+    }
+
+    /* 🔥 NEGRITA PARA LOS 3 INDICADORES (CNCI, Salario, Tarifa) */
+    .datos-orbith .card .fw-bold,
+    .datos-orbith .card .fw-black,
+    .datos-orbith .card .fw-semibold {
+        font-weight: 700 !important;
+    }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y">
+    
+    <div class="card mb-4 mt-2">
+        <div class="card-body d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar avatar-md flex-shrink-0">
+                    <span class="avatar-initial rounded bg-label-primary">
+                        <i class="bx bx-file-blank fs-2"></i>
+                    </span>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-1">Asistente de Exportación Legal</h4>
+                    <p class="text-muted mb-0">
+                        Contratado: <span class="fw-semibold text-primary text-uppercase">{{ contrato.aspirante.nombre }} {{ contrato.aspirante.papellido }} {{ contrato.aspirante.sapellido|default:"" }}</span>
+                    </p>
+                </div>
+            </div>
+            <div>
+                <a href="{% url 'list_contrato' %}" class="btn btn-outline-secondary">
+                    <i class="bx bx-arrow-back me-1"></i> Volver al Listado
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info d-flex align-items-center mb-4" role="alert">
+        <span class="badge badge-center rounded-pill bg-info me-3"><i class="bx bx-info-circle"></i></span>
+        <div>
+            <strong>Aviso importante:</strong> Los parámetros modificados en esta pantalla <span class="fw-semibold">solo se aplicarán al documento Word descargado</span>. Los datos almacenados en la base de datos de Orbith no sufrirán ningún cambio.
+        </div>
+    </div>
+
+    <form method="POST" action="{% url 'exportar_contrato_word' contrato.pk %}" id="formExportarContrato">
+        {% csrf_token %}
+
+        <!-- 🔥 CAMBIO 1: ROW CON align-items-start PARA NIVELAR COLUMNAS -->
+        <div class="row align-items-stretch">
+            
+            <!-- COLUMNA IZQUIERDA (7) -->
+            <div class="col-12 col-lg-7">
+                <div class="card mb-4 h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center border-bottom mb-3">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bx bx-slider-alt me-2 text-primary"></i>Parámetros del Documento</h5>
+                        <small class="text-muted float-end">Campos requeridos *</small>
+                    </div>
+                    <!-- 🔥 CAMBIO 2: AÑADIR CLASE parametros-doc -->
+                    <div class="card-body parametros-doc">
+                        <div class="row g-3">
+                            
+                            <div class="col-12">
+                                <div class="bg-lighter p-3 rounded mb-2 border">
+                                    <label for="{{ form.firma_cuadro.id_for_label }}" class="form-label fw-bold text-dark">
+                                        <i class="bx bx-user-check me-1 text-primary"></i> Cuadro Directivo Firme <span class="text-danger">*</span>
+                                    </label>
+                                    {{ form.firma_cuadro }}
+                                    {% if form.firma_cuadro.errors %}
+                                        <div class="text-danger small mt-1 fw-semibold">{{ form.firma_cuadro.errors.0 }}</div>
+                                    {% endif %}
+                                    <div class="form-text mt-1">Seleccione la autoridad responsable que firmará el contrato de trabajo.</div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="{{ form.resolucion_salario_escala.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Resolución Salarial</label>
+                                {{ form.resolucion_salario_escala }}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.fecha_efectiva.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Fecha Efectiva de Firma</label>
+                                {{ form.fecha_efectiva }}
+                            </div>
+
+                            <!-- UBICACIÓN DE LA ENTIDAD -->
+                            <div class="col-md-6">
+                                <label for="id_provincia_entidad" class="form-label text-muted small fw-semibold text-uppercase">Provincia (Entidad)</label>
+                                <select name="provincia_entidad" id="id_provincia_entidad" class="form-select">
+                                    <option value="">---------</option>
+                                    {% for p in provincias %}
+                                    <option value="{{ p.id }}" {% if config.provincia_entidad.id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="id_municipio_entidad" class="form-label text-muted small fw-semibold text-uppercase">Municipio (Entidad)</label>
+                                <select name="municipio_entidad" id="id_municipio_entidad" class="form-select">
+                                    <option value="">---------</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="{{ form.sistema_pago.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Sistema de Pago</label>
+                                {{ form.sistema_pago }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-semibold text-uppercase">Período de Pago</label>
+                                <div class="mt-1">
+                                    {{ form.periodo_pago }}
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="{{ form.jornada_texto.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Jornada Laboral</label>
+                                {{ form.jornada_texto }}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.horario_texto.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Horario Establecido</label>
+                                {{ form.horario_texto }}
+                            </div>
+
+                            <div class="col-12">
+                                <label for="{{ form.nocturnidad_texto.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Nocturnidad</label>
+                                {{ form.nocturnidad_texto }}
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUMNA DERECHA (5) -->
+            <div class="col-12 col-lg-5">
+                <!-- 🔥 CAMBIO 3: AÑADIR mt-0 PARA EVITAR MARGEN SUPERIOR EXTRA -->
+                <div class="card bg-lighter border mb-4 shadow-none mt-0 h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center border-bottom mb-3 bg-transparent">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="bx bx-lock-alt me-2 text-secondary"></i>Datos Base de Orbith</h5>
+                        <span class="badge bg-label-secondary text-uppercase">Solo Lectura</span>
+                    </div>
+                    <!-- 🔥 CAMBIO 4: AÑADIR CLASE datos-orbith -->
+                    <div class="card-body datos-orbith">
+    
+                    <!-- Indicadores (CNCI, Salario, Tarifa) - Reducido mb-4 a mb-3 -->
+                    <div class="row g-2 mb-3">
+                        <div class="col-4">
+                            <div class="card border shadow-none text-center py-2 bg-white">
+                                <small class="text-muted d-block text-uppercase fw-semibold" style="font-size: 10px;">CNCI</small>
+                                <span class="fw-bold text-dark">${{ contrato.cnci|default:"0.00" }}</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border border-primary shadow-none text-center py-2 bg-label-primary">
+                                <small class="text-primary d-block text-uppercase fw-bold" style="font-size: 10px;">Salario Escala</small>
+                                <span class="fw-black text-primary">${{ salario_escala }}</span>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card border shadow-none text-center py-2 bg-white">
+                                <small class="text-muted d-block text-uppercase fw-semibold" style="font-size: 10px;">Tarifa Hora</small>
+                                <span class="fw-semibold text-dark">${{ tarifa_horaria }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cargo (Full Width) - reducido mb-3 a mb-2 -->
+                    <div class="mb-2">
+                        <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Cargo Propuesto</label>
+                        <div class="form-control-plaintext fw-bold text-dark border-bottom py-1">
+                            {{ contrato.cargo.ncargo.descripcion|default:"(-)" }}
+                        </div>
+                    </div>
+
+                    <!-- Grid compacto de 2 columnas con márgenes reducidos (mb-1 en lugar de mb-2) -->
+                    <div class="row g-2">
+                        
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Categoría</label>
+                            <div class="form-control-plaintext fw-semibold text-dark border-bottom py-1">
+                                {{ contrato.cargo.ncargo.get_cat_ocupacional_display|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Unidad Organizativa</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1 text-truncate">
+                                {% if contrato.cargo.departamento.unidad_organizativa %}
+                                    {{ contrato.cargo.departamento.unidad_organizativa.descripcion|default:"(-)" }}
+                                {% else %}
+                                    (-)
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">No. Resolución</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                {% if contrato.funcionario %}
+                                    {{ contrato.funcionario_res|default:"Campo Vacío" }}
+                                {% elif contrato.designado %}
+                                    {{ contrato.designado_res|default:"Campo Vacío" }}
+                                {% else %}
+                                    (-)
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Duración del Contrato</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                {{ contrato.duracion|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Motivo</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                {{ contrato.motivo.descripcion|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <div class="col-6">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Tipo Contrato</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1 text-truncate">
+                                {{ contrato.tipo.descripcion|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <!-- 🔥 NUEVA FILA: Rol, Tridente y Grupo Escala en 3 columnas -->
+                        <div class="col-4">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Rol</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                {{ contrato.rol.tipo|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <div class="col-4">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Tridente</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                {{ contrato.tridente.tipo|default:"(-)" }}
+                            </div>
+                        </div>
+
+                        <div class="col-4">
+                            <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Grupo Escala</label>
+                            <div class="form-control-plaintext text-muted border-bottom py-1">
+                                <span class="badge bg-label-primary fw-bold font-monospace">{{ contrato.cargo.ncargo.grupo_escala.nivel|default:"(-)" }}</span>
+                            </div>
+                        </div>
+
+                        <!-- CLA (col-6) y Grado Científico (col-6) -->
+                        <div class="row g-2 align-items-end mt-1">
+                            <div class="col-6">
+                                <label class="form-label text-muted text-uppercase" style="font-size: 11px;">CLA</label>
+                                <div class="form-control-plaintext text-muted border-bottom py-1">
+                                    {% if contrato.cla %}
+                                        {{ contrato.cla.nombre }} | {{ contrato.cla.tarifa_hora }}
+                                    {% else %}
+                                        (-)
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Grado Científico</label>
+                                <div class="form-control-plaintext text-muted border-bottom py-1" style="font-size: 12px;">
+                                    {{ grados_cientificos_texto }}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                </div>
+            </div>
+
+        </div>
+        <!-- Fin row -->
+
+        <div class="card mb-4 mt-2">
+            <div class="card-body d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bx bx-check-shield text-success fs-3"></i>
+                    <span class="text-muted small">Al presionar "Generar", la plantilla descargara el modelo oficial del contrato.</span>
+                </div>
+                <div class="d-flex gap-2 w-100 w-sm-auto justify-content-end">
+                    <a href="{% url 'list_contrato' %}" class="btn btn-label-secondary w-50 w-sm-auto">Cancelar</a>
+                    <button type="submit" class="btn btn-primary w-50 w-sm-auto">
+                        <i class="bx bx-file me-1"></i> Generar Contrato
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </form>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // Inicializar Select2 con el tema nativo de Sneat declarado en tu base.html
+        $('#{{ form.firma_cuadro.id_for_label }}').select2({
+            placeholder: "Escriba para buscar un cuadro directivo activo...",
+            allowClear: true,
+            width: '100%',
+            dropdownParent: $('#formExportarContrato'),
+            theme: 'bootstrap-5'
+        });
+
+        // Captura de descarga y animación con SweetAlert2 nativo de Orbith
+        $('#formExportarContrato').on('submit', function(e) {
+            if (!$('#{{ form.firma_cuadro.id_for_label }}').val()) {
+                e.preventDefault();
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Campo Requerido',
+                    text: 'Debe seleccionar obligatoriamente un Cuadro Directivo para la firma.',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
+                });
+                return false;
+            }
+
+            // Spinner elegante usando las alertas del base.html
+            Swal.fire({
+                title: 'Compilando Documento...',
+                text: 'Orbith está inyectando las variables en la plantilla legal.',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // Cerrar el alert diferido tras la respuesta del servidor
+            setTimeout(() => { Swal.close(); }, 3500);
+        });
+    });
+
+    // ==========================================
+    // CARGA DINÁMICA DE MUNICIPIOS (Entidad)
+    // ==========================================
+    $('#id_provincia_entidad').on('change', function() {
+        var provId = $(this).val();
+        var $muni = $('#id_municipio_entidad');
+
+        if (provId) {
+            fetch('/nomencladores/cargar_municipios/?provincia=' + provId)
+                .then(response => response.text())
+                .then(html => {
+                    var options = $(html).find('option');
+                    if (options.length > 1) { // hay al menos una opción real
+                        $muni.empty().append(options);
+                        $muni.val('');
+                    } else {
+                        $muni.html('<option value="">No hay municipios</option>');
+                    }
+                })
+                .catch(() => {
+                    $muni.html('<option value="">Error al cargar</option>');
+                });
+        } else {
+            $muni.html('<option value="">---------</option>');
+        }
+    });
+
+    // Carga inicial al cargar la página
+    $(document).ready(function() {
+        if ($('#id_provincia_entidad').val()) {
+            $('#id_provincia_entidad').trigger('change');
+        }
+    });
+
+    // Ejecutar al cargar la página para cargar los municipios de la provincia precargada
+    $(document).ready(function() {
+        // Disparar el change si hay una provincia seleccionada
+        if ($('#id_provincia_entidad').val()) {
+            $('#id_provincia_entidad').trigger('change');
+        }
+    });
+</script>
+{% endblock %}

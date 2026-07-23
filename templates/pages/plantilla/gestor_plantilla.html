@@ -458,7 +458,7 @@
     let sortState = {
         unit: { sort: 'grupo_nomina', order: 'asc' },
         dept: { sort: 'alpha', order: 'asc' },
-        cargo: { sort: 'alpha', order: 'asc' },
+        cargo: { sort: 'orden', order: 'asc' },
         contrato: { sort: 'alpha', order: 'asc' }
     };
 
@@ -578,8 +578,7 @@
 
         activateToolbar('dept', item.dataset);
         
-        // Al cambiar depto, reseteamos orden de cargos
-        sortState.cargo = { sort: 'alpha', order: 'asc' };
+        
 
         loadHtmx('#search-cargo', "{% url 'htmx_load_cargos' 0 %}".replace('0', selectedDeptId));
         

@@ -44,7 +44,7 @@
                     if ($(selTridente).hasClass('select2-hidden-accessible')) {
                         $(selTridente).val(null).trigger('change.select2');
                     }
-                    $(selTridente).trigger('change'); 
+                    
                 }
             } else {
                 // HABILITADO
@@ -59,8 +59,7 @@
                     if ($sel.hasClass('select2-hidden-accessible')) {
                         $sel.trigger('change.select2');
                     }
-                    // ESTO ES NUEVO: Forzamos al JS a que lo ponga amarillo de inmediato si está vacío
-                    $sel.trigger('change'); 
+                    
                 }
             }
         }

@@ -1,87 +1,97 @@
 <div class="modal-dialog" role="document">
     <div class="modal-content">
-        <div class="modal-header">
-            <h5 class="modal-title" id="cargosModalLabel">Editar Cargo</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-header d-flex align-items-center pb-3 border-bottom mb-3">
+            <h5 class="modal-title flex-grow-1" id="cargosModalLabel">Editar Cargo</h5>
+            <div class="form-check form-switch m-0 d-flex align-items-center">
+                {{ form.activo }}
+                <label class="form-check-label ms-2 text-muted" for="id_activo" style="padding-top: 2px;">Activo</label>
+            </div>
+            <button type="button" class="btn-close ms-3 m-0" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         
-        <div class="modal-body">
-            <form hx-post="{{ request.path }}" 
-                  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
-                  hx-target="#modal_generic"
-                  hx-swap="innerHTML"
-                  hx-confirm="¿Estás seguro de guardar los cambios?"
-                  id="cargoForm">
+        <form method="post" action="{{ request.path }}" id="cargoForm" class="px-4">
+            {% csrf_token %}
                 
                 {% csrf_token %}
                 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Unidad Organizativa</label>
-                        <input type="text" class="form-control" 
+                        <label class="form-label" for="visual_unidad">Unidad Organizativa</label>
+                        <input type="text" id="visual_unidad" class="form-control" 
                             style="background-color: #e9ecef; color: #566a7f;" 
                             value="{{ form.instance.departamento.unidad_organizativa.descripcion }}" readonly>
                         <input type="hidden" name="unidad" value="{{ form.instance.departamento.unidad_organizativa.pk }}">
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Departamento</label>
-                        <input type="text" class="form-control" 
+                        <label class="form-label" for="visual_dpto">Departamento</label>
+                        <input type="text" id="visual_dpto" class="form-control" 
                             style="background-color: #e9ecef; color: #566a7f;" 
                             value="{{ form.instance.departamento.descripcion }}" readonly>
                         <input type="hidden" name="departamento" value="{{ form.instance.departamento.id }}">
                     </div>
 
                     <div class="col-12">
-                        <label class="form-label">Cargo</label>
+                        <label class="form-label" for="id_ncargo">Cargo</label>
                         {{ form.ncargo }}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label text-muted">Grupo Escala</label>
+                        <label class="form-label text-muted" for="visual_grupo_escala">Grupo Escala</label>
                         <input type="text" id="visual_grupo_escala" class="form-control" 
                             style="background-color: #e9ecef; color: #566a7f;"
                             readonly placeholder="Automático">
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Rol</label>
+                        <label class="form-label" for="id_rol">Rol</label>
                         {{ form.rol }}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Nivel de Preparación</label>
+                        <label class="form-label" for="id_nivel_preparacion">Nivel de Preparación</label>
                         {{ form.nivel_preparacion }}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Cantidad Aprobada</label>
+                        <label class="form-label" for="id_cant_aprobada">Cantidad Aprobada</label>
                         {{ form.cant_aprobada }}
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Cantidad Cubierta</label>
+                        <label class="form-label" for="id_cant_cubierta">Cantidad Cubierta</label>
                         {{ form.cant_cubierta }} 
                     </div>
-                    
-                    <div class="col-md-6 d-flex flex-column justify-content-end ps-3 pb-1"> 
-                        <div class="form-check form-switch mb-2">
-                            {{ form.activo }}
-                            <label class="form-check-label text-primary" for="{{ form.activo.id_for_label }}">
-                                Activo
-                            </label>
-                        </div>
 
-                        <div class="form-check form-switch">
-                            {{ form.puesto_clave }}
-                            <label class="form-check-label text-primary cursor-pointer" for="{{ form.puesto_clave.id_for_label }}">
-                                Puesto Clave
-                            </label>
+                    <!-- ========================================== -->
+                    <!-- NUEVO: Orden de Prioridad -->
+                    <!-- ========================================== -->
+                    <div class="col-md-6">
+                        <label class="form-label" for="{{ form.orden_informe.id_for_label }}">Orden de Prioridad</label>
+                        {{ form.orden_informe }}
+                        {% if form.orden_informe.errors %}
+                            <div class="text-danger small mt-1 fw-bold">{{ form.orden_informe.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    
+                    
+                    <div class="col-md-6">
+                        <label class="form-label d-block">Tipo</label>
+                        <div class="btn-group w-100" role="group">
+                            {{ form.funcionario }}
+                            <label class="btn btn-outline-primary" for="id_funcionario">Funcionario</label>
+                            
+                            {{ form.designado }}
+                            <label class="btn btn-outline-primary" for="id_designado">Designado</label>
                         </div>
                     </div>
+
                 </div>
 
-                <div class="modal-footer px-0 pb-0 mt-3">
+                <input type="hidden" name="autoriza_desplazamiento" id="autoriza_desplazamiento" value="false">
+
+                <div class="modal-footer px-0 pb-3 mt-4">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar</button>
                 </div>
@@ -91,141 +101,414 @@
 </div>
 
 <script>
-(function() {
-    const form = document.getElementById('cargoForm');
-    if (!form) return;
+    (function() {
+        const form = document.getElementById('cargoForm');
+        if (!form) return;
 
-    // Referencias
-    const $ncargo = $('#id_ncargo'); // jQuery para Select2
-    const rol = form.querySelector('#id_rol');
-    const inputGrupo = form.querySelector('#visual_grupo_escala');
-    const cantCubierta = form.querySelector('[name="cant_cubierta"]');
-    const cantAprobada = form.querySelector('#id_cant_aprobada'); 
-    const checkActivo = form.querySelector('#id_activo');
-    
-    const urlInfoCargo = "/estructuras/categoria_ocupacional/";
+        // --- 1. Referencias directas y seguras al DOM ---
+        const $ncargo = $('#id_ncargo'); 
+        const rol = document.getElementById('id_rol');
+        const inputGrupo = document.getElementById('visual_grupo_escala');
+        const cantCubierta = form.querySelector('[name="cant_cubierta"]');
+        const cantAprobada = document.getElementById('id_cant_aprobada'); 
+        const checkActivo = document.getElementById('id_activo');
+        const checkFuncionario = document.getElementById('id_funcionario');
+        const checkDesignado = document.getElementById('id_designado');
+        const urlInfoCargo = "/estructuras/categoria_ocupacional/"; 
 
-    // --- 0. INICIALIZAR SELECT2 ---
-    $ncargo.select2({
-        dropdownParent: $('#modal_generic'),
-        width: '100%',
-        placeholder: "Buscar cargo...",
-        language: { noResults: () => "No encontrado" }
-    });
+        // Fuerza las clases visuales de los botones (Segmented Buttons de Bootstrap)
+        if (checkFuncionario) checkFuncionario.className = 'btn-check';
+        if (checkDesignado) checkDesignado.className = 'btn-check';
 
-    // 1. Bloqueo
-    if(cantCubierta) {
-        cantCubierta.setAttribute('readonly', true);
-        cantCubierta.style.backgroundColor = '#e9ecef';
-        cantCubierta.style.color = '#566a7f';
-    }
+        // --- 2. Inicialización Select2 ---
+        try {
+            $ncargo.select2({
+                dropdownParent: $('#modal_generic'), 
+                width: '100%',
+                placeholder: "Buscar cargo...",
+                allowClear: true,
+                language: { noResults: () => "No se encontró coincidencia" }
+            });
+        } catch(e) { console.error("Select2 no pudo inicializarse", e); }
 
-    // 2. Activo
-    function actualizarEstadoActivo() {
-        if (!cantAprobada || !checkActivo) return;
-        const cantidad = parseInt(cantAprobada.value) || 0;
-        checkActivo.checked = (cantidad > 0);
-
-        checkActivo.removeAttribute('disabled');
-        const wrapper = checkActivo.closest('.form-check');
-        if (wrapper) {
-            wrapper.style.pointerEvents = 'none';
-        }
-    }
-
-    // 3. Lógica Datos Cargo Inteligente
-    function actualizarDatosCargo() {
-        const id = $ncargo.val(); 
-        
-        // Reset si borran la selección
-        if (!id) {
-            if(rol) {
-                rol.removeAttribute('disabled');
-                Array.from(rol.options).forEach(opt => { opt.hidden = false; opt.disabled = false; });
-            }
-            if(inputGrupo) inputGrupo.value = "";
-            return;
+        // --- 3. Campos ReadOnly ---
+        if(cantCubierta) {
+            cantCubierta.setAttribute('readonly', true);
+            cantCubierta.style.backgroundColor = '#e9ecef';
+            cantCubierta.style.color = '#566a7f';
+            if (!cantCubierta.value) cantCubierta.value = 0; 
         }
 
-        fetch(`${urlInfoCargo}?id=${id}`, { headers: { 'Accept': 'application/json' } })
-        .then(resp => resp.json())
-        .then(data => {
-            const grupo = data.grupo_escala || "";
-            const cat = data.cat_ocupacional || "";
+        // --- 4. MOTOR REACTIVO DEL SWITCH ACTIVO (Corregido y blindado) ---
+        function actualizarEstadoActivo() {
+            if (!cantAprobada || !checkActivo) return;
             
-            if(inputGrupo) inputGrupo.value = grupo || "---";
+            let cantidad = parseInt(cantAprobada.value);
+            if (isNaN(cantidad)) cantidad = 0; // Si borran el número, asumimos 0
 
-            if (rol) {
-                rol.removeAttribute('disabled');
+            const labelActivo = document.querySelector('label[for="' + checkActivo.id + '"]');
+
+            if (cantidad > 0) {
+                // ENCENDIDO Y VIVO
+                checkActivo.checked = true;
+                checkActivo.disabled = false; // Propiedad nativa (Quita lo opaco)
+                checkActivo.removeAttribute('disabled'); 
                 
-                let opcionesValidas = 0;
-                let ultimaOpcionValida = "";
-
-                // Recorremos las opciones del select de Roles
-                Array.from(rol.options).forEach(opt => {
-                    // Ignoramos la opción por defecto vacía "---------"
-                    if (!opt.value) {
-                        opt.hidden = false; 
-                        opt.disabled = false;
-                        return;
-                    }
-
-                    const textoRol = opt.text.toUpperCase();
-                    let mostrar = false;
-
-                    // --- REGLAS DE NEGOCIO (Lógica Estricta por Categoría) ---
-                    
-                    // 1. Si la Categoría es Cuadro (CDI o CEJ), el único rol posible es Cuadro
-                    if (cat === 'CDI' || cat === 'CEJ') {
-                        if (textoRol.includes('CUADRO')) mostrar = true;
-                    } 
-                    
-                    // 2. Si la Categoría NO es Cuadro (Técnico, Operario, etc.), JAMÁS se muestra Cuadro
-                    else {
-                        // Sub-regla: XXII, XXIII y XXIV solo pueden ser Decisorios
-                        if (grupo === 'XXII' || grupo === 'XXIII' || grupo === 'XXIV') {
-                            if (textoRol.includes('DECISORIO')) mostrar = true;
-                        } 
-                        // Para absolutamente todo el resto de los grupos (del I al XXI)
-                        else {
-                            if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) {
-                                mostrar = true;
-                            }
-                        }
-                    }
-
-                    // Aplicamos la visibilidad de forma segura para todos los navegadores
-                    if (mostrar) {
-                        opt.hidden = false;
-                        opt.disabled = false;
-                        opcionesValidas++;
-                        ultimaOpcionValida = opt.value;
-                    } else {
-                        opt.hidden = true;
-                        opt.disabled = true;
-                        // Si la opción seleccionada actualmente se acaba de ocultar, la limpiamos
-                        if (rol.value === opt.value) {
-                            rol.value = ''; 
-                        }
-                    }
-                });
-
-                // MEJORA UX: Si después de filtrar solo quedó 1 opción válida, la seleccionamos automáticamente
-                if (opcionesValidas === 1 && rol.value === '') {
-                    rol.value = ultimaOpcionValida;
+                if(labelActivo) {
+                    labelActivo.classList.remove('text-muted');
+                    labelActivo.classList.add('text-primary', 'fw-bold');
+                }
+            } else {
+                // APAGADO Y OPACO
+                checkActivo.checked = false;
+                checkActivo.disabled = true; // Propiedad nativa
+                checkActivo.setAttribute('disabled', 'disabled');
+                
+                if(labelActivo) {
+                    labelActivo.classList.remove('text-primary', 'fw-bold');
+                    labelActivo.classList.add('text-muted');
                 }
             }
-        })
-        .catch(err => console.error('Error fetching cargo:', err));
-    }
+            
+            // Bloqueo de clics (Evita que el usuario lo cambie a mano, pero mantiene el color visual)
+            checkActivo.style.pointerEvents = 'none';
+            const wrapper = checkActivo.closest('.form-check');
+            if (wrapper) wrapper.style.pointerEvents = 'none';
+        }
 
-    if (cantAprobada) cantAprobada.addEventListener('input', actualizarEstadoActivo);
+        // Conexión irrompible: Escuchamos cualquier tecla, clic o cambio en el input
+        if (cantAprobada) {
+            cantAprobada.addEventListener('input', actualizarEstadoActivo);
+            cantAprobada.addEventListener('change', actualizarEstadoActivo);
+            cantAprobada.addEventListener('keyup', actualizarEstadoActivo);
+        }
+
+        // --- 5. Lógica Datos Cargo Inteligente ---
+        function actualizarDatosCargo() {
+            const id = $ncargo.val(); 
+            
+            if (!id) {
+                if(rol) {
+                    rol.removeAttribute('disabled');
+                    Array.from(rol.options).forEach(opt => { opt.hidden = false; opt.disabled = false; });
+                }
+                if(inputGrupo) inputGrupo.value = "";
+                return;
+            }
+
+            fetch(`${urlInfoCargo}?id=${id}`, { headers: { 'Accept': 'application/json' } })
+            .then(resp => resp.json())
+            .then(data => {
+                const grupo = data.grupo_escala || "";
+                const cat = data.cat_ocupacional || "";
+                
+                if(inputGrupo) inputGrupo.value = grupo || "---";
+
+                if (rol) {
+                    rol.removeAttribute('disabled');
+                    let opcionesValidas = 0;
+                    let ultimaOpcionValida = "";
+
+                    Array.from(rol.options).forEach(opt => {
+                        if (!opt.value) { opt.hidden = false; opt.disabled = false; return; }
+
+                        const textoRol = opt.text.toUpperCase();
+                        let mostrar = false;
+                        
+                        if (cat === 'CDI' || cat === 'CEJ') {
+                            if (textoRol.includes('CUADRO')) mostrar = true;
+                        } else {
+                            if (grupo === 'XXII' || grupo === 'XXIII' || grupo === 'XXIV') {
+                                if (textoRol.includes('DECISORIO')) mostrar = true;
+                            } else {
+                                if (textoRol.includes('FUNDAMENTAL') || textoRol.includes('DECISORIO') || textoRol.includes('APOYO')) {
+                                    mostrar = true;
+                                }
+                            }
+                        }
+
+                        if (mostrar) {
+                            opt.hidden = false; opt.disabled = false;
+                            opcionesValidas++; ultimaOpcionValida = opt.value;
+                        } else {
+                            opt.hidden = true; opt.disabled = true;
+                            if (rol.value === opt.value) rol.value = ''; 
+                        }
+                    });
+
+                    if (opcionesValidas === 1 && rol.value === '') rol.value = ultimaOpcionValida;
+                }
+            }).catch(err => console.error('Error fetching cargo:', err));
+        }
+        
+        $ncargo.on('change', actualizarDatosCargo);
+
+        // --- 6. EXCLUSIVIDAD DE CARGOS ESPECIALES (Funcionario / Designado) ---
+        if (checkFuncionario && checkDesignado) {
+            
+            function notificarAjusteAutomatico() {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ 
+                        toast: true, 
+                        position: 'top-end', 
+                        icon: 'info', 
+                        title: 'Ajuste automático', 
+                        text: 'Un cargo no puede ser Funcionario y Designado simultáneamente.', 
+                        showConfirmButton: false, 
+                        timer: 3000 
+                    });
+                }
+            }
+
+            checkFuncionario.addEventListener('change', function() {
+                if (this.checked) {
+                    // REGLA 1 y 3: Si se enciende Funcionario, revisamos si Designado estaba encendido
+                    if (checkDesignado.checked) {
+                        checkDesignado.checked = false; // Apagamos el contrario
+                        notificarAjusteAutomatico();    // SOLO avisamos en el cruce
+                    }
+                } else {
+                    // REGLA 2: El usuario lo apagó. 
+                    // Quitamos el foco a la fuerza para que Bootstrap borre el color azul al instante.
+                    this.blur();
+                }
+            });
+
+            checkDesignado.addEventListener('change', function() {
+                if (this.checked) {
+                    // REGLA 1 y 3: Si se enciende Designado, revisamos si Funcionario estaba encendido
+                    if (checkFuncionario.checked) {
+                        checkFuncionario.checked = false; // Apagamos el contrario
+                        notificarAjusteAutomatico();      // SOLO avisamos en el cruce
+                    }
+                } else {
+                    // REGLA 4: El usuario lo apagó.
+                    // Quitamos el foco a la fuerza para que Bootstrap borre el color azul al instante.
+                    this.blur();
+                }
+            });
+        }
+        
+        // --- 7. ARRANQUE INICIAL ---
+        actualizarDatosCargo(); // Necesario para edición
+        actualizarEstadoActivo(); // Fuerza el color del switch desde el segundo 0
+
+        // --- 8. CONTROL DE DESPLAZAMIENTO AL CAMBIAR ORDEN ---
+        const inputOrden = document.getElementById('id_orden_informe');
+        const inputAutoriza = document.getElementById('autoriza_desplazamiento');
+
+        if (inputOrden && inputAutoriza) {
+            inputOrden.addEventListener('change', function() {
+                // Si el valor cambia, activamos el desplazamiento
+                inputAutoriza.value = 'true';
+            });
+        }
+
+        // ============================================================
+        // 9. VALIDACIÓN DE DUPLICIDAD EN TIEMPO REAL (CON EXCLUDE_ID)
+        // ============================================================
+        const inputOrdenValidar = document.getElementById('id_orden_informe');
+        const hiddenDpto = document.querySelector('input[name="departamento"]');
+        const cargoId = '{{ form.instance.pk|default:"" }}'; // ID del cargo actual (para excluirlo)
+        const errorContainer = document.createElement('div');
+        errorContainer.id = 'orden-error';
+        errorContainer.className = 'text-danger small mt-1 fw-bold d-none';
+        
+        if (inputOrdenValidar) {
+            // Insertar el contenedor de error justo después del input
+            inputOrdenValidar.parentNode.appendChild(errorContainer);
+            
+            inputOrdenValidar.addEventListener('input', function() {
+                const orden = this.value;
+                const dptoId = hiddenDpto ? hiddenDpto.value : '';
+                if (orden && dptoId) {
+                    // 🔥 Incluir exclude_id para que no detecte el propio cargo
+                    fetch(`/estructuras/validar_orden_cargo/?orden=${orden}&departamento_id=${dptoId}&exclude_id=${cargoId}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const errEl = document.getElementById('orden-error');
+                            if (data.ocupado) {
+                                errEl.textContent = `⚠️ ${data.mensaje}`;
+                                errEl.classList.remove('d-none');
+                                this.classList.add('border-warning');
+                            } else {
+                                errEl.classList.add('d-none');
+                                this.classList.remove('border-warning');
+                            }
+                        })
+                        .catch(() => {});
+                } else {
+                    document.getElementById('orden-error')?.classList.add('d-none');
+                    this.classList.remove('border-warning');
+                }
+            });
+        }
+
+        // --- 10. ACTUALIZAR VALIDACIÓN AL CAMBIAR DEPARTAMENTO ---
+        const dptoSelect = document.getElementById('id_departamento');
+        if (dptoSelect) {
+            dptoSelect.addEventListener('change', function() {
+                // Forzar la validación del orden si el input tiene valor
+                const inputOrden = document.getElementById('id_orden_informe');
+                if (inputOrden && inputOrden.value) {
+                    // Disparar el evento 'input' para que revalide
+                    inputOrden.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+
+        // --- 10. CONFIRMACIÓN DE DESPLAZAMIENTO (SOLO SI HAY CONFLICTO) ---
+        const inputOrdenConfirm = document.getElementById('id_orden_informe');
+        const originalOrdenInput = document.getElementById('orden_informe_original');
+        let confirmacionPendiente = false;
+
+        if (inputOrdenConfirm && originalOrdenInput && hiddenDpto && inputAutoriza) {
+            const originalOrden = originalOrdenInput.value;
+
+            inputOrdenConfirm.addEventListener('change', function() {
+                const nuevoOrden = this.value;
+                if (nuevoOrden === originalOrden) return;
+
+                const dptoId = hiddenDpto.value;
+                if (!nuevoOrden || !dptoId) return;
+
+                fetch(`/estructuras/validar_orden_cargo/?orden=${nuevoOrden}&departamento_id=${dptoId}&exclude_id={{ form.instance.pk|default:'' }}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.ocupado) {
+                            if (!confirmacionPendiente) {
+                                confirmacionPendiente = true;
+                                Swal.fire({
+                                    title: '⚠️ Conflicto de orden',
+                                    text: `El número ${nuevoOrden} ya está ocupado por "${data.mensaje}". ¿Deseas desplazar los cargos?`,
+                                    icon: 'warning',
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Sí, desplazar',
+                                    cancelButtonText: 'Cancelar',
+                                    reverseButtons: true
+                                }).then((result) => {
+                                    confirmacionPendiente = false;
+                                    if (result.isConfirmed) {
+                                        inputAutoriza.value = 'true';
+                                        // Cerrar modal manualmente
+                                        const modal = document.getElementById('modal_generic');
+                                        if (modal) {
+                                            bootstrap.Modal.getInstance(modal)?.hide();
+                                        }
+                                        // Disparar el evento submit del formulario
+                                        document.getElementById('cargoForm').dispatchEvent(new Event('submit'));
+                                    } else {
+                                        // 🔥 CANCELAR: NO HACER NADA
+                                        // El campo se queda con el valor conflictivo y el error visual se mantiene
+                                    }
+                                });
+                            }
+                        } else {
+                            const errEl = document.getElementById('orden-error');
+                            if (errEl) {
+                                errEl.classList.add('d-none');
+                                this.classList.remove('border-warning');
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            });
+        }
+
+        // ============================================================
+        // 11. VALIDACIÓN AL ENVIAR EL FORMULARIO (SIEMPRE)
+        // ============================================================
+        const cargoForm = document.getElementById('cargoForm');
+        if (cargoForm) {
+            let enviando = false;
+
+            cargoForm.addEventListener('submit', function(e) {
+                e.preventDefault(); // Prevenir el envío automático
+                if (enviando) return;
+
+                const orden = document.getElementById('id_orden_informe')?.value;
+                const dptoId = document.querySelector('input[name="departamento"]')?.value;
+                const cargoId = '{{ form.instance.pk|default:"" }}';
+                const excludeParam = cargoId ? `&exclude_id=${cargoId}` : '';
+
+                // Si no hay orden o departamento, enviar directamente
+                if (!orden || !dptoId) {
+                    enviando = true;
+                    htmx.ajax('POST', cargoForm.action, {
+                        source: cargoForm,
+                        target: '#modal_generic',
+                        swap: 'innerHTML',
+                        headers: { 
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                        }
+                    });
+                    return;
+                }
+
+                // Validar conflicto en el backend
+                fetch(`/estructuras/validar_orden_cargo/?orden=${orden}&departamento_id=${dptoId}${excludeParam}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.ocupado) {
+                            // Mostrar SweetAlert de conflicto (SIEMPRE)
+                            Swal.fire({
+                                title: '⚠️ Conflicto de orden',
+                                text: `El número ${orden} ya está ocupado por "${data.mensaje}". ¿Deseas guardar de todas formas (se desplazarán los cargos)?`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonText: 'Sí, guardar',
+                                cancelButtonText: 'Cancelar',
+                                reverseButtons: true
+                            }).then((result) => {
+                                if (result.isConfirmed) {
+                                    // Activar desplazamiento
+                                    document.getElementById('autoriza_desplazamiento').value = 'true';
+                                    // Cerrar modal manualmente
+                                    const modal = document.getElementById('modal_generic');
+                                    if (modal) {
+                                        bootstrap.Modal.getInstance(modal)?.hide();
+                                    }
+                                    // Enviar con HTMX
+                                    enviando = true;
+                                    htmx.ajax('POST', cargoForm.action, {
+                                        source: cargoForm,
+                                        target: '#modal_generic',
+                                        swap: 'innerHTML',
+                                        headers: { 
+                                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                                        }
+                                    });
+                                }
+                                // Si cancela, no se envía
+                            });
+                        } else {
+                            // No hay conflicto, enviar normalmente
+                            enviando = true;
+                            htmx.ajax('POST', cargoForm.action, {
+                                source: cargoForm,
+                                target: '#modal_generic',
+                                swap: 'innerHTML',
+                                headers: { 
+                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                                }
+                            });
+                        }
+                    })
+                    .catch(() => {
+                        // Si falla la validación, enviar de todas formas
+                        enviando = true;
+                        htmx.ajax('POST', cargoForm.action, {
+                            source: cargoForm,
+                            target: '#modal_generic',
+                            swap: 'innerHTML',
+                            headers: { 
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
+                            }
+                        });
+                    });
+            });
+        }
+    })();
+
     
-    // Listener jQuery
-    $ncargo.on('change', actualizarDatosCargo);
-
-    // Ejecución inicial (para cargar datos del cargo que ya viene al editar)
-    actualizarDatosCargo();
-    actualizarEstadoActivo();
-})();
 </script>

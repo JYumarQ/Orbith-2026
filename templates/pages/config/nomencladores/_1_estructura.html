@@ -157,13 +157,25 @@
                       <tbody id="grupos-tbody">
                         {% for g in grupos %}
                         <tr data-id="{{ g.id }}" class="border-bottom">
-                          <td class="nivel-cell fw-medium text-heading ps-3">Nivel <span class="badge bg-label-secondary ms-1">{{ g.nivel }}</span></td>
+                          <td class="nivel-cell fw-medium text-heading ps-3">
+                            Nivel <span class="badge bg-label-secondary ms-1">{{ g.nivel }}</span>
+                          </td>
                           <td class="text-end pe-3" style="width: 80px;">
                             <div class="d-flex justify-content-end gap-1">
-                              <button class="btn btn-xs btn-icon btn-text-secondary edit-btn"><i class="fas fa-pencil-alt text-muted"></i></button>
-                              <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn"><i class="fas fa-trash text-muted"></i></button>
+                              <button class="btn btn-xs btn-icon btn-text-secondary edit-btn" 
+                                      onclick="abrirModalGrupo({{ g.id }})">
+                                <i class="fas fa-pencil-alt text-muted"></i>
+                              </button>
+                              <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn" 
+                                      onclick="eliminarGrupo({{ g.id }})">
+                                <i class="fas fa-trash text-muted"></i>
+                              </button>
                             </div>
                           </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                          <td colspan="2" class="text-center text-muted py-3">No hay grupos escala.</td>
                         </tr>
                         {% endfor %}
                       </tbody>
@@ -171,7 +183,29 @@
                   </div>
                   <div class="border-top pt-2 pb-2 d-flex justify-content-center bg-lighter">
                     <nav aria-label="Grupos Escala paginación">
-                      <ul class="pagination pagination-sm m-0" id="grupos-paginator"></ul>
+                      <ul class="pagination pagination-sm m-0">
+                        {% if grupos.has_previous %}
+                          <li class="page-item">
+                            <a class="page-link" href="?page_grupos={{ grupos.previous_page_number }}#tab-grupos">Anterior</a>
+                          </li>
+                        {% else %}
+                          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                        {% endif %}
+
+                        {% for num in grupos.paginator.page_range %}
+                          <li class="page-item {% if grupos.number == num %}active{% endif %}">
+                            <a class="page-link" href="?page_grupos={{ num }}#tab-grupos">{{ num }}</a>
+                          </li>
+                        {% endfor %}
+
+                        {% if grupos.has_next %}
+                          <li class="page-item">
+                            <a class="page-link" href="?page_grupos={{ grupos.next_page_number }}#tab-grupos">Siguiente</a>
+                          </li>
+                        {% else %}
+                          <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+                        {% endif %}
+                      </ul>
                     </nav>
                   </div>
                 </div>
@@ -379,7 +413,7 @@
               const url = form.getAttribute('action'); // Leemos la URL que pusimos en el HTML
 
               // Conseguimos el token directamente del formulario para evitar errores
-              const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+              var csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
 
               fetch(url, {
                   method: 'POST',
@@ -519,16 +553,21 @@
             if(data.tipo.es_subunidad) badges += '<span class="badge bg-info">Subunidad</span>';
 
             // ATENCIÓN: Se incluyen los parámetros en el botón editar al renderizar por JS
+            // CORRECCIÓN: Botones idénticos al Django original y variables seguras
             let strDesc = data.tipo.descripcion.replace(/'/g, "\\'");
-            let btnEdit = `<button class="btn btn-sm btn-info me-1" onclick="editarTipoUnidad(${data.tipo.id}, '${strDesc}', ${data.tipo.es_temporal}, ${data.tipo.es_principal}, ${data.tipo.es_subunidad}, '${data.tipo.color}', '${data.tipo.tipo_padre_id || ''}')"><i class="fas fa-pencil-alt"></i></button>`;
-            let btnDel = `<button class="btn btn-sm btn-danger" onclick="eliminarTipoUnidad(${data.tipo.id})"><i class="fas fa-trash"></i></button>`;
+            let strColor = data.tipo.color ? data.tipo.color : '';
+            let strPadre = data.tipo.tipo_padre_id ? data.tipo.tipo_padre_id : '';
+            
+            let btnEdit = `<button class="btn btn-sm btn-icon btn-text-secondary rounded-pill edit-btn" onclick="editarTipoUnidad(${data.tipo.id}, '${strDesc}', ${data.tipo.es_temporal}, ${data.tipo.es_principal}, ${data.tipo.es_subunidad}, '${strColor}', '${strPadre}')" title="Editar"><i class="fas fa-pencil-alt text-info"></i></button>`;
+            
+            let btnDel = `<button class="btn btn-sm btn-icon btn-text-secondary rounded-pill delete-btn" onclick="eliminarTipoUnidad(${data.tipo.id})" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>`;
 
             tr.innerHTML = `
-                <td class="fw-bold">${data.tipo.descripcion}</td>
-                <td class="text-center">${data.tipo.es_temporal ? '<span class="badge bg-label-warning">Sí</span>' : '<span class="badge bg-label-secondary">No</span>'}</td>
+                <td class="fw-semibold text-heading">${data.tipo.descripcion}</td>
+                <td class="text-center">${data.tipo.es_temporal ? '<span class="badge bg-label-warning px-3 rounded-pill">Sí</span>' : '<span class="badge bg-label-secondary px-3 rounded-pill">No</span>'}</td>
                 <td class="text-center">${badges}</td>
                 <td class="text-center">${colorBadge}</td>
-                <td class="text-center">${btnEdit} ${btnDel}</td>
+                <td class="text-center"><div class="d-flex justify-content-center gap-2">${btnEdit} ${btnDel}</div></td>
             `;
 
             if (isNew && tbody) { tbody.appendChild(tr); }

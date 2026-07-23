@@ -241,7 +241,7 @@
                     }
                 });
                 if (window.jQuery) {
-                    $(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
+                    jQuery(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
                 }
             }
             actualizarEstilo(input, cfg); 
@@ -268,8 +268,8 @@
                     
                     if (warningSexo) warningSexo.classList.add('d-none');
                     
-                    if (window.jQuery && $(sexInput).hasClass('select2-hidden-accessible')) {
-                        $(sexInput).trigger('change.select2');
+                    if (window.jQuery && jQuery(sexInput).hasClass('select2-hidden-accessible')) {
+                        jQuery(sexInput).trigger('change.select2');
                     }
                 }
             });
@@ -337,8 +337,8 @@
             } else {
                 grado.setAttribute('disabled', 'disabled');
                 grado.value = ''; 
-                if (window.jQuery && $(grado).hasClass('select2-hidden-accessible')) {
-                    $(grado).trigger('change.select2');
+                if (window.jQuery && jQuery(grado).hasClass('select2-hidden-accessible')) {
+                    jQuery(grado).trigger('change.select2');
                 }
             }
         }
@@ -396,7 +396,7 @@
             // Escuchar cambios nativos
             nivelEduc.addEventListener('change', validarTituloOro);
             // Escuchar cambios si el select utiliza jQuery/Select2
-            $(nivelEduc).on('change', validarTituloOro);
+            jQuery(nivelEduc).on('change', validarTituloOro);
             
             // Ejecutar al abrir el formulario para evaluar el estado inicial
             validarTituloOro(); 

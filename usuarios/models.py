@@ -15,6 +15,7 @@ class CustomUser(AbstractUser):
 
     es_admin = models.BooleanField(default=False)
     es_moderador = models.BooleanField(default=False)
+    es_observador = models.BooleanField(default=False)
     fecha_creado = models.DateField(auto_now_add=True)
     fecha_actualizado = models.DateTimeField(auto_now=True)
     
@@ -23,42 +24,43 @@ class CustomUser(AbstractUser):
         verbose_name = ("Usuario")
         verbose_name_plural = ("Usuarios")
         constraints = [
+            # Un usuario solo puede tener UN rol activo
             CheckConstraint(
-                check=~(Q(es_admin=True) & Q(es_moderador=True)),
-                name='roles_exclusivos_admin_xor_moderador'
+                check=(
+                    Q(es_admin=True) & Q(es_moderador=False) & Q(es_observador=False) |
+                    Q(es_admin=False) & Q(es_moderador=True) & Q(es_observador=False) |
+                    Q(es_admin=False) & Q(es_moderador=False) & Q(es_observador=True) 
+
+                ),
+                name='exactamente_un_rol'
             )
         ]
         
     def clean(self):
         super().clean()
+        roles_activos = sum([self.es_admin, self.es_moderador, self.es_observador])
+        if roles_activos == 0:
+            raise ValidationError("El usuario debe tener al menos un rol asignado (Administrador, Moderador o Observador).")
+        if roles_activos > 1:
+            raise ValidationError("El usuario no puede tener más de un rol activo.")
 #no levantar para permitir autocorreccion en save
 #if self.es_admin and self.es_moderador:
 #raise ValidationError('No puede ser Administrador y Moderador a la vez.')
 
     def save(self, *args, **kwargs):
-        """
-        Auto-exclusión de roles + sincronía de permisos:
-        - Si ambos vienen True, decide según el estado anterior:
-        * Antes Admin y ahora también marcaron Moderador => queda Moderador.
-        * Antes Moderador y ahora también marcaron Admin => queda Admin.
-        * Caso ambiguo => prioriza Admin.
-        - Admin => is_staff & is_superuser = True
-        - Moderador o Solo lectura => is_staff & is_superuser = False
-        """
+        # Resolución de conflictos (si hay más de un rol, prioriza Admin > Moderador > Observador)
         if self.es_admin and self.es_moderador:
-            prefer_moderador = False
-            if self.pk:
-                prev = type(self).objects.filter(pk=self.pk).values('es_admin', 'es_moderador').first()
-                if prev and prev['es_admin'] and not prev['es_moderador']:
-                    prefer_moderador = True
-            if prefer_moderador:
-                self.es_admin = False
-            else:
-                self.es_moderador = False
+            self.es_moderador = False
+        if self.es_admin and self.es_observador:
+            self.es_observador = False
+        if self.es_moderador and self.es_observador:
+            self.es_observador = False
 
-        # Solo los admin entran a /admin/
+        # Permisos de staff/superuser
         self.is_staff = bool(self.es_admin)
         self.is_superuser = bool(self.es_admin)
 
-        # Guardar UNA única vez con todo coherente
+        # 👇 Ejecuta validaciones antes de guardar
+        self.full_clean()  # Lanza ValidationError si roles_activos == 0 o > 1
+
         super().save(*args, **kwargs)

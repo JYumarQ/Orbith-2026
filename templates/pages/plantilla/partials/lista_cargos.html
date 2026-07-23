@@ -19,6 +19,9 @@
                 
                 <div class="d-flex align-items-center gap-3 overflow-hidden">
                     <i class="fas fa-briefcase {% if not cargo.activo %}text-secondary{% else %}text-muted{% endif %} opacity-50"></i>
+                    
+                    
+
                     <div class="overflow-hidden">
                         <h6 class="mb-0 fw-bold {% if not cargo.activo %}text-secondary{% else %}text-dark{% endif %} text-truncate" style="font-size: 0.85rem;">
                             {{ cargo.ncargo.descripcion }}
