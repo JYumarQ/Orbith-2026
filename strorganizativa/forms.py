@@ -7,6 +7,43 @@ from .models import CargoPlantilla, Departamento, UnidadOrganizativa
 from nomencladores.models import NTipoUnidadOrganizativa
 
 
+
+class SelectNCargoConGrupoWidget(forms.Select):
+    """
+    Select del campo 'ncargo' que añade a cada <option>:
+      - data-grupo : nivel del Grupo Escala (tooltip de Select2).
+      - disabled   : si ese NCargo ya está usado en el departamento actual.
+    """
+
+    # Ids de NCargo ya usados en el departamento.
+    # Lo rellena CargoPlantillaForm.__init__
+    ncargos_usados = frozenset()
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs
+        )
+
+        # La opción vacía ("---------") llega con value = '' -> se ignora
+        if value:
+            # --- Grupo Escala (para el tooltip) ---
+            instancia = getattr(value, 'instance', None)
+            grupo = getattr(instancia, 'grupo_escala', None) if instancia else None
+            if grupo is not None:
+                option['attrs']['data-grupo'] = grupo.nivel
+
+            # --- ¿Este cargo ya existe en el departamento? ---
+            try:
+                pk = int(getattr(value, 'value', value))
+            except (TypeError, ValueError):
+                pk = None
+
+            if pk is not None and pk in self.ncargos_usados:
+                option['attrs']['disabled'] = True     # Select2 lo respeta de forma nativa
+                option['attrs']['data-usado'] = 'true'  # Para el gris del templateResult
+
+        return option
+    
 #CARGO
 class CargoPlantillaForm(forms.ModelForm):
     unidad = forms.ModelChoiceField(
@@ -35,7 +72,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'orden_informe': 'Orden de Prioridad',
         }
         widgets = {
-            'ncargo': forms.Select(attrs={'class':'form-select js-cargo-select', 'id':'id_ncargo', 'style': 'width: 100%'}),
+            'ncargo': SelectNCargoConGrupoWidget(attrs={'class':'form-select js-cargo-select', 'id':'id_ncargo', 'style': 'width: 100%'}),
             'departamento': forms.Select(attrs={'class':'form-select'}),
             'rol': forms.Select(attrs={'class':'form-select', 'id':'id_rol'}),
             'nivel_preparacion': forms.Select(attrs={'class':'form-select', 'id':'id_nivel_preparacion'}),
@@ -52,7 +89,20 @@ class CargoPlantillaForm(forms.ModelForm):
     def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields['ncargo'].queryset = self.fields['ncargo'].queryset.order_by('descripcion')
+        self.fields['ncargo'].queryset = self.fields['ncargo'].queryset.select_related('grupo_escala').order_by('descripcion')
+
+        # --- Cargos ya utilizados en este departamento (se muestran deshabilitados) ---
+        dpto_id = self._obtener_departamento_id()
+        usados = set()
+
+        if dpto_id:
+            qs_usados = CargoPlantilla.objects.filter(departamento_id=dpto_id)
+            # En edición, el propio registro no debe bloquearse a sí mismo
+            if self.instance.pk:
+                qs_usados = qs_usados.exclude(pk=self.instance.pk)
+            usados = set(qs_usados.values_list('ncargo_id', flat=True))
+
+        self.fields['ncargo'].widget.ncargos_usados = frozenset(usados)
 
         # 1) Restringe por usuario (si aplica)
         # 1) Restringe por usuario (Solo si NO es superusuario)
@@ -83,7 +133,26 @@ class CargoPlantillaForm(forms.ModelForm):
         else:
             self.fields['departamento'].queryset = Departamento.objects.none()
 
-    
+    def _obtener_departamento_id(self):
+        """
+        Devuelve el id del departamento sobre el que se está trabajando.
+        Orden de búsqueda: instancia (edición) -> POST -> initial (creación por GET).
+        """
+        if self.instance.pk and self.instance.departamento_id:
+            return self.instance.departamento_id
+
+        valor = self.data.get('departamento') or self.initial.get('departamento')
+        if not valor:
+            return None
+
+        # 'initial' puede traer el objeto Departamento; 'data' trae texto
+        valor = getattr(valor, 'pk', valor)
+        try:
+            return int(valor)
+        except (TypeError, ValueError):
+            return None
+
+        
     def clean(self):
         cleaned_data = super().clean()
         funcionario = cleaned_data.get('funcionario')

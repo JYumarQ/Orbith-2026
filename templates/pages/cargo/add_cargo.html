@@ -142,13 +142,30 @@
         if (checkDesignado) checkDesignado.className = 'btn-check';
 
         // --- 2. Inicialización Select2 ---
+
+        // Pinta cada opción del desplegable mostrando el Grupo Escala
+        // como tooltip nativo del navegador (igual que en contratos).
+        function formatOpcionCargo(state) {
+            // Opción vacía / placeholder: se muestra tal cual
+            if (!state.id) return state.text;
+
+            const grupo = $(state.element).data('grupo') || '';
+            if (!grupo) return state.text;
+
+            return $('<span></span>')
+                .attr('title', 'Grupo Escala: ' + grupo)
+                .css('cursor', 'help')
+                .text(state.text);
+        }
+
         try {
             $ncargo.select2({
                 dropdownParent: $('#modal_generic'), 
                 width: '100%',
                 placeholder: "Buscar cargo...",
                 allowClear: true,
-                language: { noResults: () => "No se encontró coincidencia" }
+                language: { noResults: () => "No se encontró coincidencia" },
+                templateResult: formatOpcionCargo
             });
         } catch(e) { console.error("Select2 no pudo inicializarse", e); }
 

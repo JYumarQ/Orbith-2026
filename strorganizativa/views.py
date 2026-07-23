@@ -186,8 +186,8 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
         cargo = form.save(commit=False)
         
         # Evaluamos si el rol es correcto según la categoría ocupacional
-        rol_valido = ((cargo.ncargo.cat_ocupacional in ('CDI', 'CDJ') and cargo.rol is None) or
-                      (cargo.ncargo.cat_ocupacional not in ('CDI', 'CDJ') and cargo.rol is not None))
+        rol_valido = ((cargo.ncargo.cat_ocupacional in ('CDI', 'CEJ') and cargo.rol is None) or
+                      (cargo.ncargo.cat_ocupacional not in ('CDI', 'CEJ') and cargo.rol is not None))
         
         # 2. Guardar definitivamente en la base de datos
         cargo.save()
