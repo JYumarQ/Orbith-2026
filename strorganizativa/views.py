@@ -650,8 +650,8 @@ def gestor_plantilla_view(request):
     field = 'descripcion' if sort_by == 'alpha' else 'orden_informe'
     if order == 'desc': field = f'-{field}'
     
-    # Ordenamos primero por jerarquía (Para que la Principal siempre sea la reina) y luego por tu número
-    unidades = unidades.order_by('jerarquia_visual', field)
+    # El orden lo decide el usuario mediante el Orden de Prioridad
+    unidades = unidades.order_by(field)
 
     # 5. Respuestas HTMX o Render normal
     context = {'unidades': unidades, 'q': q}

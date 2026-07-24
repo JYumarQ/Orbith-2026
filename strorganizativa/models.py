@@ -37,13 +37,22 @@ class UnidadOrganizativa(Base):
     orden_informe = models.PositiveIntegerField(
         null=True, blank=True,
         verbose_name="Posición en el Organigrama",
-        unique=True # REGLA 1: PostgreSQL prohíbe repetir el número en toda la tabla
+         # REGLA 1: PostgreSQL prohíbe repetir el número en toda la tabla
     )
 
     class Meta:
         verbose_name = ("Unidad Organizativa")
         verbose_name_plural = ("Unidades Organizativas")
         ordering = ['orden_informe', 'descripcion']
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['padre', 'orden_informe'],
+                name='unique_orden_por_rama',
+                nulls_distinct=False,
+                deferrable=models.Deferrable.DEFERRED,
+            )
+        ]
 
     def clean(self):
         super().clean()

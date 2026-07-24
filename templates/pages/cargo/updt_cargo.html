@@ -9,10 +9,14 @@
             <button type="button" class="btn-close ms-3 m-0" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         
-        <form method="post" action="{{ request.path }}" id="cargoForm" class="px-4">
+        <form hx-post="{{ request.path }}"
+              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              hx-target="#modal_generic"
+              hx-swap="innerHTML"
+              id="cargoForm" class="px-4">
             {% csrf_token %}
                 
-                {% csrf_token %}
+                
                 
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -63,19 +67,10 @@
                         {{ form.cant_cubierta }} 
                     </div>
 
-                    <!-- ========================================== -->
-                    <!-- NUEVO: Orden de Prioridad -->
-                    <!-- ========================================== -->
                     <div class="col-md-6">
-                        <label class="form-label" for="{{ form.orden_informe.id_for_label }}">Orden de Prioridad</label>
-                        {{ form.orden_informe }}
-                        {% if form.orden_informe.errors %}
-                            <div class="text-danger small mt-1 fw-bold">{{ form.orden_informe.errors.0 }}</div>
-                        {% endif %}
+                        {% include "pages/plantilla/partials/campo_orden_prioridad.html" with campo=form.orden_informe ruta_validacion="validar_orden_cargo" param_nombre="departamento_id" param_valor=form.instance.departamento.id exclude_id=form.instance.pk %}
                     </div>
-
-                    
-                    
+                
                     <div class="col-md-6">
                         <label class="form-label d-block">Tipo</label>
                         <div class="btn-group w-100" role="group">
@@ -310,219 +305,90 @@
         actualizarDatosCargo(); // Necesario para edición
         actualizarEstadoActivo(); // Fuerza el color del switch desde el segundo 0
 
-        // --- 8. CONTROL DE DESPLAZAMIENTO AL CAMBIAR ORDEN ---
-        const inputOrden = document.getElementById('id_orden_informe');
-        const inputAutoriza = document.getElementById('autoriza_desplazamiento');
-
-        if (inputOrden && inputAutoriza) {
-            inputOrden.addEventListener('change', function() {
-                // Si el valor cambia, activamos el desplazamiento
-                inputAutoriza.value = 'true';
-            });
-        }
-
-        // ============================================================
-        // 9. VALIDACIÓN DE DUPLICIDAD EN TIEMPO REAL (CON EXCLUDE_ID)
-        // ============================================================
-        const inputOrdenValidar = document.getElementById('id_orden_informe');
-        const hiddenDpto = document.querySelector('input[name="departamento"]');
-        const cargoId = '{{ form.instance.pk|default:"" }}'; // ID del cargo actual (para excluirlo)
-        const errorContainer = document.createElement('div');
-        errorContainer.id = 'orden-error';
-        errorContainer.className = 'text-danger small mt-1 fw-bold d-none';
         
-        if (inputOrdenValidar) {
-            // Insertar el contenedor de error justo después del input
-            inputOrdenValidar.parentNode.appendChild(errorContainer);
-            
-            inputOrdenValidar.addEventListener('input', function() {
-                const orden = this.value;
-                const dptoId = hiddenDpto ? hiddenDpto.value : '';
-                if (orden && dptoId) {
-                    // 🔥 Incluir exclude_id para que no detecte el propio cargo
-                    fetch(`/estructuras/validar_orden_cargo/?orden=${orden}&departamento_id=${dptoId}&exclude_id=${cargoId}`)
-                        .then(res => res.json())
-                        .then(data => {
-                            const errEl = document.getElementById('orden-error');
-                            if (data.ocupado) {
-                                errEl.textContent = `⚠️ ${data.mensaje}`;
-                                errEl.classList.remove('d-none');
-                                this.classList.add('border-warning');
-                            } else {
-                                errEl.classList.add('d-none');
-                                this.classList.remove('border-warning');
-                            }
-                        })
-                        .catch(() => {});
-                } else {
-                    document.getElementById('orden-error')?.classList.add('d-none');
-                    this.classList.remove('border-warning');
-                }
-            });
-        }
 
-        // --- 10. ACTUALIZAR VALIDACIÓN AL CAMBIAR DEPARTAMENTO ---
+        
+
+       // --- ACTUALIZAR HIDDEN Y VALIDACIÓN AL CAMBIAR DEPARTAMENTO ---
         const dptoSelect = document.getElementById('id_departamento');
-        if (dptoSelect) {
+        const hiddenDpto = document.querySelector('input[name="departamento"]');
+        if (dptoSelect && hiddenDpto) {
             dptoSelect.addEventListener('change', function() {
-                // Forzar la validación del orden si el input tiene valor
-                const inputOrden = document.getElementById('id_orden_informe');
-                if (inputOrden && inputOrden.value) {
-                    // Disparar el evento 'input' para que revalide
-                    inputOrden.dispatchEvent(new Event('input'));
+                hiddenDpto.value = this.value;
+
+                const campoOrden = document.getElementById('id_orden_informe');
+                if (campoOrden && typeof campoOrden.comprobarOrden === 'function') {
+                    campoOrden.comprobarOrden();
                 }
             });
         }
 
-        // --- 10. CONFIRMACIÓN DE DESPLAZAMIENTO (SOLO SI HAY CONFLICTO) ---
-        const inputOrdenConfirm = document.getElementById('id_orden_informe');
-        const originalOrdenInput = document.getElementById('orden_informe_original');
-        let confirmacionPendiente = false;
-
-        if (inputOrdenConfirm && originalOrdenInput && hiddenDpto && inputAutoriza) {
-            const originalOrden = originalOrdenInput.value;
-
-            inputOrdenConfirm.addEventListener('change', function() {
-                const nuevoOrden = this.value;
-                if (nuevoOrden === originalOrden) return;
-
-                const dptoId = hiddenDpto.value;
-                if (!nuevoOrden || !dptoId) return;
-
-                fetch(`/estructuras/validar_orden_cargo/?orden=${nuevoOrden}&departamento_id=${dptoId}&exclude_id={{ form.instance.pk|default:'' }}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.ocupado) {
-                            if (!confirmacionPendiente) {
-                                confirmacionPendiente = true;
-                                Swal.fire({
-                                    title: '⚠️ Conflicto de orden',
-                                    text: `El número ${nuevoOrden} ya está ocupado por "${data.mensaje}". ¿Deseas desplazar los cargos?`,
-                                    icon: 'warning',
-                                    showCancelButton: true,
-                                    confirmButtonText: 'Sí, desplazar',
-                                    cancelButtonText: 'Cancelar',
-                                    reverseButtons: true
-                                }).then((result) => {
-                                    confirmacionPendiente = false;
-                                    if (result.isConfirmed) {
-                                        inputAutoriza.value = 'true';
-                                        // Cerrar modal manualmente
-                                        const modal = document.getElementById('modal_generic');
-                                        if (modal) {
-                                            bootstrap.Modal.getInstance(modal)?.hide();
-                                        }
-                                        // Disparar el evento submit del formulario
-                                        document.getElementById('cargoForm').dispatchEvent(new Event('submit'));
-                                    } else {
-                                        // 🔥 CANCELAR: NO HACER NADA
-                                        // El campo se queda con el valor conflictivo y el error visual se mantiene
-                                    }
-                                });
-                            }
-                        } else {
-                            const errEl = document.getElementById('orden-error');
-                            if (errEl) {
-                                errEl.classList.add('d-none');
-                                this.classList.remove('border-warning');
-                            }
-                        }
-                    })
-                    .catch(() => {});
-            });
-        }
+        
 
         // ============================================================
         // 11. VALIDACIÓN AL ENVIAR EL FORMULARIO (SIEMPRE)
         // ============================================================
         const cargoForm = document.getElementById('cargoForm');
         if (cargoForm) {
-            let enviando = false;
 
-            cargoForm.addEventListener('submit', function(e) {
-                e.preventDefault(); // Prevenir el envío automático
-                if (enviando) return;
+            // Garantiza que exista el campo oculto de autorización
+            function obtenerCampoAutoriza() {
+                let campo = cargoForm.querySelector('input[name="autoriza_desplazamiento"]');
+                if (!campo) {
+                    campo = document.createElement('input');
+                    campo.type = 'hidden';
+                    campo.name = 'autoriza_desplazamiento';
+                    campo.id = 'autoriza_desplazamiento';
+                    cargoForm.appendChild(campo);
+                }
+                return campo;
+            }
 
-                const orden = document.getElementById('id_orden_informe')?.value;
-                const dptoId = document.querySelector('input[name="departamento"]')?.value;
-                const cargoId = '{{ form.instance.pk|default:"" }}';
-                const excludeParam = cargoId ? `&exclude_id=${cargoId}` : '';
+            cargoForm.addEventListener('htmx:confirm', function(e) {
+                if (e.target.id !== 'cargoForm') return;
+                e.preventDefault();
 
-                // Si no hay orden o departamento, enviar directamente
-                if (!orden || !dptoId) {
-                    enviando = true;
-                    htmx.ajax('POST', cargoForm.action, {
-                        source: cargoForm,
-                        target: '#modal_generic',
-                        swap: 'innerHTML',
-                        headers: { 
-                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
-                        }
-                    });
+                const campoAutoriza = obtenerCampoAutoriza();
+                campoAutoriza.value = 'false';
+
+                const inputOrden = cargoForm.querySelector('#id_orden_informe');
+                if (!inputOrden || typeof inputOrden.comprobarOrden !== 'function') {
+                    e.detail.issueRequest(true);
                     return;
                 }
 
-                // Validar conflicto en el backend
-                fetch(`/estructuras/validar_orden_cargo/?orden=${orden}&departamento_id=${dptoId}${excludeParam}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.ocupado) {
-                            // Mostrar SweetAlert de conflicto (SIEMPRE)
-                            Swal.fire({
-                                title: '⚠️ Conflicto de orden',
-                                text: `El número ${orden} ya está ocupado por "${data.mensaje}". ¿Deseas guardar de todas formas (se desplazarán los cargos)?`,
-                                icon: 'warning',
-                                showCancelButton: true,
-                                confirmButtonText: 'Sí, guardar',
-                                cancelButtonText: 'Cancelar',
-                                reverseButtons: true
-                            }).then((result) => {
-                                if (result.isConfirmed) {
-                                    // Activar desplazamiento
-                                    document.getElementById('autoriza_desplazamiento').value = 'true';
-                                    // Cerrar modal manualmente
-                                    const modal = document.getElementById('modal_generic');
-                                    if (modal) {
-                                        bootstrap.Modal.getInstance(modal)?.hide();
-                                    }
-                                    // Enviar con HTMX
-                                    enviando = true;
-                                    htmx.ajax('POST', cargoForm.action, {
-                                        source: cargoForm,
-                                        target: '#modal_generic',
-                                        swap: 'innerHTML',
-                                        headers: { 
-                                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
-                                        }
-                                    });
-                                }
-                                // Si cancela, no se envía
-                            });
-                        } else {
-                            // No hay conflicto, enviar normalmente
-                            enviando = true;
-                            htmx.ajax('POST', cargoForm.action, {
-                                source: cargoForm,
-                                target: '#modal_generic',
-                                swap: 'innerHTML',
-                                headers: { 
-                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
-                                }
-                            });
-                        }
-                    })
-                    .catch(() => {
-                        // Si falla la validación, enviar de todas formas
-                        enviando = true;
-                        htmx.ajax('POST', cargoForm.action, {
-                            source: cargoForm,
-                            target: '#modal_generic',
-                            swap: 'innerHTML',
-                            headers: { 
-                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value 
-                            }
+                inputOrden.comprobarOrden().then(function(res) {
+                    if (res.estado === 'invalido') {
+                        Swal.fire({
+                            title: 'Atención',
+                            text: 'Corrija el Orden de Prioridad antes de continuar.',
+                            icon: 'error'
                         });
+                        return;
+                    }
+
+                    if (res.estado !== 'ocupado') {
+                        e.detail.issueRequest(true);
+                        return;
+                    }
+
+                    Swal.fire({
+                        title: 'Posición Ocupada en este Departamento',
+                        html: `${res.mensaje}.<br><br>¿Desea intercalar este cargo aquí y <b>desplazar</b> los siguientes un puesto hacia abajo?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#ffab00',
+                        cancelButtonColor: '#8592a3',
+                        confirmButtonText: '<i class="fas fa-sort-amount-down"></i> Sí, intercalar y desplazar',
+                        cancelButtonText: 'Cancelar'
+                    }).then(function(result) {
+                        if (result.isConfirmed) {
+                            campoAutoriza.value = 'true';
+                            e.detail.issueRequest(true);
+                        }
+                        // Si cancela: no se envía y el modal sigue abierto
                     });
+                });
             });
         }
     })();

@@ -1,0 +1,126 @@
+{% comment %}
+Campo unificado "Orden de Prioridad" para Unidades, Departamentos y Cargos.
+
+Parámetros:
+  campo            (obligatorio) Campo del formulario. Ej: form.orden_informe
+  ruta_validacion  (obligatorio) Nombre de la URL. Ej: "validar_orden_dpto"
+  param_nombre     (opcional)    Parámetro de ámbito. Ej: "unidad_id"
+  param_valor      (opcional)    Su valor. Ej: unidad_visual.pk
+  exclude_id       (opcional)    PK del registro en edición
+
+Deja en el input una función:  input.comprobarOrden()
+que devuelve una promesa con { estado, mensaje }.
+Estados: 'vacio' | 'invalido' | 'libre' | 'ocupado' | 'desconocido'
+{% endcomment %}
+
+<label class="form-label fw-bold" for="{{ campo.id_for_label }}">
+    <i class="fas fa-sort-numeric-down me-1 text-success"></i> {{ campo.label }}
+</label>
+{{ campo }}
+<div class="mensaje-orden small mt-1 fw-bold"></div>
+{% if campo.errors %}
+    <div class="text-danger small mt-1 fw-bold">{{ campo.errors.0 }}</div>
+{% endif %}
+
+<script>
+(function() {
+    const input = document.getElementById('{{ campo.auto_id }}');
+    if (!input) return;
+
+    const mensajeEl = input.parentNode.querySelector('.mensaje-orden');
+
+    const rutaBase   = "{% url ruta_validacion %}";
+    const paramNombre = "{{ param_nombre|default:'' }}";
+    const paramValor  = "{{ param_valor|default:'' }}";
+    const excludeId   = "{{ exclude_id|default:'' }}";
+
+    let temporizador = null;
+
+    function pintar(estado, mensaje) {
+        input.classList.remove('is-valid', 'is-invalid');
+        input.dataset.estadoOrden = estado;
+
+        if (!mensajeEl) return;
+        mensajeEl.className = 'mensaje-orden small mt-1 fw-bold';
+
+        if (estado === 'libre') {
+            input.classList.add('is-valid');
+            mensajeEl.classList.add('text-success');
+            mensajeEl.textContent = 'Disponible';
+        } else if (estado === 'ocupado' || estado === 'invalido') {
+            input.classList.add('is-invalid');
+            mensajeEl.classList.add('text-danger');
+            mensajeEl.textContent = mensaje;
+        } else if (estado === 'comprobando') {
+            mensajeEl.classList.add('text-muted');
+            mensajeEl.textContent = 'Comprobando…';
+        } else {
+            mensajeEl.textContent = '';
+        }
+    }
+
+    function construirUrl(valor) {
+        let url = `${rutaBase}?orden=${encodeURIComponent(valor)}`;
+        if (paramNombre && paramValor) {
+            url += `&${paramNombre}=${encodeURIComponent(paramValor)}`;
+        }
+        if (excludeId) {
+            url += `&exclude_id=${encodeURIComponent(excludeId)}`;
+        }
+        return url;
+    }
+
+    // Comprobación inmediata. Devuelve una promesa con { estado, mensaje }.
+    function comprobarOrden() {
+        const valor = input.value.trim();
+
+        if (!valor) {
+            pintar('vacio', '');
+            return Promise.resolve({ estado: 'vacio', mensaje: '' });
+        }
+
+        if (!/^\d+$/.test(valor) || parseInt(valor, 10) < 1) {
+            const m = 'Debe ser un número entero mayor o igual a 1.';
+            pintar('invalido', m);
+            return Promise.resolve({ estado: 'invalido', mensaje: m });
+        }
+
+        pintar('comprobando', '');
+
+        return fetch(construirUrl(valor))
+            .then(res => res.json())
+            .then(data => {
+                const estado = data.ocupado ? 'ocupado' : 'libre';
+                const m = data.ocupado ? data.mensaje : '';
+                pintar(estado, m);
+                return { estado: estado, mensaje: m };
+            })
+            .catch(() => {
+                // Sin respuesta del servidor: no bloqueamos al usuario
+                pintar('vacio', '');
+                return { estado: 'desconocido', mensaje: '' };
+            });
+    }
+
+    // Accesible desde el modal que incluye este fragmento
+    input.comprobarOrden = comprobarOrden;
+
+    // Validación en vivo con antirrebote de 300 ms
+    input.addEventListener('input', function() {
+        clearTimeout(temporizador);
+        const valor = input.value.trim();
+
+        // Vacío o formato incorrecto: respuesta inmediata, sin esperar
+        if (!valor || !/^\d+$/.test(valor) || parseInt(valor, 10) < 1) {
+            comprobarOrden();
+            return;
+        }
+
+        pintar('comprobando', '');
+        temporizador = setTimeout(comprobarOrden, 300);
+    });
+
+    // Si el modal se re-renderiza tras un error, el campo ya trae valor
+    if (input.value.trim()) comprobarOrden();
+})();
+</script>

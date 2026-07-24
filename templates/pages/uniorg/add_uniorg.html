@@ -39,11 +39,7 @@
                     </div>
                     
                     <div class="col-md-6">
-                        <label class="form-label fw-bold text-success">
-                            <i class="fas fa-sort-numeric-down me-1"></i> {{ form.orden_informe.label }}
-                        </label>
-                        {{ form.orden_informe }}
-                        <div class="invalid-feedback" id="feedback-orden"></div> 
+                        {% include "pages/plantilla/partials/campo_orden_prioridad.html" with campo=form.orden_informe ruta_validacion="validar_orden_uniorg" %}
                     </div>
                 </div>
                 
@@ -62,14 +58,12 @@
     if (!form) return;
 
     const inputOrden = form.querySelector('#id_orden_informe');
-    const feedbackOrden = form.querySelector('#feedback-orden');
+    
     const selectTipo = form.querySelector('select[name="tipo"]');
     const selectPadre = form.querySelector('select[name="padre"]');
     const inputGrupoNomina = form.querySelector('#id_grupo_nomina'); // <-- CAPTURAMOS EL GRUPO
 
     const currentId = "{{ form.instance.pk|default:'' }}";
-    let timerValidacion = null;
-    let colisionMensaje = '';
 
     // --- 1. GESTIÓN DINÁMICA DEL PADRE Y NÓMINA ---
     function sincronizarNomina() {
@@ -125,103 +119,74 @@
         evaluarPadre(true); // Ejecutar en el arranque inicial (protege datos legados)
     }
 
-    // --- 2. VALIDACIÓN DEL ORDEN (SÚPER BLINDADA) ---
-    if (inputOrden) {
-        inputOrden.addEventListener('input', function() {
-            const valor = this.value.trim();
-            inputOrden.classList.remove('is-valid', 'is-invalid');
-            colisionMensaje = '';
 
-            if (!valor) return;
+    // --- 2. HTMX: CONTROL DE ENVÍO Y RESTAURACIÓN ---
 
-            // Validación estricta: Solo números enteros mayores a 0
-            if (!/^\d+$/.test(valor) || parseInt(valor) < 1) {
-                inputOrden.classList.add('is-invalid');
-                if (feedbackOrden) feedbackOrden.textContent = 'Debe ser un número entero mayor a 0.';
+    function campoAutoriza() {
+        let campo = form.querySelector('input[name="autoriza_desplazamiento"]');
+        if (!campo) {
+            campo = document.createElement('input');
+            campo.type = 'hidden';
+            campo.name = 'autoriza_desplazamiento';
+            form.appendChild(campo);
+        }
+        return campo;
+    }
+
+    form.addEventListener('htmx:confirm', function(e) {
+        if (e.target.id !== 'uniorgForm') return;
+        e.preventDefault();
+
+        // Destrabamos el selector para que su valor viaje en el POST
+        if (selectPadre) selectPadre.disabled = false;
+
+        const autoriza = campoAutoriza();
+        autoriza.value = 'false';
+
+        // Si el usuario no continúa, volvemos a bloquear el padre si procede
+        function restaurar() {
+            evaluarPadre(false);
+        }
+
+        if (!inputOrden || typeof inputOrden.comprobarOrden !== 'function') {
+            e.detail.issueRequest(true);
+            return;
+        }
+
+        inputOrden.comprobarOrden().then(function(res) {
+            if (res.estado === 'invalido') {
+                Swal.fire({
+                    title: 'Atención',
+                    text: 'Corrija el Orden de Prioridad antes de continuar.',
+                    icon: 'error'
+                });
+                restaurar();
                 return;
             }
 
-            clearTimeout(timerValidacion);
-            timerValidacion = setTimeout(() => {
-                let url = `{% url 'validar_orden_uniorg' %}?orden=${valor}`;
-                if (currentId) url += `&exclude_id=${currentId}`;
+            if (res.estado !== 'ocupado') {
+                e.detail.issueRequest(true);
+                return;
+            }
 
-                fetch(url)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.ocupado) {
-                            inputOrden.classList.add('is-invalid');
-                            colisionMensaje = data.mensaje;
-                            if (feedbackOrden) feedbackOrden.textContent = `Ocupado: ${data.mensaje}`;
-                        } else {
-                            inputOrden.classList.add('is-valid');
-                            if (feedbackOrden) feedbackOrden.textContent = '';
-                        }
-                    });
-            }, 300);
-        });
-    }
-
-    // --- 3. HTMX: CONTROL DE ENVÍO Y RESTAURACIÓN ---
-    form.addEventListener('htmx:confirm', function(e) {
-        if (e.target.id !== 'uniorgForm') return;
-        e.preventDefault(); 
-
-        // Destrabamos para que viaje en el POST
-        if(selectPadre) selectPadre.disabled = false;
-
-        const valor = inputOrden ? inputOrden.value.trim() : '';
-        const estaOcupado = inputOrden ? inputOrden.classList.contains('is-invalid') : false;
-
-        if (estaOcupado && colisionMensaje) {
             Swal.fire({
                 title: 'Posición Ocupada',
-                html: `La posición <b>${valor}</b> ya está en uso.<br><br>¿Desea intercalar esta unidad aquí y <b>desplazar</b> las siguientes un puesto hacia abajo?`,
+                html: `${res.mensaje}.<br><br>¿Desea intercalar esta unidad aquí y <b>desplazar</b> las siguientes un puesto hacia abajo?`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ffab00',
                 cancelButtonColor: '#8592a3',
                 confirmButtonText: '<i class="fas fa-sort-amount-down"></i> Sí, intercalar y desplazar',
                 cancelButtonText: 'Cancelar'
-            }).then((result) => {
+            }).then(function(result) {
                 if (result.isConfirmed) {
-                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
-                    if (!inputOculto) {
-                        inputOculto = document.createElement('input');
-                        inputOculto.type = 'hidden';
-                        inputOculto.name = 'autoriza_desplazamiento';
-                        form.appendChild(inputOculto);
-                    }
-                    inputOculto.value = 'true';
-                    e.detail.issueRequest(true); 
+                    autoriza.value = 'true';
+                    e.detail.issueRequest(true);
                 } else {
-                    evaluarPadre(false); // Restaura el disabled si cancela
+                    restaurar();
                 }
             });
-        } else if (estaOcupado && !colisionMensaje) {
-            // Es inválido por ser <= 0 o letras (no colisión)
-            Swal.fire({ title: 'Atención', text: 'Corrija el Orden de Prioridad antes de continuar.', icon: 'error' });
-            evaluarPadre(false);
-        } else {
-            Swal.fire({
-                title: '¿Confirmar registro?',
-                text: '¿Estás seguro de guardar esta nueva unidad organizativa?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#696cff',
-                cancelButtonColor: '#8592a3',
-                confirmButtonText: 'Sí, guardar',
-                cancelButtonText: 'Cancelar'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    let inputOculto = form.querySelector('input[name="autoriza_desplazamiento"]');
-                    if (inputOculto) inputOculto.value = 'false';
-                    e.detail.issueRequest(true); 
-                } else {
-                    evaluarPadre(false); 
-                }
-            });
-        }
+        });
     });
 
     // Si el request falla por error de red o backend, restauramos el selectPadre
