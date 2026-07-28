@@ -1,6 +1,9 @@
 {% for m in municipios_filtrados %}
-<tr data-id="{{ m.id }}" data-provincia-id="{{ m.provincia.id }}">
-  <td class="nombre-cell">{{ m.nombre }}</td>
+<tr data-id="{{ m.id }}" data-provincia-id="{{ m.provincia.id }}" data-siglas="{{ m.siglas|default:'' }}">
+  <td class="nombre-cell">
+      <span class="nombre-txt">{{ m.nombre }}</span>
+      {% if m.siglas %}<span class="badge bg-label-secondary ms-1">{{ m.siglas }}</span>{% endif %}
+  </td>
   <td class="provincia-cell">{{ m.provincia.nombre }}</td>
   <td class="text-center">
     <div class="btn-group btn-group-sm">

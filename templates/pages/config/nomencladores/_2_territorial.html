@@ -43,11 +43,15 @@
                         <tbody id="provincias-tbody">
                           {% for p in provincias %}
                           <tr data-id="{{ p.id }}" 
+                              data-siglas="{{ p.siglas|default:'' }}"
                               hx-get="{% url 'municipios_provincia_tabla' p.id %}" 
                               hx-target="#municipios-tbody"
                               hx-swap="innerHTML"
                               onclick="seleccionarProvincia(this)">
-                            <td class="nombre-cell"><i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>{{ p.nombre }}</td>
+                            <td class="nombre-cell">
+                                <i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i><span class="nombre-txt">{{ p.nombre }}</span>
+                                {% if p.siglas %}<span class="badge bg-label-secondary ms-1">{{ p.siglas }}</span>{% endif %}
+                            </td>
                           </tr>
                           {% endfor %}
                         </tbody>
@@ -117,7 +121,7 @@
       
       // Guardar estado
       stateGeo.provId = tr.dataset.id;
-      stateGeo.provName = tr.querySelector('.nombre-cell').textContent.trim();
+      stateGeo.provName = tr.querySelector('.nombre-txt').textContent.trim();
 
       // Habilitar botones de Provincia
       document.getElementById('btn-edit-prov').classList.add('active-prov', 'edit');
@@ -142,7 +146,7 @@
           muniRow.classList.add('selected-blue');
           
           stateGeo.muniId = muniRow.dataset.id;
-          stateGeo.muniName = muniRow.querySelector('.nombre-cell').textContent.trim();
+          stateGeo.muniName = muniRow.querySelector('.nombre-txt').textContent.trim();
 
           // Habilitar botones de Municipio
           document.getElementById('btn-edit-muni').classList.add('active-muni', 'edit');
@@ -195,14 +199,66 @@
               }
           });
       } else {
+          // Al editar, buscamos las siglas actuales de la fila para precargarlas
+          let siglasActuales = '';
+          if (metodo === 'PUT') {
+              const filaOrigen = document.querySelector(`#${entidad}-tbody tr[data-id="${idObj}"]`);
+              siglasActuales = filaOrigen ? (filaOrigen.dataset.siglas || '') : '';
+          }
+
           Swal.fire({
               title: metodo === 'POST' ? `Añadir ${esProv ? 'Provincia' : 'Municipio'}` : `Editar ${esProv ? 'Provincia' : 'Municipio'}`,
-              input: 'text', inputValue: metodo === 'PUT' ? nomObj : '',
+              html: `
+                  <input id="swal-nombre" class="swal2-input" placeholder="Nombre" value="${metodo === 'PUT' ? nomObj : ''}">
+                  <input id="swal-siglas" class="swal2-input" placeholder="Siglas (3 letras)" maxlength="3" value="${siglasActuales}">
+                  <small id="swal-siglas-msg" class="fw-bold d-block mt-1" style="display:none; padding: 0 1em;"></small>
+              `,
+              didOpen: () => {
+                  const $siglas = document.getElementById('swal-siglas');
+                  const $msg = document.getElementById('swal-siglas-msg');
+                  let timerSiglas = null;
+
+                  $siglas.addEventListener('input', () => {
+                      // Forzar solo letras mayúsculas mientras se escribe
+                      $siglas.value = $siglas.value.toUpperCase().replace(/[^A-Z]/g, '');
+
+                      $siglas.classList.remove('border-warning');
+                      $siglas.style.borderColor = '';
+                      $msg.style.display = 'none';
+
+                      clearTimeout(timerSiglas);
+                      const valor = $siglas.value;
+                      if (valor.length !== 3) return;
+
+                      timerSiglas = setTimeout(() => {
+                          let qs = `siglas=${valor}`;
+                          if (esProv && metodo === 'PUT') qs += `&excluir_provincia_id=${idObj}`;
+                          if (!esProv && metodo === 'PUT') qs += `&excluir_municipio_id=${idObj}`;
+
+                          fetch(`{% url 'verificar_siglas' %}?${qs}`)
+                              .then(res => res.json())
+                              .then(data => {
+                                  if (data.coincidencia) {
+                                      $siglas.style.borderColor = '#ffab00';
+                                      $msg.style.color = '#ffab00';
+                                      $msg.textContent = `Esta abreviatura coincide con ${data.coincidencia}.`;
+                                      $msg.style.display = 'block';
+                                  }
+                              });
+                      }, 300); // pequeño margen para no consultar en cada tecla
+                  });
+              },
               showCancelButton: true, confirmButtonText: 'Guardar',
-              inputValidator: (value) => { if (!value) return 'El nombre es obligatorio' }
+              preConfirm: () => {
+                  const nombre = document.getElementById('swal-nombre').value.trim();
+                  const siglas = document.getElementById('swal-siglas').value.trim();
+                  if (!nombre) { Swal.showValidationMessage('El nombre es obligatorio'); return false; }
+                  if (siglas && siglas.length !== 3) { Swal.showValidationMessage('Las siglas deben tener exactamente 3 letras'); return false; }
+                  return { nombre, siglas };
+              }
           }).then(res => {
               if(res.isConfirmed) {
-                  const payload = { nombre: res.value };
+                  const payload = { nombre: res.value.nombre, siglas: res.value.siglas };
                   if (!esProv && metodo === 'POST') payload.provincia_id = stateGeo.provId;
                   
                   fetch(url, {
@@ -215,7 +271,8 @@
                       
                       if (esProv) {
                           if (metodo === 'PUT') {
-                              document.querySelector(`#provincias-tbody tr[data-id="${idObj}"] .nombre-cell`).innerHTML = `<i class="fas fa-globe-americas me-2 text-indigo opacity-50"></i>${d.nombre}`;
+                              document.querySelector(`#provincias-tbody tr[data-id="${idObj}"] .nombre-txt`).textContent = d.nombre;
+                              document.querySelector(`#provincias-tbody tr[data-id="${idObj}"]`).dataset.siglas = d.siglas || '';
                               stateGeo.provName = d.nombre;
                               document.getElementById('sub-muni').textContent = d.nombre.toUpperCase();
                           } else { window.location.reload(); }
@@ -229,62 +286,7 @@
       }
   }
 
-  async function guardarProvincia(row) {
-    const nombre = row.querySelector('.input-nombre').value.trim();
-    if (!nombre) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/provincias/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell">${data.nombre}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-      
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  }
-
-  async function guardarMunicipio(row) {
-    const nombre = row.querySelector('.input-nombre').value.trim();
-    const provinciaId = row.closest('tbody').dataset.provinciaId;
-    if (!nombre || !provinciaId) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/municipios/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ nombre, provincia_id: provinciaId })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      const provinciaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent || '';
-      row.outerHTML = `
-        <tr data-id="${data.id}" data-provincia-id="${data.provincia_id}">
-          <td class="nombre-cell">${data.nombre}</td>
-          <td class="provincia-cell">${provinciaName}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-      
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  }
+  
 
   /* ---------- RESALTAR PROVINCIA SELECCIONADA ---------- */
   function resaltarProvincia(fila) {

@@ -22,7 +22,7 @@ urlpatterns = [
     path('validar_plazas/', views.validar_plazas_cargo, name='validar_plazas_cargo'),
 
     path('ajax/cargar_departamentos/', login_required(views.cargar_departamentos), name='cargar_departamentos'),
-    path('ajax/cargar_cargos/', login_required(views.cargar_cargos), name='cargar_cargos'),
+    path('ajax/cargar_cargos/', login_required(views.cargar_cargos), name='cargar_cargos_contratos'),
 
     path('movimiento/solicitar/<pk>/', login_required(views.solicitar_movimiento_nomina), name='solicitar_movimiento'),
 

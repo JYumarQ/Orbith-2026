@@ -39,7 +39,7 @@
                     </div>
                     
                     <div class="col-md-6">
-                        {% include "pages/plantilla/partials/campo_orden_prioridad.html" with campo=form.orden_informe ruta_validacion="validar_orden_uniorg" exclude_id=form.instance.pk %}
+                        {% include "pages/plantilla/partials/campo_orden_prioridad.html" with campo=form.orden_informe ruta_validacion="validar_orden_uniorg" param_nombre="padre_id" param_origen="#id_padre" exclude_id=form.instance.pk %}
                     </div>
                 </div>
                 
@@ -113,11 +113,25 @@
         sincronizarNomina();
     }
 
+    // Al cambiar de rama hay que volver a comprobar el Orden de Prioridad
+    function revalidarOrden() {
+        if (inputOrden && typeof inputOrden.comprobarOrden === 'function') {
+            inputOrden.comprobarOrden();
+        }
+    }
+
     if (selectTipo) {
-        selectTipo.addEventListener('change', () => evaluarPadre(false));
-        if (selectPadre) selectPadre.addEventListener('change', sincronizarNomina);
-        
-        evaluarPadre(true); // Ejecutar en el arranque inicial (protege datos legados)
+        selectTipo.addEventListener('change', function() {
+            evaluarPadre(false);
+            revalidarOrden();
+        });
+        if (selectPadre) {
+            selectPadre.addEventListener('change', function() {
+                sincronizarNomina();
+                revalidarOrden();
+            });
+        }
+        evaluarPadre(true);
     }
 
     

@@ -608,7 +608,9 @@
 
     async function guardarMotivoContrato(row) {
         const desc = row.querySelector('.input-desc').value.trim();
-        const tipo_id = row.querySelector('.input-tipo-contrato').value;
+        const tipoSelect = row.querySelector('.input-tipo-contrato');
+        const tipo_id = tipoSelect.value;
+        const tipoTexto = tipoSelect.options[tipoSelect.selectedIndex]?.text || '';
         if (!desc || !tipo_id) return alert('Todos los campos son obligatorios');
         try {
         const res = await fetch("/nomencladores/api/motivo_contrato/create/", {
@@ -618,7 +620,17 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        location.reload(); 
+        row.outerHTML = `
+            <tr data-id="${data.id}" data-tipo-id="${tipo_id}">
+              <td class="nombre-cell ps-3">${data.nombre}</td>
+              <td class="tipo-cell align-middle text-muted">${tipoTexto}</td>
+              <td class="text-center pe-3 align-middle">
+                <div class="btn-group btn-group-sm">
+                  <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt text-info"></i></button>
+                  <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash text-danger"></i></button>
+                </div>
+              </td>
+            </tr>`;
         } catch (err) { alert('Error: ' + err.message); }
     }
 

@@ -120,7 +120,7 @@
     let cargosSortAsc = true;
 
     const CAT_OPTIONS_HTML = `
-        <option value="OPE">Operario</option>
+        <option value="OPE">Obrero</option>
         <option value="TEC">Técnico</option>
         <option value="ADM">Administrativo</option>
         <option value="SER">Servicio</option>
@@ -129,7 +129,7 @@
     `;
 
     let GRUPO_OPTIONS_HTML = '<option value="">-- Gpo. --</option>';
-    {% for g in grupos %}
+    {% for g in grupos_completos %}
         GRUPO_OPTIONS_HTML += `<option value="{{ g.id }}">{{ g.nivel }}</option>`;
     {% endfor %}
 

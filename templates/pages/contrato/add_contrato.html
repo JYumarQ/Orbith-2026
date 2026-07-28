@@ -294,6 +294,7 @@
 </div>
 
 <script>
+
     document.body.addEventListener('htmx:beforeRequest', function(evt) {
         if (evt.detail.elt.id === 'disparador-salarios') {
             console.log('[DEBUG-ORBITH] 🌐 1. HTMX Request a cargar_salarios INICIADO.');
@@ -317,8 +318,8 @@
                         var $campoExp = $('#id_no_expediente');
                         if ($campoExp.length && !$campoExp.val()) {
                             $campoExp.val(data.no_expediente)
-                                     .css('backgroundColor', '#e8f0fe')
-                                     .attr('title', 'Recuperado del historial');
+                                    .css('backgroundColor', '#e8f0fe')
+                                    .attr('title', 'Recuperado del historial');
                             $('#id_reg_militar').val(data.reg_militar);
                             if(typeof Swal !== 'undefined') Swal.fire({toast: true, position: 'top-end', icon: 'info', title: 'Datos recuperados', showConfirmButton: false, timer: 3000});
                         }
@@ -484,13 +485,13 @@
             // 2. Bloquear y aplicar gris tenue a la opción cruzada
             if (val2) {
                 $n1.find(`option[value="${val2}"]`)
-                   .prop('disabled', true)
-                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+                .prop('disabled', true)
+                .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
             }
             if (val1) {
                 $n2.find(`option[value="${val1}"]`)
-                   .prop('disabled', true)
-                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+                .prop('disabled', true)
+                .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
             }
         }
 
@@ -585,7 +586,7 @@
 
             if (grupo) {
                 $helpText.html(`<i class="fas fa-info-circle me-1"></i> Este cargo pertenece al Grupo Escala ${grupo}`)
-                         .removeClass('d-none').hide().slideDown(200);
+                        .removeClass('d-none').hide().slideDown(200);
             } else {
                 $helpText.slideUp(200, function() { $(this).addClass('d-none').html(''); });
             }
@@ -768,4 +769,5 @@
     $(document).ready(function() { 
         window.initOrbithContrato(); 
     });
+
 </script>

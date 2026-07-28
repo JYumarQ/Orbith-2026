@@ -362,12 +362,7 @@ class CAltaForm(forms.ModelForm):
         tridente = cleaned_data.get('tridente')
 
         # --- 1. LÓGICA UNIFICADA DEL TRIDENTE ---
-        es_cuadro = False
-        if cargo and cargo.ncargo and cargo.ncargo.cat_ocupacional:
-            cat_nombre = str(cargo.ncargo.cat_ocupacional).upper()
-            # Validamos si es cuadro por su categoría ocupacional
-            if "CUADRO" in cat_nombre or cat_nombre in ["CEJ", "CDI"]:
-                es_cuadro = True
+        es_cuadro = cargo.ncargo.es_cuadro if (cargo and cargo.ncargo) else False
 
         es_fijo = (tipo_salario == 'FIJ')
 
@@ -485,6 +480,17 @@ class MovimientoForm(CAltaForm):
 
 
 class ExportarContratoWordForm(forms.Form):
+    # 0. Tipo de documento a generar
+    TIPO_DOCUMENTO_CHOICES = [
+        ('creacion', 'Contrato de Trabajo (Creación)'),
+        ('modificacion', 'Modificación al Contrato de Trabajo'),
+    ]
+    tipo_documento = forms.ChoiceField(
+        choices=TIPO_DOCUMENTO_CHOICES,
+        initial='creacion',
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'})
+    )
+
     # 1. Firma Cuadro (El queryset se inyecta desde la vista)
     firma_cuadro = forms.ModelChoiceField(
         queryset=None, 
@@ -558,6 +564,13 @@ class ExportarContratoWordForm(forms.Form):
         widget=forms.Select(attrs={'class': 'form-select'})
     )
 
+    # 9. Observaciones (Motivo del cambio) — solo obligatorio si es modificación
+    observaciones = forms.CharField(
+        label='Motivo del cambio (Observaciones)',
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3})
+    )
+
     def __init__(self, *args, **kwargs):
         # Extraemos el queryset de los cuadros que la Vista haya preparado
         cuadros_qs = kwargs.pop('cuadros_qs', None)
@@ -567,3 +580,10 @@ class ExportarContratoWordForm(forms.Form):
         # Asignamos el queryset al campo si fue proporcionado
         if cuadros_qs is not None:
             self.fields['firma_cuadro'].queryset = cuadros_qs
+
+    def clean(self):
+        cleaned_data = super().clean()
+        tipo = cleaned_data.get('tipo_documento')
+        if tipo == 'modificacion' and not cleaned_data.get('observaciones', '').strip():
+            self.add_error('observaciones', 'Debe indicar el motivo del cambio para generar una modificación.')
+        return cleaned_data

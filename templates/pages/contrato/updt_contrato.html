@@ -62,8 +62,9 @@
                                     {{ form.motivo }}
                                 </div>
                                 <div class="col-md-6">
-                                    {{ form.fecha_alta.label }}  
-                                    {{ form.fecha_alta }}
+                                    {{ form.fecha_alta.label }}
+                                    <input type="date" class="form-control" value="{{ fecha_contratacion_actual|date:'Y-m-d' }}" disabled>
+                                    {{ form.fecha_alta.as_hidden }}
                                 </div>
                                 <div class="col-md-6">
                                     {{ form.duracion.label }}  
@@ -292,6 +293,7 @@
 </div>
 
 <script>
+
     window.initOrbithEdicion = function() {
         var $form = $('#contratoForm');
         var formulario = $form[0];
@@ -303,8 +305,8 @@
         var $f_contrato = $('#id_fecha_alta');
         if ($f_contrato.length) {
             $f_contrato.removeAttr('disabled')
-                       .attr('readonly', 'readonly')
-                       .css({'pointer-events': 'none', 'background-color': '#e9ecef', 'opacity': '1'});
+                    .attr('readonly', 'readonly')
+                    .css({'pointer-events': 'none', 'background-color': '#e9ecef', 'opacity': '1'});
         }
 
         // 2. SWITCHES Y DEPENDENCIAS
@@ -468,13 +470,13 @@
             // 2. Bloquear y aplicar gris tenue a la opción cruzada
             if (val2) {
                 $n1.find(`option[value="${val2}"]`)
-                   .prop('disabled', true)
-                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+                .prop('disabled', true)
+                .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
             }
             if (val1) {
                 $n2.find(`option[value="${val1}"]`)
-                   .prop('disabled', true)
-                   .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
+                .prop('disabled', true)
+                .css({'color': '#adb5bd', 'background-color': '#f8f9fa'}); // Gris tenue
             }
         }
 
@@ -570,7 +572,7 @@
 
             if (grupo) {
                 $helpText.html(`<i class="fas fa-info-circle me-1"></i> Este cargo pertenece al Grupo Escala ${grupo}`)
-                         .removeClass('d-none').hide().slideDown(200);
+                        .removeClass('d-none').hide().slideDown(200);
             } else {
                 $helpText.slideUp(200, function() { $(this).addClass('d-none').html(''); });
             }
@@ -753,4 +755,5 @@
     $(document).ready(function() { 
         window.initOrbithEdicion(); 
     });
+
 </script>

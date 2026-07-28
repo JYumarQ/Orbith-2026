@@ -129,7 +129,7 @@ def cargar_municipios(request):
         # MODO FILTRO: Enviamos nombre Y sigla
         municipios_list = []
         for m in qs:
-            sigla = ABR_MUNICIPIOS.get(m.nombre, m.nombre[:3].upper())
+            sigla = m.siglas or ABR_MUNICIPIOS.get(m.nombre, m.nombre[:3].upper())
             municipios_list.append({
                 'id': m.id, 
                 'nombre': m.nombre, # NECESARIO para el despliegue
@@ -500,15 +500,73 @@ def grupo_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
 # ---------- CRUD NProvincia ----------
+def _buscar_coincidencia_siglas(siglas, excluir_provincia_id=None, excluir_municipio_id=None):
+    """
+    Busca si unas siglas ya están en uso, en Provincia o Municipio.
+    Devuelve un texto descriptivo de la coincidencia, o None si no hay ninguna.
+    """
+    if not siglas:
+        return None
+
+    q_prov = NProvincia.objects.filter(siglas__iexact=siglas)
+    if excluir_provincia_id:
+        q_prov = q_prov.exclude(pk=excluir_provincia_id)
+    coincidencia = q_prov.first()
+    if coincidencia:
+        return f'la provincia "{coincidencia.nombre}"'
+
+    q_mun = NMunicipio.objects.filter(siglas__iexact=siglas)
+    if excluir_municipio_id:
+        q_mun = q_mun.exclude(pk=excluir_municipio_id)
+    coincidencia = q_mun.first()
+    if coincidencia:
+        return f'el municipio "{coincidencia.nombre}"'
+
+    return None
+
+def verificar_siglas(request):
+    """
+    Comprueba si unas siglas ya están en uso, SIN guardar nada.
+    Se llama mientras el usuario escribe, para dar feedback en vivo.
+    """
+    siglas = request.GET.get('siglas', '').strip().upper()
+    excluir_provincia_id = request.GET.get('excluir_provincia_id')
+    excluir_municipio_id = request.GET.get('excluir_municipio_id')
+
+    if not siglas or len(siglas) != 3 or not siglas.isalpha():
+        return JsonResponse({'coincidencia': None})
+
+    coincidencia = _buscar_coincidencia_siglas(
+        siglas,
+        excluir_provincia_id=excluir_provincia_id,
+        excluir_municipio_id=excluir_municipio_id
+    )
+    return JsonResponse({'coincidencia': coincidencia})
+
+
 @csrf_exempt
 @require_POST
 def provincia_create(request):
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
+    siglas = data.get('siglas', '').strip().upper()
+
     if not nombre:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NProvincia.objects.create(nombre=nombre.title())
-    return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+
+    if siglas and (len(siglas) != 3 or not siglas.isalpha()):
+        return JsonResponse({'error': 'Las siglas deben tener exactamente 3 letras.'}, status=400)
+
+    obj = NProvincia.objects.create(nombre=nombre.title(), siglas=siglas or None)
+
+    coincidencia = _buscar_coincidencia_siglas(siglas, excluir_provincia_id=obj.pk)
+
+    return JsonResponse({
+        'id': obj.id,
+        'nombre': obj.nombre,
+        'siglas': obj.siglas or '',
+        'coincidencia': coincidencia,
+    })
 
 @csrf_exempt
 @require_http_methods(["PUT"])
@@ -516,11 +574,26 @@ def provincia_update(request, pk):
     obj = NProvincia.objects.get(pk=pk)
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
+    siglas = data.get('siglas', '').strip().upper()
+
     if not nombre:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+
+    if siglas and (len(siglas) != 3 or not siglas.isalpha()):
+        return JsonResponse({'error': 'Las siglas deben tener exactamente 3 letras.'}, status=400)
+
     obj.nombre = nombre.title()
+    obj.siglas = siglas or None
     obj.save()
-    return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+
+    coincidencia = _buscar_coincidencia_siglas(siglas, excluir_provincia_id=obj.pk)
+
+    return JsonResponse({
+        'id': obj.id,
+        'nombre': obj.nombre,
+        'siglas': obj.siglas or '',
+        'coincidencia': coincidencia,
+    })
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -538,11 +611,26 @@ def municipio_create(request):
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
     provincia_id = data.get('provincia_id')
+    siglas = data.get('siglas', '').strip().upper()
+
     if not nombre or not provincia_id:
         return JsonResponse({'error': 'Campos obligatorios'}, status=400)
+
+    if siglas and (len(siglas) != 3 or not siglas.isalpha()):
+        return JsonResponse({'error': 'Las siglas deben tener exactamente 3 letras.'}, status=400)
+
     provincia = get_object_or_404(NProvincia, pk=provincia_id)
-    obj = NMunicipio.objects.create(nombre=nombre.title(), provincia=provincia)
-    return JsonResponse({'id': obj.id, 'nombre': obj.nombre, 'provincia_id': obj.provincia_id})
+    obj = NMunicipio.objects.create(nombre=nombre.title(), provincia=provincia, siglas=siglas or None)
+
+    coincidencia = _buscar_coincidencia_siglas(siglas, excluir_municipio_id=obj.pk)
+
+    return JsonResponse({
+        'id': obj.id,
+        'nombre': obj.nombre,
+        'provincia_id': obj.provincia_id,
+        'siglas': obj.siglas or '',
+        'coincidencia': coincidencia,
+    })
 
 @csrf_exempt
 @require_http_methods(["PUT"])
@@ -550,11 +638,26 @@ def municipio_update(request, pk):
     obj = NMunicipio.objects.get(pk=pk)
     data = json.loads(request.body)
     nombre = data.get('nombre', '').strip()
+    siglas = data.get('siglas', '').strip().upper()
+
     if not nombre:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+
+    if siglas and (len(siglas) != 3 or not siglas.isalpha()):
+        return JsonResponse({'error': 'Las siglas deben tener exactamente 3 letras.'}, status=400)
+
     obj.nombre = nombre.title()
+    obj.siglas = siglas or None
     obj.save()
-    return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
+
+    coincidencia = _buscar_coincidencia_siglas(siglas, excluir_municipio_id=obj.pk)
+
+    return JsonResponse({
+        'id': obj.id,
+        'nombre': obj.nombre,
+        'siglas': obj.siglas or '',
+        'coincidencia': coincidencia,
+    })
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
@@ -846,12 +949,15 @@ def condicion_update(request, pk):
 
 @csrf_exempt
 @require_http_methods(["DELETE"])
+@login_required
 def condicion_delete(request, pk):
     try:
         NCondicionLaboralAnormal.objects.get(pk=pk).delete()
         return JsonResponse({'success': True})
     except NCondicionLaboralAnormal.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
+    except RestrictedError:
+        return JsonResponse({'error': 'No se puede eliminar. Esta condición está siendo usada por uno o más contratos.'}, status=400)
 
 # ---------- CRUD NEspecialidad ----------
 @csrf_exempt
@@ -1215,8 +1321,17 @@ def motivo_contrato_create(request):
     
     if not nombre or not tipo_id: 
         return JsonResponse({'error': 'Nombre y Tipo de Contrato son obligatorios'}, status=400)
-        
-    obj = NMotivoContrato.objects.create(descripcion=nombre.title(), tipo_contrato_id=tipo_id)
+
+    descripcion = nombre.title()
+
+    # No se permite el mismo motivo dentro del mismo tipo de contrato
+    if NMotivoContrato.objects.filter(descripcion__iexact=descripcion, tipo_contrato_id=tipo_id).exists():
+        return JsonResponse(
+            {'error': f'El motivo "{descripcion}" ya existe para este tipo de contrato.'},
+            status=400
+        )
+
+    obj = NMotivoContrato.objects.create(descripcion=descripcion, tipo_contrato_id=tipo_id)
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
 @csrf_exempt
@@ -1227,12 +1342,29 @@ def motivo_contrato_update(request, pk):
     nombre = data.get('nombre', '').strip()
     tipo_id = data.get('tipo_contrato_id')
     
-    if not nombre: return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    
-    obj.descripcion = nombre.title()
-    if tipo_id: obj.tipo_contrato_id = tipo_id
+    if not nombre:
+        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
+
+    descripcion = nombre.title()
+    # Si no llega tipo en la edición, conservamos el que ya tenía
+    tipo_destino = tipo_id if tipo_id else obj.tipo_contrato_id
+
+    # No se permite chocar con OTRO motivo del mismo tipo
+    duplicado = NMotivoContrato.objects.filter(
+        descripcion__iexact=descripcion,
+        tipo_contrato_id=tipo_destino
+    ).exclude(pk=obj.pk).exists()
+
+    if duplicado:
+        return JsonResponse(
+            {'error': f'El motivo "{descripcion}" ya existe para este tipo de contrato.'},
+            status=400
+        )
+
+    obj.descripcion = descripcion
+    obj.tipo_contrato_id = tipo_destino
     obj.save()
-    
+
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
 @csrf_exempt
@@ -1287,13 +1419,32 @@ def grupo_escala_modal(request, pk=None):
 def grupo_escala_save(request, pk=None):
     instance = get_object_or_404(NGrupoEscala, pk=pk) if pk else None
     form = NGrupoEscalaForm(request.POST, instance=instance)
-    
+
     if form.is_valid():
-        # form.save() en un ModelForm con ManyToMany se encarga de todo automáticamente
         grupo = form.save()
-        return JsonResponse({'success': True})
-    
+        return JsonResponse({
+            'success': True,
+            'grupo': {
+                'id': grupo.id,
+                'nivel': grupo.nivel,
+                'es_cuadro': grupo.es_cuadro,
+                'tiene_rol': grupo.tiene_rol,
+            }
+        })
+
     return JsonResponse({'success': False, 'errors': form.errors.as_json()}, status=400)
+
+def grupos_escala_tabla_parcial(request):
+    """Devuelve solo la tabla de Grupos Escala (para refrescar sin recargar la página)."""
+    from operator import attrgetter
+    from django.core.paginator import Paginator
+
+    grupos_todos = sorted(NGrupoEscala.objects.all(), key=attrgetter('valor_numerico'))
+    page_number = request.GET.get('page_grupos', 1)
+    paginator = Paginator(grupos_todos, 5)
+    grupos = paginator.get_page(page_number)
+
+    return render(request, 'pages/config/partials/tabla_grupos.html', {'grupos': grupos})
 
 @login_required
 def municipios_provincia_tabla(request, prov_id):

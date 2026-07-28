@@ -46,7 +46,7 @@
                             <div class="p-1 bg-emerald-50 text-emerald-600 rounded"><i class="bx bx-dollar-circle fs-6"></i></div>
                             <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Importe</span>
                         </div>
-                        <div class="fs-3 fw-black text-slate-800 lh-1">${{ importe_total|floatformat:2 }}</div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1" id="card-importe-total">${{ importe_total|floatformat:2 }}</div>
                     </div>
                 </div>
 
@@ -95,7 +95,11 @@
                             <td class="px-3 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-pill fw-bold" style="font-size: 12px;">{{ t.cat_letra }}</span></td>
                             <td class="px-3 py-2 text-center font-monospace fw-bold text-slate-500" style="font-size: 14px;">{{ t.g_escala }}</td>
                             <td class="px-3 py-2 text-center font-monospace text-slate-400" style="font-size: 14px;">{{ t.dias }}</td>
-                            <td class="px-4 py-2 text-end font-monospace fw-bold text-slate-800" style="font-size: 14px;">{{ t.importe|floatformat:2 }}</td>
+                            <td class="px-4 py-2 text-end font-monospace fw-bold text-slate-800 celda-importe"
+                                id="importe-{{ t.expediente }}"
+                                data-expediente="{{ t.expediente }}"
+                                data-importe-original="{{ t.importe|floatformat:2 }}"
+                                title="Doble clic para editar el importe (temporal, no se guarda en base de datos)">{{ t.importe|floatformat:2 }}</td>
                         </tr>
                         {% endfor %}
                     {% empty %}
@@ -106,4 +110,87 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const PREFIJO = 'mision_importe_';
+
+    function formatearMoneda(valor) {
+        return parseFloat(valor || 0).toFixed(2);
+    }
+
+    function recalcularTotal() {
+        let total = 0;
+        document.querySelectorAll('.celda-importe').forEach(function (celda) {
+            total += parseFloat(celda.textContent.trim()) || 0;
+        });
+        const cardTotal = document.getElementById('card-importe-total');
+        if (cardTotal) cardTotal.textContent = '$' + formatearMoneda(total);
+    }
+
+    function guardarValor(expediente, valor) {
+        sessionStorage.setItem(PREFIJO + expediente, valor);
+    }
+
+    function leerValorGuardado(expediente) {
+        return sessionStorage.getItem(PREFIJO + expediente);
+    }
+
+    function activarEdicion(celda) {
+        const expediente = celda.dataset.expediente;
+        const valorActual = celda.textContent.trim();
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = '0.01';
+        input.min = '0';
+        input.value = valorActual;
+        input.className = 'form-control form-control-sm text-end';
+        input.style.width = '110px';
+        input.style.display = 'inline-block';
+
+        celda.textContent = '';
+        celda.appendChild(input);
+        input.focus();
+        input.select();
+
+        function confirmarEdicion() {
+            const nuevoValor = formatearMoneda(input.value);
+            celda.textContent = nuevoValor;
+            guardarValor(expediente, nuevoValor);
+            recalcularTotal();
+        }
+
+        input.addEventListener('blur', confirmarEdicion);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                input.blur();
+            }
+            if (e.key === 'Escape') {
+                celda.textContent = valorActual;
+            }
+        });
+    }
+
+    // Doble clic para editar
+    document.querySelectorAll('.celda-importe').forEach(function (celda) {
+        celda.addEventListener('dblclick', function () {
+            activarEdicion(celda);
+        });
+    });
+
+    // Al cargar la página: repoblar valores guardados en esta sesión
+    document.querySelectorAll('.celda-importe').forEach(function (celda) {
+        const expediente = celda.dataset.expediente;
+        const guardado = leerValorGuardado(expediente);
+        if (guardado !== null) {
+            celda.textContent = formatearMoneda(guardado);
+        }
+    });
+
+    recalcularTotal();
+});
+</script>
+
 {% endblock %}

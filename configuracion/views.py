@@ -55,6 +55,7 @@ class ParametrosGeneralesView(FormView):
         page_number = self.request.GET.get('page_grupos', 1)
         paginator = Paginator(grupos_todos, 5)
         context['grupos'] = paginator.get_page(page_number)
+        context['grupos_completos'] = grupos_todos
         context['provincias'] = NProvincia.objects.all()
         context['municipios'] = NMunicipio.objects.all()
         context['horarios'] = NHorario.objects.all()

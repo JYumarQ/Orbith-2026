@@ -63,6 +63,22 @@
     <form method="POST" action="{% url 'exportar_contrato_word' contrato.pk %}" id="formExportarContrato">
         {% csrf_token %}
 
+        <div class="mb-4">
+            <label class="form-label fw-bold text-dark d-block">
+                <i class="bx bx-file-blank me-1 text-primary"></i> ¿Qué documento desea generar? <span class="text-danger">*</span>
+            </label>
+            <div class="d-flex gap-4">
+                {% for radio in form.tipo_documento %}
+                    <div class="form-check">
+                        {{ radio.tag }}
+                        <label class="form-check-label" for="{{ radio.id_for_label }}">
+                            {{ radio.choice_label }}
+                        </label>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
         <!-- 🔥 CAMBIO 1: ROW CON align-items-start PARA NIVELAR COLUMNAS -->
         <div class="row align-items-stretch">
             
@@ -139,6 +155,16 @@
                             <div class="col-12">
                                 <label for="{{ form.nocturnidad_texto.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">Nocturnidad</label>
                                 {{ form.nocturnidad_texto }}
+                            </div>
+
+                            <div class="col-12" id="bloque-observaciones" style="display:none;">
+                                <label for="{{ form.observaciones.id_for_label }}" class="form-label text-muted small fw-semibold text-uppercase">
+                                    Motivo del cambio (Observaciones) <span class="text-danger">*</span>
+                                </label>
+                                {{ form.observaciones }}
+                                {% if form.observaciones.errors %}
+                                    <div class="text-danger small mt-1 fw-semibold">{{ form.observaciones.errors.0 }}</div>
+                                {% endif %}
                             </div>
 
                         </div>
@@ -312,6 +338,21 @@
 
 <script>
     $(document).ready(function() {
+
+        function actualizarTipoDocumento() {
+            const tipo = $('input[name="tipo_documento"]:checked').val();
+            if (tipo === 'modificacion') {
+                $('#bloque-observaciones').slideDown(150);
+                $('#{{ form.observaciones.id_for_label }}').prop('required', true);
+            } else {
+                $('#bloque-observaciones').slideUp(150);
+                $('#{{ form.observaciones.id_for_label }}').prop('required', false).removeClass('is-invalid');
+            }
+        }
+
+        $('input[name="tipo_documento"]').on('change', actualizarTipoDocumento);
+        actualizarTipoDocumento(); // estado inicial al cargar
+
         // Inicializar Select2 con el tema nativo de Sneat declarado en tu base.html
         $('#{{ form.firma_cuadro.id_for_label }}').select2({
             placeholder: "Escriba para buscar un cuadro directivo activo...",

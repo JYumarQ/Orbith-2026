@@ -1,0 +1,168 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% block title %}Informe Inteligente{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --ii-navy: #16324f;
+        --ii-navy-700: #1d456b;
+        --ii-blue: #2b6cb0;
+        --ii-blue-soft: #eaf1f8;
+        --ii-border: #e3e8ef;
+        --ii-muted: #64748b;
+    }
+    .ii-panel { background: #fff; border: 1px solid var(--ii-border); border-radius: .65rem; margin-bottom: 1.1rem; box-shadow: 0 1px 3px rgba(22,50,79,.05); }
+    .ii-panel-head { padding: 1rem 1.35rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .ii-panel-title { font-weight: 600; color: var(--ii-navy); display: flex; align-items: center; gap: .6rem; }
+    .ii-chip { display: inline-flex; align-items: center; gap: .4rem; background: #fff; border: 1px solid #d7dee8; border-radius: 2rem; padding: .45rem .9rem; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .ii-chip.active { background: var(--ii-navy); border-color: var(--ii-navy); color: #fff; }
+    .ii-fld-check { display: flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border-radius: .4rem; }
+    .ii-fld-check:hover { background: var(--ii-blue-soft); }
+    .ii-filter-row { background: #f4f6f9; border: 1px solid var(--ii-border); border-radius: .5rem; padding: .6rem; margin-bottom: .6rem; }
+    .ii-generate-bar { background: #fff; border: 1px solid var(--ii-border); border-radius: .65rem; padding: 1.1rem 1.35rem; margin-bottom: 1.1rem; display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+    .ii-record-count { font-size: 1.3rem; font-weight: 700; color: var(--ii-navy); }
+</style>
+
+<div class="container-fluid py-4">
+    <div class="row g-4">
+
+        <!-- ===== COLUMNA PRINCIPAL ===== -->
+        <div class="col-lg-8 col-xl-9">
+
+            <!-- Encabezado -->
+            <div class="ii-panel p-4">
+                <h1 class="h3 fw-bold" style="color: var(--ii-navy);">
+                    <i class="bi bi-clipboard-data me-2"></i>Informe Inteligente
+                </h1>
+                <p class="text-muted mb-3">Crea informes a medida sin conocimientos técnicos. Elige el tipo de informe, los campos y los filtros que necesites.</p>
+
+                <label class="form-label fw-bold text-uppercase small text-muted">
+                    <i class="bi bi-database"></i> ¿Sobre qué desea informar?
+                </label>
+                <select class="form-select mb-3" id="selectModeloRaiz" style="max-width: 400px;">
+                    {% for key, label in modelos_disponibles.items %}
+                        <option value="{{ key }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Panel de campos (se carga vía HTMX según el modelo elegido) -->
+            <div id="panelCamposContainer"
+                 hx-get="{% url 'informe_inteligente:campos_del_modelo' 'CAlta' %}"
+                 hx-trigger="load"
+                 hx-target="this"
+                 hx-swap="innerHTML">
+                <div class="ii-panel p-4 text-center text-muted">
+                    <div class="spinner-border spinner-border-sm"></div> Cargando campos disponibles...
+                </div>
+            </div>
+
+            <!-- Panel de filtros -->
+            <div class="ii-panel">
+                <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelFiltros">
+                    <span class="ii-panel-title"><i class="bi bi-funnel"></i> Filtros</span>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div id="panelFiltros" class="collapse show">
+                    <div class="p-3">
+                        <p class="text-muted small">Se mostrarán solo los registros que cumplan <strong>todas</strong> las condiciones.</p>
+                        <div id="listaFiltros"></div>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarFiltro">
+                            <i class="bi bi-plus-lg"></i> Añadir filtro
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel de orden -->
+            <div class="ii-panel">
+                <div class="ii-panel-head collapsed" data-bs-toggle="collapse" data-bs-target="#panelOrden">
+                    <span class="ii-panel-title"><i class="bi bi-sort-down"></i> Ordenar</span>
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+                <div id="panelOrden" class="collapse">
+                    <div class="p-3 row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label small text-muted">Ordenar por</label>
+                            <select class="form-select" id="selectOrdenarPor">
+                                <option value="">— Sin ordenar —</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">Dirección</label>
+                            <select class="form-select" id="selectOrdenDireccion">
+                                <option value="asc">Ascendente</option>
+                                <option value="desc">Descendente</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generar + contador -->
+            <div class="ii-generate-bar">
+                <button type="button" class="btn btn-lg text-white" style="background: var(--ii-navy);" id="btnGenerarVistaPrevia">
+                    <i class="bi bi-play-circle"></i> Generar vista previa
+                </button>
+                <div>
+                    <div class="ii-record-count" id="contadorRegistros">—</div>
+                    <div class="small text-muted">registros encontrados</div>
+                </div>
+                <button type="button" class="btn btn-outline-primary ms-auto" id="btnGuardarFavorito" disabled>
+                    <i class="bi bi-star"></i> Guardar como favorito
+                </button>
+            </div>
+
+            <!-- Resultados -->
+            <div id="resultadosContainer"></div>
+
+        </div>
+
+        <!-- ===== BARRA LATERAL ===== -->
+        <div class="col-lg-4 col-xl-3">
+            <div class="ii-panel p-3">
+                <h6 class="fw-bold" style="color: var(--ii-navy);"><i class="bi bi-star-fill text-warning"></i> Mis favoritos</h6>
+                {% for fav in favoritos %}
+                    <div class="border-bottom py-2">
+                        <div class="fw-semibold small">{{ fav.informe.nombre }}</div>
+                        <div class="text-muted" style="font-size: 11px;">{{ fav.fecha_agregado|date:"d/m/Y" }}</div>
+                    </div>
+                {% empty %}
+                    <p class="text-muted small mb-0">Aún no tienes informes guardados.</p>
+                {% endfor %}
+            </div>
+
+            {% if ultimo_informe %}
+            <div class="ii-panel p-3">
+                <h6 class="fw-bold" style="color: var(--ii-navy);"><i class="bi bi-clock-history"></i> Último informe</h6>
+                <div class="small text-muted">{{ ultimo_informe.fecha_ejecucion|date:"d/m/Y H:i" }} · {{ ultimo_informe.total_registros }} reg.</div>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal para nombrar el favorito -->
+<div class="modal fade" id="modalGuardarFavorito" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Guardar informe</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label">Nombre del informe</label>
+                <input type="text" class="form-control" id="inputNombreFavorito" placeholder="Ej. Mujeres directivas mayores de 40">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarGuardarFavorito">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/informe_inteligente.js' %}"></script>
+{% endblock %}

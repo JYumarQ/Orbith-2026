@@ -19,7 +19,7 @@ def obtener_categoria_codigo(texto):
     if not t: return None
     
     # Mapeo según tu models.py
-    if 'OPERARIO' in t or 'OBRERO' in t: return 'OPE'
+    if 'OBRERO' in t or 'OPERARIO' in t: return 'OPE'
     if 'ADMINISTRATIVO' in t: return 'ADM'
     if 'SERVICIO' in t: return 'SER'
     if 'TÉCNICO' in t or 'TECNICO' in t: return 'TEC'

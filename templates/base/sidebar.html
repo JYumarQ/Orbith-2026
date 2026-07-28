@@ -99,6 +99,14 @@
         </a>
       </li>
 
+      <!-- AGREGAR AQUÍ EL INFORME INTELIGENTE -->
+<li class="menu-item {% if 'informe-inteligente' in request.path or request.resolver_match.view_name == 'informe_inteligente:index' %} active {% endif %}">
+  <a href="{% url 'informe_inteligente:index' %}" class="menu-link">
+    <i class="menu-icon tf-icons bx bx-analyse"></i>
+    <div data-i18n="Basic">Informe Inteligente</div>
+  </a>
+</li>
+
       <!--<li class="menu-header small text-uppercase">
         <span class="menu-header-text">Solicitudes</span>
       </li>

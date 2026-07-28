@@ -21,6 +21,7 @@
     var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
     
     if (formActivo) {
+        console.log("🔍 mostrar_tridente =", "{{ mostrar_tridente|yesno:'true,false' }}", "| es_movimiento =", "{{ es_movimiento }}");
         var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('#mov_tridente');
         
         if (selTridente) {
@@ -70,6 +71,9 @@
 
         var inputGrupo = formActivo.querySelector('#mov_grupo');
         if(inputGrupo) inputGrupo.value = "{{ nuevo_grupo }}";
+
+        var inputCat = formActivo.querySelector('#mov_cat');
+        if(inputCat) inputCat.value = "{{ nueva_cat }}";
 
         // Actualización de dineros
         if(formActivo.querySelector('#salarioEscala')) formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";

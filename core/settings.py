@@ -34,7 +34,7 @@ INSTALLED_APPS = [
     #?APLICACIONES
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
-    'solicitudes', 'informes',
+    'solicitudes', 'informes',  'informe_inteligente',
 ]
 
 MIDDLEWARE = [

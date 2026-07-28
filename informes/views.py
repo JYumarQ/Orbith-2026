@@ -88,7 +88,7 @@ class InformeEconomiaView(TemplateView):
         for cargo in cargos:
             cat = self.mapear_categoria(cargo.ncargo.cat_ocupacional)
             aprobadas = cargo.cant_aprobada or 0
-            cubiertas = cargo.cant_cubierta or 0
+            cubiertas = cargo.cant_cubierta_real
             vacantes = max(aprobadas - cubiertas, 0)
             
             datos[cat]['aprob'] += aprobadas

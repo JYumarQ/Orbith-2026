@@ -7,7 +7,7 @@ from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Case, When, Value, IntegerField, Q, ProtectedError, Count, RestrictedError, Sum, F
+from django.db.models import Q, ProtectedError, Count, RestrictedError, Sum, F
 from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
@@ -532,15 +532,26 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            if orden and orden.isdigit():
-                with transaction.atomic():
-                    # Empujamos +1 a todos los que estén de esa posición hacia abajo
-                    UnidadOrganizativa.objects.filter(orden_informe__gte=int(orden)).update(
-                        orden_informe=F('orden_informe') + 1
-                    )
-        return super().post(request, *args, **kwargs)
+        # Desplazamiento y guardado en UNA transacción (restricción diferida)
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                padre_id = request.POST.get('padre')
+                if orden and orden.isdigit():
+                    qs = UnidadOrganizativa.objects.filter(orden_informe__gte=int(orden))
+                    # El desplazamiento afecta SOLO a la rama correspondiente
+                    if padre_id and padre_id.isdigit():
+                        qs = qs.filter(padre_id=int(padre_id))
+                    else:
+                        qs = qs.filter(padre__isnull=True)
+                    qs.update(orden_informe=F('orden_informe') + 1)
+
+            return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        # Formulario inválido: deshacemos el desplazamiento
+        transaction.set_rollback(True)
+        return super().form_invalid(form)
 
 class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
     model = UnidadOrganizativa
@@ -569,29 +580,30 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
-        self.object = self.get_object() # Capturamos qué unidad estamos editando
-        if request.POST.get('autoriza_desplazamiento') == 'true':
-            orden = request.POST.get('orden_informe')
-            if orden and orden.isdigit():
-                with transaction.atomic():
-                    # 1. EL TRUCO DEL PARQUEO: Movemos la unidad actual a un "limbo" 
-                    # para que no estorbe ni colisione cuando empujemos a los demás
-                    self.object.orden_informe = 999999 
-                    self.object.save(update_fields=['orden_informe'])
-                    
-                    # 2. Buscamos a todos los afectados y los ORDENAMOS DE MAYOR A MENOR
-                    unidades_a_desplazar = UnidadOrganizativa.objects.filter(
+        self.object = self.get_object()
+
+        with transaction.atomic():
+            if request.POST.get('autoriza_desplazamiento') == 'true':
+                orden = request.POST.get('orden_informe')
+                padre_id = request.POST.get('padre')
+                if orden and orden.isdigit():
+                    qs = UnidadOrganizativa.objects.filter(
                         orden_informe__gte=int(orden)
-                    ).exclude(pk=self.object.pk).order_by('-orden_informe')
-                    
-                    # 3. Los movemos uno por uno de arriba hacia abajo
-                    for u in unidades_a_desplazar:
-                        u.orden_informe += 1
-                        u.save(update_fields=['orden_informe'])
-                        
-        # 4. Al llamar a super(), el formulario tomará el "orden" del request 
-        # y bajará a la unidad desde el 999999 a su asiento final correcto.
-        return super().post(request, *args, **kwargs)
+                    ).exclude(pk=self.object.pk)
+
+                    # El desplazamiento afecta SOLO a la rama correspondiente
+                    if padre_id and padre_id.isdigit():
+                        qs = qs.filter(padre_id=int(padre_id))
+                    else:
+                        qs = qs.filter(padre__isnull=True)
+
+                    qs.update(orden_informe=F('orden_informe') + 1)
+
+            return super().post(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        transaction.set_rollback(True)
+        return super().form_invalid(form)
 
 class UnidadOrganizativaDeleteView(DeleteView):
     model = UnidadOrganizativa
@@ -620,17 +632,6 @@ def gestor_plantilla_view(request):
         unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamentos'))
     else:
         unidades = request.user.unidades.annotate(total_dptos=Count('departamentos'))
-
-    # 2. LÓGICA DE ORDENAMIENTO PERSONALIZADO (El "Peso" de la Unidad)
-    # Asignamos: 1 (Principal), 3 (Temporal), 2 (Cualquier otra normal)
-    unidades = unidades.annotate(
-        jerarquia_visual=Case(
-            When(tipo__es_principal=True, then=Value(1)),
-            When(tipo__descripcion__icontains='temporal', then=Value(3)),
-            default=Value(2),
-            output_field=IntegerField()
-        )
-    )
 
     # 3. Control de visibilidad para el Gestor de Plantilla
     if hay_unidad_principal:
@@ -806,19 +807,26 @@ def htmx_load_contratos(request, cargo_id):
 
 def validar_orden_uniorg(request):
     orden = request.GET.get('orden')
+    padre_id = request.GET.get('padre_id')
     exclude_id = request.GET.get('exclude_id')
-    
+
     if not orden or not orden.isdigit():
         return JsonResponse({'ocupado': False})
-        
-    qs = UnidadOrganizativa.objects.filter(orden_informe=int(orden))
+
+    # La colisión se busca dentro de la misma rama:
+    # si hay padre -> entre sus hijas; si no -> entre las unidades raíz
+    if padre_id and padre_id.isdigit():
+        qs = UnidadOrganizativa.objects.filter(padre_id=int(padre_id), orden_informe=int(orden))
+    else:
+        qs = UnidadOrganizativa.objects.filter(padre__isnull=True, orden_informe=int(orden))
+
     if exclude_id and exclude_id.isdigit():
-        qs = qs.exclude(codigo_interno=int(exclude_id)) # Excluimos la propia unidad si estamos editando
-        
+        qs = qs.exclude(codigo_interno=int(exclude_id))
+
     colision = qs.first()
     if colision:
         return JsonResponse({
-            'ocupado': True, 
+            'ocupado': True,
             'mensaje': f'Ocupado por "{colision.descripcion}"'
         })
     return JsonResponse({'ocupado': False})

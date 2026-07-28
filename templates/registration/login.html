@@ -72,19 +72,31 @@
         .security-badge { display: flex; align-items: center; justify-content: center; gap: 10px; color: #64748b; border-top: 1px solid #cbd5e1; padding-top: 2rem; margin-top: 2rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
 
         /* PANEL DERECHO: Fondo Oscuro para el Formulario */
-        .form-panel { 
-            background: linear-gradient(10deg, #6b8fec 0%, #f8fafc 100%); 
-            padding: 3.5rem 3rem; 
-            display: flex; flex-direction: column; justify-content: center; 
-            color: #ffffff;
+        .form-panel {
+            flex: 1;
+            background: #f8fafc;          /* fondo claro sólido y legible */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px;
+            color: #384551;               /* texto oscuro */
         }
         
 
         /* Inputs */
         .input-group { position: relative; margin-bottom: 1.5rem; }
-        .input-icon { position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.4); display: flex; transition: color 0.3s; }
-        .floating-input { width: 100%; padding: 1.2rem 1rem 1.2rem 3.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; color: #fff; font-size: 0.95rem; box-sizing: border-box; transition: all 0.2s; }
-        .floating-input:focus { outline: none; background: rgba(255,255,255,0.08); border-color: var(--current-accent); }
+        .input-icon { position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: rgba(0,0,0,0.35); display: flex; transition: color 0.3s; }
+        .floating-input {
+            width: 100%;
+            padding: 16px 16px 16px 3rem;
+            background: #ffffff;
+            border: 1px solid #d1d9e0;
+            border-radius: 10px;
+            color: #384551;
+            font-size: 15px;
+            transition: all 0.3s ease;
+        }
+        ..floating-input:focus { outline: none; background: #ffffff; border-color: var(--current-accent); }
         .input-group:focus-within .input-icon { color: var(--current-accent); }
         
         /* Botones y Enlaces */
@@ -96,7 +108,7 @@
         .btn-submit:active { transform: scale(0.98); }
 
         /* Errores Django */
-        .django-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 1rem; border-radius: 1rem; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; }
+        .django-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #b91c1c; padding: 1rem; border-radius: 1rem; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; }
 
         /* Responsive para móviles */
         @media (max-width: 768px) {

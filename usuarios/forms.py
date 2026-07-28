@@ -138,6 +138,11 @@ class CustomPasswordChangeForm(forms.Form):
         return new_password2
 
 class CustomAuthenticationForm(AuthenticationForm):
+    error_messages = {
+        'invalid_login': 'Usuario o contraseña incorrectos. Recuerde que ambos campos distinguen mayúsculas y minúsculas.',
+        'inactive': 'Esta cuenta está desactivada.',
+    }
+
     def clean(self):
         cleaned_data = super().clean()
         user = self.get_user()

@@ -132,6 +132,13 @@ class CAlta(ContratoBase):
     jubilado_recontratado = models.BooleanField(default=False)
     en_proceso_movimiento = models.BooleanField(default=False, verbose_name="En Proceso de Movimiento")
 
+    salario_actual = models.DecimalField(
+        max_digits=10, decimal_places=2,
+        null=True, blank=True, editable=False,
+        verbose_name="Salario actual (calculado)",
+        help_text="Se recalcula automáticamente en cada guardado. No editar a mano."
+    )
+
     def clean(self):
         super().clean()
         
@@ -164,10 +171,10 @@ class CAlta(ContratoBase):
         
     @staticmethod
     def actualizar_plantilla(cargo_id):
-        cargo = CargoPlantilla.objects.filter(pk=cargo_id).first() # Usamos pk por consistencia
-        if cargo: # Verificamos que exista antes de editar
-            cargo.cant_cubierta += 1
-            cargo.save()
+        """Recalcula la cantidad cubierta del cargo contando los contratos reales."""
+        cargo = CargoPlantilla.objects.filter(pk=cargo_id).first()
+        if cargo:
+            cargo.refrescar_conteo_plazas()
         
     def calcular_salario_escala(self):
         try:
@@ -181,8 +188,8 @@ class CAlta(ContratoBase):
                 # Buscamos el rol (puede venir del contrato o del cargo)
                 rol_temp = self.rol or self.cargo.rol 
                 
-                # 2. REGLA: Si es Cuadro o si NO TIENE ROL (contratos viejos), lo tratamos como Cuadro
-                es_cuadro = not rol_temp or rol_temp.tipo.strip() == "Cuadro"
+                # 2. REGLA: Un cargo es Cuadro SOLO por su categoría (CDI/CEJ)
+                es_cuadro = self.cargo.ncargo.es_cuadro
                 
                 if es_cuadro:
                     salario_obj = NSalario.objects.filter(
@@ -269,49 +276,65 @@ class CAlta(ContratoBase):
     def save(self, *args, **kwargs):
         try:
             es_nuevo = self._state.adding
-            
+
+            # Cargo que tenía antes, para liberar su plaza si cambió
+            cargo_anterior_id = None
+            if not es_nuevo:
+                anterior = CAlta.objects.filter(pk=self.pk).values('cargo_id').first()
+                if anterior:
+                    cargo_anterior_id = anterior['cargo_id']
+
             # EL ESCUDO: Asignación y Limpieza real en base de datos
             if self.tipo_salario == 'DIN' and not self.tridente:
                 from nomencladores.models import NTridente
                 self.tridente = NTridente.objects.filter(tipo='I').first()
             elif self.tipo_salario == 'FIJ':
-                self.tridente = None # Obligamos a que el fijo sea NULL
-            
+                self.tridente = None  # Obligamos a que el fijo sea NULL
+
             if es_nuevo:
                 self.actualizar_aspirante(self.aspirante.doc_identidad)
-                if self.tipo and self.tipo.ocupa_plaza and self.cargo:
-                    self.actualizar_plantilla(self.cargo.pk)
-            
+
             super().save(*args, **kwargs)
+
+            # Recalcular el salario cacheado DESPUÉS del primer save
+            # (necesita que self.pk y las relaciones ya estén resueltas)
+            nuevo_salario = self.calcular_salario_escala()
+            if nuevo_salario != self.salario_actual:
+                CAlta.objects.filter(pk=self.pk).update(salario_actual=nuevo_salario)
+                self.salario_actual = nuevo_salario
+
+            # Recalculamos DESPUÉS de guardar, para contar la realidad
+            if self.cargo_id:
+                self.actualizar_plantilla(self.cargo_id)
+            if cargo_anterior_id and cargo_anterior_id != self.cargo_id:
+                self.actualizar_plantilla(cargo_anterior_id)
+
         except Exception as e:
             print(f"Error al guardar el contrato: {e}")
             raise
 
     def delete(self, *args, **kwargs):
+        # Guardamos el cargo ANTES de borrar, porque después ya no podremos leerlo
+        cargo_id_afectado = self.cargo_id
+
         try:
-            # 1. Liberar plaza (Si el contrato ocupaba plaza y tenía cargo)
-            if self.tipo and self.tipo.ocupa_plaza and self.cargo:
-                try:
-                    cargo_obj = CargoPlantilla.objects.get(pk=self.cargo.pk)
-                    if cargo_obj.cant_cubierta > 0:
-                        cargo_obj.cant_cubierta -= 1
-                        cargo_obj.save()
-                except CargoPlantilla.DoesNotExist:
-                    pass # Si el cargo ya no existe, ignoramos
-            
-            # 2. Mover Aspirante a BAJA (No a Aspirante)
+            # 1. Mover Aspirante a BAJA
             if self.aspirante:
                 try:
                     aspirante_obj = Aspirante.objects.get(pk=self.aspirante.pk)
-                    aspirante_obj.estado = 'BAJA'  # <--- CAMBIO CLAVE
+                    aspirante_obj.estado = 'BAJA'
                     aspirante_obj.save()
                 except Aspirante.DoesNotExist:
                     pass
-                
+
         except Exception as e:
             print(f"Error al eliminar contrato: {e}")
 
         super().delete(*args, **kwargs)
+
+        # 2. Recalculamos la plaza DESPUÉS de borrar, contando la realidad
+        if cargo_id_afectado:
+            self.actualizar_plantilla(cargo_id_afectado)
 
 
     def __str__(self):

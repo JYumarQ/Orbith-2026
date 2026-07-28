@@ -56,21 +56,31 @@ class UnidadOrganizativa(Base):
 
     def clean(self):
         super().clean()
-        # LÓGICA DE HERENCIA AL CREAR/EDITAR
+
         if self.tipo and self.tipo.es_subunidad:
-            # Busca automáticamente a quién debe pertenecer (Unidad con es_principal=True)
-            unidad_raiz = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exclude(pk=self.pk).first()
-            
-            if unidad_raiz:
-                self.padre = unidad_raiz
-                self.grupo_nomina = unidad_raiz.grupo_nomina
-            else:
-                self.padre = None 
+            # Subunidad: el padre lo elige el usuario en el formulario
+            if not self.padre:
+                raise ValidationError({
+                    'padre': 'Debe seleccionar la Unidad Principal a la que pertenece esta subunidad.'
+                })
+            if not self.padre.tipo.es_principal:
+                raise ValidationError({
+                    'padre': 'La unidad seleccionada no es una Unidad Principal.'
+                })
+            if self.pk and self.padre.pk == self.pk:
+                raise ValidationError({
+                    'padre': 'Una unidad no puede pertenecer a sí misma.'
+                })
+            # Hereda el Grupo de Nómina de su padre
+            self.grupo_nomina = self.padre.grupo_nomina
         else:
+            # Principal o normal: no tiene padre y su Grupo de Nómina es propio
             self.padre = None
             if not self.grupo_nomina:
-                raise ValidationError({'grupo_nomina': 'Este campo es obligatorio para Unidades Principales o Normales.'})
-
+                raise ValidationError({
+                    'grupo_nomina': 'Este campo es obligatorio para Unidades Principales o Normales.'
+                })
+            
     def save(self, *args, **kwargs):
         # Asignación de ID si es nuevo
         if not self.codigo_interno:
@@ -118,7 +128,7 @@ class Departamento(Base):
         ]
         
     def __str__(self):
-        return f"Dpto. {self.descripcion}"
+        return f"{self.descripcion}"
 
 class CargoPlantilla(Base):
 

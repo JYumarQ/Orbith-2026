@@ -31,7 +31,17 @@ Estados: 'vacio' | 'invalido' | 'libre' | 'ocupado' | 'desconocido'
 
     const rutaBase   = "{% url ruta_validacion %}";
     const paramNombre = "{{ param_nombre|default:'' }}";
-    const paramValor  = "{{ param_valor|default:'' }}";
+    const paramOrigen = "{{ param_origen|default:'' }}";
+
+    // Si se indicó un selector, el valor se lee del DOM en cada comprobación
+    // (necesario cuando el ámbito puede cambiar mientras se rellena el formulario)
+    function valorAmbito() {
+        if (paramOrigen) {
+            const el = document.querySelector(paramOrigen);
+            return el ? el.value : '';
+        }
+        return paramValor;
+    }
     const excludeId   = "{{ exclude_id|default:'' }}";
 
     let temporizador = null;
@@ -61,8 +71,9 @@ Estados: 'vacio' | 'invalido' | 'libre' | 'ocupado' | 'desconocido'
 
     function construirUrl(valor) {
         let url = `${rutaBase}?orden=${encodeURIComponent(valor)}`;
-        if (paramNombre && paramValor) {
-            url += `&${paramNombre}=${encodeURIComponent(paramValor)}`;
+        const ambito = valorAmbito();
+        if (paramNombre && ambito) {
+            url += `&${paramNombre}=${encodeURIComponent(ambito)}`;
         }
         if (excludeId) {
             url += `&exclude_id=${encodeURIComponent(excludeId)}`;

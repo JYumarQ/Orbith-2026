@@ -771,6 +771,8 @@ class ContratoUpdateView(UpdateView):
         contrato = self.object
         context['aspirante'] = contrato.aspirante
 
+        context['fecha_contratacion_actual'] = contrato.fecha_ultima_accion
+
         config = Configuracion.objects.first()
         if config and config.fondo_tiempo_calc_tarif is not None:
             fondo = float(config.fondo_tiempo_calc_tarif)
@@ -825,7 +827,7 @@ class ContratoUpdateView(UpdateView):
             self.object.rol = self.object.cargo.rol
             
         # --- LIMPIEZA AUTOMÁTICA DE TRIDENTE ---
-        if self.object.rol and "Cuadro" in self.object.rol.tipo:
+        if self.object.cargo and self.object.cargo.ncargo.es_cuadro:
             self.object.tridente = None
             
         self.object.save()
@@ -1043,7 +1045,7 @@ class MovimientoUpdateView(UpdateView):
 
             context['initial_grupo'] = contrato.cargo.ncargo.grupo_escala
             context['initial_cat'] = contrato.cargo.ncargo.get_cat_ocupacional_display()
-            context['initial_rol'] = contrato.cargo.rol.tipo if contrato.cargo.rol else "Cuadro"
+            context['initial_rol'] = contrato.cargo.rol.tipo if contrato.cargo.rol else "-"
             
             if salario_base:
                 monto = float(salario_base)
@@ -1235,18 +1237,23 @@ class MovimientoUpdateView(UpdateView):
                 return self.form_invalid(form)
 
     def form_invalid(self, form):
-        # --- 1. EL CHIVATO (Debug) ---
-        # Esto imprimirá en tu terminal EXACTAMENTE por qué falla el formulario
         print("\n" + "!"*50)
         print("❌ ERROR DE VALIDACIÓN (400):")
         print(form.errors.as_json()) 
         print("!"*50 + "\n")
         
-        # --- 2. RESPUESTA AL FRONTEND ---
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            # Renderizamos de nuevo el modal, ahora con los mensajes de error (rojos) que Django generó
-            html = render_to_string(self.template_name, self.get_context_data(form=form), request=self.request)
-            return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
+            # Construimos un mensaje legible a partir de los errores del formulario
+            mensajes = []
+            for campo, errores in form.errors.items():
+                for error in errores:
+                    mensajes.append(str(error))
+            mensaje_final = " ".join(mensajes) if mensajes else "Revise los datos del formulario."
+
+            return JsonResponse({
+                'form_is_valid': False,
+                'error_popup': mensaje_final,   # ← el frontend ya sabe leer esta clave
+            }, status=400)
             
         return super().form_invalid(form)
     
@@ -1255,7 +1262,7 @@ def abreviar_cargo_inteligente(texto_cargo):
     if not texto_cargo: return "-"
     
     diccionario = {
-        "OPERADOR": "OP.", "OPERARIO": "OPE.", "ESPECIALISTA": "ESP.",
+        "OPERADOR": "OP.", "OBRERO": "OBR.", "OPERARIO": "OPE.", "ESPECIALISTA": "ESP.",
         "MANTENIMIENTO": "MANT.", "DEPARTAMENTO": "DPTO.", "ADMINISTRATIVO": "ADMIN.",
         "ADMINISTRACION": "ADMIN.", "SERVICIOS": "SERVS.", "GENERAL": "GRAL.",
         "AUXILIAR": "AUX.", "TECNICO": "TEC.", "TÉCNICO": "TÉC.",
@@ -1319,7 +1326,7 @@ class ModeloMovimientoDocxView(View):
         def obtener_inicial_categoria(cat_str):
             if not cat_str or str(cat_str) == "None": return ""
             cat = str(cat_str).upper()
-            if "OPERARIO" in cat: return "O"
+            if "OBRERO" in cat: return "O"
             if "TÉCNICO" in cat or "TECNICO" in cat: return "T"
             if "CUADRO" in cat: return "C"
             if "SERVICIOS" in cat: return "S"
@@ -1699,7 +1706,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
         # 2. CÁLCULO DE DATOS VISUALES (Columna Derecha)
         i_grupo = '-'
         i_cat = '-'
-        i_rol = 'Cuadro'
+        i_rol = '-'
         i_salario = 0
         i_tarifa = 0
         i_extras = 0
@@ -1709,7 +1716,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 cargo_obj = CargoPlantilla.objects.select_related('ncargo', 'rol').get(pk=unsaved_contrato.cargo_id)
                 i_grupo = cargo_obj.ncargo.grupo_escala.nivel if cargo_obj.ncargo.grupo_escala else '-'
                 i_cat = getattr(cargo_obj.ncargo, 'get_cat_ocupacional_display')() if hasattr(cargo_obj.ncargo, 'get_cat_ocupacional_display') else '-'
-                i_rol = cargo_obj.rol.tipo if cargo_obj.rol else "Cuadro"
+                i_rol = cargo_obj.rol.tipo if cargo_obj.rol else "-"
                 
                 
                 # Rescatar cálculos salariales exactos
@@ -1719,8 +1726,8 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 elif hasattr(unsaved_contrato, 'tridente_id') and unsaved_contrato.tridente_id:
                     sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol=cargo_obj.rol, tridente_id=unsaved_contrato.tridente_id).first()
                     if sal_obj: monto = float(sal_obj.monto)
-                elif not cargo_obj.rol or cargo_obj.rol.tipo == "Cuadro":
-                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol=cargo_obj.rol).first()
+                elif cargo_obj.ncargo.es_cuadro:
+                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol__isnull=True, tridente__isnull=True).first()
                     if sal_obj: monto = float(sal_obj.monto)
 
                 if monto > 0:
@@ -1940,9 +1947,23 @@ def exportar_contratos_excel(request):
     wb.save(response)
     return response
 
+MAPA_CATEGORIA_TEXTO = {
+    'OPE': 'Obrero',
+    'ADM': 'Administrativo',
+    'SER': 'Servicio',
+    'TEC': 'Técnico',
+    'CDI': 'Cuadro',
+    'CEJ': 'Cuadro',
+}
+
 class ExportarContratoWordView(FormView):
     template_name = "pages/contrato/exportar_contrato.html" # HTML que crearemos luego
     form_class = ExportarContratoWordForm
+
+    PLANTILLAS = {
+        'creacion': 'CONTRATO DE TRABAJO 2026.docx',
+        'modificacion': 'MODIFICACIÓN AL CONTRATO DE TRABAJO.docx',
+    }
 
     def _get_contrato_optimizado(self, pk):
         """ Consulta unificada para evitar N+1 en las relaciones del contrato """
@@ -2198,6 +2219,13 @@ class ExportarContratoWordView(FormView):
             'firma_dia': firma_dia,
             'firma_mes': firma_mes,
             'firma_anno': firma_anno,
+
+            # --- NUEVO: solo para el documento de modificación ---
+            'categoria_texto': (
+                MAPA_CATEGORIA_TEXTO.get(contrato.cargo.ncargo.cat_ocupacional, "")
+                if contrato.cargo and contrato.cargo.ncargo else ""
+            ),
+            'observaciones': cleaned_data.get('observaciones', '') or "",
         }
         return ctx
 
@@ -2206,12 +2234,14 @@ class ExportarContratoWordView(FormView):
         contrato = self._get_contrato_optimizado(self.kwargs['pk'])
         
         config = Configuracion.objects.first()
+        tipo = form.cleaned_data.get('tipo_documento', 'creacion')
         
         # Compilar Contexto (Inyectamos form.cleaned_data)
         context_word = self._compilar_contexto_word(contrato, form.cleaned_data, config)
         
-        # Localizar plantilla
-        template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'documentos_legales', 'CONTRATO DE TRABAJO 2026.docx')
+        # Localizar plantilla según el tipo de documento elegido
+        nombre_plantilla = self.PLANTILLAS.get(tipo, self.PLANTILLAS['creacion'])
+        template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'documentos_legales', nombre_plantilla)
         
         if not os.path.exists(template_path):
             # Si el archivo fue borrado del disco, lanzamos el 404
@@ -2226,7 +2256,8 @@ class ExportarContratoWordView(FormView):
         doc.save(buffer)
         buffer.seek(0)
         
-        filename = f"Contrato_Trabajo_{contrato.aspirante.nombre}_{contrato.aspirante.papellido}.docx"
+        prefijo = "Modificacion" if tipo == 'modificacion' else "Contrato_Trabajo"
+        filename = f"{prefijo}_{contrato.aspirante.nombre}_{contrato.aspirante.papellido}.docx"
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         

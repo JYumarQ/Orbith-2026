@@ -36,7 +36,7 @@ class NGrupoEscala(Base):
     # --- NUEVOS CAMPOS ---
     es_cuadro = models.BooleanField(default=False, verbose_name="Es Cuadro")
     tiene_rol = models.BooleanField(default=True, verbose_name="Tiene Rol")
-    
+    valor_numerico_db = models.IntegerField(default=999, editable=False, verbose_name="Valor numérico (orden)")
     # Relación para seleccionar qué roles aplican a este grupo
     roles = models.ManyToManyField(
         NRol, 
@@ -72,6 +72,12 @@ class NGrupoEscala(Base):
             prev_value = current_value
             
         return result
+
+    def save(self, *args, **kwargs):
+        # Mantener el campo numérico sincronizado con el nivel romano.
+        # Reutiliza la misma lógica que la property, para que nunca difieran.
+        self.valor_numerico_db = self.valor_numerico
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nivel
@@ -124,7 +130,7 @@ class NCargo(Base):
         ('TEC', 'Técnico'),
         ('ADM', 'Administrativo'),
         ('SER', 'Servicio'),
-        ('OPE', 'Operario'),
+        ('OPE', 'Obrero'),
         ('CDI', 'Cuadro Directivo'),
         ('CEJ', 'Cuadro Ejecutivo')
     ])
@@ -136,6 +142,11 @@ class NCargo(Base):
     familias = models.ManyToManyField(NFamiliaCargo, blank=True, related_name='cargos')
     
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2)
+
+    @property
+    def es_cuadro(self):
+        """Fuente única de verdad: un cargo es Cuadro solo por su categoría ocupacional."""
+        return self.cat_ocupacional in ['CDI', 'CEJ']
 
     class Meta:
         verbose_name = ("NCargo")
@@ -223,10 +234,21 @@ class NCondicionLaboralAnormal(models.Model):
 class NProvincia(Base):
     
     nombre = models.CharField(max_length=50, unique=True)
+    siglas = models.CharField(
+        max_length=3,
+        null=True, blank=True,
+        verbose_name="Siglas",
+        help_text="Exactamente 3 letras mayúsculas"
+    )
     
     class Meta:
         verbose_name = ("NProvincia")
         verbose_name_plural = ("NProvincias")
+
+    def save(self, *args, **kwargs):
+        if self.siglas:
+            self.siglas = self.siglas.strip().upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nombre
@@ -235,11 +257,22 @@ class NMunicipio(Base):
     
     nombre = models.CharField(max_length=50)
     provincia = models.ForeignKey(NProvincia, on_delete=models.RESTRICT)    
+    siglas = models.CharField(
+        max_length=3,
+        null=True, blank=True,
+        verbose_name="Siglas",
+        help_text="Exactamente 3 letras mayúsculas"
+    )
 
     class Meta:
         verbose_name = ("NMunicipio")
         verbose_name_plural = ("NMunicipios")
         unique_together = ('nombre', 'provincia')
+
+    def save(self, *args, **kwargs):
+        if self.siglas:
+            self.siglas = self.siglas.strip().upper()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.nombre
@@ -326,19 +359,23 @@ class NTipoContrato(Base):
 
 # NUEVO NOMENCLADOR
 class NMotivoContrato(Base):
-    descripcion = models.CharField(max_length=100, unique=True, verbose_name="Descripción")
-    
+    descripcion = models.CharField(max_length=100, verbose_name="Descripción")   # ← quitado unique=True
     tipo_contrato = models.ForeignKey(
-        NTipoContrato, 
-        on_delete=models.RESTRICT, 
-        null=True, 
-        blank=True, 
-        related_name="motivos",
+        NTipoContrato,
+        on_delete=models.RESTRICT,
+        related_name="motivos",                # ← quitados null=True y blank=True
         verbose_name="Tipo de Contrato Asociado"
     )
+
     class Meta:
         verbose_name = "Motivo de Contrato"
         verbose_name_plural = "Motivos de Contratos"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['descripcion', 'tipo_contrato'],
+                name='unique_motivo_por_tipo',
+            )
+        ]
 
     def __str__(self):
         return self.descripcion

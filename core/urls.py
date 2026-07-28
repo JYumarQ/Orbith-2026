@@ -9,10 +9,11 @@ urlpatterns = [
     # DASHBOARD PRINCIPAL
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     
-    # ---------------------------------------------------------
+    ## ---------------------------------------------------------
     # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)
     # ---------------------------------------------------------
     path('informes/', include('informes.urls')),
+    path('informe-inteligente/', include('informe_inteligente.urls')),
 
     # ---------------------------------------------------------
     # MÓDULOS DE LA APLICACIÓN

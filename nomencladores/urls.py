@@ -30,11 +30,13 @@ urlpatterns = [
     path('api/grupos/', login_required(views.grupo_create), name='grupo-create'),
     path('api/grupos/<int:pk>/', login_required(views.grupo_update), name='grupo-update'),
     path('api/grupos/<int:pk>/delete/', login_required(views.grupo_delete), name='grupo-delete'),
+    path('grupos_escala/tabla/', views.grupos_escala_tabla_parcial, name='grupos_escala_tabla'),
 
     # CRUD NProvincia
     path('api/provincias/', admin_required(views.provincia_create), name='provincia-create'),
     path('api/provincias/<int:pk>/', admin_required(views.provincia_update), name='provincia-update'),
     path('api/provincias/<int:pk>/delete/', admin_required(views.provincia_delete), name='provincia-delete'),
+    path('api/verificar-siglas/', views.verificar_siglas, name='verificar_siglas'),
 
     # ---------- MODAL Y GUARDADO DE GRUPOS (NUEVO) ----------
     path('modal/grupo/', views.grupo_escala_modal, name='grupo_escala_modal'),

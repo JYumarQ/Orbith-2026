@@ -1,0 +1,29 @@
+<div class="ii-panel">
+    <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelCampos">
+        <span class="ii-panel-title"><i class="bi bi-list-check"></i> Campos a mostrar</span>
+        <span>
+            <span class="badge bg-light text-dark border" id="contadorCampos">0 seleccionados</span>
+            <i class="bi bi-chevron-down"></i>
+        </span>
+    </div>
+    <div id="panelCampos" class="collapse show">
+        <div class="p-3">
+            <input type="text" class="form-control mb-3" id="buscadorCampos" placeholder="Buscar un campo...">
+            <div class="row g-2" id="listaCamposCheckboxes" data-modelo-raiz="{{ modelo_raiz }}">
+                {% for key, campo in campos.items %}
+                    <div class="col-md-4 ii-fld-check" data-label="{{ campo.label|lower }}">
+                        <input class="form-check-input campo-checkbox"
+                               type="checkbox"
+                               id="campo_{{ key }}"
+                               value="{{ key }}"
+                               data-label="{{ campo.label }}"
+                               data-tipo="{{ campo.tipo }}"
+                               data-filtrable="{{ campo.filtrable|yesno:'1,0' }}"
+                               data-ordenable="{{ campo.ordenable|yesno:'1,0' }}">
+                        <label class="form-check-label ms-1" for="campo_{{ key }}">{{ campo.label }}</label>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>

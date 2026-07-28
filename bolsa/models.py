@@ -66,6 +66,12 @@ class Aspirante(Contacto):
 
     titulo_oro = models.BooleanField(default=False, verbose_name="Título de Oro")
 
+    fecha_nacimiento = models.DateField(
+        null=True, blank=True, editable=False,
+        verbose_name="Fecha de Nacimiento",
+        help_text="Calculada automáticamente desde el Carnet de Identidad."
+    )
+
     especialidad = models.ForeignKey(NEspecialidad,null=True, blank=True, on_delete=models.RESTRICT)
     
     contratado = models.BooleanField(null=True, blank=True, default=False)
@@ -86,8 +92,32 @@ class Aspirante(Contacto):
         if self.municipio and self.provincia:
             if self.municipio.provincia != self.provincia:
                 raise ValidationError({'municipio': 'El municipio no pertenece a la provincia seleccionada.'})
-        
+
+    @staticmethod
+    def _calcular_fecha_nacimiento(doc_identidad):
+        """
+        Extrae la fecha de nacimiento del Carnet de Identidad cubano.
+        El 7º dígito indica el siglo de nacimiento sin ambigüedad:
+          0-5 -> 1900-1999
+          6-8 -> 2000-2099
+        (El carné siempre es cubano; no se contempla el caso 9=extranjero).
+        """
+        ci = (doc_identidad or "").strip()
+        if len(ci) < 7 or not ci[:7].isdigit():
+            return None
+
+        yy, mm, dd = int(ci[0:2]), int(ci[2:4]), int(ci[4:6])
+        digito_siglo = int(ci[6])
+
+        century = 1900 if digito_siglo <= 5 else 2000
+
+        try:
+            return date(century + yy, mm, dd)
+        except ValueError:
+            return None
+
     def save(self, *args, **kwargs):
+        self.fecha_nacimiento = self._calcular_fecha_nacimiento(self.doc_identidad)
         self.full_clean()  # asegura que se ejecute clean()
         super().save(*args, **kwargs)
 
@@ -103,18 +133,9 @@ class Aspirante(Contacto):
     
     @property
     def get_edad(self):
-        ci = (self.doc_identidad or "").strip()
-        # Posibilidad de exigir 11 dígitos exactos:
-        # if len(ci) != 11 or not ci.isdigit(): return None
-        if len(ci) < 6 or not ci[:6].isdigit():
-            return None  # edad desconocida
-
-        yy = int(ci[:2]); mm = int(ci[2:4]); dd = int(ci[4:6])
+        if not self.fecha_nacimiento:
+            return None
         hoy = date.today()
-        century = 2000 if yy <= hoy.year % 100 else 1900  # De 00 a 25 -> 2000..2025; 26 a 99 -> 1926..1999
-        try:
-            fn = date(century + yy, mm, dd)
-        except ValueError:
-            return None  # fecha inválida
-
-        return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        return hoy.year - self.fecha_nacimiento.year - (
+            (hoy.month, hoy.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day)
+        )
