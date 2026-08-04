@@ -21,7 +21,6 @@
     var formActivo = {% if es_movimiento %} document.getElementById('movimientoForm') {% else %} document {% endif %};
     
     if (formActivo) {
-        console.log("🔍 mostrar_tridente =", "{{ mostrar_tridente|yesno:'true,false' }}", "| es_movimiento =", "{{ es_movimiento }}");
         var selTridente = formActivo.querySelector('#id_tridente') || formActivo.querySelector('#mov_tridente');
         
         if (selTridente) {
@@ -76,7 +75,18 @@
         if(inputCat) inputCat.value = "{{ nueva_cat }}";
 
         // Actualización de dineros
-        if(formActivo.querySelector('#salarioEscala')) formActivo.querySelector('#salarioEscala').value = "{{ salario|stringformat:'.2f' }}";
+        var inputSalario = formActivo.querySelector('#salarioEscala');
+        if (inputSalario) {
+            inputSalario.value = "{{ salario|stringformat:'.2f' }}";
+
+            // Un salario en 0 significa que no existe tarifa para esta combinación de
+            // grupo escala / rol / tridente. Antes se guardaba tal cual y el histórico
+            // quedaba con salario_nuevo = 0.00 sin ningún aviso. Lo marcamos para que
+            // el usuario lo vea; el envío queda bloqueado en el submit del modal.
+            var salarioValido = parseFloat(inputSalario.value) > 0;
+            inputSalario.classList.toggle('border-danger', !salarioValido);
+            inputSalario.classList.toggle('text-danger', !salarioValido);
+        }
         if(formActivo.querySelector('#tarifaHoraria')) formActivo.querySelector('#tarifaHoraria').value = "{{ tarifa }}";
         if(formActivo.querySelector('#tarifaExtras')) formActivo.querySelector('#tarifaExtras').value = "{{ extras }}";
     }

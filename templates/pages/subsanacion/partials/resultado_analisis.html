@@ -1,0 +1,92 @@
+{# Cierre de la cadena: resumen del análisis y acceso a los resultados. #}
+
+<div class="sub-paso sub-paso-hecho">
+  <i class="bi bi-flag-fill"></i>
+  <span>
+    <strong>Análisis terminado</strong> — {{ ejecucion.get_estado_display|lower }}
+    {% if ejecucion.duracion_segundos %} en {{ ejecucion.duracion_segundos }} s{% endif %}
+  </span>
+</div>
+
+<div class="row g-2 mt-3">
+  <div class="col-6 col-md-3">
+    <div class="sub-kpi sub-color-indigo">
+      <div class="sub-kpi-valor">{{ ejecucion.indice_salud|default:"—" }} %</div>
+      <div class="sub-kpi-label">Salud de los datos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-kpi sub-color-rojo">
+      <div class="sub-kpi-valor">{{ ejecucion.hallazgos_nuevos }}</div>
+      <div class="sub-kpi-label">Hallazgos nuevos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-kpi sub-color-verde">
+      <div class="sub-kpi-valor">{{ ejecucion.hallazgos_resueltos }}</div>
+      <div class="sub-kpi-label">Ya corregidos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-kpi sub-color-azul">
+      <div class="sub-kpi-valor">{{ ejecucion.hallazgos_vigentes }}</div>
+      <div class="sub-kpi-label">Vigentes en total</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-2 mt-2 small text-muted">
+  <div class="col-6 col-md-3">
+    <div class="sub-dato-clave">Reglas ejecutadas</div>
+    <div class="sub-dato-valor">{{ ejecucion.reglas_ejecutadas }}</div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-dato-clave">Registros analizados</div>
+    <div class="sub-dato-valor">{{ ejecucion.registros_analizados }}</div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-dato-clave">Categorías revisadas</div>
+    <div class="sub-dato-valor">{{ ejecucion.modulos_completados|length }}</div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="sub-dato-clave">Ya conocidos</div>
+    <div class="sub-dato-valor">{{ ejecucion.hallazgos_persistentes }}</div>
+  </div>
+</div>
+
+{% if ejecucion.estado == 'PAR' %}
+  <div class="alert alert-warning mt-3 py-2">
+    <div class="small">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      El análisis quedó <strong>incompleto</strong>. Los hallazgos de las reglas que
+      fallaron se conservaron sin cambios: no se marcó nada como corregido por error.
+      {% if ejecucion.errores %}
+        <ul class="mb-0 mt-2">
+          {% for codigo, mensaje in ejecucion.errores.items %}
+            <li><code>{{ codigo }}</code> — {{ mensaje }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 mt-3">
+  <button class="btn btn-sm btn-primary"
+          hx-get="{% url 'subsanacion:panel_hallazgos' %}"
+          hx-target="#paneHallazgos" hx-swap="innerHTML"
+          onclick="document.querySelector('[data-bs-target=\'#paneHallazgos\']').click()">
+    <i class="bi bi-list-check me-1"></i>Ver los hallazgos
+  </button>
+  <button class="btn btn-sm btn-outline-secondary"
+          hx-get="{% url 'subsanacion:panel_dashboard' %}"
+          hx-target="#paneDashboard" hx-swap="innerHTML"
+          onclick="document.querySelector('[data-bs-target=\'#paneDashboard\']').click()">
+    <i class="bi bi-speedometer2 me-1"></i>Ir al dashboard
+  </button>
+  <button class="btn btn-sm btn-outline-secondary"
+          hx-get="{% url 'subsanacion:panel_analisis' %}"
+          hx-target="#paneAnalisis" hx-swap="innerHTML">
+    <i class="bi bi-arrow-clockwise me-1"></i>Analizar otra vez
+  </button>
+</div>

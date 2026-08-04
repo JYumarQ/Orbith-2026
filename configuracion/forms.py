@@ -15,13 +15,14 @@ class ConfiguracionForm(forms.ModelForm):
     class Meta:
         model = Configuracion
         fields = (
-            'nombre_empresa', 'org_superior', 'rama', 'unidad_presup', 'moneda_local', 'periodo',
+            'nombre_empresa', 'org_superior', 'reup', 'rama', 'unidad_presup', 'moneda_local', 'periodo',
             'fondo_tiempo_calc_tarif', 'porcentaje_horas_extras', 'correo', 'telefono', 'direccion', 'logo',
             'provincia_entidad'  # ← AÑADIDO
         )
         labels = {
             'nombre_empresa': 'Nombre de la Empresa',
-            'org_superior': 'Organismo Superior',
+            'org_superior': 'Organismo',
+            'reup': 'REUP',
             'rama': 'Rama',
             'unidad_presup': 'Sector',
             'moneda_local': 'Moneda Local',
@@ -36,6 +37,12 @@ class ConfiguracionForm(forms.ModelForm):
         widgets = {
             'nombre_empresa': forms.TextInput(attrs={'class': 'form-control'}),
             'org_superior': forms.TextInput(attrs={'class': 'form-control'}),
+            'reup': forms.TextInput(attrs={
+                'class': 'form-control',
+                'maxlength': '15',
+                'pattern': '[0-9-]*',
+                'title': 'Solo números y guiones (-).',
+            }),
             'rama': forms.TextInput(attrs={'class': 'form-control'}),
             'unidad_presup': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'moneda_local': forms.TextInput(attrs={'class': 'form-control'}),

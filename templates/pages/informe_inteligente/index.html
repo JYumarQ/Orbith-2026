@@ -1,168 +1,641 @@
 {% extends 'base/base.html' %}
 {% load static %}
+
 {% block title %}Informe Inteligente{% endblock %}
 
-{% block content %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
 <style>
     :root {
-        --ii-navy: #16324f;
-        --ii-navy-700: #1d456b;
-        --ii-blue: #2b6cb0;
-        --ii-blue-soft: #eaf1f8;
-        --ii-border: #e3e8ef;
-        --ii-muted: #64748b;
+        --ii-navy:      #0f172a;
+        --ii-navy-800:  #1e293b;
+        --ii-navy-700:  #334155;
+        --ii-border:    #e2e8f0;
+        --ii-bg-suave:  #f8fafc;
+        --ii-muted:     #64748b;
+
+        /* Paleta viva, la misma que ya usa el panel de Puestos Clave */
+        --ii-indigo:    #4f46e5;  --ii-indigo-bg:    #eef2ff;
+        --ii-violeta:   #7c3aed;  --ii-violeta-bg:   #f5f3ff;
+        --ii-esmeralda: #059669;  --ii-esmeralda-bg: #ecfdf5;
+        --ii-naranja:   #ea580c;  --ii-naranja-bg:   #fff7ed;
+        --ii-azul:      #2563eb;  --ii-azul-bg:      #eff6ff;
+        --ii-rosa:      #db2777;  --ii-rosa-bg:      #fdf2f8;
     }
-    .ii-panel { background: #fff; border: 1px solid var(--ii-border); border-radius: .65rem; margin-bottom: 1.1rem; box-shadow: 0 1px 3px rgba(22,50,79,.05); }
-    .ii-panel-head { padding: 1rem 1.35rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .ii-panel-title { font-weight: 600; color: var(--ii-navy); display: flex; align-items: center; gap: .6rem; }
-    .ii-chip { display: inline-flex; align-items: center; gap: .4rem; background: #fff; border: 1px solid #d7dee8; border-radius: 2rem; padding: .45rem .9rem; font-size: 13px; font-weight: 500; cursor: pointer; }
-    .ii-chip.active { background: var(--ii-navy); border-color: var(--ii-navy); color: #fff; }
-    .ii-fld-check { display: flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border-radius: .4rem; }
-    .ii-fld-check:hover { background: var(--ii-blue-soft); }
-    .ii-filter-row { background: #f4f6f9; border: 1px solid var(--ii-border); border-radius: .5rem; padding: .6rem; margin-bottom: .6rem; }
-    .ii-generate-bar { background: #fff; border: 1px solid var(--ii-border); border-radius: .65rem; padding: 1.1rem 1.35rem; margin-bottom: 1.1rem; display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
-    .ii-record-count { font-size: 1.3rem; font-weight: 700; color: var(--ii-navy); }
+
+    .ii-wrapper { font-size: .925rem; background: #f1f5f9; }
+
+    /* ---------- Colores reutilizables ---------- */
+    .ii-color-indigo    { --c: var(--ii-indigo);    --c-bg: var(--ii-indigo-bg); }
+    .ii-color-violeta   { --c: var(--ii-violeta);   --c-bg: var(--ii-violeta-bg); }
+    .ii-color-esmeralda { --c: var(--ii-esmeralda); --c-bg: var(--ii-esmeralda-bg); }
+    .ii-color-naranja   { --c: var(--ii-naranja);   --c-bg: var(--ii-naranja-bg); }
+    .ii-color-azul      { --c: var(--ii-azul);      --c-bg: var(--ii-azul-bg); }
+    .ii-color-rosa      { --c: var(--ii-rosa);      --c-bg: var(--ii-rosa-bg); }
+
+    .ii-icono-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px; height: 28px;
+        border-radius: .5rem;
+        background: var(--c-bg, var(--ii-indigo-bg));
+        color: var(--c, var(--ii-indigo));
+        font-size: .95rem;
+        flex-shrink: 0;
+    }
+
+    /* ---------- Cabecera del módulo ---------- */
+    .ii-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #312e81 100%);
+        border-radius: .75rem;
+        color: #fff;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, .18);
+    }
+    /* El tema de Orbith fija un color oscuro a los encabezados: aquí hay que
+       forzar el blanco para que se lean sobre el degradado. */
+    .ii-hero h1 { font-weight: 800; letter-spacing: -.02em; margin-bottom: .2rem; color: #fff !important; }
+    .ii-hero p  { color: #cbd5e1 !important; margin-bottom: 0; }
+    .ii-hero-icono i { color: #fff; }
+    .ii-hero-icono {
+        width: 46px; height: 46px;
+        border-radius: .7rem;
+        background: rgba(255,255,255,.12);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.5rem;
+        border: 1px solid rgba(255,255,255,.18);
+    }
+    .ii-btn-favoritos {
+        background: rgba(255,255,255,.1);
+        border: 1px solid rgba(255,255,255,.25);
+        color: #fff;
+        font-weight: 600;
+    }
+    .ii-btn-favoritos:hover { background: rgba(255,255,255,.2); color: #fff; }
+
+    /* ---------- Paneles ---------- */
+    .ii-panel {
+        background: #fff;
+        border: 1px solid var(--ii-border);
+        border-radius: .6rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .ii-panel-head {
+        padding: .8rem 1.1rem;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: .75rem;
+        background: #fff;
+        border-bottom: 1px solid var(--ii-border);
+    }
+    .ii-panel-title {
+        font-weight: 700;
+        font-size: .98rem;
+        color: var(--ii-navy);
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        margin-bottom: 0;
+    }
+    .ii-chevron { transition: transform .2s ease; color: var(--ii-muted); }
+    .ii-panel-head[aria-expanded="false"] .ii-chevron { transform: rotate(-90deg); }
+
+    .ii-badge-contador {
+        background: var(--ii-bg-suave);
+        color: var(--ii-navy-700);
+        border: 1px solid var(--ii-border);
+        font-weight: 600;
+        font-size: .72rem;
+    }
+
+    /* ---------- Plantillas rápidas ---------- */
+    .ii-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        background: #fff;
+        border: 1.5px solid var(--ii-border);
+        border-radius: 2rem;
+        padding: .42rem .9rem;
+        font-size: .85rem;
+        font-weight: 600;
+        color: var(--ii-navy-700);
+        cursor: pointer;
+        transition: all .18s ease-in-out;
+    }
+    .ii-chip i { color: var(--c, var(--ii-indigo)); font-size: 1rem; }
+    .ii-chip:hover {
+        background: var(--c-bg, var(--ii-indigo-bg));
+        border-color: var(--c, var(--ii-indigo));
+        color: var(--c, var(--ii-indigo));
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(15,23,42,.08);
+    }
+    .ii-chip.active {
+        background: var(--c, var(--ii-indigo));
+        border-color: var(--c, var(--ii-indigo));
+        color: #fff;
+        box-shadow: 0 3px 8px rgba(15,23,42,.18);
+    }
+    .ii-chip.active i { color: #fff; }
+
+    /* ---------- Selección de campos ---------- */
+    .ii-categoria-box {
+        background: var(--c-bg, var(--ii-bg-suave));
+        border: 1px solid var(--ii-border);
+        border-radius: .5rem;
+        padding: .85rem;
+        height: 100%;
+        border-top: 3px solid var(--c, var(--ii-indigo));
+    }
+    .ii-categoria-title {
+        font-size: .76rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--c, var(--ii-navy));
+        font-weight: 800;
+        margin-bottom: .7rem;
+        padding-bottom: .45rem;
+        border-bottom: 1px solid rgba(15,23,42,.08);
+        display: flex; align-items: center; gap: .4rem;
+    }
+    .ii-fld-check {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .3rem .45rem;
+        border-radius: .35rem;
+        background: rgba(255,255,255,.65);
+    }
+    .ii-fld-check:hover { background: #fff; }
+    .ii-fld-check label { cursor: pointer; user-select: none; margin-bottom: 0; font-weight: 500; }
+    .ii-fld-check .form-check-input:checked { background-color: var(--c); border-color: var(--c); }
+
+    /* ---------- Filtros ---------- */
+    .ii-filter-row {
+        background: var(--ii-bg-suave);
+        border: 1px solid var(--ii-border);
+        border-left: 3px solid var(--ii-azul);
+        border-radius: .4rem;
+        padding: .6rem .7rem;
+        margin-bottom: .6rem;
+        animation: iiAparecer .18s ease-in-out;
+    }
+    @keyframes iiAparecer {
+        from { opacity: 0; transform: translateY(-4px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .ii-sin-filtros {
+        border: 1.5px dashed #cbd5e1;
+        border-radius: .4rem;
+        padding: .9rem;
+        text-align: center;
+        color: var(--ii-muted);
+        font-size: .85rem;
+        margin-bottom: .6rem;
+        background: var(--ii-bg-suave);
+    }
+
+    /* ---------- Barra de generación ---------- */
+    .ii-generate-bar {
+        background: #fff;
+        border: 1px solid var(--ii-border);
+        border-radius: .6rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+        padding: .9rem 1.1rem;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: .9rem;
+        flex-wrap: wrap;
+    }
+    .ii-contador-caja {
+        display: inline-flex;
+        align-items: center;
+        gap: .6rem;
+        background: var(--ii-indigo-bg);
+        border: 1px solid #c7d2fe;
+        color: #3730a3;
+        border-radius: .5rem;
+        padding: .45rem .9rem;
+    }
+    .ii-contador-numero { font-size: 1.2rem; font-weight: 800; line-height: 1.1; }
+    .ii-btn-generar {
+        background: linear-gradient(135deg, var(--ii-indigo) 0%, #6d28d9 100%);
+        border: 0;
+        color: #fff;
+        font-weight: 700;
+        padding: .55rem 1.3rem;
+        box-shadow: 0 3px 10px rgba(79, 70, 229, .3);
+    }
+    .ii-btn-generar:hover:not(:disabled) { color: #fff; filter: brightness(1.08); }
+    .ii-btn-generar:disabled { opacity: .55; }
+
+    /* ---------- Panel de resumen ---------- */
+    .ii-resumen {
+        background: #fff;
+        border: 1px solid var(--ii-border);
+        border-radius: .6rem;
+        box-shadow: 0 1px 3px rgba(15,23,42,.06);
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    .ii-resumen-cabecera {
+        background: linear-gradient(135deg, #1e293b 0%, #312e81 100%);
+        color: #fff;
+        padding: .75rem 1.1rem;
+        display: flex; justify-content: space-between; align-items: center;
+        flex-wrap: wrap; gap: .4rem;
+    }
+    .ii-resumen-titulo { font-weight: 700; display: flex; align-items: center; gap: .5rem; }
+    .ii-resumen-titulo i { color: #fbbf24; }
+    .ii-resumen-nota { font-size: .72rem; color: #cbd5e1; }
+
+    .ii-kpi {
+        background: #fff;
+        border: 1px solid var(--ii-border);
+        border-bottom: 4px solid var(--c, var(--ii-indigo));
+        border-radius: .55rem;
+        padding: .8rem .9rem;
+        height: 100%;
+        box-shadow: 0 1px 3px rgba(15,23,42,.05);
+    }
+    .ii-kpi-icono {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px;
+        border-radius: .45rem;
+        background: var(--c-bg); color: var(--c);
+        font-size: 1rem;
+    }
+    .ii-kpi-pct {
+        background: var(--c-bg); color: var(--c);
+        border-radius: 1rem; padding: .05rem .45rem;
+        font-size: .72rem; font-weight: 800;
+    }
+    .ii-kpi-valor {
+        font-size: 1.5rem; font-weight: 800; line-height: 1.1;
+        color: var(--ii-navy); letter-spacing: -.02em;
+    }
+    .ii-kpi-label {
+        font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+        color: var(--ii-muted); font-weight: 700; margin-top: .15rem;
+    }
+
+    .ii-desglose {
+        background: var(--ii-bg-suave);
+        border: 1px solid var(--ii-border);
+        border-radius: .5rem;
+        overflow: hidden;
+    }
+    .ii-desglose-cabecera {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: .55rem .85rem;
+        background: #fff;
+        border-bottom: 1px solid var(--ii-border);
+        font-size: .78rem; font-weight: 800;
+        text-transform: uppercase; letter-spacing: .04em;
+        color: var(--ii-navy-700);
+    }
+    .ii-desglose-cabecera i { color: var(--ii-indigo); }
+    .ii-desglose-total { color: var(--ii-muted); font-weight: 600; }
+    .ii-desglose-cuerpo { padding: .5rem .85rem .7rem; }
+    .ii-desglose-fila {
+        display: flex; align-items: center; gap: .8rem;
+        padding: .3rem 0;
+    }
+    .ii-desglose-nombre {
+        flex: 0 0 34%; font-size: .84rem; font-weight: 600; color: var(--ii-navy-800);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ii-desglose-barra {
+        flex: 1 1 auto; height: 10px;
+        background: #e2e8f0; border-radius: 1rem; overflow: hidden;
+    }
+    .ii-desglose-relleno {
+        height: 100%; border-radius: 1rem;
+        background: linear-gradient(90deg, var(--ii-indigo) 0%, #7c3aed 100%);
+        transition: width .35s ease;
+    }
+    .ii-desglose-cifras { flex: 0 0 92px; text-align: right; }
+    .ii-desglose-cantidad { font-weight: 800; color: var(--ii-navy); font-size: .9rem; }
+    .ii-desglose-pct { color: var(--ii-muted); font-size: .76rem; margin-left: .35rem; }
+
+    /* ---------- Tabla de resultados ---------- */
+    .ii-head-tabla { background: var(--ii-bg-suave); }
+    .ii-table { font-size: .85rem; }
+    .ii-table thead th {
+        background: var(--ii-navy-800);
+        color: #fff;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: .7rem;
+        letter-spacing: .04em;
+        padding: .7rem .8rem;
+        white-space: nowrap;
+        vertical-align: middle;
+        border-bottom: 0;
+    }
+    .ii-table tbody td {
+        padding: .55rem .8rem;
+        vertical-align: middle;
+        color: var(--ii-navy-800);
+        border-bottom-color: #eef2f7;
+        white-space: nowrap;
+    }
+    .ii-table tbody tr:hover > * { background-color: var(--ii-indigo-bg); }
+    .ii-col-indice { color: #94a3b8; width: 1%; text-align: right; font-size: .78rem; }
+    .ii-badge-opcion {
+        display: inline-block;
+        background: var(--ii-indigo-bg);
+        color: var(--ii-indigo);
+        border: 1px solid #c7d2fe;
+        border-radius: 1rem;
+        padding: .1rem .6rem;
+        font-size: .74rem;
+        font-weight: 700;
+    }
+
+    /* ---------- Barra lateral ---------- */
+    .ii-offcanvas-head { background: linear-gradient(135deg, #0f172a 0%, #312e81 100%); }
+    .ii-fav-item:hover { background: var(--ii-indigo-bg); }
 </style>
+{% endblock %}
 
-<div class="container-fluid py-4">
-    <div class="row g-4">
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y ii-wrapper">
 
-        <!-- ===== COLUMNA PRINCIPAL ===== -->
-        <div class="col-lg-8 col-xl-9">
-
-            <!-- Encabezado -->
-            <div class="ii-panel p-4">
-                <h1 class="h3 fw-bold" style="color: var(--ii-navy);">
-                    <i class="bi bi-clipboard-data me-2"></i>Informe Inteligente
-                </h1>
-                <p class="text-muted mb-3">Crea informes a medida sin conocimientos técnicos. Elige el tipo de informe, los campos y los filtros que necesites.</p>
-
-                <label class="form-label fw-bold text-uppercase small text-muted">
-                    <i class="bi bi-database"></i> ¿Sobre qué desea informar?
-                </label>
-                <select class="form-select mb-3" id="selectModeloRaiz" style="max-width: 400px;">
-                    {% for key, label in modelos_disponibles.items %}
-                        <option value="{{ key }}">{{ label }}</option>
-                    {% endfor %}
-                </select>
+    <!-- ===== CABECERA ===== -->
+    <div class="ii-hero d-md-flex justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <span class="ii-hero-icono"><i class="bi bi-file-earmark-bar-graph-fill"></i></span>
+            <div>
+                <h1 class="h4 mb-0">Informe Inteligente</h1>
+                <p>Configure los datos del personal que necesita y obtenga resumen y detalle al instante.</p>
             </div>
-
-            <!-- Panel de campos (se carga vía HTMX según el modelo elegido) -->
-            <div id="panelCamposContainer"
-                 hx-get="{% url 'informe_inteligente:campos_del_modelo' 'CAlta' %}"
-                 hx-trigger="load"
-                 hx-target="this"
-                 hx-swap="innerHTML">
-                <div class="ii-panel p-4 text-center text-muted">
-                    <div class="spinner-border spinner-border-sm"></div> Cargando campos disponibles...
-                </div>
-            </div>
-
-            <!-- Panel de filtros -->
-            <div class="ii-panel">
-                <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelFiltros">
-                    <span class="ii-panel-title"><i class="bi bi-funnel"></i> Filtros</span>
-                    <i class="bi bi-chevron-down"></i>
-                </div>
-                <div id="panelFiltros" class="collapse show">
-                    <div class="p-3">
-                        <p class="text-muted small">Se mostrarán solo los registros que cumplan <strong>todas</strong> las condiciones.</p>
-                        <div id="listaFiltros"></div>
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="btnAgregarFiltro">
-                            <i class="bi bi-plus-lg"></i> Añadir filtro
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Panel de orden -->
-            <div class="ii-panel">
-                <div class="ii-panel-head collapsed" data-bs-toggle="collapse" data-bs-target="#panelOrden">
-                    <span class="ii-panel-title"><i class="bi bi-sort-down"></i> Ordenar</span>
-                    <i class="bi bi-chevron-down"></i>
-                </div>
-                <div id="panelOrden" class="collapse">
-                    <div class="p-3 row g-3">
-                        <div class="col-md-8">
-                            <label class="form-label small text-muted">Ordenar por</label>
-                            <select class="form-select" id="selectOrdenarPor">
-                                <option value="">— Sin ordenar —</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small text-muted">Dirección</label>
-                            <select class="form-select" id="selectOrdenDireccion">
-                                <option value="asc">Ascendente</option>
-                                <option value="desc">Descendente</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Generar + contador -->
-            <div class="ii-generate-bar">
-                <button type="button" class="btn btn-lg text-white" style="background: var(--ii-navy);" id="btnGenerarVistaPrevia">
-                    <i class="bi bi-play-circle"></i> Generar vista previa
-                </button>
-                <div>
-                    <div class="ii-record-count" id="contadorRegistros">—</div>
-                    <div class="small text-muted">registros encontrados</div>
-                </div>
-                <button type="button" class="btn btn-outline-primary ms-auto" id="btnGuardarFavorito" disabled>
-                    <i class="bi bi-star"></i> Guardar como favorito
-                </button>
-            </div>
-
-            <!-- Resultados -->
-            <div id="resultadosContainer"></div>
-
         </div>
+        <button type="button" class="btn ii-btn-favoritos btn-sm mt-3 mt-md-0 d-flex align-items-center gap-2 flex-shrink-0"
+                data-bs-toggle="offcanvas" data-bs-target="#panelFavoritos">
+            <i class="bi bi-folder-symlink-fill"></i>
+            <span>Mis favoritos e historial</span>
+            <span class="badge rounded-pill bg-warning text-dark">{{ favoritos|length }}</span>
+        </button>
+    </div>
 
-        <!-- ===== BARRA LATERAL ===== -->
-        <div class="col-lg-4 col-xl-3">
-            <div class="ii-panel p-3">
-                <h6 class="fw-bold" style="color: var(--ii-navy);"><i class="bi bi-star-fill text-warning"></i> Mis favoritos</h6>
-                {% for fav in favoritos %}
-                    <div class="border-bottom py-2">
-                        <div class="fw-semibold small">{{ fav.informe.nombre }}</div>
-                        <div class="text-muted" style="font-size: 11px;">{{ fav.fecha_agregado|date:"d/m/Y" }}</div>
-                    </div>
-                {% empty %}
-                    <p class="text-muted small mb-0">Aún no tienes informes guardados.</p>
+    <!-- ===== PLANTILLAS RÁPIDAS ===== -->
+    <div class="ii-panel">
+        <div class="p-3">
+            <label class="form-label text-uppercase fw-bold mb-2" style="font-size: .74rem; letter-spacing: .05em; color: var(--ii-muted);">
+                <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Plantillas rápidas preconfiguradas
+            </label>
+            <div class="d-flex flex-wrap gap-2 mb-3" id="contenedorPlantillas">
+                {% for plantilla in plantillas_del_modelo %}
+                    <button type="button" class="ii-chip btn-plantilla ii-color-{{ plantilla.color }}"
+                            data-plantilla="{{ plantilla.key }}"
+                            title="{{ plantilla.descripcion }}">
+                        <i class="bi {{ plantilla.icono }}"></i> {{ plantilla.nombre }}
+                    </button>
                 {% endfor %}
             </div>
 
-            {% if ultimo_informe %}
-            <div class="ii-panel p-3">
-                <h6 class="fw-bold" style="color: var(--ii-navy);"><i class="bi bi-clock-history"></i> Último informe</h6>
-                <div class="small text-muted">{{ ultimo_informe.fecha_ejecucion|date:"d/m/Y H:i" }} · {{ ultimo_informe.total_registros }} reg.</div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
+                        <i class="bi bi-database-fill me-1" style="color: var(--ii-indigo);"></i>¿Sobre qué desea informar?
+                    </label>
+                    <select class="form-select form-select-sm" id="selectModeloRaiz">
+                        {% for key, label in modelos_disponibles.items %}
+                            <option value="{{ key }}" {% if key == modelo_raiz_inicial %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
+                        <i class="bi bi-diagram-3-fill me-1" style="color: var(--ii-violeta);"></i>Desglosar el resumen por
+                    </label>
+                    <select class="form-select form-select-sm" id="selectDesglosarPor" multiple></select>
+                </div>
             </div>
-            {% endif %}
         </div>
+    </div>
+
+    <!-- ===== 1. CAMPOS (HTMX) ===== -->
+    <div id="panelCamposContainer"
+         hx-get="{% url 'informe_inteligente:campos_del_modelo' modelo_raiz_inicial %}"
+         hx-trigger="load"
+         hx-target="this"
+         hx-swap="innerHTML">
+        <div class="ii-panel p-4 text-center text-muted">
+            <div class="spinner-border spinner-border-sm me-1"></div> Cargando campos disponibles...
+        </div>
+    </div>
+
+    <!-- ===== 2. FILTROS ===== -->
+    <div class="ii-panel">
+        <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelFiltros" aria-expanded="true">
+            <span class="ii-panel-title">
+                <span class="ii-icono-chip ii-color-azul"><i class="bi bi-funnel-fill"></i></span>
+                2. Filtros de búsqueda y condiciones
+            </span>
+            <span class="d-flex align-items-center gap-2">
+                <span class="badge ii-badge-contador" id="contadorFiltros">Sin filtros</span>
+                <i class="bi bi-chevron-down ii-chevron"></i>
+            </span>
+        </div>
+        <div id="panelFiltros" class="collapse show">
+            <div class="p-3">
+                <p class="text-muted small mb-3">
+                    Solo se incluirán los registros que cumplan <strong>todas</strong> las condiciones indicadas.
+                </p>
+                <div id="listaFiltros"></div>
+                <div class="ii-sin-filtros" id="avisoSinFiltros">
+                    <i class="bi bi-funnel me-1"></i>No hay filtros. Se mostrarán todos los registros disponibles.
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm fw-semibold" id="btnAgregarFiltro">
+                    <i class="bi bi-plus-lg me-1"></i>Añadir filtro
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 3. ORDENAR ===== -->
+    <div class="ii-panel">
+        <div class="ii-panel-head collapsed" data-bs-toggle="collapse" data-bs-target="#panelOrden" aria-expanded="false">
+            <span class="ii-panel-title">
+                <span class="ii-icono-chip ii-color-esmeralda"><i class="bi bi-sort-alpha-down"></i></span>
+                3. Ordenar el detalle (opcional)
+            </span>
+            <span class="d-flex align-items-center gap-2">
+                <span class="badge ii-badge-contador" id="resumenOrden">Sin ordenar</span>
+                <i class="bi bi-chevron-down ii-chevron"></i>
+            </span>
+        </div>
+        <div id="panelOrden" class="collapse">
+            <div class="p-3 row g-3">
+                <div class="col-md-8">
+                    <label class="form-label small text-muted fw-semibold">Ordenar por campo</label>
+                    <select class="form-select form-select-sm" id="selectOrdenarPor">
+                        <option value="">— Sin ordenar —</option>
+                    </select>
+                    <div class="form-text" style="font-size: 11px;">
+                        Solo aparecen los campos marcados en el paso 1 que permiten ordenación.
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small text-muted fw-semibold">Dirección</label>
+                    <select class="form-select form-select-sm" id="selectOrdenDireccion">
+                        <option value="asc">Ascendente (A-Z, 0-9)</option>
+                        <option value="desc">Descendente (Z-A, 9-0)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== GENERAR ===== -->
+    <div class="ii-generate-bar">
+        <div class="ii-contador-caja">
+            <i class="bi bi-people-fill fs-5"></i>
+            <div>
+                <div class="ii-contador-numero" id="contadorRegistros">—</div>
+                <div style="font-size: 11px; font-weight: 600;">registros encontrados</div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" id="btnGuardarFavorito" disabled>
+            <i class="bi bi-star-fill text-warning me-1"></i>Guardar como favorito
+        </button>
+
+        <button type="button" class="btn ii-btn-generar d-flex align-items-center gap-2" id="btnGenerarVistaPrevia">
+            <i class="bi bi-play-circle-fill"></i>
+            <span>Generar informe</span>
+        </button>
+    </div>
+
+    <!-- ===== RESULTADOS (resumen + detalle) ===== -->
+    <div id="resultadosContainer"></div>
+
+</div>
+
+<!-- ===== BARRA LATERAL: FAVORITOS E HISTORIAL ===== -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="panelFavoritos">
+    <div class="offcanvas-header ii-offcanvas-head text-white">
+        <h5 class="offcanvas-title fs-6 fw-bold d-flex align-items-center gap-2">
+            <i class="bi bi-folder2-open text-warning"></i> Informes guardados e historial
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+
+        <div class="p-3 border-bottom">
+            <h6 class="text-uppercase fw-bold text-muted small mb-3">
+                <i class="bi bi-star-fill text-warning me-1"></i>Mis informes favoritos
+            </h6>
+            <div class="list-group list-group-flush border rounded-3" id="listaFavoritos">
+                {% for fav in favoritos %}
+                    <div class="list-group-item p-2 ii-fav-item d-flex justify-content-between align-items-start gap-2"
+                         data-informe-id="{{ fav.informe.id }}">
+                        <div class="flex-grow-1 btn-cargar-favorito" style="cursor: pointer;">
+                            <div class="d-flex justify-content-between align-items-center gap-2">
+                                <strong class="small text-dark">{{ fav.informe.nombre }}</strong>
+                                <small class="text-muted flex-shrink-0" style="font-size: 10px;">
+                                    {{ fav.fecha_agregado|date:"d/m/Y" }}
+                                </small>
+                            </div>
+                            {% if fav.informe.descripcion %}
+                                <p class="mb-0 text-muted" style="font-size: 11px;">{{ fav.informe.descripcion }}</p>
+                            {% endif %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-eliminar-favorito"
+                                title="Eliminar este informe">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                {% empty %}
+                    <div class="list-group-item p-3 text-center text-muted small">
+                        <i class="bi bi-star d-block mb-1" style="font-size: 1.3rem;"></i>
+                        Aún no tiene informes guardados.
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% if ultimo_informe %}
+        <div class="p-3 bg-light">
+            <h6 class="text-uppercase fw-bold text-muted small mb-3">
+                <i class="bi bi-clock-history me-1"></i>Último informe generado
+            </h6>
+            <div class="card card-body border p-2" style="font-size: .8rem;">
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-muted">Fecha de ejecución:</span>
+                    <strong>{{ ultimo_informe.fecha_ejecucion|date:"d/m/Y H:i" }}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-1">
+                    <span class="text-muted">Registros devueltos:</span>
+                    <span class="badge bg-secondary">{{ ultimo_informe.total_registros }}</span>
+                </div>
+                <button type="button" class="btn btn-outline-primary btn-sm w-100 mt-2" id="btnRecargarUltimo"
+                        data-modelo-raiz="{{ ultimo_informe.modelo_raiz }}">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Recargar este informe
+                </button>
+                {{ ultimo_informe.configuracion|json_script:"datosUltimoInforme" }}
+            </div>
+        </div>
+        {% endif %}
 
     </div>
 </div>
 
-<!-- Modal para nombrar el favorito -->
+<!-- ===== MODAL: GUARDAR COMO FAVORITO ===== -->
 <div class="modal fade" id="modalGuardarFavorito" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Guardar informe</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title fs-6 fw-bold">
+                    <i class="bi bi-star-fill text-warning me-2"></i>Guardar informe en favoritos
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body">
-                <label class="form-label">Nombre del informe</label>
-                <input type="text" class="form-control" id="inputNombreFavorito" placeholder="Ej. Mujeres directivas mayores de 40">
+                <div class="mb-3">
+                    <label for="inputNombreFavorito" class="form-label fw-semibold small">
+                        Nombre del informe <span class="text-danger">*</span>
+                    </label>
+                    <input type="text" class="form-control" id="inputNombreFavorito" maxlength="150"
+                           placeholder="Ej. Cuadros por unidad organizativa">
+                </div>
+                <div class="mb-0">
+                    <label for="inputDescripcionFavorito" class="form-label fw-semibold small">
+                        Descripción corta (opcional)
+                    </label>
+                    <textarea class="form-control" id="inputDescripcionFavorito" rows="2" maxlength="300"
+                              placeholder="Notas sobre para qué sirve este informe..."></textarea>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmarGuardarFavorito">Guardar</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmarGuardarFavorito">Guardar informe</button>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
+{{ plantillas|json_script:"datosPlantillas" }}
+<script>
+    window.II_URLS = {
+        campos: "{% url 'informe_inteligente:campos_del_modelo' 'MODELO' %}",
+        vistaPrevia: "{% url 'informe_inteligente:generar_vista_previa' %}",
+        guardarFavorito: "{% url 'informe_inteligente:guardar_favorito' %}",
+        cargarFavorito: "{% url 'informe_inteligente:cargar_favorito' 0 %}",
+        eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}"
+    };
+</script>
 <script src="{% static 'js/informe_inteligente.js' %}"></script>
 {% endblock %}

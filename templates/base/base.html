@@ -46,13 +46,58 @@
         .layout-menu, .layout-page, .layout-menu-toggle {
             transition: all 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
         }
+
+        /* — PREFERENCIA DE USUARIO: INTERFAZ SIN ANIMACIONES —
+           Se usa una duración mínima en lugar de 'none' porque Bootstrap y
+           SweetAlert esperan el evento transitionend para completar sus
+           acciones; con 'none' ese evento podría no dispararse. */
+        html.sin-animaciones *,
+        html.sin-animaciones *::before,
+        html.sin-animaciones *::after {
+            transition-duration: 0.001ms !important;
+            animation-duration: 0.001ms !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+        }
+        /* Los indicadores de carga sí deben seguir girando: congelados
+           parecerían un sistema colgado. */
+        html.sin-animaciones .spinner-border,
+        html.sin-animaciones .spinner-grow,
+        html.sin-animaciones .swal2-loader {
+            animation-duration: 0.75s !important;
+            animation-iteration-count: infinite !important;
+        }
     </style>
 
     <script>
-        /* Recuperar estado antes de pintar el DOM */
-        if (localStorage.getItem('estadoSidebarOrbith') === 'colapsado' && window.innerWidth >= 1200) {
-            document.documentElement.classList.add('menu-colapsado');
-        }
+        /* — PREFERENCIAS DE INTERFAZ —
+           Se aplican aquí, en el <head>, antes de pintar el DOM, para que no
+           haya parpadeo. El valor lo inyecta el servidor desde las preferencias
+           del usuario: esa es la fuente de verdad, así la configuración viaja
+           con la cuenta y no con el navegador (antes se leía de localStorage y
+           por eso no se compartía entre equipos). */
+        (function () {
+            var raiz = document.documentElement;
+            var sidebarColapsada = {{ pref_sidebar_colapsada|yesno:"true,false" }};
+            var animacionesActivas = {{ pref_animaciones_activas|yesno:"true,false" }};
+
+            if (sidebarColapsada && window.innerWidth >= 1200) {
+                raiz.classList.add('menu-colapsado');
+            }
+            if (!animacionesActivas) {
+                raiz.classList.add('sin-animaciones');
+            }
+        })();
+
+        /* Aplicadores globales: los reutiliza el modal de Configuración para
+           que el cambio se vea al instante, sin recargar la página. */
+        window.orbithAplicarSidebar = function (colapsada) {
+            if (window.innerWidth < 1200) return;
+            document.documentElement.classList.toggle('menu-colapsado', !!colapsada);
+        };
+        window.orbithAplicarAnimaciones = function (activas) {
+            document.documentElement.classList.toggle('sin-animaciones', !activas);
+        };
 
         document.addEventListener('DOMContentLoaded', function() {
             const btnColapsar = document.querySelector('.layout-menu-toggle.d-xl-block');
@@ -63,7 +108,20 @@
                         e.stopImmediatePropagation();
                         const htmlTag = document.documentElement;
                         htmlTag.classList.toggle('menu-colapsado');
-                        localStorage.setItem('estadoSidebarOrbith', htmlTag.classList.contains('menu-colapsado') ? 'colapsado' : 'expandido');
+                        const colapsada = htmlTag.classList.contains('menu-colapsado');
+
+                        /* Persistimos en el usuario sin bloquear nada: el cambio
+                           visual ya está hecho y un fallo de red no debe
+                           deshacerlo en esta sesión. */
+                        if (window.orbithGuardarPreferencias) {
+                            window.orbithGuardarPreferencias({ sidebar_colapsada: colapsada });
+                        }
+
+                        /* Dejamos el modal de Configuración en sintonía. */
+                        const radio = document.getElementById(
+                            colapsada ? 'prefSidebarColapsada' : 'prefSidebarExpandida'
+                        );
+                        if (radio) radio.checked = true;
                     }
                 });
             }
@@ -139,12 +197,14 @@
             if (!form.matches('form.swal-confirm')) return;
             e.preventDefault();
 
+            /* Cada formulario puede personalizar título, mensaje, icono y el
+               texto del botón mediante atributos data-confirm-*. */
             Swal.fire({
-                title: '¿Estás seguro?',
+                title: form.dataset.confirmTitle || '¿Estás seguro?',
                 text: form.dataset.confirmText || '¿Deseas continuar?',
-                icon: 'question',
+                icon: form.dataset.confirmIcon || 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Confirmar',
+                confirmButtonText: form.dataset.confirmButton || 'Confirmar',
                 cancelButtonText: 'Cancelar',
                 customClass: {
                     confirmButton: 'btn btn-primary px-4 me-2',

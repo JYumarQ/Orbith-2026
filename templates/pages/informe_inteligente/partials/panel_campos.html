@@ -1,29 +1,79 @@
+{% load informe_inteligente_extras %}
+
 <div class="ii-panel">
-    <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelCampos">
-        <span class="ii-panel-title"><i class="bi bi-list-check"></i> Campos a mostrar</span>
-        <span>
-            <span class="badge bg-light text-dark border" id="contadorCampos">0 seleccionados</span>
-            <i class="bi bi-chevron-down"></i>
+    <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelCampos" aria-expanded="true">
+        <span class="ii-panel-title">
+            <span class="ii-icono-chip ii-color-violeta"><i class="bi bi-check2-square"></i></span>
+            1. Campos a mostrar en el detalle
+        </span>
+        <span class="d-flex align-items-center gap-2">
+            <span class="badge ii-badge-contador" id="contadorCampos">0 campos seleccionados</span>
+            <i class="bi bi-chevron-down ii-chevron"></i>
         </span>
     </div>
+
     <div id="panelCampos" class="collapse show">
         <div class="p-3">
-            <input type="text" class="form-control mb-3" id="buscadorCampos" placeholder="Buscar un campo...">
-            <div class="row g-2" id="listaCamposCheckboxes" data-modelo-raiz="{{ modelo_raiz }}">
-                {% for key, campo in campos.items %}
-                    <div class="col-md-4 ii-fld-check" data-label="{{ campo.label|lower }}">
-                        <input class="form-check-input campo-checkbox"
-                               type="checkbox"
-                               id="campo_{{ key }}"
-                               value="{{ key }}"
-                               data-label="{{ campo.label }}"
-                               data-tipo="{{ campo.tipo }}"
-                               data-filtrable="{{ campo.filtrable|yesno:'1,0' }}"
-                               data-ordenable="{{ campo.ordenable|yesno:'1,0' }}">
-                        <label class="form-check-label ms-1" for="campo_{{ key }}">{{ campo.label }}</label>
+
+            <div class="row g-2 align-items-center mb-3">
+                <div class="col-md-6 col-lg-5">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control border-start-0 ps-0"
+                               id="buscadorCampos" placeholder="Buscar campo por nombre...">
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-7 text-md-end">
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none p-0 me-3" id="btnMarcarTodos">
+                        <i class="bi bi-check-all me-1"></i>Marcar todos
+                    </button>
+                    <button type="button" class="btn btn-link btn-sm text-decoration-none text-muted p-0" id="btnDesmarcarTodos">
+                        <i class="bi bi-x-circle me-1"></i>Desmarcar todos
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-3" id="listaCamposCheckboxes" data-modelo-raiz="{{ modelo_raiz }}">
+                {% for categoria in categorias %}
+                    <div class="col-md-6 col-xl-3 ii-categoria-col ii-color-{{ categoria.color }}" data-categoria="{{ categoria.key }}">
+                        <div class="ii-categoria-box">
+                            <div class="ii-categoria-title">
+                                <i class="bi {{ categoria.icono }}"></i>{{ categoria.label }}
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                {% for item in categoria.campos %}
+                                    <div class="ii-fld-check" data-label="{{ item.campo.label|lower }}">
+                                        <input class="form-check-input campo-checkbox m-0"
+                                               type="checkbox"
+                                               id="campo_{{ item.key }}"
+                                               value="{{ item.key }}"
+                                               data-label="{{ item.campo.label }}"
+                                               data-tipo="{{ item.campo.tipo }}"
+                                               data-filtrable="{{ item.campo.filtrable|yesno:'1,0' }}"
+                                               data-ordenable="{{ item.campo.ordenable|yesno:'1,0' }}"
+                                               data-agrupable="{{ item.campo.agrupable|yesno:'1,0' }}"
+                                               data-choices="{{ item.opciones|como_json }}">
+                                        <label class="form-check-label flex-grow-1" for="campo_{{ item.key }}">
+                                            {{ item.campo.label }}
+                                        </label>
+                                        {% if item.campo.sensible %}
+                                            <i class="bi bi-shield-lock text-warning"
+                                               title="Dato sensible" style="font-size: 12px;"></i>
+                                        {% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 {% endfor %}
             </div>
+
+            <p class="text-muted mb-0 mt-3" id="mensajeSinCoincidencias" style="font-size: 12px; display: none;">
+                <i class="bi bi-info-circle me-1"></i>Ningún campo coincide con la búsqueda.
+            </p>
+
         </div>
     </div>
 </div>

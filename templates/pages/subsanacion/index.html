@@ -1,0 +1,250 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Subsanación · Orbith{% endblock %}
+
+{% block extra_head %}
+{# Bootstrap Icons no viene en base.html: cada módulo que use `bi bi-*` lo carga. #}
+<link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}" />
+<style>
+  /* Sistema visual del módulo. Mismo enfoque que `ii-` en Informe Inteligente:
+     una clase de color fija dos variables CSS locales y los componentes leen
+     var(--c), así una tarjeta cambia de color solo añadiendo sub-color-{{ x }}. */
+  :root {
+    --sub-navy-900: #0f172a;
+    --sub-navy-800: #1e293b;
+    --sub-borde: #e2e8f0;
+    --sub-texto-suave: #64748b;
+  }
+
+  .sub-color-rojo    { --c: #dc2626; --c-bg: #fef2f2; }
+  .sub-color-naranja { --c: #ea580c; --c-bg: #fff7ed; }
+  .sub-color-ambar   { --c: #d97706; --c-bg: #fffbeb; }
+  .sub-color-azul    { --c: #2563eb; --c-bg: #eff6ff; }
+  .sub-color-gris    { --c: #64748b; --c-bg: #f8fafc; }
+  .sub-color-verde   { --c: #059669; --c-bg: #ecfdf5; }
+  .sub-color-indigo  { --c: #4f46e5; --c-bg: #eef2ff; }
+
+  .sub-hero {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #312e81 100%);
+    border-radius: .75rem;
+    color: #fff;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .sub-hero-icono {
+    width: 46px; height: 46px; border-radius: .625rem;
+    background: rgba(255, 255, 255, .12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.35rem; flex-shrink: 0;
+  }
+  .sub-hero small { color: rgba(255, 255, 255, .72); }
+
+  .sub-panel {
+    background: #fff; border: 1px solid var(--sub-borde);
+    border-radius: .625rem; margin-bottom: 1rem;
+  }
+  .sub-panel-head {
+    padding: .875rem 1.125rem; border-bottom: 1px solid var(--sub-borde);
+    display: flex; align-items: center; gap: .625rem;
+  }
+  .sub-panel-title { font-size: .9375rem; font-weight: 600; margin: 0; }
+  .sub-icono-chip {
+    width: 28px; height: 28px; border-radius: .375rem;
+    background: var(--c-bg); color: var(--c);
+    display: flex; align-items: center; justify-content: center; font-size: .875rem;
+  }
+
+  /* Índice de salud */
+  .sub-indice { display: flex; align-items: baseline; gap: .5rem; }
+  .sub-indice-valor { font-size: 2.75rem; font-weight: 800; line-height: 1; color: var(--c); }
+  .sub-indice-barra {
+    height: 8px; border-radius: 4px; background: #eef2f6; overflow: hidden; margin-top: .75rem;
+  }
+  .sub-indice-barra > span { display: block; height: 100%; background: var(--c); }
+
+  /* Tarjetas de severidad */
+  .sub-kpi {
+    background: #fff; border: 1px solid var(--sub-borde); border-radius: .5rem;
+    border-bottom: 4px solid var(--c); padding: .875rem; height: 100%;
+  }
+  .sub-kpi-icono {
+    width: 30px; height: 30px; border-radius: .375rem;
+    background: var(--c-bg); color: var(--c);
+    display: flex; align-items: center; justify-content: center; font-size: .9375rem;
+  }
+  .sub-kpi-valor { font-size: 1.75rem; font-weight: 700; line-height: 1.1; margin-top: .5rem; }
+  .sub-kpi-label {
+    font-size: .75rem; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--sub-texto-suave); font-weight: 600;
+  }
+
+  /* Fila de categoría */
+  .sub-modulo { display: flex; align-items: center; gap: .75rem; padding: .625rem 1.125rem; }
+  .sub-modulo + .sub-modulo { border-top: 1px solid #f1f5f9; }
+  .sub-modulo-barra {
+    flex: 1; height: 6px; border-radius: 3px; background: #eef2f6; overflow: hidden;
+  }
+  .sub-modulo-barra > span { display: block; height: 100%; background: var(--c); }
+  .sub-modulo-nombre { min-width: 190px; font-size: .8125rem; font-weight: 600; }
+  .sub-modulo-valor {
+    min-width: 92px; text-align: right; font-size: .8125rem; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Tabla de hallazgos */
+  .sub-table { font-size: .8125rem; }
+  .sub-table thead th {
+    background: var(--sub-navy-800); color: #fff; text-transform: uppercase;
+    font-size: .6875rem; letter-spacing: .04em; font-weight: 600; white-space: nowrap;
+  }
+  .sub-severidad {
+    display: inline-flex; align-items: center; gap: .3125rem;
+    background: var(--c-bg); color: var(--c);
+    border: 1px solid color-mix(in srgb, var(--c) 25%, transparent);
+    border-radius: 1rem; padding: .125rem .5rem;
+    font-size: .6875rem; font-weight: 700; white-space: nowrap;
+  }
+
+  /* Estadísticas e historial */
+  .sub-badge-contador {
+    background: #eef2f6; color: #526175; border: 1px solid #e2e8f0;
+    border-radius: 1rem; font-size: .6875rem; font-weight: 700;
+  }
+  .sub-codigo {
+    display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .6875rem; font-weight: 700; color: #526175;
+    background: #f4f6f9; border: 1px solid #e2e8f0; border-radius: .25rem;
+    padding: .0625rem .3125rem; margin-right: .375rem; white-space: nowrap;
+  }
+  .sub-pill {
+    display: inline-block; background: var(--c-bg); color: var(--c);
+    border-radius: 1rem; padding: .125rem .5rem;
+    font-size: .6875rem; font-weight: 700; white-space: nowrap;
+  }
+  .sub-barra-mini {
+    height: 6px; border-radius: 3px; background: #eef2f6; overflow: hidden;
+    min-width: 60px;
+  }
+  .sub-barra-mini > span { display: block; height: 100%; background: var(--c); }
+
+  /* Cadena de progreso del análisis */
+  .sub-paso {
+    display: flex; align-items: center; gap: .625rem;
+    padding: .5rem .75rem; border-radius: .375rem; font-size: .8125rem;
+  }
+  .sub-paso + .sub-paso { margin-top: .25rem; }
+  .sub-paso-hecho { background: #ecfdf5; color: #065f46; }
+  .sub-paso-curso { background: #eef2ff; color: #3730a3; }
+  .sub-paso-error { background: #fef2f2; color: #991b1b; }
+
+  .sub-guia-bloque { padding: .75rem 1rem; border-radius: .5rem; background: var(--c-bg); }
+  .sub-guia-titulo {
+    font-size: .75rem; text-transform: uppercase; letter-spacing: .03em;
+    font-weight: 700; color: var(--c); margin-bottom: .25rem;
+  }
+  .sub-dato-clave {
+    font-size: .6875rem; text-transform: uppercase; letter-spacing: .02em;
+    color: var(--sub-texto-suave); font-weight: 600;
+  }
+  .sub-dato-valor { font-size: .875rem; font-weight: 600; }
+
+  .sub-vacio { padding: 2.5rem 1rem; text-align: center; color: var(--sub-texto-suave); }
+  .sub-vacio i { font-size: 2.25rem; opacity: .35; display: block; margin-bottom: .5rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="sub-hero d-flex align-items-center gap-3">
+    <div class="sub-hero-icono"><i class="bi bi-shield-check"></i></div>
+    <div class="flex-grow-1">
+      <h1 class="h4 mb-1">Subsanación</h1>
+      <small>
+        Centro de diagnóstico de integridad de datos. Detecta inconsistencias, explica por qué
+        ocurren y le lleva al registro para que usted las corrija.
+        <strong>Nunca modifica información por su cuenta.</strong>
+      </small>
+    </div>
+    <div class="text-end d-none d-md-block">
+      <div class="small opacity-75">Reglas activas</div>
+      <div class="fs-4 fw-bold">{{ total_reglas }}</div>
+    </div>
+  </div>
+
+  <ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#paneDashboard" type="button"
+              hx-get="{% url 'subsanacion:panel_dashboard' %}"
+              hx-target="#paneDashboard" hx-swap="innerHTML">
+        <i class="bi bi-speedometer2 me-1"></i>Dashboard
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneHallazgos" type="button"
+              hx-get="{% url 'subsanacion:panel_hallazgos' %}"
+              hx-target="#paneHallazgos" hx-swap="innerHTML">
+        <i class="bi bi-list-check me-1"></i>Hallazgos
+        {% if total_vigentes %}<span class="badge bg-label-danger ms-1">{{ total_vigentes }}</span>{% endif %}
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneRevisiones" type="button"
+              hx-get="{% url 'subsanacion:panel_revisiones' %}"
+              hx-target="#panelRevisiones" hx-swap="innerHTML">
+        <i class="bi bi-clock-history me-1"></i>Historial de revisiones
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneEstadisticas" type="button"
+              hx-get="{% url 'subsanacion:panel_estadisticas' %}"
+              hx-target="#paneEstadisticas" hx-swap="innerHTML">
+        <i class="bi bi-bar-chart me-1"></i>Estadísticas
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneAnalisis" type="button"
+              hx-get="{% url 'subsanacion:panel_analisis' %}"
+              hx-target="#paneAnalisis" hx-swap="innerHTML">
+        <i class="bi bi-play-circle me-1"></i>Ejecutar nuevo análisis
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content p-0">
+    {% comment %} El dashboard se pinta ya renderizado: no hace falta una segunda petición para
+       ver la pantalla principal. {% endcomment %}
+    <div class="tab-pane fade show active" id="paneDashboard">
+      {% include 'pages/subsanacion/partials/panel_dashboard.html' %}
+    </div>
+    <div class="tab-pane fade" id="paneHallazgos">
+      <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando hallazgos…</div>
+    </div>
+    {% comment %} El contenedor interior permite que la paginación del historial se
+       recargue sola sin volver a pedir la pestaña entera. {% endcomment %}
+    <div class="tab-pane fade" id="paneRevisiones">
+      <div id="panelRevisiones">
+        <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando historial…</div>
+      </div>
+    </div>
+    <div class="tab-pane fade" id="paneEstadisticas">
+      <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando estadísticas…</div>
+    </div>
+    <div class="tab-pane fade" id="paneAnalisis">
+      <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando…</div>
+    </div>
+  </div>
+</div>
+
+{# Modal del detalle del hallazgo. El contenido lo trae HTMX desde cada fila. #}
+<div class="modal fade" id="modalHallazgo" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" id="contenidoModalHallazgo">
+      <div class="modal-body sub-vacio">
+        <div class="spinner-border spinner-border-sm"></div> Cargando el hallazgo…
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

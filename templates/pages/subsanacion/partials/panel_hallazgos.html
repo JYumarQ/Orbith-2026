@@ -1,0 +1,222 @@
+{% comment %} Listado de hallazgos: búsqueda, filtros, tabla y paginación.
+   Todo el formulario apunta al mismo endpoint y reemplaza este mismo panel. {% endcomment %}
+
+<form id="formFiltrosHallazgos"
+      hx-get="{% url 'subsanacion:panel_hallazgos' %}"
+      hx-target="#paneHallazgos" hx-swap="innerHTML"
+      hx-trigger="submit, change from:.sub-filtro, keyup changed delay:400ms from:#buscadorHallazgos">
+
+  <div class="sub-panel">
+    <div class="sub-panel-head sub-color-indigo">
+      <span class="sub-icono-chip"><i class="bi bi-funnel"></i></span>
+      <h6 class="sub-panel-title">Buscar y filtrar</h6>
+      <span class="badge bg-label-secondary ms-auto">
+        {{ total_resultados }} resultado{{ total_resultados|pluralize }}
+      </span>
+    </div>
+
+    <div class="p-3">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-lg-5">
+          <label class="form-label small mb-1" for="buscadorHallazgos">Búsqueda</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" id="buscadorHallazgos" name="q"
+                   value="{{ filtros.q }}"
+                   placeholder="Nombre, carnet, expediente, cargo, código de regla…">
+          </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+          <label class="form-label small mb-1" for="filtroCategoria">Categoría</label>
+          <select class="form-select form-select-sm sub-filtro" id="filtroCategoria" name="modulo">
+            <option value="">Todas</option>
+            {% for clave, etiqueta, icono in modulos_disponibles %}
+              <option value="{{ clave }}" {% if clave in filtros.modulos %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small mb-1" for="filtroGravedad">Gravedad</label>
+          <select class="form-select form-select-sm sub-filtro" id="filtroGravedad" name="criticidad">
+            <option value="">Todas</option>
+            {% for valor, etiqueta in criticidades %}
+              <option value="{{ valor }}" {% if valor in filtros.criticidades %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-6 col-lg-2">
+          <label class="form-label small mb-1" for="filtroEstado">Estado</label>
+          <select class="form-select form-select-sm sub-filtro" id="filtroEstado" name="estado">
+            <option value="">Pendientes y en revisión</option>
+            {% for valor, etiqueta in estados_disponibles %}
+              <option value="{{ valor }}" {% if valor in filtros.estados %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+        <div class="form-check mb-0">
+          <input class="form-check-input sub-filtro" type="checkbox" id="filtroSoloCriticos"
+                 name="solo_criticos" value="1" {% if filtros.solo_criticos %}checked{% endif %}>
+          <label class="form-check-label small" for="filtroSoloCriticos">Solo críticos</label>
+        </div>
+        <div class="form-check mb-0">
+          <input class="form-check-input sub-filtro" type="checkbox" id="filtroArchivados"
+                 name="archivados" value="1" {% if filtros.archivados %}checked{% endif %}>
+          <label class="form-check-label small" for="filtroArchivados">
+            Incluir los ya resueltos (histórico)
+          </label>
+        </div>
+        <div class="d-flex align-items-center gap-2 ms-auto">
+          {% if filtros.hay_filtros %}
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    hx-get="{% url 'subsanacion:panel_hallazgos' %}"
+                    hx-target="#paneHallazgos" hx-swap="innerHTML">
+              <i class="bi bi-x-lg me-1"></i>Quitar filtros
+            </button>
+          {% endif %}
+
+          {% comment %} Enlaces normales, no HTMX: una descarga no se puede inyectar en el
+             DOM. Llevan la querystring actual para que el archivo contenga exactamente lo
+             que hay en pantalla, con sus filtros y su búsqueda. {% endcomment %}
+          {% if total_resultados %}
+            <a class="btn btn-sm btn-outline-success py-0 px-2"
+               href="{% url 'subsanacion:exportar_excel' %}?{{ querystring_completa }}"
+               title="Exporta los {{ total_resultados }} hallazgos filtrados">
+              <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </a>
+            <a class="btn btn-sm btn-outline-danger py-0 px-2"
+               href="{% url 'subsanacion:exportar_pdf' %}?{{ querystring_completa }}"
+               title="Exporta los {{ total_resultados }} hallazgos filtrados">
+              <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="sub-panel">
+  {% if hallazgos %}
+    <div class="table-responsive">
+      <table class="table table-hover sub-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Gravedad</th>
+            <th>Regla</th>
+            <th>Hallazgo</th>
+            <th>Categoría</th>
+            <th>Estado</th>
+            <th class="text-nowrap">Detectado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for hallazgo in hallazgos %}
+            <tr {% if not hallazgo.vigente %}class="opacity-50"{% endif %}>
+              <td>
+                <span class="sub-severidad sub-color-{{ hallazgo.color_criticidad }}">
+                  <i class="bi {{ hallazgo.icono_criticidad }}"></i>{{ hallazgo.get_criticidad_display }}
+                </span>
+              </td>
+              <td><code class="text-muted">{{ hallazgo.codigo_regla }}</code></td>
+              <td>
+                <div class="fw-semibold">{{ hallazgo.titulo }}</div>
+                {% if hallazgo.detalle %}
+                  <div class="text-muted" style="font-size: .75rem;">{{ hallazgo.detalle|truncatechars:130 }}</div>
+                {% endif %}
+                {% if not hallazgo.vigente %}
+                  <span class="badge bg-label-success mt-1" style="font-size: .625rem;">
+                    <i class="bi bi-archive me-1"></i>Ya no se detecta
+                  </span>
+                {% endif %}
+              </td>
+              <td class="text-nowrap">
+                <i class="bi {{ hallazgo.icono_modulo }} text-muted me-1"></i>{{ hallazgo.get_modulo_display }}
+              </td>
+              <td>
+                <span class="badge bg-label-{{ hallazgo.color_estado }}">{{ hallazgo.get_estado_display }}</span>
+              </td>
+              <td class="text-nowrap text-muted">
+                {{ hallazgo.ultima_deteccion|date:"d/m/Y H:i" }}
+                {% if hallazgo.veces_detectado > 1 %}
+                  <div style="font-size: .6875rem;">{{ hallazgo.veces_detectado }} veces</div>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2"
+                        hx-get="{% url 'subsanacion:detalle_hallazgo' hallazgo.pk %}"
+                        hx-target="#contenidoModalHallazgo" hx-swap="innerHTML"
+                        data-bs-toggle="modal" data-bs-target="#modalHallazgo">
+                  Ver detalle
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagina.paginator.num_pages > 1 %}
+      <div class="d-flex justify-content-between align-items-center p-3 border-top">
+        <small class="text-muted">
+          Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+          · {{ total_resultados }} hallazgo{{ total_resultados|pluralize }}
+        </small>
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {% if not pagina.has_previous %}disabled{% endif %}">
+              <button class="page-link"
+                      {% if pagina.has_previous %}
+                        hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.previous_page_number }}{{ querystring }}"
+                        hx-target="#paneHallazgos" hx-swap="innerHTML"
+                      {% endif %}>
+                <i class="bi bi-chevron-left"></i>
+              </button>
+            </li>
+            {% for numero in pagina.paginator.page_range %}
+              {% if numero == pagina.number %}
+                <li class="page-item active"><span class="page-link">{{ numero }}</span></li>
+              {% elif numero >= pagina.number|add:"-2" and numero <= pagina.number|add:"2" %}
+                <li class="page-item">
+                  <button class="page-link"
+                          hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ numero }}{{ querystring }}"
+                          hx-target="#paneHallazgos" hx-swap="innerHTML">{{ numero }}</button>
+                </li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagina.has_next %}disabled{% endif %}">
+              <button class="page-link"
+                      {% if pagina.has_next %}
+                        hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.next_page_number }}{{ querystring }}"
+                        hx-target="#paneHallazgos" hx-swap="innerHTML"
+                      {% endif %}>
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div class="sub-vacio">
+      {% if filtros.hay_filtros %}
+        <i class="bi bi-search"></i>
+        <div class="fw-semibold mb-1">Ningún hallazgo coincide con los filtros</div>
+        <div class="small">Pruebe a quitar algún filtro o a buscar otro término.</div>
+      {% else %}
+        <i class="bi bi-check2-circle text-success"></i>
+        <div class="fw-semibold mb-1">No hay hallazgos pendientes</div>
+        <div class="small">
+          Las reglas de diagnóstico no encontraron inconsistencias abiertas.
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

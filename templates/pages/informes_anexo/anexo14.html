@@ -1,0 +1,521 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load informe_inteligente_extras %}
+
+{% block title %}Anexo 14{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
+<style>
+    /* ===== BASE & WRAPPER ===== */
+    .anx-wrapper { font-size: .925rem; background: #f1f5f9; }
+
+    /* ===== HERO SECTION ===== */
+    .anx-hero {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #312e81 100%);
+        border-radius: .75rem;
+        color: #fff;
+        padding: 1.4rem 1.5rem;
+        margin-bottom: 1.25rem;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, .18);
+    }
+    .anx-hero h1 { font-weight: 800; letter-spacing: -.02em; margin-bottom: .2rem; color: #fff !important; }
+    .anx-hero p  { color: #cbd5e1 !important; margin-bottom: 0; }
+    .anx-hero-icono {
+        width: 46px; height: 46px; border-radius: .7rem;
+        background: rgba(255,255,255,.12);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.5rem; border: 1px solid rgba(255,255,255,.18);
+    }
+    .anx-btn-accion {
+        background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.25);
+        color: #fff; font-weight: 600;
+    }
+    .anx-btn-accion:hover { background: rgba(255,255,255,.2); color: #fff; }
+
+    /* ===== PANELS ===== */
+    .anx-panel {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: .6rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .06); margin-bottom: 1.25rem; overflow: hidden;
+    }
+    .anx-panel-head {
+        padding: .8rem 1.1rem; display: flex; justify-content: space-between; align-items: center;
+        gap: .75rem; background: #fff; border-bottom: 1px solid #e2e8f0;
+        font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: #334155;
+    }
+
+    /* ===== META CARDS ===== */
+    .anx-meta-card {
+        border-radius: 1rem; padding: .7rem .9rem; display: flex; align-items: center; gap: .7rem;
+        height: 100%;
+    }
+    .anx-meta-icono {
+        width: 38px; height: 38px; border-radius: .6rem; color: #fff;
+        display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .anx-meta-label { display: block; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .anx-meta-valor { display: block; font-size: .8rem; font-weight: 800; color: #1e293b; }
+
+    /* ===== GRID PERSONALIZADO PARA 7 COLUMNAS EN ESCRITORIO ===== */
+    @media (min-width: 1200px) {
+        .row-cols-xl-7 > * {
+            flex: 0 0 auto;
+            width: 14.2857142857%; /* 100% / 7 */
+        }
+    }
+
+    /* ===== TARJETAS KPI (CENTRADO + ICONOS A COLOR) ===== */
+    .anx-kpi {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-bottom: 3.5px solid var(--anx-c, #4f46e5);
+        border-radius: .6rem;
+        padding: .6rem .5rem;
+        height: 100%;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, .04);
+        display: flex;
+        flex-direction: column;
+        align-items: center;      /* Centra los elementos horizontalmente */
+        justify-content: center;  /* Centra los elementos verticalmente */
+        text-align: center;       /* Centra los textos */
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .anx-kpi:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(15, 23, 42, .08);
+    }
+    .anx-kpi-head {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: .35rem;
+    }
+    .anx-kpi-icono {
+        width: 32px;
+        height: 32px;
+        border-radius: .5rem;
+        background: var(--anx-c-bg, #eef2ff);
+        color: var(--anx-c, #4f46e5);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+    }
+    .anx-kpi-valor {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a;
+        letter-spacing: -.02em;
+        line-height: 1.1;
+        margin-bottom: .15rem;
+    }
+    .anx-kpi-label {
+        font-size: .62rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    /* ===== ARBOL Y TABLAS ===== */
+    .anx-tree-padre {
+        background: #0f172a; color: #fff; padding: .8rem 1.1rem;
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem;
+    }
+    .anx-tree-hija {
+        background: #f1f5f9; border-top: 2px solid #e2e8f0; border-bottom: 2px solid #e2e8f0;
+        padding: .6rem 1.1rem; display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap;
+        cursor: pointer;
+    }
+    .anx-tree-depto {
+        background: #eef2ff; padding: .5rem 1.1rem .5rem 2.4rem;
+        border-bottom: 1px solid #e0e7ff; font-weight: 700; font-size: .78rem;
+        color: #312e81; text-transform: uppercase; letter-spacing: .03em;
+    }
+    .anx-tree-cargo td { vertical-align: middle; }
+    .anx-tree-cargo.oculto { display: none; }
+
+    /* ===== BADGES Y FIRMAS ===== */
+    .anx-badge-cat { font-weight: 800; font-size: .72rem; padding: .2rem .55rem; border-radius: .4rem; }
+    .anx-cat-CDI, .anx-cat-CEJ { background: #f3e8ff; color: #7e22ce; }
+    .anx-cat-TEC { background: #e0f2fe; color: #0369a1; }
+    .anx-cat-ADM { background: #fef3c7; color: #b45309; }
+    .anx-cat-OPE { background: #ffe4e6; color: #be123c; }
+    .anx-cat-SER { background: #ecfdf5; color: #047857; }
+
+    .anx-firma-card {
+        background: #1e293b; border: 1px solid #334155; border-radius: 1rem; padding: 1rem;
+        display: flex; align-items: center; gap: 1rem; color: #fff;
+    }
+    .anx-firma-icono {
+        width: 46px; height: 46px; border-radius: .7rem; background: rgba(255,255,255,.1);
+        display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;
+    }
+
+    @media print {
+        .anx-no-print { display: none !important; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y anx-wrapper">
+
+    <!-- ===== CABECERA ===== -->
+    <div class="anx-hero d-md-flex justify-content-between align-items-center gap-3 anx-no-print">
+        <div class="d-flex align-items-center gap-3">
+            <span class="anx-hero-icono"><i class="bi bi-diagram-3-fill"></i></span>
+            <div>
+                <h1 class="h4 mb-0">Anexo 14 — Estructura Jerárquica y Plantilla Aprobada</h1>
+                <p>Documento oficial de estructura organizativa y plantilla de cargos aprobada.</p>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-md-0">
+            <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
+               href="{% url 'informes_anexo:anexo14_excel' %}?{{ request.GET.urlencode }}">
+                <i class="bi bi-file-earmark-excel-fill text-success"></i> Exportar Excel
+            </a>
+            <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
+               href="{% url 'informes_anexo:anexo14_pdf' %}?{{ request.GET.urlencode }}">
+                <i class="bi bi-file-earmark-pdf-fill text-danger"></i> Exportar PDF
+            </a>
+            <button type="button" class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2" onclick="window.print()">
+                <i class="bi bi-printer-fill"></i> Imprimir
+            </button>
+        </div>
+    </div>
+
+    <form method="get" id="formFiltrosAnexo14">
+        {% if filtros.director_ch_id %}<input type="hidden" name="director_ch" value="{{ filtros.director_ch_id }}">{% endif %}
+        {% if filtros.director_gral_id %}<input type="hidden" name="director_gral" value="{{ filtros.director_gral_id }}">{% endif %}
+
+        <!-- ===== METADATOS INSTITUCIONALES ===== -->
+        <div class="anx-panel">
+            <div class="anx-panel-head">
+                <span><i class="bi bi-bank2 me-1 text-warning"></i>Información institucional y delimitación territorial</span>
+            </div>
+            <div class="p-3">
+                <div class="row g-2">
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="anx-meta-card" style="background:#eef2ff;">
+                            <span class="anx-meta-icono" style="background:#4f46e5;"><i class="bi bi-building-fill"></i></span>
+                            <div class="overflow-hidden">
+                                <span class="anx-meta-label" style="color:#4f46e5;">Empresa</span>
+                                <span class="anx-meta-valor text-truncate d-block">{{ configuracion.nombre_empresa|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="anx-meta-card" style="background:#fff7ed;">
+                            <span class="anx-meta-icono" style="background:#f97316;"><i class="bi bi-diagram-2-fill"></i></span>
+                            <div class="overflow-hidden">
+                                <span class="anx-meta-label" style="color:#c2410c;">Organismo</span>
+                                <span class="anx-meta-valor text-truncate d-block">{{ configuracion.org_superior|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="anx-meta-card" style="background:#ecfdf5;">
+                            <span class="anx-meta-icono" style="background:#059669;"><i class="bi bi-geo-alt-fill"></i></span>
+                            <div class="overflow-hidden">
+                                <span class="anx-meta-label" style="color:#059669;">Provincia</span>
+                                <span class="anx-meta-valor text-truncate d-block">{{ padre_actual.municipio.provincia.nombre|default:"Sin definir" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="anx-meta-card" style="background:#e0f2fe;">
+                            <span class="anx-meta-icono" style="background:#0284c7;"><i class="bi bi-buildings-fill"></i></span>
+                            <div class="overflow-hidden">
+                                <span class="anx-meta-label" style="color:#0284c7;">Municipio</span>
+                                <span class="anx-meta-valor text-truncate d-block">{{ padre_actual.municipio.nombre|default:"Sin definir" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <div class="anx-meta-card" style="background:#f3e8ff;">
+                            <span class="anx-meta-icono" style="background:#9333ea;"><i class="bi bi-upc"></i></span>
+                            <div class="overflow-hidden">
+                                <span class="anx-meta-label" style="color:#9333ea;">REUP</span>
+                                <span class="anx-meta-valor text-truncate d-block font-monospace">{{ configuracion.reup|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if mostrar_selector_padre %}
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <label class="anx-meta-label text-muted mb-1"><i class="bi bi-diagram-3 me-1"></i>Unidad Organizativa</label>
+                        <select name="padre" class="form-select form-select-sm" onchange="this.form.submit()">
+                            {% for p in padres %}
+                                <option value="{{ p.pk }}" {% if padre_actual.pk == p.pk %}selected{% endif %}>{{ p.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    <div class="col-6 col-md-4 col-xl-2">
+                        <label class="anx-meta-label text-muted mb-1"><i class="bi bi-diagram-3 me-1"></i>Subunidad</label>
+                        <select name="unidad" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">{{ padre_actual.descripcion|default:"Todas" }} (Todas)</option>
+                            {% for h in hijas_todas %}
+                                <option value="{{ h.pk }}" {% if filtros.unidad_hija_id == h.pk|stringformat:"s" %}selected{% endif %}>{{ h.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== KPIs COMPACTOS CENTRADOS A COLOR ===== -->
+        <div class="anx-panel p-25">
+            <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-xl-7 g-2">
+                
+                <!-- 1. TOTAL CARGOS (Indigo) -->
+                <div>
+                    <div class="anx-kpi" style="--anx-c:#6366f1; --anx-c-bg:#eef2ff;">
+                        <div class="anx-kpi-head">
+                            <span class="anx-kpi-icono"><i class="bi bi-briefcase-fill"></i></span>
+                        </div>
+                        <div>
+                            <div class="anx-kpi-valor">{{ kpis.total_cargos }}</div>
+                            <div class="anx-kpi-label" title="Total Cargos">Total Cargos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2 a 6. CATEGORÍAS OCUPACIONALES CON EVALUACIÓN DE CLAVE EN MAYÚSCULAS Y MINÚSCULAS -->
+                {% for clave, etiqueta, categorias in categorias_kpi %}
+                <div>
+                    {% if clave|upper == 'C' or 'CUADRO' in etiqueta|upper %}
+                        <!-- CUADROS (Púrpura) -->
+                        <div class="anx-kpi" style="--anx-c:#9333ea; --anx-c-bg:#f3e8ff;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-person-workspace"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+
+                    {% elif clave|upper == 'T' or 'TÉCNICO' in etiqueta|upper or 'TECNICO' in etiqueta|upper %}
+                        <!-- TÉCNICOS (Azul Sky) -->
+                        <div class="anx-kpi" style="--anx-c:#0284c7; --anx-c-bg:#e0f2fe;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-gear-wide-connected"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+
+                    {% elif clave|upper == 'A' or 'ADMIN' in etiqueta|upper %}
+                        <!-- ADMINISTRATIVOS (Ámbar) -->
+                        <div class="anx-kpi" style="--anx-c:#d97706; --anx-c-bg:#fef3c7;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-file-earmark-text-fill"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+
+                    {% elif clave|upper == 'O' or 'OBRERO' in etiqueta|upper %}
+                        <!-- OBREROS (Rojo / Rose) -->
+                        <div class="anx-kpi" style="--anx-c:#e11d48; --anx-c-bg:#ffe4e6;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-tools"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+
+                    {% elif clave|upper == 'S' or 'SERVICIO' in etiqueta|upper %}
+                        <!-- SERVICIO (Esmeralda) -->
+                        <div class="anx-kpi" style="--anx-c:#059669; --anx-c-bg:#ecfdf5;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-headset"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+
+                    {% else %}
+                        <!-- FALLBACK DINÁMICO (Si viene otra categoría, asignamos un tono Slate con icono de usuario) -->
+                        <div class="anx-kpi" style="--anx-c:#64748b; --anx-c-bg:#f1f5f9;">
+                            <div class="anx-kpi-head">
+                                <span class="anx-kpi-icono"><i class="bi bi-person-badge-fill"></i></span>
+                            </div>
+                            <div>
+                                <div class="anx-kpi-valor">{{ kpis.conteos|get_item:clave }}</div>
+                                <div class="anx-kpi-label" title="{{ etiqueta }}">{{ etiqueta }}</div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <!-- 7. UNIDADES ORG. (Verde Jade) -->
+                <div>
+                    <div class="anx-kpi" style="--anx-c:#10b981; --anx-c-bg:#d1fae5;">
+                        <div class="anx-kpi-head">
+                            <span class="anx-kpi-icono"><i class="bi bi-diagram-3-fill"></i></span>
+                        </div>
+                        <div>
+                            <div class="anx-kpi-valor">{{ kpis.total_unidades }}</div>
+                            <div class="anx-kpi-label" title="Unidades Org.">Unidades Org.</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ===== FILTROS ===== -->
+        <div class="anx-panel p-3 anx-no-print">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="anx-meta-label text-muted mb-1"><i class="bi bi-search me-1"></i>Búsqueda de cargo</label>
+                    <input type="text" name="q" value="{{ filtros.busqueda }}" placeholder="Ej: Director, Especialista..." class="form-control form-control-sm">
+                </div>
+                <div class="col-md-3">
+                    <label class="anx-meta-label text-muted mb-1">Categoría Ocupacional</label>
+                    <select name="categoria" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="ALL" {% if filtros.categoria == "ALL" %}selected{% endif %}>Todas las categorías</option>
+                        {% for valor, etiqueta in opciones_filtro_categoria %}
+                            <option value="{{ valor }}" {% if filtros.categoria == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="anx-meta-label text-muted mb-1">Rol Estructural</label>
+                    <select name="rol" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="ALL" {% if filtros.rol == "ALL" %}selected{% endif %}>Todos los roles</option>
+                        <option value="Decisorio" {% if filtros.rol == "Decisorio" %}selected{% endif %}>Decisorio</option>
+                        <option value="Fundamental" {% if filtros.rol == "Fundamental" %}selected{% endif %}>Fundamental</option>
+                        <option value="Apoyo" {% if filtros.rol == "Apoyo" %}selected{% endif %}>Apoyo</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="bi bi-funnel-fill me-1"></i>Filtrar</button>
+                    <a href="{% url 'informes_anexo:anexo14' %}" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-arrow-counterclockwise"></i></a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- ===== ÁRBOL ===== -->
+    <div class="anx-panel">
+        <div class="anx-tree-padre">
+            <div>
+                <span class="text-uppercase small" style="color:#a5b4fc;">Unidad Organizativa</span>
+                <h2 class="h6 mb-0 fw-black">{{ padre_actual.descripcion|default:"Sin unidad organizativa configurada" }}</h2>
+            </div>
+        </div>
+
+        {% if not hijas %}
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inboxes display-6 d-block mb-2"></i>
+                No se encontraron cargos que coincidan con los filtros aplicados.
+            </div>
+        {% endif %}
+
+        {% for hija in hijas %}
+            <div class="anx-tree-hija" data-bs-toggle="collapse" data-bs-target="#hija-{{ hija.pk }}">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-chevron-down"></i>
+                    <strong class="text-uppercase small">{{ hija.descripcion }}</strong>
+                    <span class="badge bg-indigo text-bg-primary">{{ hija.departamentos_con_cargos|length }} deptos</span>
+                </div>
+            </div>
+            <div class="collapse show" id="hija-{{ hija.pk }}">
+                {% for depto in hija.departamentos_con_cargos %}
+                    <div class="anx-tree-depto">
+                        <i class="bi bi-folder2-open me-1"></i>{{ depto.descripcion }}
+                        <span class="badge bg-white text-dark border ms-1">{{ depto.cargos_filtrados|length }} cargos</span>
+                    </div>
+                    <table class="table table-sm table-hover mb-0">
+                        <tbody>
+                        {% for cargo in depto.cargos_filtrados %}
+                            <tr class="anx-tree-cargo">
+                                <td class="ps-5">{{ cargo.ncargo.descripcion }}</td>
+                                <td class="text-center" style="width:110px;">
+                                    <span class="anx-badge-cat anx-cat-{{ cargo.ncargo.cat_ocupacional }}">{{ etiquetas_categoria|get_item:cargo.ncargo.cat_ocupacional }}</span>
+                                </td>
+                                <td class="text-center fw-bold" style="width:90px;">{{ cargo.cant_aprobada }}</td>
+                                <td style="width:120px;">{{ cargo.rol.tipo|default:"—" }}</td>
+                                <td>{{ cargo.nivel_preparacion.nombre|default:"" }}</td>
+                                <td class="text-center font-monospace" style="width:90px;">{{ cargo.ncargo.grupo_escala.nivel }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- ===== FIRMAS ===== -->
+    <div class="anx-panel p-4" style="background:#0f172a;">
+        <div class="text-center mb-3">
+            <span class="text-uppercase small fw-bold" style="color:#a5b4fc;">Firmas y conformidad institucional</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="anx-firma-card">
+                    <span class="anx-firma-icono"><i class="bi bi-person-vcard-fill"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_ch.titulo }}</div>
+                        {% if director_ch.aspirante %}
+                            <div class="fw-bold">{{ director_ch.aspirante.nombre }} {{ director_ch.aspirante.papellido }} {{ director_ch.aspirante.sapellido }}</div>
+                        {% else %}
+                            {% if not director_ch.cargo_existe %}
+                                <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director de Capital Humano" en el nomenclador.</div>
+                            {% endif %}
+                            <select name="director_ch" form="formFiltrosAnexo14" class="form-select form-select-sm" onchange="document.getElementById('formFiltrosAnexo14').submit()">
+                                <option value="">Seleccione manualmente...</option>
+                                {% for a in aspirantes_cuadro %}
+                                    <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>
+                                {% endfor %}
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="anx-firma-card">
+                    <span class="anx-firma-icono"><i class="bi bi-person-check-fill"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_gral.titulo }}</div>
+                        {% if director_gral.aspirante %}
+                            <div class="fw-bold">{{ director_gral.aspirante.nombre }} {{ director_gral.aspirante.papellido }} {{ director_gral.aspirante.sapellido }}</div>
+                        {% else %}
+                            {% if not director_gral.cargo_existe %}
+                                <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director General" en el nomenclador.</div>
+                            {% endif %}
+                            <select name="director_gral" form="formFiltrosAnexo14" class="form-select form-select-sm" onchange="document.getElementById('formFiltrosAnexo14').submit()">
+                                <option value="">Seleccione manualmente...</option>
+                                {% for a in aspirantes_cuadro %}
+                                    <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>
+                                {% endfor %}
+                            </select>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,8 +1,9 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
-from .models import CustomUser
+from .models import CustomUser, PreferenciasUsuario
 from django.contrib.auth.forms import AuthenticationForm
 from contratos.models import CAlta
+from core.validators import validar_imagen
 class CustomUserCreationForm(UserCreationForm):
 
     contrato = forms.ModelChoiceField(
@@ -136,6 +137,53 @@ class CustomPasswordChangeForm(forms.Form):
         if new_password1 != new_password2:
             raise ValidationError("Las contraseñas no coinciden.")
         return new_password2
+
+class AvatarForm(forms.ModelForm):
+    """Subida o cambio de la foto de perfil del propio usuario."""
+
+    TAMANO_MAXIMO_MB = 2
+
+    # El campo se declara a mano para poder traducir los mensajes de Django.
+    # El proyecto tiene LANGUAGE_CODE = 'en-us', así que los textos por defecto
+    # ("Upload a valid image...") saldrían en inglés.
+    avatar = forms.ImageField(
+        required=True,
+        label='Foto de perfil',
+        error_messages={
+            'required': "Debe seleccionar una imagen.",
+            'invalid': "El archivo seleccionado no es una imagen válida.",
+            'invalid_image': (
+                "El archivo seleccionado no es una imagen válida o está dañado. "
+                "Use una imagen JPG, PNG o WEBP."
+            ),
+            'missing': "No se recibió ningún archivo.",
+            'empty': "El archivo enviado está vacío.",
+        },
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': 'image/jpeg,image/png,image/webp',
+        })
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = ('avatar',)
+
+    def clean_avatar(self):
+        return validar_imagen(self.cleaned_data.get('avatar'), self.TAMANO_MAXIMO_MB)
+
+
+class PreferenciasUsuarioForm(forms.ModelForm):
+    """Preferencias personales de interfaz."""
+
+    class Meta:
+        model = PreferenciasUsuario
+        fields = ('sidebar_colapsada', 'animaciones_activas')
+        widgets = {
+            'sidebar_colapsada': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'animaciones_activas': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
 
 class CustomAuthenticationForm(AuthenticationForm):
     error_messages = {

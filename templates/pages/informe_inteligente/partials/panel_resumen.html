@@ -1,0 +1,67 @@
+<div class="ii-resumen" data-total-registros="{{ total_registros }}">
+
+    <div class="ii-resumen-cabecera">
+        <span class="ii-resumen-titulo">
+            <i class="bi bi-stars"></i> Resumen del informe
+        </span>
+        <span class="ii-resumen-nota">Calculado sobre los registros que cumplen los filtros aplicados</span>
+    </div>
+
+    <!-- ===== TARJETAS DE INDICADORES ===== -->
+    <div class="row g-3 px-3 pt-3">
+        {% for indicador in indicadores %}
+            <div class="col-6 col-lg">
+                <div class="ii-kpi ii-color-{{ indicador.color }}">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="ii-kpi-icono"><i class="bi {{ indicador.icono }}"></i></span>
+                        {% if indicador.porcentaje != None %}
+                            <span class="ii-kpi-pct">{{ indicador.porcentaje }}%</span>
+                        {% endif %}
+                    </div>
+                    <div class="ii-kpi-valor">{{ indicador.valor }}</div>
+                    <div class="ii-kpi-label">{{ indicador.label }}</div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- ===== DESGLOSES POR CAMPO (uno o varios, elegidos en "Desglosar por") ===== -->
+    {% if desgloses %}
+    <div class="p-3">
+        <div class="row g-3">
+            {% for grupo in desgloses %}
+            <div class="col-12 col-lg-6">
+                <div class="ii-desglose h-100">
+                    <div class="ii-desglose-cabecera">
+                        <span><i class="bi bi-diagram-3-fill me-1"></i>Desglose por {{ grupo.etiqueta|lower }}</span>
+                        <span class="ii-desglose-total">{{ grupo.filas|length }} grupo{{ grupo.filas|length|pluralize:"s" }}</span>
+                    </div>
+
+                    <div class="ii-desglose-cuerpo">
+                        {% for fila in grupo.filas %}
+                            <div class="ii-desglose-fila">
+                                <div class="ii-desglose-nombre">
+                                    {% if fila.valor == None or fila.valor == '' %}
+                                        <span class="text-muted fst-italic">Sin definir</span>
+                                    {% else %}
+                                        {{ fila.valor }}
+                                    {% endif %}
+                                </div>
+                                <div class="ii-desglose-barra">
+                                    <div class="ii-desglose-relleno" style="width: {{ fila.porcentaje }}%;"></div>
+                                </div>
+                                <div class="ii-desglose-cifras">
+                                    <span class="ii-desglose-cantidad">{{ fila.cantidad }}</span>
+                                    <span class="ii-desglose-pct">{{ fila.porcentaje }}%</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>

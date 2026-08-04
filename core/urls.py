@@ -14,6 +14,7 @@ urlpatterns = [
     # ---------------------------------------------------------
     path('informes/', include('informes.urls')),
     path('informe-inteligente/', include('informe_inteligente.urls')),
+    path('informes-anexo/', include('informes_anexo.urls')),
 
     # ---------------------------------------------------------
     # MÓDULOS DE LA APLICACIÓN
@@ -27,6 +28,8 @@ urlpatterns = [
     path('notificaciones/', include('notificaciones.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),
+    path('soporte/', include('soporte.urls')),
+    path('subsanacion/', include('subsanacion.urls')),
     
     # SISTEMA DE AUTENTICACIÓN
     path('accounts/login/', CustomLoginView.as_view(), name='login'),

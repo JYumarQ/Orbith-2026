@@ -1,0 +1,10 @@
+{% comment %} Error como fragmento, con su código de estado HTTP.
+
+   Mismo patrón que `error_configuracion.html` de Informe Inteligente: el mismo swap de
+   HTMX que iba a mostrar el resultado muestra el mensaje, siempre en español y nunca
+   como un 500 opaco. {% endcomment %}
+
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-0" role="alert">
+  <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+  <div class="small">{{ mensaje }}</div>
+</div>

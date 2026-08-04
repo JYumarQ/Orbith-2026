@@ -24,8 +24,6 @@ class Base(models.Model):
     def save(self, *args, **kwargs):
         # Obtiene el usuario actual guardado por el middleware
         user = get_current_user()
-        # DEBUG: ver en consola el estado y usuario
-        print(f"[AUDIT] {self.__class__.__name__} adding={self._state.adding}, pk={self.pk}, user={user}")
 
         if user:
             # Solo asignar created_by en inserciones nuevas
@@ -35,5 +33,3 @@ class Base(models.Model):
             self.updated_by = user
 
         super().save(*args, **kwargs)  # Llama al save original
-
-# Al confirmar que funciona, puedes eliminar el print de DEBUG

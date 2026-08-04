@@ -1,0 +1,56 @@
+{# Panel «Ejecutar nuevo análisis»: el botón de arranque, o el aviso de que ya hay uno. #}
+
+<div class="sub-panel">
+  <div class="sub-panel-head sub-color-indigo">
+    <span class="sub-icono-chip"><i class="bi bi-play-circle"></i></span>
+    <h6 class="sub-panel-title">Analizar la base de datos</h6>
+    <span class="badge bg-label-secondary ms-auto">
+      {{ total_reglas }} regla{{ total_reglas|pluralize }}
+    </span>
+  </div>
+
+  <div class="p-3" id="zonaAnalisis">
+    {% if ejecucion_en_curso %}
+      <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-0">
+        <div class="spinner-border spinner-border-sm"></div>
+        <div class="small">
+          Ya hay un análisis en curso, iniciado el
+          <strong>{{ ejecucion_en_curso.iniciada_en|date:"d/m/Y H:i" }}</strong>.
+          Espere a que termine antes de lanzar otro.
+        </div>
+      </div>
+    {% else %}
+      <p class="small text-muted">
+        El análisis revisa las categorías una por una. Cada categoría se procesa en una
+        petición independiente, así que verá el avance en vivo y ninguna consulta se
+        prolonga más de lo debido.
+        <strong>El análisis solo lee datos: no modifica nada.</strong>
+      </p>
+
+      <div class="row g-2 mb-3">
+        {% for clave, etiqueta, icono in modulos %}
+          <div class="col-6 col-md-4 col-xl-3">
+            <div class="d-flex align-items-center gap-2 small text-muted">
+              <i class="bi {{ icono }}"></i>{{ etiqueta }}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if ultima %}
+        <p class="small text-muted">
+          El último análisis fue el {{ ultima.iniciada_en|date:"d/m/Y H:i" }}
+          y tardó
+          {% if ultima.duracion_segundos %}{{ ultima.duracion_segundos }} segundos{% else %}—{% endif %}.
+        </p>
+      {% endif %}
+
+      <button class="btn btn-primary"
+              hx-post="{% url 'subsanacion:iniciar_analisis' %}"
+              hx-target="#zonaAnalisis" hx-swap="innerHTML"
+              hx-disabled-elt="this">
+        <i class="bi bi-play-fill me-1"></i>Analizar la base de datos
+      </button>
+    {% endif %}
+  </div>
+</div>

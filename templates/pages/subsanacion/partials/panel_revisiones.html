@@ -1,0 +1,115 @@
+{# Historial de revisiones del módulo. NO es la Auditoría del sistema. #}
+
+<div class="sub-panel">
+  <div class="sub-panel-head">
+    <span class="sub-icono-chip"><i class="bi bi-clock-history"></i></span>
+    <h6 class="sub-panel-title">Historial de revisiones</h6>
+    <span class="badge sub-badge-contador ms-auto">{{ total_resultados }}</span>
+  </div>
+
+  <div class="px-3 pt-2 pb-1">
+    <p class="small text-muted mb-0">
+      Cada cambio de estado de un hallazgo queda registrado aquí: quién, cuándo, de qué
+      estado a cuál y con qué observación. Las marcadas como
+      <span class="badge bg-label-secondary">Automática</span> las hizo el propio motor
+      al detectar que un hallazgo reapareció o dejó de detectarse.
+    </p>
+  </div>
+
+  {% if revisiones %}
+    <div class="table-responsive">
+      <table class="table table-hover sub-table mb-0 align-middle">
+        <thead>
+          <tr>
+            <th style="width: 140px;">Fecha</th>
+            <th style="width: 150px;">Usuario</th>
+            <th style="width: 180px;">Cambio</th>
+            <th>Hallazgo</th>
+            <th>Observación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for revision in revisiones %}
+            <tr>
+              <td class="text-nowrap small text-muted">
+                {{ revision.fecha|date:"d/m/Y" }}<br>
+                <span style="font-size: .75rem;">{{ revision.fecha|date:"H:i" }}</span>
+              </td>
+              <td class="small">
+                {% if revision.automatica %}
+                  <span class="badge bg-label-secondary">Automática</span>
+                {% elif revision.usuario %}
+                  <i class="bi bi-person-fill text-muted me-1"></i>{{ revision.usuario.username }}
+                {% else %}
+                  <span class="text-muted">Usuario eliminado</span>
+                {% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if revision.estado_anterior == revision.estado_nuevo %}
+                  {# Ocurre al archivar un hallazgo de una regla retirada: el estado no
+                     cambia, lo que cambia es que deja de comprobarse. #}
+                  <span class="badge bg-label-secondary">
+                    {{ revision.get_estado_nuevo_display }}
+                  </span>
+                  <span class="text-muted ms-1" style="font-size: .75rem;">· archivado</span>
+                {% else %}
+                  <span class="text-muted">{{ revision.get_estado_anterior_display }}</span>
+                  <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                  <strong>{{ revision.get_estado_nuevo_display }}</strong>
+                {% endif %}
+              </td>
+              <td class="small">
+                <a href="{% url 'subsanacion:index' %}?hallazgo={{ revision.hallazgo_id }}"
+                   class="text-decoration-none"
+                   hx-get="{% url 'subsanacion:detalle_hallazgo' revision.hallazgo_id %}"
+                   hx-target="#modalDetalleCuerpo"
+                   hx-swap="innerHTML"
+                   data-bs-toggle="modal"
+                   data-bs-target="#modalDetalle">
+                  <span class="sub-codigo">{{ revision.hallazgo.codigo_regla }}</span>
+                  {{ revision.hallazgo.titulo|truncatechars:70 }}
+                </a>
+              </td>
+              <td class="small text-muted">
+                {{ revision.nota|default:"—"|truncatechars:120 }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if pagina.has_other_pages %}
+      <div class="d-flex justify-content-center py-3">
+        <ul class="pagination pagination-sm mb-0">
+          {% if pagina.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="#"
+                 hx-get="{% url 'subsanacion:panel_revisiones' %}?pagina={{ pagina.previous_page_number }}"
+                 hx-target="#panelRevisiones" hx-swap="innerHTML">&laquo;</a>
+            </li>
+          {% endif %}
+          <li class="page-item active">
+            <span class="page-link">{{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+          </li>
+          {% if pagina.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="#"
+                 hx-get="{% url 'subsanacion:panel_revisiones' %}?pagina={{ pagina.next_page_number }}"
+                 hx-target="#panelRevisiones" hx-swap="innerHTML">&raquo;</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div class="text-center py-5">
+      <i class="bi bi-clock-history text-muted" style="font-size: 2.5rem; opacity: .35;"></i>
+      <p class="text-muted mt-3 mb-0">Todavía no se ha revisado ningún hallazgo.</p>
+      <p class="text-muted small">
+        Cuando marque un hallazgo como revisado, ignorado o falso positivo, aparecerá aquí.
+      </p>
+    </div>
+  {% endif %}
+</div>

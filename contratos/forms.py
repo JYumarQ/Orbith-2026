@@ -1,9 +1,27 @@
 from django import forms
+from django.db.models import Count, Q
 from django.urls import reverse_lazy
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
 from nomencladores.models import NRol, NTipoContrato, NCondicionLaboralAnormal
 import json
+
+def _optimizar_queryset_cargos(queryset):
+    """Prepara el queryset de cargos para pintar el desplegable sin N+1.
+
+    Cada opción necesita el nombre del cargo (ncargo), su grupo escala y el número
+    de plazas ocupadas. Sin esto se lanzaban tres consultas por cargo: una por
+    __str__ (ncargo.descripcion), otra por el grupo escala y otra por la property
+    plazas_fijas. 'count_ind' es precisamente el atajo que plazas_fijas reconoce.
+    """
+    return queryset.select_related('ncargo', 'ncargo__grupo_escala').annotate(
+        count_ind=Count(
+            'calta',
+            filter=Q(calta__tipo__ocupa_plaza=True, calta__aspirante__estado='ACTIVO'),
+            distinct=True,
+        )
+    )
+
 
 class CLAModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
@@ -302,8 +320,9 @@ class CAltaForm(forms.ModelForm):
 
         # B) LA CURA DE EDICIÓN: Si el form ya trae cargos precargados, les amarramos el mapa numérico
         if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
-            cargos_qs = self.fields['cargo'].queryset
-            
+            cargos_qs = _optimizar_queryset_cargos(self.fields['cargo'].queryset)
+            self.fields['cargo'].queryset = cargos_qs
+
             mapa = {}
             for c in cargos_qs:
                 grupo = ""
@@ -374,6 +393,17 @@ class CAltaForm(forms.ModelForm):
             if not tridente:
                 self.add_error('tridente', "El tridente es obligatorio para un salario dinámico en este cargo.")
 
+        # --- 1.b MOTIVO OBLIGATORIO SEGÚN EL TIPO DE CONTRATO ---
+        # Hasta ahora esto solo lo controlaba el JavaScript: si el campo llegaba vacío
+        # (o deshabilitado, y por tanto sin enviarse), el contrato se guardaba con
+        # motivo NULL sin ningún aviso. El servidor debe ser el que decida.
+        if 'motivo' in self.fields and tipo_contrato and tipo_contrato.requiere_motivo:
+            if not cleaned_data.get('motivo'):
+                self.add_error(
+                    'motivo',
+                    f'Debe seleccionar un motivo para los contratos de tipo "{tipo_contrato.descripcion}".'
+                )
+
         # --- 2. VALIDACIÓN DE CAPACIDAD (Intacta) ---
         if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
             check_capacity = True
@@ -413,9 +443,23 @@ class MovimientoForm(CAltaForm):
         fields = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo', 'duracion', 
                   'tipo_salario', 'tridente', 'fecha_efectiva', 'fecha_solicitud', 'observaciones')
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, unidad_id=None, departamento_id=None, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
+        # Los combos dependientes se pueblan AQUÍ, no desde la vista después de
+        # construir el formulario. El bloque B de más abajo arma el mapa de plazas
+        # recorriendo el queryset de 'cargo': si todavía estuviera vacío, las <option>
+        # saldrían sin data-aprobadas/data-ocupadas y el JS del modal vaciaría el
+        # cargo creyendo que el puesto está lleno (0/0).
+        if unidad_id:
+            f_dpto_dep = self.fields['departamento']
+            if isinstance(f_dpto_dep, forms.ModelChoiceField):
+                f_dpto_dep.queryset = Departamento.objects.filter(unidad_organizativa_id=unidad_id)
+        if departamento_id:
+            f_cargo_dep = self.fields['cargo']
+            if isinstance(f_cargo_dep, forms.ModelChoiceField):
+                f_cargo_dep.queryset = CargoPlantilla.objects.filter(departamento_id=departamento_id)
+
         # 1. Bloquear Expediente (Read Only)
         if 'no_expediente' in self.fields:
             self.fields['no_expediente'].widget.attrs['readonly'] = 'readonly'
@@ -454,8 +498,9 @@ class MovimientoForm(CAltaForm):
 
         # B) LA CURA DE MOVIMIENTOS:
         if 'cargo' in self.fields and self.fields['cargo'].queryset.exists():
-            cargos_qs = self.fields['cargo'].queryset
-            
+            cargos_qs = _optimizar_queryset_cargos(self.fields['cargo'].queryset)
+            self.fields['cargo'].queryset = cargos_qs
+
             mapa = {}
             for c in cargos_qs:
                 grupo = ""

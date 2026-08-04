@@ -32,6 +32,7 @@ Estados: 'vacio' | 'invalido' | 'libre' | 'ocupado' | 'desconocido'
     const rutaBase   = "{% url ruta_validacion %}";
     const paramNombre = "{{ param_nombre|default:'' }}";
     const paramOrigen = "{{ param_origen|default:'' }}";
+    const paramValor  = "{{ param_valor|default:'' }}";
 
     // Si se indicó un selector, el valor se lee del DOM en cada comprobación
     // (necesario cuando el ámbito puede cambiar mientras se rellena el formulario)
@@ -98,7 +99,23 @@ Estados: 'vacio' | 'invalido' | 'libre' | 'ocupado' | 'desconocido'
 
         pintar('comprobando', '');
 
-        return fetch(construirUrl(valor))
+        // La URL se construye ANTES del fetch, envuelta en su propio
+        // try/catch: si algo aquí lanzara una excepción (parámetro mal
+        // configurado, selector inexistente...), un fetch(construirUrl(...))
+        // directo la propagaría de forma síncrona y comprobarOrden() no
+        // devolvería ninguna promesa — dejando el mensaje congelado en
+        // "Comprobando…" para siempre y rompiendo el .then() de quien la
+        // llama (por ejemplo, el botón de guardar). Así, cualquier fallo cae
+        // siempre en un estado controlado.
+        let url;
+        try {
+            url = construirUrl(valor);
+        } catch (err) {
+            pintar('vacio', '');
+            return Promise.resolve({ estado: 'desconocido', mensaje: '' });
+        }
+
+        return fetch(url)
             .then(res => res.json())
             .then(data => {
                 const estado = data.ocupado ? 'ocupado' : 'libre';

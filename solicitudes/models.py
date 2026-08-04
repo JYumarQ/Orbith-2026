@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -6,6 +8,7 @@ from notificaciones.models import Notificacion
 from strorganizativa.models import CargoPlantilla
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 class TipoSolicitud(models.TextChoices):
     CREACION = 'ADD', 'Creacion'
@@ -42,14 +45,28 @@ class SolicitudCargo(Solicitud):
         super().save(*args, **kwargs)
 
         if es_nuevo:
-            Notificacion.objects.create(
-                titulo= 'Nueva Solicitud Pendiente',
-                mensaje = f"Se ha creado una nueva solicitud de "
-                          f"{self.get_tipo_display()}.",
-                content_type = ContentType.objects.get_for_model(self),
-                object_id=str(self.pk),
-                unidad = self.cargo_origen.departamento.unidad_organizativa
-            )
+            from notificaciones.destinatarios import destinatarios_de_unidad
+
+            unidad = self.cargo_origen.departamento.unidad_organizativa
+            destinatarios = list(destinatarios_de_unidad(unidad))
+            if not destinatarios:
+                logger.warning(
+                    "Nueva solicitud %s sin ningún destinatario que notificar "
+                    "(unidad=%s sin moderador ni administradores activos).",
+                    self.pk, unidad)
+            else:
+                Notificacion.objects.bulk_create([
+                    Notificacion(
+                        titulo='Nueva Solicitud Pendiente',
+                        mensaje=f"Se ha creado una nueva solicitud de "
+                                f"{self.get_tipo_display()}.",
+                        tipo=Notificacion.Tipo.EVENTO,
+                        content_type=ContentType.objects.get_for_model(self),
+                        object_id=str(self.pk),
+                        unidad=unidad, destinatario=destinatario,
+                    )
+                    for destinatario in destinatarios
+                ])
 
     def __str__(self):
         return f"{self.get_tipo_display()} {self.cargo_origen} ({self.get_estado_display()})"

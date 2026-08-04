@@ -1,28 +1,94 @@
 {% load static %}
-{% if user.is_authenticated  %}
+{% if user.is_authenticated %}
+{% comment %}
+En el dashboard la barra ocupa su sitio en el flujo normal; en el resto de
+páginas se superpone al contenido (así lo hacía el diseño original). Ese modo
+"flotante" es el que obliga a reservar espacio para los iconos anclados, por eso
+la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
+{% endcomment %}
 {% with route_name=request.resolver_match.url_name %}
   <nav
     class="layout-navbar container-xxl navbar navbar-expand-xl navbar-detached align-items-center"
     id="layout-navbar"
     style="
-      background-color: transparent !important; 
+      background-color: transparent !important;
       box-shadow: none !important;
       backdrop-filter: none !important;
       color: #566a7f !important;
-      
+
       {% if route_name != 'dashboard' and route_name != 'index' %}
-         position: absolute; 
-         top: 0; 
-         left: 0; 
+         position: absolute;
+         top: 0;
+         left: 0;
          right: 0;
          z-index: 1050;
          pointer-events: none; /* Deja pasar clics al titulo de abajo */
       {% endif %}
     "
     >
+
     <style>
-      #layout-navbar .navbar-nav { pointer-events: auto; }
+      /* Los iconos sí reciben clics aunque la barra los deje pasar. */
+      #layout-navbar .navbar-nav,
+      #layout-navbar #acciones-usuario { pointer-events: auto; }
       #layout-navbar a { color: inherit !important; } /* Asegura color gris */
+
+      /* ANCLAJE A LA DERECHA
+         El <nav> vive dentro de un .container-xxl, que en pantallas anchas se
+         centra con márgenes automáticos: por eso los iconos no llegaban al borde
+         real de la ventana y se solapaban con el contenido de la página.
+         Anclamos el grupo al viewport, independientemente del contenedor. */
+      #acciones-usuario {
+        position: fixed;
+        top: 1rem;
+        right: 1.5rem;
+        z-index: 1055;      /* por encima del contenido, por debajo de los modales */
+        display: flex;
+        align-items: center;
+        gap: .25rem;
+      }
+
+      /* Fondo propio para que los iconos se lean sobre cualquier contenido. */
+      #acciones-usuario {
+        background: rgba(255, 255, 255, .85);
+        backdrop-filter: blur(6px);
+        border-radius: 2rem;
+        padding: .15rem .35rem;
+        box-shadow: 0 .125rem .5rem rgba(161, 172, 184, .25);
+      }
+
+      @media (max-width: 1199.98px) {
+        #acciones-usuario { top: .75rem; right: .75rem; }
+      }
+
+      {% if route_name != 'dashboard' and route_name != 'index' %}
+      /* El grupo va anclado al viewport y flota sobre el contenido, así que hay
+         que reservarle sitio: sin esto, en pantallas estrechas el título de la
+         página queda justo debajo de los iconos. Se reserva arriba (no a la
+         derecha) para no recortar el ancho útil de las tablas.
+
+         Se repiten los :not([class^="pt-"]) del tema (core.css) por dos motivos:
+         para superar su especificidad —si no, gana él y esta regla no hace nada—
+         y para conservar su intención: una página que fije su propia clase pt-*
+         sigue mandando. */
+      .content-wrapper .container-p-y:not([class^="pt-"]):not([class*=" pt-"]),
+      .layout-page > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) {
+        padding-top: 4.25rem !important;
+      }
+      {% endif %}
+
+      /* Los desplegables se sacan del flujo con Popper, así que el anclaje del
+         contenedor no les afecta; solo aseguramos que queden por encima. */
+      #acciones-usuario .dropdown-menu { z-index: 1060; }
+
+      .orbith-avatar-preview {
+        width: 96px; height: 96px; object-fit: cover;
+        border-radius: 50%; border: 3px solid #fff;
+        box-shadow: 0 .125rem .5rem rgba(161, 172, 184, .4);
+      }
+      .orbith-dato-perfil { font-size: .8125rem; }
+      .orbith-dato-perfil dt { font-weight: 600; color: #566a7f; }
+      .orbith-dato-perfil dd { color: #8592a3; margin-bottom: .5rem; }
     </style>
 {% endwith %}
 
@@ -32,115 +98,143 @@
       </a>
     </div>
 
-    <div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
-      
-      <ul class="navbar-nav flex-row align-items-center ms-auto">
-        <li class="nav-item dropdown">
-          <a 
-            class="btn btn-m position-relative" 
-            href="#" 
-            id="notificacionesDropdown" 
-            role="button" 
-            data-bs-toggle="dropdown" 
-            aria-expanded="false"
-          >
-            <i class="fas fa-bell fa-2x"></i>
-            <span 
-              id="badge-notificaciones"
-              class="position-absolute badge rounded-pill bg-danger"
-              style="display: none; top: 0.25rem; right: 0.25rem; transform: none;"
-            >0
-              <span class="visually-hidden">notificaciones</span>
-            </span>
-          </a>
-          <ul id="menu-notificaciones" class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="notificacionesDropdown" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
-            <div id="lista-notificaciones">
-              <li class="text-center">Cargando notificaciones...</li>
-            </div>
-            <li><hr class="dropdown-divider"></li>
-            <li class="text-center">
-              <button 
-                class="btn btn-link" 
-                id="ver-mas-notificaciones" 
-                type="button"
-                data-bs-toggle="offcanvas" 
-                data-bs-target="#offcanvasNotificaciones"
-              >
-                Ver más
-              </button>
-            </li>
-          </ul>
-        </li>
-        <li class="nav-item navbar-dropdown dropdown-user dropdown position-relative">
-          <a
-            class="nav-link dropdown-toggle hide-arrow"
-            href="javascript:void(0);"
-            id="userDropdown"
-            role="button"
-            data-bs-toggle="dropdown" 
-            aria-expanded="false"
-          >
-            <div class="avatar avatar-online">
-              <img
-                src="{% static 'img/avatars/1.png' %}"
-                alt="Avatar"
-                class="w-px-40 h-auto rounded-circle"
-              />
-            </div>
-          </a>
+    {# Grupo anclado al borde derecho del viewport: notificaciones + usuario #}
+    <ul class="navbar-nav flex-row align-items-center" id="acciones-usuario">
+      <li class="nav-item dropdown">
+        <a
+          class="btn btn-m position-relative"
+          href="#"
+          id="notificacionesDropdown"
+          role="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          <i class="fas fa-bell fa-lg"></i>
+          <span
+            id="badge-notificaciones"
+            class="position-absolute badge rounded-pill bg-danger"
+            style="display: none; top: 0.1rem; right: 0.1rem; transform: none;"
+          >0
+            <span class="visually-hidden">notificaciones</span>
+          </span>
+        </a>
+        <ul id="menu-notificaciones" class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="notificacionesDropdown" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+          <div id="lista-notificaciones">
+            <li class="text-center">Cargando notificaciones...</li>
+          </div>
+          <li><hr class="dropdown-divider"></li>
+          <li class="d-flex justify-content-between px-2">
+            <button class="btn btn-link btn-sm p-0" id="marcar-todas-leidas" type="button">
+              Marcar todas como leídas
+            </button>
+            <button
+              class="btn btn-link btn-sm p-0"
+              id="ver-mas-notificaciones"
+              type="button"
+              data-bs-toggle="offcanvas"
+              data-bs-target="#offcanvasNotificaciones"
+            >
+              Ver más
+            </button>
+          </li>
+        </ul>
+      </li>
 
-          <ul
-            id="menu-user"
-            class="dropdown-menu dropdown-menu-end p-0 shadow border-0 rounded-2"
-            aria-labelledby="userDropdown"
-            style="width: 250px;"
-          >
-            <li class="px-3 py-2 bg-light rounded-top">
-              <div class="d-flex align-items-center">
-                <div class="shrink-0 me-2">
-                  <div class="avatar avatar-online">
-                    <img
-                      src="{% static 'img/avatars/1.png' %}"
-                      alt="Avatar"
-                      class="w-px-40 h-auto rounded-circle"
-                    />
-                  </div>
-                </div>
-                <div class="grow"
-                  <span class="fw-semibold d-block">{{ user.username }}</span>
-                  <small class="text-muted">Administrador</small>
+      <li class="nav-item navbar-dropdown dropdown-user dropdown position-relative">
+        <a
+          class="nav-link dropdown-toggle hide-arrow p-1"
+          href="javascript:void(0);"
+          id="userDropdown"
+          role="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+        >
+          <div class="avatar avatar-online">
+            <img
+              src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
+              alt="Avatar"
+              class="w-px-40 h-auto rounded-circle avatar-usuario"
+              style="object-fit: cover; aspect-ratio: 1;"
+            />
+          </div>
+        </a>
+
+        <ul
+          id="menu-user"
+          class="dropdown-menu dropdown-menu-end p-0 shadow border-0 rounded-2"
+          aria-labelledby="userDropdown"
+          style="width: 260px;"
+        >
+          <li class="px-3 py-2 bg-light rounded-top">
+            <div class="d-flex align-items-center">
+              <div class="shrink-0 me-2">
+                <div class="avatar avatar-online">
+                  <img
+                    src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
+                    alt="Avatar"
+                    class="w-px-40 h-auto rounded-circle avatar-usuario"
+                    style="object-fit: cover; aspect-ratio: 1;"
+                  />
                 </div>
               </div>
-            </li>
-            <li><hr class="dropdown-divider m-0"></li>
-            
-            <li>
-              <a class="dropdown-item px-3 py-2" href="#">
-                <i class="bx bx-user me-2"></i>
-                <span class="align-middle">Perfil</span>
-              </a>
-            </li>
-            <li>
-              <a class="dropdown-item px-3 py-2" href="#">
-                <i class="bx bx-cog me-2"></i>
-                <span class="align-middle">Configuración</span>
-              </a>
-            </li>
-            <li><hr class="dropdown-divider m-0"></li>
-            
-            <li>
-              <form method="POST" action="{% url 'logout' %}" id="logout-form">
-                {% csrf_token %}
-                <button type="submit" class="dropdown-item px-3 py-2">
-                  <i class="bx bx-power-off me-2"></i>
-                  <span class="align-middle">Salir</span>
-                </button>
-              </form>
-            </li>
-          </ul>
-        </li>
-        </ul> </div> </nav>
-  
+              <div class="grow overflow-hidden">
+                <span class="fw-semibold d-block text-truncate">
+                  {{ user.nombre_completo|default:user.username }}
+                </span>
+                <small class="text-muted">{{ user.rol_descripcion }}</small>
+              </div>
+            </div>
+          </li>
+          <li><hr class="dropdown-divider m-0"></li>
+
+          <li>
+            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalMiPerfil">
+              <i class="bx bx-user me-2"></i>
+              <span class="align-middle">Mi Perfil</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalPreferencias">
+              <i class="bx bx-cog me-2"></i>
+              <span class="align-middle">Configuración</span>
+            </button>
+          </li>
+          <li><hr class="dropdown-divider m-0"></li>
+          <li>
+            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalAcercaDe">
+              <i class="bx bx-info-circle me-2"></i>
+              <span class="align-middle">Acerca de Orbith</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalNovedades">
+              <i class="bx bx-gift me-2"></i>
+              <span class="align-middle">Novedades de la versión</span>
+              <span class="badge bg-label-primary ms-1">{{ orbith_version }}</span>
+            </button>
+          </li>
+          <li><hr class="dropdown-divider m-0"></li>
+
+          <li>
+            {# Reutiliza el confirmador universal de base.html (form.swal-confirm) #}
+            <form method="POST" action="{% url 'logout' %}" id="logout-form"
+                  class="swal-confirm"
+                  data-confirm-title="¿Desea cerrar sesión?"
+                  data-confirm-text="Su sesión actual será finalizada."
+                  data-confirm-button="Cerrar sesión"
+                  data-confirm-icon="question">
+              {% csrf_token %}
+              <button type="submit" class="dropdown-item px-3 py-2">
+                <i class="bx bx-power-off me-2"></i>
+                <span class="align-middle">Cerrar sesión</span>
+              </button>
+            </form>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
+
   <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNotificaciones" aria-labelledby="offcanvasNotificacionesLabel" style="width: 400px;">
     <div class="offcanvas-header">
       <h5 id="offcanvasNotificacionesLabel">Todas las notificaciones</h5>
@@ -150,7 +244,9 @@
       <p class="text-center">Cargando notificaciones...</p>
     </div>
   </div>
-  
+
+  {% include 'base/partials/modales_usuario.html' %}
+
 {% endif %}
 
 <script>
@@ -159,6 +255,11 @@
     const urlCount    = "{% url 'notificaciones_json' %}";
     const urlUltimas  = "{% url 'ultimas_notificaciones' %}";
     const urlTodas    = "{% url 'notificaciones_json' %}";
+    // Con `pk` dinámico: se sustituye el 0 por el id real antes de usarla (el
+    // truco estándar para pasar una url con parámetro a JS sin tener el id en
+    // tiempo de renderizado del template).
+    const urlMarcarLeidaPlantilla = "{% url 'notificacion_marcar_leida' 0 %}";
+    const urlMarcarTodasLeidas    = "{% url 'notificaciones_marcar_todas_leidas' %}";
 
     // Referencias DOM
     const badge              = document.getElementById('badge-notificaciones');
@@ -166,10 +267,48 @@
     const menuNotificaciones = document.getElementById('menu-notificaciones');
     const listaNotificaciones= document.getElementById('lista-notificaciones');
     const verMas             = document.getElementById('ver-mas-notificaciones');
+    const btnMarcarTodas     = document.getElementById('marcar-todas-leidas');
     const offcanvasBody      = document.getElementById('offcanvas-body-notificaciones');
 
-    // (El JavaScript para 'btnUser' y 'menuUser' se elimina 
-    // porque Bootstrap ya lo maneja con 'data-bs-toggle="dropdown"')
+    // En la pantalla de login no existe la barra: no hay nada que inicializar.
+    if (!btnNotificaciones) return;
+
+    function obtenerCookie(nombre) {
+      const coincidencia = document.cookie.match('(^|;)\\s*' + nombre + '\\s*=\\s*([^;]+)');
+      return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
+    }
+    const csrftoken = obtenerCookie('csrftoken');
+
+    // Colores por severidad: mismos valores numéricos que usa Subsanación
+    // (10=Crítica … 50=Informativa). `null` (los EVENTO) no colorea nada especial.
+    const COLOR_POR_SEVERIDAD = {10: 'danger', 20: 'warning', 30: 'info', 40: 'secondary', 50: 'light'};
+
+    function marcadorDeNotificacion(n) {
+      const partes = [];
+      if (n.severidad != null && COLOR_POR_SEVERIDAD[n.severidad]) {
+        partes.push(`<span class="badge bg-${COLOR_POR_SEVERIDAD[n.severidad]} me-1">&nbsp;</span>`);
+      }
+      if (n.estado === 'RES') {
+        partes.push('<span class="badge bg-label-success me-1">Resuelto</span>');
+      }
+      return partes.join('');
+    }
+
+    async function marcarLeida(id) {
+      // La plantilla es ".../0/leer/" (0 es el pk de relleno usado al renderizar
+      // la url); se sustituye por el id real de la notificación.
+      const url = urlMarcarLeidaPlantilla.replace('/0/leer/', '/' + id + '/leer/');
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrftoken },
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        await actualizarBadge();
+      } catch (e) {
+        console.error('Error al marcar como leída:', e);
+      }
+    }
 
     // — Funciones de notificaciones —
     async function actualizarBadge() {
@@ -204,14 +343,26 @@
         notificaciones.forEach(n => {
           const a = document.createElement('a');
           a.href = "#";
+          a.dataset.id = n.id;
           a.className = 'dropdown-item d-flex align-items-start gap-2 py-2 border-bottom';
           a.innerHTML = `
             <div class="grow">
+              ${marcadorDeNotificacion(n)}
               <strong class="text-truncate d-block">${n.titulo}</strong>
               <small class="text-muted">${n.fecha}</small>
               <p class="mb-0 text-truncate" style="max-width: 280px;">${n.mensaje}</p>
             </div>
           `;
+          // Clic en la notificación: la marca como leída y la quita del dropdown
+          // (que solo enseña las NO leídas) sin esperar el polling de 5 minutos.
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            marcarLeida(n.id);
+            a.remove();
+            if (!listaNotificaciones.children.length) {
+              listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
+            }
+          });
           listaNotificaciones.appendChild(a);
         });
       } catch (e) {
@@ -234,11 +385,18 @@
         notificaciones.forEach(n => {
           const div = document.createElement('div');
           div.className = 'mb-3 border-bottom pb-2';
+          div.dataset.id = n.id;
+          div.style.cursor = 'pointer';
           div.innerHTML = `
-            <h6>${n.titulo}</h6>
-            <small class="text-muted">${n.fecha}</small>
+            ${marcadorDeNotificacion(n)}
+            <h6 class="d-inline">${n.titulo}</h6>
+            <br><small class="text-muted">${n.fecha}</small>
             <p>${n.mensaje}</p>
           `;
+          div.addEventListener('click', () => {
+            marcarLeida(n.id);
+            div.remove();
+          });
           offcanvasBody.appendChild(div);
         });
       } catch (e) {
@@ -248,7 +406,7 @@
     }
 
     // — Handlers de toggle —
-    // (Este código es para tu dropdown de notificaciones personalizado, 
+    // (Este código es para tu dropdown de notificaciones personalizado,
     // no para el acople del sidebar, así que está bien)
     btnNotificaciones.addEventListener('click', (e) => {
       e.preventDefault();
@@ -266,18 +424,33 @@
        menuNotificaciones.style.display = 'none';
     });
 
+    btnMarcarTodas.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        const res = await fetch(urlMarcarTodasLeidas, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrftoken },
+        });
+        if (!res.ok) throw new Error(res.statusText);
+        listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
+        await actualizarBadge();
+      } catch (e2) {
+        console.error('Error al marcar todas como leídas:', e2);
+      }
+    });
+
     // — Cerrar al hacer clic fuera —
     document.addEventListener('click', (e) => {
       // Notificaciones
       if (!btnNotificaciones.contains(e.target) && !menuNotificaciones.contains(e.target)) {
         menuNotificaciones.style.display = 'none';
       }
-      
+
       // El dropdown de Usuario ya no se maneja aquí, Bootstrap lo hace.
     });
 
     // — Inicialización —
     actualizarBadge();
-    setInterval(actualizarBadge, 300000); // Corregí un error tipográfico aquí (decía 'actualarizarBadge')
+    setInterval(actualizarBadge, 300000);
   });
 </script>

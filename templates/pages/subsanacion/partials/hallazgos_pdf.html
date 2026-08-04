@@ -1,0 +1,88 @@
+{% load static %}
+<!--
+  Plantilla exclusiva para xhtml2pdf. No extiende base.html a propósito: xhtml2pdf
+  entiende un subconjunto muy limitado de CSS y no ejecuta JavaScript, así que se
+  escribe con estilos en línea y tablas, sin flexbox ni grid ni variables CSS.
+-->
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 landscape; margin: 1.2cm 1cm; }
+    body { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; color: #1e293b; }
+    h1 { font-size: 14pt; margin: 0 0 2pt 0; color: #1e293b; }
+    .meta { font-size: 7.5pt; color: #64748b; margin-bottom: 10pt; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      background-color: #1e293b; color: #ffffff; font-size: 7pt;
+      text-transform: uppercase; padding: 5pt 4pt; text-align: left;
+    }
+    td { padding: 4pt; border-bottom: 0.5pt solid #e2e8f0; vertical-align: top; }
+    tr.par td { background-color: #f8fafc; }
+    .codigo { font-family: Courier, monospace; font-size: 7.5pt; white-space: nowrap; }
+    .grav { font-weight: bold; white-space: nowrap; }
+    .g10 { color: #dc2626; }   /* Crítica */
+    .g20 { color: #ea580c; }   /* Alta */
+    .g30 { color: #ca8a04; }   /* Media */
+    .g40 { color: #2563eb; }   /* Baja */
+    .g50 { color: #64748b; }   /* Informativa */
+    .fecha { white-space: nowrap; font-size: 7.5pt; color: #64748b; }
+    .total { margin-top: 10pt; font-size: 9pt; font-weight: bold; }
+    .vacio { padding: 20pt; text-align: center; color: #64748b; }
+    .aviso {
+      margin-top: 12pt; padding: 6pt; background-color: #f8fafc;
+      border-left: 2pt solid #94a3b8; font-size: 7.5pt; color: #475569;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Subsanación · Hallazgos de integridad de datos</h1>
+  <div class="meta">
+    Generado el {{ generado|date:"d/m/Y" }} a las {{ generado|date:"H:i" }} ·
+    {{ resumen_filtros }}
+  </div>
+
+  {% if filas %}
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 8%;">Código</th>
+          <th style="width: 8%;">Gravedad</th>
+          <th style="width: 12%;">Categoría</th>
+          <th style="width: 8%;">Estado</th>
+          <th style="width: 44%;">Hallazgo</th>
+          <th style="width: 10%;">Registro</th>
+          <th style="width: 10%;">Detectado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in filas %}
+          <tr {% if forloop.counter|divisibleby:2 %}class="par"{% endif %}>
+            <td class="codigo">{{ fila.codigo }}</td>
+            <td class="grav g{{ fila.criticidad }}">{{ fila.gravedad }}</td>
+            <td>{{ fila.categoria }}</td>
+            <td>{{ fila.estado }}</td>
+            <td>{{ fila.titulo }}</td>
+            <td class="fecha">{{ fila.registro }}</td>
+            <td class="fecha">{{ fila.ultima|date:"d/m/Y" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="total">
+      Total: {{ total }} hallazgo{{ total|pluralize }}
+    </div>
+  {% else %}
+    <div class="vacio">No hay hallazgos que cumplan los filtros aplicados.</div>
+  {% endif %}
+
+  <div class="aviso">
+    Este documento es un diagnóstico: señala dónde hay inconsistencias, pero las
+    correcciones se realizan a mano desde los formularios de Orbith. Subsanación nunca
+    modifica información por su cuenta.
+  </div>
+
+</body>
+</html>

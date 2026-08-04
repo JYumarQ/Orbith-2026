@@ -1,0 +1,48 @@
+{% comment %} Resultado de una categoría, más el disparador de la siguiente.
+
+   Este fragmento sustituye (outerHTML) al marcador de posición que lo pidió, así que
+   los pasos se van acumulando en pantalla de forma natural. {% endcomment %}
+
+{% if resumen.errores %}
+  <div class="sub-paso sub-paso-error">
+    <i class="bi bi-exclamation-octagon"></i>
+    <span>
+      <strong>{{ resumen.etiqueta }}</strong> —
+      {{ resumen.reglas }} regla{{ resumen.reglas|pluralize }} completada{{ resumen.reglas|pluralize }},
+      {{ resumen.errores|length }} con error
+    </span>
+  </div>
+{% else %}
+  <div class="sub-paso sub-paso-hecho">
+    <i class="bi bi-check-circle-fill"></i>
+    <span>
+      <strong>{{ resumen.etiqueta }}</strong> —
+      {% if resumen.reglas %}
+        {{ resumen.reglas }} regla{{ resumen.reglas|pluralize }}
+        · {{ resumen.nuevos }} nuevo{{ resumen.nuevos|pluralize }}
+        · {{ resumen.persistentes }} ya conocido{{ resumen.persistentes|pluralize }}
+        · {{ resumen.resueltos }} resuelto{{ resumen.resueltos|pluralize }}
+      {% else %}
+        sin reglas todavía
+      {% endif %}
+    </span>
+  </div>
+{% endif %}
+
+{% if siguiente %}
+  <div class="sub-paso sub-paso-curso"
+       hx-post="{% url 'subsanacion:ejecutar_modulo' ejecucion.pk siguiente %}"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="spinner-border spinner-border-sm"></div>
+    <span>Revisando <strong>{{ etiqueta_siguiente }}</strong>…</span>
+  </div>
+{% else %}
+  <div class="sub-paso sub-paso-curso"
+       hx-post="{% url 'subsanacion:finalizar_analisis' ejecucion.pk %}"
+       hx-trigger="load"
+       hx-swap="outerHTML">
+    <div class="spinner-border spinner-border-sm"></div>
+    <span>Calculando el índice de salud…</span>
+  </div>
+{% endif %}

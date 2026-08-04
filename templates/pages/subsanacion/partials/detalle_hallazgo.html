@@ -1,0 +1,237 @@
+{% comment %} Detalle del hallazgo: qué encontró, por qué es un problema, cómo se corrige y
+   a dónde ir a corregirlo. Se renderiza dentro de #contenidoModalHallazgo. {% endcomment %}
+
+<div class="modal-header sub-color-{{ color }}">
+  <div class="d-flex align-items-start gap-2 flex-grow-1">
+    <span class="sub-icono-chip mt-1"><i class="bi {{ hallazgo.icono_criticidad }}"></i></span>
+    <div>
+      <h5 class="modal-title mb-1" style="font-size: 1rem;">{{ hallazgo.titulo }}</h5>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="sub-severidad sub-color-{{ hallazgo.color_criticidad }}">
+          {{ hallazgo.get_criticidad_display }}
+        </span>
+        <span class="badge bg-label-{{ hallazgo.color_estado }}">{{ hallazgo.get_estado_display }}</span>
+        <span class="badge bg-label-secondary">
+          <i class="bi {{ hallazgo.icono_modulo }} me-1"></i>{{ hallazgo.get_modulo_display }}
+        </span>
+        <code class="text-muted small">{{ hallazgo.codigo_regla }}</code>
+      </div>
+    </div>
+  </div>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+
+<div class="modal-body">
+
+  {% if not hallazgo.vigente %}
+    <div class="alert alert-success d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-check2-circle"></i>
+      <div class="small">
+        El último análisis ya <strong>no detectó</strong> este problema
+        {% if hallazgo.fecha_resolucion %}(desde el {{ hallazgo.fecha_resolucion|date:"d/m/Y H:i" }}){% endif %}.
+        La ficha se conserva como registro de que se corrigió.
+      </div>
+    </div>
+  {% endif %}
+
+  {# ¿Qué encontró? #}
+  <div class="mb-3">
+    <div class="sub-guia-titulo sub-color-{{ color }}" style="color: var(--c);">
+      <i class="bi bi-search me-1"></i>¿Qué encontró?
+    </div>
+    <p class="mb-2 small">{{ hallazgo.detalle|default:"—" }}</p>
+
+    {% if hallazgo.datos %}
+      <div class="row g-2">
+        {% for clave, valor in hallazgo.datos.items %}
+          <div class="col-6 col-md-4">
+            <div class="sub-guia-bloque sub-color-gris">
+              <div class="sub-dato-clave">{{ clave|cut:"_"|capfirst }}</div>
+              <div class="sub-dato-valor">{{ valor }}</div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if regla %}
+    {# ¿Por qué es un problema? #}
+    <div class="sub-guia-bloque sub-color-naranja mb-2">
+      <div class="sub-guia-titulo"><i class="bi bi-exclamation-triangle me-1"></i>¿Por qué es un problema?</div>
+      <p class="small mb-0">{{ regla.impacto }}</p>
+    </div>
+
+    {# ¿Por qué ocurre? #}
+    <div class="sub-guia-bloque sub-color-azul mb-2">
+      <div class="sub-guia-titulo"><i class="bi bi-question-circle me-1"></i>¿Por qué ocurre?</div>
+      <p class="small mb-0">{{ regla.causa_probable }}</p>
+    </div>
+
+    {# ¿Cómo se corrige? #}
+    <div class="sub-guia-bloque sub-color-verde mb-3">
+      <div class="sub-guia-titulo"><i class="bi bi-tools me-1"></i>¿Cómo se corrige?</div>
+      <p class="small mb-0">{{ regla.solucion }}</p>
+    </div>
+  {% else %}
+    <div class="alert alert-secondary small py-2">
+      La regla <code>{{ hallazgo.codigo_regla }}</code> ya no existe en esta versión de
+      Orbith, así que no se puede mostrar su guía. El hallazgo se conserva como
+      histórico.
+    </div>
+  {% endif %}
+
+  {# Ir al registro. Este es el único camino a la corrección: la hace el usuario. #}
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    {% if enlace %}
+      <a href="{{ enlace.href }}" class="btn btn-primary btn-sm" target="_blank" rel="noopener">
+        <i class="bi bi-box-arrow-up-right me-1"></i>{{ enlace.etiqueta }}
+      </a>
+      {% if not enlace.editable %}
+        <small class="text-muted">
+          Este tipo de registro no tiene formulario de edición propio; el enlace lleva al
+          listado. Siga las indicaciones de «¿Cómo se corrige?».
+        </small>
+      {% endif %}
+    {% elif hallazgo.es_global %}
+      <small class="text-muted">
+        <i class="bi bi-info-circle me-1"></i>Este hallazgo no apunta a un registro
+        concreto porque el problema es que el registro no existe.
+      </small>
+    {% else %}
+      <small class="text-muted">
+        <i class="bi bi-info-circle me-1"></i>No se pudo construir el enlace al registro.
+      </small>
+    {% endif %}
+  </div>
+
+  {# Revisión: lo único que escribe el usuario, y solo en las tablas de Subsanación. #}
+  <div class="sub-panel mb-3">
+    <div class="sub-panel-head sub-color-indigo">
+      <span class="sub-icono-chip"><i class="bi bi-clipboard-check"></i></span>
+      <h6 class="sub-panel-title">Registrar una revisión</h6>
+    </div>
+    <form class="p-3"
+          hx-post="{% url 'subsanacion:cambiar_estado' hallazgo.pk %}"
+          hx-target="#contenidoModalHallazgo" hx-swap="innerHTML">
+      {% csrf_token %}
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1" for="estadoHallazgo">Estado</label>
+          <select class="form-select form-select-sm" id="estadoHallazgo" name="estado" required>
+            {% for valor, etiqueta in estados_disponibles %}
+              <option value="{{ valor }}" {% if valor == hallazgo.estado %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-8">
+          <label class="form-label small mb-1" for="notaHallazgo">
+            Observación <span id="notaObligatoria" class="text-danger d-none">*</span>
+          </label>
+          <input type="text" class="form-control form-control-sm" id="notaHallazgo" name="nota"
+                 value="{{ hallazgo.nota }}"
+                 placeholder="Por ejemplo: no aplica porque existe una resolución especial">
+          <small id="ayudaNota" class="text-muted d-none">
+            Para ignorar un hallazgo o marcarlo como falso positivo hay que explicar por qué.
+          </small>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between align-items-center mt-3">
+        <small class="text-muted">
+          Esto solo cambia el estado del hallazgo. No modifica ningún dato de Orbith.
+        </small>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-save me-1"></i>Guardar revisión
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+  (function () {
+    // La nota es obligatoria al marcar Ignorado o Falso positivo (subsanacion.servicios
+    // lo exige igual en el servidor; esto solo evita el viaje de ida y vuelta).
+    var ESTADOS_QUE_EXIGEN_NOTA = ['IGN', 'FAL'];
+    var select = document.getElementById('estadoHallazgo');
+    var nota = document.getElementById('notaHallazgo');
+    var marca = document.getElementById('notaObligatoria');
+    var ayuda = document.getElementById('ayudaNota');
+    if (!select || !nota) return;
+
+    function actualizar() {
+      var exige = ESTADOS_QUE_EXIGEN_NOTA.indexOf(select.value) !== -1;
+      nota.required = exige;
+      if (marca) marca.classList.toggle('d-none', !exige);
+      if (ayuda) ayuda.classList.toggle('d-none', !exige);
+    }
+
+    select.addEventListener('change', actualizar);
+    actualizar();
+  })();
+  </script>
+
+  {# Historial de revisiones #}
+  <div class="sub-panel mb-0">
+    <div class="sub-panel-head sub-color-gris">
+      <span class="sub-icono-chip"><i class="bi bi-clock-history"></i></span>
+      <h6 class="sub-panel-title">Historial de revisiones</h6>
+      <span class="badge bg-label-secondary ms-auto">{{ revisiones|length }}</span>
+    </div>
+    {% if revisiones %}
+      <ul class="list-group list-group-flush">
+        {% for revision in revisiones %}
+          <li class="list-group-item py-2">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div class="small">
+                <span class="badge bg-label-secondary">{{ revision.get_estado_anterior_display }}</span>
+                <i class="bi bi-arrow-right mx-1 text-muted"></i>
+                <span class="badge bg-label-primary">{{ revision.get_estado_nuevo_display }}</span>
+                {% if revision.automatica %}
+                  <span class="badge bg-label-info ms-1" title="La hizo el motor de análisis, no una persona">
+                    <i class="bi bi-cpu me-1"></i>Automática
+                  </span>
+                {% endif %}
+                {% if revision.nota %}
+                  <div class="text-muted mt-1">{{ revision.nota }}</div>
+                {% endif %}
+              </div>
+              <div class="text-muted text-end text-nowrap" style="font-size: .6875rem;">
+                {{ revision.fecha|date:"d/m/Y H:i" }}
+                <div>{% if revision.usuario %}{{ revision.usuario.username }}{% else %}Sistema{% endif %}</div>
+              </div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="p-3 small text-muted">Todavía nadie ha revisado este hallazgo.</div>
+    {% endif %}
+  </div>
+
+  {# Trazabilidad de la detección #}
+  <div class="row g-2 mt-3 small text-muted">
+    <div class="col-6 col-md-3">
+      <div class="sub-dato-clave">Primera detección</div>
+      <div>{{ hallazgo.primera_deteccion|date:"d/m/Y H:i" }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="sub-dato-clave">Última detección</div>
+      <div>{{ hallazgo.ultima_deteccion|date:"d/m/Y H:i" }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="sub-dato-clave">Veces detectado</div>
+      <div>{{ hallazgo.veces_detectado }}</div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="sub-dato-clave">Registro afectado</div>
+      <div>
+        {% if hallazgo.object_id %}{{ hallazgo.content_type.name }} #{{ hallazgo.object_id }}
+        {% else %}Ninguno (hallazgo global){% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-footer">
+  <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+</div>

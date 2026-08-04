@@ -34,7 +34,8 @@ INSTALLED_APPS = [
     #?APLICACIONES
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
-    'solicitudes', 'informes',  'informe_inteligente',
+    'solicitudes', 'informes',  'informe_inteligente', 'informes_anexo',
+    'soporte', 'subsanacion',
 ]
 
 MIDDLEWARE = [
@@ -64,6 +65,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.orbith',
             ],
         },
     },
@@ -130,6 +132,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
+# El default de Django (2.5 MB) se queda corto para el reporte de problemas,
+# que admite hasta 4 imágenes de 2 MB cada una más el texto del mensaje.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -146,7 +153,11 @@ else:
 
     CSRF_TRUSTED_ORIGINS = ['https://orbith.eleccmg.une.cu']
 
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    # Sin EMAIL_HOST configurado en ningún sitio y sin un solo send_mail() en
+    # todo el proyecto, el backend SMTP era configuración muerta que solo
+    # sugería una salida a Internet inexistente. Producción usa el mismo
+    # backend de consola fijado arriba: coherente con el requisito de
+    # funcionar 100% offline en la intranet.
 
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

@@ -4,7 +4,8 @@ from pyexpat import model
 from django import forms
 from django.forms import widgets
 from .models import CargoPlantilla, Departamento, UnidadOrganizativa
-from nomencladores.models import NTipoUnidadOrganizativa
+from nomencladores.models import NTipoUnidadOrganizativa, NMunicipio
+from configuracion.models import Configuracion
 
 
 
@@ -336,17 +337,28 @@ class UnidadOrganizativaForm(forms.ModelForm):
     )
     # NUEVO: Selector de Unidad Principal (Aparecerá en el orden 2)
     padre = forms.ModelChoiceField(
-        queryset=UnidadOrganizativa.objects.none(), 
+        queryset=UnidadOrganizativa.objects.none(),
         empty_label="Seleccione la Unidad Principal...",
         required=False,
         widget=SelectPadreWidget(attrs={'class': 'form-select', 'id': 'id_padre'}), # <--- CAMBIADO AQUÍ
         label="Unidad Principal Asociada"
     )
 
+    # Municipio: se filtra en __init__ según la provincia fijada en Parámetros
+    # Generales (Configuracion.provincia_entidad). No depende de otro campo
+    # del propio formulario, así que no hace falta cascada HTMX.
+    municipio = forms.ModelChoiceField(
+        queryset=NMunicipio.objects.none(),
+        empty_label="Seleccione un municipio...",
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_municipio'}),
+        label="Municipio"
+    )
+
     class Meta:
         model = UnidadOrganizativa
         # Inyectamos 'orden_informe' al principio de la lista
-        fields = ['orden_informe', 'tipo', 'padre', 'descripcion', 'grupo_nomina'] 
+        fields = ['orden_informe', 'tipo', 'padre', 'descripcion', 'grupo_nomina', 'municipio']
         labels = {
             'orden_informe': 'Orden de Prioridad',
             'grupo_nomina': 'Grupo de Nómina',
@@ -354,7 +366,7 @@ class UnidadOrganizativaForm(forms.ModelForm):
         }
         widgets = {
             'orden_informe': forms.NumberInput(attrs={
-                'class': 'form-control', 
+                'class': 'form-control',
                 'min': '1',
                 'placeholder': 'Ej: 1 (Mayor prioridad)'
             }),
@@ -369,8 +381,21 @@ class UnidadOrganizativaForm(forms.ModelForm):
         # Si estamos editando, nos excluimos a nosotros mismos para evitar bucles (ser tu propio padre)
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
-        
+
         self.fields['padre'].queryset = qs
+
+        # Municipio disponible según la provincia configurada en Parámetros
+        # Generales. Si aún no se ha definido, el select queda vacío.
+        configuracion = Configuracion.objects.first()
+        if configuracion and configuracion.provincia_entidad_id:
+            self.fields['municipio'].queryset = (
+                NMunicipio.objects.filter(provincia_id=configuracion.provincia_entidad_id).order_by('nombre')
+            )
+        else:
+            self.fields['municipio'].widget.attrs['disabled'] = 'disabled'
+            self.fields['municipio'].help_text = (
+                'Defina la provincia de la entidad en Parámetros Generales para habilitar este campo.'
+            )
 
     
         

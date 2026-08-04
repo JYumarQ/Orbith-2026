@@ -1,15 +1,25 @@
 from decimal import Decimal
 from django.db import models
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from auditoria.models import Base
 from nomencladores.models import NProvincia
 
 # Create your models here.
 class Configuracion(Base):
-    
+
     #?GENERALES
     nombre_empresa = models.CharField(max_length=100)
     org_superior = models.CharField(max_length=50, blank=True, null=True)
+    reup = models.CharField(
+        max_length=15,
+        blank=True,
+        null=True,
+        verbose_name="REUP",
+        validators=[RegexValidator(
+            regex=r'^[0-9-]*$',
+            message='El REUP solo puede contener números y guiones (-).'
+        )]
+    )
     unidad_presup = models.BooleanField(default=False)
     rama = models.CharField(max_length=50, blank=True, null=True)
     moneda_local = models.CharField(max_length=10, default='CUP')

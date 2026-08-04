@@ -1,0 +1,263 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Reportes de problemas | Orbith{% endblock %}
+
+{% block content %}
+<style>
+    /* Mismo patrón de selección de fila + toolbar que la Lista de Contratos. */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .cursor-pointer { cursor: pointer; }
+</style>
+
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <h4 class="fw-bold mb-0">
+        <i class="bx bx-bug me-2 text-danger"></i>Reportes de problemas
+      </h4>
+      <small class="text-muted">
+        Incidencias enviadas por los usuarios desde «Acerca de Orbith». Seleccione una fila para actuar sobre ella.
+      </small>
+    </div>
+
+    {% if total_pendientes %}
+      <span class="badge bg-label-danger fs-6">
+        {{ total_pendientes }} pendiente{{ total_pendientes|pluralize }}
+      </span>
+    {% endif %}
+  </div>
+
+  {# --- Filtro por estado --- #}
+  <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+    {% for valor, etiqueta in estados %}
+      <li class="nav-item">
+        <a class="nav-link {% if estado_actual == valor %}active{% endif %}"
+           href="?estado={{ valor }}">{{ etiqueta }}</a>
+      </li>
+    {% endfor %}
+    <li class="nav-item">
+      <a class="nav-link {% if estado_actual == 'TODOS' %}active{% endif %}"
+         href="?estado=TODOS">Todos</a>
+    </li>
+  </ul>
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center gap-2">
+      {# Igual que en Contratos: deshabilitado hasta que se seleccione una fila. #}
+      <div id="reporte-toolbar" class="d-flex gap-2 toolbar-disabled">
+        <button type="button" class="btn btn-sm btn-outline-success" id="btn-atender-reporte"
+                onclick="confirmarCambioEstadoReporte('ATE')" title="Marcar como atendido">
+          <i class="bx bx-check"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-descartar-reporte"
+                onclick="confirmarCambioEstadoReporte('DES')" title="Descartar">
+          <i class="bx bx-x"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger" id="btn-eliminar-reporte"
+                onclick="confirmarEliminarReporte()" title="Eliminar reporte">
+          <i class="bx bx-trash"></i>
+        </button>
+      </div>
+      
+    </div>
+
+    <div class="table-responsive text-nowrap">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th class="text-wrap" style="min-width: 320px;">Problema</th>
+            <th>Página</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody class="table-border-bottom-0">
+          {% for reporte in reportes %}
+            <tr class="fila-reporte cursor-pointer" onclick="seleccionarReporte(this)"
+                data-id="{{ reporte.pk }}"
+                data-estado="{{ reporte.estado }}"
+                data-url-estado="{% url 'soporte:cambiar_estado_reporte' reporte.pk %}"
+                data-url-eliminar="{% url 'soporte:eliminar_reporte' reporte.pk %}">
+              <td><small>{{ reporte.fecha_creado|date:"d/m/Y H:i" }}</small></td>
+              <td>
+                {% if reporte.usuario %}
+                  <span class="fw-semibold">{{ reporte.usuario.username }}</span>
+                  {% if reporte.usuario.nombre_completo %}
+                    <small class="text-muted d-block">{{ reporte.usuario.nombre_completo }}</small>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted fst-italic">Usuario eliminado</span>
+                {% endif %}
+              </td>
+              <td class="text-wrap">
+                {{ reporte.mensaje|linebreaksbr }}
+
+                {% if reporte.error_consola %}
+                  <details class="mt-2">
+                    <summary class="text-danger small" style="cursor: pointer;">
+                      <i class="bx bx-terminal me-1"></i>Error de consola
+                    </summary>
+                    <pre class="bg-light border rounded p-2 mt-1 mb-0" style="font-size: .75rem; white-space: pre-wrap;">{{ reporte.error_consola }}</pre>
+                  </details>
+                {% endif %}
+
+                {% if reporte.imagenes.all %}
+                  <div class="d-flex flex-wrap gap-2 mt-2">
+                    {% for img in reporte.imagenes.all %}
+                      <a href="{{ img.imagen.url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+                        <img src="{{ img.imagen.url }}" alt="Captura"
+                             style="width:56px;height:56px;object-fit:cover;border-radius:.375rem;border:1px solid #d9dee3;">
+                      </a>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+              </td>
+              <td><small class="text-muted">{{ reporte.url_origen|default:"—" }}</small></td>
+              <td>
+                <span class="badge estado-reporte
+                  {% if reporte.estado == 'PEN' %}bg-label-warning
+                  {% elif reporte.estado == 'ATE' %}bg-label-success
+                  {% else %}bg-label-secondary{% endif %}">
+                  {{ reporte.get_estado_display }}
+                </span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">
+                <i class="bx bx-check-circle fs-3 d-block mb-2"></i>
+                No hay reportes en este estado.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const toolbar = document.getElementById('reporte-toolbar');
+  const btnAtender = document.getElementById('btn-atender-reporte');
+  const btnDescartar = document.getElementById('btn-descartar-reporte');
+  const btnEliminar = document.getElementById('btn-eliminar-reporte');
+  const hint = document.getElementById('reporte-toolbar-hint');
+
+  function obtenerCsrf() {
+    const m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  // Selecciona la fila igual que en la Lista de Contratos: resalta la fila,
+  // habilita el toolbar y le pasa las URLs/estado de ESA fila a los botones.
+  window.seleccionarReporte = function (fila) {
+    document.querySelectorAll('.fila-reporte').forEach(f => f.classList.remove('table-active-row'));
+    fila.classList.add('table-active-row');
+
+    toolbar.classList.remove('toolbar-disabled');
+    toolbar.classList.add('toolbar-active');
+    if (hint) hint.classList.add('d-none');
+
+    toolbar.dataset.urlEstado = fila.dataset.urlEstado;
+    toolbar.dataset.urlEliminar = fila.dataset.urlEliminar;
+    toolbar.dataset.id = fila.dataset.id;
+
+    // Si ya está atendido/descartado, no tiene sentido repetir esa acción.
+    const estado = fila.dataset.estado;
+    btnAtender.disabled = (estado === 'ATE');
+    btnDescartar.disabled = (estado === 'DES');
+  };
+
+  window.deseleccionarTodo = function () {
+    document.querySelectorAll('.fila-reporte').forEach(f => f.classList.remove('table-active-row'));
+    toolbar.classList.add('toolbar-disabled');
+    toolbar.classList.remove('toolbar-active');
+    if (hint) hint.classList.remove('d-none');
+    btnAtender.disabled = false;
+    btnDescartar.disabled = false;
+  };
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.fila-reporte') && !e.target.closest('#reporte-toolbar')) {
+      deseleccionarTodo();
+    }
+  });
+
+  function llamarEndpoint(url, cuerpoExtra) {
+    const datos = new FormData();
+    datos.append('csrfmiddlewaretoken', obtenerCsrf());
+    if (cuerpoExtra) {
+      Object.keys(cuerpoExtra).forEach(k => datos.append(k, cuerpoExtra[k]));
+    }
+    return fetch(url, {
+      method: 'POST', body: datos,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(r => r.json());
+  }
+
+  window.confirmarCambioEstadoReporte = function (estado) {
+    if (!toolbar.dataset.urlEstado) return;
+
+    const textos = {
+      ATE: { titulo: '¿Marcar como atendido?', texto: 'El reporte pasará al estado Atendido.', color: '#28a745' },
+      DES: { titulo: '¿Descartar el reporte?', texto: 'El reporte pasará al estado Descartado.', color: '#8592a3' },
+    };
+    const t = textos[estado];
+
+    Swal.fire({
+      title: t.titulo, text: t.texto, icon: 'question',
+      showCancelButton: true, confirmButtonText: 'Sí, continuar', cancelButtonText: 'Cancelar',
+      confirmButtonColor: t.color
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      llamarEndpoint(toolbar.dataset.urlEstado, { estado })
+        .then(d => {
+          if (!d.exito) { Swal.fire('Error', d.mensaje, 'error'); return; }
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: d.mensaje, showConfirmButton: false, timer: 2000 });
+          setTimeout(() => window.location.reload(), 800);
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo contactar con el servidor.', 'error'));
+    });
+  };
+
+  window.confirmarEliminarReporte = function () {
+    if (!toolbar.dataset.urlEliminar) return;
+
+    Swal.fire({
+      title: '¿Eliminar este reporte?',
+      text: 'Se borrará junto con sus imágenes adjuntas. Esta acción no se puede deshacer.',
+      icon: 'warning',
+      showCancelButton: true, confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545'
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      llamarEndpoint(toolbar.dataset.urlEliminar)
+        .then(d => {
+          if (!d.exito) { Swal.fire('Error', d.mensaje, 'error'); return; }
+          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: d.mensaje, showConfirmButton: false, timer: 2000 });
+          setTimeout(() => window.location.reload(), 800);
+        })
+        .catch(() => Swal.fire('Error', 'No se pudo contactar con el servidor.', 'error'));
+    });
+  };
+})();
+</script>
+{% endblock %}

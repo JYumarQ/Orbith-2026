@@ -1,46 +1,101 @@
 {% load informe_inteligente_extras %}
 
-
 <div class="ii-panel">
-    <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-        <span class="fw-bold" style="color: var(--ii-navy);"><i class="bi bi-table"></i> Vista previa · {{ campos_elegidos|length }} columnas</span>
+
+    <div class="ii-panel-head ii-head-tabla" style="cursor: default;">
+        <span class="ii-panel-title">
+            <span class="ii-icono-chip ii-color-indigo"><i class="bi bi-table"></i></span>
+            Detalle de registros
+        </span>
+        <span class="d-flex align-items-center gap-2">
+            <span class="badge ii-badge-contador">{{ campos_elegidos|length }} columnas</span>
+            <span class="badge ii-badge-contador">Página {{ pagina.number }} de {{ paginator.num_pages }}</span>
+        </span>
     </div>
 
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover table-striped ii-table mb-0 align-middle">
             <thead>
                 <tr>
+                    <th class="ii-col-indice">#</th>
                     {% for campo in campos_elegidos %}
-                        <th>{{ campo.label }}</th>
+                        <th{% if campo.tipo == 'numero' %} class="text-end"{% endif %}>{{ campo.label }}</th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody>
                 {% for fila in filas %}
                     <tr>
+                        <td class="ii-col-indice">{{ forloop.counter0|add:pagina.start_index }}</td>
                         {% for campo in campos_elegidos %}
-                            <td>{{ fila|get_item:campo.key|default:"—" }}</td>
+                            {% with valor=fila|get_item:campo.key %}
+                                {% if valor == None or valor == '' %}
+                                    <td class="text-muted">—</td>
+                                {% elif campo.tipo == 'fecha' %}
+                                    <td>{{ valor|date:"d/m/Y" }}</td>
+                                {% elif campo.tipo == 'numero' %}
+                                    <td class="text-end font-monospace">{{ valor }}</td>
+                                {% elif campo.tipo == 'opcion' %}
+                                    <td><span class="ii-badge-opcion">{{ valor }}</span></td>
+                                {% else %}
+                                    <td>{{ valor }}</td>
+                                {% endif %}
+                            {% endwith %}
                         {% endfor %}
                     </tr>
                 {% empty %}
-                    <tr><td colspan="{{ campos_elegidos|length }}" class="text-center text-muted py-4">Sin resultados con los filtros actuales.</td></tr>
+                    <tr>
+                        <td colspan="{{ campos_elegidos|length|add:1 }}" class="text-center text-muted py-5">
+                            <i class="bi bi-search d-block mb-2" style="font-size: 1.8rem;"></i>
+                            No se encontraron registros que cumplan los filtros aplicados.
+                        </td>
+                    </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <div class="p-3 border-top d-flex justify-content-between align-items-center">
-        <span class="text-muted small">Mostrando {{ pagina.start_index }}–{{ pagina.end_index }} de {{ total_registros }} registros</span>
-        <nav>
+    {% if filas %}
+    <div class="p-3 border-top d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+        <span class="text-muted small">
+            Mostrando <strong>{{ pagina.start_index }}–{{ pagina.end_index }}</strong>
+            de <strong>{{ total_registros }}</strong> registros
+        </span>
+
+        {% if paginator.num_pages > 1 %}
+        <nav aria-label="Navegación de páginas">
             <ul class="pagination pagination-sm mb-0">
                 {% if pagina.has_previous %}
-                    <li class="page-item"><a class="page-link" href="#" data-pagina="{{ pagina.previous_page_number }}">Anterior</a></li>
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-pagina="{{ pagina.previous_page_number }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-left"></i></span></li>
                 {% endif %}
-                <li class="page-item active"><span class="page-link">{{ pagina.number }}</span></li>
+                {% for num in paginator|rango_paginas:pagina.number %}
+                    {% if num == '…' %}
+                        <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% elif num == pagina.number %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% else %}
+                        <li class="page-item"><a class="page-link" href="#" data-pagina="{{ num }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
                 {% if pagina.has_next %}
-                    <li class="page-item"><a class="page-link" href="#" data-pagina="{{ pagina.next_page_number }}">Siguiente</a></li>
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-pagina="{{ pagina.next_page_number }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link"><i class="bi bi-chevron-right"></i></span></li>
                 {% endif %}
             </ul>
         </nav>
+        {% endif %}
     </div>
+    {% endif %}
+
 </div>

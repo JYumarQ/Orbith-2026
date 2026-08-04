@@ -1,0 +1,590 @@
+{% load static %}
+{% comment %}
+Modales del menú de usuario: Mi Perfil, Configuración, Acerca de Orbith y
+Novedades. Se incluyen desde navbar.html, así que están disponibles en todas
+las páginas autenticadas sin que cada vista tenga que inyectar nada.
+{% endcomment %}
+
+<!-- ================= MI PERFIL ================= -->
+<div class="modal fade" id="modalMiPerfil" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-label-primary py-2">
+        <h5 class="modal-title fs-5"><i class="bx bx-user me-2"></i>Mi Perfil</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="row g-4">
+
+          {# --- Columna izquierda: avatar --- #}
+          <div class="col-md-4 text-center border-end">
+            <img id="previsualizacionAvatar"
+                 src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
+                 alt="Foto de perfil" class="orbith-avatar-preview mb-3">
+
+            <form id="formAvatar" enctype="multipart/form-data">
+              {% csrf_token %}
+              <input type="file" name="avatar" id="inputAvatar" class="d-none"
+                     accept="image/jpeg,image/png,image/webp">
+
+              <div class="d-grid gap-2">
+                <button type="button" class="btn btn-sm btn-primary" id="btnSeleccionarAvatar">
+                  <i class="bx bx-camera me-1"></i>
+                  {% if user.avatar %}Cambiar foto{% else %}Añadir foto{% endif %}
+                </button>
+                <button type="button" class="btn btn-sm btn-label-secondary {% if not user.avatar %}d-none{% endif %}"
+                        id="btnEliminarAvatar">
+                  <i class="bx bx-trash me-1"></i>Quitar foto
+                </button>
+              </div>
+            </form>
+            <small class="text-muted d-block mt-2" style="font-size: .75rem;">
+              JPG, PNG o WEBP. Máximo 2 MB.
+            </small>
+          </div>
+
+          {# --- Columna derecha: datos --- #}
+          <div class="col-md-8">
+            {% if not user.contrato %}
+              <div class="alert alert-warning py-2 px-3 mb-3" style="font-size: .8125rem;">
+                <i class="bx bx-info-circle me-1"></i>
+                <strong>Sin trabajador vinculado.</strong>
+                Esta cuenta no está asociada a ningún contrato, por lo que no se
+                pueden mostrar sus datos personales ni su cargo.
+              </div>
+            {% endif %}
+
+            <dl class="row mb-0 orbith-dato-perfil">
+              <dt class="col-5">Nombre</dt>
+              <dd class="col-7">{{ user.contrato.aspirante.nombre|default:"—" }}</dd>
+
+              <dt class="col-5">Primer apellido</dt>
+              <dd class="col-7">{{ user.contrato.aspirante.papellido|default:"—" }}</dd>
+
+              <dt class="col-5">Segundo apellido</dt>
+              <dd class="col-7">{{ user.contrato.aspirante.sapellido|default:"—" }}</dd>
+
+              <dt class="col-5">Nombre de usuario</dt>
+              <dd class="col-7">{{ user.username }}</dd>
+
+              <dt class="col-5">Rol</dt>
+              <dd class="col-7">
+                <span class="badge bg-label-primary">{{ user.rol_descripcion }}</span>
+              </dd>
+
+              <dt class="col-5">Cargo actual</dt>
+              <dd class="col-7">{{ user.cargo_actual|default:"—" }}</dd>
+
+              <dt class="col-5">Último acceso</dt>
+              <dd class="col-7">
+                {% if user.last_login %}{{ user.last_login|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+              </dd>
+
+              <dt class="col-5">Usuario creado el</dt>
+              <dd class="col-7">{{ user.fecha_creado|date:"d/m/Y"|default:"—" }}</dd>
+            </dl>
+
+            <hr class="my-3">
+
+            {# Funcionalidad futura: el botón queda visible pero inactivo a propósito. #}
+            <button type="button" class="btn btn-sm btn-label-secondary w-100" disabled
+                    title="Esta funcionalidad todavía no está disponible">
+              <i class="bx bx-lock-alt me-1"></i>
+              Solicitar cambio de contraseña
+              <span class="badge bg-label-secondary ms-1">Próximamente</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= CONFIGURACIÓN (PREFERENCIAS) ================= -->
+<div class="modal fade" id="modalPreferencias" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-label-primary py-2">
+        <h5 class="modal-title fs-5"><i class="bx bx-cog me-2"></i>Configuración</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          Estas preferencias son personales: se guardan en su usuario y se aplican
+          en cualquier equipo desde el que entre.
+        </p>
+
+        <h6 class="fw-bold text-uppercase text-muted mb-2" style="font-size: .7rem;">
+          Barra lateral
+        </h6>
+        <div class="mb-4">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="pref_sidebar" id="prefSidebarExpandida"
+                   value="expandida" {% if not pref_sidebar_colapsada %}checked{% endif %}>
+            <label class="form-check-label" for="prefSidebarExpandida">
+              Expandida por defecto
+              <small class="text-muted d-block">Se muestra el menú completo con los nombres.</small>
+            </label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="pref_sidebar" id="prefSidebarColapsada"
+                   value="colapsada" {% if pref_sidebar_colapsada %}checked{% endif %}>
+            <label class="form-check-label" for="prefSidebarColapsada">
+              Colapsada por defecto
+              <small class="text-muted d-block">Solo se muestran los iconos, dejando más espacio.</small>
+            </label>
+          </div>
+        </div>
+
+        <h6 class="fw-bold text-uppercase text-muted mb-2" style="font-size: .7rem;">
+          Interfaz
+        </h6>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="prefAnimaciones"
+                 {% if pref_animaciones_activas %}checked{% endif %}>
+          <label class="form-check-label" for="prefAnimaciones">
+            Animaciones de la interfaz
+            <small class="text-muted d-block">
+              Desactívelas si el sistema le responde con lentitud.
+            </small>
+          </label>
+        </div>
+
+        <div id="avisoPreferencias" class="alert alert-success py-2 px-3 mt-3 d-none" style="font-size: .8125rem;">
+          <i class="bx bx-check-circle me-1"></i><span></span>
+        </div>
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= ACERCA DE ORBITH ================= -->
+<div class="modal fade" id="modalAcercaDe" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-label-primary py-2">
+        <h5 class="modal-title fs-5"><i class="bx bx-info-circle me-2"></i>Acerca de Orbith</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="text-center mb-3">
+          <img src="{% static 'img/favicon/icon.png' %}" alt="Orbith" style="height: 64px;">
+          <h4 class="fw-bold mt-2 mb-0">{{ orbith_info.nombre }}</h4>
+          <span class="badge bg-label-primary">Versión {{ orbith_version }}</span>
+        </div>
+
+        <p class="text-center text-muted small">{{ orbith_info.descripcion }}</p>
+
+        <hr>
+
+        <h6 class="fw-bold text-uppercase text-muted mb-2" style="font-size: .7rem;">Tecnologías</h6>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          {% for tecnologia, icono in orbith_info.tecnologias %}
+            <span class="badge bg-label-secondary">
+              <i class="bx {{ icono }} me-1"></i>{{ tecnologia }}
+            </span>
+          {% endfor %}
+        </div>
+
+        <h6 class="fw-bold text-uppercase text-muted mb-1" style="font-size: .7rem;">Desarrollador</h6>
+        <p class="mb-3" style="font-size: .875rem;">
+            {% for dev in orbith_info.desarrollador %}
+                {{ dev }}<br>
+            {% endfor %}
+        </p>
+
+        <hr>
+
+        {# --- Reportar problema --- #}
+        <div id="bloqueReportar">
+          <button type="button" class="btn btn-sm btn-label-danger w-100" id="btnAbrirReporte">
+            <i class="bx bx-bug me-1"></i>Reportar problema
+          </button>
+
+          <form id="formReporte" class="d-none mt-3">
+            {% csrf_token %}
+            <label class="form-label fw-bold" style="font-size: .8125rem;">Describa el problema</label>
+            <textarea name="mensaje" class="form-control" rows="4"
+                      placeholder="Explique qué ocurrió, en qué pantalla y qué esperaba que sucediera."></textarea>
+
+            {# Colapsado: no todos los usuarios saben qué es la consola del navegador. #}
+            <button type="button" class="btn btn-link btn-sm px-0 mt-2" id="btnToggleErrorConsola"
+                    style="font-size: .75rem;">
+              <i class="bx bx-chevron-right me-1"></i>¿Vio un error en la consola (F12)? Péguelo aquí
+            </button>
+            <div id="bloqueErrorConsola" class="d-none mt-1">
+              <textarea name="error_consola" class="form-control font-monospace"
+                        style="font-size: .75rem;" rows="4"
+                        placeholder="Pegue aquí el texto exacto del error de la consola."></textarea>
+            </div>
+
+            <label class="form-label fw-bold mt-3 mb-1" style="font-size: .8125rem;">
+              Capturas de pantalla <span class="text-muted fw-normal">(opcional, hasta 4)</span>
+            </label>
+            <div class="d-flex flex-wrap gap-2 mb-2" id="miniaturasReporte"></div>
+            <input type="file" id="inputImagenesReporte" class="d-none"
+                   accept="image/jpeg,image/png,image/webp" multiple>
+            <button type="button" class="btn btn-sm btn-label-secondary" id="btnAnadirImagenReporte">
+              <i class="bx bx-image-add me-1"></i>Añadir imagen
+              <span class="text-muted" id="contadorImagenesReporte">(0/4)</span>
+            </button>
+
+            <small class="text-muted d-block mt-2" style="font-size: .75rem;">
+              El reporte se registra en el sistema y lo revisa el administrador.
+              No se envía ningún correo. JPG, PNG o WEBP, máximo 2 MB por imagen.
+            </small>
+            <div class="d-flex gap-2 mt-2">
+              <button type="submit" class="btn btn-sm btn-danger flex-fill">
+                <i class="bx bx-send me-1"></i>Enviar reporte
+              </button>
+              <button type="button" class="btn btn-sm btn-label-secondary" id="btnCancelarReporte">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ================= NOVEDADES DE LA VERSIÓN ================= -->
+<div class="modal fade" id="modalNovedades" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-label-primary py-2">
+        <h5 class="modal-title fs-5"><i class="bx bx-gift me-2"></i>Novedades de la versión</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% for entrada in orbith_changelog %}
+          <div class="{% if not forloop.last %}mb-4 pb-3 border-bottom{% endif %}">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="badge {% if forloop.first %}bg-primary{% else %}bg-label-secondary{% endif %}">
+                {{ entrada.version }}
+              </span>
+              {% if forloop.first %}
+                <span class="badge bg-label-success">Versión actual</span>
+              {% endif %}
+              <small class="text-muted ms-auto">{{ entrada.fecha }}</small>
+            </div>
+
+            {% if entrada.titulo %}
+              <p class="fw-bold mb-2" style="font-size: .9rem;">{{ entrada.titulo }}</p>
+            {% endif %}
+
+            <ul class="list-unstyled mb-0">
+              {% for cambio in entrada.cambios %}
+                <li class="d-flex gap-2 mb-2" style="font-size: .8125rem;">
+                  <span class="badge {{ cambio.clase }} flex-shrink-0" style="min-width: 5.5rem;">
+                    {{ cambio.etiqueta }}
+                  </span>
+                  <span class="text-muted">{{ cambio.descripcion }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% empty %}
+          <p class="text-center text-muted mb-0">Todavía no hay novedades registradas.</p>
+        {% endfor %}
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+(function () {
+  const csrf = document.querySelector('#formAvatar [name=csrfmiddlewaretoken]');
+  const tokenCsrf = csrf ? csrf.value : '';
+
+  function avisar(icono, titulo, texto) {
+    if (typeof Swal === 'undefined') { alert(texto || titulo); return; }
+    Swal.fire({ icon: icono, title: titulo, text: texto || '', confirmButtonColor: '#696cff' });
+  }
+
+  // ---------------------------------------------------------------
+  // AVATAR
+  // ---------------------------------------------------------------
+  const inputAvatar = document.getElementById('inputAvatar');
+  const btnSeleccionar = document.getElementById('btnSeleccionarAvatar');
+  const btnEliminar = document.getElementById('btnEliminarAvatar');
+  const preview = document.getElementById('previsualizacionAvatar');
+
+  if (btnSeleccionar && inputAvatar) {
+    btnSeleccionar.addEventListener('click', () => inputAvatar.click());
+
+    inputAvatar.addEventListener('change', function () {
+      const fichero = this.files && this.files[0];
+      if (!fichero) return;
+
+      // Validación en cliente para no subir en balde; el servidor la repite.
+      if (fichero.size > 2 * 1024 * 1024) {
+        avisar('warning', 'Imagen demasiado grande',
+               'La foto no puede superar los 2 MB. La seleccionada ocupa ' +
+               (fichero.size / (1024 * 1024)).toFixed(1) + ' MB.');
+        this.value = '';
+        return;
+      }
+
+      const datos = new FormData();
+      datos.append('avatar', fichero);
+      datos.append('csrfmiddlewaretoken', tokenCsrf);
+
+      fetch("{% url 'actualizar_avatar' %}", {
+        method: 'POST',
+        body: datos,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok || !d.exito) { avisar('error', 'No se pudo guardar', d.mensaje); return; }
+        // Cache-busting: si no, el navegador reutiliza la imagen antigua.
+        const url = d.avatar_url + '?v=' + Date.now();
+        if (preview) preview.src = url;
+        document.querySelectorAll('.avatar-usuario').forEach(img => { img.src = url; });
+        if (btnEliminar) btnEliminar.classList.remove('d-none');
+        btnSeleccionar.innerHTML = '<i class="bx bx-camera me-1"></i>Cambiar foto';
+        avisar('success', 'Listo', d.mensaje);
+      })
+      .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'))
+      .finally(() => { inputAvatar.value = ''; });
+    });
+  }
+
+  if (btnEliminar) {
+    btnEliminar.addEventListener('click', function () {
+      const datos = new FormData();
+      datos.append('csrfmiddlewaretoken', tokenCsrf);
+
+      fetch("{% url 'eliminar_avatar' %}", {
+        method: 'POST', body: datos,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.exito) { avisar('error', 'No se pudo quitar', d.mensaje); return; }
+        const porDefecto = "{% static 'img/avatars/1.png' %}";
+        if (preview) preview.src = porDefecto;
+        document.querySelectorAll('.avatar-usuario').forEach(img => { img.src = porDefecto; });
+        btnEliminar.classList.add('d-none');
+        if (btnSeleccionar) btnSeleccionar.innerHTML = '<i class="bx bx-camera me-1"></i>Añadir foto';
+        avisar('success', 'Listo', d.mensaje);
+      })
+      .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'));
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // PREFERENCIAS
+  // Se aplican al instante en la interfaz y se persisten en segundo plano:
+  // si la llamada falla, el usuario no pierde el cambio en esta sesión.
+  // ---------------------------------------------------------------
+  const avisoPref = document.getElementById('avisoPreferencias');
+
+  function mostrarAvisoPref(texto, esError) {
+    if (!avisoPref) return;
+    avisoPref.classList.remove('d-none', 'alert-success', 'alert-danger');
+    avisoPref.classList.add(esError ? 'alert-danger' : 'alert-success');
+    avisoPref.querySelector('span').textContent = texto;
+    clearTimeout(avisoPref._temporizador);
+    avisoPref._temporizador = setTimeout(() => avisoPref.classList.add('d-none'), 2500);
+  }
+
+  // Expuesta globalmente para que base.html la reutilice al plegar la barra.
+  window.orbithGuardarPreferencias = function (datos, alTerminar) {
+    const cuerpo = new FormData();
+    cuerpo.append('csrfmiddlewaretoken', tokenCsrf || (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '');
+    Object.keys(datos).forEach(k => cuerpo.append(k, datos[k]));
+
+    return fetch("{% url 'guardar_preferencias' %}", {
+      method: 'POST', body: cuerpo,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(d => { if (alTerminar) alTerminar(d); return d; })
+    .catch(() => {
+      if (alTerminar) alTerminar({ exito: false, mensaje: 'Sin conexión con el servidor.' });
+    });
+  };
+
+  document.querySelectorAll('input[name="pref_sidebar"]').forEach(radio => {
+    radio.addEventListener('change', function () {
+      const colapsada = (this.value === 'colapsada');
+      // Aplicar de inmediato, igual que el botón de la propia barra.
+      if (window.orbithAplicarSidebar) window.orbithAplicarSidebar(colapsada);
+      window.orbithGuardarPreferencias({ sidebar_colapsada: colapsada }, d => {
+        mostrarAvisoPref(d.exito ? 'Preferencia guardada.' : d.mensaje, !d.exito);
+      });
+    });
+  });
+
+  const switchAnimaciones = document.getElementById('prefAnimaciones');
+  if (switchAnimaciones) {
+    switchAnimaciones.addEventListener('change', function () {
+      const activas = this.checked;
+      if (window.orbithAplicarAnimaciones) window.orbithAplicarAnimaciones(activas);
+      window.orbithGuardarPreferencias({ animaciones_activas: activas }, d => {
+        mostrarAvisoPref(d.exito ? 'Preferencia guardada.' : d.mensaje, !d.exito);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // REPORTAR PROBLEMA
+  // ---------------------------------------------------------------
+  const btnAbrirReporte = document.getElementById('btnAbrirReporte');
+  const formReporte = document.getElementById('formReporte');
+  const btnCancelarReporte = document.getElementById('btnCancelarReporte');
+  const btnToggleErrorConsola = document.getElementById('btnToggleErrorConsola');
+  const bloqueErrorConsola = document.getElementById('bloqueErrorConsola');
+
+  const MAX_IMAGENES_REPORTE = 4;
+  const MAX_MB_IMAGEN_REPORTE = 2;
+
+  if (btnAbrirReporte && formReporte) {
+    btnAbrirReporte.addEventListener('click', () => {
+      formReporte.classList.remove('d-none');
+      btnAbrirReporte.classList.add('d-none');
+      formReporte.querySelector('[name=mensaje]').focus();
+    });
+
+    // ---- Error de consola: colapsado por defecto ----
+    if (btnToggleErrorConsola && bloqueErrorConsola) {
+      btnToggleErrorConsola.addEventListener('click', () => {
+        const abierto = !bloqueErrorConsola.classList.contains('d-none');
+        bloqueErrorConsola.classList.toggle('d-none', abierto);
+        btnToggleErrorConsola.querySelector('i').className =
+          abierto ? 'bx bx-chevron-right me-1' : 'bx bx-chevron-down me-1';
+      });
+    }
+
+    // ---- Imágenes: hasta 4, con miniatura y opción de quitar ----
+    // No se usa el <input multiple> tal cual (name="imagenes") porque el
+    // FileList nativo no permite quitar un fichero ya elegido; se gestiona
+    // un array propio y se anexa al FormData a mano en el submit.
+    const inputImagenes = document.getElementById('inputImagenesReporte');
+    const btnAnadirImagen = document.getElementById('btnAnadirImagenReporte');
+    const contenedorMiniaturas = document.getElementById('miniaturasReporte');
+    const contadorImagenes = document.getElementById('contadorImagenesReporte');
+    let imagenesReporte = [];
+
+    function refrescarMiniaturas() {
+      contenedorMiniaturas.innerHTML = '';
+      imagenesReporte.forEach((fichero, indice) => {
+        const url = URL.createObjectURL(fichero);
+        const cont = document.createElement('div');
+        cont.className = 'position-relative';
+        cont.style.cssText = 'width:56px;height:56px;';
+        cont.innerHTML = `
+          <img src="${url}" style="width:56px;height:56px;object-fit:cover;border-radius:.375rem;border:1px solid #d9dee3;">
+          <button type="button" class="btn-close btn-close-white bg-danger rounded-circle p-1 quitar-imagen-reporte"
+                  style="position:absolute;top:-6px;right:-6px;width:16px;height:16px;" data-indice="${indice}"
+                  title="Quitar"></button>
+        `;
+        contenedorMiniaturas.appendChild(cont);
+      });
+      contadorImagenes.textContent = `(${imagenesReporte.length}/${MAX_IMAGENES_REPORTE})`;
+      if (btnAnadirImagen) btnAnadirImagen.disabled = imagenesReporte.length >= MAX_IMAGENES_REPORTE;
+    }
+
+    if (btnAnadirImagen && inputImagenes) {
+      btnAnadirImagen.addEventListener('click', () => inputImagenes.click());
+
+      inputImagenes.addEventListener('change', function () {
+        const nuevos = Array.from(this.files || []);
+        this.value = ''; // permite volver a elegir el mismo fichero más tarde
+
+        for (const fichero of nuevos) {
+          if (imagenesReporte.length >= MAX_IMAGENES_REPORTE) {
+            avisar('warning', 'Límite alcanzado', `Solo se admiten hasta ${MAX_IMAGENES_REPORTE} imágenes.`);
+            break;
+          }
+          if (fichero.size > MAX_MB_IMAGEN_REPORTE * 1024 * 1024) {
+            avisar('warning', 'Imagen demasiado grande',
+                   `"${fichero.name}" ocupa ${(fichero.size / (1024 * 1024)).toFixed(1)} MB. ` +
+                   `El máximo es ${MAX_MB_IMAGEN_REPORTE} MB.`);
+            continue;
+          }
+          imagenesReporte.push(fichero);
+        }
+        refrescarMiniaturas();
+      });
+    }
+
+    if (contenedorMiniaturas) {
+      contenedorMiniaturas.addEventListener('click', function (e) {
+        const boton = e.target.closest('.quitar-imagen-reporte');
+        if (!boton) return;
+        imagenesReporte.splice(Number(boton.dataset.indice), 1);
+        refrescarMiniaturas();
+      });
+    }
+
+    function limpiarFormularioReporte() {
+      formReporte.reset();
+      imagenesReporte = [];
+      refrescarMiniaturas();
+      if (bloqueErrorConsola) bloqueErrorConsola.classList.add('d-none');
+      if (btnToggleErrorConsola) btnToggleErrorConsola.querySelector('i').className = 'bx bx-chevron-right me-1';
+    }
+
+    if (btnCancelarReporte) {
+      btnCancelarReporte.addEventListener('click', () => {
+        formReporte.classList.add('d-none');
+        limpiarFormularioReporte();
+        btnAbrirReporte.classList.remove('d-none');
+      });
+    }
+
+    formReporte.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const datos = new FormData(formReporte);
+      datos.append('url_origen', window.location.pathname);
+      imagenesReporte.forEach(fichero => datos.append('imagenes', fichero));
+
+      const boton = formReporte.querySelector('[type=submit]');
+      boton.disabled = true;
+
+      fetch("{% url 'soporte:crear_reporte' %}", {
+        method: 'POST', body: datos,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok || !d.exito) { avisar('warning', 'Revise el reporte', d.mensaje); return; }
+        formReporte.classList.add('d-none');
+        limpiarFormularioReporte();
+        btnAbrirReporte.classList.remove('d-none');
+        avisar('success', 'Reporte enviado', d.mensaje);
+      })
+      .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'))
+      .finally(() => { boton.disabled = false; });
+    });
+  }
+})();
+</script>

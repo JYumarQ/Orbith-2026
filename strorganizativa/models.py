@@ -1,10 +1,14 @@
+import logging
+
 from django.db import models
 from notificaciones.models import Notificacion
 from django.contrib.contenttypes.models import ContentType
-from nomencladores.models import NCargo, NRol, NNivelPreparacion, NTipoUnidadOrganizativa
+from nomencladores.models import NCargo, NRol, NNivelPreparacion, NTipoUnidadOrganizativa, NMunicipio
 from auditoria.models import Base
 from django.core.exceptions import ValidationError
 from django.db.models import Max
+
+logger = logging.getLogger(__name__)
 
 # Create your models here.
 class UnidadOrganizativa(Base):
@@ -18,11 +22,21 @@ class UnidadOrganizativa(Base):
     
     # 3. Relación con Nomencladores Dinámicos
     tipo = models.ForeignKey(
-        NTipoUnidadOrganizativa, 
-        on_delete=models.RESTRICT, 
+        NTipoUnidadOrganizativa,
+        on_delete=models.RESTRICT,
         verbose_name="Tipo de Unidad"
     )
-    
+
+    # Municipio donde radica la unidad. Se filtra en el formulario según la
+    # provincia definida en Parámetros Generales (Configuracion.provincia_entidad).
+    municipio = models.ForeignKey(
+        NMunicipio,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Municipio"
+    )
+
     # 4. Relación Jerárquica
     padre = models.ForeignKey(
         'self', 
@@ -49,7 +63,6 @@ class UnidadOrganizativa(Base):
             models.UniqueConstraint(
                 fields=['padre', 'orden_informe'],
                 name='unique_orden_por_rama',
-                nulls_distinct=False,
                 deferrable=models.Deferrable.DEFERRED,
             )
         ]
@@ -198,13 +211,30 @@ class CargoPlantilla(Base):
         super().save(*args, **kwargs)  # Guarda primero para obtener el PK
 
         if es_nuevo:
-            Notificacion.objects.create(
-                titulo="Nuevo Cargo creado",
-                mensaje=f"Se ha creado un nuevo cargo: {self.ncargo.descripcion} en {self.departamento}.",
-                content_type=ContentType.objects.get_for_model(self),
-                object_id=str(self.pk),
-                unidad = self.departamento.unidad_organizativa
-            )
+            # Personal por destinatario (moderador de la unidad + administradores),
+            # no una sola fila «por unidad»: así cada quien puede marcarla como
+            # leída de forma independiente. `unidad` se conserva como contexto.
+            from notificaciones.destinatarios import destinatarios_de_unidad
+
+            unidad = self.departamento.unidad_organizativa
+            destinatarios = list(destinatarios_de_unidad(unidad))
+            if not destinatarios:
+                logger.warning(
+                    "Nuevo cargo %s sin ningún destinatario que notificar "
+                    "(unidad=%s sin moderador ni administradores activos).",
+                    self.pk, unidad)
+            else:
+                Notificacion.objects.bulk_create([
+                    Notificacion(
+                        titulo="Nuevo Cargo creado",
+                        mensaje=f"Se ha creado un nuevo cargo: {self.ncargo.descripcion} en {self.departamento}.",
+                        tipo=Notificacion.Tipo.EVENTO,
+                        content_type=ContentType.objects.get_for_model(self),
+                        object_id=str(self.pk),
+                        unidad=unidad, destinatario=destinatario,
+                    )
+                    for destinatario in destinatarios
+                ])
 
 
     @property

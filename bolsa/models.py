@@ -73,10 +73,7 @@ class Aspirante(Contacto):
     )
 
     especialidad = models.ForeignKey(NEspecialidad,null=True, blank=True, on_delete=models.RESTRICT)
-    
-    contratado = models.BooleanField(null=True, blank=True, default=False)
 
-    
     #?TALLAS
     tpantalon = models.CharField(max_length=5, null=True, blank=True)
     tcamisa = models.CharField(max_length=5, null=True, blank=True)

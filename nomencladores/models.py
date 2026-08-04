@@ -143,10 +143,16 @@ class NCargo(Base):
     
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2)
 
+    # Categorías ocupacionales que hacen que un cargo sea Cuadro. Es una constante y no
+    # una lista escrita dentro de la property para que otros módulos puedan consultarla
+    # sin repetir el criterio: Subsanación la necesita al evaluar filas obtenidas con
+    # .values(), donde no hay una instancia sobre la que llamar a `es_cuadro`.
+    CATEGORIAS_CUADRO = ('CDI', 'CEJ')
+
     @property
     def es_cuadro(self):
         """Fuente única de verdad: un cargo es Cuadro solo por su categoría ocupacional."""
-        return self.cat_ocupacional in ['CDI', 'CEJ']
+        return self.cat_ocupacional in self.CATEGORIAS_CUADRO
 
     class Meta:
         verbose_name = ("NCargo")

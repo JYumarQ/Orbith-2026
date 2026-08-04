@@ -23,6 +23,7 @@ from .forms import CAltaForm, MovimientoForm
 from docxtpl import DocxTemplate, RichText
 from io import BytesIO
 import os
+import logging
 import traceback
 import sys
 import json
@@ -32,8 +33,11 @@ from openpyxl.utils import get_column_letter
 from django.http import HttpResponse, Http404
 from datetime import datetime
 from .forms import ExportarContratoWordForm
+from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
 
 
+
+logger = logging.getLogger(__name__)
 
 CAT_MAP = {
     'TEC': 'T',
@@ -169,7 +173,7 @@ def cargar_roles(request):
                 roles_disponibles = NRol.objects.none()
 
         except Exception as e:
-            print(f"Error cargando roles: {e}")
+            logger.exception("Error cargando roles para el cargo %s: %s", cargo_id, e)
             pass
             
     return render(request, 'pages/contrato/partials/options_roles.html', {'roles': roles_disponibles})
@@ -298,7 +302,10 @@ def search_contratos(request):
         elif sort_col == 'tridente':
             contratos_list.sort(key=lambda x: x.tridente.tipo if x.tridente else "", reverse=reverse_sort)
         elif sort_col == 'salario':
-            contratos_list.sort(key=lambda x: x.calcular_salario_escala() or 0, reverse=reverse_sort)
+            # Usamos el salario ya cacheado en la fila (se recalcula en cada save del
+            # contrato). Antes se llamaba a calcular_salario_escala() por cada registro,
+            # lo que suponía una consulta a NSalario por fila del listado completo.
+            contratos_list.sort(key=lambda x: x.salario_actual or 0, reverse=reverse_sort)
 
     # 6. Paginación SOBRE la lista ya ordenada
     paginator = Paginator(contratos_list, int(page_size))
@@ -327,6 +334,7 @@ def validar_datos_contrato(request):
             
     return JsonResponse(data)
 
+@requiere_edicion
 def solicitar_movimiento_nomina(request, pk):
     """
     Alterna el estado de 'En Proceso de Movimiento' de un contrato.
@@ -442,22 +450,53 @@ def historico_trabajador(request, aspirante_id):
 
     hitos = []
 
-    # --- FUNCIÓN AUXILIAR PARA BUSCAR EL ID DEL MOVIMIENTO ---
+    # Traemos de una sola vez todos los movimientos implicados y los resolvemos en
+    # memoria. Antes se lanzaba una consulta por cada hito (obtener_id_movimiento) y
+    # otra más por cada contrato para localizar su primer movimiento.
+    # El OR cubre los dos filtros que usaba el código original: unos buscaban por
+    # aspirante y otros por contrato (que puede tener el aspirante a NULL).
+    movs_todos = list(
+        TMovimiento.objects
+        .filter(Q(aspirante_id=aspirante_id) | Q(contrato__aspirante_id=aspirante_id))
+        .order_by('fecha_efectiva')
+    )
+    movimientos_aspirante = [m for m in movs_todos if str(m.aspirante_id) == str(aspirante_id)]
+
+    # Índice por (expediente, tipo). El original usaba .first() sobre el orden por
+    # defecto del modelo ('-fecha_efectiva'), es decir el MÁS RECIENTE.
+    indice_por_tipo = {}
+    for m in sorted(movimientos_aspirante, key=lambda x: x.fecha_efectiva, reverse=True):
+        indice_por_tipo.setdefault((m.no_expediente, m.tipo_movimiento), m.pk)
+
     def obtener_id_movimiento(aspirante_id, expediente, tipo_busqueda):
-        # Buscamos en TMovimiento el registro que coincide con este expediente y tipo
-        mov = TMovimiento.objects.filter(
-            aspirante_id=aspirante_id, 
-            no_expediente=expediente, 
-            tipo_movimiento=tipo_busqueda
-        ).first()
-        return mov.pk if mov else None
+        return indice_por_tipo.get((expediente, tipo_busqueda))
+
+    def primer_movimiento_real(expediente=None, contrato=None):
+        """Movimiento más antiguo del contrato/expediente, ignorando el alta automática.
+
+        movs_todos ya viene ordenado por fecha_efectiva ascendente, así que el primero
+        que cumpla el filtro es el equivalente al .order_by('fecha_efectiva').first().
+        """
+        origen = movs_todos if contrato is not None else movimientos_aspirante
+        for m in origen:
+            if m.tipo_movimiento == 'Alta Inicial':
+                continue
+            if contrato is not None and m.contrato_id != contrato.pk:
+                continue
+            if expediente is not None and m.no_expediente != expediente:
+                continue
+            return m
+        return None
 
     # --- FUENTE A: Altas Activas ---
-    altas_activas = CAlta.objects.filter(aspirante_id=aspirante_id)
+    altas_activas = CAlta.objects.filter(aspirante_id=aspirante_id).select_related(
+        'cargo__ncargo',
+        'cargo__departamento__unidad_organizativa',
+    )
     for a in altas_activas:
         # CORRECCIÓN: Ignorar el movimiento fantasma de "Alta Inicial" para buscar el pasado real
         mov_id = obtener_id_movimiento(aspirante_id, a.no_expediente, 'Alta Inicial')
-        primer_mov = TMovimiento.objects.filter(contrato=a).exclude(tipo_movimiento='Alta Inicial').order_by('fecha_efectiva').first()
+        primer_mov = primer_movimiento_real(contrato=a)
         
         if primer_mov and primer_mov.cargo_anterior != "---":
             cargo_inicial = primer_mov.cargo_anterior
@@ -481,16 +520,16 @@ def historico_trabajador(request, aspirante_id):
         })
 
     # --- FUENTE B: Altas de Contratos Cerrados ---
-    altas_viejas = CBaja.objects.filter(aspirante_id=aspirante_id)
+    altas_viejas = CBaja.objects.filter(aspirante_id=aspirante_id).select_related(
+        'cargo__ncargo',
+        'cargo__departamento__unidad_organizativa',
+    )
     for b in altas_viejas:
         if b.fecha_alta:
             mov_id_alta = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Alta Inicial')
             mov_id_baja = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Baja')
             # CORRECCIÓN: Igual que arriba, ignoramos "Alta Inicial"
-            primer_mov_baja = TMovimiento.objects.filter(
-                aspirante_id=aspirante_id, 
-                no_expediente=b.no_expediente
-            ).exclude(tipo_movimiento='Alta Inicial').order_by('fecha_efectiva').first()
+            primer_mov_baja = primer_movimiento_real(expediente=b.no_expediente)
 
             if primer_mov_baja and primer_mov_baja.cargo_anterior != "---":
                 cargo_baja_ini = primer_mov_baja.cargo_anterior
@@ -528,8 +567,10 @@ def historico_trabajador(request, aspirante_id):
 
     # --- FUENTE C: Movimientos ---
     # CORRECCIÓN: Filtramos los movimientos que crea el sistema por detrás ('Baja' y 'Alta Inicial')
-    movimientos = TMovimiento.objects.filter(aspirante_id=aspirante_id).exclude(tipo_movimiento__in=['Baja', 'Alta Inicial'])
-    
+    # Reutilizamos la lista ya cargada en memoria en lugar de volver a consultar.
+    movimientos = [m for m in movimientos_aspirante
+                   if m.tipo_movimiento not in ('Baja', 'Alta Inicial')]
+
     for m in movimientos:
         tipo = "Movimiento Salario"
         if m.unidad_anterior != m.unidad_nueva or m.cargo_anterior != m.cargo_nuevo:
@@ -655,7 +696,7 @@ def movimiento_detalle_readonly(request, pk):
     }
     return render(request, 'pages/contrato/movimiento_nomina.html', context)
 
-class ContratoCreateView(CreateView):
+class ContratoCreateView(RequiereEdicionMixin, CreateView):
     model = CAlta
     form_class = CAltaForm
     template_name = "pages/contrato/add_contrato.html"
@@ -685,7 +726,15 @@ class ContratoCreateView(CreateView):
         # --- FASE 1: GUARDAR EN SESIÓN, NO EN BD ---
         # Convertimos los datos críticos del formulario a un diccionario serializable
         contrato_data = form.cleaned_data.copy()
-        
+
+        # 'rol' y 'grupo_escala' son campos de PRESENTACIÓN: CharField de solo lectura
+        # que muestran lo que se deduce del cargo. Como son readonly (no disabled) el
+        # navegador los envía, y al llegar al wizard el mapeo automático los convierte
+        # en 'rol_id' → se intentaría escribir el texto "Fundamental" en una clave
+        # foránea. El rol real se asigna desde el cargo al guardar.
+        for campo_presentacion in ('rol', 'grupo_escala'):
+            contrato_data.pop(campo_presentacion, None)
+
         from decimal import Decimal # <--- Importación necesaria para detectar los decimales
         
         # Limpiar datos no serializables (fechas, objetos, decimales) para la sesión
@@ -719,7 +768,7 @@ class ContratoCreateView(CreateView):
 
     def form_invalid(self, form):
         # 1. Imprimir en consola para depuración
-        print("🔴 ERRORES AL CREAR CONTRATO:", form.errors)
+        logger.warning("Errores al crear contrato: %s", form.errors.as_json())
 
         # 2. RESPUESTA AJAX (Para evitar el crasheo)
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -753,7 +802,7 @@ class ContratoCreateView(CreateView):
             
         return super().form_invalid(form)
 
-class ContratoUpdateView(UpdateView):
+class ContratoUpdateView(RequiereEdicionMixin, UpdateView):
     model = CAlta
     form_class = CAltaForm
     template_name = "pages/contrato/updt_contrato.html"
@@ -870,7 +919,7 @@ class ContratoUpdateView(UpdateView):
 
 
 
-class ContratoDeleteView(DeleteView):
+class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
     model = CAlta
 
     def post(self, request, *args, **kwargs):
@@ -933,7 +982,8 @@ class ContratoDeleteView(DeleteView):
 
                 # B. CAPTURAR DATOS PARA EL HISTÓRICO ANTES DE BORRAR
                 cargo_ant_str = contrato.cargo.ncargo.descripcion if contrato.cargo else "---"
-                unidad_ant_str = contrato.cargo.departamento.unidad_organizativa.descripcion if (contrato.cargo and contrato.cargo.departamento) else "---"
+                unidad_ant_obj = contrato.cargo.departamento.unidad_organizativa if (contrato.cargo and contrato.cargo.departamento) else None
+                unidad_ant_str = unidad_ant_obj.descripcion if unidad_ant_obj else "---"
                 rol_ant_str = contrato.cargo.rol.tipo if (contrato.cargo and contrato.cargo.rol) else "---"
                 tri_ant_str = str(contrato.tridente) if contrato.tridente else "---"
                 salario_ant_val = contrato.calcular_salario_escala() or 0
@@ -958,8 +1008,9 @@ class ContratoDeleteView(DeleteView):
                     rol_anterior=rol_ant_str,
                     tridente_anterior=tri_ant_str,
                     unidad_anterior=unidad_ant_str,
+                    unidad_anterior_fk=unidad_ant_obj,
                     salario_anterior=salario_ant_val,
-                    
+
                     cargo_nuevo="---",
                     salario_nuevo=0,
                     unidad_nueva="---"
@@ -976,6 +1027,7 @@ class ContratoDeleteView(DeleteView):
                     fecha_baja=fecha_baja,
                     causa_baja_id=causa_id,
                     fecha_alta=contrato.fecha_alta,
+                    fecha_documento=fecha_efectiva,
                     tridente=contrato.tridente,
                     cobro_sistema_pago=cobro_sistema,
                     actividad_realizada=actividad_manual,
@@ -1000,8 +1052,8 @@ class ContratoDeleteView(DeleteView):
                 if cargo_obj:
                     cargo_obj.refrescar_conteo_plazas()
 
-            # Usamos el PK del único movimiento creado
-            pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': movimiento_baja.pk})
+            # Usamos el PK del único movimiento creado (ruta explícita de TMovimiento)
+            pdf_url = reverse('imprimir_movimiento', kwargs={'pk': movimiento_baja.pk})
 
             return JsonResponse({
                 'success': True, 
@@ -1011,7 +1063,7 @@ class ContratoDeleteView(DeleteView):
 
         except Exception as e:
             # Captura cualquier error (Integridad, Modelo, etc.) y evita el crash del servidor
-            print(f"ERROR AL DAR BAJA: {e}")
+            logger.exception("Error al dar baja al contrato %s: %s", kwargs.get('pk'), e)
             return JsonResponse({
                 'success': False, 
                 'message': f'Error interno al procesar la baja: {str(e)}'
@@ -1021,7 +1073,7 @@ class ContratoDeleteView(DeleteView):
         
 
 
-class MovimientoUpdateView(UpdateView):
+class MovimientoUpdateView(RequiereEdicionMixin, UpdateView):
     model = CAlta
     form_class = MovimientoForm
     template_name = "pages/contrato/movimiento_nomina.html"
@@ -1090,7 +1142,9 @@ class MovimientoUpdateView(UpdateView):
             # La fecha límite es: La del último movimiento, O si no hay, la fecha de Alta original
             fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
 
-            if nueva_fecha and nueva_fecha < fecha_limite:
+            # fecha_limite puede ser None (contrato sin fecha_alta y sin movimientos):
+            # sin este guardia la comparación lanzaba TypeError y devolvía un 500.
+            if nueva_fecha and fecha_limite and nueva_fecha < fecha_limite:
                 # Si la nueva fecha es viajar al pasado -> ERROR
                 mensaje = f"Error Cronológico: La fecha seleccionada ({nueva_fecha.strftime('%d/%m/%Y')}) es anterior al último evento registrado ({fecha_limite.strftime('%d/%m/%Y')})."
                 
@@ -1120,8 +1174,9 @@ class MovimientoUpdateView(UpdateView):
             # PASO 2: CAPTURAR DATOS PREVIOS (LÓGICA DE NEGOCIO)
             # =================================================================
             cargo_ant = contrato_previo.cargo.ncargo.descripcion if contrato_previo.cargo else "---"
-            unidad_ant = contrato_previo.cargo.departamento.unidad_organizativa.descripcion if (contrato_previo.cargo and contrato_previo.cargo.departamento) else "---"
-            
+            unidad_ant_obj = contrato_previo.cargo.departamento.unidad_organizativa if (contrato_previo.cargo and contrato_previo.cargo.departamento) else None
+            unidad_ant = unidad_ant_obj.descripcion if unidad_ant_obj else "---"
+
             rol_ant_str = contrato_previo.cargo.rol.tipo if (contrato_previo.cargo and contrato_previo.cargo.rol) else "---"
             tri_ant_str = str(contrato_previo.tridente) if contrato_previo.tridente else "---"
             salario_ant = contrato_previo.calcular_salario_escala() or 0
@@ -1137,8 +1192,9 @@ class MovimientoUpdateView(UpdateView):
             duracion_nueva_val = form.cleaned_data.get('duracion')
             
             cargo_nue = cargo_nuevo_obj.ncargo.descripcion if cargo_nuevo_obj else "---"
-            unidad_nue = cargo_nuevo_obj.departamento.unidad_organizativa.descripcion if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else "---"
-            
+            unidad_nue_obj = cargo_nuevo_obj.departamento.unidad_organizativa if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else None
+            unidad_nue = unidad_nue_obj.descripcion if unidad_nue_obj else "---"
+
             salario_nue = float(self.request.POST.get('salarioEscala', 0))
 
             observaciones_txt = form.cleaned_data.get('observaciones', '')
@@ -1168,6 +1224,7 @@ class MovimientoUpdateView(UpdateView):
                 tridente_anterior=tri_ant_str,  
                 salario_anterior=salario_ant,
                 unidad_anterior=unidad_ant,
+                unidad_anterior_fk=unidad_ant_obj,
                 tipo_contrato_anterior=tipo_ant_str, # <--- NUEVO
                 motivo_anterior=motivo_ant_str,      # <--- NUEVO
                 
@@ -1181,6 +1238,7 @@ class MovimientoUpdateView(UpdateView):
                 tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
                 salario_nuevo=salario_nue,
                 unidad_nueva=unidad_nue,
+                unidad_nueva_fk=unidad_nue_obj,
                 tipo_contrato_nuevo=tipo_nuevo_obj.descripcion if tipo_nuevo_obj else "---", # <--- NUEVO
                 motivo_nuevo=motivo_nuevo_obj.descripcion if motivo_nuevo_obj else "---",   # <--- NUEVO
                 duracion_nueva=duracion_nueva_val,                                           # <--- NUEVO
@@ -1202,46 +1260,25 @@ class MovimientoUpdateView(UpdateView):
                     'message': 'Movimiento registrado correctamente.', 
                     'success_url': str(self.success_url),
                     # Ahora sí existe 'nuevo_mov'
-                    'pdf_url': reverse('imprimir_modelo_movimiento', kwargs={'pk': nuevo_mov.pk})
+                    'pdf_url': reverse('imprimir_movimiento', kwargs={'pk': nuevo_mov.pk})
                 })
             return super().form_valid(form)
 
         
         except Exception as e:
             # --- MANEJO DE ERRORES ---
-            print("\n" + "="*50)
-            print("🔴 ERROR CRÍTICO EN MOVIMIENTO DE NÓMINA")
-            print(f"Tipo: {type(e).__name__}")
-            print(f"Mensaje: {str(e)}")
-            print("-" * 20)
-            print(f"Error: {e}")
-            import traceback
-            traceback.print_exc()
-            print("="*50 + "\n")
+            logger.exception(
+                "Error crítico en movimiento de nómina (contrato=%s): %s",
+                getattr(self.object, 'pk', None), e
+            )
 
             transaction.set_rollback(True)
             return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)
 
-            if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({
-                    'form_is_valid': False,
-                    'error_popup': f"Error del Sistema: {str(e)}",
-                    'html_form': render_to_string(
-                        self.template_name, 
-                        self.get_context_data(form=form), 
-                        request=self.request
-                    )
-                }, status=500)
-            else:
-                messages.error(self.request, f"Error crítico: {str(e)}")
-                return self.form_invalid(form)
-
     def form_invalid(self, form):
-        print("\n" + "!"*50)
-        print("❌ ERROR DE VALIDACIÓN (400):")
-        print(form.errors.as_json()) 
-        print("!"*50 + "\n")
-        
+        logger.warning("Movimiento de nómina inválido: %s", form.errors.as_json())
+
+
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             # Construimos un mensaje legible a partir de los errores del formulario
             mensajes = []
@@ -1279,41 +1316,43 @@ def abreviar_cargo_inteligente(texto_cargo):
 
 
 class ModeloMovimientoDocxView(View):
-    def get(self, request, pk):
-        print(f"[PDF] PK recibido: {pk}")
-        
-        
-        # --- FASE 1: RESOLVER 404 ---
+    def get(self, request, pk, origen=None):
+        # --- FASE 1: RESOLVER EL REGISTRO ---
         obj = None
         es_movimiento_real = False
 
-        # 1. Intentar como CAlta (pk de contrato)
-        try:
-            contrato = CAlta.objects.get(pk=pk)
-            # Buscar el movimiento asociado a este contrato (el más reciente)
-            movimiento = TMovimiento.objects.filter(contrato_id=contrato.pk).order_by('-id').first()
-            if movimiento:
-                obj = movimiento
-                es_movimiento_real = True
-            else:
-                # Sin movimiento (no debería pasar, porque pdf_url vacío cuando no hay)
-                obj = contrato
-                es_movimiento_real = False
-        except CAlta.DoesNotExist:
-            # 2. Si no es contrato, intentar como TMovimiento directo
+        if origen == 'movimiento':
+            # Ruta explícita: el pk es SIEMPRE de TMovimiento.
+            # La ruta genérica de abajo probaba CAlta primero, así que un
+            # TMovimiento.pk que coincidiera con un CAlta.pk existente (algo muy
+            # probable, ambas secuencias arrancan en 1) imprimía el documento
+            # de OTRO trabajador.
+            obj = get_object_or_404(TMovimiento, pk=pk)
+            es_movimiento_real = True
+        else:
+            # 1. Intentar como CAlta (pk de contrato)
             try:
-                obj = TMovimiento.objects.get(pk=pk)
-                es_movimiento_real = True
-            except TMovimiento.DoesNotExist:
-                # 3. Fallback final a CBaja
-                obj = CBaja.objects.filter(pk=pk).first()
-                if not obj:
-                    return HttpResponse("Error: No se encontró el registro.", status=404)
-                es_movimiento_real = True
-        print(f"[PDF] Objeto encontrado: {obj} (tipo: {type(obj)})")
-        print(f"[PDF] Aspirante: {obj.aspirante.nombre} {obj.aspirante.papellido}")
-        print(f"[PDF] fecha_solicitud: {getattr(obj, 'fecha_solicitud', 'NO_EXISTE')}")
-        print(f"[PDF] observaciones: {getattr(obj, 'observaciones', 'NO_EXISTE')}")
+                contrato = CAlta.objects.get(pk=pk)
+                # Buscar el movimiento asociado a este contrato (el más reciente)
+                movimiento = TMovimiento.objects.filter(contrato_id=contrato.pk).order_by('-id').first()
+                if movimiento:
+                    obj = movimiento
+                    es_movimiento_real = True
+                else:
+                    # Sin movimiento (no debería pasar, porque pdf_url vacío cuando no hay)
+                    obj = contrato
+                    es_movimiento_real = False
+            except CAlta.DoesNotExist:
+                # 2. Si no es contrato, intentar como TMovimiento directo
+                try:
+                    obj = TMovimiento.objects.get(pk=pk)
+                    es_movimiento_real = True
+                except TMovimiento.DoesNotExist:
+                    # 3. Fallback final a CBaja
+                    obj = CBaja.objects.filter(pk=pk).first()
+                    if not obj:
+                        return HttpResponse("Error: No se encontró el registro.", status=404)
+                    es_movimiento_real = True
 
         # Contrato base (CAlta activo). Si es baja, esto será None porque ya se borró.
         contrato_base = obj.contrato if es_movimiento_real and hasattr(obj, 'contrato') else (obj if not es_movimiento_real else None)
@@ -1613,7 +1652,7 @@ def cargar_salario(request):
                 })
                 
         except Exception as e:
-            print(f"Error calculando salario: {e}")
+            logger.exception("Error calculando salario (cargo=%s, tridente=%s): %s", cargo_id, tridente_id, e)
 
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
 
@@ -1637,13 +1676,31 @@ def cargar_cargos_contrato(request):
 # =========================================================================
 # VISTA WIZARD FASE 3: Finalizar Contrato y (Opcional) Movimiento
 # =========================================================================
+@requiere_edicion
 def finalizar_contrato_wizard(request, aspirante_id):
     borrador = request.session.get('contrato_borrador')
-    
-    if not borrador:
+    aspirante_borrador = request.session.get('aspirante_borrador')
+
+    def _abortar_wizard(mensaje):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'form_is_valid': False, 'error_popup': 'No hay datos en proceso. Cierre y vuelva a intentar.'}, status=400)
+            return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
+        messages.error(request, mensaje)
         return redirect('list_aspir')
+
+    if not borrador:
+        return _abortar_wizard('No hay datos en proceso. Cierre y vuelva a intentar.')
+
+    # El borrador vive en la sesión del usuario, que es única. Si quedó uno a medias
+    # de otro trabajador (por ejemplo al cerrar el modal con la X en vez de Cancelar),
+    # aquí se crearía un contrato con SUS datos a nombre de esta otra persona.
+    # Comprobamos que el borrador corresponde al aspirante de la URL.
+    if str(aspirante_borrador) != str(aspirante_id):
+        request.session.pop('contrato_borrador', None)
+        request.session.pop('aspirante_borrador', None)
+        return _abortar_wizard(
+            'El contrato en proceso pertenece a otro trabajador y se ha descartado '
+            'por seguridad. Vuelva a llenar el formulario.'
+        )
 
     aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
 
@@ -1655,9 +1712,16 @@ def finalizar_contrato_wizard(request, aspirante_id):
     campos_validos = {f.name for f in CAlta._meta.get_fields()}
     atributos_validos = {getattr(f, 'attname', f.name) for f in CAlta._meta.get_fields()}
 
+    # Campos del formulario que se llaman igual que una relación del modelo pero que
+    # NO contienen una clave foránea (son texto para mostrar). Sin esta lista, el
+    # mapeo de abajo los convertiría en 'rol_id' y reventaría al guardar.
+    CAMPOS_SOLO_PRESENTACION = {'rol', 'grupo_escala'}
+
     for k in list(borrador_db.keys()):
+        if k in CAMPOS_SOLO_PRESENTACION:
+            borrador_db.pop(k)
         # Convertir FKs (ej. cargo -> cargo_id)
-        if k + '_id' in atributos_validos and not k.endswith('_id'):
+        elif k + '_id' in atributos_validos and not k.endswith('_id'):
             borrador_db[k + '_id'] = borrador_db.pop(k)
         # Si el campo es del formulario pero NO del modelo, lo descartamos
         elif k not in campos_validos and k not in atributos_validos:
@@ -1669,7 +1733,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
             unsaved_contrato = CAlta(**borrador_db)
             unsaved_contrato.aspirante = aspirante
         except Exception as e:
-            print(f"🔴 ERROR AL INSTANCIAR CALTA: {e}")
+            logger.exception("Error al instanciar CAlta desde el borrador: %s", e)
             return JsonResponse({'form_is_valid': False, 'error_popup': f"Error interno en los datos: {str(e)}"}, status=500)
             
         # 1. PRECARGAR EL FORMULARIO CON LA INSTANCIA
@@ -1695,13 +1759,15 @@ def finalizar_contrato_wizard(request, aspirante_id):
             except CargoPlantilla.DoesNotExist:
                 pass
                 
-        form_movimiento = MovimientoForm(instance=unsaved_contrato, initial=initial_data, user=request.user)
-        
-        # FORZAR QUERYSETS DE COMBOS DEPENDIENTES
-        if unidad_id:
-            form_movimiento.fields['departamento'].queryset = Departamento.objects.filter(unidad_organizativa_id=unidad_id)
-        if dpto_id:
-            form_movimiento.fields['cargo'].queryset = CargoPlantilla.objects.filter(departamento_id=dpto_id)
+        # Los querysets dependientes se pasan al constructor (no se asignan después),
+        # para que el formulario pueda construir el mapa de plazas con los cargos reales.
+        form_movimiento = MovimientoForm(
+            instance=unsaved_contrato,
+            initial=initial_data,
+            user=request.user,
+            unidad_id=unidad_id,
+            departamento_id=dpto_id,
+        )
 
         # 2. CÁLCULO DE DATOS VISUALES (Columna Derecha)
         i_grupo = '-'
@@ -1737,7 +1803,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     i_tarifa = round(monto / fondo, 5) if fondo else 0
                     i_extras = round((i_tarifa*0.25)+i_tarifa, 5)
             except Exception as e:
-                print(f"Error precargando datos del cargo: {e}")
+                logger.exception("Error precargando datos del cargo en el wizard: %s", e)
 
         context = {
             'is_wizard': True,
@@ -1788,9 +1854,25 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 contrato.aspirante = aspirante
                 
                 if contrato.cargo_id:
-                    cargo_obj = CargoPlantilla.objects.get(pk=contrato.cargo_id)
+                    # Bloqueamos la fila del cargo dentro de la transacción. La plaza se
+                    # validó en la Fase 1, pero el contrato no se guarda hasta aquí: en
+                    # ese intervalo otro usuario pudo ocupar la última vacante.
+                    cargo_obj = CargoPlantilla.objects.select_for_update().select_related('ncargo').get(pk=contrato.cargo_id)
                     if cargo_obj.rol:
                         contrato.rol = cargo_obj.rol
+
+                    if contrato.tipo and contrato.tipo.ocupa_plaza:
+                        if cargo_obj.cant_cubierta_real >= cargo_obj.cant_aprobada:
+                            transaction.set_rollback(True)
+                            return JsonResponse({
+                                'form_is_valid': False,
+                                'error_popup': (
+                                    f'El cargo "{cargo_obj.ncargo.descripcion}" ya no tiene plazas '
+                                    f'disponibles ({cargo_obj.cant_cubierta_real}/{cargo_obj.cant_aprobada}). '
+                                    'Es posible que otro usuario haya ocupado la última mientras '
+                                    'llenaba el contrato.'
+                                )
+                            }, status=400)
                 
                 # --- LA CURA CONTRA FECHAS ERRÓNEAS EN RECONTRATACIÓN ---
                 # IMPERATIVO: Siempre mandará la fecha validada de la UI, ignorando la caché del borrador
@@ -1803,7 +1885,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     contrato.fecha_alta = timezone.now().date()
 
                 contrato.save() # Guardado Físico
-                print(f"[WIZARD] Contrato creado con pk: {contrato.pk} - Aspirante: {contrato.aspirante.nombre}")
+                logger.info("Contrato creado desde el wizard: pk=%s aspirante=%s", contrato.pk, contrato.aspirante_id)
                 
                 pdf_url = ""
                 
@@ -1816,7 +1898,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         salario_nue = float(request.POST.get('salarioEscala', 0))
                         
                         tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
-                        TMovimiento.objects.create(
+                        mov_alta = TMovimiento.objects.create(
                             contrato=contrato,
                             aspirante=aspirante,
                             no_expediente=contrato.no_expediente,
@@ -1837,12 +1919,15 @@ def finalizar_contrato_wizard(request, aspirante_id):
                             tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
                             salario_nuevo=salario_nue,
                             unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
-                            
+                            unidad_nueva_fk=cargo_nuevo.departamento.unidad_organizativa if (cargo_nuevo and cargo_nuevo.departamento) else None,
+
                             tipo_movimiento="Alta Inicial"
                         )
                         form.instance.en_proceso_movimiento = False
                         contrato = form.save()
-                        pdf_url = reverse('imprimir_modelo_movimiento', kwargs={'pk': contrato.pk})
+                        # Apuntamos al movimiento recién creado, no al contrato: así el
+                        # documento no depende de resolver un pk ambiguo entre tablas.
+                        pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
                     else:
                         # Si el form falla, cancelamos todo (Contrato no se guarda) y devolvemos el error al modal
                         transaction.set_rollback(True)
@@ -1853,7 +1938,18 @@ def finalizar_contrato_wizard(request, aspirante_id):
                             'initial_tarifa_horaria': 0, 'initial_tarifa_extras': 0,
                         }
                         html = render_to_string("pages/contrato/movimiento_nomina.html", context, request=request)
-                        return JsonResponse({'form_is_valid': False, 'html_form': html}, status=400)
+
+                        # El modal solo sabe leer 'error_popup'. Sin este mensaje, el
+                        # usuario veía "Error de comunicación inesperado" ante cualquier
+                        # error de validación.
+                        mensajes = [str(error) for errores in form.errors.values() for error in errores]
+                        mensaje_final = " ".join(mensajes) if mensajes else "Revise los datos del movimiento."
+
+                        return JsonResponse({
+                            'form_is_valid': False,
+                            'html_form': html,
+                            'error_popup': mensaje_final,
+                        }, status=400)
                 
                 # 3. LIMPIEZA
                 del request.session['contrato_borrador']
@@ -1867,8 +1963,8 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 })
 
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            logger.exception("Error al finalizar el contrato desde el wizard (aspirante=%s): %s",
+                             aspirante_id, e)
             return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)
 
 def exportar_contratos_excel(request):
@@ -1934,7 +2030,9 @@ def exportar_contratos_excel(request):
             asp.doc_identidad, asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
             asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
             asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
-            asp.direccion or "", asp.movil_personal or "", asp.fijo_personal or "",
+            # El orden debe seguir la cabecera: Dirección, Fijo, Móvil.
+            # Antes se escribía el móvil bajo "Fijo" y viceversa.
+            asp.direccion or "", asp.fijo_personal or "", asp.movil_personal or "",
             # Tallas
             asp.tpantalon or "",
             asp.tcamisa or "",
@@ -1967,8 +2065,12 @@ class ExportarContratoWordView(FormView):
 
     def _get_contrato_optimizado(self, pk):
         """ Consulta unificada para evitar N+1 en las relaciones del contrato """
+        # Se llama desde get_initial, get_context_data y form_valid: sin caché se
+        # repetía la misma consulta 2-3 veces por petición.
+        if getattr(self, '_contrato_cache', None) is not None:
+            return self._contrato_cache
         try:
-            return CAlta.objects.select_related(
+            self._contrato_cache = CAlta.objects.select_related(
                 'aspirante__municipio',
                 'aspirante__provincia',
                 'aspirante__especialidad',
@@ -2142,7 +2244,10 @@ class ExportarContratoWordView(FormView):
         elif contrato.designado and contrato.designado_res:
             res_no = contrato.designado_res
 
-        # 6. Construcción Final del Diccionario (Valores por defecto en "" para usar el Subrayado de Word)
+        # 6. Código del tridente en números romanos ('I', 'II', 'III')
+        tridente_codigo = (contrato.tridente.tipo or '').strip().upper() if contrato.tridente else ''
+
+        # 7. Construcción Final del Diccionario (Valores por defecto en "" para usar el Subrayado de Word)
         ctx = {
             # ENTIDAD Y FIRMANTE
             'entidad_nombre': (
@@ -2187,9 +2292,12 @@ class ExportarContratoWordView(FormView):
             'check_decisorio': "X" if contrato.rol and 'DECISORIO' in contrato.rol.tipo.upper() else "",
             
             # TRIDENTES
-            'check_t1': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 1 else "",
-            'check_t2': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 2 else "",
-            'check_t3': "X" if contrato.tridente and getattr(contrato.tridente, 'id', None) == 3 else "",
+            # Se marca por el código romano ('I', 'II', 'III'), no por el id de la
+            # tabla: si se recrean los nomencladores los ids cambian y el documento
+            # marcaría la casilla equivocada.
+            'check_t1': "X" if tridente_codigo == 'I' else "",
+            'check_t2': "X" if tridente_codigo == 'II' else "",
+            'check_t3': "X" if tridente_codigo == 'III' else "",
 
             # SALARIO Y HORARIOS
             'contrato_jornada': cleaned_data.get('jornada_texto') or "",

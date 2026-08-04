@@ -295,12 +295,6 @@
 
 <script>
 
-    document.body.addEventListener('htmx:beforeRequest', function(evt) {
-        if (evt.detail.elt.id === 'disparador-salarios') {
-            console.log('[DEBUG-ORBITH] 🌐 1. HTMX Request a cargar_salarios INICIADO.');
-        }
-    });
-        
     window.initOrbithContrato = function() {
         var $form = $('#contratoForm');
         var formulario = $form[0];
@@ -360,10 +354,14 @@
                 var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
                 desc.includes('INDETERMINADO') ? $duracion.attr('disabled', 'disabled').val('') : $duracion.removeAttr('disabled');
                 
+                // Conservamos la selección actual al repintar: si el modal se repinta
+                // tras un error de validación, el motivo elegido debe sobrevivir.
+                var valorPrevio = $motivo.val() || "{{ form.motivo.value|default:'' }}";
                 $motivo.empty().append('<option value="">---------</option>');
                 if (data.motivos_asociados) {
                     data.motivos_asociados.forEach(m => {
-                        $motivo.append(new Option(m.descripcion, m.id, false, false));
+                        var seleccionado = (String(m.id) === String(valorPrevio));
+                        $motivo.append(new Option(m.descripcion, m.id, false, seleccionado));
                     });
                 }
 
@@ -527,7 +525,10 @@
 
         function initSelect2Cargo() {
             if ($cargoSelect.hasClass("select2-hidden-accessible")) $cargoSelect.select2('destroy');
-            $cargoSelect.select2({ dropdownParent: $cargoSelect.parent(), width: '100%', templateResult: formatCargoOption, templateSelection: s => s.text });
+            // theme 'bootstrap-5' es obligatorio: sin él el contenedor se pinta como
+            // select2-container--default y ni el tema ni select2-sneat-fix.css aplican,
+            // por lo que el control encoge ~11px al inicializarse (parpadeo visible).
+            $cargoSelect.select2({ dropdownParent: $cargoSelect.parent(), width: '100%', theme: 'bootstrap-5', templateResult: formatCargoOption, templateSelection: s => s.text });
         }
         initSelect2Cargo();
 

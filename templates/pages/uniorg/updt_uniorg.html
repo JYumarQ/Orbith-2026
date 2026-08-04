@@ -16,11 +16,19 @@
                 {% csrf_token %}
                 
                 <div class="row g-3 mb-3">
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <label class="form-label fw-bold">{{ form.tipo.label }}</label>
                         {{ form.tipo }}
                     </div>
-                    
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">{{ form.municipio.label }}</label>
+                        {{ form.municipio }}
+                        {% if form.municipio.help_text %}
+                            <div class="form-text">{{ form.municipio.help_text }}</div>
+                        {% endif %}
+                    </div>
+
                     <div class="col-12">
                         <label class="form-label fw-bold">{{ form.padre.label }}</label>
                         {{ form.padre }}

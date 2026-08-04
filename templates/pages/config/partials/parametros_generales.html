@@ -215,11 +215,21 @@
                             </div>
                         </div>
 
-                        <div class="mb-4">
-                            <label class="modern-label">{{ form.org_superior.label }}</label>
-                            <div class="modern-input-wrapper">
-                                <div class="icon-container"><i class="fas fa-globe"></i></div>
-                                {{ form.org_superior }}
+                        <div class="row g-3 mb-4">
+                            <div class="col-12 col-xl-6">
+                                <label class="modern-label">{{ form.org_superior.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-globe"></i></div>
+                                    {{ form.org_superior }}
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-xl-6">
+                                <label class="modern-label">{{ form.reup.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-id-card"></i></div>
+                                    {{ form.reup }}
+                                </div>
                             </div>
                         </div>
 
@@ -267,7 +277,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-0">
+                        <div class="mb-4">
                             <label class="modern-label">{{ form.direccion.label }}</label>
                             <div class="modern-input-wrapper">
                                 <div class="icon-container"><i class="fas fa-map-pin"></i></div>
@@ -275,7 +285,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-0">
+                        <div class="mb-4">
                             <label class="modern-label">{{ form.provincia_entidad.label }}</label>
                             <div class="modern-input-wrapper">
                                 <div class="icon-container"><i class="fas fa-map"></i></div>

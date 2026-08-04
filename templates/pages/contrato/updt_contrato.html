@@ -513,7 +513,10 @@
 
         function initSelect2Cargo() {
             if ($cargoSelect.hasClass("select2-hidden-accessible")) $cargoSelect.select2('destroy');
-            $cargoSelect.select2({ dropdownParent: $cargoSelect.parent(), width: '100%', templateResult: formatCargoOption, templateSelection: s => s.text });
+            // theme 'bootstrap-5' es obligatorio: sin él el contenedor se pinta como
+            // select2-container--default y ni el tema ni select2-sneat-fix.css aplican,
+            // por lo que el control encoge ~11px al inicializarse (parpadeo visible).
+            $cargoSelect.select2({ dropdownParent: $cargoSelect.parent(), width: '100%', theme: 'bootstrap-5', templateResult: formatCargoOption, templateSelection: s => s.text });
         }
         initSelect2Cargo();
 

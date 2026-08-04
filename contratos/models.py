@@ -1,13 +1,28 @@
+import logging
 from decimal import Decimal
 from django.db import models
 from bolsa.models import Aspirante
-from strorganizativa.models import CargoPlantilla
+from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
 from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
 from auditoria.models import Base
 from django.core.exceptions import ValidationError
+from contratos.salarios import calcular_salario
+
+
+logger = logging.getLogger(__name__)
+
+
+# Los movimientos de baja se crean DELIBERADAMENTE sin contrato (véase la creación del
+# movimiento de baja en `contratos/views.py`), porque el contrato se borra justo después.
+# Es el diseño del histórico inmutable, no un defecto, así que el reenganche los excluye.
+#
+# Se compara por el texto porque `TMovimiento.tipo_movimiento` es un CharField libre, sin
+# `choices`. Si algún día ese literal cambia en views.py, hay que cambiarlo aquí también
+# (y en `subsanacion/reglas/nomina.py`, que tiene su propia copia por el mismo motivo).
+TIPO_MOVIMIENTO_BAJA = 'Baja'
 
 
 #?CONTRATO
@@ -176,55 +191,49 @@ class CAlta(ContratoBase):
         if cargo:
             cargo.refrescar_conteo_plazas()
         
-    def calcular_salario_escala(self):
-        try:
-            if self.tipo_salario == 'DIN':
-                # 1. Validación básica (ya no exigimos el rol aquí)
-                if not self.cargo:
-                    return None
-                
-                grupo_temp = self.cargo.ncargo.grupo_escala
-                
-                # Buscamos el rol (puede venir del contrato o del cargo)
-                rol_temp = self.rol or self.cargo.rol 
-                
-                # 2. REGLA: Un cargo es Cuadro SOLO por su categoría (CDI/CEJ)
-                es_cuadro = self.cargo.ncargo.es_cuadro
-                
-                if es_cuadro:
-                    salario_obj = NSalario.objects.filter(
-                        grupo_escala=grupo_temp,
-                        rol=rol_temp, 
-                        tridente__isnull=True
-                    ).first()
-                    
-                    # Fallback de seguridad extrema
-                    if not salario_obj:
-                         salario_obj = NSalario.objects.filter(
-                             grupo_escala=grupo_temp,
-                             rol__isnull=True,
-                             tridente__isnull=True
-                         ).first()
-                else:
-                    if not self.tridente:
-                        return None
-                    salario_obj = NSalario.objects.filter(
-                        grupo_escala=grupo_temp,
-                        rol=rol_temp,
-                        tridente=self.tridente
-                    ).first()
+    @staticmethod
+    def _buscar_monto_salario(grupo_escala_id, rol_id, tridente_id):
+        """Busca el monto de una combinación de la escala. None si no existe la fila.
 
-                if salario_obj and salario_obj.monto:
-                    return round(float(salario_obj.monto), 2)
-                return None
-                
-            else:
-                if self.cargo and self.cargo.ncargo and self.cargo.ncargo.salario_basico:
-                    return round(float(self.cargo.ncargo.salario_basico), 2)
-                return None
+        Se filtra por los `_id` directamente, así que `rol_id=None` se traduce a
+        `rol IS NULL`, que es lo que corresponde a un cuadro (sin tridente) o a la
+        escala del grupo sin rol concreto.
+        """
+        return (NSalario.objects
+                .filter(grupo_escala_id=grupo_escala_id, rol_id=rol_id,
+                        tridente_id=tridente_id)
+                .values_list('monto', flat=True)
+                .first())
+
+    def calcular_salario_escala(self):
+        """Salario de escala de este contrato, o None si no se puede calcular.
+
+        El árbol de decisión vive en `contratos/salarios.py`, que es la única fuente de
+        verdad del cálculo. Aquí solo se extraen los datos del contrato y se delega, de
+        modo que el módulo de Subsanación pueda usar EXACTAMENTE el mismo cálculo sin
+        consultar la base de datos por cada fila.
+        """
+        try:
+            cargo = self.cargo
+            ncargo = cargo.ncargo if cargo else None
+
+            return calcular_salario(
+                tipo_salario=self.tipo_salario,
+                tiene_cargo=bool(cargo),
+                es_cuadro=bool(ncargo.es_cuadro) if ncargo else False,
+                grupo_escala_id=ncargo.grupo_escala_id if ncargo else None,
+                rol_id_contrato=self.rol_id,
+                rol_id_cargo=cargo.rol_id if cargo else None,
+                tridente_id=self.tridente_id,
+                salario_basico=ncargo.salario_basico if ncargo else None,
+                buscar_monto=self._buscar_monto_salario,
+            )
         except Exception as e:
+            # Se devuelve None para no romper listados ni informes, pero el error se
+            # registra: antes cualquier fallo de cálculo desaparecía sin rastro.
+            logger.exception("No se pudo calcular el salario de escala del contrato %s: %s", self.pk, e)
             return None
-        
+
     @property
     def funcionario(self):
         return self.cargo.funcionario if self.cargo else False
@@ -272,7 +281,37 @@ class CAlta(ContratoBase):
         ).order_by('-fecha_efectiva').first()
         
         return ultimo_mov.fecha_efectiva if ultimo_mov else self.fecha_alta
-    
+
+    def movimientos_huerfanos_reenganchables(self):
+        """Movimientos del histórico que son de este contrato pero quedaron sueltos.
+
+        `TMovimiento.contrato` es SET_NULL a propósito: al dar de baja al trabajador se
+        borra su CAlta y los movimientos sobreviven con el enlace en blanco. El problema
+        aparece al recontratarlo reutilizando el mismo número de expediente: el contrato
+        nuevo es OTRA fila, así que ese histórico anterior no vuelve solo y no aparece al
+        abrir el histórico del trabajador desde su contrato.
+
+        El criterio es deliberadamente estricto: mismo aspirante y mismo `no_expediente`
+        EXACTO. No hay ambigüedad posible en el destino, porque `no_expediente` es único
+        entre los contratos vivos, así que solo este contrato puede reclamarlos. Los
+        movimientos de tipo «Baja» se excluyen: están sin contrato por diseño.
+
+        Este método define el criterio en un solo sitio; lo usan tanto `save()` como el
+        comando `reenganchar_movimientos`.
+        """
+        if not self.pk or not self.aspirante_id or not self.no_expediente:
+            return TMovimiento.objects.none()
+
+        return (TMovimiento.objects
+                .filter(contrato__isnull=True,
+                        aspirante_id=self.aspirante_id,
+                        no_expediente=self.no_expediente)
+                .exclude(tipo_movimiento__iexact=TIPO_MOVIMIENTO_BAJA))
+
+    def reenganchar_movimientos_huerfanos(self):
+        """Reasocia a este contrato su histórico suelto. Devuelve cuántos reenganchó."""
+        return self.movimientos_huerfanos_reenganchables().update(contrato=self)
+
     def save(self, *args, **kwargs):
         try:
             es_nuevo = self._state.adding
@@ -303,14 +342,55 @@ class CAlta(ContratoBase):
                 CAlta.objects.filter(pk=self.pk).update(salario_actual=nuevo_salario)
                 self.salario_actual = nuevo_salario
 
+            if es_nuevo:
+                # Recontratación: recuperar el histórico que se quedó huérfano cuando se
+                # borró el contrato anterior de esta misma persona.
+                #
+                # Va en su propio try/except, y no en el general de abajo, a propósito: el
+                # reenganche es una recuperación de histórico, no parte de la contratación.
+                # Si fallara, el contrato debe guardarse igual; el aviso queda en el log y
+                # el comando `reenganchar_movimientos` lo repara después.
+                try:
+                    reenganchados = self.reenganchar_movimientos_huerfanos()
+                    if reenganchados:
+                        logger.info(
+                            "Recontratación: reenganchados %s movimiento(s) huérfanos al "
+                            "contrato %s (expediente %s, aspirante %s).",
+                            reenganchados, self.pk, self.no_expediente, self.aspirante_id)
+                except Exception:
+                    logger.exception(
+                        "No se pudieron reenganchar los movimientos huérfanos del "
+                        "contrato %s (expediente %s). El contrato SÍ se guardó; ejecute "
+                        "el comando reenganchar_movimientos para repararlo.",
+                        self.pk, self.no_expediente)
+
             # Recalculamos DESPUÉS de guardar, para contar la realidad
             if self.cargo_id:
                 self.actualizar_plantilla(self.cargo_id)
             if cargo_anterior_id and cargo_anterior_id != self.cargo_id:
                 self.actualizar_plantilla(cargo_anterior_id)
 
+            # Alertas de campos vacíos/inconsistencias (Subsanación en caliente) y
+            # aviso de alta. Cada una en su propio try/except: son avisos, no parte
+            # de la contratación; si fallaran, el contrato debe guardarse igual.
+            try:
+                from notificaciones.avisos import avisar_hallazgos_en_caliente
+                avisar_hallazgos_en_caliente(self)
+            except Exception:
+                logger.exception(
+                    "No se pudieron evaluar/notificar las alertas de integridad "
+                    "del contrato %s.", self.pk)
+
+            if es_nuevo:
+                try:
+                    from notificaciones.avisos import avisar_alta_contrato
+                    avisar_alta_contrato(self)
+                except Exception:
+                    logger.exception(
+                        "No se pudo notificar el alta del contrato %s.", self.pk)
+
         except Exception as e:
-            print(f"Error al guardar el contrato: {e}")
+            logger.exception("Error al guardar el contrato %s: %s", self.pk, e)
             raise
 
     def delete(self, *args, **kwargs):
@@ -327,8 +407,18 @@ class CAlta(ContratoBase):
                 except Aspirante.DoesNotExist:
                     pass
 
+            # Aviso de baja ANTES de super().delete(): tiene que apuntar al
+            # Aspirante (que sigue existiendo), no a este CAlta, que a partir de
+            # aquí queda inaccesible.
+            try:
+                from notificaciones.avisos import avisar_baja_contrato
+                avisar_baja_contrato(self)
+            except Exception:
+                logger.exception(
+                    "No se pudo notificar la baja del contrato %s.", self.pk)
+
         except Exception as e:
-            print(f"Error al eliminar contrato: {e}")
+            logger.exception("Error al eliminar el contrato %s: %s", self.pk, e)
 
         super().delete(*args, **kwargs)
 
@@ -373,16 +463,10 @@ class CBaja(ContratoBase):
     )
 
     actividad_realizada = models.CharField(
-        max_length=255, 
-        null=True, 
-        blank=True, 
+        max_length=255,
+        null=True,
+        blank=True,
         verbose_name="Actividad que realizaba"
-    )
-
-    fecha_documento = models.DateField(
-        null=True, 
-        blank=True, 
-        verbose_name="Fecha de documento"
     )
 
     observaciones = models.TextField(
@@ -417,7 +501,23 @@ class TMovimiento(models.Model):
 
     unidad_anterior = models.CharField(max_length=255, null=True, blank=True)
     unidad_nueva = models.CharField(max_length=255, null=True, blank=True)
-    
+
+    # FKs reales (además de los campos de texto de arriba, que se conservan
+    # tal cual para mostrar el nombre histórico exacto de la unidad en ese
+    # momento). Estas sí son relaciones consultables, usadas únicamente para
+    # acotar qué movimientos puede ver un Moderador según sus Unidades
+    # Organizativas asignadas — no se muestran en ningún informe ni cambian
+    # el texto ya guardado. SET_NULL: borrar una Unidad Organizativa nunca
+    # debe bloquear ni borrar historial de movimientos.
+    unidad_anterior_fk = models.ForeignKey(
+        UnidadOrganizativa, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Unidad Anterior (relación)"
+    )
+    unidad_nueva_fk = models.ForeignKey(
+        UnidadOrganizativa, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Unidad Nueva (relación)"
+    )
+
     # -------------------------------------------------------------
     # NUEVOS CAMPOS AÑADIDOS PARA HISTORIAL INMUTABLE (FOTO EXACTA)
     # -------------------------------------------------------------
@@ -455,6 +555,18 @@ class TMovimiento(models.Model):
 
     class Meta:
         ordering = ['-fecha_efectiva']
-
-    class Meta:
-        ordering = ['-fecha_efectiva']
+        indexes = [
+            # Sirve exactamente al `partition_by=[aspirante_id]` +
+            # `order_by=[fecha_efectiva, id]` que usa la regla MOV-001 de
+            # Subsanación para comprobar la continuidad del histórico salarial
+            # (subsanacion/reglas/nomina.py). Sin este índice, PostgreSQL resuelve
+            # la partición y el orden de la función de ventana con un `Sort`
+            # explícito en memoria (confirmado con EXPLAIN ANALYZE antes de
+            # añadirlo); con él, el motor puede recorrer el índice ya ordenado.
+            # Con el volumen actual de datos (109 filas) la diferencia es
+            # inapreciable, pero el plan de ejecución ya muestra el nodo de
+            # ordenamiento que este índice existe para eliminar a medida que la
+            # tabla crezca.
+            models.Index(fields=['aspirante', 'fecha_efectiva', 'id'],
+                         name='contratos_tmov_asp_fecha_id'),
+        ]

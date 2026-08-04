@@ -88,6 +88,7 @@
         .input-icon { position: absolute; left: 1.2rem; top: 50%; transform: translateY(-50%); color: rgba(0,0,0,0.35); display: flex; transition: color 0.3s; }
         .floating-input {
             width: 100%;
+            box-sizing: border-box;
             padding: 16px 16px 16px 3rem;
             background: #ffffff;
             border: 1px solid #d1d9e0;
@@ -96,7 +97,7 @@
             font-size: 15px;
             transition: all 0.3s ease;
         }
-        ..floating-input:focus { outline: none; background: #ffffff; border-color: var(--current-accent); }
+        .floating-input:focus { outline: none; background: #ffffff; border-color: var(--current-accent); }
         .input-group:focus-within .input-icon { color: var(--current-accent); }
         
         /* Botones y Enlaces */

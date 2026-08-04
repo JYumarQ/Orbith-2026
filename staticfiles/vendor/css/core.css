@@ -5486,6 +5486,7 @@ textarea.form-control-lg {
 
 .offcanvas.show {
   transform: none;
+  visibility: visible;
 }
 
 .placeholder {

@@ -11,5 +11,10 @@ urlpatterns = [
     path('del_usuario/<pk>/', login_required(views.CustomUserDeleteView.as_view()), name='del_usuario'),
     path('validar_username/', views.validar_username, name='validar_username'),
     path('search_usuarios/', login_required(views.search_usuarios), name='search_usuarios'),
+
+    # --- MENÚ DE USUARIO (siempre sobre la propia cuenta) ---
+    path('perfil/avatar/', views.actualizar_avatar, name='actualizar_avatar'),
+    path('perfil/avatar/eliminar/', views.eliminar_avatar, name='eliminar_avatar'),
+    path('preferencias/', views.guardar_preferencias, name='guardar_preferencias'),
 ]
 

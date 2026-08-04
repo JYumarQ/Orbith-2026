@@ -1,0 +1,196 @@
+{% if not ejecucion %}
+  {% comment %} Estado vacío explícito: es importante no mostrar un 100 % cuando lo que ocurre es
+     que nunca se ha comprobado nada. {% endcomment %}
+  <div class="sub-panel">
+    <div class="sub-vacio">
+      <i class="bi bi-clipboard-x"></i>
+      <div class="fw-semibold mb-1">Nunca se ha ejecutado un análisis de integridad</div>
+      <div class="small mb-3">
+        Hay {{ total_reglas }} regla{{ total_reglas|pluralize }} de diagnóstico lista{{ total_reglas|pluralize }}
+        para revisar la coherencia de los datos.
+      </div>
+      <button class="btn btn-primary btn-sm"
+              hx-post="{% url 'subsanacion:iniciar_analisis' %}"
+              hx-target="#paneAnalisis" hx-swap="innerHTML"
+              onclick="document.querySelector('[data-bs-target=\'#paneAnalisis\']').click()">
+        <i class="bi bi-play-fill me-1"></i>Analizar la base de datos
+      </button>
+    </div>
+  </div>
+{% else %}
+
+  {% if resultado_antiguo %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 py-2" role="alert">
+      <i class="bi bi-clock-history"></i>
+      <div class="small">
+        Estos resultados son del <strong>{{ ejecucion.iniciada_en|date:"d/m/Y H:i" }}</strong>
+        (hace más de {{ dias_antiguo }} días). Vuelva a analizar para ver el estado actual.
+      </div>
+    </div>
+  {% endif %}
+
+  {% if ejecucion.estado == 'PAR' %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 py-2" role="alert">
+      <i class="bi bi-exclamation-triangle"></i>
+      <div class="small">
+        El último análisis quedó <strong>incompleto</strong>: alguna regla falló o alguna
+        categoría no se llegó a revisar. Los resultados de abajo son parciales.
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-1">
+    {# Índice general #}
+    <div class="col-12 col-lg-4">
+      <div class="sub-panel h-100 sub-color-{{ color_indice }}">
+        <div class="sub-panel-head">
+          <span class="sub-icono-chip"><i class="bi bi-activity"></i></span>
+          <h6 class="sub-panel-title">Salud general de los datos</h6>
+        </div>
+        <div class="p-3">
+          <div class="sub-indice">
+            <span class="sub-indice-valor">{{ ejecucion.indice_salud|default:"—" }}</span>
+            <span class="fs-5 fw-bold text-muted">%</span>
+          </div>
+          <div class="sub-indice-barra"><span style="width: {{ ejecucion.indice_salud|default:0 }}%"></span></div>
+          <div class="small text-muted mt-2">
+            Porcentaje de registros sin ningún hallazgo pendiente.
+            La gravedad se ve en el panel de la derecha.
+          </div>
+
+          <div class="row g-2 mt-3 small">
+            <div class="col-6">
+              <div class="sub-dato-clave">Último análisis</div>
+              <div class="sub-dato-valor">{{ ejecucion.iniciada_en|date:"d/m/Y H:i" }}</div>
+            </div>
+            <div class="col-6">
+              <div class="sub-dato-clave">Duración</div>
+              <div class="sub-dato-valor">
+                {% if ejecucion.duracion_segundos %}{{ ejecucion.duracion_segundos }} s{% else %}—{% endif %}
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="sub-dato-clave">Registros analizados</div>
+              <div class="sub-dato-valor">{{ ejecucion.registros_analizados }}</div>
+            </div>
+            <div class="col-6">
+              <div class="sub-dato-clave">Reglas ejecutadas</div>
+              <div class="sub-dato-valor">{{ ejecucion.reglas_ejecutadas }} de {{ total_reglas }}</div>
+            </div>
+          </div>
+
+          {% if ejecucion.lanzada_por %}
+            <div class="small text-muted mt-3">
+              <i class="bi bi-person me-1"></i>Lanzado por {{ ejecucion.lanzada_por.username }}
+              · {{ ejecucion.get_origen_display }}
+            </div>
+          {% else %}
+            <div class="small text-muted mt-3">
+              <i class="bi bi-terminal me-1"></i>{{ ejecucion.get_origen_display }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Contadores por severidad #}
+    <div class="col-12 col-lg-8">
+      <div class="sub-panel h-100">
+        <div class="sub-panel-head sub-color-indigo">
+          <span class="sub-icono-chip"><i class="bi bi-bar-chart-steps"></i></span>
+          <h6 class="sub-panel-title">Hallazgos pendientes por gravedad</h6>
+          <span class="ms-auto small text-muted">
+            No se cuentan los ignorados ni los falsos positivos
+          </span>
+        </div>
+        <div class="row g-2 p-3">
+          {% for tarjeta in tarjetas_criticidad %}
+            <div class="col-6 col-md-4 col-xl">
+              <div class="sub-kpi sub-color-{{ tarjeta.color }}">
+                <span class="sub-kpi-icono"><i class="bi {{ tarjeta.icono }}"></i></span>
+                <div class="sub-kpi-valor">{{ tarjeta.total }}</div>
+                <div class="sub-kpi-label">{{ tarjeta.etiqueta }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Resumen por categoría #}
+  <div class="sub-panel">
+    <div class="sub-panel-head sub-color-azul">
+      <span class="sub-icono-chip"><i class="bi bi-diagram-2"></i></span>
+      <h6 class="sub-panel-title">Estado por categoría</h6>
+      <span class="badge bg-label-secondary ms-auto">{{ modulos|length }} categorías</span>
+    </div>
+
+    {% for modulo in modulos %}
+      <div class="sub-modulo sub-color-{{ modulo.color }}">
+        <span class="sub-icono-chip"><i class="bi {{ modulo.icono }}"></i></span>
+        <div class="sub-modulo-nombre">
+          {{ modulo.etiqueta }}
+          <div class="text-muted fw-normal" style="font-size: .6875rem;">
+            {% if modulo.reglas %}
+              {{ modulo.reglas }} regla{{ modulo.reglas|pluralize }} · {{ modulo.registros }} registro{{ modulo.registros|pluralize }}
+              {% if modulo.afectados %}· {{ modulo.afectados }} afectado{{ modulo.afectados|pluralize }}{% endif %}
+            {% else %}
+              Sin reglas todavía
+            {% endif %}
+          </div>
+        </div>
+
+        {% if modulo.situacion == 'normal' %}
+          <div class="sub-modulo-barra"><span style="width: {{ modulo.indice }}%"></span></div>
+          <div class="sub-modulo-valor" style="color: var(--c);">{{ modulo.indice }} %</div>
+        {% elif modulo.situacion == 'sin_porcentaje' %}
+          {% comment %} Con muy pocos registros un porcentaje sería engañoso (ver
+             MINIMO_REGISTROS_PARA_PORCENTAJE), así que se muestra el conteo. {% endcomment %}
+          <div class="sub-modulo-barra"></div>
+          <div class="sub-modulo-valor text-muted">
+            {% if modulo.total %}{{ modulo.total }} hallazgo{{ modulo.total|pluralize }}{% else %}Sin hallazgos{% endif %}
+          </div>
+        {% else %}
+          <div class="sub-modulo-barra"></div>
+          <div class="sub-modulo-valor text-muted" style="font-size: .75rem;">No comprobado</div>
+        {% endif %}
+
+        {% if modulo.total %}
+          <a class="btn btn-sm btn-outline-secondary py-0 px-2" href="#"
+             hx-get="{% url 'subsanacion:panel_hallazgos' %}?modulo={{ modulo.clave }}"
+             hx-target="#paneHallazgos" hx-swap="innerHTML"
+             onclick="document.querySelector('[data-bs-target=\'#paneHallazgos\']').click()"
+             title="Ver los hallazgos de esta categoría">
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        {% else %}
+          <span class="d-inline-block" style="width: 34px;"></span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if ejecucion.errores %}
+    <div class="sub-panel sub-color-rojo">
+      <div class="sub-panel-head">
+        <span class="sub-icono-chip"><i class="bi bi-bug"></i></span>
+        <h6 class="sub-panel-title">Avisos del último análisis</h6>
+      </div>
+      <div class="p-3">
+        <p class="small text-muted mb-2">
+          Estas reglas no se pudieron completar. Sus hallazgos anteriores se conservaron
+          intactos: no se marcó nada como corregido.
+        </p>
+        <ul class="list-unstyled mb-0 small">
+          {% for codigo, mensaje in ejecucion.errores.items %}
+            <li class="mb-1">
+              <code class="text-danger">{{ codigo }}</code> — {{ mensaje }}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+{% endif %}

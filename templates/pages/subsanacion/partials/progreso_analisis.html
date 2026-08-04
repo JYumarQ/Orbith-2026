@@ -1,0 +1,36 @@
+{% comment %} Arranque de la cadena de análisis.
+
+   El patrón: cada paso es una petición POST que devuelve su propio resultado MÁS el
+   disparador del paso siguiente, con hx-trigger="load". Así la cadena avanza sola,
+   sin temporizadores, sin polling y sin estado en el navegador. {% endcomment %}
+
+<div class="mb-2 d-flex align-items-center gap-2">
+  <i class="bi bi-activity text-primary"></i>
+  <strong class="small">Analizando la base de datos…</strong>
+  <span class="text-muted small ms-auto">Análisis #{{ ejecucion.pk }}</span>
+</div>
+
+<div id="pasosAnalisis">
+  {% if primer_modulo %}
+    <div class="sub-paso sub-paso-curso"
+         hx-post="{% url 'subsanacion:ejecutar_modulo' ejecucion.pk primer_modulo %}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="spinner-border spinner-border-sm"></div>
+      <span>Revisando <strong>{{ etiqueta_primero }}</strong>…</span>
+    </div>
+  {% else %}
+    <div class="sub-paso sub-paso-curso"
+         hx-post="{% url 'subsanacion:finalizar_analisis' ejecucion.pk %}"
+         hx-trigger="load"
+         hx-swap="outerHTML">
+      <div class="spinner-border spinner-border-sm"></div>
+      <span>Cerrando el análisis…</span>
+    </div>
+  {% endif %}
+</div>
+
+<p class="small text-muted mt-3 mb-0">
+  <i class="bi bi-info-circle me-1"></i>No cierre esta página hasta que termine. Si la
+  cierra, el análisis queda incompleto y no se marcará ningún hallazgo como corregido.
+</p>

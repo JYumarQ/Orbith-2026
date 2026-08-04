@@ -1,0 +1,205 @@
+{# Estadísticas: distribución y tendencia. Todo son lecturas, no lanza análisis. #}
+
+{% if not ejecucion %}
+  <div class="sub-panel">
+    <div class="text-center py-5">
+      <i class="bi bi-bar-chart text-muted" style="font-size: 2.5rem; opacity: .35;"></i>
+      <p class="text-muted mt-3 mb-0">Todavía no hay estadísticas.</p>
+      <p class="text-muted small">Ejecute un análisis para empezar a acumular datos.</p>
+    </div>
+  </div>
+{% else %}
+
+<div class="row g-3">
+
+  {# --- Tendencia del índice de salud --- #}
+  <div class="col-12">
+    <div class="sub-panel">
+      <div class="sub-panel-head">
+        <span class="sub-icono-chip"><i class="bi bi-graph-up"></i></span>
+        <h6 class="sub-panel-title">Evolución del índice de salud</h6>
+        <span class="badge sub-badge-contador ms-auto">{{ tendencia|length }} análisis</span>
+      </div>
+      <div class="p-3">
+        {% if hay_tendencia %}
+          <div id="graficaTendencia" style="min-height: 240px;"></div>
+          {{ tendencia|json_script:"datosTendencia" }}
+        {% else %}
+          <p class="text-muted small mb-0">
+            <i class="bi bi-info-circle me-1"></i>
+            Con un solo análisis todavía no hay evolución que dibujar. La gráfica
+            aparecerá a partir del segundo.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# --- Reparto por categoría --- #}
+  <div class="col-12 col-xl-7">
+    <div class="sub-panel h-100">
+      <div class="sub-panel-head">
+        <span class="sub-icono-chip"><i class="bi bi-diagram-3"></i></span>
+        <h6 class="sub-panel-title">Salud por categoría</h6>
+      </div>
+      <div class="table-responsive">
+        <table class="table sub-table mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>Categoría</th>
+              <th class="text-end" style="width: 90px;">Reglas</th>
+              <th class="text-end" style="width: 100px;">Registros</th>
+              <th class="text-end" style="width: 100px;">Hallazgos</th>
+              <th style="width: 150px;">Salud</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for modulo in modulos %}
+              <tr>
+                <td>
+                  <i class="bi {{ modulo.icono }} me-2 text-muted"></i>{{ modulo.etiqueta }}
+                </td>
+                <td class="text-end font-monospace small">{{ modulo.reglas }}</td>
+                <td class="text-end font-monospace small">{{ modulo.registros }}</td>
+                <td class="text-end font-monospace small">
+                  {% if modulo.total %}<strong>{{ modulo.total }}</strong>{% else %}0{% endif %}
+                </td>
+                <td>
+                  {% if modulo.indice != None %}
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="sub-barra-mini flex-grow-1">
+                        <span class="sub-color-{{ modulo.color }}"
+                              style="width: {{ modulo.indice }}%"></span>
+                      </div>
+                      <span class="small font-monospace text-nowrap">{{ modulo.indice }}%</span>
+                    </div>
+                  {% elif modulo.situacion == 'sin_reglas' %}
+                    <span class="badge bg-label-secondary">Sin reglas</span>
+                  {% else %}
+                    <span class="text-muted small">Muy pocos registros</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# --- Reparto por estado --- #}
+  <div class="col-12 col-xl-5">
+    <div class="sub-panel h-100">
+      <div class="sub-panel-head">
+        <span class="sub-icono-chip"><i class="bi bi-list-check"></i></span>
+        <h6 class="sub-panel-title">Hallazgos por estado</h6>
+      </div>
+      <div class="p-3">
+        {% for fila in por_estado %}
+          <div class="d-flex align-items-center justify-content-between py-2
+                      {% if not forloop.last %}border-bottom{% endif %}">
+            <span class="badge bg-label-{{ fila.color }}">{{ fila.etiqueta }}</span>
+            <span class="fw-bold font-monospace">{{ fila.total }}</span>
+          </div>
+        {% endfor %}
+        <p class="small text-muted mt-3 mb-0">
+          Solo cuentan los hallazgos vigentes. Los archivados —corregidos o de reglas ya
+          retiradas— se conservan pero no aparecen aquí.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {# --- Reparto por regla --- #}
+  <div class="col-12">
+    <div class="sub-panel">
+      <div class="sub-panel-head">
+        <span class="sub-icono-chip"><i class="bi bi-ui-checks-grid"></i></span>
+        <h6 class="sub-panel-title">Detalle por regla</h6>
+        <span class="badge sub-badge-contador ms-auto">{{ por_regla|length }} reglas</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover sub-table mb-0 align-middle">
+          <thead>
+            <tr>
+              <th style="width: 100px;">Código</th>
+              <th>Regla</th>
+              <th style="width: 180px;">Categoría</th>
+              <th style="width: 120px;">Gravedad</th>
+              <th class="text-end" style="width: 110px;">Hallazgos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for regla in por_regla %}
+              <tr {% if not regla.total %}class="text-muted"{% endif %}>
+                <td><span class="sub-codigo">{{ regla.codigo }}</span></td>
+                <td class="small">{{ regla.nombre }}</td>
+                <td class="small">{{ regla.etiqueta_modulo }}</td>
+                <td>
+                  <span class="sub-pill sub-color-{{ regla.color }}">
+                    {{ regla.etiqueta_criticidad }}
+                  </span>
+                </td>
+                <td class="text-end font-monospace">
+                  {% if regla.total %}
+                    <strong>{{ regla.total }}</strong>
+                  {% else %}
+                    <i class="bi bi-check-lg text-success" title="Sin hallazgos"></i>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="px-3 py-2 border-top">
+        <p class="small text-muted mb-0">
+          Una regla con cero hallazgos significa que se comprobó y está limpio, no que no
+          se haya revisado.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% if hay_tendencia %}
+<script>
+(function () {
+  // ApexCharts ya viene cargado en base.html; no se añade ninguna biblioteca.
+  var contenedor = document.getElementById('graficaTendencia');
+  var datos = document.getElementById('datosTendencia');
+  if (!contenedor || !datos || typeof ApexCharts === 'undefined') return;
+
+  var serie = JSON.parse(datos.textContent);
+
+  new ApexCharts(contenedor, {
+    chart: { type: 'area', height: 240, toolbar: { show: false }, fontFamily: 'inherit' },
+    series: [{
+      name: 'Índice de salud',
+      data: serie.map(function (punto) { return punto.indice; })
+    }],
+    xaxis: {
+      categories: serie.map(function (punto) {
+        var fecha = new Date(punto.fecha);
+        return fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+      }),
+      labels: { style: { fontSize: '11px' } }
+    },
+    // El eje siempre de 0 a 100: sin esto, ApexCharts autoescala y una mejora de medio
+    // punto parecería enorme.
+    yaxis: { min: 0, max: 100, labels: { formatter: function (v) { return v.toFixed(0) + '%'; } } },
+    colors: ['#4f46e5'],
+    fill: { type: 'gradient', gradient: { opacityFrom: 0.35, opacityTo: 0.05 } },
+    stroke: { curve: 'smooth', width: 2 },
+    dataLabels: { enabled: false },
+    grid: { borderColor: '#e2e8f0', strokeDashArray: 4 },
+    tooltip: {
+      y: { formatter: function (v) { return v.toFixed(2) + '% de registros limpios'; } }
+    }
+  }).render();
+})();
+</script>
+{% endif %}
+
+{% endif %}

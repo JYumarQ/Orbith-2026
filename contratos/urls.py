@@ -15,11 +15,14 @@ urlpatterns = [
     
     #?REPORTES
     path('reporte/modelo_movimiento/<str:pk>/', login_required(views.ModeloMovimientoDocxView.as_view()), name='imprimir_modelo_movimiento'),
+    # Ruta explícita para TMovimiento. La de arriba resuelve el pk probando CAlta
+    # primero, así que no sirve cuando el pk viene de un movimiento o una baja.
+    path('reporte/movimiento/<int:pk>/', login_required(views.ModeloMovimientoDocxView.as_view()), {'origen': 'movimiento'}, name='imprimir_movimiento'),
     
 
     #?Validaciones
     path('validar_datos_contrato/', login_required(views.validar_datos_contrato), name='validar_datos_contrato'),
-    path('validar_plazas/', views.validar_plazas_cargo, name='validar_plazas_cargo'),
+    path('validar_plazas/', login_required(views.validar_plazas_cargo), name='validar_plazas_cargo'),
 
     path('ajax/cargar_departamentos/', login_required(views.cargar_departamentos), name='cargar_departamentos'),
     path('ajax/cargar_cargos/', login_required(views.cargar_cargos), name='cargar_cargos_contratos'),
@@ -46,7 +49,7 @@ urlpatterns = [
     path('exportar/historico/pdf/<int:aspirante_id>/', login_required(views.ExportarHistoricoPDFView.as_view()), name='exportar_historico_pdf'),
 
 
-    path('cargar-cargos-contrato/', views.cargar_cargos_contrato, name='cargar_cargos_contrato'),
+    path('cargar-cargos-contrato/', login_required(views.cargar_cargos_contrato), name='cargar_cargos_contrato'),
 
     #? EXPORTACIONES
     path('exportar_excel/', login_required(views.exportar_contratos_excel), name='exportar_contratos_excel'),
