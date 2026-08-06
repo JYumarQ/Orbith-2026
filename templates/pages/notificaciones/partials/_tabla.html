@@ -1,0 +1,114 @@
+{% comment %} Tabla + paginación compartida por ambas pestañas: la única diferencia
+   real entre Notificaciones y Advertencias es el queryset de partida (`notificaciones`
+   ya viene paginado y con `.enlace` anotado por `notificaciones/views.py`) y si se
+   muestra la columna Severidad (`mostrar_severidad`, solo Advertencias — un EVENTO
+   nunca tiene severidad real).
+
+   Sin columnas "Registro" ni "Acciones": cada fila lleva sus posibles acciones en
+   atributos `data-url-*` (vacíos si no aplican) que lee
+   `OrbithNotificaciones.activarBarraDeAcciones()` al seleccionar la fila, mismo patrón
+   de selección de fila + barra de acciones externa que ya usa
+   `templates/pages/contrato/list_contrato.html`. {% endcomment %}
+<style>
+  /* Mismo resaltado que ya usa `.table-active-row` en `list_contrato.html`, para que
+     se note visualmente qué fila está seleccionada (y por tanto a cuál se aplican
+     los botones habilitados del toolbar). */
+  .table-active-row > td {
+    background-color: rgba(105, 108, 255, 0.16) !important;
+    color: #696cff !important;
+    font-weight: 600;
+  }
+  .fila-notificacion { cursor: pointer; }
+</style>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th class="text-wrap" style="min-width: 320px;">Notificación</th>
+          {% if mostrar_severidad %}<th>Severidad</th>{% endif %}
+          <th>Estado</th>
+          <th>Leída</th>
+        </tr>
+      </thead>
+      <tbody class="table-border-bottom-0">
+        {% for n in notificaciones %}
+          <tr class="fila-notificacion {% if not n.leido %}fw-semibold{% endif %}"
+              data-id="{{ n.pk }}"
+              data-url-enlace="{{ n.enlace.href|default:'' }}"
+              data-url-marcar-leida="{% if not n.leido %}{% url 'notificacion_marcar_leida' n.pk %}{% endif %}"
+              data-url-descartar="{% if request.user.es_admin and n.tipo == 'ALE' and n.estado == 'ACT' %}{% url 'descartar_advertencia' n.pk %}{% endif %}"
+              data-url-reactivar="{% if request.user.es_admin and n.tipo == 'ALE' and n.estado == 'DES' %}{% url 'reactivar_advertencia' n.pk %}{% endif %}">
+            <td><small>{{ n.fecha_creado|date:"d/m/Y H:i" }}</small></td>
+            <td class="text-wrap">
+              {{ n.titulo }}
+              <small class="text-muted d-block">{{ n.mensaje }}</small>
+              {% if n.destinatarios_agrupados > 1 %}
+                <small class="text-muted d-block">
+                  <i class="bx bx-group"></i> Notificada a {{ n.destinatarios_agrupados }} destinatarios
+                </small>
+              {% endif %}
+            </td>
+            {% if mostrar_severidad %}
+              <td>
+                {% if n.severidad %}
+                  <span class="badge
+                    {% if n.severidad == 10 %}bg-danger
+                    {% elif n.severidad == 20 %}bg-warning
+                    {% elif n.severidad == 30 %}bg-info
+                    {% elif n.severidad == 40 %}bg-secondary
+                    {% else %}bg-light text-dark{% endif %}">
+                    {{ n.get_severidad_display }}
+                  </span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            {% endif %}
+            <td>
+              <span class="badge
+                {% if n.estado == 'ACT' %}bg-label-warning
+                {% elif n.estado == 'RES' %}bg-label-success
+                {% else %}bg-label-secondary{% endif %}">
+                {{ n.get_estado_display }}
+              </span>
+            </td>
+            <td>
+              {% if n.leido %}
+                <i class="bx bx-check text-success" title="Leída"></i>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="{% if mostrar_severidad %}5{% else %}4{% endif %}" class="text-center text-muted py-4">
+              <i class="bx bx-bell-off fs-3 d-block mb-2"></i>
+              No hay notificaciones{% if hay_filtros %} con este filtro{% endif %}.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if notificaciones.paginator.num_pages > 1 %}
+  <nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+      <li class="page-item {% if not notificaciones.has_previous %}disabled{% endif %}">
+        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if notificaciones.has_previous %}{{ notificaciones.previous_page_number }}{% else %}1{% endif %}">Anterior</a>
+      </li>
+      {% for numero in notificaciones.paginator.page_range %}
+        <li class="page-item {% if numero == notificaciones.number %}active{% endif %}">
+          <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={{ numero }}">{{ numero }}</a>
+        </li>
+      {% endfor %}
+      <li class="page-item {% if not notificaciones.has_next %}disabled{% endif %}">
+        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if notificaciones.has_next %}{{ notificaciones.next_page_number }}{% else %}{{ notificaciones.paginator.num_pages }}{% endif %}">Siguiente</a>
+      </li>
+    </ul>
+  </nav>
+{% endif %}

@@ -378,6 +378,9 @@ class GradoCientificoSinReflejar(ReglaContratos):
                 f'pero el campo correspondiente del contrato está vacío.'),
             datos={'grado_cientifico': etiqueta, campo: 'Vacío'},
             unidad_organizativa_id=unidad_organizativa_id,
+            # `campo` aquí es la clave de presentación ('campo_maestria'/'campo_doctorado'),
+            # no el nombre real del campo del modelo: se le quita el prefijo.
+            campo_formulario=campo.replace('campo_', ''),
         )
 
     def ejecutar(self, contexto):
@@ -659,6 +662,7 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
                 f'código de resolución correspondiente.'),
             datos={'condicion': etiqueta, 'campo': campo},
             unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario=campo,
         )
 
     def ejecutar(self, contexto):
@@ -754,6 +758,9 @@ class ChoferSinFechasDeVencimiento(ReglaContratos):
             titulo=titulo,
             detalle=f'El trabajador es chófer y le faltan estas fechas de vencimiento: {nombres}.',
             datos={'faltantes': [campo for campo, _ in faltantes]},
+            # Puede faltar más de una fecha a la vez: se apunta a la primera, que
+            # basta para llevar al usuario a la zona correcta del formulario.
+            campo_formulario=faltantes[0][0],
         )
 
     def ejecutar(self, contexto):
@@ -794,3 +801,123 @@ class ChoferSinFechasDeVencimiento(ReglaContratos):
 
         nombres = ', '.join(nombre for _, nombre in faltantes)
         return [self._hallazgo(str(contrato.pk), faltantes, f'Chófer sin fecha de {nombres}')]
+
+
+def _mision_sin_pais(mision, pais):
+    """Pura: la usan ejecutar() y evaluar_instancia() sin repetir la condición."""
+    return bool(mision) and not (pais or '').strip()
+
+
+class MisionSinPais(ReglaContratos):
+    codigo = 'CTR-014'
+    nombre = 'Contrato de misión sin país registrado'
+    criticidad = CRITICIDAD_MEDIA
+    # Evaluable en caliente: O(1) — solo campos propios de la instancia, sin FK.
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que un contrato marcado como misión tenga registrado el país '
+        'donde se cumple.')
+    causa_probable = (
+        'Se marcó «Misión» al crear el contrato pero el país todavía no estaba '
+        'confirmado, o se registró en el expediente físico sin trasladarlo al '
+        'sistema.')
+    impacto = (
+        'Sin el país, el contrato no documenta dónde se cumple la misión, un dato '
+        'que afecta a la trazabilidad administrativa del trabajador en el '
+        'exterior. No es obligatorio a nivel de formulario porque el dato puede '
+        'llegar después del alta.')
+    solucion = 'Abra el contrato y complete el país de la misión.'
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle='El contrato es de misión, pero no tiene registrado el país.',
+            datos={'mision': 'Sí', 'pais': 'Vacío'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='pais',
+        )
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(mision=True)
+                 .filter(Q(pais__isnull=True) | Q(pais=''))
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield self._hallazgo(
+                str(fila['id']), self.titulo_de(fila, 'misión sin país'),
+                self.unidad_de(fila))
+
+    def evaluar_instancia(self, contrato):
+        if not _mision_sin_pais(contrato.mision, contrato.pais):
+            return None
+        return [self._hallazgo(str(contrato.pk), 'Misión sin país')]
+
+
+def _c_formal_sin_res(c_formal, c_formal_res):
+    """Pura: la usan ejecutar() y evaluar_instancia() sin repetir la condición."""
+    return bool(c_formal) and not (c_formal_res or '').strip()
+
+
+class ConformidadFormalSinCodigo(ReglaContratos):
+    """Contrato marcado como «C. Formal» sin su código de resolución.
+
+    A diferencia de `funcionario`/`designado` (CTR-012), que son `@property` que
+    delegan en `self.cargo`, `c_formal` es un campo propio de `CAlta` — no depende
+    de la Plantilla, se marca directamente en el contrato.
+    """
+
+    codigo = 'CTR-015'
+    nombre = 'Conformidad formal sin código de resolución'
+    criticidad = CRITICIDAD_BAJA
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Cuando el contrato marca «C. Formal», debe tener registrado el código de '
+        'la resolución correspondiente.')
+    causa_probable = (
+        'Se marcó «C. Formal» al crear el contrato antes de que llegara la '
+        'resolución administrativa que la respalda.')
+    impacto = (
+        'El contrato no tiene trazabilidad del acto administrativo que respalda '
+        'la conformidad formal. No es obligatorio a nivel de sistema porque el '
+        'código puede tardar en emitirse.')
+    solucion = (
+        'Cuando llegue la resolución, abra el contrato y registre el código '
+        'correspondiente en «C. Formal».')
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle=(
+                'El contrato está marcado como C. Formal, pero no tiene '
+                'registrado el código de resolución correspondiente.'),
+            datos={'c_formal': 'Sí', 'c_formal_res': 'Vacío'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='c_formal_res',
+        )
+
+    def ejecutar(self, contexto):
+        columnas = self.COLUMNAS_BASE + ('c_formal', 'c_formal_res')
+
+        filas = (self.base_queryset()
+                 .filter(c_formal=True)
+                 .values(*columnas)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            if not _c_formal_sin_res(fila.get('c_formal'), fila.get('c_formal_res')):
+                continue
+            yield self._hallazgo(
+                str(fila['id']),
+                self.titulo_de(fila, 'C. Formal sin código de resolución'),
+                self.unidad_de(fila))
+
+    def evaluar_instancia(self, contrato):
+        if not _c_formal_sin_res(contrato.c_formal, contrato.c_formal_res):
+            return None
+        return [self._hallazgo(str(contrato.pk), 'C. Formal sin código de resolución')]

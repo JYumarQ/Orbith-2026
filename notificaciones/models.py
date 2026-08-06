@@ -21,12 +21,22 @@ class Notificacion(models.Model):
         EVENTO = 'EVE', 'Evento'                # alta/baja de contrato, nuevo cargo, solicitud
         ALERTA = 'ALE', 'Alerta'                # hallazgos de integridad (en caliente o Subsanación)
         SISTEMA = 'SIS', 'Sistema'              # reservado: nada lo emite todavía
-        RECORDATORIO = 'REC', 'Recordatorio'    # reservado: vencimientos, cumpleaños, etc.
+        RECORDATORIO = 'REC', 'Recordatorio'    # vencimientos, cumpleaños, jubilación próxima, etc.
 
     class Estado(models.TextChoices):
         ACTIVA = 'ACT', 'Activa'
         RESUELTA = 'RES', 'Resuelta'
         DESCARTADA = 'DES', 'Descartada'        # reservado: nadie lo escribe todavía
+
+    class Origen(models.TextChoices):
+        """Solo se usa en RECORDATORIO — distingue si lo generó el escaneo periódico
+        (`notificaciones/recordatorios.py`) o lo creó a mano un administrador. Campo
+        explícito a propósito: se descartó inferirlo de una convención de prefijo en
+        `codigo_regla` (p. ej. 'REC-' = automático) por implícito y frágil — cualquiera
+        que lea el dato sin conocer la convención no sabría qué significa, y una regla
+        mal nombrada rompería la clasificación en silencio."""
+        SISTEMA = 'SIS', 'Sistema'
+        ADMINISTRACION = 'ADM', 'Administración'
 
     titulo = models.CharField(max_length=150)
     mensaje = models.TextField()
@@ -56,6 +66,21 @@ class Notificacion(models.Model):
     # `notificaciones/avisos.py`. Vacíos para los EVENTO, que no vienen de una regla.
     codigo_regla = models.CharField(max_length=20, blank=True, default='')
     clave_extra = models.CharField(max_length=50, blank=True, default='')
+
+    # Copiado de `HallazgoDetectado.campo_formulario` al registrar la notificación
+    # (ver `notificaciones/avisos.py::_registrar_notificacion_de_hallazgo`): el nombre
+    # real del campo del modelo al que corresponde el hallazgo, si la regla lo declara.
+    # Se persiste aquí (en vez de recalcularlo) porque el panel "otras advertencias del
+    # registro" lee filas ya guardadas, no vuelve a evaluar la regla. Vacío si la regla
+    # no lo declara o la alerta es un EVENTO sin campo asociado.
+    campo_formulario = models.CharField(max_length=100, blank=True, default='')
+
+    # Solo para RECORDATORIO: cuándo vence/ocurre lo recordado (vencimiento de
+    # contrato, fecha del próximo cumpleaños, fecha en la que se alcanza la edad de
+    # pre-jubilación...). Es lo que permite calcular el color de prioridad (🟢🟠🟡🔴) al
+    # vuelo, sin guardar un estado "Vencido" aparte — ver `notificaciones/recordatorios.py`.
+    fecha_objetivo = models.DateField(null=True, blank=True)
+    origen = models.CharField(max_length=3, choices=Origen.choices, blank=True, default='')
 
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.CharField(max_length=50)

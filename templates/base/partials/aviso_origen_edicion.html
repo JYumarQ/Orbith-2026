@@ -1,0 +1,15 @@
+{% comment %} Aviso "está corrigiendo un registro desde...", compartido por las 6 vistas de
+   edición con `VolverAlOrigenMixin`. Vive DENTRO del modal (justo bajo el título) a
+   propósito: en el modo "página completa" (`core.mixins.ModalOPaginaCompletaMixin`), la
+   plantilla envolvente simula un modal con un `.modal-backdrop.show` que tiene su propio
+   z-index de Bootstrap. Un aviso fuera de `.modal`/`.modal-content` queda por debajo de ese
+   backdrop en el eje de apilamiento aunque el DOM lo pinte antes — por eso no basta con
+   reordenar el HTML, hay que moverlo dentro. Sin `next` no se renderiza nada, así que el
+   flujo normal (abrir el modal desde el propio listado del módulo) no cambia visualmente. {% endcomment %}
+{% if next %}
+  <div class="alert alert-info mb-3">
+    <i class="bx bx-info-circle me-1"></i>
+    Está corrigiendo un registro desde {{ origen|default:"una advertencia" }}. Al guardar, volverá
+    automáticamente {% if origen %}a {{ origen }}{% else %}a donde estaba{% endif %}.
+  </div>
+{% endif %}

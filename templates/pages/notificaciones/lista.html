@@ -1,0 +1,103 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% block title %}Notificaciones | Orbith{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+    <div>
+      <h4 class="fw-bold mb-0">
+        <i class="bx bx-bell me-2 text-primary"></i>Notificaciones
+      </h4>
+      <small class="text-muted">
+        Eventos informativos y advertencias de integridad, separados por pestaña.
+      </small>
+    </div>
+
+    {% if total_no_leidas %}
+      <span class="badge bg-label-danger fs-6">
+        {{ total_no_leidas }} sin leer
+      </span>
+    {% endif %}
+
+    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-marcar-todas-lista">
+      <i class="bx bx-check-double me-1"></i>Marcar todas como leídas
+    </button>
+  </div>
+
+  <div class="nav-align-top mb-4">
+    <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link {% if tab_activa == 'notificaciones' %}active{% endif %}"
+           href="?tab=notificaciones">
+          <i class="bx bx-bell me-1"></i>Notificaciones
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if tab_activa == 'advertencias' %}active{% endif %}"
+           href="?tab=advertencias">
+          <i class="bx bx-error-circle me-1"></i>Advertencias
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if tab_activa == 'recordatorios' %}active{% endif %}"
+           href="?tab=recordatorios">
+          <i class="bx bx-calendar-event me-1"></i>Recordatorios
+        </a>
+      </li>
+    </ul>
+
+    {% if tab_activa == 'advertencias' %}
+      {% include 'pages/notificaciones/partials/tab_advertencias.html' %}
+    {% elif tab_activa == 'recordatorios' %}
+      {% include 'pages/notificaciones/partials/tab_recordatorios.html' %}
+    {% else %}
+      {% include 'pages/notificaciones/partials/tab_notificaciones.html' %}
+    {% endif %}
+  </div>
+
+</div>
+
+<script src="{% static 'js/notificaciones.js' %}"></script>
+<script>
+(function () {
+  function obtenerCookie(nombre) {
+    const coincidencia = document.cookie.match('(^|;)\\s*' + nombre + '\\s*=\\s*([^;]+)');
+    return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
+  }
+  const csrftoken = obtenerCookie('csrftoken');
+
+  const btnTodas = document.getElementById('btn-marcar-todas-lista');
+  if (btnTodas) {
+    btnTodas.addEventListener('click', function () {
+      fetch("{% url 'notificaciones_marcar_todas_leidas' %}", { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
+        .then(function (res) { if (res.ok) window.location.reload(); });
+    });
+  }
+
+  const btnBuscar = document.getElementById('btn-buscar-incidencias');
+  if (btnBuscar) {
+    btnBuscar.addEventListener('click', function () {
+      btnBuscar.disabled = true;
+      fetch("{% url 'buscar_incidencias' %}", { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          Swal.fire({
+            toast: true, position: 'top-end', icon: 'success',
+            title: data.mensaje, showConfirmButton: false, timer: 3000, timerProgressBar: true,
+          }).then(function () { window.location.reload(); });
+        })
+        .catch(function () {
+          btnBuscar.disabled = false;
+          Swal.fire({
+            toast: true, position: 'top-end', icon: 'error',
+            title: 'No se pudo completar el escaneo.', showConfirmButton: false, timer: 3000,
+          });
+        });
+    });
+  }
+})();
+</script>
+{% endblock %}

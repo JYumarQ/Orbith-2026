@@ -1,0 +1,83 @@
+{% comment %} Tabla + paginación de Recordatorios, separada de `tab_recordatorios.html`
+   para que `panel_recordatorios` pueda intercambiar SOLO esto vía HTMX al buscar,
+   igual que `panel_advertencias` hace con `_tabla.html` en Advertencias. {% endcomment %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Prioridad</th>
+          <th>Fecha objetivo</th>
+          <th class="text-wrap" style="min-width: 320px;">Recordatorio</th>
+          <th>Unidad</th>
+          <th>Registro</th>
+          {% if sub_activa == 'administracion' %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody class="table-border-bottom-0">
+        {% for r in recordatorios %}
+          <tr data-id="{{ r.pk }}">
+            <td>
+              <span title="{{ r.prioridad.etiqueta }}">
+                {{ r.prioridad.emoji }}
+                {% if r.prioridad.dias is not None %}
+                  <small class="text-muted">
+                    {% if r.prioridad.dias > 0 %}{{ r.prioridad.dias }} día(s){% elif r.prioridad.dias == 0 %}Hoy{% else %}Vencido{% endif %}
+                  </small>
+                {% endif %}
+              </span>
+            </td>
+            <td><small>{{ r.fecha_objetivo|date:"d/m/Y" }}</small></td>
+            <td class="text-wrap">
+              {{ r.titulo }}
+              <small class="text-muted d-block">{{ r.mensaje }}</small>
+            </td>
+            <td><small>{{ r.unidad|default:"—" }}</small></td>
+            <td>
+              {% if r.enlace %}
+                <a href="{{ r.enlace.href }}" class="btn btn-sm btn-outline-primary">
+                  <i class="bx bx-link-external"></i> {{ r.enlace.etiqueta }}
+                </a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            {% if sub_activa == 'administracion' %}
+              <td>
+                <button type="button" class="btn btn-sm btn-link p-0 btn-completar-recordatorio"
+                        data-url="{% url 'recordatorio_completar' r.pk %}">
+                  Marcar completado
+                </button>
+              </td>
+            {% endif %}
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted py-4">
+              <i class="bx bx-calendar-check fs-3 d-block mb-2"></i>
+              Sin recordatorios{% if hay_filtros %} con este filtro{% elif sub_activa == 'sistema' %} automáticos pendientes{% else %} manuales pendientes{% endif %}.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if recordatorios.paginator.num_pages > 1 %}
+  <nav class="mt-3">
+    <ul class="pagination pagination-sm justify-content-center">
+      <li class="page-item {% if not recordatorios.has_previous %}disabled{% endif %}">
+        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if recordatorios.has_previous %}{{ recordatorios.previous_page_number }}{% else %}1{% endif %}">Anterior</a>
+      </li>
+      {% for numero in recordatorios.paginator.page_range %}
+        <li class="page-item {% if numero == recordatorios.number %}active{% endif %}">
+          <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={{ numero }}">{{ numero }}</a>
+        </li>
+      {% endfor %}
+      <li class="page-item {% if not recordatorios.has_next %}disabled{% endif %}">
+        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if recordatorios.has_next %}{{ recordatorios.next_page_number }}{% else %}{{ recordatorios.paginator.num_pages }}{% endif %}">Siguiente</a>
+      </li>
+    </ul>
+  </nav>
+{% endif %}

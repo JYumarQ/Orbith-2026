@@ -74,6 +74,15 @@ class EjecucionAnalisis(models.Model):
     modulos_completados = models.JSONField(default=list, blank=True)
     reglas_ejecutadas = models.PositiveSmallIntegerField(default=0)
 
+    # Códigos de las reglas que esta ejecución reconcilió con éxito (sin las que
+    # fallaron). Es más fino que `modulos_completados`: un análisis de una sola
+    # regla (`--regla CODIGO`) completa su módulo entero sin haber ejecutado las
+    # demás reglas de esa categoría, y varias reglas de módulos distintos pueden
+    # compartir modelo (p. ej. `CAlta` en «contratos» y en «nómina»). `hallazgos_
+    # vigentes` e `indice_salud` se acotan a esta lista — ver `finalizar_ejecucion` —
+    # para no contar hallazgos de una regla que esta ejecución nunca comprobó.
+    codigos_regla_ejecutados = models.JSONField(default=list, blank=True)
+
     # Etiquetas «app.Modelo» de los modelos que se revisaron, sin repetir.
     # De aquí sale `registros_analizados`: se cuenta cada modelo UNA vez, no una vez
     # por regla. Si se contara por regla, añadir reglas nuevas inflaría el

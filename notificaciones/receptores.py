@@ -58,6 +58,10 @@ def avisar_criticas_nuevas(sender, ejecucion, **kwargs):
     Notificacion.objects.bulk_create([
         Notificacion(
             titulo=titulo, mensaje=mensaje, destinatario=admin,
-            content_type=tipo_ejecucion, object_id=str(ejecucion.pk))
+            content_type=tipo_ejecucion, object_id=str(ejecucion.pk),
+            # Es una alerta de integridad, no un evento informativo — sin esto caía
+            # en el default EVENTO y aparecía mezclada con altas/bajas/cargos nuevos
+            # en vez de en la pestaña de Advertencias.
+            tipo=Notificacion.Tipo.ALERTA)
         for admin in admins
     ])

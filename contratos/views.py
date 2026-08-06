@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View, FormView
 from django.core.paginator import Paginator
 from django.conf import settings
+from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 from bolsa.models import Aspirante
 from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
@@ -51,6 +52,30 @@ CAT_MAP = {
 class ContratoListView(ListView):
     model = CAlta
     template_name = "pages/contrato/list_contrato.html"
+
+    def get_queryset(self):
+        """Precarga las relaciones que recorre la plantilla de filas.
+
+        `partials/filter_contratos_list.html` baja por `c.aspirante`,
+        `c.cargo.departamento.unidad_organizativa`, `c.cargo.ncargo.grupo_escala`,
+        `c.cargo.rol`, `c.rol` y `c.tridente`. Sin esto Django resolvía cada salto
+        con una consulta suelta por fila: la vista disparaba 95 consultas (36 de
+        ellas repetidas) con apenas 51 empleados.
+        """
+        return super().get_queryset().select_related(
+            'aspirante',
+            'tipo',
+            'motivo',
+            'rol',
+            'tridente',
+            'cargo',
+            'cargo__ncargo',
+            'cargo__ncargo__grupo_escala',
+            'cargo__rol',
+            'cargo__departamento',
+            'cargo__departamento__unidad_organizativa',
+        )
+
     def get_paginate_by(self, queryset):
         # PROTECCIÓN: Si viene vacío (''), usar 8 por defecto
         page_size = self.request.GET.get('per_page')
@@ -802,11 +827,12 @@ class ContratoCreateView(RequiereEdicionMixin, CreateView):
             
         return super().form_invalid(form)
 
-class ContratoUpdateView(RequiereEdicionMixin, UpdateView):
+class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CAlta
     form_class = CAltaForm
     template_name = "pages/contrato/updt_contrato.html"
-    success_url = reverse_lazy('list_contrato')
+    template_name_pagina = "pages/contrato/updt_contrato_pagina.html"
+    url_por_defecto = reverse_lazy('list_contrato')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -880,19 +906,30 @@ class ContratoUpdateView(RequiereEdicionMixin, UpdateView):
             self.object.tridente = None
             
         self.object.save()
-        
+
+        # Hay una redirección real posterior SOLO cuando se llegó desde una
+        # advertencia (`next` presente, ver `VolverAlOrigenMixin`): las ramas AJAX/HTMX
+        # de abajo cierran el modal en la MISMA página cuando no hay `next`, así que un
+        # `messages.success()` incondicional aquí quedaría «colgado» en la sesión y
+        # podría aparecer en una navegación posterior no relacionada.
+        hay_origen = bool(self.request.POST.get('next') or self.request.GET.get('next'))
+
         # ✅ PARA PETICIONES AJAX NORMALES (esto va ANTES del bloque HTMX)
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             from django.http import JsonResponse
+            if hay_origen:
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Contrato actualizado correctamente.'))
             return JsonResponse({
                 'form_is_valid': True,
-                'success_url': str(self.success_url)
+                'success_url': str(self.get_success_url())
             })
-        
+
         # MAGIA HTMX: Respondemos directamente con las órdenes para el frontend
         if self.request.headers.get('HX-Request'):
             import json
             from django.http import HttpResponse
+            if hay_origen:
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Contrato actualizado correctamente.'))
             response = HttpResponse(status=204)
             response['HX-Trigger'] = json.dumps({
                 'updateContratoList': '',
@@ -902,7 +939,7 @@ class ContratoUpdateView(RequiereEdicionMixin, UpdateView):
             })
             return response
 
-        messages.success(self.request, 'Contrato actualizado correctamente.')
+        messages.success(self.request, self.mensaje_de_guardado_exitoso('Contrato actualizado correctamente.'))
         return super(UpdateView, self).form_valid(form)
 
     def form_invalid(self, form):

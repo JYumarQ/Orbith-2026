@@ -6,3 +6,12 @@ __pycache__/
 orbith_db.sqlite3
 media/
 static_root/
+
+# Credenciales: nunca deben viajar en el repositorio.
+# `core/.env` guarda SECRET_KEY y los datos de la base de datos.
+.env
+*.env
+core/.env
+
+# Copias de trabajo que crea automaticamente el agente de Claude Code.
+.claude/worktrees/

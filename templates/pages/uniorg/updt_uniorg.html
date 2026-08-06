@@ -6,15 +6,18 @@
         </div>
         
         <div class="modal-body">
-            <form hx-post="{{ request.path }}" 
+            {% include 'base/partials/aviso_origen_edicion.html' %}
+            {% include 'base/partials/panel_advertencias_registro.html' %}
+            <form hx-post="{{ request.path }}"
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
                   
                   id="uniorgForm">
-                
+
                 {% csrf_token %}
-                
+                <input type="hidden" name="next" value="{{ next }}">
+
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
                         <label class="form-label fw-bold">{{ form.tipo.label }}</label>

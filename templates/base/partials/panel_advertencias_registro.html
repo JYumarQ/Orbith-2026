@@ -1,0 +1,48 @@
+{% load static %}
+{% comment %} Panel "otras advertencias de este registro", alimentado por
+   `core.mixins.AdvertenciasDelRegistroMixin`. Abierto por defecto solo cuando `next`
+   está vacío (se llegó desde el propio módulo, no desde una advertencia concreta —
+   si ya se sabe por qué se abrió el formulario, no hace falta forzar el panel
+   abierto). Solo se listan (y son clicables) las ACTIVA; las RESUELTA solo cuentan
+   para la barra de progreso. {% endcomment %}
+{% if advertencias_total %}
+  <div class="card mb-3 border">
+    <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center cursor-pointer"
+         role="button" data-bs-toggle="collapse" data-bs-target="#panelAdvertenciasRegistro"
+         aria-expanded="{% if not next %}true{% else %}false{% endif %}" aria-controls="panelAdvertenciasRegistro">
+      <span class="fw-semibold small">
+        <i class="bx bx-list-check me-1"></i>
+        {{ advertencias_resueltas }} de {{ advertencias_total }} resueltas
+      </span>
+      <i class="bx bx-chevron-down"></i>
+    </div>
+    <div class="progress" style="height: 4px; border-radius: 0;">
+      <div class="progress-bar bg-success" role="progressbar"
+           style="width: {% widthratio advertencias_resueltas advertencias_total 100 %}%"
+           aria-valuenow="{{ advertencias_resueltas }}" aria-valuemin="0" aria-valuemax="{{ advertencias_total }}"></div>
+    </div>
+    <div class="collapse {% if not next %}show{% endif %}" id="panelAdvertenciasRegistro">
+      <ul class="list-group list-group-flush">
+        {% for n in advertencias_del_registro %}
+          <li class="list-group-item d-flex justify-content-between align-items-start small
+                     {% if n.campo_formulario %}advertencia-clicable cursor-pointer{% endif %}"
+              {% if n.campo_formulario %}data-campo-formulario="{{ n.campo_formulario }}"{% endif %}>
+            <div>
+              <div class="fw-semibold">{{ n.titulo }}</div>
+              <span class="text-muted">{{ n.mensaje }}</span>
+            </div>
+            {% if n.campo_formulario %}
+              <i class="bx bx-target-lock text-primary ms-2 flex-shrink-0" title="Ir al campo"></i>
+            {% endif %}
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted small">Sin otras advertencias activas en este registro.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <script src="{% static 'js/notificaciones.js' %}"></script>
+  <script>
+    OrbithNotificaciones.activarClicACampo('#panelAdvertenciasRegistro');
+  </script>
+{% endif %}

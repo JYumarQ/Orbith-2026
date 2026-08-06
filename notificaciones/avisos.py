@@ -35,13 +35,129 @@ def _unidad_del_contrato(contrato):
     return None
 
 
+def _registrar_notificacion_de_hallazgo(*, tipo_ct, object_id, destinatario, regla, hallazgo):
+    """Un `HallazgoDetectado` + un destinatario -> una fila `Notificacion`.
+
+    Deduplica por `(content_type, object_id, destinatario, codigo_regla, clave_extra)`
+    vía `update_or_create()`: volver a detectar el mismo problema actualiza la MISMA
+    fila en vez de crear una nueva — es la base de que tanto el aviso en caliente como
+    el escaneo en lote (`notificaciones/escaneo.py`) sean idempotentes. No resuelve
+    nada — solo escribe esta fila. La usan ambos flujos para no poder divergir.
+    """
+    clave_extra = hallazgo.clave_extra or ''
+
+    existente = Notificacion.objects.filter(
+        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+        codigo_regla=regla.codigo, clave_extra=clave_extra,
+    ).first()
+
+    if existente and existente.estado == Notificacion.Estado.DESCARTADA:
+        # Un descarte manual (falso positivo / caso aceptado) no lo revierte la
+        # próxima evaluación automática — mismo criterio que Subsanación ya aplica a
+        # sus hallazgos «Ignorado»/«Falso positivo».
+        return
+
+    Notificacion.objects.update_or_create(
+        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+        codigo_regla=regla.codigo, clave_extra=clave_extra,
+        defaults={
+            'titulo': hallazgo.titulo,
+            'mensaje': hallazgo.detalle,
+            'tipo': Notificacion.Tipo.ALERTA,
+            'severidad': regla.criticidad,
+            'estado': Notificacion.Estado.ACTIVA,
+            'fecha_resolucion': None,
+            # El hallazgo ya trae su propia unidad (calculada por la regla); antes no
+            # se guardaba aquí y el campo `unidad` de las alertas quedaba siempre
+            # vacío, dejando sin efecto el filtro por unidad de Advertencias.
+            'unidad_id': hallazgo.unidad_organizativa_id,
+            'campo_formulario': hallazgo.campo_formulario,
+        },
+    )
+
+
+def _registrar_recordatorio(*, tipo_ct, object_id, destinatario, codigo, clave_extra,
+                             titulo, mensaje, fecha_objetivo, unidad_id):
+    """Un recordatorio automático detectado (`notificaciones/recordatorios.py`) + un
+    destinatario -> una fila `Notificacion`.
+
+    Reutiliza la MISMA clave de deduplicación que `_registrar_notificacion_de_hallazgo`
+    (content_type+object_id+destinatario+codigo_regla+clave_extra) y el mismo criterio
+    de no revertir un descarte manual — es el patrón ya establecido para Advertencias,
+    aplicado aquí a Recordatorios en vez de inventar uno paralelo. `codigo` ocupa el
+    campo `codigo_regla` (identifica el TIPO de recordatorio: 'REC-CUMPLE', etc.), igual
+    que una regla de Subsanación identifica un tipo de alerta.
+    """
+    existente = Notificacion.objects.filter(
+        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+        codigo_regla=codigo, clave_extra=clave_extra,
+    ).first()
+
+    if existente and existente.estado == Notificacion.Estado.DESCARTADA:
+        return
+
+    Notificacion.objects.update_or_create(
+        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+        codigo_regla=codigo, clave_extra=clave_extra,
+        defaults={
+            'titulo': titulo,
+            'mensaje': mensaje,
+            'tipo': Notificacion.Tipo.RECORDATORIO,
+            'origen': Notificacion.Origen.SISTEMA,
+            'estado': Notificacion.Estado.ACTIVA,
+            'fecha_resolucion': None,
+            'fecha_objetivo': fecha_objetivo,
+            'unidad_id': unidad_id,
+        },
+    )
+
+
+def _resolver_notificaciones_obsoletas(*, destinatario, codigos_relevantes, claves_vigentes, alcance=None):
+    """Marca `RESUELTA` (sin tocar `leido`) las notificaciones `ACTIVA` de
+    `destinatario` cuyo `codigo_regla` está en `codigos_relevantes` pero cuya clave
+    `(content_type_id, object_id, codigo_regla, clave_extra)` NO está en
+    `claves_vigentes` — es decir, ya no se detectan. No se borran aquí: quedan
+    `RESUELTA` y las purga `notificaciones/limpieza.py::purgar_notificaciones_antiguas()`
+    a los 60 días (bandeja enfocada en lo vigente, no un historial permanente).
+
+    `alcance` es un filtro adicional opcional sobre el queryset de candidatas (por
+    ejemplo `{'content_type': tipo_ct, 'object_id': object_id}`): lo usa
+    `avisar_hallazgos_en_caliente()` para acotar la resolución a la MISMA instancia
+    que se acaba de guardar, sin tocar notificaciones de otros registros con el mismo
+    código de regla. El escaneo en lote (`notificaciones/escaneo.py`) no lo pasa: su
+    `claves_vigentes` ya cubre toda la empresa, así que no hace falta acotar más.
+    """
+    if not codigos_relevantes:
+        return 0
+
+    candidatas = Notificacion.objects.filter(
+        destinatario=destinatario, estado=Notificacion.Estado.ACTIVA,
+        codigo_regla__in=codigos_relevantes)
+    if alcance:
+        candidatas = candidatas.filter(**alcance)
+
+    ahora = timezone.now()
+    resueltas = 0
+    for notificacion in candidatas:
+        clave = (notificacion.content_type_id, notificacion.object_id,
+                  notificacion.codigo_regla, notificacion.clave_extra)
+        if clave in claves_vigentes:
+            continue
+        notificacion.estado = Notificacion.Estado.RESUELTA
+        notificacion.fecha_resolucion = ahora
+        notificacion.save(update_fields=['estado', 'fecha_resolucion'])
+        resueltas += 1
+    return resueltas
+
+
 def avisar_hallazgos_en_caliente(instancia):
     """Evalúa las reglas en caliente sobre `instancia` y notifica a quien la guardó.
 
     Deduplica por `(content_type, object_id, destinatario, codigo_regla, clave_extra)`:
     guardar el mismo registro sin corregir el campo actualiza la MISMA notificación en
     vez de crear una nueva. Si el problema se corrige, la notificación existente pasa a
-    `estado=RESUELTA` sin tocar `leido` — nunca se borra.
+    `estado=RESUELTA` sin tocar `leido`; se conserva 60 días y después se purga (ver
+    `notificaciones/limpieza.py`).
     """
     resultados = evaluar_reglas_de_instancia(instancia)
 
@@ -71,52 +187,20 @@ def avisar_hallazgos_en_caliente(instancia):
                 "(script o migración); no se notifica a nadie.", etiqueta, instancia.pk)
         return
 
-    detectadas_claves = set()
+    claves_vigentes = set()
 
     for regla, detectados in resultados:
         for detectado in detectados:
-            clave_extra = detectado.clave_extra or ''
-            detectadas_claves.add((regla.codigo, clave_extra))
+            claves_vigentes.add(
+                (tipo_ct.id, object_id, regla.codigo, detectado.clave_extra or ''))
+            _registrar_notificacion_de_hallazgo(
+                tipo_ct=tipo_ct, object_id=object_id, destinatario=destinatario,
+                regla=regla, hallazgo=detectado)
 
-            existente = Notificacion.objects.filter(
-                content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
-                codigo_regla=regla.codigo, clave_extra=clave_extra,
-            ).first()
-
-            if existente and existente.estado == Notificacion.Estado.DESCARTADA:
-                # Un descarte manual (falso positivo / caso aceptado) no lo revierte
-                # la próxima evaluación automática — mismo criterio que Subsanación ya
-                # aplica a sus hallazgos «Ignorado»/«Falso positivo».
-                continue
-
-            Notificacion.objects.update_or_create(
-                content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
-                codigo_regla=regla.codigo, clave_extra=clave_extra,
-                defaults={
-                    'titulo': detectado.titulo,
-                    'mensaje': detectado.detalle,
-                    'tipo': Notificacion.Tipo.ALERTA,
-                    'severidad': regla.criticidad,
-                    'estado': Notificacion.Estado.ACTIVA,
-                    'fecha_resolucion': None,
-                },
-            )
-
-    if not codigos_relevantes:
-        return
-
-    # Resolver (sin borrar, sin tocar `leido`) las que ya no se detectan.
-    candidatas = Notificacion.objects.filter(
-        content_type=tipo_ct, object_id=object_id,
-        estado=Notificacion.Estado.ACTIVA, codigo_regla__in=codigos_relevantes,
-    )
-    ahora = timezone.now()
-    for notificacion in candidatas:
-        if (notificacion.codigo_regla, notificacion.clave_extra) in detectadas_claves:
-            continue
-        notificacion.estado = Notificacion.Estado.RESUELTA
-        notificacion.fecha_resolucion = ahora
-        notificacion.save(update_fields=['estado', 'fecha_resolucion'])
+    _resolver_notificaciones_obsoletas(
+        destinatario=destinatario, codigos_relevantes=codigos_relevantes,
+        claves_vigentes=claves_vigentes,
+        alcance={'content_type': tipo_ct, 'object_id': object_id})
 
 
 def avisar_alta_contrato(contrato):

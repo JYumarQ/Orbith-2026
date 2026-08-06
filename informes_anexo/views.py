@@ -7,7 +7,7 @@ Observadores pueden verlo/generarlo (Moderadores no tienen acceso).
 """
 from datetime import date
 from io import BytesIO
-
+from .excel.reports.anexo14 import Anexo14Report
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -265,8 +265,18 @@ def _obtener_datos_reporte(request):
     if not padre_actual and padres_lista:
         padre_actual = padres_lista[0]
 
+    # `hijas_todas` alimenta el selector de unidad (sin filtrar) y `hijas` la tabla.
+    # Cuando no hay ningún filtro activo ambas listas son idénticas, así que se
+    # reutiliza en vez de reconstruir el árbol completo por segunda vez.
+    hay_filtros_de_cargo = any((
+        filtros.get("busqueda"),
+        filtros.get("categoria") not in (None, "", "ALL"),
+        filtros.get("rol") not in (None, "", "ALL"),
+        filtros.get("unidad_hija_id"),
+    ))
     hijas_todas = _construir_hijas(padre_actual, {}) if padre_actual else []
-    hijas = _construir_hijas(padre_actual, filtros) if padre_actual else []
+    hijas = (_construir_hijas(padre_actual, filtros) if (padre_actual and hay_filtros_de_cargo)
+             else hijas_todas)
     kpis = _calcular_kpis(hijas)
 
     director_ch = _resolver_firmante(
@@ -299,75 +309,34 @@ def _obtener_datos_reporte(request):
 
 class AnexoCatorceView(PermisoAnexoMixin, TemplateView):
     template_name = "pages/informes_anexo/anexo14.html"
+    #: Solo el bloque de firmas, para las peticiones HTMX de los `<select>` de
+    #: firmantes. Elegir un firmante no cambia el árbol de unidades ni los KPIs, así
+    #: que repintar la página entera (lo que hacía el `form.submit()` anterior) era
+    #: trabajo desperdiciado y perdía la posición de scroll.
+    template_name_firmas = "pages/informes_anexo/partials/bloque_firmas.html"
+
+    def get_template_names(self):
+        if getattr(self.request, "htmx", False):
+            return [self.template_name_firmas]
+        return [self.template_name]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context.update(_obtener_datos_reporte(self.request))
+        # Activa el `hx-swap-oob` de la botonera de exportación: sus enlaces llevan
+        # los filtros en el query string y quedarían desfasados tras el intercambio.
+        context["intercambio_oob"] = bool(getattr(self.request, "htmx", False))
         return context
 
 
 class ExportarAnexo14ExcelView(PermisoAnexoMixin, View):
     def get(self, request, *args, **kwargs):
+        # 1. Reutiliza la función que ya construiste con todo el árbol de datos y filtros
         datos = _obtener_datos_reporte(request)
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Anexo 14"
-
-        encabezado_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
-        encabezado_font = Font(color="FFFFFF", bold=True)
-        titulo_font = Font(bold=True, size=14)
-
-        ws.append(["ANEXO 14 — ESTRUCTURA JERÁRQUICA Y PLANTILLA APROBADA"])
-        ws["A1"].font = titulo_font
-        ws.append([])
-
-        config = datos["configuracion"]
-        padre = datos["padre_actual"]
-        if config:
-            ws.append(["Empresa", config.nombre_empresa])
-            ws.append(["Organismo", config.org_superior or ""])
-            ws.append(["REUP", config.reup or ""])
-        if padre and padre.municipio:
-            ws.append(["Provincia", padre.municipio.provincia.nombre])
-            ws.append(["Municipio", padre.municipio.nombre])
-        ws.append([])
-
-        columnas = [
-            "Unidad Organizativa", "Departamento", "Cargo", "Cat. Ocup.",
-            "Cant. Aprobada", "Rol", "Nivel de Preparación", "Grupo Escala",
-        ]
-        ws.append(columnas)
-        for celda in ws[ws.max_row]:
-            celda.font = encabezado_font
-            celda.fill = encabezado_fill
-            celda.alignment = Alignment(horizontal="center")
-
-        for hija in datos["hijas"]:
-            for depto in hija.departamentos_con_cargos:
-                for cargo in depto.cargos_filtrados:
-                    ws.append([
-                        hija.descripcion,
-                        depto.descripcion,
-                        cargo.ncargo.descripcion,
-                        ETIQUETAS_CATEGORIA.get(cargo.ncargo.cat_ocupacional, cargo.ncargo.cat_ocupacional),
-                        cargo.cant_aprobada,
-                        cargo.rol.tipo if cargo.rol else "—",
-                        cargo.nivel_preparacion.nombre if cargo.nivel_preparacion else "",
-                        cargo.ncargo.grupo_escala.nivel,
-                    ])
-
-        for columna in ws.columns:
-            longitud = max((len(str(c.value)) for c in columna if c.value is not None), default=10)
-            ws.column_dimensions[columna[0].column_letter].width = min(longitud + 2, 45)
-
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        nombre_archivo = f"Anexo_14_{date.today().isoformat()}.xlsx"
-        response["Content-Disposition"] = f'attachment; filename="{nombre_archivo}"'
-        wb.save(response)
-        return response
+        
+        # 2. Delega la creación del Excel al motor especializado
+        reporte = Anexo14Report()
+        return reporte.export_to_response(datos)
 
 
 class ExportarAnexo14PDFView(PermisoAnexoMixin, View):

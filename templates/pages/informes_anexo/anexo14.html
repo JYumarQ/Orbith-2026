@@ -175,24 +175,15 @@
                 <p>Documento oficial de estructura organizativa y plantilla de cargos aprobada.</p>
             </div>
         </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-md-0">
-            <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
-               href="{% url 'informes_anexo:anexo14_excel' %}?{{ request.GET.urlencode }}">
-                <i class="bi bi-file-earmark-excel-fill text-success"></i> Exportar Excel
-            </a>
-            <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
-               href="{% url 'informes_anexo:anexo14_pdf' %}?{{ request.GET.urlencode }}">
-                <i class="bi bi-file-earmark-pdf-fill text-danger"></i> Exportar PDF
-            </a>
-            <button type="button" class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2" onclick="window.print()">
-                <i class="bi bi-printer-fill"></i> Imprimir
-            </button>
-        </div>
+        {% include "pages/informes_anexo/partials/acciones_export.html" %}
     </div>
 
+    {% comment %} Los `hidden` que conservan los firmantes ya elegidos NO viven aquí sino
+       dentro de `partials/bloque_firmas.html`: ese bloque es el que HTMX reemplaza, y
+       si se quedaran en este formulario (que no se intercambia) mantendrían el valor
+       del render inicial — al elegir el segundo firmante se perdía el primero. Se
+       enlazan a este formulario con el atributo `form=`. {% endcomment %}
     <form method="get" id="formFiltrosAnexo14">
-        {% if filtros.director_ch_id %}<input type="hidden" name="director_ch" value="{{ filtros.director_ch_id }}">{% endif %}
-        {% if filtros.director_gral_id %}<input type="hidden" name="director_gral" value="{{ filtros.director_gral_id }}">{% endif %}
 
         <!-- ===== METADATOS INSTITUCIONALES ===== -->
         <div class="anx-panel">
@@ -467,55 +458,7 @@
     </div>
 
     <!-- ===== FIRMAS ===== -->
-    <div class="anx-panel p-4" style="background:#0f172a;">
-        <div class="text-center mb-3">
-            <span class="text-uppercase small fw-bold" style="color:#a5b4fc;">Firmas y conformidad institucional</span>
-        </div>
-        <div class="row g-3">
-            <div class="col-md-6">
-                <div class="anx-firma-card">
-                    <span class="anx-firma-icono"><i class="bi bi-person-vcard-fill"></i></span>
-                    <div class="flex-grow-1">
-                        <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_ch.titulo }}</div>
-                        {% if director_ch.aspirante %}
-                            <div class="fw-bold">{{ director_ch.aspirante.nombre }} {{ director_ch.aspirante.papellido }} {{ director_ch.aspirante.sapellido }}</div>
-                        {% else %}
-                            {% if not director_ch.cargo_existe %}
-                                <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director de Capital Humano" en el nomenclador.</div>
-                            {% endif %}
-                            <select name="director_ch" form="formFiltrosAnexo14" class="form-select form-select-sm" onchange="document.getElementById('formFiltrosAnexo14').submit()">
-                                <option value="">Seleccione manualmente...</option>
-                                {% for a in aspirantes_cuadro %}
-                                    <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>
-                                {% endfor %}
-                            </select>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="anx-firma-card">
-                    <span class="anx-firma-icono"><i class="bi bi-person-check-fill"></i></span>
-                    <div class="flex-grow-1">
-                        <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_gral.titulo }}</div>
-                        {% if director_gral.aspirante %}
-                            <div class="fw-bold">{{ director_gral.aspirante.nombre }} {{ director_gral.aspirante.papellido }} {{ director_gral.aspirante.sapellido }}</div>
-                        {% else %}
-                            {% if not director_gral.cargo_existe %}
-                                <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director General" en el nomenclador.</div>
-                            {% endif %}
-                            <select name="director_gral" form="formFiltrosAnexo14" class="form-select form-select-sm" onchange="document.getElementById('formFiltrosAnexo14').submit()">
-                                <option value="">Seleccione manualmente...</option>
-                                {% for a in aspirantes_cuadro %}
-                                    <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>
-                                {% endfor %}
-                            </select>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    {% include "pages/informes_anexo/partials/bloque_firmas.html" %}
 
 </div>
 {% endblock %}

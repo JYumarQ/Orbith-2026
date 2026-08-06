@@ -24,6 +24,18 @@
         </a>
       </li>
 
+      {% comment %} Visible para cualquier usuario autenticado: las notificaciones son
+         personales (destinatario=usuario actual), no una función administrativa. {% endcomment %}
+      <li class="menu-item {% if request.resolver_match.url_name == 'lista_notificaciones' %} active {% endif %}">
+        <a href="{% url 'lista_notificaciones' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-bell"></i>
+          <div data-i18n="Basic">Notificaciones</div>
+          {% if advertencias_pendientes %}
+            <div class="badge bg-danger rounded-pill ms-auto" title="Advertencias pendientes">{{ advertencias_pendientes }}</div>
+          {% endif %}
+        </a>
+      </li>
+
       {% if user.es_admin or user.es_moderador or user.is_staff %}
           <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Configuración</span>
@@ -35,7 +47,7 @@
               <div data-i18n="Basic">Parámetros Generales</div>
             </a>
           </li>
-          
+
           <li class="menu-item {% if request.resolver_match.url_name == 'familias_cargo' %} active {% endif %} ">
             <a href="{% url 'familias_cargo' %}" class="menu-link">
               <i class="menu-icon tf-icons bx bx-group"></i>
@@ -43,21 +55,87 @@
             </a>
           </li>
 
-          <li class="menu-item {% if request.resolver_match.url_name == 'list_usuarios' %} active {% endif %} ">
-            <a href="{% url 'list_usuarios' %}" class="menu-link">
-              <i class="menu-icon tf-icons bx bx-user"></i>
-              <div data-i18n="Basic">Usuarios</div>
-            </a>
-          </li>
+      {% endif %}
 
-          <li class="menu-item {% if 'gestor' in request.path %} active {% endif %} ">
-            <a href="{% url 'gestor_plantilla' %}" class="menu-link">
-              <i class="menu-icon tf-icons bx bx-sitemap"></i> 
+      {% comment %} ==================== ADMINISTRACIÓN ====================
+         Acordeón que agrupa Usuarios, Reportes de Problemas, Subsanación y Auditoría.
+         Solo `es_admin` ve la cabecera y todo su contenido — ni moderador ni staff,
+         decisión explícita del usuario (aunque antes «Usuarios» viviera en
+         «Configuración», visible también para ellos: al moverlo aquí, un moderador
+         deja de verlo). {% endcomment %}
+      {% if user.es_admin %}
+          {# Si el usuario está en una de estas páginas, el acordeón se pinta ya abierto. #}
+          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'subsanacion' in request.path %}active abierto{% endif %}"
+              id="menuItemAdministracion">
+            <a href="javascript:void(0);" class="menu-link orb-acordeon-toggle" id="menuLinkAdministracion"
+               aria-expanded="false" title="Clic para desplegar">
+              <i class="menu-icon tf-icons bx bx-shield-quarter"></i>
+              <div data-i18n="Basic">Administración</div>
+              <i class="bx bx-chevron-down orb-acordeon-chevron"></i>
+            </a>
+            {# `data-titulo` se pinta como rótulo solo con la barra colapsada (ver CSS). #}
+            <ul class="orb-acordeon" data-titulo="Administración">
+              <li>
+                <a href="{% url 'list_usuarios' %}"
+                   class="orb-acordeon-sublink {% if request.resolver_match.url_name == 'list_usuarios' %}activo{% endif %}">
+                  <i class="bx bx-user"></i><span>Usuarios</span>
+                </a>
+
+                <a href="{% url 'soporte:lista_reportes' %}"
+                   class="orb-acordeon-sublink {% if request.resolver_match.url_name == 'lista_reportes' %}activo{% endif %}">
+                  <i class="bx bx-bug"></i><span>Reportes de Problemas</span>
+                </a>
+
+                <a href="{% url 'subsanacion:index' %}"
+                   class="orb-acordeon-sublink {% if 'subsanacion' in request.path %}activo{% endif %}">
+                  <i class="bx bx-check-shield"></i><span>Subsanación</span>
+                </a>
+
+                {% comment %} Auditoría todavía no tiene destino. Se muestra con el mismo patrón de
+                   «Próximamente» que ya usa el acordeón del Gestor de Plantilla, en vez
+                   de crear una url vacía que prometa algo que no existe. {% endcomment %}
+                <span class="orb-acordeon-sublink deshabilitado" aria-disabled="true">
+                  <i class="bx bx-history"></i><span>Auditoría</span>
+                  <span class="badge bg-label-secondary">Próximamente</span>
+                </span>
+              </li>
+            </ul>
+          </li>
+      {% endif %}
+
+      {% if user.es_admin or user.es_moderador or user.es_observador or user.is_staff %}
+          <li class="menu-item gestor-plantilla-item {% if 'gestor' in request.path %} active {% endif %}" id="menuItemGestorPlantilla">
+            <a href="{% url 'gestor_plantilla' %}" class="menu-link" id="menuLinkGestorPlantilla" title="Clic: abrir · Doble clic: más opciones">
+              <i class="menu-icon tf-icons bx bx-sitemap"></i>
               <div data-i18n="Basic">Gestor de Plantilla</div>
             </a>
+            <ul class="gestor-plantilla-acordeon" id="acordeonGestorPlantilla" data-titulo="Gestor de Plantilla">
+              {% if not user.es_moderador %}
+              <li class="gestor-plantilla-subitem">
+                <span class="gestor-plantilla-sublink" aria-disabled="true">
+                  <i class="bx bx-line-chart me-1"></i>Resumen <span class="badge bg-label-secondary">Próximamente</span>
+                </span>
+              </li>
+              {% endif %}
+              {% if user.es_admin or user.es_observador %}
+              <li class="gestor-plantilla-subitem">
+                <a href="{% url 'informes_anexo:anexo14' %}" class="gestor-plantilla-sublink">
+                  <i class="bx bx-spreadsheet me-1"></i>Anexo 14
+                </a>
+              </li>
+              {% endif %}
+              <li class="gestor-plantilla-subitem">
+                <span class="gestor-plantilla-sublink" aria-disabled="true">
+                  <i class="bx bx-file me-1"></i>Anexo 14A <span class="badge bg-label-secondary">Próximamente</span>
+                </span>
+              </li>
+              <li class="gestor-plantilla-subitem">
+                <span class="gestor-plantilla-sublink" aria-disabled="true">
+                  <i class="bx bx-file-blank me-1"></i>Anexo 14B <span class="badge bg-label-secondary">Próximamente</span>
+                </span>
+              </li>
+            </ul>
           </li>
-
-          
       {% endif %}
 
       <li class="menu-header small text-uppercase">
@@ -120,3 +198,273 @@
 
     </ul>
   </aside>
+
+<style>
+  /* ============ Acordeón genérico "orb-acordeon" ============
+     Se usa hoy en «Administración». Es independiente a propósito del acordeón del
+     Gestor de Plantilla (clases `gestor-plantilla-*`), que se queda intacto: ese ya
+     está en uso y tiene otro comportamiento (clic navega, doble clic despliega),
+     mientras que aquí la cabecera no tiene destino y un solo clic despliega.
+     Unificar ambos en un mecanismo común queda para más adelante, cuando haya dos
+     casos reales de los que abstraer sin arriesgar una regresión.
+
+     La transición usa `grid-template-rows: 0fr -> 1fr` en lugar de un `max-height`
+     con un número fijo: así el acordeón crece según su contenido y añadir un ítem
+     más nunca lo deja cortado. */
+  .orb-acordeon {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows .25s ease;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .orb-acordeon-item.abierto > .orb-acordeon { grid-template-rows: 1fr; }
+  .orb-acordeon > li { overflow: hidden; list-style: none; }
+
+  .orb-acordeon-toggle { cursor: pointer; }
+  .orb-acordeon-chevron {
+    margin-left: auto;
+    font-size: 1.1rem;
+    transition: transform .25s ease;
+    opacity: .6;
+  }
+  .orb-acordeon-item.abierto > .orb-acordeon-toggle .orb-acordeon-chevron {
+    transform: rotate(180deg);
+  }
+
+  .orb-acordeon-sublink {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .4375rem 1rem .4375rem 2.7rem;
+    font-size: .8125rem;
+    color: #566a7f;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .orb-acordeon-sublink:hover { color: #696cff; background: rgba(105, 108, 255, .06); }
+  .orb-acordeon-sublink.activo { color: #696cff; background: rgba(105, 108, 255, .1); }
+  .orb-acordeon-sublink.deshabilitado {
+    color: #8895aa;
+    cursor: not-allowed;
+    user-select: none;
+    font-weight: 400;
+  }
+  .orb-acordeon-sublink.deshabilitado:hover { background: none; color: #8895aa; }
+  .orb-acordeon-sublink .badge { margin-left: auto; }
+
+  /* Con la barra lateral colapsada el chevron sobra (no hay sitio para él): el
+     desplegable pasa a ser un panel flotante, ver el bloque «MODO COLAPSADO» al
+     final de esta hoja. */
+  html.menu-colapsado .orb-acordeon-chevron { display: none; }
+
+  /* Acordeón propio del ítem "Gestor de Plantilla": no reutiliza el
+     mecanismo .menu-sub/.menu-toggle del theme (ese es de un solo clic
+     y está pensado para colapsar el menú entero) para no interferir con
+     el resto de los ítems de la sidebar. */
+  .gestor-plantilla-acordeon {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .gestor-plantilla-item.abierto > .gestor-plantilla-acordeon {
+    max-height: 220px;
+  }
+  .gestor-plantilla-sublink {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .5rem 1rem .5rem 2.7rem;
+    font-size: .8125rem;
+    color: #8895aa;
+    cursor: not-allowed;
+    user-select: none;
+    text-decoration: none;
+  }
+  /* Los sub-ítems ya funcionales (con href real, no placeholder) sí se ven clicables */
+  a.gestor-plantilla-sublink {
+    color: #566a7f;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  a.gestor-plantilla-sublink:hover {
+    color: #696cff;
+    background: rgba(105, 108, 255, .06);
+  }
+
+  /* ==================== MODO COLAPSADO: SUBMENÚS FLOTANTES ====================
+     Con la barra reducida a 3rem solo caben los iconos, así que el desplegable en
+     línea no sirve: antes «Administración» quedaba en `display:none` (sus opciones
+     eran inalcanzables) y el de «Gestor de Plantilla» se abría con el ancho del
+     menú — 48px — dejando el texto ilegible.
+
+     La solución es sacar el submenú fuera de la barra como panel flotante anclado
+     al ítem. Va dentro del mismo `@media (min-width: 1200px)` que usa `base.html`
+     para colapsar, porque por debajo de ese ancho la barra funciona como off-canvas
+     y no existe el estado colapsado.
+
+     Se abre al pasar el ratón Y con la clase `.flyout-abierto` que pone el JS al
+     hacer clic: el hover solo no basta para teclado ni para pantallas táctiles. */
+  @media (min-width: 1200px) {
+    html.menu-colapsado .orb-acordeon-item,
+    html.menu-colapsado .gestor-plantilla-item {
+      position: relative;
+    }
+
+    /* Ningún ancestro debe recortar el panel al salirse de la barra. */
+    html.menu-colapsado #layout-menu,
+    html.menu-colapsado #layout-menu .menu-inner {
+      overflow: visible !important;
+    }
+
+    /* Estado cerrado: se oculta de verdad (no solo con altura 0) para que no
+       capture clics invisibles junto al icono. */
+    html.menu-colapsado .orb-acordeon,
+    html.menu-colapsado .gestor-plantilla-acordeon {
+      display: none;
+      position: absolute;
+      left: 100%;
+      top: 0;
+      z-index: 1085;           /* por encima del contenido; por debajo de modales (1050+) no aplica aquí */
+      min-width: 232px;
+      padding: .25rem 0;
+      background: #fff;
+      border-radius: .375rem;
+      box-shadow: 0 .25rem 1rem rgba(161, 172, 184, .45);
+      /* Se neutralizan las mecánicas del modo expandido, que aquí no aplican. */
+      max-height: none;
+      overflow: visible;
+      grid-template-rows: none;
+      transition: none;
+    }
+
+    html.menu-colapsado .orb-acordeon-item:hover > .orb-acordeon,
+    html.menu-colapsado .orb-acordeon-item.flyout-abierto > .orb-acordeon,
+    html.menu-colapsado .gestor-plantilla-item:hover > .gestor-plantilla-acordeon,
+    html.menu-colapsado .gestor-plantilla-item.flyout-abierto > .gestor-plantilla-acordeon {
+      display: block;
+    }
+
+    /* `.orb-acordeon > li` lleva `overflow:hidden` para la animación del modo
+       expandido; dentro del panel recortaría los enlaces. */
+    html.menu-colapsado .orb-acordeon > li { overflow: visible; }
+
+    /* La sangría de 2.7rem existía para alinear bajo el icono del padre. En el
+       panel flotante no hay icono padre a la izquierda, así que estorba. */
+    html.menu-colapsado .orb-acordeon-sublink,
+    html.menu-colapsado .gestor-plantilla-sublink {
+      padding-left: 1rem;
+      padding-right: 1rem;
+      white-space: nowrap;
+    }
+
+    /* Rótulo del grupo dentro del panel: con la barra colapsada el nombre del ítem
+       padre está oculto, así que sin esto no se sabe de qué menú es el panel. */
+    html.menu-colapsado .orb-acordeon::before,
+    html.menu-colapsado .gestor-plantilla-acordeon::before {
+      content: attr(data-titulo);
+      display: block;
+      padding: .375rem 1rem .5rem;
+      margin-bottom: .25rem;
+      border-bottom: 1px solid rgba(161, 172, 184, .25);
+      font-size: .75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #a1acb8;
+      white-space: nowrap;
+    }
+  }
+</style>
+
+<script>
+/* Utilidades compartidas por los dos acordeones de la barra lateral.
+   `barraColapsada()` se consulta en cada clic (no se cachea) porque el usuario puede
+   colapsar/expandir la barra en cualquier momento sin recargar la página. */
+window.orbithMenu = (function () {
+  function barraColapsada() {
+    return document.documentElement.classList.contains('menu-colapsado')
+        && window.innerWidth >= 1200;   // mismo umbral que el CSS de base.html
+  }
+
+  /* Solo puede haber un panel flotante abierto a la vez: si no, al recorrer los
+     iconos quedarían varios superpuestos. */
+  function cerrarFlyouts(excepto) {
+    document.querySelectorAll('.flyout-abierto').forEach(function (el) {
+      if (el !== excepto) el.classList.remove('flyout-abierto');
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.orb-acordeon-item, .gestor-plantilla-item')) cerrarFlyouts(null);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') cerrarFlyouts(null);
+  });
+
+  return { barraColapsada: barraColapsada, cerrarFlyouts: cerrarFlyouts };
+})();
+
+// Acordeón genérico: un solo clic despliega o repliega. Se engancha por la clase
+// `.orb-acordeon-toggle`, no por un id, así que sirve para cualquier acordeón futuro
+// sin tocar este script.
+(function () {
+  document.querySelectorAll('.orb-acordeon-toggle').forEach(function (boton) {
+    const item = boton.closest('.orb-acordeon-item');
+    if (!item) return;
+    boton.setAttribute('aria-expanded', item.classList.contains('abierto') ? 'true' : 'false');
+    boton.addEventListener('click', function (e) {
+      e.preventDefault();
+      /* Colapsada, el desplegable en línea no se ve (el CSS lo convierte en panel
+         flotante), así que el clic tiene que alternar `flyout-abierto`. El hover ya
+         lo abre; esto es lo que lo hace usable con teclado y en táctil. */
+      if (window.orbithMenu.barraColapsada()) {
+        const abierto = item.classList.toggle('flyout-abierto');
+        window.orbithMenu.cerrarFlyouts(abierto ? item : null);
+        boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+        return;
+      }
+      const abierto = item.classList.toggle('abierto');
+      boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    });
+  });
+})();
+</script>
+
+<script>
+(function() {
+  const item = document.getElementById('menuItemGestorPlantilla');
+  const link = document.getElementById('menuLinkGestorPlantilla');
+  if (!item || !link) return;
+
+  const DEMORA_CLIC_MS = 250; // margen para distinguir un clic de un doble clic
+  let temporizador = null;
+
+  link.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (temporizador) return; // ya hay un clic esperando: el dblclick decide
+    temporizador = setTimeout(function () {
+      temporizador = null;
+      window.location.href = link.href;
+    }, DEMORA_CLIC_MS);
+  });
+
+  link.addEventListener('dblclick', function (e) {
+    e.preventDefault();
+    clearTimeout(temporizador);
+    temporizador = null;
+    /* Se mantiene el mismo gesto de siempre (doble clic = desplegar), solo cambia
+       qué clase se alterna: colapsada, lo que hay que abrir es el panel flotante. */
+    if (window.orbithMenu.barraColapsada()) {
+      const abierto = item.classList.toggle('flyout-abierto');
+      window.orbithMenu.cerrarFlyouts(abierto ? item : null);
+      return;
+    }
+    item.classList.toggle('abierto');
+  });
+})();
+</script>

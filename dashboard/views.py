@@ -134,12 +134,17 @@ class DashboardView(TemplateView):
 
                 nombre_full = f"{asp.nombre} {asp.papellido}"
                 cargo_desc = c.cargo.ncargo.descripcion if c.cargo and getattr(c.cargo, 'ncargo', None) else '-'
-                if sexo == 'F':
-                    if 58 <= edad <= 60: pre_jubilacion.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'F', 'cargo': cargo_desc})
-                    elif edad > 60: recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'F', 'cargo': cargo_desc})
-                elif sexo == 'M':
-                    if 63 <= edad <= 65: pre_jubilacion.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc})
-                    elif edad > 65: recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc})
+                # `dias_hasta_jubilacion` centraliza (en `bolsa/models.py`) el mismo
+                # criterio de edad por sexo que antes estaba en línea aquí: no-None y
+                # <=0 significa "ya alcanzó la edad mínima de pre-jubilación pero no ha
+                # superado la ventana", exactamente el rango que antes comprobaban las
+                # condiciones 58<=edad<=60 / 63<=edad<=65.
+                if asp.dias_hasta_jubilacion is not None and asp.dias_hasta_jubilacion <= 0:
+                    pre_jubilacion.append({'nombre': nombre_full, 'edad': edad, 'sexo': sexo, 'cargo': cargo_desc})
+                elif sexo == 'F' and edad > 60:
+                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'F', 'cargo': cargo_desc})
+                elif sexo == 'M' and edad > 65:
+                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc})
 
             # I) Distribución por Raza
             raza = asp.get_raza_display() if hasattr(asp, 'get_raza_display') and asp.raza else 'No Definida'

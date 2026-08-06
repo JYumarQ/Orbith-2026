@@ -222,7 +222,13 @@ def detalle_hallazgo(request, pk):
         'hallazgo': hallazgo,
         'regla': regla,
         'enlace': enlace_de_hallazgo(
-            hallazgo, forzar_url=regla.enlace_url if regla else None),
+            hallazgo, forzar_url=regla.enlace_url if regla else None,
+            # `detalle_hallazgo` se abre vía HTMX dentro de un modal sobre el panel de
+            # hallazgos: `request.get_full_path()` sería la URL de este propio
+            # fragmento, no la página real que ve el usuario (con sus filtros). HTMX
+            # manda `HX-Current-URL` con la URL de la página en el navegador en el
+            # momento de la petición — es la que hay que usar para volver ahí.
+            next_url=request.headers.get('HX-Current-URL'), origen_label='Subsanación'),
         'revisiones': hallazgo.revisiones.select_related('usuario')[:20],
         'estados_disponibles': Hallazgo.ESTADOS,
         'color': COLOR_POR_CRITICIDAD.get(hallazgo.criticidad, 'gris'),

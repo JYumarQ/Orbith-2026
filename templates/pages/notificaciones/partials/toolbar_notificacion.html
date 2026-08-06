@@ -1,0 +1,20 @@
+{% comment %} Barra de acciones para la tabla de notificaciones/advertencias — mismo
+   patrón de "seleccionar fila, habilitar solo los botones válidos" que ya usa
+   `templates/pages/contrato/list_contrato.html` (`#contrato-toolbar`). Los 4 botones
+   existen siempre; cada fila decide (vía sus `data-url-*`, ver `_tabla.html`) cuáles
+   se habilitan al seleccionarla — un botón sin acción posible para esa fila y ese rol
+   simplemente nunca se habilita, no hace falta ocultarlo por pestaña. {% endcomment %}
+<div class="d-flex gap-2 mb-3" id="toolbar-notificacion">
+  <button type="button" class="btn btn-sm btn-outline-primary" id="btn-abrir-registro" disabled title="Abrir registro">
+    <i class="bx bx-link-external"></i>
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-marcar-leida-toolbar" disabled title="Marcar leída">
+    <i class="bx bx-check"></i>
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-danger" id="btn-descartar-toolbar" disabled title="Descartar">
+    <i class="bx bx-x-circle"></i>
+  </button>
+  <button type="button" class="btn btn-sm btn-outline-success" id="btn-reactivar-toolbar" disabled title="Reactivar">
+    <i class="bx bx-undo"></i>
+  </button>
+</div>

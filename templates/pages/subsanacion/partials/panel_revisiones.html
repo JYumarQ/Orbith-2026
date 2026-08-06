@@ -46,8 +46,8 @@
               </td>
               <td class="small text-nowrap">
                 {% if revision.estado_anterior == revision.estado_nuevo %}
-                  {# Ocurre al archivar un hallazgo de una regla retirada: el estado no
-                     cambia, lo que cambia es que deja de comprobarse. #}
+                  {% comment %} Ocurre al archivar un hallazgo de una regla retirada: el estado no
+                     cambia, lo que cambia es que deja de comprobarse. {% endcomment %}
                   <span class="badge bg-label-secondary">
                     {{ revision.get_estado_nuevo_display }}
                   </span>

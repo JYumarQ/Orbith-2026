@@ -5,6 +5,8 @@
             <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
         </div>
         <div class="modal-body">
+            {% include 'base/partials/aviso_origen_edicion.html' %}
+            {% include 'base/partials/panel_advertencias_registro.html' %}
             <form method="POST"
                 class="swal-confirm"
                 action="{% url 'updt_aspir' object.pk %}"

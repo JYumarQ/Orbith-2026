@@ -350,6 +350,7 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
     }
 
     errores = dict(ejecucion.errores or {})
+    codigos_ok = []
 
     for regla in reglas:
         try:
@@ -366,6 +367,7 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
         resumen['nuevos'] += contadores['nuevos']
         resumen['persistentes'] += contadores['persistentes']
         resumen['resueltos'] += contadores['resueltos']
+        codigos_ok.append(regla.codigo)
         if contadores['truncada']:
             aviso = (f'La regla superó el límite de {LIMITE_HALLAZGOS_POR_REGLA:,} '
                      f'hallazgos; se guardaron los primeros.')
@@ -378,8 +380,17 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
 
     modelos = set(ejecucion.modelos_analizados or []) | contexto.modelos_analizados
 
+    # Una regla que falló NO entra aquí (por eso se acumula aparte de `completados`,
+    # que es por módulo): sus hallazgos no se tocaron esta vez, así que no deben
+    # contar en `hallazgos_vigentes`/`indice_salud` como si se hubieran comprobado.
+    codigos_regla = list(ejecucion.codigos_regla_ejecutados or [])
+    for codigo in codigos_ok:
+        if codigo not in codigos_regla:
+            codigos_regla.append(codigo)
+
     ejecucion.modulos_completados = completados
     ejecucion.modelos_analizados = sorted(modelos)
+    ejecucion.codigos_regla_ejecutados = codigos_regla
     ejecucion.reglas_ejecutadas = (ejecucion.reglas_ejecutadas or 0) + resumen['reglas']
     ejecucion.hallazgos_nuevos = (ejecucion.hallazgos_nuevos or 0) + resumen['nuevos']
     ejecucion.hallazgos_persistentes = (
@@ -387,8 +398,9 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
     ejecucion.hallazgos_resueltos = (ejecucion.hallazgos_resueltos or 0) + resumen['resueltos']
     ejecucion.errores = errores
     ejecucion.save(update_fields=[
-        'modulos_completados', 'modelos_analizados', 'reglas_ejecutadas',
-        'hallazgos_nuevos', 'hallazgos_persistentes', 'hallazgos_resueltos', 'errores'])
+        'modulos_completados', 'modelos_analizados', 'codigos_regla_ejecutados',
+        'reglas_ejecutadas', 'hallazgos_nuevos', 'hallazgos_persistentes',
+        'hallazgos_resueltos', 'errores'])
 
     return resumen
 
@@ -424,17 +436,29 @@ def contar_registros(etiquetas_modelos):
     return sum(conteo_por_modelo.values()), por_modulo
 
 
-def contar_registros_afectados(modulo=None):
+def contar_registros_afectados(codigos_regla=None):
     """Cuántos REGISTROS DISTINTOS tienen algún hallazgo abierto.
 
     Se cuentan registros y no hallazgos, porque un mismo registro puede producir varios
     (un trabajador con diez movimientos genera diez hallazgos, y sigue siendo un
     trabajador). Los «Ignorado» y «Falso positivo» no cuentan: el usuario ya dictaminó.
+
+    `codigos_regla` acota el recuento a esas reglas (típicamente
+    `ejecucion.codigos_regla_ejecutados`); sin él, cuenta todo el sitio.
+
+    Se acota por CÓDIGO DE REGLA y no por módulo ni por modelo, a propósito: son más
+    anchos de lo que parece. Un módulo puede agrupar varias reglas que no corrieron
+    todas juntas (`--regla CODIGO` completa su módulo sin ejecutar las demás reglas de
+    esa categoría), y dos reglas de módulos DISTINTOS pueden compartir modelo (p. ej.
+    `CAlta` lo usan tanto «contratos» como «nómina»). Acotar por módulo o por modelo
+    mezclaría en el numerador hallazgos de reglas que esta ejecución nunca comprobó.
+    Por código de regla es exacto por construcción, porque es la misma unidad que ya
+    usa `reconciliar_regla` para todo lo demás.
     """
     consulta = Hallazgo.objects.filter(
         vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS)
-    if modulo:
-        consulta = consulta.filter(modulo=modulo)
+    if codigos_regla is not None:
+        consulta = consulta.filter(codigo_regla__in=codigos_regla)
     return consulta.values('content_type', 'object_id').distinct().count()
 
 
@@ -460,10 +484,16 @@ def indice_desde_afectados(afectados, registros):
     return (Decimal(limpios * 100) / Decimal(base)).quantize(Decimal('0.01'))
 
 
-def calcular_indice_salud(registros_analizados):
-    """Índice de salud global, de 0 a 100."""
+def calcular_indice_salud(registros_analizados, codigos_regla=None):
+    """Índice de salud, de 0 a 100.
+
+    `codigos_regla` debe ser `ejecucion.codigos_regla_ejecutados`, es decir, las reglas
+    que produjeron `registros_analizados`: si el numerador de afectados cuenta reglas
+    que no corrieron esta vez, el índice deja de significar nada en un análisis parcial
+    (`--regla`/`--modulo`), típicamente saturándose en 0 aunque la base esté sana.
+    """
     return indice_desde_afectados(
-        contar_registros_afectados(), registros_analizados)
+        contar_registros_afectados(codigos_regla), registros_analizados)
 
 
 def archivar_hallazgos_de_reglas_retiradas(ejecucion):
@@ -527,8 +557,25 @@ def finalizar_ejecucion(ejecucion):
     total, por_modulo = contar_registros(ejecucion.modelos_analizados)
     ejecucion.registros_analizados = total
     ejecucion.registros_por_modulo = por_modulo
-    ejecucion.hallazgos_vigentes = Hallazgo.objects.filter(vigente=True).count()
-    ejecucion.indice_salud = calcular_indice_salud(total)
+
+    # Acotados a las REGLAS que esta ejecución realmente reconcilió con éxito: en un
+    # análisis completo son todas las reglas activas —equivale a no filtrar, así que
+    # el resultado es igual que antes— y en uno parcial (--regla/--modulo) evita
+    # mezclar el numerador con hallazgos de reglas que esta ejecución nunca comprobó
+    # (de otro módulo, o del mismo módulo pero no ejecutadas por ser `--regla`), que
+    # antes saturaba el índice en 0 o lo inflaba con datos ajenos. Ver el docstring de
+    # `contar_registros_afectados` para por qué es por código de regla y no por
+    # módulo ni por modelo.
+    if ejecucion.codigos_regla_ejecutados:
+        codigos_regla = ejecucion.codigos_regla_ejecutados
+        ejecucion.hallazgos_vigentes = Hallazgo.objects.filter(
+            vigente=True, codigo_regla__in=codigos_regla).count()
+        ejecucion.indice_salud = calcular_indice_salud(total, codigos_regla)
+    else:
+        # No se reconcilió ninguna regla (ejecución FALLIDA): no hay nada que contar,
+        # y un 0.00 % o un 100 % serían ambos una afirmación falsa sobre la salud.
+        ejecucion.hallazgos_vigentes = 0
+        ejecucion.indice_salud = None
     ejecucion.terminada_en = ahora
     ejecucion.duracion_ms = max(
         0, int((ahora - ejecucion.iniciada_en).total_seconds() * 1000))

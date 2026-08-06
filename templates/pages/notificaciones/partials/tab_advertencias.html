@@ -1,0 +1,222 @@
+{% load static %}
+
+<style>
+  /* Mismas reglas que `list_contrato.html`/`list_aspir.html`: no están en el CSS global,
+     así que cada plantilla que reutiliza el patrón de embudo+dropdown las repite. */
+  .dropdown-header-custom {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #a1acb8;
+    font-weight: 700;
+    padding: 0.5rem 0.5rem 0.2rem 0.5rem;
+    border-bottom: 1px solid #eceef1;
+    margin-bottom: 0.5rem;
+  }
+  .dropdown-menu select {
+    display: block !important;
+    width: 100% !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.875rem !important;
+    font-weight: 400 !important;
+    color: #566a7f !important;
+    background-color: #fff !important;
+    border: 1px solid #d9dee3 !important;
+    border-radius: 0.25rem !important;
+  }
+</style>
+
+{% comment %} Filtros al estilo de `templates/pages/contrato/list_contrato.html`: buscador
+   libre siempre visible + botón de embudo con un dropdown de filtros agrupados. El propio
+   buscador dispara la petición HTMX incluyendo los `<select>` del dropdown (que quedan
+   FUERA de #resultados-advertencias, así que nunca se reinicializan al cambiar de página o
+   filtrar — Select2 solo se inicializa una vez, al cargar la pestaña). {% endcomment %}
+
+{% comment %} Subpestañas por estado (activas/resueltas/descartadas): navegación real
+   (`?tab=advertencias&sub=...`), no HTMX — mismo patrón que Sistema/Administración en
+   Recordatorios. "Descartar" no borra nada (ver notificaciones/views.py::descartar_advertencia):
+   solo cambia el estado, así que resueltas/descartadas siguen consultables aquí durante
+   los 60 días antes de la purga automática, sin estorbar la bandeja de trabajo (activas). {% endcomment %}
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if sub_activa == 'activas' %}active{% endif %}" href="?tab=advertencias&sub=activas">
+      Activas
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if sub_activa == 'resueltas' %}active{% endif %}" href="?tab=advertencias&sub=resueltas">
+      Resueltas
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if sub_activa == 'descartadas' %}active{% endif %}" href="?tab=advertencias&sub=descartadas">
+      Descartadas
+    </a>
+  </li>
+</ul>
+
+{% comment %} Módulo y Severidad como chips SIEMPRE visibles (no dentro del embudo): son
+   los dos filtros más usados, y obligar a abrir un dropdown para llegar a ellos era el
+   paso extra menos eficiente de todo el panel. El embudo se reduce a Regla/Unidad/
+   Destinatario (uso ocasional, más de administración). {% endcomment %}
+<div class="d-flex flex-wrap gap-2 mb-2">
+  <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por módulo" id="chips-modulo">
+    <button type="button" class="btn btn-outline-secondary {% if not modulos_actuales %}active{% endif %}" data-valor="">Todos los módulos</button>
+    {% for clave, etiqueta in opciones_filtro.modulos %}
+      <button type="button" class="btn btn-outline-secondary {% if clave in modulos_actuales %}active{% endif %}" data-valor="{{ clave }}">{{ etiqueta }}</button>
+    {% endfor %}
+  </div>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por severidad" id="chips-severidad">
+    <button type="button" class="btn btn-outline-secondary {% if not severidades_actuales %}active{% endif %}" data-valor="">Todas las severidades</button>
+    {% for valor, etiqueta in opciones_filtro.severidades %}
+      <button type="button" class="btn btn-outline-secondary {% if valor in severidades_actuales %}active{% endif %}" data-valor="{{ valor }}">{{ etiqueta }}</button>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div id="search_container_advertencias" class="flex-grow-1" style="max-width: 320px;">
+    <input type="hidden" id="tab-advertencias-hidden" name="tab" value="advertencias">
+    <input type="hidden" id="sub-advertencias-hidden" name="sub" value="{{ sub_activa }}">
+    <input type="hidden" id="chip-modulo-hidden" name="modulo" value="{{ modulos_actuales|first|default:'' }}">
+    <input type="hidden" id="chip-severidad-hidden" name="severidad" value="{{ severidades_actuales|first|default:'' }}">
+    <div class="input-group input-group-merge">
+      <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+      <input id="search-advertencias" type="text" class="form-control border-0 shadow-none"
+             placeholder="Buscar..." name="q" value="{{ q }}"
+             hx-get="{% url 'panel_advertencias' %}"
+             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
+             hx-target="#resultados-advertencias" hx-swap="innerHTML"
+             hx-include="#filtros-advertencias-dropdown, #tab-advertencias-hidden, #sub-advertencias-hidden, #chip-modulo-hidden, #chip-severidad-hidden">
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <div class="btn-group">
+      <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow"
+              data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+        <i class="fas fa-filter"></i>
+      </button>
+      <div id="filtros-advertencias-dropdown" class="dropdown-menu dropdown-menu-end p-3"
+           style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+        <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
+          <span><i class="fas fa-exclamation-triangle me-1"></i> Problema</span>
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltrosAdvertencias()"
+                  style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+            <i class="fas fa-undo-alt me-1"></i> Reset
+          </button>
+        </div>
+        <div class="mb-2">
+          <label class="small text-muted" for="filter_regla_select">Regla</label>
+          <select id="filter_regla_select" name="regla" class="form-select form-select-sm notif-filtro-select2"
+                  multiple onchange="triggerSearchAdvertencias()">
+            {% for codigo, nombre in opciones_filtro.reglas %}
+              <option value="{{ codigo }}" title="{{ codigo }}" {% if codigo in reglas_actuales %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="dropdown-header-custom mt-3"><i class="fas fa-layer-group me-1"></i> Alcance</div>
+        <div class="mb-2">
+          <label class="small text-muted" for="filter_modelo_select">Modelo afectado</label>
+          <select id="filter_modelo_select" name="modelo" class="form-select form-select-sm" onchange="triggerSearchAdvertencias()">
+            <option value="">Todos</option>
+            {% for valor, etiqueta in opciones_filtro.modelos %}
+              <option value="{{ valor }}" {% if valor in modelos_actuales %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if opciones_filtro.unidades %}
+          <div class="mb-2">
+            <label class="small text-muted" for="filter_unidad_select">Unidad organizativa</label>
+            <select id="filter_unidad_select" name="unidad" class="form-select form-select-sm" onchange="triggerSearchAdvertencias()">
+              <option value="">Todas</option>
+              {% for valor, etiqueta in opciones_filtro.unidades %}
+                <option value="{{ valor }}" {% if valor in unidades_actuales %}selected{% endif %}>{{ etiqueta }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+        {% if opciones_filtro.destinatarios %}
+          <div class="mb-2">
+            <label class="small text-muted" for="filter_destinatario_select">Destinatario</label>
+            <select id="filter_destinatario_select" name="destinatario" class="form-select form-select-sm" onchange="triggerSearchAdvertencias()">
+              <option value="">Todos</option>
+              {% for valor, etiqueta in opciones_filtro.destinatarios %}
+                <option value="{{ valor }}" {% if valor in destinatarios_actuales %}selected{% endif %}>{{ etiqueta }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if hay_filtros %}
+      <a href="?tab=advertencias&sub={{ sub_activa }}" class="btn btn-sm btn-outline-secondary">Quitar filtros</a>
+    {% endif %}
+
+    {% if puede_escanear %}
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-buscar-incidencias">
+        <i class="bx bx-search-alt me-1"></i>Buscar incidencias
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+{% include 'pages/notificaciones/partials/toolbar_notificacion.html' %}
+
+<div id="resultados-advertencias">
+  {% include 'pages/notificaciones/partials/_tabla.html' %}
+</div>
+
+<script src="{% static 'js/notificaciones.js' %}"></script>
+<script>
+  /* Los <select> del formulario de filtros quedan FUERA de #resultados-advertencias
+     (solo se intercambia la tabla), así que no hay que reinicializar Select2 en cada
+     htmx:afterSwap — solo una vez, al cargar la pestaña. */
+  OrbithNotificaciones.initSelect2Filtros('.notif-filtro-select2');
+  OrbithNotificaciones.activarBarraDeAcciones('#resultados-advertencias', '#toolbar-notificacion');
+
+  function triggerSearchAdvertencias() {
+    htmx.trigger(document.getElementById('search-advertencias'), 'searchFilters');
+  }
+
+  // Chips de Módulo/Severidad: un solo valor activo por grupo (o "Todos"), sincronizado
+  // con un <input type="hidden"> que es lo que de verdad viaja en el hx-include.
+  function activarChipsFiltro(grupoSelector, hiddenInputId) {
+    var grupo = document.querySelector(grupoSelector);
+    if (!grupo) return;
+    grupo.querySelectorAll('button').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        grupo.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+        boton.classList.add('active');
+        document.getElementById(hiddenInputId).value = boton.dataset.valor;
+        triggerSearchAdvertencias();
+      });
+    });
+  }
+  activarChipsFiltro('#chips-modulo', 'chip-modulo-hidden');
+  activarChipsFiltro('#chips-severidad', 'chip-severidad-hidden');
+
+  function resetFiltrosAdvertencias() {
+    document.querySelectorAll('#filtros-advertencias-dropdown select').forEach(function (sel) {
+      if (sel.multiple) {
+        Array.from(sel.options).forEach(function (opt) { opt.selected = false; });
+        if (window.jQuery && jQuery(sel).data('select2')) {
+          jQuery(sel).val(null).trigger('change.select2');
+        }
+      } else {
+        sel.value = '';
+      }
+    });
+    ['#chips-modulo', '#chips-severidad'].forEach(function (grupoSelector) {
+      var grupo = document.querySelector(grupoSelector);
+      if (!grupo) return;
+      grupo.querySelectorAll('button').forEach(function (b, indice) { b.classList.toggle('active', indice === 0); });
+    });
+    document.getElementById('chip-modulo-hidden').value = '';
+    document.getElementById('chip-severidad-hidden').value = '';
+    document.getElementById('search-advertencias').value = '';
+    triggerSearchAdvertencias();
+  }
+</script>

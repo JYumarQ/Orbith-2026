@@ -8,13 +8,19 @@
             </div>
             <button type="button" class="btn-close ms-3 m-0" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        
+
+        <div class="px-4">
+            {% include 'base/partials/aviso_origen_edicion.html' %}
+            {% include 'base/partials/panel_advertencias_registro.html' %}
+        </div>
+
         <form hx-post="{{ request.path }}"
               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
               hx-target="#modal_generic"
               hx-swap="innerHTML"
               id="cargoForm" class="px-4">
             {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
                 
                 
                 

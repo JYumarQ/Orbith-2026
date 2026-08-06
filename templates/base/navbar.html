@@ -127,15 +127,9 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
             <button class="btn btn-link btn-sm p-0" id="marcar-todas-leidas" type="button">
               Marcar todas como leídas
             </button>
-            <button
-              class="btn btn-link btn-sm p-0"
-              id="ver-mas-notificaciones"
-              type="button"
-              data-bs-toggle="offcanvas"
-              data-bs-target="#offcanvasNotificaciones"
-            >
+            <a class="btn btn-link btn-sm p-0" href="{% url 'lista_notificaciones' %}">
               Ver más
-            </button>
+            </a>
           </li>
         </ul>
       </li>
@@ -235,16 +229,6 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
     </ul>
   </nav>
 
-  <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNotificaciones" aria-labelledby="offcanvasNotificacionesLabel" style="width: 400px;">
-    <div class="offcanvas-header">
-      <h5 id="offcanvasNotificacionesLabel">Todas las notificaciones</h5>
-      <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
-    </div>
-    <div class="offcanvas-body" id="offcanvas-body-notificaciones" style="overflow-y: auto; max-height: 80vh;">
-      <p class="text-center">Cargando notificaciones...</p>
-    </div>
-  </div>
-
   {% include 'base/partials/modales_usuario.html' %}
 
 {% endif %}
@@ -254,7 +238,6 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
     // URLs de notificaciones
     const urlCount    = "{% url 'notificaciones_json' %}";
     const urlUltimas  = "{% url 'ultimas_notificaciones' %}";
-    const urlTodas    = "{% url 'notificaciones_json' %}";
     // Con `pk` dinámico: se sustituye el 0 por el id real antes de usarla (el
     // truco estándar para pasar una url con parámetro a JS sin tener el id en
     // tiempo de renderizado del template).
@@ -266,9 +249,7 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
     const btnNotificaciones  = document.getElementById('notificacionesDropdown');
     const menuNotificaciones = document.getElementById('menu-notificaciones');
     const listaNotificaciones= document.getElementById('lista-notificaciones');
-    const verMas             = document.getElementById('ver-mas-notificaciones');
     const btnMarcarTodas     = document.getElementById('marcar-todas-leidas');
-    const offcanvasBody      = document.getElementById('offcanvas-body-notificaciones');
 
     // En la pantalla de login no existe la barra: no hay nada que inicializar.
     if (!btnNotificaciones) return;
@@ -370,41 +351,6 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
       }
     }
 
-    async function cargarTodasNotificaciones() {
-      try {
-        const res = await fetch(urlTodas);
-        if (!res.ok) throw new Error(res.statusText);
-        const { notificaciones } = await res.json();
-
-        if (notificaciones.length === 0) {
-          offcanvasBody.innerHTML = '<p class="text-center text-muted">No hay notificaciones</p>';
-          return;
-        }
-
-        offcanvasBody.innerHTML = '';
-        notificaciones.forEach(n => {
-          const div = document.createElement('div');
-          div.className = 'mb-3 border-bottom pb-2';
-          div.dataset.id = n.id;
-          div.style.cursor = 'pointer';
-          div.innerHTML = `
-            ${marcadorDeNotificacion(n)}
-            <h6 class="d-inline">${n.titulo}</h6>
-            <br><small class="text-muted">${n.fecha}</small>
-            <p>${n.mensaje}</p>
-          `;
-          div.addEventListener('click', () => {
-            marcarLeida(n.id);
-            div.remove();
-          });
-          offcanvasBody.appendChild(div);
-        });
-      } catch (e) {
-        console.error('Error al cargar todas las notificaciones:', e);
-        offcanvasBody.innerHTML = '<p class="text-center text-danger">Error cargando notificaciones</p>';
-      }
-    }
-
     // — Handlers de toggle —
     // (Este código es para tu dropdown de notificaciones personalizado,
     // no para el acople del sidebar, así que está bien)
@@ -417,11 +363,6 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
         cargarUltimasNotificaciones();
         menuNotificaciones.style.display = 'block';
       }
-    });
-
-    verMas.addEventListener('click', () => {
-      cargarTodasNotificaciones();
-       menuNotificaciones.style.display = 'none';
     });
 
     btnMarcarTodas.addEventListener('click', async (e) => {

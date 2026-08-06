@@ -1,0 +1,30 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Editar cargo | Orbith{% endblock %}
+
+{% block content %}
+{% comment %} El aviso "está corrigiendo un registro desde..." vive ahora DENTRO del modal
+   (dentro de `updt_cargo.html`, vía `base/partials/aviso_origen_edicion.html`) para no
+   quedar oculto bajo el `.modal-backdrop` de abajo. {% endcomment %}
+<div class="modal-backdrop show"></div>
+<div class="modal show d-block" id="modal_generic" role="dialog" style="z-index: 1055;">
+  {% include 'pages/cargo/updt_cargo.html' %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var urlVolver = "{{ next|default:url_por_defecto }}";
+  // El servidor dispara HX-Trigger: closeModal al guardar con éxito (ver
+  // CargoPlantillaUpdateView.form_valid); dentro de gestor_plantilla.html ese evento
+  // solo oculta el modal, aquí no hay página detrás, así que navega.
+  document.body.addEventListener('closeModal', function () {
+    window.location.href = urlVolver;
+  });
+  document.querySelectorAll('#modal_generic [data-bs-dismiss="modal"]').forEach(function (boton) {
+    boton.addEventListener('click', function () {
+      window.location.href = urlVolver;
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -7,10 +7,11 @@ from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
 from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.db.models import Q, ProtectedError, Count, RestrictedError, Sum, F
+from django.db.models import Q, ProtectedError, Count, Prefetch, RestrictedError, Sum, F
 from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
+from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 import json
 
 # ------------------  CARGO PLANTILLA  ------------------
@@ -173,11 +174,12 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
         print("❌ ERROR DE VALIDACIÓN EN CARGO:", form.errors)
         return super().form_invalid(form)
 
-class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
+class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CargoPlantilla
     form_class = CargoPlantillaForm
     template_name = 'pages/cargo/updt_cargo.html'
-    success_url = reverse_lazy('gestor_plantilla')
+    template_name_pagina = 'pages/cargo/updt_cargo_pagina.html'
+    url_por_defecto = reverse_lazy('gestor_plantilla')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -198,12 +200,18 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, UpdateView):
         # 3. La magia de HTMX para refrescar la columna de Cargos automáticamente
         if self.request.headers.get('HX-Request'):
             response = HttpResponse(status=204)
-            
+
             # Ajustamos el mensaje flotante (SweetAlert) dependiendo de si el rol era válido
             if rol_valido:
                 mensaje = {'icon': 'success', 'text': 'Cargo actualizado correctamente'}
             else:
                 mensaje = {'icon': 'warning', 'text': 'Guardado, pero debe seleccionar un rol para los cargos que no son cuadro'}
+
+            # Hay una redirección real posterior SOLO cuando se llegó desde una
+            # advertencia (`next` presente): sin eso, el modal se cierra en la MISMA
+            # página y un `messages.success()` aquí quedaría «colgado» en la sesión.
+            if rol_valido and (self.request.POST.get('next') or self.request.GET.get('next')):
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Cargo actualizado correctamente'))
 
             triggers = {
                 'closeModal': True,
@@ -391,11 +399,12 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
     
     
 
-class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
+class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = Departamento
     form_class = DepartamentoForm
     template_name = "pages/dpto/updt_dpto.html"
-    success_url = reverse_lazy('gestor_plantilla')
+    template_name_pagina = "pages/dpto/updt_dpto_pagina.html"
+    url_por_defecto = reverse_lazy('gestor_plantilla')
 
     def post(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -419,6 +428,8 @@ class DepartamentoUpdateView(SuccessMessageMixin, UpdateView):
     def form_valid(self, form):
         self.object = form.save()
         if self.request.headers.get('HX-Request'):
+            if self.request.POST.get('next') or self.request.GET.get('next'):
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Departamento actualizado correctamente'))
             response = HttpResponse(status=204)
             triggers = {
                 'closeModal': True,
@@ -553,11 +564,12 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
         transaction.set_rollback(True)
         return super().form_invalid(form)
 
-class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
+class UnidadOrganizativaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = UnidadOrganizativa
     form_class = UnidadOrganizativaForm
     template_name = 'pages/uniorg/updt_uniorg.html'
-    success_url = reverse_lazy('gestor_plantilla')
+    template_name_pagina = 'pages/uniorg/updt_uniorg_pagina.html'
+    url_por_defecto = reverse_lazy('gestor_plantilla')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -569,14 +581,16 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, UpdateView):
     
     def form_valid(self, form):
         self.object = form.save()
-        
+
         if self.request.htmx:
+            if self.request.POST.get('next') or self.request.GET.get('next'):
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Unidad organizativa actualizada correctamente'))
             # 204 significa "Todo salió bien, no devuelvas HTML que rompa la pantalla"
             response = HttpResponse(status=204)
             # Aquí disparamos la recarga de la lista, cerramos el modal y mostramos el toast
             response['HX-Trigger'] = 'updateUnitList, closeModal, showMessage'
             return response
-            
+
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
@@ -632,6 +646,17 @@ def gestor_plantilla_view(request):
         unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamentos'))
     else:
         unidades = request.user.unidades.annotate(total_dptos=Count('departamentos'))
+
+    # `lista_unidades_div.html` recorre `u.tipo.*` y `u.direcciones_hijas.all/.count`
+    # por cada fila: sin precargarlos Django lanzaba una consulta suelta por unidad
+    # (42 consultas, 18 repetidas). El `select_related('tipo')` del prefetch evita que
+    # las subunidades repitan el mismo problema un nivel más abajo.
+    unidades = unidades.select_related('tipo').prefetch_related(
+        Prefetch(
+            'direcciones_hijas',
+            queryset=UnidadOrganizativa.objects.select_related('tipo').order_by('orden_informe', 'descripcion'),
+        )
+    )
 
     # 3. Control de visibilidad para el Gestor de Plantilla
     if hay_unidad_principal:

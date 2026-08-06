@@ -84,14 +84,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 #     }
 # }
 
+# Las credenciales viven en `core/.env` (ignorado por git). Antes estaban aquí en
+# texto plano y viajaban en cada commit.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'orbith_db',       
-        'USER': 'postgres',        
-        'PASSWORD': '12345678',    
-        'HOST': 'localhost',       
-        'PORT': '5432',            
+        'NAME': env('DATABASE_NAME'),
+        'USER': env('DATABASE_USER'),
+        'PASSWORD': env('DATABASE_PASSWORD'),
+        'HOST': env('DATABASE_HOST'),
+        'PORT': env('DATABASE_PORT'),
     }
 }
 

@@ -25,9 +25,12 @@
             <h5 class="modal-title" id="contractModalLabel">Editar Datos del Contrato: {{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }} </h5>
         </div>
         <div class="modal-body">
+            {% include 'base/partials/aviso_origen_edicion.html' %}
+            {% include 'base/partials/panel_advertencias_registro.html' %}
             <form action="{% url 'updt_contrato' object.pk %}" method="POST" id="contratoForm">
                 {% csrf_token %}
-                
+                <input type="hidden" name="next" value="{{ next }}">
+
                 <div class="nav-align-top mb-4">
                     <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
                         <li class="nav-item">

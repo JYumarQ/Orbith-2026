@@ -177,6 +177,7 @@ class Command(BaseCommand):
 
         ejecucion.modelos_analizados = sorted(contexto.modelos_analizados)
         ejecucion.modulos_completados = [regla.modulo]
+        ejecucion.codigos_regla_ejecutados = [regla.codigo]
         ejecucion.reglas_ejecutadas = 1
         ejecucion.hallazgos_nuevos = contadores['nuevos']
         ejecucion.hallazgos_persistentes = contadores['persistentes']
@@ -215,9 +216,10 @@ class Command(BaseCommand):
         elif ejecucion.estado == EjecucionAnalisis.PARCIAL:
             estilo = self.style.WARNING
 
+        salud = '—' if ejecucion.indice_salud is None else f'{ejecucion.indice_salud} %'
         self.stdout.write(estilo(
             f'{ejecucion.get_estado_display()} · '
-            f'Salud de los datos: {ejecucion.indice_salud} % · '
+            f'Salud de los datos: {salud} · '
             f'{ejecucion.registros_analizados} registro(s) analizado(s) · '
             f'{ejecucion.hallazgos_vigentes} hallazgo(s) vigente(s) · '
             f'{ejecucion.duracion_ms} ms'))

@@ -14,6 +14,7 @@ Dos decisiones importantes:
 """
 
 import logging
+from urllib.parse import quote
 
 from django.urls import NoReverseMatch, reverse
 
@@ -52,12 +53,18 @@ ENLACES_POR_MODELO = {
 }
 
 
-def construir_enlace(etiqueta_modelo, object_id, forzar_url=None):
+def construir_enlace(etiqueta_modelo, object_id, forzar_url=None, next_url=None, origen_label=None):
     """Devuelve `{'href', 'etiqueta', 'editable'}` o None si no se puede construir.
 
     `etiqueta_modelo` es «app.Modelo». `object_id` es el valor guardado en el
     hallazgo, que es el pk real del registro — importante para
     `UnidadOrganizativa`, cuyo pk es `codigo_interno` y no `id`.
+
+    `next_url`/`origen_label` (opcionales): si se pasan, se anexan como
+    `?next=...&origen=...` al `href`. Es el ÚNICO punto que genera estos enlaces
+    (tanto desde Subsanación como desde Notificaciones), así que añadirlos aquí basta
+    para que el destino sepa a dónde volver tras guardar (`core.mixins.VolverAlOrigenMixin`)
+    y pueda mostrar de dónde vino el usuario, sin duplicar esa lógica en cada llamador.
     """
     definicion = ENLACES_POR_MODELO.get(etiqueta_modelo)
     if definicion is None:
@@ -82,6 +89,11 @@ def construir_enlace(etiqueta_modelo, object_id, forzar_url=None):
             '¿Se renombró la url?', nombre_url, etiqueta_modelo, object_id)
         return None
 
+    if next_url:
+        href = f'{href}?next={quote(next_url)}'
+        if origen_label:
+            href = f'{href}&origen={quote(origen_label)}'
+
     return {
         'href': href,
         'etiqueta': definicion['etiqueta'],
@@ -89,7 +101,7 @@ def construir_enlace(etiqueta_modelo, object_id, forzar_url=None):
     }
 
 
-def enlace_de_hallazgo(hallazgo, forzar_url=None):
+def enlace_de_hallazgo(hallazgo, forzar_url=None, next_url=None, origen_label=None):
     """Igual que `construir_enlace`, partiendo de un `Hallazgo`.
 
     Usa `content_type` sin resolver la GenericForeignKey, así que no dispara una
@@ -99,4 +111,6 @@ def enlace_de_hallazgo(hallazgo, forzar_url=None):
     etiqueta_modelo = f'{ct.app_label}.{ct.model_class().__name__}' if ct.model_class() else None
     if etiqueta_modelo is None:
         return None
-    return construir_enlace(etiqueta_modelo, hallazgo.object_id, forzar_url=forzar_url)
+    return construir_enlace(
+        etiqueta_modelo, hallazgo.object_id, forzar_url=forzar_url,
+        next_url=next_url, origen_label=origen_label)

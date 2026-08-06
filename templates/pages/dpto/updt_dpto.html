@@ -6,15 +6,18 @@
         </div>
         
         <div class="modal-body">
-            <form hx-post="{{ request.path }}" 
+            {% include 'base/partials/aviso_origen_edicion.html' %}
+            {% include 'base/partials/panel_advertencias_registro.html' %}
+            <form hx-post="{{ request.path }}"
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
                   
                   id="dptoForm">
-                
+
                 {% csrf_token %}
-                
+                <input type="hidden" name="next" value="{{ next }}">
+
                 <div class="mb-3">
                     <label class="form-label" for="{{ form.descripcion.id_for_label }}">Descripción</label>
                     {{ form.descripcion }}

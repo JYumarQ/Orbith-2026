@@ -27,5 +27,29 @@ def orbith(request):
         if preferencias is not None:
             contexto['pref_sidebar_colapsada'] = preferencias.sidebar_colapsada
             contexto['pref_animaciones_activas'] = preferencias.animaciones_activas
+        contexto['advertencias_pendientes'] = _contar_advertencias_pendientes(usuario)
 
     return contexto
+
+
+def _contar_advertencias_pendientes(usuario):
+    """Advertencias ACTIVA visibles para `usuario` (por unidad organizativa o
+    asignación directa; TODAS si `es_admin`), para el badge de `sidebar.html` —
+    visible en TODA la app, no solo en la página de Notificaciones. Mismo criterio de
+    "pertenencia" que `notificaciones.views._notificaciones_visibles`, reescrito aquí
+    en pequeño en vez de importado: ese helper es privado de su módulo y este context
+    processor corre en CADA petición autenticada, así que conviene que no dependa de
+    las vistas de otra app.
+    """
+    from django.db.models import Q
+
+    from notificaciones.models import Notificacion
+
+    base = Notificacion.objects.filter(
+        tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA)
+
+    if usuario.es_admin:
+        return base.count()
+
+    unidades_usuario = usuario.unidades.all()
+    return base.filter(Q(unidad__in=unidades_usuario) | Q(destinatario=usuario)).count()

@@ -1,10 +1,22 @@
+import logging
+
 from django.db import models
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from nomencladores.models import NTridente, NSalario, NJornada, NEspecialidad, NMunicipio, NProvincia
 from django.core.validators import MinValueValidator
-from datetime import date
+from datetime import date, timedelta
 from auditoria.models import Base
 from django.core.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
+
+# Edad mínima de pre-jubilación y edad máxima de la ventana, por sexo. Mismo criterio
+# que ya usaba `dashboard/views.py::DashboardView` de forma inline (58-60 F, 63-65 M);
+# se centraliza aquí para que `Aspirante.dias_hasta_jubilacion` y el dashboard no
+# puedan divergir. Fuera de estos dos sexos (o de la ventana) la property devuelve
+# `None`: no es un caso de error, simplemente no aplica.
+EDAD_MINIMA_JUBILACION = {'F': 58, 'M': 63}
+EDAD_MAXIMA_VENTANA_JUBILACION = {'F': 60, 'M': 65}
 # CONTACTO
 class Contacto(Base):
 
@@ -118,6 +130,14 @@ class Aspirante(Contacto):
         self.full_clean()  # asegura que se ejecute clean()
         super().save(*args, **kwargs)
 
+        try:
+            from notificaciones.avisos import avisar_hallazgos_en_caliente
+            avisar_hallazgos_en_caliente(self)
+        except Exception:
+            logger.exception(
+                "No se pudieron evaluar/notificar las alertas de integridad "
+                "del trabajador %s.", self.pk)
+
     def __str__(self):
         return f"{self.nombre} {self.papellido} {self.sapellido or ''}".strip()
 
@@ -136,3 +156,61 @@ class Aspirante(Contacto):
         return hoy.year - self.fecha_nacimiento.year - (
             (hoy.month, hoy.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day)
         )
+
+    @staticmethod
+    def _proximo_aniversario(fecha_base, hoy, anios):
+        """`fecha_base` desplazada `anios` a partir de su propio año, buscando la
+        primera ocurrencia que caiga en `hoy` o después. 29 de febrero se corre al 1 de
+        marzo en años no bisiestos (mismo criterio en los dos usos de este helper)."""
+        def _en_anio(year):
+            try:
+                return fecha_base.replace(year=year)
+            except ValueError:
+                return fecha_base.replace(year=year, day=28) + timedelta(days=1)
+
+        fecha = _en_anio(fecha_base.year + anios)
+        if fecha < hoy:
+            fecha = _en_anio(fecha_base.year + anios + 1)
+        return fecha
+
+    @property
+    def dias_hasta_cumpleanos(self):
+        """Días que faltan para el próximo cumpleaños (0 si es hoy), a partir de
+        `fecha_nacimiento` (ya calculada al guardar desde el carnet de identidad).
+        `None` si no hay fecha de nacimiento registrada."""
+        if not self.fecha_nacimiento:
+            return None
+        hoy = date.today()
+        edad_actual = self.get_edad or 0
+        proximo = self._proximo_aniversario(self.fecha_nacimiento, hoy, edad_actual)
+        return (proximo - hoy).days
+
+    @property
+    def dias_hasta_jubilacion(self):
+        """Días que faltan para que el trabajador alcance la edad mínima de
+        pre-jubilación (58 F / 63 M) — negativo si ya la alcanzó (recordatorio
+        "vencido", igual que cualquier otro vencimiento). `None` fuera de la ventana de
+        pre-jubilación: sexo no contemplado, sin fecha de nacimiento, o ya superó la
+        edad máxima de la ventana (60 F / 65 M) — a partir de ahí ya no es "próxima",
+        es una situación ya resuelta, mismo corte que separa hoy `pre_jubilacion` de
+        `recontratados` en `dashboard/views.py`.
+
+        Extrae a esta property el criterio de edad por sexo que antes solo vivía
+        duplicado dentro de `DashboardView.get_context_data()`.
+        """
+        edad_minima = EDAD_MINIMA_JUBILACION.get(self.sexo)
+        edad_maxima = EDAD_MAXIMA_VENTANA_JUBILACION.get(self.sexo)
+        if not self.fecha_nacimiento or edad_minima is None:
+            return None
+
+        edad = self.get_edad
+        if edad is None or edad > edad_maxima:
+            return None
+
+        hoy = date.today()
+        fecha_edad_minima = self._proximo_aniversario(
+            self.fecha_nacimiento, date.min, edad_minima)
+        # `_proximo_aniversario` con `hoy=date.min` siempre da la ÚNICA ocurrencia real
+        # (no la "próxima desde hoy"): el cumpleaños en que cumple exactamente
+        # `edad_minima`, sin importar si ya pasó.
+        return (fecha_edad_minima - hoy).days

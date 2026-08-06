@@ -51,6 +51,12 @@ class HallazgoDetectado:
     datos: dict = field(default_factory=dict)
     clave_extra: str = ''
     unidad_organizativa_id: Optional[int] = None
+    # Nombre real del campo del modelo al que corresponde el hallazgo (p. ej.
+    # 'movil_personal'), usado por el panel de Notificaciones para hacer scroll+foco
+    # directo al campo del formulario (ver `panel_advertencias_registro.html`). Vacío
+    # por defecto: una regla que no lo declare simplemente no es clicable — degradación
+    # segura, no todas las reglas corresponden a un único campo editable.
+    campo_formulario: str = ''
 
 
 # Registro de reglas, en orden de declaración. La clave es el código de la regla.

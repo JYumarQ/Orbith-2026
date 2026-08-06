@@ -21,6 +21,7 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
+from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 
 class UsuarioListView(LoginRequiredMixin, ListView):
     model = CustomUser
@@ -94,15 +95,23 @@ class CustomUserCreateView(LoginRequiredMixin, CreateView):
             return JsonResponse({'form_is_valid': False, 'html_form': html}, status=200)
         return super().form_invalid(form)
 
-class CustomUserUpdateView(LoginRequiredMixin, UpdateView):
+class CustomUserUpdateView(LoginRequiredMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CustomUser
     form_class = CustomUserChangeForm
     template_name = 'pages/usuarios/updt_usuario.html'
-    success_url = reverse_lazy('list_usuarios')
+    template_name_pagina = 'pages/usuarios/updt_usuario_pagina.html'
+    url_por_defecto = reverse_lazy('list_usuarios')
 
     def form_valid(self, form):
         user = form.save()
+        self.object = user
+        hay_origen = bool(self.request.POST.get('next') or self.request.GET.get('next'))
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            # Hay una redirección real posterior SOLO cuando hay `next` (ver
+            # `next_url` abajo): sin eso, el modal se cierra en la MISMA página y un
+            # `messages.success()` aquí quedaría «colgado» en la sesión.
+            if hay_origen:
+                messages.success(self.request, self.mensaje_de_guardado_exitoso('Usuario actualizado correctamente'))
             return JsonResponse({
                 'form_is_valid': True,  # <-- usa la misma clave que en create
                 'message': 'Usuario actualizado correctamente',
@@ -110,8 +119,12 @@ class CustomUserUpdateView(LoginRequiredMixin, UpdateView):
                 'es_moderador': user.es_moderador,
                 'is_staff': user.is_staff,
                 'is_superuser': user.is_superuser,
+                # Solo poblado cuando se abrió desde fuera (Notificaciones/Subsanación,
+                # ver core.mixins.VolverAlOrigenMixin); vacío en el flujo normal dentro
+                # de list_usuarios.html, que no lo necesita.
+                'next_url': self.get_success_url() if hay_origen else '',
             })
-        messages.success(self.request, 'Usuario actualizado correctamente')
+        messages.success(self.request, self.mensaje_de_guardado_exitoso('Usuario actualizado correctamente'))
         return super().form_valid(form)
 
     def form_invalid(self, form):

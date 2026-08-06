@@ -1,7 +1,7 @@
 """Reglas de integridad de los datos personales de los trabajadores."""
 
 from django.apps import apps
-from django.db.models import F
+from django.db.models import F, Q
 
 from ..constantes import (
     CRITICIDAD_ALTA,
@@ -292,3 +292,155 @@ class SexoIncompatibleConCarnet(ReglaAspirantes):
                 },
                 unidad_organizativa_id=fila.get('unidad_organizativa_id'),
             )
+
+
+def _campo_de_texto_vacio(valor):
+    """Pura: la usan ejecutar() y evaluar_instancia() sin repetir el criterio.
+
+    Vacío = None o cadena en blanco tras strip(). La reutilizan ASP-005 y ASP-006:
+    ambas son «campo de contacto sin completar», con el mismo criterio de vacío.
+    """
+    return not (valor or '').strip()
+
+
+class MovilPersonalVacio(ReglaAspirantes):
+    codigo = 'ASP-005'
+    nombre = 'Móvil personal sin completar'
+    criticidad = CRITICIDAD_BAJA
+    # Evaluable en caliente: O(1), solo un campo propio de la instancia.
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que el trabajador tenga registrado un número de móvil personal.')
+    causa_probable = (
+        'El trabajador no facilitó un móvil al registrarse, o el dato llegará más '
+        'adelante.')
+    impacto = (
+        'Sin un móvil registrado, Orbith no tiene ninguna vía rápida de contacto '
+        'directo con el trabajador. No es obligatorio a nivel de formulario porque '
+        'el dato puede llegar después del alta.')
+    solucion = 'Abra el trabajador y complete el móvil personal.'
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle='El trabajador no tiene registrado ningún móvil personal.',
+            datos={'movil_personal': 'Vacío'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='movil_personal',
+        )
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(Q(movil_personal__isnull=True) | Q(movil_personal=''))
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield self._hallazgo(
+                str(fila['id']), self.titulo_de(fila, 'sin móvil personal'),
+                fila.get('unidad_organizativa_id'))
+
+    def evaluar_instancia(self, aspirante):
+        if not _campo_de_texto_vacio(aspirante.movil_personal):
+            return None
+        return [self._hallazgo(str(aspirante.pk), 'Sin móvil personal')]
+
+
+class DireccionVacia(ReglaAspirantes):
+    codigo = 'ASP-006'
+    nombre = 'Dirección sin completar'
+    criticidad = CRITICIDAD_BAJA
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que el trabajador tenga registrada una dirección.')
+    causa_probable = (
+        'El trabajador no facilitó su dirección al registrarse, o el dato llegará '
+        'más adelante.')
+    impacto = (
+        'Sin dirección registrada, Orbith no tiene forma de localizar al '
+        'trabajador fuera del contacto telefónico. No es obligatorio a nivel de '
+        'formulario porque el dato puede llegar después del alta.')
+    solucion = 'Abra el trabajador y complete la dirección.'
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle='El trabajador no tiene registrada ninguna dirección.',
+            datos={'direccion': 'Vacía'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='direccion',
+        )
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(Q(direccion__isnull=True) | Q(direccion=''))
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield self._hallazgo(
+                str(fila['id']), self.titulo_de(fila, 'sin dirección'),
+                fila.get('unidad_organizativa_id'))
+
+    def evaluar_instancia(self, aspirante):
+        if not _campo_de_texto_vacio(aspirante.direccion):
+            return None
+        return [self._hallazgo(str(aspirante.pk), 'Sin dirección')]
+
+
+class NivelEducativoSinCompletar(ReglaAspirantes):
+    """Nivel educativo nunca completado.
+
+    OJO: `nivel_educ` tiene la opción explícita `'SA'` («Sin Acreditar»), que es una
+    respuesta legítima del formulario, no una falta de dato. Por eso la condición
+    NO reutiliza `_campo_de_texto_vacio` (que trataría cualquier valor no vacío como
+    válido, cosa que aquí sí sería correcto) sino que compara contra `None`/`''`
+    explícitamente: `'SA'` nunca debe reportarse como vacío.
+    """
+
+    codigo = 'ASP-007'
+    nombre = 'Nivel educativo sin completar'
+    criticidad = CRITICIDAD_BAJA
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que el trabajador tenga registrado un nivel educativo (aunque '
+        'sea «Sin Acreditar», que es una respuesta válida).')
+    causa_probable = (
+        'El campo se dejó sin seleccionar al registrar al trabajador.')
+    impacto = (
+        'El nivel educativo es un dato reportable; dejarlo sin completar (en vez '
+        'de marcar explícitamente «Sin Acreditar») distorsiona cualquier informe '
+        'que lo desglose.')
+    solucion = 'Abra el trabajador y seleccione su nivel educativo.'
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle='El trabajador no tiene registrado ningún nivel educativo.',
+            datos={'nivel_educ': 'Vacío'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='nivel_educ',
+        )
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(Q(nivel_educ__isnull=True) | Q(nivel_educ=''))
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield self._hallazgo(
+                str(fila['id']), self.titulo_de(fila, 'sin nivel educativo'),
+                fila.get('unidad_organizativa_id'))
+
+    def evaluar_instancia(self, aspirante):
+        nivel_educ = aspirante.nivel_educ
+        if nivel_educ is not None and nivel_educ != '':
+            return None
+        return [self._hallazgo(str(aspirante.pk), 'Sin nivel educativo')]

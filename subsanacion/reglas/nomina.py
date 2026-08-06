@@ -290,18 +290,31 @@ TIPO_MOVIMIENTO_BAJA = 'Baja'
 
 
 class MovimientoDesconectadoDeSuContrato(ReglaMovimientos):
-    """Movimiento sin contrato cuando el contrato SÍ existe.
+    """Movimiento que DEBERÍA tener contrato y no lo tiene.
 
-    Esta regla se redefinió tras analizar los datos. La versión anterior reportaba todo
-    movimiento con `contrato` en blanco, y eso incluía los 21 movimientos de baja, que
-    están así a propósito: el 100 % de los movimientos de tipo «Baja» se crean sin
-    contrato porque el contrato se borra justo después. Eran falsos positivos por
-    construcción.
+    La pregunta que responde esta regla no es «¿este movimiento tiene `contrato` en
+    blanco?», sino «¿existe un contrato vivo al que este movimiento debería estar
+    asociado y no lo está?». Son preguntas distintas:
 
-    Lo que sí es un problema real, y lo que detecta ahora, son los movimientos que NO son
-    de baja y han perdido el enlace: el código que los crea sí asigna el contrato, así
-    que si está en blanco es porque el contrato al que apuntaban se borró y se volvió a
-    contratar reutilizando el mismo número de expediente.
+      * Un movimiento de baja sin contrato es normal: se crea así a propósito porque el
+        contrato se borra justo después (véase `TIPO_MOVIMIENTO_BAJA` más arriba).
+      * Un movimiento sin contrato de un trabajador que sigue de baja HOY —sin ningún
+        `CAlta` vivo con su mismo número de expediente— tampoco es un defecto: es el
+        estado normal de alguien que no está recontratado. No hay ningún contrato al
+        que asociarlo, así que no hay nada que un usuario pueda corregir. Si se le
+        recontrata reutilizando el expediente, `CAlta.save()` lo reengancha solo (véase
+        `contratos/models.py`) y el caso nunca llega a producir hallazgo.
+      * Un movimiento sin contrato mientras SÍ existe un `CAlta` vivo del mismo
+        aspirante con el mismo expediente —el reenganche automático no llegó a
+        ocurrir, por ejemplo por una importación, una edición masiva o datos
+        heredados de antes de que existiera ese mecanismo— es el único caso realmente
+        accionable, y es el único que se reporta.
+
+    El criterio de «contrato vivo al que correspondería» tiene que coincidir exactamente
+    con `CAlta.movimientos_huerfanos_reenganchables()` en `contratos/models.py`: mismo
+    aspirante y mismo `no_expediente`. Subsanación no puede importar modelos de negocio
+    directamente (por eso usa `apps.get_model`), así que la condición está reimplementada
+    aquí; si ese criterio cambia en el modelo, hay que cambiarlo también aquí.
     """
 
     codigo = 'MOV-002'
@@ -309,35 +322,55 @@ class MovimientoDesconectadoDeSuContrato(ReglaMovimientos):
     criticidad = CRITICIDAD_MEDIA
 
     descripcion = (
-        'Busca movimientos que no son de baja y han perdido el enlace con su contrato, o '
-        'que no tienen trabajador asociado. Los movimientos de baja se excluyen: Orbith '
-        'los crea sin contrato a propósito, porque el contrato desaparece al darse la '
-        'baja.')
+        'Busca movimientos que no son de baja y deberían estar asociados a un contrato '
+        'vivo del mismo trabajador y no lo están, o que no tienen trabajador asociado. '
+        'Se excluyen los movimientos de baja (sin contrato por diseño) y los casos en '
+        'los que el trabajador no tiene ningún contrato vivo con ese expediente: eso no '
+        'es un dato incorrecto, es el estado normal de alguien dado de baja.')
     causa_probable = (
         'El trabajador fue dado de baja —lo que borra su contrato— y después se volvió a '
-        'contratar reutilizando el mismo número de expediente. El contrato nuevo es otra '
-        'fila, así que los movimientos anteriores se quedaron apuntando al que ya no '
-        'existe.')
+        'contratar reutilizando el mismo número de expediente, pero el movimiento no se '
+        'reenganchó al contrato nuevo (por ejemplo, por una importación o una edición '
+        'hecha directamente en la base de datos, sin pasar por el guardado normal).')
     impacto = (
         'Esos movimientos no aparecen al abrir el histórico del trabajador desde su '
-        'contrato, aunque sigan contando en el listado de movimientos de nómina. Es '
-        'información que existe y a la que ya no se llega por el camino normal, así que '
-        'el histórico que se consulta parece más corto de lo que realmente es.')
+        'contrato actual, aunque sigan contando en el listado de movimientos de nómina. '
+        'Es información que existe y a la que ya no se llega por el camino normal, así '
+        'que el histórico que se consulta parece más corto de lo que realmente es.')
     solucion = (
-        'Estos movimientos no se editan desde ningún formulario: son el registro de lo '
-        'que ocurrió. Compruebe en el listado de movimientos de nómina, buscando por el '
-        'número de expediente, que el histórico completo del trabajador está ahí. Si '
-        'necesita que vuelva a aparecer desde el contrato, un administrador tiene que '
-        'reasociarlo, y conviene revisar el proceso de recontratación para que no se '
-        'repita.')
+        'Ejecute el comando de gestión «reenganchar_movimientos» (use --dry-run primero '
+        'para ver qué haría). Reasocia automáticamente cada movimiento al contrato vivo '
+        'del mismo trabajador con el mismo número de expediente. Estos movimientos no '
+        'se editan desde ningún formulario: son el registro de lo que ocurrió.')
 
     def ejecutar(self, contexto):
-        from django.db.models import Q
+        from django.apps import apps
+        from django.db.models import Exists, OuterRef, Q
+
+        CAlta = apps.get_model('contratos', 'CAlta')
+
+        # Mismo criterio que `CAlta.movimientos_huerfanos_reenganchables()`: mismo
+        # aspirante y mismo `no_expediente` exacto. `no_expediente` es único entre los
+        # contratos vivos, así que esta subconsulta nunca puede encontrar más de una fila.
+        contrato_vivo_correspondiente = CAlta.objects.filter(
+            aspirante_id=OuterRef('aspirante_id'),
+            no_expediente=OuterRef('no_expediente'),
+        )
 
         filas = (self.base_queryset()
                  # Se excluyen las bajas: están sin contrato por diseño.
                  .exclude(tipo_movimiento__iexact=TIPO_MOVIMIENTO_BAJA)
-                 .filter(Q(contrato__isnull=True) | Q(aspirante__isnull=True))
+                 .filter(
+                     # Sin trabajador: problema estructural, se reporta siempre.
+                     Q(aspirante__isnull=True)
+                     # Con trabajador: solo se reporta si de verdad existe un contrato
+                     # vivo al que debería estar enlazado y no lo está. Si el trabajador
+                     # no tiene ningún contrato vivo con ese expediente, no es un
+                     # defecto: es el estado normal de alguien dado de baja.
+                     | Q(contrato__isnull=True, aspirante__isnull=False)
+                     & ~Q(no_expediente__isnull=True) & ~Q(no_expediente='')
+                     & Exists(contrato_vivo_correspondiente)
+                 )
                  .values('id', 'no_expediente', 'fecha_efectiva', 'tipo_movimiento',
                          'contrato_id', 'aspirante_id',
                          'aspirante__nombre', 'aspirante__papellido',

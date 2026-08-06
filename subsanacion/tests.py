@@ -611,6 +611,30 @@ class FuncionesPurasEnCalienteTests(TestCase):
         self.assertEqual(_fechas_de_vencimiento_faltantes(hoy, None, hoy), [
             ('fecha_vence_recal', 'recalificación')])
 
+    def test_campo_de_texto_vacio(self):
+        from .reglas.aspirantes import _campo_de_texto_vacio
+
+        self.assertTrue(_campo_de_texto_vacio(None))
+        self.assertTrue(_campo_de_texto_vacio(''))
+        self.assertTrue(_campo_de_texto_vacio('   '))
+        self.assertFalse(_campo_de_texto_vacio('54212345'))
+
+    def test_mision_sin_pais(self):
+        from .reglas.contratos import _mision_sin_pais
+
+        self.assertTrue(_mision_sin_pais(True, None))
+        self.assertTrue(_mision_sin_pais(True, ''))
+        self.assertFalse(_mision_sin_pais(True, 'Brasil'))
+        self.assertFalse(_mision_sin_pais(False, None))
+
+    def test_c_formal_sin_res(self):
+        from .reglas.contratos import _c_formal_sin_res
+
+        self.assertTrue(_c_formal_sin_res(True, None))
+        self.assertTrue(_c_formal_sin_res(True, ''))
+        self.assertFalse(_c_formal_sin_res(True, 'RES-1'))
+        self.assertFalse(_c_formal_sin_res(False, None))
+
 
 class EvaluarInstanciaTests(TestCase):
     """`evaluar_instancia()` de CTR-007/012/013 sobre una instancia real, no un dict.
@@ -686,6 +710,98 @@ class EvaluarInstanciaTests(TestCase):
             fecha_vence_lic=None, fecha_vence_recal=None, fecha_vence_seg=None)
 
         self.assertIsNone(ChoferSinFechasDeVencimiento().evaluar_instancia(contrato))
+
+    def test_movil_personal_vacio_detectado(self):
+        from types import SimpleNamespace
+
+        from .reglas.aspirantes import MovilPersonalVacio
+
+        aspirante = SimpleNamespace(pk=1, movil_personal='')
+
+        detectados = MovilPersonalVacio().evaluar_instancia(aspirante)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_movil_personal_completo_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.aspirantes import MovilPersonalVacio
+
+        aspirante = SimpleNamespace(pk=1, movil_personal='54212345')
+
+        self.assertIsNone(MovilPersonalVacio().evaluar_instancia(aspirante))
+
+    def test_direccion_vacia_detectada(self):
+        from types import SimpleNamespace
+
+        from .reglas.aspirantes import DireccionVacia
+
+        aspirante = SimpleNamespace(pk=1, direccion=None)
+
+        detectados = DireccionVacia().evaluar_instancia(aspirante)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_nivel_educativo_vacio_detectado(self):
+        from types import SimpleNamespace
+
+        from .reglas.aspirantes import NivelEducativoSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, nivel_educ=None)
+
+        detectados = NivelEducativoSinCompletar().evaluar_instancia(aspirante)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_nivel_educativo_sin_acreditar_no_es_vacio(self):
+        """'SA' (Sin Acreditar) es una respuesta válida del formulario, no un vacío."""
+        from types import SimpleNamespace
+
+        from .reglas.aspirantes import NivelEducativoSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, nivel_educ='SA')
+
+        self.assertIsNone(NivelEducativoSinCompletar().evaluar_instancia(aspirante))
+
+    def test_mision_sin_pais_detectada(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import MisionSinPais
+
+        contrato = SimpleNamespace(pk=1, mision=True, pais=None)
+
+        detectados = MisionSinPais().evaluar_instancia(contrato)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_sin_mision_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import MisionSinPais
+
+        contrato = SimpleNamespace(pk=1, mision=False, pais=None)
+
+        self.assertIsNone(MisionSinPais().evaluar_instancia(contrato))
+
+    def test_c_formal_sin_codigo_detectado(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import ConformidadFormalSinCodigo
+
+        contrato = SimpleNamespace(pk=1, c_formal=True, c_formal_res='')
+
+        detectados = ConformidadFormalSinCodigo().evaluar_instancia(contrato)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_sin_c_formal_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import ConformidadFormalSinCodigo
+
+        contrato = SimpleNamespace(pk=1, c_formal=False, c_formal_res='')
+
+        self.assertIsNone(ConformidadFormalSinCodigo().evaluar_instancia(contrato))
 
 
 class EvaluarReglasDeInstanciaTests(TestCase):

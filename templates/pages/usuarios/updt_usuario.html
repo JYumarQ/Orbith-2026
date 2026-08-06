@@ -7,12 +7,15 @@
           data-user-id="{{ object.id }}"
           data-confirm-text="¿Estás seguro de guardar los cambios para el usuario {{ object.username }}?">
       {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
 
       <div class="modal-header">
         <h5 class="modal-title">Editar Usuario</h5>
       </div>
 
       <div class="modal-body">
+        {% include 'base/partials/aviso_origen_edicion.html' %}
+        {% include 'base/partials/panel_advertencias_registro.html' %}
         <div class="mb-3">
           <label for="{{ form.username.id_for_label }}" class="form-label">Nombre de usuario</label>
           {{ form.username }}
@@ -158,6 +161,13 @@
           dataType: 'json',
           success: function (data) {
             if (data.form_is_valid || data.success) {
+              // Se abrió desde fuera de list_usuarios.html (Notificaciones/Subsanación,
+              // ver core.mixins.VolverAlOrigenMixin): no hay #filter_usuarios_results
+              // al que refrescar, hay que volver a donde estaba el usuario.
+              if (data.next_url) {
+                window.location.href = data.next_url;
+                return;
+              }
               $('#editar_usuario').modal('hide');
               if (window.htmx) {
                 htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });

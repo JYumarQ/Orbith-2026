@@ -15,6 +15,7 @@ from django.views.decorators.cache import never_cache
 from .models import Aspirante
 from .forms import AspiranteForm
 from usuarios.decorators import write_required
+from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 
 ABR_PROVINCIAS = {
     'Isla de la Juventud': 'IJU',
@@ -311,24 +312,17 @@ class AspiranteCreateView(CreateView):
 
 # ----------------- EDITAR -----------------
 @method_decorator(write_required, name='dispatch')
-class AspiranteUpdateView(UpdateView):
+class AspiranteUpdateView(AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = Aspirante
     form_class = AspiranteForm
     template_name = "pages/aspirante/updt_aspir.html"
+    template_name_pagina = "pages/aspirante/updt_aspir_pagina.html"
+    url_por_defecto = reverse_lazy('list_aspir')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['next'] = self.request.GET.get('next', '')
-        return context
-
-    def get_success_url(self):
-        next_url = self.request.POST.get('next') or self.request.GET.get('next')
-        return next_url or reverse_lazy('list_aspir')
 
     def form_valid(self, form):
         # 1. Pausamos el guardado para hacer las validaciones
@@ -346,12 +340,10 @@ class AspiranteUpdateView(UpdateView):
 
         # 4. Retornamos usando el flujo normal de Django (Recarga la página)
         form.instance = aspirante
-        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente.')
+        mensaje = self.mensaje_de_guardado_exitoso(
+            f'Datos de "{aspirante.nombre}" actualizados correctamente.')
+        messages.success(self.request, mensaje)
         return super().form_valid(form)
-
-        # Comportamiento tradicional (si no se usa HTMX)
-        messages.success(self.request, f'Datos de "{aspirante.nombre}" actualizados correctamente.')
-        return HttpResponseRedirect(self.get_success_url())
 
 
 # ----------------- BORRAR -----------------

@@ -1,0 +1,27 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Editar unidad organizativa | Orbith{% endblock %}
+
+{% block content %}
+{% comment %} El aviso "está corrigiendo un registro desde..." vive ahora DENTRO del modal
+   (dentro de `updt_uniorg.html`, vía `base/partials/aviso_origen_edicion.html`) para no
+   quedar oculto bajo el `.modal-backdrop` de abajo. {% endcomment %}
+<div class="modal-backdrop show"></div>
+<div class="modal show d-block" id="modal_generic" role="dialog" style="z-index: 1055;">
+  {% include 'pages/uniorg/updt_uniorg.html' %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var urlVolver = "{{ next|default:url_por_defecto }}";
+  document.body.addEventListener('closeModal', function () {
+    window.location.href = urlVolver;
+  });
+  document.querySelectorAll('#modal_generic [data-bs-dismiss="modal"]').forEach(function (boton) {
+    boton.addEventListener('click', function () {
+      window.location.href = urlVolver;
+    });
+  });
+});
+</script>
+{% endblock %}

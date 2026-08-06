@@ -1,0 +1,23 @@
+{% comment %} Botonera de exportación.
+
+   Vive en su propio parcial porque los enlaces de Excel/PDF arrastran los filtros
+   vigentes en `request.GET`: al elegir un firmante por HTMX (sin recargar la página)
+   estos href quedarían apuntando a la selección anterior. El parcial se reenvía en la
+   misma respuesta HTMX con `hx-swap-oob` para mantenerlos en sintonía.
+
+   `intercambio_oob` lo activa solo la respuesta HTMX; en el render normal de la
+   página se omite para no duplicar el contenedor. {% endcomment %}
+<div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-md-0"
+     id="accionesExportAnexo14"{% if intercambio_oob %} hx-swap-oob="true"{% endif %}>
+    <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
+       href="{% url 'informes_anexo:anexo14_excel' %}?{{ request.GET.urlencode }}">
+        <i class="bi bi-file-earmark-excel-fill text-success"></i> Exportar Excel
+    </a>
+    <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
+       href="{% url 'informes_anexo:anexo14_pdf' %}?{{ request.GET.urlencode }}">
+        <i class="bi bi-file-earmark-pdf-fill text-danger"></i> Exportar PDF
+    </a>
+    <button type="button" class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2" onclick="window.print()">
+        <i class="bi bi-printer-fill"></i> Imprimir
+    </button>
+</div>

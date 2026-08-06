@@ -1,6 +1,9 @@
 import logging
+import threading
 from decimal import Decimal
+from django.core.signals import request_started
 from django.db import models
+from django.db.models.signals import post_delete, post_save
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
@@ -13,6 +16,41 @@ from contratos.salarios import calcular_salario
 
 
 logger = logging.getLogger(__name__)
+
+
+# ==================== CACHÉ DE LA ESCALA SALARIAL ====================
+# `NSalario` es un nomenclador diminuto (una fila por combinación grupo/rol/tridente)
+# que antes se consultaba UNA VEZ POR CONTRATO desde `_buscar_monto_salario`. En el
+# dashboard eso producía 14 consultas idénticas por carga, y en el listado de
+# contratos una por fila.
+#
+# La caché es por PETICIÓN (`threading.local` + `request_started`), no global: así no
+# puede sobrevivir a un rollback de transacción — un caché de módulo dejaría datos de
+# un test revertido visibles para el siguiente. Dentro de una misma petición también
+# se invalida si alguien edita la escala.
+_local_escala = threading.local()
+
+
+def _obtener_escala_salarial():
+    """`{(grupo_escala_id, rol_id, tridente_id): monto}` de toda la escala."""
+    escala = getattr(_local_escala, 'valores', None)
+    if escala is None:
+        escala = {
+            (grupo_id, rol_id, tridente_id): monto
+            for grupo_id, rol_id, tridente_id, monto in NSalario.objects.values_list(
+                'grupo_escala_id', 'rol_id', 'tridente_id', 'monto')
+        }
+        _local_escala.valores = escala
+    return escala
+
+
+def invalidar_escala_salarial(**kwargs):
+    _local_escala.valores = None
+
+
+request_started.connect(invalidar_escala_salarial, dispatch_uid='contratos_escala_salarial')
+post_save.connect(invalidar_escala_salarial, sender=NSalario, dispatch_uid='contratos_escala_save')
+post_delete.connect(invalidar_escala_salarial, sender=NSalario, dispatch_uid='contratos_escala_delete')
 
 
 # Los movimientos de baja se crean DELIBERADAMENTE sin contrato (véase la creación del
@@ -195,15 +233,14 @@ class CAlta(ContratoBase):
     def _buscar_monto_salario(grupo_escala_id, rol_id, tridente_id):
         """Busca el monto de una combinación de la escala. None si no existe la fila.
 
-        Se filtra por los `_id` directamente, así que `rol_id=None` se traduce a
-        `rol IS NULL`, que es lo que corresponde a un cuadro (sin tridente) o a la
-        escala del grupo sin rol concreto.
+        La clave usa los `_id` directamente, así que `rol_id=None` corresponde a un
+        cuadro (sin tridente) o a la escala del grupo sin rol concreto — el mismo
+        criterio que el `rol IS NULL` de la consulta que había antes aquí.
+
+        Lee de `_obtener_escala_salarial()` (una sola consulta por petición) en vez de
+        consultar la base de datos en cada llamada.
         """
-        return (NSalario.objects
-                .filter(grupo_escala_id=grupo_escala_id, rol_id=rol_id,
-                        tridente_id=tridente_id)
-                .values_list('monto', flat=True)
-                .first())
+        return _obtener_escala_salarial().get((grupo_escala_id, rol_id, tridente_id))
 
     def calcular_salario_escala(self):
         """Salario de escala de este contrato, o None si no se puede calcular.

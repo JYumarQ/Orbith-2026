@@ -1,0 +1,170 @@
+{% load static %}
+{% comment %} Pestaña «Recordatorios»: dos subpestañas, NUNCA mezcladas (decisión ya
+   tomada) — Sistema (automáticos, `?sub=sistema`) y Administración (manuales,
+   `?sub=administracion`). Cada subpestaña es una navegación real (`?tab=recordatorios&
+   sub=...`), mismo patrón que las pestañas de nivel superior. {% endcomment %}
+
+<ul class="nav nav-pills mb-3" role="tablist">
+  <li class="nav-item">
+    <a class="nav-link {% if sub_activa == 'sistema' %}active{% endif %}"
+       href="?tab=recordatorios&sub=sistema">
+      <i class="bx bx-bell-ring me-1"></i>Sistema
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if sub_activa == 'administracion' %}active{% endif %}"
+       href="?tab=recordatorios&sub=administracion">
+      <i class="bx bx-user-check me-1"></i>Administración
+    </a>
+  </li>
+</ul>
+
+{% comment %} Prioridad como chips siempre visibles, mismo criterio que Módulo/Severidad
+   en Advertencias — sin embudo: Recordatorios no tiene tantas dimensiones de filtro
+   como para justificar uno. {% endcomment %}
+<div class="d-flex flex-wrap gap-2 mb-2">
+  <div class="btn-group btn-group-sm" role="group" aria-label="Filtro por prioridad" id="chips-prioridad-recordatorios">
+    <button type="button" class="btn btn-outline-secondary {% if not prioridad_actual %}active{% endif %}" data-valor="">Todas</button>
+    <button type="button" class="btn btn-outline-secondary {% if prioridad_actual == 'rojo' %}active{% endif %}" data-valor="rojo">🔴 Vencido/Hoy</button>
+    <button type="button" class="btn btn-outline-secondary {% if prioridad_actual == 'amarillo' %}active{% endif %}" data-valor="amarillo">🟡 Próximo</button>
+    <button type="button" class="btn btn-outline-secondary {% if prioridad_actual == 'naranja' %}active{% endif %}" data-valor="naranja">🟠 Cercano</button>
+    <button type="button" class="btn btn-outline-secondary {% if prioridad_actual == 'verde' %}active{% endif %}" data-valor="verde">🟢 Lejano</button>
+  </div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div class="flex-grow-1" style="max-width: 320px;">
+    <input type="hidden" id="tab-recordatorios-hidden" name="tab" value="recordatorios">
+    <input type="hidden" id="sub-recordatorios-hidden" name="sub" value="{{ sub_activa }}">
+    <input type="hidden" id="chip-prioridad-hidden" name="prioridad" value="{{ prioridad_actual }}">
+    <div class="input-group input-group-merge">
+      <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+      <input id="search-recordatorios" type="text" class="form-control border-0 shadow-none"
+             placeholder="Buscar..." name="q" value="{{ q }}"
+             hx-get="{% url 'panel_recordatorios' %}"
+             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
+             hx-target="#resultados-recordatorios" hx-swap="innerHTML"
+             hx-include="#tab-recordatorios-hidden, #sub-recordatorios-hidden, #chip-prioridad-hidden">
+    </div>
+  </div>
+
+  {% if sub_activa == 'sistema' and puede_actualizar_recordatorios %}
+    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-actualizar-recordatorios">
+      <i class="bx bx-refresh me-1"></i>Actualizar recordatorios
+    </button>
+  {% endif %}
+
+  {% if sub_activa == 'administracion' and unidades_admin %}
+    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoRecordatorio">
+      <i class="bx bx-plus me-1"></i>Nuevo recordatorio
+    </button>
+  {% endif %}
+</div>
+
+<div id="resultados-recordatorios">
+  {% include 'pages/notificaciones/partials/_tabla_recordatorios.html' %}
+</div>
+
+{% if sub_activa == 'administracion' and unidades_admin %}
+  <div class="modal fade" id="modalNuevoRecordatorio" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="{% url 'recordatorio_crear' %}">
+          {% csrf_token %}
+          <div class="modal-header">
+            <h5 class="modal-title">Nuevo recordatorio</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label" for="id_rec_titulo">Título</label>
+              <input type="text" class="form-control" id="id_rec_titulo" name="titulo" maxlength="150" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="id_rec_mensaje">Mensaje</label>
+              <textarea class="form-control" id="id_rec_mensaje" name="mensaje" rows="3" required></textarea>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="id_rec_fecha">Fecha objetivo</label>
+                <input type="date" class="form-control" id="id_rec_fecha" name="fecha_objetivo" required>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="id_rec_unidad">Unidad organizativa</label>
+                <select class="form-select" id="id_rec_unidad" name="unidad" required>
+                  <option value="">Seleccione...</option>
+                  {% for unidad in unidades_admin %}
+                    <option value="{{ unidad.pk }}">{{ unidad.descripcion }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">Crear recordatorio</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<script src="{% static 'js/notificaciones.js' %}"></script>
+<script>
+(function () {
+  function obtenerCookie(nombre) {
+    const coincidencia = document.cookie.match('(^|;)\\s*' + nombre + '\\s*=\\s*([^;]+)');
+    return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
+  }
+  const csrftoken = obtenerCookie('csrftoken');
+
+  // Delegado en el contenedor (no en cada fila): #resultados-recordatorios es lo que
+  // HTMX reemplaza por dentro al buscar, así que el listener sobrevive al swap.
+  document.getElementById('resultados-recordatorios').addEventListener('click', function (evento) {
+    const boton = evento.target.closest('.btn-completar-recordatorio');
+    if (!boton) return;
+    fetch(boton.dataset.url, { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
+      .then(function (res) { if (res.ok) window.location.reload(); });
+  });
+
+  function triggerSearchRecordatorios() {
+    htmx.trigger(document.getElementById('search-recordatorios'), 'searchFilters');
+  }
+
+  // Botón «Actualizar recordatorios» (solo subpestaña Sistema): corre los
+  // detectores automáticos bajo demanda, mismo patrón que «Buscar incidencias»
+  // en lista.html (toast de SweetAlert2 y recarga al terminar).
+  const btnActualizarRecordatorios = document.getElementById('btn-actualizar-recordatorios');
+  if (btnActualizarRecordatorios) {
+    btnActualizarRecordatorios.addEventListener('click', function () {
+      btnActualizarRecordatorios.disabled = true;
+      fetch("{% url 'actualizar_recordatorios' %}", { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          Swal.fire({
+            toast: true, position: 'top-end', icon: 'success',
+            title: data.mensaje, showConfirmButton: false, timer: 3000, timerProgressBar: true,
+          }).then(function () { window.location.reload(); });
+        })
+        .catch(function () {
+          btnActualizarRecordatorios.disabled = false;
+          Swal.fire({
+            toast: true, position: 'top-end', icon: 'error',
+            title: 'No se pudo actualizar los recordatorios.', showConfirmButton: false, timer: 3000,
+          });
+        });
+    });
+  }
+
+  const grupoPrioridad = document.getElementById('chips-prioridad-recordatorios');
+  grupoPrioridad.querySelectorAll('button').forEach(function (boton) {
+    boton.addEventListener('click', function () {
+      grupoPrioridad.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+      boton.classList.add('active');
+      document.getElementById('chip-prioridad-hidden').value = boton.dataset.valor;
+      triggerSearchRecordatorios();
+    });
+  });
+})();
+</script>
