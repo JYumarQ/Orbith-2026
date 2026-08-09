@@ -112,7 +112,7 @@ def generar_vista_previa(request):
         desgloses = []
         for key_desglose in keys_desglose:
             filas, etiqueta = calcular_desglose(queryset, definicion_modelo, key_desglose, total_registros)
-            desgloses.append({"etiqueta": etiqueta, "filas": filas})
+            desgloses.append({"clave": key_desglose, "etiqueta": etiqueta, "filas": filas})
 
         # ---- Listado paginado ----
         paginator = Paginator(queryset, REGISTROS_POR_PAGINA)

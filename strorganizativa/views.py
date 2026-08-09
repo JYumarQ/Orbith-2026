@@ -5,13 +5,19 @@ from .models import CargoPlantilla, Departamento, UnidadOrganizativa
 from .forms import CargoPlantillaForm, DepartamentoForm, UnidadOrganizativaForm
 from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
 from django.urls import reverse_lazy, reverse
-from django.http import JsonResponse, HttpResponse
+from django.http import JsonResponse, HttpResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.db.models import Q, ProtectedError, Count, Prefetch, RestrictedError, Sum, F
 from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
+# Convierten el guardado en una solicitud cuando quien envía el formulario es un
+# Moderador; devuelven None (y la vista sigue como siempre) para un Administrador.
+# Ver `solicitudes/integracion.py`.
+from cierres import integracion as integracion_cierres
+from solicitudes.integracion import desviar_borrado, interceptar
+from solicitudes.models import AccionSolicitud
 import json
 
 # ------------------  CARGO PLANTILLA  ------------------
@@ -153,6 +159,13 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
+        # Un Moderador no ejecuta nada: registra la propuesta y sale. Va lo primero
+        # porque el desplazamiento de abajo escribe en la base de datos antes incluso de
+        # validar, y eso no debe ocurrir al proponer.
+        desvio = interceptar(self, request, AccionSolicitud.CREAR)
+        if desvio is not None:
+            return desvio
+
         # Desplazamiento y guardado en UNA sola transacción, para que la
         # restricción diferida se compruebe una única vez al confirmar.
         with transaction.atomic():
@@ -171,7 +184,6 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
     def form_invalid(self, form):
         # El formulario no es válido: deshacemos el desplazamiento aplicado en post()
         transaction.set_rollback(True)
-        print("❌ ERROR DE VALIDACIÓN EN CARGO:", form.errors)
         return super().form_invalid(form)
 
 class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
@@ -225,6 +237,11 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
+        # Ver la nota en `CargoPlantillaCreateView.post`.
+        desvio = interceptar(self, request, AccionSolicitud.EDITAR)
+        if desvio is not None:
+            return desvio
+
         self.object = self.get_object()
 
         with transaction.atomic():
@@ -245,9 +262,15 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin
 
 
 class CargoPlantillaDeleteView(DeleteView):
+    """Eliminar cargo. Para un Moderador genera una solicitud de eliminación:
+    el registro no se toca hasta que un Administrador la apruebe."""
     model = CargoPlantilla
-    
+
     def post(self, request, *args, **kwargs):
+        desvio = desviar_borrado(self, request)
+        if desvio is not None:
+            return desvio
+
         try:
             cargo = self.get_object()
             cargo.delete()
@@ -263,8 +286,10 @@ class CargoPlantillaDeleteView(DeleteView):
                 mensaje = "No se puede eliminar: Este cargo tiene historial de Bajas asociadas. Borrarlo rompería el historial laboral."
             elif 'Contrato' in error_msg or 'calta' in error_msg:
                 mensaje = "No se puede eliminar: Hay contratos activos asociados a este cargo."
-            elif 'Solicitud' in error_msg:
-                mensaje = "No se puede eliminar: Hay solicitudes pendientes para este cargo."
+            # Ya no se comprueba 'Solicitud': el modelo antiguo tenía una FK PROTECT a
+            # CargoPlantilla, pero el actual apunta con una GenericForeignKey y no puede
+            # bloquear un borrado. Una solicitud pendiente sobre un cargo que se elimina
+            # queda huérfana y se detecta al aprobarla (`servicios.obtener_objeto`).
             else:
                 mensaje = "No se puede eliminar: Está siendo utilizado en otros registros del sistema."
 
@@ -328,11 +353,13 @@ def cargar_dptos(request):
 
 
 class DepartamentoCreateView(SuccessMessageMixin, CreateView):
+    """Crear departamento. Para un Moderador se convierte en solicitud de aprobación."""
     model = Departamento
     form_class = DepartamentoForm
     template_name = "pages/dpto/add_dpto.html"
     success_url = reverse_lazy('gestor_plantilla')
-    
+
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
@@ -363,6 +390,13 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        # Un Moderador no ejecuta nada: registra la propuesta y sale. Va lo primero
+        # porque el desplazamiento de abajo escribe en la base de datos antes incluso de
+        # validar, y eso no debe ocurrir al proponer.
+        desvio = interceptar(self, request, AccionSolicitud.CREAR)
+        if desvio is not None:
+            return desvio
+
         # Todo dentro de UNA transacción: el desplazamiento y el guardado
         # deben confirmarse juntos para que la restricción diferida funcione.
         with transaction.atomic():
@@ -400,6 +434,7 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
     
 
 class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+    """Editar departamento. Para un Moderador se convierte en solicitud de aprobación."""
     model = Departamento
     form_class = DepartamentoForm
     template_name = "pages/dpto/updt_dpto.html"
@@ -407,6 +442,11 @@ class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, 
     url_por_defecto = reverse_lazy('gestor_plantilla')
 
     def post(self, request, *args, **kwargs):
+        # Ver la nota en `DepartamentoCreateView.post`.
+        desvio = interceptar(self, request, AccionSolicitud.EDITAR)
+        if desvio is not None:
+            return desvio
+
         self.object = self.get_object()
 
         with transaction.atomic():
@@ -444,9 +484,15 @@ class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, 
     
 
 class DepartamentoDeleteView(DeleteView):
+    """Eliminar departamento. Para un Moderador genera una solicitud de eliminación:
+    el registro no se toca hasta que un Administrador la apruebe."""
     model = Departamento
 
     def post(self, request, *args, **kwargs):
+        desvio = desviar_borrado(self, request)
+        if desvio is not None:
+            return desvio
+
         try:
             self.get_object().delete()
             return JsonResponse({'status': 'ok', 'message': 'Departamento eliminado correctamente.'})
@@ -594,6 +640,17 @@ class UnidadOrganizativaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroM
         return super().form_valid(form)
     
     def post(self, request, *args, **kwargs):
+        # Un Moderador solo puede editar las unidades que tiene asignadas, y su envío se
+        # convierte en solicitud. Crear y eliminar unidades no le está permitido en
+        # absoluto (ver `strorganizativa/urls.py`).
+        if getattr(request.user, 'es_moderador', False):
+            if not request.user.unidades.filter(pk=self.get_object().pk).exists():
+                return HttpResponseForbidden('Fuera de su Unidad Organizativa asignada.')
+
+        desvio = interceptar(self, request, AccionSolicitud.EDITAR)
+        if desvio is not None:
+            return desvio
+
         self.object = self.get_object()
 
         with transaction.atomic():
@@ -651,10 +708,13 @@ def gestor_plantilla_view(request):
     # por cada fila: sin precargarlos Django lanzaba una consulta suelta por unidad
     # (42 consultas, 18 repetidas). El `select_related('tipo')` del prefetch evita que
     # las subunidades repitan el mismo problema un nivel más abajo.
-    unidades = unidades.select_related('tipo').prefetch_related(
+    # `estado_cierre` alimenta el punto de color de cada fila (ver
+    # `lista_unidades_div.html`). Sin el select_related aquí y en el prefetch de
+    # las hijas, pintar el indicador costaría una consulta por unidad.
+    unidades = unidades.select_related('tipo', 'estado_cierre').prefetch_related(
         Prefetch(
             'direcciones_hijas',
-            queryset=UnidadOrganizativa.objects.select_related('tipo').order_by('orden_informe', 'descripcion'),
+            queryset=UnidadOrganizativa.objects.select_related('tipo', 'estado_cierre').order_by('orden_informe', 'descripcion'),
         )
     )
 
@@ -679,9 +739,14 @@ def gestor_plantilla_view(request):
     # El orden lo decide el usuario mediante el Orden de Prioridad
     unidades = unidades.order_by(field)
 
-    # 5. Respuestas HTMX o Render normal
+    # 5. Acciones de Cierres disponibles para cada fila
+    # Cuelga `acciones_cierre` de cada unidad y de cada subunidad. Lo resuelve en
+    # dos consultas para todo el listado, no en una por fila.
+    unidades = integracion_cierres.anotar_acciones(list(unidades), request.user)
+
+    # 6. Respuestas HTMX o Render normal
     context = {'unidades': unidades, 'q': q}
-    
+
     if request.htmx:
         return render(request, 'pages/plantilla/partials/lista_unidades_div.html', context)
 

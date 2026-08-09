@@ -468,8 +468,25 @@ class CAlta(ContratoBase):
         return self.aspirante.nombre
 
 class CBaja(ContratoBase):
-    
+
     no_expediente = models.CharField(max_length=5, unique=False)
+
+    # Sobrescribe el `RESTRICT` de `ContratoBase`, que aquí impedía eliminar a nadie.
+    #
+    # Toda persona que aparece en la Lista de Bajas tiene por definición un `CBaja`, así
+    # que con `RESTRICT` el botón «Eliminar» de esa lista fallaba SIEMPRE con «tiene un
+    # historial de contratos o bajas asociado». La protección tiene sentido en `CAlta`
+    # —no se puede borrar a alguien con un contrato activo, y ahí sigue vigente— pero no
+    # en el registro histórico de la baja, que es precisamente lo que se quiere eliminar
+    # junto con la persona.
+    #
+    # `related_name` se declara explícito para conservar el mismo accesor que generaba
+    # `"%(class)s_contratos"` en la clase base: hay código que usa `cbaja_contratos`.
+    #
+    # Consecuencia asumida: eliminar un Aspirante borra su historial de bajas y, por la
+    # cascada de `TMovimiento.aspirante`, también sus movimientos de nómina.
+    aspirante = models.ForeignKey(
+        Aspirante, on_delete=models.CASCADE, related_name="cbaja_contratos")
 
     fecha_baja = models.DateField(null=True, blank=True)
     fecha_alta = models.DateField(null=True, blank=True) # Necesario para guardar el historial

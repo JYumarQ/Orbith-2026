@@ -1,0 +1,164 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Auditoría{% endblock %}
+
+{% block content %}
+{% load static %}
+
+<style>
+    .dropdown-header-custom {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #a1acb8;
+        font-weight: 700;
+        padding: 0.5rem 0.5rem 0.2rem 0.5rem;
+        border-bottom: 1px solid #eceef1;
+        margin-bottom: 0.5rem;
+    }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+        <h4 class="fw-bold py-3 mb-4">
+            <span class="text-muted fw-light">Orbith / Administración /</span> Auditoría
+        </h4>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+
+                {# ---------------- Búsqueda ---------------- #}
+                <div id="search_container" class="grow" style="max-width: 280px;">
+                    <input type="hidden" id="filter_per_page" name="per_page" value="{{ current_page_size }}">
+
+                    <div class="input-group input-group-merge">
+                        <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+                        <input id="search" type="text" class="form-control border-0 shadow-none"
+                               placeholder="Buscar..." name="q" value="{{ q }}"
+                               hx-get="{% url 'auditoria:buscar_eventos' %}"
+                               hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
+                               hx-target="#filter_eventos_results"
+                               hx-include="#filter_per_page, #filter_usuario, #filter_accion, #filter_unidad, #filter_desde, #filter_hasta">
+                    </div>
+                </div>
+
+                {# ---------------- Filtros ---------------- #}
+                <div class="btn-group ms-auto">
+                    <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow"
+                            data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                        <i class="fas fa-filter"></i>
+                        {% if hay_filtros %}<span class="badge badge-dot bg-danger"></span>{% endif %}
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+                        <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-sliders-h me-1"></i> Filtrar eventos</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()"
+                                    style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                                <i class="fas fa-undo-alt me-1"></i> Reset
+                            </button>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="small text-muted" for="filter_usuario">Usuario</label>
+                            <select id="filter_usuario" name="usuario" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todos</option>
+                                {% for pk, nombre in opciones_filtro.usuarios %}
+                                    <option value="{{ pk }}" {% if pk in usuarios_actuales %}selected{% endif %}>{{ nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="small text-muted" for="filter_accion">Tipo de acción</label>
+                            <select id="filter_accion" name="accion" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todas</option>
+                                {% for clave, etiqueta in opciones_filtro.acciones %}
+                                    <option value="{{ clave }}" {% if clave in acciones_actuales %}selected{% endif %}>{{ etiqueta }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="small text-muted" for="filter_unidad">Unidad Organizativa</label>
+                            <select id="filter_unidad" name="unidad" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todas</option>
+                                {% for pk, nombre in opciones_filtro.unidades %}
+                                    <option value="{{ pk }}" {% if pk in unidades_actuales %}selected{% endif %}>{{ nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="dropdown-header-custom"><i class="far fa-calendar-alt me-1"></i> Fecha</div>
+                        <div class="mb-2">
+                            <label class="small text-muted" for="filter_desde">Desde</label>
+                            <input type="date" id="filter_desde" name="desde" value="{{ desde }}"
+                                   class="form-control form-control-sm" onchange="triggerSearch()">
+                        </div>
+                        <div class="mb-2">
+                            <label class="small text-muted" for="filter_hasta">Hasta</label>
+                            <input type="date" id="filter_hasta" name="hasta" value="{{ hasta }}"
+                                   class="form-control form-control-sm" onchange="triggerSearch()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive text-nowrap">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Usuario</th>
+                            <th>Acción</th>
+                            <th>Descriptor</th>
+                            <th>Unidad Organizativa</th>
+                            <th>Solicitud de origen</th>
+                            <th class="text-center">Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filter_eventos_results">
+                        {% include 'pages/auditoria/partials/filter_auditoria_list.html' %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card-body pt-0">
+                <div id="table-pagination-footer">
+                    {% include 'pages/auditoria/partials/pagination.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal_evento" tabindex="-1" aria-hidden="true"></div>
+
+{% block extra_scripts %}
+<script>
+    var $ = jQuery.noConflict();
+
+    function triggerSearch() {
+        htmx.trigger(document.getElementById('search'), 'searchFilters');
+    }
+
+    function resetFiltros() {
+        document.querySelectorAll('.dropdown-menu select').forEach(s => s.value = '');
+        document.querySelectorAll('.dropdown-menu input[type="date"]').forEach(i => i.value = '');
+        document.getElementById('search').value = '';
+        triggerSearch();
+    }
+
+    function verDetalleEvento(url) {
+        $.ajax({ url: url, method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .done(function (html) {
+                const $modal = $('#modal_evento');
+                $modal.html(html);
+                $modal.modal('show');
+            })
+            .fail(function () {
+                Swal.fire({ icon: 'error', text: 'No se pudo cargar el detalle del evento.' });
+            });
+    }
+</script>
+{% endblock %}
+{% endblock %}

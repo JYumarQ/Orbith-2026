@@ -1,0 +1,75 @@
+<div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">
+                <i class="fas fa-history me-2 text-primary"></i>
+                Historial de cierres — {{ unidad.descripcion }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body">
+            {% if cierres %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Período</th>
+                                <th>Declarado</th>
+                                <th>Por</th>
+                                <th class="text-center">Plazo</th>
+                                <th class="text-end">Plazas</th>
+                                <th class="text-end">Trabajadores</th>
+                                <th class="text-center">Ver</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cierre in cierres %}
+                                <tr>
+                                    <td class="fw-semibold">{{ cierre.periodo.etiqueta }}</td>
+                                    <td>{{ cierre.fecha_declaracion|date:"d/m/Y H:i" }}</td>
+                                    <td>{{ cierre.declarado_por_nombre|default:"—" }}</td>
+                                    <td class="text-center">
+                                        {% if cierre.en_plazo %}
+                                            <span class="badge bg-label-success">En plazo</span>
+                                        {% else %}
+                                            <span class="badge bg-label-danger">Fuera de plazo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {{ cierre.total_plazas_cubiertas }}/{{ cierre.total_plazas_aprobadas }}
+                                    </td>
+                                    <td class="text-end">{{ cierre.total_contratos }}</td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-xs btn-label-primary"
+                                                onclick="abrirModalCierres('{% url 'detalle_cierre' cierre.pk %}')"
+                                                title="Ver la fotografía">
+                                            <i class="fas fa-camera"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <p class="text-muted small mb-0 mt-2">
+                    <i class="fas fa-lock me-1"></i>
+                    Cada fotografía refleja el estado de la unidad en el momento de
+                    declararla. Los cambios posteriores no la modifican.
+                </p>
+            {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fs-4 text-muted opacity-25 d-block mb-2"></i>
+                    <p class="text-muted mb-0">
+                        Esta unidad todavía no ha declarado ningún cierre.
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+    </div>
+</div>

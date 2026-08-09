@@ -1,0 +1,52 @@
+{% comment %}
+Pie de la tabla. Los `hx-include` repiten los mismos filtros que el buscador para que
+paginar no pierda la búsqueda ni los filtros activos — mismo criterio que
+`pages/solicitudes/partials/pagination.html`.
+{% endcomment %}
+
+<div class="row align-items-center mt-3">
+    <div class="col text-start text-muted">
+        <small>
+            {% if page_obj.paginator.count > 0 %}
+                Mostrando <b>{{ page_obj.start_index }}</b> - <b>{{ page_obj.end_index }}</b>
+                de <b>{{ page_obj.paginator.count }}</b> eventos
+            {% else %}
+                0 eventos
+            {% endif %}
+        </small>
+    </div>
+
+    <div class="col-auto">
+        {% if page_obj.paginator.num_pages > 1 %}
+        <nav aria-label="Navegación">
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <button class="page-link"
+                            hx-get="{% url 'auditoria:buscar_eventos' %}?page={{ page_obj.previous_page_number }}"
+                            hx-include="#filter_per_page, #search, #filter_usuario, #filter_accion, #filter_unidad, #filter_desde, #filter_hasta"
+                            hx-target="#filter_eventos_results">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                </li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+                </li>
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <button class="page-link"
+                            hx-get="{% url 'auditoria:buscar_eventos' %}?page={{ page_obj.next_page_number }}"
+                            hx-include="#filter_per_page, #search, #filter_usuario, #filter_accion, #filter_unidad, #filter_desde, #filter_hasta"
+                            hx-target="#filter_eventos_results">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>

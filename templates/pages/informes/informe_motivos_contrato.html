@@ -221,28 +221,28 @@
 
                                     {% for c in ueb_data.contratos %}
                                         <tr class="contrato-row {% if c.dias_restantes is not None and c.dias_restantes <= 5 %}table-danger{% endif %}" 
-                                            data-name="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.no_expediente }}"
-                                            data-cat="{{ c.cargo.ncargo.cat_ocupacional|slice:':1' }}"
+                                            data-name="{{ c.aspirante_nombre }} {{ c.no_expediente }}"
+                                            data-cat="{{ c.cat_ocupacional|slice:':1' }}"
                                             data-estado="{% if c.dias_restantes is None %}vigente{% elif c.dias_restantes <= 15 %}critica{% elif c.dias_restantes <= 30 %}advertencia{% else %}vigente{% endif %}">
                                             
                                             <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ c.no_expediente }}</td>
                                             
-                                            <td><span class="text-dark" style="font-size: 13px;">{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}</span></td>
+                                            <td><span class="text-dark" style="font-size: 13px;">{{ c.aspirante_nombre }}</span></td>
                                             
                                             <td class="text-center fw-bold text-dark" style="font-size: 13px;">
-                                                {{ c.aspirante.sexo }}
+                                                {{ c.sexo }}
                                             </td>
 
-                                            <td><span class="text-dark" style="font-size: 13px;">{{ c.cargo.ncargo.descripcion }}</span></td>
+                                            <td><span class="text-dark" style="font-size: 13px;">{{ c.ncargo_descripcion }}</span></td>
                                             
                                             <td class="text-center">
                                                 <span class="badge bg-dark fw-bold border px-2 py-1" style="font-size: 12px;">
-                                                    {{ c.cargo.ncargo.cat_ocupacional|slice:":1" }}
+                                                    {{ c.cat_ocupacional|slice:":1" }}
                                                 </span>
                                             </td>
 
                                             <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">
-                                                {{ c.cargo.ncargo.grupo_escala.nivel|default:"-" }}
+                                                {{ c.grupo_escala_nivel|default:"-" }}
                                             </td>
                                             
                                             <td class="text-center font-monospace text-dark" style="font-size: 14px;">

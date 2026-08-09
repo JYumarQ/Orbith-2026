@@ -322,6 +322,13 @@
         background: linear-gradient(90deg, var(--ii-indigo) 0%, #7c3aed 100%);
         transition: width .35s ease;
     }
+    /* Fila "Femenino" del desglose por sexo: mismo criterio y mismo token --ii-rosa
+       que el badge de la tabla de detalle (.ii-badge-femenino) — "Masculino" no
+       necesita clase propia, se queda con el degradado índigo por defecto. */
+    .ii-desglose-fila.ii-fila-femenino .ii-desglose-nombre { color: var(--ii-rosa); }
+    .ii-desglose-fila.ii-fila-femenino .ii-desglose-relleno {
+        background: linear-gradient(90deg, var(--ii-rosa) 0%, #f472b6 100%);
+    }
     .ii-desglose-cifras { flex: 0 0 92px; text-align: right; }
     .ii-desglose-cantidad { font-weight: 800; color: var(--ii-navy); font-size: .9rem; }
     .ii-desglose-pct { color: var(--ii-muted); font-size: .76rem; margin-left: .35rem; }
@@ -359,6 +366,14 @@
         padding: .1rem .6rem;
         font-size: .74rem;
         font-weight: 700;
+    }
+    /* Sexo femenino, único valor de un campo "opción" que se diferencia por color
+       (a petición explícita): mismo token --ii-rosa que ya usa el resto del módulo
+       (p. ej. el chip "Mujeres" de los indicadores), no un color inventado aparte. */
+    .ii-badge-opcion.ii-badge-femenino {
+        background: var(--ii-rosa-bg);
+        color: var(--ii-rosa);
+        border-color: #fbcfe8;
     }
 
     /* ---------- Barra lateral ---------- */

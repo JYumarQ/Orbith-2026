@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from django.contrib.auth.decorators import login_required
+from usuarios.decorators import admin_required
 
 urlpatterns = [
     
@@ -22,12 +23,16 @@ urlpatterns = [
     path('search_dpto_view/', login_required(views.search_dpto_view), name='search_dpto_view'), 
     path('cargar_dptos/', login_required(views.cargar_dptos), name='cargar_dptos'),
     
-    #UNIDAD ORGANIZATIVA
+    # UNIDAD ORGANIZATIVA
+    # Crear y eliminar unidades es competencia EXCLUSIVA del Administrador: no se pueden
+    # ni solicitar. Editar sí puede pedirlo un Moderador, pero solo sobre las unidades que
+    # tiene asignadas (se comprueba en `UnidadOrganizativaUpdateView.post`) y su envío se
+    # convierte en solicitud.
     path('list_uniorg/', login_required(views.UnidadOrganizativaListView.as_view()), name='list_uniorg'),
-    path('add_uniorg/', login_required(views.UnidadOrganizativaCreateView.as_view()), name='add_uniorg'),
+    path('add_uniorg/', admin_required(views.UnidadOrganizativaCreateView.as_view()), name='add_uniorg'),
     path('updt_uniorg/<pk>/', login_required(views.UnidadOrganizativaUpdateView.as_view()), name='updt_uniorg'),
-    path('del_uniorg/<pk>/', login_required(views.UnidadOrganizativaDeleteView.as_view()), name='del_uniorg'), 
-    path('search_unidad_view/', login_required(views.search_unidades_views), name='search_unidad_view'), 
+    path('del_uniorg/<pk>/', admin_required(views.UnidadOrganizativaDeleteView.as_view()), name='del_uniorg'),
+    path('search_unidad_view/', login_required(views.search_unidades_views), name='search_unidad_view'),
     
     path('categoria_ocupacional/', login_required(views.get_cat_ocup_from_ncargo), name='categoria_ocupacional'), 
 

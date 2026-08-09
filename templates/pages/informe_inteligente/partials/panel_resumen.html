@@ -39,7 +39,7 @@
 
                     <div class="ii-desglose-cuerpo">
                         {% for fila in grupo.filas %}
-                            <div class="ii-desglose-fila">
+                            <div class="ii-desglose-fila{% if grupo.clave == 'sexo' and fila.valor == 'Femenino' %} ii-fila-femenino{% endif %}">
                                 <div class="ii-desglose-nombre">
                                     {% if fila.valor == None or fila.valor == '' %}
                                         <span class="text-muted fst-italic">Sin definir</span>

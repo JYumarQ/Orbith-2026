@@ -6,7 +6,6 @@ from datetime import date, datetime
 # 2. Librerías y Módulos de Django
 from django.conf import settings
 from django.contrib import messages
-from django.db.models import Sum  # <-- AQUÍ ESTÁ EL QUE NECESITAMOS
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.template.loader import get_template
@@ -19,15 +18,31 @@ from docxtpl import DocxTemplate
 from xhtml2pdf import pisa
 
 # 4. Modelos de tus Propias Aplicaciones
+# Los modelos de plantilla y contratos ya no se consultan aquí: los informes leen
+# de `fuentes.py`, que es quien decide si sirve datos vivos o un cierre mensual.
+from cierres.periodos import Periodo
 from configuracion.models import Configuracion
-from contratos.models import CAlta
 from nomencladores.models import NTipoFamilia, NFamiliaCargo, NCargo
-from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
+from strorganizativa.models import UnidadOrganizativa
+from . import fuentes
 from .models import PlanMensualRegistro
+
+
+def _combo_unidades():
+    """Unidades que alimentan el desplegable de UEB.
+
+    Se leen siempre de los datos vivos, también en modo histórico: es un control
+    de navegación, no un dato del informe.
+    """
+    return (UnidadOrganizativa.objects
+            .select_related('tipo')
+            .filter(padre__isnull=True)
+            .order_by('orden_informe'))
+
 
 # Create your views here.
 class InformeEconomiaView(TemplateView):
-    
+
     def get_template_names(self):
         if self.request.htmx:
             return ['pages/informes/partials/tabla_consolidado.html']
@@ -35,23 +50,24 @@ class InformeEconomiaView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # 1. Obtenemos el ID de la UEB si el usuario seleccionó alguna
+
+        # La fuente decide si esto sale de la base de datos viva o de un cierre.
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
+        context.update(contexto_fuente)
+
         ueb_id = self.request.GET.get('ueb', '')
-        
-        # 2. Fechas SIEMPRE en tiempo real
-        from datetime import date # Asegúrate de tener este import
+
+        from datetime import date
         hoy = date.today()
-        context['mes_actual'] = str(hoy.month)
-        context['anno_actual'] = str(hoy.year)
+        context['mes_actual'] = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        context['anno_actual'] = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
         context['ueb_actual'] = str(ueb_id)
-        
+
         # LIMPIEZA: Trae Unidades Principales, Normales y Subunidades Independientes
-        context['unidades'] = UnidadOrganizativa.objects.select_related('tipo').filter(padre__isnull=True).order_by('orden_informe')
-        
-        # 3. Calculamos en tiempo real
-        context['datos_tabla'], context['totales'] = self.calcular_consolidado(ueb_id)
-        
+        context['unidades'] = _combo_unidades()
+
+        context['datos_tabla'], context['totales'] = self.calcular_consolidado(fuente)
+
         return context
 
 
@@ -59,8 +75,7 @@ class InformeEconomiaView(TemplateView):
         mapa = {'OPE': 'Obreros', 'TEC': 'Técnico', 'CDI': 'Cuadro', 'CEJ': 'Cuadro', 'SER': 'Servicio', 'ADM': 'Administrativo'}
         return mapa.get(codigo, 'Obreros')
 
-    # -- CÁLCULO EN TIEMPO REAL --
-    def calcular_consolidado(self, ueb_id):
+    def calcular_consolidado(self, fuente):
         datos = {
             'Obreros': {'aprob':0, 'cub':0, 'vac':0, 'p_muj':0, 'd_tot':0, 'd_muj':0, 'a_tot':0, 'a_muj':0},
             'Técnico': {'aprob':0, 'cub':0, 'vac':0, 'p_muj':0, 'd_tot':0, 'd_muj':0, 'a_tot':0, 'a_muj':0},
@@ -69,47 +84,25 @@ class InformeEconomiaView(TemplateView):
             'Administrativo': {'aprob':0, 'cub':0, 'vac':0, 'p_muj':0, 'd_tot':0, 'd_muj':0, 'a_tot':0, 'a_muj':0},
         }
 
-        # Jerarquía Dinámica
-        unidades_ids = []
-        if ueb_id:
-            unidad_seleccionada = UnidadOrganizativa.objects.select_related('tipo').filter(pk=ueb_id).first()
-            if unidad_seleccionada:
-                unidades_ids = [unidad_seleccionada.pk]
-                # Si la unidad seleccionada es de tipo Principal, sumamos todas sus hijas
-                if unidad_seleccionada.tipo and unidad_seleccionada.tipo.es_principal:
-                    hijas_ids = UnidadOrganizativa.objects.filter(padre=unidad_seleccionada).values_list('pk', flat=True)
-                    unidades_ids.extend(hijas_ids)
+        # Cargos Aprobados, Cubiertos y Vacantes
+        for cargo in fuente.cargos:
+            if not cargo.activo:
+                continue
+            cat = self.mapear_categoria(cargo.cat_ocupacional)
+            datos[cat]['aprob'] += cargo.cant_aprobada
+            datos[cat]['cub'] += cargo.cant_cubierta
+            datos[cat]['vac'] += cargo.vacantes
 
-        # Contar Cargos Aprobados, Cubiertos y Vacantes (Directo de la plantilla actual)
-        cargos = CargoPlantilla.objects.filter(activo=True)
-        if unidades_ids:
-            cargos = cargos.filter(departamento__unidad_organizativa_id__in=unidades_ids)
-            
-        for cargo in cargos:
-            cat = self.mapear_categoria(cargo.ncargo.cat_ocupacional)
-            aprobadas = cargo.cant_aprobada or 0
-            cubiertas = cargo.cant_cubierta_real
-            vacantes = max(aprobadas - cubiertas, 0)
-            
-            datos[cat]['aprob'] += aprobadas
-            datos[cat]['cub'] += cubiertas
-            datos[cat]['vac'] += vacantes
-
-        # Contar Contratos activos para sacar las mujeres, determinados y adiestrados
-        # AÑADIDO: 'tipo' en select_related para que la base de datos sea super rápida
-        contratos = CAlta.objects.select_related('aspirante', 'cargo__ncargo', 'tipo').all()
-        if unidades_ids:
-            contratos = contratos.filter(cargo__departamento__unidad_organizativa_id__in=unidades_ids)
-            
-        for c in contratos:
+        # Contratos, para sacar las mujeres, determinados y adiestrados
+        for c in fuente.contratos:
             # Protegemos el código asegurándonos de que tenga cargo y tipo asignado
-            if not c.cargo or not c.tipo: continue 
-            cat = self.mapear_categoria(c.cargo.ncargo.cat_ocupacional)
-            mujer = (c.aspirante.sexo == 'F')
-            
+            if not c.ncargo_id or not c.tipo_descripcion: continue
+            cat = self.mapear_categoria(c.cat_ocupacional)
+            mujer = c.es_mujer
+
             # Convertimos el nombre del nomenclador a mayúsculas para buscar las palabras clave
-            desc_tipo = c.tipo.descripcion.upper()
-            
+            desc_tipo = c.tipo_descripcion.upper()
+
             # Buscamos de forma dinámica:
             if 'INDETERMINADO' in desc_tipo:
                 if mujer: datos[cat]['p_muj'] += 1
@@ -134,14 +127,15 @@ class InformeEconomiaView(TemplateView):
 class ExportarConsolidadoWordView(InformeEconomiaView):
     def get(self, request, *args, **kwargs):
         ueb_id = request.GET.get('ueb', '')
-        
-        # Forzamos las fechas en tiempo real para imprimir el Word
-        hoy = date.today()
-        mes = str(hoy.month)
-        anno = str(hoy.year)
 
-        # Calculamos los datos
-        datos, totales = self.calcular_consolidado(ueb_id)
+        # El documento sale de la misma fuente que la pantalla: si se está viendo
+        # un cierre, lo que se exporta es ese cierre, no los datos de hoy.
+        fuente, _ = fuentes.resolver_fuente(request)
+        hoy = date.today()
+        mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        anno = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
+
+        datos, totales = self.calcular_consolidado(fuente)
 
         template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'consolidado_template.docx')
         doc = DocxTemplate(template_path)
@@ -171,13 +165,14 @@ class ExportarConsolidadoWordView(InformeEconomiaView):
 class ExportarConsolidadoPDFView(InformeEconomiaView):
     def get(self, request, *args, **kwargs):
         ueb_id = request.GET.get('ueb', '')
-        
+
+        fuente, _ = fuentes.resolver_fuente(request)
         hoy = date.today()
-        mes = str(hoy.month)
-        anno = str(hoy.year)
+        mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        anno = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
 
         # Usamos tu misma matemática exacta
-        datos, totales = self.calcular_consolidado(ueb_id)
+        datos, totales = self.calcular_consolidado(fuente)
 
         nombre_ueb = "Empresa Eléctrica Camagüey"
         if ueb_id:
@@ -216,59 +211,72 @@ class InformeTrabajadoresUEBView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from datetime import date
+
+        # Informe global: compara TODAS las unidades entre sí, así que no admite
+        # filtro por unidad.
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request, usar_filtro_ueb=False)
+        context.update(contexto_fuente)
+
         hoy = date.today()
-        context['mes_actual'] = str(hoy.month)
-        context['anno_actual'] = str(hoy.year)
+        context['mes_actual'] = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        context['anno_actual'] = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
 
         # Llamada correcta al método de la clase
-        datos_uebs, total_general, total_mujeres = self.calcular_resumen_uebs()
-        
+        datos_uebs, total_general, total_mujeres = self.calcular_resumen_uebs(fuente)
+
         context['datos_uebs'] = datos_uebs
         context['total_general'] = total_general
         context['total_mujeres'] = total_mujeres
-        
+
         return context
 
 
-    # Reemplaza la función calcular_resumen_uebs completa por esta:
-    def calcular_resumen_uebs(self):
-        unidades = UnidadOrganizativa.objects.select_related('tipo').filter(padre__isnull=True).order_by('orden_informe')
+    def calcular_resumen_uebs(self, fuente):
+        """Una fila por unidad raíz, sumando las de sus subunidades.
+
+        En modo histórico la jerarquía es la que se congeló en el cierre, no la
+        de hoy: si una subunidad cambió de padre en octubre, el informe de agosto
+        la sigue contando donde estaba en agosto.
+        """
+        raices = sorted(
+            (u for u in fuente.unidades.values() if not u.padre_id),
+            key=lambda u: u.orden)
+
         datos_uebs = []
         total_general = 0; total_mujeres = 0
-        
-        contratos = CAlta.objects.select_related('aspirante', 'cargo__departamento__unidad_organizativa__tipo').all()
-        
-        for ueb in unidades:
-            unidades_ids = [ueb.pk]
-            if ueb.tipo and ueb.tipo.es_principal:
-                hijas_ids = UnidadOrganizativa.objects.filter(padre=ueb).values_list('pk', flat=True)
-                unidades_ids.extend(hijas_ids)
-                
-            contratos_ueb = [c for c in contratos if c.cargo and c.cargo.departamento and c.cargo.departamento.unidad_organizativa_id in unidades_ids]
-            
+
+        for ueb in raices:
+            unidades_ids = {ueb.id}
+            if ueb.es_principal:
+                unidades_ids |= {u.id for u in fuente.unidades.values()
+                                 if u.padre_id == ueb.id}
+
+            contratos_ueb = [c for c in fuente.contratos if c.unidad_id in unidades_ids]
+
             total_ueb = len(contratos_ueb)
-            mujeres_ueb = sum(1 for c in contratos_ueb if c.aspirante.sexo == 'F')
-            
+            mujeres_ueb = sum(1 for c in contratos_ueb if c.es_mujer)
+
             datos_uebs.append({
                 'nombre': ueb.descripcion,
-                'es_principal': ueb.tipo.es_principal if ueb.tipo else False,
-                'es_subunidad': ueb.tipo.es_subunidad if ueb.tipo else False,
+                'es_principal': ueb.es_principal,
+                'es_subunidad': ueb.es_subunidad,
                 'total': total_ueb,
                 'mujeres': mujeres_ueb
             })
             total_general += total_ueb; total_mujeres += mujeres_ueb
-            
+
         return datos_uebs, total_general, total_mujeres
 
 
 class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
     def get(self, request, *args, **kwargs):
+        fuente, _ = fuentes.resolver_fuente(request)
         hoy = date.today()
-        mes = str(hoy.month)
-        anno = str(hoy.year)
+        mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        anno = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
 
         # Calculamos los datos
-        datos_uebs, total_general, total_mujeres = self.calcular_resumen_uebs()
+        datos_uebs, total_general, total_mujeres = self.calcular_resumen_uebs(fuente)
 
         # Apuntamos a la nueva plantilla que guardaste
         template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'resumen_ueb_template.docx')
@@ -296,90 +304,99 @@ class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
 class InformePuestosClaveView(TemplateView):
     template_name = 'pages/informes/informe_puestos_clave.html'
 
+    def _resumen_de_ncargo(self, fuente, ncargo_id, nombre_alternativo=''):
+        """Cifras de un nomenclador de cargo dentro de la fuente, o None si no tiene
+        ninguna plaza activa (el informe lo omite, igual que antes)."""
+        cargos = [c for c in fuente.cargos
+                  if c.ncargo_id == ncargo_id and c.activo]
+        if not cargos:
+            return None
+
+        aprob = sum(c.cant_aprobada for c in cargos)
+        cub = sum(c.cant_cubierta for c in cargos)
+        vac = max(aprob - cub, 0)
+
+        # Mismo filtro que la consulta original: contratos de cargos activos y de
+        # aspirantes en ACTIVO.
+        contratos = [c for c in fuente.contratos
+                     if c.ncargo_id == ncargo_id and c.cargo_activo
+                     and c.aspirante_estado == 'ACTIVO']
+
+        c_det = c_muj = c_adiest = 0
+        for c in contratos:
+            desc_tipo = (c.tipo_descripcion or '').upper()
+            if c.es_mujer:
+                c_muj += 1
+            if "INDETERMINADO" in desc_tipo:
+                continue
+            elif "DETERMINADO" in desc_tipo:
+                c_det += 1
+            elif "ADIESTRAMIENTO" in desc_tipo:
+                c_adiest += 1
+
+        return {
+            'codigo': ncargo_id,
+            'nombre': nombre_alternativo or cargos[0].ncargo_descripcion,
+            'aprob': aprob, 'cub': cub, 'vac': vac,
+            'porc': int((cub / aprob * 100)) if aprob > 0 else 0,
+            'det': c_det, 'muj': c_muj, 'adiest': c_adiest,
+        }
+
+    def _acumular(self, f_stats, puesto):
+        for origen, destino in (('aprob', 'aprob'), ('cub', 'cub'), ('vac', 'vac'),
+                                ('det', 'det'), ('muj', 'muj'), ('adiest', 'adiest')):
+            f_stats[destino] += puesto[origen]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
+        context.update(contexto_fuente)
+
         # 1. Filtros
         ueb_id = self.request.GET.get('ueb', '')
         tipo_id = self.request.GET.get('tipo_familia', '')
         mes = self.request.GET.get('mes', str(date.today().month))
         anno = self.request.GET.get('anno', str(date.today().year))
-        
+        if fuente.periodo:
+            mes, anno = str(fuente.periodo.mes), str(fuente.periodo.anno)
+
         # 2. Tipos de Familia
         tipos_familia = NTipoFamilia.objects.all().order_by('nombre')
         if not tipo_id:
             tipo_id = 'puestos_clave'
-            
+
         # 3. Estructuras
         datos_familias = []
         stats = {'aprobada': 0, 'cubierta': 0, 'vacante': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porcentaje': 0}
-
-        unidades_ids = []
-        if ueb_id:
-            unidad_obj = UnidadOrganizativa.objects.select_related('tipo').filter(pk=ueb_id).first()
-            if unidad_obj:
-                unidades_ids = [unidad_obj.pk]
-                if unidad_obj.tipo and unidad_obj.tipo.es_principal:
-                    hijas_ids = UnidadOrganizativa.objects.filter(padre=unidad_obj).values_list('pk', flat=True)
-                    unidades_ids.extend(hijas_ids)
 
         # 4. Lógica de Agrupación con Subtotales
         # ================================================
         # CASO 1: FILTRO "PUESTOS CLAVE"
         # ================================================
         if tipo_id == 'puestos_clave':
-            # Obtenemos todos los NCargos marcados como Puesto Clave
-            ncargos_qs = NCargo.objects.filter(puesto_clave=True).order_by('descripcion')
-            
+            # Los NCargos marcados como Puesto Clave que tienen plazas en la fuente.
+            # `puesto_clave` sale de la propia fila, así que en modo histórico se
+            # respeta la marca que tenía el cargo entonces, no la de hoy.
+            # `.lower()` porque el orden venía de PostgreSQL, que no distingue
+            # mayúsculas al ordenar texto; `sorted()` de Python sí, y colocaría
+            # todos los cargos en minúscula al final de la lista.
+            ncargos_qs = sorted(
+                {c.ncargo_id: c.ncargo_descripcion
+                 for c in fuente.cargos if c.puesto_clave and c.activo}.items(),
+                key=lambda par: (par[1] or '').lower())
+
             # Creamos una "familia virtual" para agruparlos
             virtual_family_name = '⭐ Puestos Clave'
             f_stats = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
             puestos_list = []
-            
-            for ncargo in ncargos_qs:
-                # Filtramos las plazas de este cargo (sin necesidad de filtro por puesto_clave, ya lo sabemos)
-                cqs = CargoPlantilla.objects.filter(ncargo=ncargo, activo=True)
-                if unidades_ids:
-                    cqs = cqs.filter(departamento__unidad_organizativa_id__in=unidades_ids)
-                    
-                if not cqs.exists():
+
+            for ncargo_id, _descripcion in ncargos_qs:
+                puesto = self._resumen_de_ncargo(fuente, ncargo_id)
+                if puesto is None:
                     continue
-                    
-                aprob = sum(c.cant_aprobada for c in cqs)
-                cub = sum(c.cant_cubierta_real for c in cqs)
-                vac = max(aprob - cub, 0)
-                
-                contratos = CAlta.objects.filter(cargo__in=cqs, aspirante__estado='ACTIVO').select_related('tipo', 'aspirante')
-                
-                c_det = 0
-                c_muj = 0
-                c_adiest = 0
-                
-                for c in contratos:
-                    desc_tipo = c.tipo.descripcion.upper() if c.tipo else ""
-                    if c.aspirante.sexo == 'F':
-                        c_muj += 1
-                    if "INDETERMINADO" in desc_tipo:
-                        continue
-                    elif "DETERMINADO" in desc_tipo:
-                        c_det += 1
-                    elif "ADIESTRAMIENTO" in desc_tipo:
-                        c_adiest += 1
-                        
-                puestos_list.append({
-                    'codigo': ncargo.pk,
-                    'nombre': ncargo.descripcion,
-                    'aprob': aprob, 'cub': cub, 'vac': vac, 
-                    'porc': int((cub / aprob * 100)) if aprob > 0 else 0,
-                    'det': c_det, 'muj': c_muj, 'adiest': c_adiest
-                })
-                
-                f_stats['aprob'] += aprob
-                f_stats['cub'] += cub
-                f_stats['vac'] += vac
-                f_stats['det'] += c_det
-                f_stats['muj'] += c_muj
-                f_stats['adiest'] += c_adiest
+                puestos_list.append(puesto)
+                self._acumular(f_stats, puesto)
 
             if puestos_list:
                 f_stats['porc'] = int((f_stats['cub'] / f_stats['aprob'] * 100)) if f_stats['aprob'] > 0 else 0
@@ -413,49 +430,21 @@ class InformePuestosClaveView(TemplateView):
                     f_stats = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
                     
                     for ncargo in familia.cargos.all():
-                        # Mantenemos el filtro de puesto_clave=True (solo plazas clave dentro de esta familia)
-                        cqs = CargoPlantilla.objects.filter(ncargo=ncargo, activo=True, ncargo__puesto_clave=True)
-                        if unidades_ids:
-                            cqs = cqs.filter(departamento__unidad_organizativa_id__in=unidades_ids)
-                            
-                        if not cqs.exists():
+                        # Se mantiene el filtro de puesto_clave=True (solo plazas
+                        # clave dentro de esta familia). La pertenencia a la familia
+                        # se lee de los nomencladores vivos también en modo
+                        # histórico: es un agrupador global, como el propio nombre
+                        # de la familia, no un dato de la unidad.
+                        if not ncargo.puesto_clave:
                             continue
-                            
-                        aprob = sum(c.cant_aprobada for c in cqs)
-                        cub = sum(c.cant_cubierta_real for c in cqs)
-                        vac = max(aprob - cub, 0)
-                        
-                        contratos = CAlta.objects.filter(cargo__in=cqs, aspirante__estado='ACTIVO').select_related('tipo', 'aspirante')
-                        
-                        c_det = 0
-                        c_muj = 0
-                        c_adiest = 0
-                        
-                        for c in contratos:
-                            desc_tipo = c.tipo.descripcion.upper() if c.tipo else ""
-                            if c.aspirante.sexo == 'F':
-                                c_muj += 1
-                            if "INDETERMINADO" in desc_tipo:
-                                continue
-                            elif "DETERMINADO" in desc_tipo:
-                                c_det += 1
-                            elif "ADIESTRAMIENTO" in desc_tipo:
-                                c_adiest += 1
-                                
-                        puestos_list.append({
-                            'codigo': ncargo.pk,
-                            'nombre': ncargo.descripcion,
-                            'aprob': aprob, 'cub': cub, 'vac': vac, 
-                            'porc': int((cub / aprob * 100)) if aprob > 0 else 0,
-                            'det': c_det, 'muj': c_muj, 'adiest': c_adiest
-                        })
-                        
-                        f_stats['aprob'] += aprob
-                        f_stats['cub'] += cub
-                        f_stats['vac'] += vac
-                        f_stats['det'] += c_det
-                        f_stats['muj'] += c_muj
-                        f_stats['adiest'] += c_adiest
+
+                        puesto = self._resumen_de_ncargo(
+                            fuente, ncargo.pk, nombre_alternativo=ncargo.descripcion)
+                        if puesto is None:
+                            continue
+
+                        puestos_list.append(puesto)
+                        self._acumular(f_stats, puesto)
 
                     if puestos_list:
                         f_stats['porc'] = int((f_stats['cub'] / f_stats['aprob'] * 100)) if f_stats['aprob'] > 0 else 0
@@ -488,7 +477,7 @@ class InformePuestosClaveView(TemplateView):
             'tipos_familia': tipos_familia,
             'tipo_actual': tipo_id,
             # Filtramos el combo para no mostrar las subunidades sueltas, solo contenedores o independientes
-            'unidades': UnidadOrganizativa.objects.select_related('tipo').filter(padre__isnull=True).order_by('orden_informe'),
+            'unidades': _combo_unidades(),
             'ueb_actual': ueb_id,
             'mes_actual': mes,
             'anno_actual': anno,
@@ -550,22 +539,22 @@ class InformeMisionesView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from datetime import date
-        hoy = date.today()
-        context['mes_actual'] = str(hoy.month)
-        context['anno_actual'] = str(hoy.year)
 
-        # 1. Traer solo los contratos en misión
-        # Asumiendo que el campo se llama 'mision' (Boolean) y 'pais' (Char)
-        contratos = CAlta.objects.filter(mision=True).select_related(
-            'aspirante', 
-            'cargo__ncargo__grupo_escala', 
-            'cargo__departamento__unidad_organizativa'
-        )
+        # Informe global: recorre la empresa entera y no ofrece selector de unidad.
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request, usar_filtro_ueb=False)
+        context.update(contexto_fuente)
+
+        hoy = date.today()
+        context['mes_actual'] = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
+        context['anno_actual'] = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
+
+        # 1. Solo los contratos en misión
+        contratos = [c for c in fuente.contratos if c.mision]
 
         # 2. Variables de conteo
-        total_misiones = contratos.count()
+        total_misiones = len(contratos)
         importe_total = 0.00  # Queda en 0 hasta que la empresa lo defina
-        
+
         desglose = {
             'Obreros': 0,
             'Servicios': 0,
@@ -575,15 +564,15 @@ class InformeMisionesView(TemplateView):
         }
 
         # 3. Agrupación por UEB (ESTRUCTURA COMPATIBLE CON TU HTML)
-        datos_por_ueb = {} 
-        orden_map = {}     
+        datos_por_ueb = {}
+        orden_map = {}
 
         for c in contratos:
-            ueb_obj = c.cargo.departamento.unidad_organizativa if c.cargo and c.cargo.departamento else None
-            ueb_nombre = ueb_obj.descripcion if ueb_obj else "Sin Unidad"
-            orden = ueb_obj.orden_informe if ueb_obj and ueb_obj.orden_informe else 999
-            
-            cat_sigla = c.cargo.ncargo.cat_ocupacional if c.cargo and c.cargo.ncargo else ""
+            unidad = fuente.unidad(c.unidad_id)
+            ueb_nombre = unidad.descripcion if unidad else "Sin Unidad"
+            orden = unidad.orden if unidad else 999
+
+            cat_sigla = c.cat_ocupacional or ""
             if cat_sigla == 'OPE': desglose['Obreros'] += 1
             elif cat_sigla == 'SER': desglose['Servicios'] += 1
             elif cat_sigla == 'ADM': desglose['Administrativos'] += 1
@@ -598,11 +587,11 @@ class InformeMisionesView(TemplateView):
             # Guardamos el diccionario directamente en la lista (esto es lo que tu HTML espera)
             datos_por_ueb[ueb_nombre].append({
                 'expediente': c.no_expediente,
-                'nombre': f"{c.aspirante.nombre} {c.aspirante.papellido} {c.aspirante.sapellido or ''}".strip(),
-                'cargo': c.cargo.ncargo.descripcion if c.cargo and c.cargo.ncargo else "-",
-                'cat_letra': cat_sigla[0] if cat_sigla else "-", 
-                'g_escala': c.cargo.ncargo.grupo_escala.nivel if c.cargo and c.cargo.ncargo and c.cargo.ncargo.grupo_escala else "-",
-                'pais': getattr(c, 'pais', '-'), 'dias': 0, 'importe': 0.00
+                'nombre': c.aspirante_nombre,
+                'cargo': c.ncargo_descripcion or "-",
+                'cat_letra': cat_sigla[0] if cat_sigla else "-",
+                'g_escala': c.grupo_escala_nivel or "-",
+                'pais': c.pais, 'dias': 0, 'importe': 0.00
             })
 
         # Ordenamos las llaves según el mapa de orden y reconstruimos
@@ -621,33 +610,37 @@ class RegistroDiarioView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from datetime import date
+
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
+        context.update(contexto_fuente)
+
         hoy = date.today()
         mes_actual = self.request.GET.get('mes', str(hoy.month))
         anno_actual = self.request.GET.get('anno', str(hoy.year))
-        
+        if fuente.periodo:
+            mes_actual, anno_actual = str(fuente.periodo.mes), str(fuente.periodo.anno)
+
         ueb_filtro = self.request.GET.get('ueb', '')
         familia_filtro = self.request.GET.get('tipo_familia', '')
 
-        # 1. Traer contratos activos
-        contratos = CAlta.objects.select_related('aspirante', 'cargo__ncargo').all()
+        # 1. Contratos de la fuente (ya acotados a la unidad seleccionada y a sus
+        #    subunidades por `resolver_fuente`).
+        contratos = fuente.contratos
 
-        # --- LÓGICA DE UNIDADES Y SUBUNIDADES (Padres e Hijas) ---
-        unidades_ids = []
-        if ueb_filtro:
-            # Añadimos la unidad seleccionada (que puede ser padre o hija)
-            unidades_ids.append(ueb_filtro)
-            
-            # Buscamos si tiene hijas usando el campo 'padre_id' que me mostraste en tu modelo
-            hijas_ids = UnidadOrganizativa.objects.filter(padre_id=ueb_filtro).values_list('codigo_interno', flat=True)
-            if hijas_ids:
-                unidades_ids.extend(list(hijas_ids))
-
-        # --- APLICAR FILTROS A LOS CONTRATOS ---
-        if unidades_ids:
-            # Filtramos los contratos cuyo departamento pertenezca a la unidad padre O a sus hijas
-            contratos = contratos.filter(cargo__departamento__unidad_organizativa_id__in=unidades_ids)
         if familia_filtro:
-            contratos = contratos.filter(cargo__ncargo__familia_id=familia_filtro)
+            # Antes filtraba por `cargo__ncargo__familia_id`, un campo que NO existe:
+            # `NCargo` tiene `familias` (M2M). Cualquier valor en este filtro
+            # reventaba con FieldError; no saltaba porque la plantilla nunca lo
+            # enviaba. Ahora se resuelve contra las familias congeladas de la fila.
+            try:
+                familia_id = int(familia_filtro)
+            except (TypeError, ValueError):
+                familia_id = None
+            if familia_id is not None:
+                familias_de_ncargo = {
+                    c.ncargo_id: c.familias_ids for c in fuente.cargos}
+                contratos = [c for c in contratos
+                             if familia_id in familias_de_ncargo.get(c.ncargo_id, ())]
 
         # 2. Diccionario de contadores
         # OPE=Obreros, TEC=Técnicos, ADM=Administrativos, SER=Servicios, CDI/CEJ=Cuadros
@@ -661,8 +654,8 @@ class RegistroDiarioView(TemplateView):
         }
 
         for c in contratos:
-            cat = c.cargo.ncargo.cat_ocupacional if c.cargo and c.cargo.ncargo else ""
-            es_mujer = c.aspirante.sexo == 'F'
+            cat = c.cat_ocupacional or ""
+            es_mujer = c.es_mujer
 
             # Contar Misiones
             if c.mision:
@@ -682,8 +675,11 @@ class RegistroDiarioView(TemplateView):
                 if es_mujer: datos[llave]['muj'] += 1
 
        # --- 3. Buscar el Plan Editable (PlanMensualRegistro) ---
-        
-        # Intentar buscar un plan manual guardado previamente para este filtro
+
+        # El plan manual NO forma parte de la fotografía: es un objetivo de
+        # planificación, no un dato observado. Como ya está indexado por
+        # (mes, año, ueb, familia), en modo cierre lee de forma natural el plan
+        # de ese mismo mes.
         plan_guardado = PlanMensualRegistro.objects.filter(
             mes=mes_actual,
             anno=anno_actual,
@@ -695,14 +691,18 @@ class RegistroDiarioView(TemplateView):
             # Si existe en BD, usamos ese
             valor_plan = plan_guardado.valor
         else:
-            # Si no existe, calculamos el de CargoPlantilla por defecto
-            plazas_query = CargoPlantilla.objects.filter(activo=True)
-            if unidades_ids:
-                plazas_query = plazas_query.filter(departamento__unidad_organizativa_id__in=unidades_ids)
+            # Si no existe, calculamos el de la plantilla de la fuente
+            cargos_plan = [c for c in fuente.cargos if c.activo]
             if familia_filtro:
-                plazas_query = plazas_query.filter(ncargo__familia_id=familia_filtro)
-                
-            valor_plan = plazas_query.aggregate(total=Sum('cant_aprobada'))['total'] or 0
+                try:
+                    familia_id = int(familia_filtro)
+                except (TypeError, ValueError):
+                    familia_id = None
+                if familia_id is not None:
+                    cargos_plan = [c for c in cargos_plan
+                                   if familia_id in (c.familias_ids or ())]
+
+            valor_plan = sum(c.cant_aprobada for c in cargos_plan)
 
         # Enviar al contexto
         context['mes_actual'] = mes_actual
@@ -712,8 +712,8 @@ class RegistroDiarioView(TemplateView):
         context['datos'] = datos
         context['plan_editable'] = valor_plan
         # Para los combos (Ajusta NFamiliaCargo a tu modelo real)
-        context['unidades'] = UnidadOrganizativa.objects.select_related('tipo').filter(padre__isnull=True).order_by('orden_informe')
-        # context['tipos_familia'] = NFamiliaCargo.objects.all() 
+        context['unidades'] = _combo_unidades()
+        # context['tipos_familia'] = NFamiliaCargo.objects.all()
 
         return context
 
@@ -738,39 +738,29 @@ class InformeMotivosContratoView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         hoy = date.today()
-        
+
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
+        context.update(contexto_fuente)
+
         # 1. CAPTURAR EL FILTRO DE LA URL
         ueb_id = self.request.GET.get('ueb', '')
-        
-        # Consulta base
-        contratos_qs = CAlta.objects.filter(
-            aspirante__estado='ACTIVO',
-            tipo__requiere_motivo=True
-        )
 
-        # Lógica de cascada: Si hay filtro, sumar las hijas si es Unidad Principal
-        if ueb_id:
-            unidad_seleccionada = UnidadOrganizativa.objects.select_related('tipo').filter(pk=ueb_id).first()
-            if unidad_seleccionada:
-                unidades_ids = [unidad_seleccionada.pk]
-                if unidad_seleccionada.tipo and unidad_seleccionada.tipo.es_principal:
-                    hijas_ids = UnidadOrganizativa.objects.filter(padre=unidad_seleccionada).values_list('pk', flat=True)
-                    unidades_ids.extend(hijas_ids)
-                contratos_qs = contratos_qs.filter(cargo__departamento__unidad_organizativa_id__in=unidades_ids)
+        # Mismo criterio que la consulta original: solo aspirantes en ACTIVO y
+        # tipos de contrato que exigen motivo. La cascada por unidad ya la aplicó
+        # `resolver_fuente`.
+        contratos = [c for c in fuente.contratos
+                     if c.aspirante_estado == 'ACTIVO' and c.requiere_motivo]
 
-        # 2. ORDENAR POR ORDEN_INFORME EN VEZ DE DESCRIPCIÓN
-        contratos = contratos_qs.select_related(
-            'aspirante',
-            'cargo__ncargo__grupo_escala',
-            'cargo__departamento__unidad_organizativa__tipo',
-            'tipo',
-            'motivo'
-        ).order_by(
-            'tipo__descripcion',
-            'motivo__descripcion',
-            'cargo__departamento__unidad_organizativa__orden_informe', # <-- CAMBIADO AQUÍ
-            'aspirante__nombre'
-        )
+        # 2. ORDENAR POR ORDEN_INFORME EN VEZ DE DESCRIPCIÓN.
+        #    El desempate final era `aspirante__nombre` (solo el nombre de pila);
+        #    aquí se usa el nombre completo, que ordena igual y además desempata
+        #    entre homónimos en vez de dejarlo al azar.
+        contratos.sort(key=lambda c: (
+            c.tipo_descripcion or '',
+            c.motivo_descripcion or '',
+            (fuente.unidad(c.unidad_id).orden if fuente.unidad(c.unidad_id) else 999),
+            c.aspirante_nombre or '',
+        ))
 
         total_contratos = 0
         total_mujeres = 0
@@ -786,31 +776,31 @@ class InformeMotivosContratoView(TemplateView):
         for c in contratos:
             total_contratos += 1
             
-            if c.aspirante.sexo == 'F': total_mujeres += 1
-            elif c.aspirante.sexo == 'M': total_hombres += 1
-                
-            cat = c.cargo.ncargo.cat_ocupacional if c.cargo and c.cargo.ncargo else None
+            if c.sexo == 'F': total_mujeres += 1
+            elif c.sexo == 'M': total_hombres += 1
+
+            cat = c.cat_ocupacional or None
             if cat == 'TEC': cat_t += 1
             elif cat == 'OPE': cat_o += 1
             elif cat == 'SER': cat_s += 1
             elif cat == 'ADM': cat_a += 1
             elif cat in ['CDI', 'CEJ']: cat_c += 1
-            
+
             if c.dias_restantes is not None:
                 if c.dias_restantes <= 15: vencen_critico += 1
                 elif c.dias_restantes <= 30: vencen_alerta += 1
                 else: vencen_vigente += 1
-            
-            tipo_desc = c.tipo.descripcion if c.tipo else "Sin Tipo Asignado"
-            motivo_desc = c.motivo.descripcion if c.motivo else "Sin Motivo Asignado"
-            
-            ueb_obj = c.cargo.departamento.unidad_organizativa if c.cargo and c.cargo.departamento else None
+
+            tipo_desc = c.tipo_descripcion or "Sin Tipo Asignado"
+            motivo_desc = c.motivo_descripcion or "Sin Motivo Asignado"
+
+            ueb_obj = fuente.unidad(c.unidad_id)
             ueb_desc = ueb_obj.descripcion if ueb_obj else "Sin Unidad Organizativa"
-            ueb_color = ueb_obj.tipo.color if ueb_obj and ueb_obj.tipo and ueb_obj.tipo.color else "#697a8d"
-            
+            ueb_color = ueb_obj.color if ueb_obj else "#697a8d"
+
             # 3. EXTRAER LAS BANDERAS PARA EL HTML
-            es_p = ueb_obj.tipo.es_principal if ueb_obj and ueb_obj.tipo else False
-            es_s = ueb_obj.tipo.es_subunidad if ueb_obj and ueb_obj.tipo else False
+            es_p = ueb_obj.es_principal if ueb_obj else False
+            es_s = ueb_obj.es_subunidad if ueb_obj else False
             
             conteo_motivos[motivo_desc] = conteo_motivos.get(motivo_desc, 0) + 1
             
@@ -884,10 +874,12 @@ class InformeMotivosContratoView(TemplateView):
             'mayor_motivo_nombre': mayor_motivo_nombre,
             'mayor_motivo_count': mayor_motivo_count,
             'mayor_motivo_porc': mayor_motivo_porc,
-            'mes_actual': hoy.strftime("%B").capitalize(),
-            'anno_actual': hoy.year,
+            # `strftime("%B")` devolvía el mes en inglés ("August"), porque depende
+            # del locale del servidor. `Periodo` lo da siempre en español.
+            'mes_actual': (fuente.periodo or Periodo(hoy.year, hoy.month)).etiqueta.split()[0],
+            'anno_actual': fuente.periodo.anno if fuente.periodo else hoy.year,
             # 4. ENVIAR LAS UNIDADES Y EL FILTRO ACTUAL AL TEMPLATE
-            'unidades': UnidadOrganizativa.objects.select_related('tipo').filter(padre__isnull=True).order_by('orden_informe'),
+            'unidades': _combo_unidades(),
             'ueb_actual': ueb_id,
         })
         

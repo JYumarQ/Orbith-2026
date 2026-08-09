@@ -1,0 +1,72 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Modificar solicitud{% endblock %}
+
+{% comment %}
+El Moderador rehace su propia propuesta mientras siga En Espera y nadie la esté revisando.
+
+Página completa, como la revisión, porque muestra la misma comparación de dos columnas: el
+Moderador tiene que ver contra qué está proponiendo el cambio, no solo un formulario suelto.
+
+La columna izquierda sigue mostrando la FOTOGRAFÍA del momento en que creó la solicitud,
+no el estado actual del registro. Si el registro cambió entretanto, el aviso de
+`comparacion.html` se lo dice; la fotografía no se recaptura para que ambas columnas
+sigan comparándose contra el mismo punto de partida.
+{% endcomment %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+
+        <h4 class="fw-bold py-3 mb-1">
+            <span class="text-muted fw-light">
+                <a href="{% url 'list_solicitudes' %}" class="text-muted">Solicitudes</a> /
+            </span>
+            Modificar mi solicitud
+        </h4>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-1">{{ definicion.etiqueta }}</h5>
+                <div class="text-muted small">
+                    Enviada el {{ solicitud.created_at|date:'d/m/Y H:i' }}
+                    {% if solicitud.unidad %}· {{ solicitud.unidad.descripcion }}{% endif %}
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="alert alert-info d-flex align-items-start" role="alert">
+                    <i class="fas fa-info-circle me-2 mt-1"></i>
+                    <div class="small">
+                        Está modificando una solicitud <strong>pendiente de aprobación</strong>.
+                        El registro original no se toca: solo cambia lo que propone.
+                        Si un Administrador empieza a revisarla, dejará de poder modificarla.
+                    </div>
+                </div>
+
+                <form method="POST" action="{% url 'updt_solicitud' solicitud.pk %}">
+                    {% csrf_token %}
+
+                    {% include 'pages/solicitudes/partials/comparacion.html' %}
+
+                    <div class="mt-4">
+                        <label class="form-label" for="motivo">Motivo de la solicitud</label>
+                        <textarea name="motivo" id="motivo" rows="3" class="form-control"
+                                  placeholder="Explique brevemente por qué solicita este cambio.">{{ solicitud.motivo }}</textarea>
+                        <div class="form-text">Lo verá el Administrador que revise la solicitud.</div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4 flex-wrap gap-2">
+                        <a href="{% url 'list_solicitudes' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Volver sin guardar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Guardar cambios en la solicitud
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% comment %}
+Cuerpo de la tabla de Auditoría. Se pinta incrustado en la carga inicial y se devuelve
+suelto en las peticiones HTMX de búsqueda, filtro y paginación. Sin barra de selección:
+el módulo es de solo lectura, cada fila abre su propio detalle.
+{% endcomment %}
+
+{% for evento in eventos %}
+<tr>
+    <td>{{ evento.fecha|date:'d/m/Y H:i' }}</td>
+
+    <td>
+        <i class="fas fa-user-circle text-muted me-1"></i>
+        {{ evento.usuario_nombre|default:"—" }}
+    </td>
+
+    <td>
+        {% if evento.accion == 'ADD' %}
+            <span class="badge bg-label-success">Creación</span>
+        {% elif evento.accion == 'UPD' %}
+            <span class="badge bg-label-primary">Modificación</span>
+        {% elif evento.accion == 'DEL' %}
+            <span class="badge bg-label-danger">Eliminación</span>
+        {% elif evento.accion == 'REC' %}
+            <span class="badge bg-label-warning">Rechazo</span>
+        {% elif evento.accion == 'CAN' %}
+            <span class="badge bg-label-secondary">Cancelación</span>
+        {% elif evento.accion == 'DEV' %}
+            <span class="badge bg-label-info">Devuelta a espera</span>
+        {% endif %}
+    </td>
+
+    <td>{{ evento.descriptor|default:"—" }}</td>
+
+    <td>
+        {% if evento.unidad %}
+            {{ evento.unidad.descripcion }}
+        {% else %}
+            <span class="badge bg-label-secondary">Global</span>
+        {% endif %}
+    </td>
+
+    <td>
+        {% if evento.solicitud %}
+            <a href="{% url 'ver_solicitud' evento.solicitud.pk %}">{{ evento.solicitud }}</a>
+        {% else %}
+            —
+        {% endif %}
+    </td>
+
+    <td class="text-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                onclick="verDetalleEvento('{% url 'auditoria:detalle_evento' evento.pk %}')"
+                title="Ver detalle">
+            <i class="fas fa-eye"></i>
+        </button>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="7" class="text-center text-muted py-4">
+        {% if hay_filtros %}
+            No hay eventos que coincidan con los filtros aplicados.
+        {% else %}
+            Todavía no se ha registrado ningún evento.
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+
+{% comment %}
+Paginación fuera de banda: el `hx-target` de la búsqueda es solo el `<tbody>`, así que el
+pie se actualiza aparte con `hx-swap-oob`. Mismo mecanismo que usa Solicitudes.
+{% endcomment %}
+{% if request.META.HTTP_HX_REQUEST %}
+<div id="table-pagination-footer" hx-swap-oob="true">
+    {% include 'pages/auditoria/partials/pagination.html' %}
+</div>
+{% endif %}

@@ -35,7 +35,7 @@ INSTALLED_APPS = [
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
     'solicitudes', 'informes',  'informe_inteligente', 'informes_anexo',
-    'soporte', 'subsanacion',
+    'soporte', 'subsanacion', 'cierres',
 ]
 
 MIDDLEWARE = [

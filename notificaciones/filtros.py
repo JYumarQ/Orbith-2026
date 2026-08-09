@@ -213,6 +213,10 @@ def filtrar_recordatorios(request, usuario, origen):
     Sin embudo (a diferencia de Advertencias): Recordatorios no tiene tantas
     dimensiones de filtro como para justificarlo — solo búsqueda libre (`q`) y
     prioridad, ambas como controles siempre visibles en la plantilla.
+
+    Deduplica con `_deduplicar()` antes de devolver, igual que `filtrar_advertencias`:
+    un mismo recordatorio se reparte a varios destinatarios (moderador(es) +
+    administradores) y sin esto aparecía repetido una vez por destinatario.
     """
     from .views import _color_prioridad, _notificaciones_visibles
 
@@ -245,4 +249,4 @@ def filtrar_recordatorios(request, usuario, origen):
         'prioridad_actual': prioridad,
         'hay_filtros': bool(busqueda or prioridad),
     }
-    return consulta, contexto
+    return _deduplicar(consulta), contexto

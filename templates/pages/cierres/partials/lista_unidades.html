@@ -1,0 +1,85 @@
+{% for fila in filas %}
+    <tr>
+        <td>
+            <div class="d-flex align-items-center">
+                {% if fila.unidad.padre_id %}
+                    <i class="fas fa-level-up-alt fa-rotate-90 text-muted me-2" title="Subunidad"></i>
+                {% else %}
+                    <i class="fas fa-building text-primary me-2"></i>
+                {% endif %}
+                <div>
+                    <span class="fw-semibold">{{ fila.unidad.descripcion }}</span>
+                    <small class="d-block text-muted">{{ fila.unidad.tipo.descripcion }}</small>
+                </div>
+            </div>
+        </td>
+
+        <td>
+            {% if fila.estado and not fila.estado.nunca_declarada %}
+                <span class="badge {{ fila.estado.color_badge }}">
+                    {{ fila.estado.get_estado_display }}
+                </span>
+                {% if fila.estado.meses_pendientes > 1 %}
+                    <small class="d-block text-danger mt-1">
+                        Arrastra {{ fila.estado.meses_pendientes }} meses
+                    </small>
+                {% endif %}
+            {% else %}
+                {% comment %} Sin primera declaración no hay incumplimiento: no se le
+                   puede reclamar ningún mes anterior (regla 4).
+                {% endcomment %}
+                <span class="badge bg-label-secondary">Nunca declarada</span>
+            {% endif %}
+        </td>
+
+        <td>
+            {% if fila.ultimo_cierre %}
+                <span class="fw-semibold">{{ fila.ultimo_cierre.periodo.etiqueta }}</span>
+                <small class="d-block text-muted">
+                    {{ fila.ultimo_cierre.fecha_declaracion|date:"d/m/Y" }} ·
+                    {% if fila.ultimo_cierre.en_plazo %}
+                        <span class="text-success">En plazo</span>
+                    {% else %}
+                        <span class="text-danger">Fuera de plazo</span>
+                    {% endif %}
+                </small>
+            {% else %}
+                <span class="text-muted">—</span>
+            {% endif %}
+        </td>
+
+        <td>
+            {% if fila.calculo.periodo_pendiente %}
+                <span class="text-dark">{{ fila.calculo.periodo_pendiente.etiqueta }}</span>
+            {% else %}
+                <span class="text-muted">—</span>
+            {% endif %}
+        </td>
+
+        <td class="text-end">
+            {% comment %} Esta pantalla es de consulta. Declarar y reabrir se hacen
+               desde el Gestor de Plantilla, sobre la fila de la unidad, junto al
+               resto de acciones de su toolbar.
+            {% endcomment %}
+            <button type="button" class="btn btn-sm btn-label-secondary"
+                    onclick="abrirModalCierres('{% url 'historial_cierres' fila.unidad.pk %}')"
+                    title="Historial de cierres">
+                <i class="fas fa-history me-1"></i> Historial
+            </button>
+        </td>
+    </tr>
+{% empty %}
+    <tr>
+        <td colspan="5" class="text-center py-4">
+            <i class="fas fa-search fs-4 text-muted mb-2 opacity-25 d-block"></i>
+            <p class="text-muted small m-0">
+                {% if hay_filtros %}
+                    Sin resultados para el filtro aplicado.
+                {% else %}
+                    No tiene Unidades Organizativas asignadas.
+                {% endif %}
+            </p>
+        </td>
+    </tr>
+{% endfor %}
+

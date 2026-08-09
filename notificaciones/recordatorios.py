@@ -56,6 +56,23 @@ def _unidad_del_contrato(contrato):
     return None
 
 
+def _unidad_del_aspirante(aspirante):
+    """Unidad organizativa de un aspirante: la propia si la tiene, si no la de su
+    contrato de alta vigente.
+
+    Respaldo inverso al de `_unidad_del_contrato`: `Aspirante.unidad_organizativa` es
+    el campo que se usa mientras la persona es candidata (`estado='ASPIRANTE'`); al
+    pasar a trabajador activo, su unidad real la fija el cargo del contrato y ese
+    campo propio normalmente se queda vacío. Sin este respaldo, `detectar_cumpleanos`
+    y `detectar_jubilacion_proxima` mandaban el recordatorio a todos los
+    administradores en vez de a la unidad del trabajador."""
+    if aspirante.unidad_organizativa_id:
+        return aspirante.unidad_organizativa_id
+    contrato = (aspirante.calta_contratos.filter(cargo__departamento__isnull=False)
+                .select_related('cargo__departamento').first())
+    return contrato.cargo.departamento.unidad_organizativa_id if contrato else None
+
+
 def detectar_cumpleanos():
     """Cumpleaños dentro del horizonte, de trabajadores activos."""
     hoy = date.today()
@@ -72,7 +89,7 @@ def detectar_cumpleanos():
             titulo=f'Cumpleaños de {aspirante}',
             mensaje=f'{aspirante} cumple años el {fecha_objetivo.strftime("%d/%m/%Y")}.',
             fecha_objetivo=fecha_objetivo,
-            unidad_organizativa_id=aspirante.unidad_organizativa_id,
+            unidad_organizativa_id=_unidad_del_aspirante(aspirante),
         )
 
 
@@ -148,7 +165,7 @@ def detectar_jubilacion_proxima():
             titulo=f'Jubilación próxima: {aspirante}',
             mensaje=mensaje,
             fecha_objetivo=fecha_objetivo,
-            unidad_organizativa_id=aspirante.unidad_organizativa_id,
+            unidad_organizativa_id=_unidad_del_aspirante(aspirante),
         )
 
 

@@ -18,6 +18,8 @@
                 
                 {% csrf_token %}
 
+                {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger d-flex align-items-center p-2 mb-3" role="alert">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -110,7 +112,7 @@
 
                 <div class="modal-footer px-0 pb-0 mt-4">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    {% include 'pages/solicitudes/partials/boton_guardar.html' %}
                 </div>
             </form>
         </div>

@@ -20,7 +20,9 @@ urlpatterns = [
     # MÓDULOS DE LA APLICACIÓN
     # ---------------------------------------------------------
     path('admin/', admin.site.urls),
+    path('auditoria/', include('auditoria.urls')),
     path('bolsa/', include('bolsa.urls')),
+    path('cierres/', include('cierres.urls')),
     path('contrato/', include('contratos.urls')),
     path('estructuras/', include('strorganizativa.urls')),
     path('config/', include('configuracion.urls')),

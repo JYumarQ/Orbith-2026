@@ -1,0 +1,162 @@
+{% comment %}
+Fragmento de modal (sin `{% extends %}`), inyectado en `#modal_solicitud` con jQuery
+`.load()`, igual que el resto de modales de Orbith.
+
+Solo sirve para las operaciones marcadas `desde_tabla` en el catálogo — hoy, las dos de
+NCargo. El resto de operaciones nacen del formulario de su propio módulo y nunca llegan
+aquí.
+
+Los campos del registro NO están escritos en esta plantilla: se cargan por HTMX en
+`#campos-de-la-operacion` usando el ModelForm real de la operación elegida. Así el
+Moderador rellena exactamente los mismos campos, con las mismas etiquetas y validaciones,
+que rellenaría un Administrador creando el registro directamente — y si mañana cambia
+`NCargoForm`, este modal cambia con él sin tocar nada.
+{% endcomment %}
+
+<div class="modal-dialog modal-lg">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Nueva Solicitud</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+
+        <form hx-post="{% url 'add_solicitud' %}"
+              hx-target="#modal_solicitud"
+              hx-swap="innerHTML"
+              id="solicitudForm">
+            {% csrf_token %}
+
+            <div class="modal-body">
+                <div class="alert alert-info d-flex align-items-start" role="alert">
+                    <i class="fas fa-info-circle me-2 mt-1"></i>
+                    <div class="small">
+                        Esta operación requiere aprobación. Al enviarla <strong>no se
+                        modificará nada todavía</strong>: se creará una solicitud que un
+                        Administrador deberá revisar y aprobar.
+                    </div>
+                </div>
+
+                {% if error_general %}
+                <div class="alert alert-danger">{{ error_general }}</div>
+                {% endif %}
+
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        {{ form.operacion.label_tag }}
+                        {{ form.operacion }}
+                        {% for error in form.operacion.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    {% comment %}
+                    Este wrapper es el ANCLA del swap fuera de banda: `campos_operacion.html`
+                    lo reemplaza entero cada vez que cambia la operación elegida, con las
+                    opciones correctas para el modelo de esa operación. Tiene que existir
+                    aquí desde la carga inicial — un `id` que no está ya en el DOM no puede
+                    recibir un swap OOB.
+                    {% endcomment %}
+                    <div class="col-md-6" id="campo-registro-wrapper">
+                        {% include 'pages/solicitudes/partials/campo_registro.html' %}
+                    </div>
+                </div>
+                {% if form.registro.errors %}
+                    <div class="row g-3">
+                        <div class="col-md-6 offset-md-6">
+                            {% for error in form.registro.errors %}
+                                <div class="text-danger small mt-1">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <hr class="my-3">
+
+                {# Aquí HTMX inyecta los campos reales de la operación elegida. #}
+                <div id="campos-de-la-operacion">
+                    {% if form_operacion %}
+                        {% include 'pages/solicitudes/partials/campos_operacion.html' %}
+                    {% else %}
+                        <p class="text-muted text-center py-3 mb-0">
+                            Seleccione qué desea solicitar para ver los campos.
+                        </p>
+                    {% endif %}
+                </div>
+
+                <hr class="my-3">
+
+                <div>
+                    {{ form.motivo.label_tag }}
+                    {{ form.motivo }}
+                    {% for error in form.motivo.errors %}
+                        <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                    <div class="form-text">{{ form.motivo.help_text }}</div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-paper-plane me-1"></i> Enviar Solicitud
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function () {
+    // Buscable: cuando hay muchos NCargo, elegir cuál editar a golpe de scroll en un
+    // <select> nativo es incómodo. Mismo tema/patrón que usa el resto de Orbith
+    // (p. ej. `pages/cargo/add_cargo.html`).
+    function initSelect2Registro() {
+        var $modal = $('#modal_solicitud');
+        var $registro = $modal.find('#id_registro');
+        if (!$registro.length) return;
+
+        if ($registro.hasClass('select2-hidden-accessible')) {
+            $registro.select2('destroy');
+        }
+        $registro.select2({
+            dropdownParent: $modal,
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Buscar…',
+            allowClear: true,
+            language: { noResults: function () { return 'No se encontró coincidencia'; } }
+        });
+
+        // Select2 no siempre dispara el 'change' nativo a tiempo para que lo capte
+        // hx-trigger="change"; se redispara a mano, mismo patrón que ya usa el proyecto
+        // en sus otras cascadas con Select2.
+        $registro.off('select2:select.solicitud select2:clear.solicitud')
+                 .on('select2:select.solicitud select2:clear.solicitud', function () {
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    }
+
+    initSelect2Registro();
+
+    // El cambio de operación trae un `#campo-registro-wrapper` NUEVO (swap fuera de
+    // banda), así que Select2 hay que reengancharlo después de cada asentamiento de
+    // HTMX dentro de este modal. El listener se registra una sola vez en `document.body`
+    // aunque el modal se abra varias veces en la misma sesión — sin este guardado se
+    // acumularía un listener nuevo cada vez que se abre "Añadir Solicitud".
+    if (!document.body.dataset.solicitudSelect2Bound) {
+        document.body.dataset.solicitudSelect2Bound = '1';
+        document.body.addEventListener('htmx:afterSettle', function (evt) {
+            var modal = document.getElementById('modal_solicitud');
+            if (modal && modal.contains(evt.target)) {
+                initSelect2Registro();
+            }
+        });
+    }
+})();
+</script>

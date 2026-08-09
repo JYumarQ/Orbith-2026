@@ -1,0 +1,135 @@
+{% comment %}
+Tabla «Situación Actual | Cambio propuesto». UN SOLO fragmento para las diez operaciones.
+
+Las filas las construye `solicitudes/views.py::_filas_de_comparacion()` recorriendo el
+ModelForm real de la operación, así que el orden, las etiquetas y los widgets son los del
+formulario que el usuario ya conoce, sin declararlos aquí por segunda vez.
+
+Columna izquierda: texto plano, no widgets deshabilitados. Un `<select disabled>` con la
+opción antigua arrastraría al DOM los atributos HTMX de las cascadas del formulario
+original, que no deben dispararse en la mitad de solo lectura.
+
+Columna derecha: el widget real y editable cuando `editable` es verdadero. Es lo que
+permite al Administrador ajustar la propuesta antes de aprobar.
+{% endcomment %}
+
+<style>
+    /* Azul de Orbith (--bs-primary del tema Sneat) para lo que cambió respecto al original. */
+    .campo-modificado {
+        background-color: rgba(105, 108, 255, 0.08);
+        border-left: 3px solid #696cff;
+    }
+    .campo-modificado .valor-original { text-decoration: line-through; opacity: 0.65; }
+    .comparacion-cabecera th { position: sticky; top: 0; z-index: 2; background: var(--bs-card-bg, #fff); }
+    .columna-original { width: 38%; }
+    .columna-propuesta { width: 38%; }
+    .columna-etiqueta { width: 24%; }
+    .fila-eliminacion { background-color: rgba(255, 62, 29, 0.06); }
+</style>
+
+{% if registro_desincronizado %}
+<div class="alert alert-warning d-flex align-items-start" role="alert">
+    <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+    <div>
+        <strong>El registro original ha cambiado desde que se creó esta solicitud.</strong>
+        <div class="small">
+            La columna «Situación Actual» muestra cómo estaba el registro cuando el
+            Moderador envió la solicitud, no cómo está ahora. Verifique el estado real
+            antes de decidir.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if es_eliminacion %}
+<div class="alert alert-danger d-flex align-items-start" role="alert">
+    <i class="fas fa-trash-alt me-2 mt-1"></i>
+    <div>
+        <strong>Se solicita ELIMINAR este registro.</strong>
+        <div class="small">
+            Si aprueba, «{{ solicitud.descriptor }}» se eliminará de forma permanente.
+            Abajo se muestra el registro tal y como estaba al crearse la solicitud.
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger">
+    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead class="comparacion-cabecera">
+            <tr>
+                <th class="columna-etiqueta">Campo</th>
+                <th class="columna-original">
+                    <i class="fas fa-history text-muted me-1"></i> Situación Actual
+                    <div class="small fw-normal text-muted">
+                        {% if es_creacion %}
+                            El registro todavía no existe
+                        {% else %}
+                            Estado al crearse la solicitud
+                        {% endif %}
+                    </div>
+                </th>
+                <th class="columna-propuesta">
+                    <i class="fas fa-pen-alt text-primary me-1"></i>
+                    {% if es_eliminacion %}
+                        Operación solicitada
+                    {% else %}
+                        Cambio propuesto por {{ solicitud.solicitante_nombre|default:"el Moderador" }}
+                    {% endif %}
+                    {% if editable and not es_eliminacion %}
+                    <div class="small fw-normal text-muted">Puede modificar estos valores antes de aprobar</div>
+                    {% endif %}
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in filas %}
+            <tr class="{% if fila.cambiado %}campo-modificado{% endif %} {% if es_eliminacion %}fila-eliminacion{% endif %}">
+                <td class="fw-semibold">
+                    {{ fila.etiqueta }}
+                    {% if fila.cambiado %}
+                        <i class="fas fa-circle text-primary ms-1" style="font-size: 0.5rem;"
+                           title="Este campo cambia respecto a la situación actual"></i>
+                    {% endif %}
+                </td>
+
+                <td class="text-muted valor-original">
+                    {% if es_creacion %}—{% else %}{{ fila.original }}{% endif %}
+                </td>
+
+                <td>
+                    {% if es_eliminacion %}
+                        <span class="text-danger fw-semibold">{{ fila.original }}</span>
+                    {% elif editable and fila.campo %}
+                        {{ fila.campo }}
+                        {% if fila.campo.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in fila.campo.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if fila.campo.help_text %}
+                            <div class="form-text small">{{ fila.campo.help_text }}</div>
+                        {% endif %}
+                    {% else %}
+                        <span class="{% if fila.cambiado %}text-primary fw-semibold{% endif %}">
+                            {{ fila.propuesto_texto }}
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3" class="text-center text-muted py-4">
+                    No hay campos que comparar en esta solicitud.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

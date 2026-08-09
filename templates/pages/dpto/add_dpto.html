@@ -14,7 +14,9 @@
                   id="dptoForm">
                 
                 {% csrf_token %}
-                
+
+                {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+
                 <div class="mb-3">
                     <label class="form-label" for="{{ form.descripcion.id_for_label }}">Descripción</label>
                     {{ form.descripcion }}
@@ -51,7 +53,7 @@
                 
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    {% include 'pages/solicitudes/partials/boton_guardar.html' %}
                 </div>
             </form>
         </div>

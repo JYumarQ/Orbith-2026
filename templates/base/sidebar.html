@@ -36,7 +36,14 @@
         </a>
       </li>
 
-      {% if user.es_admin or user.es_moderador or user.is_staff %}
+      {% comment %} Configuración es exclusiva del Administrador: contiene los nomencladores
+         de los que depende todo el sistema (cargos, escalas salariales, tipos de contrato).
+         Antes también la veían Moderador y staff. Lo único que un Moderador puede pedir de
+         aquí —añadir o editar un NCargo— pasa ahora por el módulo de Solicitudes. Las
+         vistas van además protegidas con `admin_required` en `configuracion/urls.py` y
+         `nomencladores/urls.py`: ocultar el menú no basta, la URL seguía siendo accesible.
+      {% endcomment %}
+      {% if user.es_admin %}
           <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Configuración</span>
           </li>
@@ -65,7 +72,7 @@
          deja de verlo). {% endcomment %}
       {% if user.es_admin %}
           {# Si el usuario está en una de estas páginas, el acordeón se pinta ya abierto. #}
-          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'subsanacion' in request.path %}active abierto{% endif %}"
+          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'subsanacion' in request.path or 'auditoria' in request.path %}active abierto{% endif %}"
               id="menuItemAdministracion">
             <a href="javascript:void(0);" class="menu-link orb-acordeon-toggle" id="menuLinkAdministracion"
                aria-expanded="false" title="Clic para desplegar">
@@ -91,18 +98,22 @@
                   <i class="bx bx-check-shield"></i><span>Subsanación</span>
                 </a>
 
-                {% comment %} Auditoría todavía no tiene destino. Se muestra con el mismo patrón de
-                   «Próximamente» que ya usa el acordeón del Gestor de Plantilla, en vez
-                   de crear una url vacía que prometa algo que no existe. {% endcomment %}
-                <span class="orb-acordeon-sublink deshabilitado" aria-disabled="true">
+                <a href="{% url 'auditoria:index' %}"
+                   class="orb-acordeon-sublink {% if 'auditoria' in request.path %}activo{% endif %}">
                   <i class="bx bx-history"></i><span>Auditoría</span>
-                  <span class="badge bg-label-secondary">Próximamente</span>
-                </span>
+                </a>
               </li>
             </ul>
           </li>
       {% endif %}
 
+      <li class="menu-header small text-uppercase">
+        <span class="menu-header-text">Plantilla</span>
+      </li>
+      {% comment %} Antes vivía justo debajo de Configuración/Administración, sin
+         cabecera propia, así que visualmente parecía parte de esa sección aunque no
+         lo era. Va primero dentro de «Plantilla», que es a la que pertenece de
+         verdad. {% endcomment %}
       {% if user.es_admin or user.es_moderador or user.es_observador or user.is_staff %}
           <li class="menu-item gestor-plantilla-item {% if 'gestor' in request.path %} active {% endif %}" id="menuItemGestorPlantilla">
             <a href="{% url 'gestor_plantilla' %}" class="menu-link" id="menuLinkGestorPlantilla" title="Clic: abrir · Doble clic: más opciones">
@@ -134,13 +145,20 @@
                   <i class="bx bx-file-blank me-1"></i>Anexo 14B <span class="badge bg-label-secondary">Próximamente</span>
                 </span>
               </li>
+              {% comment %} Cierres es donde el Moderador declara su plantilla al día y
+                 consulta el historial de fotografías. El Observador no participa en el
+                 flujo, así que no lo ve (`cierres/permisos.py` también se lo niega).
+              {% endcomment %}
+              {% if user.es_admin or user.es_moderador %}
+              <li class="gestor-plantilla-subitem">
+                <a href="{% url 'list_cierres' %}" class="gestor-plantilla-sublink">
+                  <i class="bx bx-calendar-check me-1"></i>Cierres Mensuales
+                </a>
+              </li>
+              {% endif %}
             </ul>
           </li>
       {% endif %}
-
-      <li class="menu-header small text-uppercase">
-        <span class="menu-header-text">Plantilla</span>
-      </li>
       <li class="menu-item {% if request.resolver_match.url_name == 'list_aspir' %} active {% endif %} ">
         <a href="{% url 'list_aspir' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-user-plus"></i>
@@ -173,7 +191,7 @@
       <li class="menu-item {% if request.resolver_match.url_name == 'informe_economia' %} active {% endif %} ">
         <a href="{% url 'informe_economia' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-bar-chart-alt-2"></i>
-          <div data-i18n="Basic">Economía</div>
+          <div data-i18n="Basic">Informes RRHH</div>
         </a>
       </li>
 
@@ -185,16 +203,21 @@
   </a>
 </li>
 
-      <!--<li class="menu-header small text-uppercase">
+      {% comment %} Solicitudes: el Moderador propone operaciones sensibles y el Administrador
+         decide. El Observador no participa en ese flujo, así que no ve el módulo (las
+         vistas también se lo niegan, ver `solicitudes/permisos.py`).
+      {% endcomment %}
+      {% if user.es_admin or user.es_moderador %}
+      <li class="menu-header small text-uppercase">
         <span class="menu-header-text">Solicitudes</span>
       </li>
-      <li class="menu-item {% if request.resolver_match.url_name == 'list_solicitudes' %} active {% endif %} ">
+      <li class="menu-item {% if 'solicitudes' in request.path %} active {% endif %} ">
         <a href="{% url 'list_solicitudes' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-clipboard"></i>
           <div data-i18n="Basic">Solicitudes</div>
         </a>
       </li>
-      -->
+      {% endif %}
 
     </ul>
   </aside>
@@ -316,20 +339,29 @@
       position: relative;
     }
 
-    /* Ningún ancestro debe recortar el panel al salirse de la barra. */
-    html.menu-colapsado #layout-menu,
-    html.menu-colapsado #layout-menu .menu-inner {
-      overflow: visible !important;
-    }
+    /* `.menu-inner` lo desplaza PerfectScrollbar (ver `base/scripts.html`) con su
+       propio riel, fino y ya correcto — el mismo que se ve con la barra desplegada.
+       NO se toca su `overflow` en ningún momento, ni siquiera condicionalmente: un
+       intento anterior alternaba `overflow` con `:has()` al pasar el ratón, y eso
+       hacía temblar la barra — PerfectScrollbar recalcula su riel cada vez que el
+       `overflow` del contenedor cambia, y el vaivén de abrir/cerrar el `:has()` en
+       cada micro-movimiento del ratón lo dejaba en un bucle de recálculo constante.
+
+       El panel flotante YA NO necesita que `.menu-inner` deje de recortar: en vez de
+       eso, `orbithMenu.abrirFlyout()` (más abajo) LO SACA del todo de `.menu-inner`
+       —lo mueve a `document.body` con `position: fixed` y coordenadas calculadas del
+       icono— así que nunca depende de su overflow. Y lo devuelve a su sitio original
+       al cerrarse, para que el acordeón en línea del modo expandido (que sí necesita
+       que sea hijo directo del `<li>`) siga funcionando exactamente igual. */
 
     /* Estado cerrado: se oculta de verdad (no solo con altura 0) para que no
-       capture clics invisibles junto al icono. */
+       capture clics invisibles junto al icono. Una vez que `abrirFlyout()` lo saca de
+       aquí, `position: fixed` reemplaza a este `absolute` (que solo sirve de valor
+       por defecto inofensivo mientras el panel sigue en su sitio original). */
     html.menu-colapsado .orb-acordeon,
     html.menu-colapsado .gestor-plantilla-acordeon {
       display: none;
-      position: absolute;
-      left: 100%;
-      top: 0;
+      position: fixed;
       z-index: 1085;           /* por encima del contenido; por debajo de modales (1050+) no aplica aquí */
       min-width: 232px;
       padding: .25rem 0;
@@ -343,9 +375,7 @@
       transition: none;
     }
 
-    html.menu-colapsado .orb-acordeon-item:hover > .orb-acordeon,
     html.menu-colapsado .orb-acordeon-item.flyout-abierto > .orb-acordeon,
-    html.menu-colapsado .gestor-plantilla-item:hover > .gestor-plantilla-acordeon,
     html.menu-colapsado .gestor-plantilla-item.flyout-abierto > .gestor-plantilla-acordeon {
       display: block;
     }
@@ -391,22 +421,154 @@ window.orbithMenu = (function () {
         && window.innerWidth >= 1200;   // mismo umbral que el CSS de base.html
   }
 
-  /* Solo puede haber un panel flotante abierto a la vez: si no, al recorrer los
-     iconos quedarían varios superpuestos. */
+  /* ==================== PANEL FLOTANTE: portal a <body> ====================
+     Colapsada, el panel (`.orb-acordeon` / `.gestor-plantilla-acordeon`) tiene que
+     salirse de los 3rem de ancho de la barra. La solución anterior dejaba
+     `overflow: visible` puesto en `.menu-inner` mientras el panel estaba abierto,
+     pero ese contenedor lo gestiona PerfectScrollbar (su riel fino, el mismo que ya
+     funciona con la barra desplegada) y tocarle el overflow —aunque fuera solo
+     mientras se pasaba el ratón— lo hacía recalcular en bucle y la barra temblaba.
+
+     Ahora `.menu-inner` no se toca NUNCA: al abrir, el panel se saca por completo de
+     ahí con `appendChild` a `document.body`, con `position: fixed` y coordenadas en
+     píxeles calculadas del icono (`getBoundingClientRect`, relativas al viewport, así
+     que no dependen de dónde esté posicionado ni de cuánto haya hecho scroll
+     `.menu-inner`). Al cerrar, se devuelve a su `<li>` de origen —siempre al final,
+     que es donde vivía en el HTML— para que el acordeón en línea del modo expandido
+     (que si necesita que sea hijo directo) siga intacto.
+
+     Solo puede haber un panel abierto a la vez: si no, al recorrer los iconos
+     quedarían varios superpuestos. */
+  const flyoutsAbiertos = new Set();
+
+  function flyoutDe(item) {
+    // Colapsada y abierto: ya vive en <body>, hay que encontrarlo por su marca.
+    const enBody = document.body.querySelector(
+      ':scope > .orb-acordeon[data-flyout-de="' + item.id + '"], ' +
+      ':scope > .gestor-plantilla-acordeon[data-flyout-de="' + item.id + '"]');
+    if (enBody) return enBody;
+    // Si no, sigue en su sitio original dentro del <li>.
+    return item.querySelector(':scope > .orb-acordeon, :scope > .gestor-plantilla-acordeon');
+  }
+
+  function posicionarFlyout(item, flyout) {
+    const r = item.getBoundingClientRect();
+    flyout.style.top = Math.round(r.top) + 'px';
+    flyout.style.left = Math.round(r.right) + 'px';
+  }
+
+  function abrirFlyout(item) {
+    if (!barraColapsada()) return;
+    const flyout = flyoutDe(item);
+    if (!flyout) return;
+
+    if (!item.id) return; // `flyoutDe` necesita el id para reencontrarlo en <body>
+    flyout.setAttribute('data-flyout-de', item.id);
+    document.body.appendChild(flyout);
+    posicionarFlyout(item, flyout);
+    flyout.style.display = 'block';
+    item.classList.add('flyout-abierto');
+    flyoutsAbiertos.add(item);
+
+    const boton = item.querySelector('.orb-acordeon-toggle');
+    if (boton) boton.setAttribute('aria-expanded', 'true');
+  }
+
+  function cerrarFlyout(item) {
+    if (!flyoutsAbiertos.has(item)) return;
+    const flyout = flyoutDe(item);
+    if (flyout) {
+      item.appendChild(flyout);   // de vuelta a su <li>: siempre fue su único hijo tras el <a>
+      flyout.style.display = '';
+      flyout.style.top = '';
+      flyout.style.left = '';
+      flyout.removeAttribute('data-flyout-de');
+    }
+    item.classList.remove('flyout-abierto');
+    flyoutsAbiertos.delete(item);
+
+    const boton = item.querySelector('.orb-acordeon-toggle');
+    if (boton) boton.setAttribute('aria-expanded', 'false');
+  }
+
   function cerrarFlyouts(excepto) {
-    document.querySelectorAll('.flyout-abierto').forEach(function (el) {
-      if (el !== excepto) el.classList.remove('flyout-abierto');
+    Array.from(flyoutsAbiertos).forEach(function (item) {
+      if (item !== excepto) cerrarFlyout(item);
     });
   }
 
   document.addEventListener('click', function (e) {
-    if (!e.target.closest('.orb-acordeon-item, .gestor-plantilla-item')) cerrarFlyouts(null);
+    if (!e.target.closest('.orb-acordeon-item, .gestor-plantilla-item, .orb-acordeon, .gestor-plantilla-acordeon')) {
+      cerrarFlyouts(null);
+    }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') cerrarFlyouts(null);
   });
+  // Reposicionar por scroll/resize de la ventana es más trabajo del que vale: con un
+  // panel de apertura rápida (hover o clic), simplemente se cierra.
+  window.addEventListener('resize', function () { cerrarFlyouts(null); });
+  window.addEventListener('scroll', function () { cerrarFlyouts(null); }, true);
+  // Si la barra pasa de colapsada a desplegada (o al revés) con un panel abierto,
+  // el CSS de destino no coincide con el de origen — se cierra para no dejarlo a
+  // medias. El botón de colapsar es el único disparador de ese cambio.
+  document.querySelectorAll('.layout-menu-toggle').forEach(function (boton) {
+    boton.addEventListener('click', function () { cerrarFlyouts(null); });
+  });
 
-  return { barraColapsada: barraColapsada, cerrarFlyouts: cerrarFlyouts };
+  return {
+    barraColapsada: barraColapsada,
+    cerrarFlyouts: cerrarFlyouts,
+    abrirFlyout: abrirFlyout,
+    cerrarFlyout: cerrarFlyout
+  };
+})();
+
+// Hover con intención: un pequeño margen antes de abrir y otro antes de cerrar, para
+// que un movimiento de ratón de paso no dispare el panel, y para que se pueda mover
+// el cursor del icono AL panel (que ya no es su hijo en el DOM tras `abrirFlyout`, así
+// que un simple `:hover` de CSS no basta) sin que se cierre de camino.
+(function () {
+  const DEMORA_ABRIR_MS = 120;
+  const DEMORA_CERRAR_MS = 250;
+  let temporizador = null;
+
+  function programarApertura(item) {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(function () {
+      window.orbithMenu.cerrarFlyouts(item);
+      window.orbithMenu.abrirFlyout(item);
+    }, DEMORA_ABRIR_MS);
+  }
+
+  function programarCierre(item) {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(function () {
+      window.orbithMenu.cerrarFlyout(item);
+    }, DEMORA_CERRAR_MS);
+  }
+
+  document.querySelectorAll('.orb-acordeon-item, .gestor-plantilla-item').forEach(function (item) {
+    item.addEventListener('mouseenter', function () {
+      if (window.orbithMenu.barraColapsada()) programarApertura(item);
+    });
+    item.addEventListener('mouseleave', function () {
+      if (window.orbithMenu.barraColapsada()) programarCierre(item);
+    });
+  });
+
+  // El panel vive en <body> mientras está abierto: sus propios mouseenter/mouseleave
+  // se enganchan una vez, delegados, porque el nodo se mueve dentro y fuera del DOM.
+  document.body.addEventListener('mouseenter', function (e) {
+    const panel = e.target.closest && e.target.closest('.orb-acordeon[data-flyout-de], .gestor-plantilla-acordeon[data-flyout-de]');
+    if (panel) clearTimeout(temporizador);
+  }, true);
+  document.body.addEventListener('mouseleave', function (e) {
+    const panel = e.target.closest && e.target.closest('.orb-acordeon[data-flyout-de], .gestor-plantilla-acordeon[data-flyout-de]');
+    if (!panel) return;
+    const item = document.getElementById(panel.getAttribute('data-flyout-de'));
+    if (item) programarCierre(item);
+  }, true);
 })();
 
 // Acordeón genérico: un solo clic despliega o repliega. Se engancha por la clase
@@ -420,12 +582,15 @@ window.orbithMenu = (function () {
     boton.addEventListener('click', function (e) {
       e.preventDefault();
       /* Colapsada, el desplegable en línea no se ve (el CSS lo convierte en panel
-         flotante), así que el clic tiene que alternar `flyout-abierto`. El hover ya
-         lo abre; esto es lo que lo hace usable con teclado y en táctil. */
+         flotante), así que el clic tiene que alternar el panel. El hover ya lo abre;
+         esto es lo que lo hace usable con teclado y en táctil. */
       if (window.orbithMenu.barraColapsada()) {
-        const abierto = item.classList.toggle('flyout-abierto');
-        window.orbithMenu.cerrarFlyouts(abierto ? item : null);
-        boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+        if (item.classList.contains('flyout-abierto')) {
+          window.orbithMenu.cerrarFlyout(item);
+        } else {
+          window.orbithMenu.cerrarFlyouts(item);
+          window.orbithMenu.abrirFlyout(item);
+        }
         return;
       }
       const abierto = item.classList.toggle('abierto');
@@ -458,10 +623,14 @@ window.orbithMenu = (function () {
     clearTimeout(temporizador);
     temporizador = null;
     /* Se mantiene el mismo gesto de siempre (doble clic = desplegar), solo cambia
-       qué clase se alterna: colapsada, lo que hay que abrir es el panel flotante. */
+       qué hay que abrir: colapsada, el panel flotante. */
     if (window.orbithMenu.barraColapsada()) {
-      const abierto = item.classList.toggle('flyout-abierto');
-      window.orbithMenu.cerrarFlyouts(abierto ? item : null);
+      if (item.classList.contains('flyout-abierto')) {
+        window.orbithMenu.cerrarFlyout(item);
+      } else {
+        window.orbithMenu.cerrarFlyouts(item);
+        window.orbithMenu.abrirFlyout(item);
+      }
       return;
     }
     item.classList.toggle('abierto');

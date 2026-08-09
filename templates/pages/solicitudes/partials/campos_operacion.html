@@ -1,0 +1,52 @@
+{% comment %}
+Campos de la operación elegida.
+
+Se pinta el ModelForm real del módulo correspondiente (`NCargoForm`, etc.) en un grid de
+dos columnas. Recorrer `form_operacion` en lugar de escribir los campos uno a uno es lo
+que hace que este fragmento sirva para cualquier operación presente o futura del catálogo
+sin tocarlo.
+
+Se incluye desde DOS sitios: `add_solicitud.html` (directamente, sin nada fuera de
+banda) y `respuesta_campos_solicitud.html` (la respuesta HTMX de `campos_solicitud`, que
+además refresca el selector de registro). Por eso este archivo NO lleva el swap fuera de
+banda del registro — si lo llevara, incluirlo dos veces en la misma página duplicaría el
+`id="campo-registro-wrapper"`.
+{% endcomment %}
+
+{% if form_operacion %}
+    <div class="small text-muted mb-2">
+        <i class="fas fa-list-ul me-1"></i>
+        Datos {% if definicion.accion == 'ADD' %}del nuevo registro{% else %}propuestos{% endif %}
+    </div>
+
+    <div class="row g-3">
+        {% for campo in form_operacion %}
+        <div class="{% if campo.field.widget.input_type == 'checkbox' %}col-12{% else %}col-md-6{% endif %}">
+            {% if campo.field.widget.input_type == 'checkbox' %}
+                <div class="form-check">
+                    {{ campo }}
+                    <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                </div>
+            {% else %}
+                <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                {{ campo }}
+            {% endif %}
+
+            {% for error in campo.errors %}
+                <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+            {% if campo.help_text %}
+                <div class="form-text">{{ campo.help_text }}</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+{% elif necesita_registro %}
+    <p class="text-muted text-center py-3 mb-0">
+        Seleccione qué registro desea editar para ver sus datos actuales.
+    </p>
+{% else %}
+    <p class="text-muted text-center py-3 mb-0">
+        Seleccione qué desea solicitar para ver los campos.
+    </p>
+{% endif %}

@@ -43,6 +43,14 @@ ENLACES_POR_MODELO = {
         'url': 'parametros', 'etiqueta': 'Abrir parámetros generales',
         'editable': True, 'sin_argumento': True},
 
+    # Las notificaciones de Solicitudes apuntan a la propia solicitud, no al registro
+    # afectado: la solicitud sobrevive a la operación —incluso cuando lo aprobado fue
+    # eliminar ese registro—, así que el enlace nunca queda roto. `editable=False` porque
+    # el destino es la pantalla de consulta: una solicitud ya decidida solo se mira, y una
+    # pendiente se modifica desde su propia pantalla, no desde aquí.
+    'solicitudes.Solicitud': {
+        'url': 'ver_solicitud', 'etiqueta': 'Abrir solicitud', 'editable': False},
+
     # Sin formulario de edición: se degrada al listado.
     'contratos.CBaja': {
         'url': 'list_baja', 'etiqueta': 'Ver listado de bajas',

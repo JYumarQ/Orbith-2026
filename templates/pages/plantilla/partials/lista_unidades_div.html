@@ -2,9 +2,19 @@
     <div id="unit-{{ u.pk }}" class="card mb-0 border-bottom nav-card unit-card"
          data-pk="{{ u.pk }}"
          data-desc="{{ u.descripcion }}"
-         data-es-principal="{{ u.tipo.es_principal|yesno:'true,false' }}" 
+         data-es-principal="{{ u.tipo.es_principal|yesno:'true,false' }}"
          data-url-edit="{% url 'updt_uniorg' u.pk %}"
          data-url-del="{% url 'del_uniorg' u.pk %}"
+         {% comment %} Cierres: la toolbar decide con estos datos si habilita
+            «Declarar actualizada» y «Reabrir». Vienen resueltos del servidor
+            (permiso del usuario + ventana + cola de meses pendientes), igual que
+            las urls de editar/eliminar.
+         {% endcomment %}
+         data-url-declarar="{% url 'declarar_cierre' u.pk %}"
+         data-url-reabrir="{% url 'reabrir_cierre' u.pk %}"
+         data-puede-declarar="{{ u.acciones_cierre.puede_declarar|yesno:'true,false' }}"
+         data-puede-reabrir="{{ u.acciones_cierre.puede_reabrir|yesno:'true,false' }}"
+         data-periodo-declarable="{{ u.acciones_cierre.etiqueta_declarable }}"
          onclick="selectUnit(this)"
          ondblclick="if(this.dataset.esPrincipal === 'true') toggleHijas('{{ u.pk }}')"
          hx-get="{% url 'htmx_load_departamentos' u.pk %}"
@@ -12,7 +22,7 @@
          hx-swap="innerHTML"
          hx-indicator="#col-departamentos"
          style="cursor: pointer; position: relative; border-left: 5px solid {{ u.tipo.color|default:'#cbd5e1' }} !important;">
-         
+
         <div class="card-body p-2 d-flex align-items-center">
             
             <div class="me-3 rounded d-flex align-items-center justify-content-center bg-label-primary text-primary" style="width: 32px; height: 32px;">
@@ -36,7 +46,15 @@
                     </small>
                 </div>
                 <div class="col-2 text-end">
-                    <span class="badge bg-label-primary" style="font-size: 0.65rem;">
+                    {% comment %} Mismo badge de siempre (icono + conteo); el color
+                       ahora también indica el estado de cierre de la unidad — verde
+                       actualizada, azul esperando su ventana, naranja con la ventana
+                       abierta sin declarar, rojo desactualizada o nunca declarada. En
+                       un padre, el color resume el de sus subunidades.
+                    {% endcomment %}
+                    <span class="badge {{ u.acciones_cierre.color_badge|default:'bg-label-primary' }}"
+                          style="font-size: 0.65rem;"
+                          title="{{ u.acciones_cierre.color_titulo|default:'' }}">
                         {% if u.tipo.es_principal %}
                             <i class="fas fa-project-diagram me-1" style="font-size: 0.6rem;" title="Subunidades"></i>{{ u.direcciones_hijas.count }}
                         {% else %}
@@ -67,15 +85,20 @@
                      data-es-principal="{{ hija.tipo.es_principal|yesno:'true,false' }}"
                      data-url-edit="{% url 'updt_uniorg' hija.pk %}"
                      data-url-del="{% url 'del_uniorg' hija.pk %}"
+                     data-url-declarar="{% url 'declarar_cierre' hija.pk %}"
+                     data-url-reabrir="{% url 'reabrir_cierre' hija.pk %}"
+                     data-puede-declarar="{{ hija.acciones_cierre.puede_declarar|yesno:'true,false' }}"
+                     data-puede-reabrir="{{ hija.acciones_cierre.puede_reabrir|yesno:'true,false' }}"
+                     data-periodo-declarable="{{ hija.acciones_cierre.etiqueta_declarable }}"
                      onclick="event.stopPropagation(); selectUnit(this);"
                      hx-get="{% url 'htmx_load_departamentos' hija.pk %}"
                      hx-target="#col-departamentos"
                      hx-swap="innerHTML"
                      hx-indicator="#col-departamentos"
-                     style="cursor: pointer; 
+                     style="cursor: pointer; position: relative;
                             margin-left: 10px; /* <--- Desplazamiento a la derecha */
                             border-left: 5px solid {{ hija.tipo.color|default:'#cbd5e1' }} !important;">
-                     
+
                     <div class="card-body p-2 d-flex align-items-center">
                         
                         <div class="me-3 rounded d-flex align-items-center justify-content-center bg-label-secondary text-secondary" style="width: 32px; height: 32px;">
@@ -99,7 +122,9 @@
                                 </small>
                             </div>
                             <div class="col-2 text-end">
-                                <span class="badge bg-label-primary" style="font-size: 0.65rem;">
+                                <span class="badge {{ hija.acciones_cierre.color_badge|default:'bg-label-primary' }}"
+                                      style="font-size: 0.65rem;"
+                                      title="{{ hija.acciones_cierre.color_titulo|default:'' }}">
                                     <i class="fas fa-sitemap me-1" style="font-size: 0.6rem;"></i>{{ hija.departamentos.count }}
                                 </span>
                             </div>

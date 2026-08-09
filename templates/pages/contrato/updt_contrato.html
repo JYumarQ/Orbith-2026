@@ -31,6 +31,8 @@
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
 
+                {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+
                 <div class="nav-align-top mb-4">
                     <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
                         <li class="nav-item">
@@ -288,7 +290,7 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    {% include 'pages/solicitudes/partials/boton_guardar.html' %}
                 </div>
             </form>
         </div>

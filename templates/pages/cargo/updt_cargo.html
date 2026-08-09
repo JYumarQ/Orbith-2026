@@ -21,9 +21,9 @@
               id="cargoForm" class="px-4">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">
-                
-                
-                
+
+                {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="visual_unidad">Unidad Organizativa</label>
@@ -94,7 +94,7 @@
 
                 <div class="modal-footer px-0 pb-3 mt-4">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+                    {% include 'pages/solicitudes/partials/boton_guardar.html' %}
                 </div>
             </form>
         </div>

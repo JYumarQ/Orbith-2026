@@ -1,0 +1,19 @@
+{% comment %}
+Botón de envío de los formularios que, para un Moderador, generan una solicitud.
+
+Va junto a `aviso_moderador.html`: uno explica qué va a pasar y este lo confirma en la
+acción. Se extrae a un parcial porque son cinco formularios en tres módulos distintos y
+el texto tiene que decir lo mismo en todos.
+
+Uso:
+    {% include 'pages/solicitudes/partials/boton_guardar.html' %}
+    {% include 'pages/solicitudes/partials/boton_guardar.html' with texto='Guardar cambios' %}
+{% endcomment %}
+
+{% if user.es_moderador and not user.es_admin %}
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-paper-plane me-1"></i> Enviar Solicitud
+    </button>
+{% else %}
+    <button type="submit" class="btn btn-primary">{{ texto|default:"Guardar" }}</button>
+{% endif %}

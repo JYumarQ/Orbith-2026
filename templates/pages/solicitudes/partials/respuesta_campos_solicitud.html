@@ -1,0 +1,15 @@
+{% comment %}
+Respuesta HTMX completa de `campos_solicitud`: los campos del registro (el `hx-target`
+normal) MÁS el refresco fuera de banda del selector «Registro a modificar».
+
+Separado de `campos_operacion.html` a propósito: ese archivo también se incluye
+directamente en `add_solicitud.html` cuando se repinta el modal completo tras un envío
+inválido, y si llevara el bloque OOB, incluirlo ahí duplicaría el
+`id="campo-registro-wrapper"` que ya existe en esa misma página.
+{% endcomment %}
+
+{% include 'pages/solicitudes/partials/campos_operacion.html' %}
+
+<div class="col-md-6" id="campo-registro-wrapper" hx-swap-oob="true">
+    {% include 'pages/solicitudes/partials/campo_registro.html' %}
+</div>

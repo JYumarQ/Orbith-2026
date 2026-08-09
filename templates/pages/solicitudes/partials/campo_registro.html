@@ -1,0 +1,30 @@
+{% comment %}
+Contenido del selector «Registro a modificar». Compartido entre la carga inicial del
+modal (`add_solicitud.html`) y el refresco por HTMX al cambiar de operación
+(`campos_operacion.html`, como swap fuera de banda), para que ambos pinten exactamente lo
+mismo y no diverjan.
+
+Deshabilitado cuando la operación elegida es de creación (no hay nada que elegir todavía)
+o cuando aún no se ha elegido operación: Django ignora un `<select disabled>` al enviar el
+formulario, así que no hace falta lógica adicional para que `registro` llegue vacío.
+
+Select2 (buscable, con el mismo tema que el resto de Orbith) se inicializa desde el
+JavaScript de `add_solicitud.html`, que se ejecuta después de cada swap — incluido este.
+{% endcomment %}
+
+<label class="form-label" for="id_registro">Registro a modificar</label>
+<select name="registro" id="id_registro" class="form-select"
+        {% if necesita_registro %}
+        hx-get="{% url 'campos_solicitud' %}"
+        hx-target="#campos-de-la-operacion"
+        hx-trigger="change"
+        hx-include="[name='operacion']"
+        {% else %}
+        disabled
+        {% endif %}>
+    <option value="">Seleccione…</option>
+    {% for pk, nombre in opciones_registro %}
+        <option value="{{ pk }}" {% if pk|stringformat:"s" == registro_seleccionado %}selected{% endif %}>{{ nombre }}</option>
+    {% endfor %}
+</select>
+<div class="form-text">Solo es necesario si va a editar un registro existente.</div>

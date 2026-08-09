@@ -1,0 +1,158 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Revisar solicitud{% endblock %}
+
+{% comment %}
+Página completa, no modal: son dos columnas de campos y necesita el ancho.
+
+Al llegar aquí la solicitud YA está bloqueada (la vista llamó a `iniciar_revision`), así
+que el Moderador no puede tocarla mientras esta pantalla esté abierta. Las tres salidas
+—Aprobar, Rechazar y Cancelar— pasan por POST y liberan el bloqueo.
+{% endcomment %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+
+        <h4 class="fw-bold py-3 mb-1">
+            <span class="text-muted fw-light">
+                <a href="{% url 'list_solicitudes' %}" class="text-muted">Solicitudes</a> /
+            </span>
+            Revisión
+        </h4>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <h5 class="mb-1">{{ definicion.etiqueta }}</h5>
+                    <div class="text-muted small">
+                        <span class="me-3"><i class="fas fa-user-circle me-1"></i>
+                            {{ solicitud.solicitante_nombre|default:"—" }}</span>
+                        <span class="me-3"><i class="far fa-calendar me-1"></i>
+                            {{ solicitud.created_at|date:'d/m/Y H:i' }}</span>
+                        {% if solicitud.unidad %}
+                        <span><i class="fas fa-sitemap me-1"></i> {{ solicitud.unidad.descripcion }}</span>
+                        {% else %}
+                        <span><i class="fas fa-globe me-1"></i> Nomenclador global</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="badge bg-label-warning">
+                    <i class="fas fa-lock me-1"></i> En revisión por usted
+                </span>
+            </div>
+
+            {% if solicitud.motivo %}
+            <div class="card-body pb-0">
+                <div class="alert alert-secondary mb-0">
+                    <div class="small text-muted mb-1">Motivo indicado por el Moderador</div>
+                    {{ solicitud.motivo|linebreaksbr }}
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card-body">
+                {% comment %}
+                El formulario envuelve la comparación para que los widgets de la columna
+                derecha viajen en el POST de aprobación con los valores del Administrador.
+                {% endcomment %}
+                <form method="POST" action="{% url 'aprobar_solicitud' solicitud.pk %}" id="form_aprobacion">
+                    {% csrf_token %}
+
+                    {% include 'pages/solicitudes/partials/comparacion.html' %}
+
+                    <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-2">
+                        {% comment %}
+                        Cancelar es un POST propio: devuelve la solicitud a En Espera y
+                        libera el bloqueo SIN guardar nada de lo escrito arriba. Por eso
+                        usa formaction en vez de ir dentro del form de aprobación.
+                        {% endcomment %}
+                        <button type="submit" class="btn btn-outline-secondary"
+                                formaction="{% url 'cancelar_revision' solicitud.pk %}"
+                                formnovalidate>
+                            <i class="fas fa-undo-alt me-1"></i> Cancelar revisión
+                        </button>
+
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-danger" onclick="abrirModalRechazo()">
+                                <i class="fas fa-times-circle me-1"></i> Rechazar
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="btn_aprobar">
+                                <i class="fas fa-check-circle me-1"></i>
+                                {% if es_eliminacion %}Aprobar eliminación{% else %}Aprobar solicitud{% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modal de rechazo. El motivo es obligatorio: llega al Moderador en su notificación. #}
+<div class="modal fade" id="modal_rechazo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" action="{% url 'rechazar_solicitud' solicitud.pk %}">
+            {% csrf_token %}
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rechazar solicitud</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">{{ solicitud.descriptor }}</p>
+                    {{ form_rechazo.motivo_decision.label_tag }}
+                    {{ form_rechazo.motivo_decision }}
+                    {% if form_rechazo.motivo_decision.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for error in form_rechazo.motivo_decision.errors %}<div>{{ error }}</div>{% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-text">El Moderador recibirá este texto en su notificación.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Volver</button>
+                    <button type="submit" class="btn btn-danger">Rechazar solicitud</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+    function abrirModalRechazo() {
+        new bootstrap.Modal(document.getElementById('modal_rechazo')).show();
+    }
+
+    // Aprobar aplica el cambio de verdad sobre la base de datos: se confirma primero,
+    // con el mismo patrón de SweetAlert que usa el resto de Orbith para acciones que no
+    // se pueden deshacer con un clic.
+    document.getElementById('form_aprobacion').addEventListener('submit', function (e) {
+        // Cancelar revisión usa este mismo form con `formaction`: no debe confirmarse,
+        // porque no cambia nada.
+        if (e.submitter && e.submitter.hasAttribute('formaction')) return;
+
+        e.preventDefault();
+        const esEliminacion = {{ es_eliminacion|yesno:"true,false" }};
+        Swal.fire({
+            title: esEliminacion ? '¿Aprobar la eliminación?' : '¿Aprobar la solicitud?',
+            text: esEliminacion
+                ? 'El registro se eliminará de forma permanente.'
+                : 'Se aplicarán los valores que aparecen en la columna de la derecha.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, aprobar',
+            cancelButtonText: 'Volver'
+        }).then((resultado) => {
+            if (resultado.isConfirmed) e.target.submit();
+        });
+    });
+
+    {% if form_rechazo.motivo_decision.errors %}
+        // El rechazo se envió sin motivo: se reabre el modal para que se vea el error.
+        document.addEventListener('DOMContentLoaded', abrirModalRechazo);
+    {% endif %}
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,41 @@
+{% comment %}
+Aviso + campo de motivo para los formularios que, en manos de un Moderador, generan una
+solicitud en lugar de guardar directamente.
+
+Se incluye en los formularios de Departamento, Cargo Plantilla, Unidad Organizativa,
+Contrato y Aspirante. Solo se pinta para el Moderador: el Administrador ve el formulario
+tal cual siempre lo ha visto.
+
+Sin este bloque, el único indicio de que el cambio no se aplica de inmediato sería el
+texto del botón, y es fácil no reparar en él cuando se está rellenando un formulario largo.
+
+Uso:
+    {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+    {% include 'pages/solicitudes/partials/aviso_moderador.html' with accion='eliminar' %}
+{% endcomment %}
+
+{% if user.es_moderador and not user.es_admin %}
+<div class="alert alert-info d-flex align-items-start" role="alert">
+    <i class="fas fa-paper-plane me-2 mt-1"></i>
+    <div class="small">
+        {% if accion == 'eliminar' %}
+            Esta eliminación <strong>requiere aprobación</strong>. El registro no se
+            eliminará ahora: se enviará una solicitud para que un Administrador la revise.
+        {% else %}
+            Los cambios que guarde aquí <strong>no se aplicarán directamente</strong>:
+            se enviarán como solicitud para aprobación del Administrador.
+        {% endif %}
+    </div>
+</div>
+
+<div class="mb-3">
+    {% comment %}
+    El nombre NO es `motivo` a secas: `CAlta` ya tiene un campo con ese nombre y
+    colisionarían en el mismo POST. Ver `solicitudes/integracion.py::CAMPO_MOTIVO`.
+    {% endcomment %}
+    <label class="form-label" for="id_motivo_solicitud">Motivo de la solicitud</label>
+    <textarea name="motivo_solicitud" id="id_motivo_solicitud" rows="2" class="form-control"
+              placeholder="Opcional: explique por qué solicita este cambio."></textarea>
+    <div class="form-text">Lo verá el Administrador que revise la solicitud.</div>
+</div>
+{% endif %}

@@ -36,7 +36,7 @@
                                 {% elif campo.tipo == 'numero' %}
                                     <td class="text-end font-monospace">{{ valor }}</td>
                                 {% elif campo.tipo == 'opcion' %}
-                                    <td><span class="ii-badge-opcion">{{ valor }}</span></td>
+                                    <td><span class="ii-badge-opcion{% if campo.key == 'sexo' and valor == 'Femenino' %} ii-badge-femenino{% endif %}">{{ valor }}</span></td>
                                 {% else %}
                                     <td>{{ valor }}</td>
                                 {% endif %}

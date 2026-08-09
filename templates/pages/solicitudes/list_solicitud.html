@@ -1,0 +1,406 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Solicitudes{% endblock %}
+
+{% block content %}
+{% load static %}
+
+<style>
+    /* Mismo lenguaje visual que la tabla de Contratos: fila seleccionada resaltada y
+       barra de acciones que se activa al seleccionar. */
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .toolbar-active { opacity: 1; pointer-events: auto; }
+    .cursor-pointer { cursor: pointer; }
+    .dropdown-header-custom {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #a1acb8;
+        font-weight: 700;
+        padding: 0.5rem 0.5rem 0.2rem 0.5rem;
+        border-bottom: 1px solid #eceef1;
+        margin-bottom: 0.5rem;
+    }
+    /* Una solicitud que un administrador tiene abierta ahora mismo. Se distingue del
+       resto de «En Espera» porque nadie más puede actuar sobre ella. */
+    .fila-bloqueada td {
+        color: #ffab00 !important;
+        background-color: rgba(255, 171, 0, 0.05);
+    }
+    .fila-bloqueada td:first-child { border-left: 3px solid #ffab00 !important; }
+</style>
+
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+        <h4 class="fw-bold py-3 mb-4">
+            <span class="text-muted fw-light">Orbith /</span> Solicitudes
+        </h4>
+
+        {# ---------------- Pestañas: los tres estados que definió RRHH ---------------- #}
+        <ul class="nav nav-pills flex-column flex-md-row mb-3">
+            {% for pestana in pestanas %}
+            <li class="nav-item">
+                <a class="nav-link {% if tab_activa == pestana.clave %}active{% endif %}"
+                   href="{% url 'list_solicitudes' %}?tab={{ pestana.clave }}">
+                    {{ pestana.etiqueta }}
+                    <span class="badge {% if tab_activa == pestana.clave %}bg-white text-primary{% else %}bg-label-secondary{% endif %} rounded-pill ms-1">
+                        {{ pestana.total }}
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+
+                {# ---------------- Barra de acciones (se activa al seleccionar fila) ---------------- #}
+                <div id="solicitud-toolbar" class="d-flex gap-2 toolbar-disabled">
+                    <a class="btn btn-sm btn-outline-secondary" id="btn-ver" href="#" title="Ver solicitud">
+                        <i class="fas fa-eye"></i>
+                    </a>
+
+                    {% if es_admin %}
+                    <a class="btn btn-sm btn-outline-primary" id="btn-revisar" href="#" title="Revisar">
+                        <i class="fas fa-clipboard-check"></i>
+                    </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="btn-rechazar"
+                            onclick="abrirModalRechazo()" title="Rechazar">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-warning" id="btn-cancelar"
+                            onclick="accionSobreSeleccion('cancelar', '¿Cancelar la revisión en curso? La solicitud volverá a En Espera sin guardar cambios.')"
+                            title="Cancelar revisión en curso">
+                        <i class="fas fa-undo-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-info" id="btn-devolver"
+                            onclick="accionSobreSeleccion('devolver', '¿Devolver esta solicitud a En Espera para volver a procesarla?')"
+                            title="Devolver a En Espera">
+                        <i class="fas fa-reply"></i>
+                    </button>
+                    {% else %}
+                    <a class="btn btn-sm btn-outline-primary" id="btn-editar" href="#" title="Editar mi solicitud">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    {% endif %}
+
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="btn-eliminar"
+                            onclick="accionSobreSeleccion('eliminar', '¿Eliminar esta solicitud? Esta acción no se puede deshacer.')"
+                            title="{% if es_admin %}Eliminar solicitud{% else %}Retirar mi solicitud{% endif %}">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+
+                {# ---------------- Búsqueda ---------------- #}
+                <div id="search_container" class="ms-3 grow" style="max-width: 280px;">
+                    <input type="hidden" id="filter_tab" name="tab" value="{{ tab_activa }}">
+                    <input type="hidden" id="filter_per_page" name="per_page" value="{{ current_page_size }}">
+
+                    <div class="input-group input-group-merge">
+                        <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
+                        <input id="search" type="text" class="form-control border-0 shadow-none"
+                               placeholder="Buscar..." name="q" value="{{ q }}"
+                               hx-get="{% url 'search_solicitudes' %}"
+                               hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
+                               hx-target="#filter_solicitudes_results"
+                               hx-include="#filter_tab, #filter_per_page, #filter_tipo, #filter_unidad, #filter_moderador, #filter_desde, #filter_hasta">
+                    </div>
+                </div>
+
+                <div class="d-flex ms-auto gap-2">
+                    {# ---------------- Filtros ---------------- #}
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow"
+                                data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                            <i class="fas fa-filter"></i>
+                            {% if hay_filtros %}<span class="badge badge-dot bg-danger"></span>{% endif %}
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+                            <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
+                                <span><i class="fas fa-sliders-h me-1"></i> Filtrar solicitudes</span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()"
+                                        style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
+                                    <i class="fas fa-undo-alt me-1"></i> Reset
+                                </button>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_tipo">Tipo de solicitud</label>
+                                <select id="filter_tipo" name="tipo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    {% for clave, etiqueta in opciones_filtro.tipos %}
+                                        <option value="{{ clave }}" {% if clave in tipos_actuales %}selected{% endif %}>{{ etiqueta }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            {% if es_admin %}
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_unidad">Unidad Organizativa</label>
+                                <select id="filter_unidad" name="unidad" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    {% for pk, nombre in opciones_filtro.unidades %}
+                                        <option value="{{ pk }}" {% if pk in unidades_actuales %}selected{% endif %}>{{ nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_moderador">Moderador</label>
+                                <select id="filter_moderador" name="moderador" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todos</option>
+                                    {% for pk, nombre in opciones_filtro.moderadores %}
+                                        <option value="{{ pk }}" {% if pk in moderadores_actuales %}selected{% endif %}>{{ nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            {% endif %}
+
+                            <div class="dropdown-header-custom"><i class="far fa-calendar-alt me-1"></i> Fecha de envío</div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_desde">Desde</label>
+                                <input type="date" id="filter_desde" name="desde" value="{{ desde }}"
+                                       class="form-control form-control-sm" onchange="triggerSearch()">
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_hasta">Hasta</label>
+                                <input type="date" id="filter_hasta" name="hasta" value="{{ hasta }}"
+                                       class="form-control form-control-sm" onchange="triggerSearch()">
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                    {% if not es_admin %}
+                    <button type="button" class="btn btn-primary"
+                            data-url="{% url 'add_solicitud' %}"
+                            onclick="abrir_modal_creacion(this.dataset.url)">
+                        <i class="fas fa-plus me-1"></i> Añadir Solicitud
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="table-responsive text-nowrap">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Solicitante</th>
+                            <th>Unidad Organizativa</th>
+                            <th>Tipo de solicitud</th>
+                            <th>Registro afectado</th>
+                            <th class="text-center">Fecha</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filter_solicitudes_results">
+                        {% include 'pages/solicitudes/partials/filter_solicitud_list.html' %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card-body pt-0">
+                <div id="table-pagination-footer">
+                    {% include 'pages/solicitudes/partials/pagination.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Contenedores de modal, igual que en el resto de listados de Orbith #}
+<div class="modal fade" id="modal_solicitud" tabindex="-1" aria-hidden="true"></div>
+
+{# Modal de rechazo: el motivo es obligatorio porque llega al Moderador en su notificación #}
+<div class="modal fade" id="modal_rechazo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="POST" id="form_rechazo">
+            {% csrf_token %}
+            {# Devuelve al usuario a la pestaña desde la que actuó. #}
+            <input type="hidden" name="tab" value="{{ tab_activa }}">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Rechazar solicitud</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small mb-2" id="rechazo_descriptor"></p>
+                    <label class="form-label" for="motivo_decision">Motivo del rechazo</label>
+                    <textarea name="motivo_decision" id="motivo_decision" rows="3" class="form-control"
+                              placeholder="Explique por qué se rechaza esta solicitud." required></textarea>
+                    <div class="form-text">El Moderador recibirá este texto en su notificación.</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Rechazar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Formulario oculto para las acciones POST simples de la barra (eliminar, cancelar, devolver) #}
+<form method="POST" id="form_accion" class="d-none">
+    {% csrf_token %}
+    <input type="hidden" name="tab" value="{{ tab_activa }}">
+</form>
+
+{% block extra_scripts %}
+<script>
+    var $ = jQuery.noConflict();
+
+    // ------------------------------------------------------------------
+    // Selección de fila -> barra de acciones (mismo patrón que Contratos)
+    // ------------------------------------------------------------------
+    // Cada fila trae sus URLs ya resueltas por {% templatetag openblock %} url {% templatetag closeblock %}
+    // y unos flags de permiso calculados en el servidor. El JS solo copia esos datos a
+    // los botones: no decide nada sobre permisos, esa decisión ya está tomada.
+    let filaSeleccionada = null;
+
+    function seleccionarSolicitud(fila) {
+        document.querySelectorAll('.fila-solicitud').forEach(f => f.classList.remove('table-active-row'));
+        fila.classList.add('table-active-row');
+        filaSeleccionada = fila;
+
+        const toolbar = document.getElementById('solicitud-toolbar');
+        toolbar.classList.remove('toolbar-disabled');
+        toolbar.classList.add('toolbar-active');
+
+        const ver = document.getElementById('btn-ver');
+        if (ver) ver.setAttribute('href', fila.dataset.urlVer);
+
+        habilitar('btn-revisar', fila.dataset.puedeRevisar === 'true', fila.dataset.urlRevisar);
+        habilitar('btn-editar', fila.dataset.puedeEditar === 'true', fila.dataset.urlEditar);
+        habilitar('btn-rechazar', fila.dataset.puedeRechazar === 'true');
+        habilitar('btn-cancelar', fila.dataset.puedeCancelar === 'true');
+        habilitar('btn-devolver', fila.dataset.puedeDevolver === 'true');
+        habilitar('btn-eliminar', fila.dataset.puedeEliminar === 'true');
+    }
+
+    function habilitar(id, permitido, url) {
+        const boton = document.getElementById(id);
+        if (!boton) return;
+        boton.classList.toggle('disabled', !permitido);
+        boton.style.pointerEvents = permitido ? 'auto' : 'none';
+        boton.style.opacity = permitido ? '1' : '0.35';
+        if (url !== undefined) boton.setAttribute('href', url);
+    }
+
+    function deseleccionarTodo() {
+        document.querySelectorAll('.fila-solicitud').forEach(f => f.classList.remove('table-active-row'));
+        filaSeleccionada = null;
+        const toolbar = document.getElementById('solicitud-toolbar');
+        if (toolbar) {
+            toolbar.classList.add('toolbar-disabled');
+            toolbar.classList.remove('toolbar-active');
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('.fila-solicitud') && !e.target.closest('#solicitud-toolbar')) {
+            deseleccionarTodo();
+        }
+    });
+
+    // ------------------------------------------------------------------
+    // Acciones POST de la barra
+    // ------------------------------------------------------------------
+    function accionSobreSeleccion(accion, pregunta) {
+        if (!filaSeleccionada) return;
+        const url = filaSeleccionada.dataset['url' + accion.charAt(0).toUpperCase() + accion.slice(1)];
+        if (!url) return;
+
+        Swal.fire({
+            title: '¿Está seguro?',
+            text: pregunta,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sí, continuar',
+            cancelButtonText: 'Cancelar'
+        }).then((resultado) => {
+            if (!resultado.isConfirmed) return;
+            const form = document.getElementById('form_accion');
+            form.setAttribute('action', url);
+            form.submit();
+        });
+    }
+
+    function abrirModalRechazo() {
+        if (!filaSeleccionada) return;
+        document.getElementById('form_rechazo').setAttribute('action', filaSeleccionada.dataset.urlRechazar);
+        document.getElementById('rechazo_descriptor').textContent = filaSeleccionada.dataset.descriptor || '';
+        document.getElementById('motivo_decision').value = '';
+        new bootstrap.Modal(document.getElementById('modal_rechazo')).show();
+    }
+
+    // ------------------------------------------------------------------
+    // Filtros
+    // ------------------------------------------------------------------
+    function triggerSearch() {
+        htmx.trigger(document.getElementById('search'), 'searchFilters');
+    }
+
+    function resetFiltros() {
+        document.querySelectorAll('.dropdown-menu select').forEach(s => s.value = '');
+        document.querySelectorAll('.dropdown-menu input[type="date"]').forEach(i => i.value = '');
+        document.getElementById('search').value = '';
+        triggerSearch();
+    }
+
+    // ------------------------------------------------------------------
+    // Modal de creación
+    // ------------------------------------------------------------------
+    // Se usa `$.ajax` directo en vez de `.load(url, callback)`: el callback de `.load()`
+    // se ejecuta también cuando la petición falla, y en ese caso jQuery NO reemplaza el
+    // contenido — así que un error mostraría el modal con lo que hubiera quedado ahí de
+    // una apertura anterior en vez de un mensaje de error.
+    function abrir_modal_creacion(url) {
+        $.ajax({ url: url, method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .done(function (html) {
+                const $modal = $('#modal_solicitud');
+                $modal.html(html);
+                if (window.htmx) htmx.process($modal[0]);
+                $modal.modal('show');
+            })
+            .fail(function (jqXHR) {
+                const mensaje = jqXHR.status === 403
+                    ? 'No tiene permisos para realizar esta acción.'
+                    : 'No se pudo abrir el formulario. Inténtelo de nuevo.';
+                Swal.fire({ icon: 'error', text: mensaje });
+            });
+    }
+
+    // ------------------------------------------------------------------
+    // Eventos que emiten las vistas por HX-Trigger
+    // ------------------------------------------------------------------
+    document.body.addEventListener('closeModal', function () {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modal_solicitud'));
+        if (modal) modal.hide();
+    });
+
+    document.body.addEventListener('updateSolicitudList', function () {
+        deseleccionarTodo();
+        triggerSearch();
+    });
+
+    document.body.addEventListener('showMessage', function (evt) {
+        const detalle = evt.detail;
+        Swal.fire({
+            icon: detalle.icon || 'success',
+            text: detalle.text || detalle,
+            timer: detalle.icon === 'error' ? undefined : 2200,
+            showConfirmButton: detalle.icon === 'error'
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

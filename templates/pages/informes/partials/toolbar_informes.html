@@ -82,14 +82,45 @@
                 <div class="bg-label-secondary rounded p-1 me-2 d-flex">
                     <i class="bx bx-calendar-event" style="color: #FF6600 !important;"></i>
                 </div>
-                <span>Periodo actual: <strong class="text-dark ms-1">
-                    {% if mes_actual == '1' %}Enero{% elif mes_actual == '2' %}Febrero{% elif mes_actual == '3' %}Marzo{% elif mes_actual == '4' %}Abril{% elif mes_actual == '5' %}Mayo{% elif mes_actual == '6' %}Junio{% elif mes_actual == '7' %}Julio{% elif mes_actual == '8' %}Agosto{% elif mes_actual == '9' %}Septiembre{% elif mes_actual == '10' %}Octubre{% elif mes_actual == '11' %}Noviembre{% elif mes_actual == '12' %}Diciembre{% else %}Junio{% endif %} {{ anno_actual|default:"2026" }}
+                <span>
+                    {% if es_historico %}Cierre de:{% else %}Periodo actual:{% endif %}
+                    <strong class="text-dark ms-1">
+                    {% if mes_actual == '1' %}Enero{% elif mes_actual == '2' %}Febrero{% elif mes_actual == '3' %}Marzo{% elif mes_actual == '4' %}Abril{% elif mes_actual == '5' %}Mayo{% elif mes_actual == '6' %}Junio{% elif mes_actual == '7' %}Julio{% elif mes_actual == '8' %}Agosto{% elif mes_actual == '9' %}Septiembre{% elif mes_actual == '10' %}Octubre{% elif mes_actual == '11' %}Noviembre{% elif mes_actual == '12' %}Diciembre{% else %}{{ mes_actual }}{% endif %} {{ anno_actual|default:"2026" }}
                 </strong></span>
+                {% if es_historico %}
+                    <span class="badge bg-label-info ms-2">
+                        <i class="bx bx-camera me-1"></i>Fotografía histórica
+                    </span>
+                {% endif %}
             </div>
         </div>
 
         <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
-            
+
+            {% comment %} Fuente de datos: en tiempo real o contra un cierre mensual.
+               El desplegable de períodos solo ofrece cierres que existen de verdad,
+               así que no se puede pedir un mes del que no hay fotografía.
+            {% endcomment %}
+            <div class="d-flex align-items-center gap-2" style="min-width: 250px;">
+                <select id="selector-fuente" class="form-select form-select-sm" style="width: auto;"
+                        title="Fuente de datos del informe">
+                    <option value="actual" {% if not es_historico %}selected{% endif %}>Información actual</option>
+                    <option value="cierre" {% if es_historico %}selected{% endif %}
+                            {% if not periodos_disponibles %}disabled{% endif %}>
+                        Sincronizar con cierre de mes
+                    </option>
+                </select>
+
+                <select id="selector-periodo" class="form-select form-select-sm" style="width: auto;"
+                        {% if not es_historico %}hidden{% endif %}>
+                    {% for p in periodos_disponibles %}
+                        <option value="{{ p.clave }}" {% if p.clave == fuente_periodo %}selected{% endif %}>
+                            {{ p.etiqueta }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
             <div style="min-width: 260px; width: 100%; max-width: 350px;">
                 <select id="selector-informes" class="form-select w-100">
                     <option value="{% url 'informe_economia' %}">Consolidado F. Trabajo</option>
@@ -114,9 +145,30 @@
             </div>
 
         </div>
-        
+
     </div>
 </div>
+
+{% comment %} Un informe histórico solo suma las unidades que cerraron ese mes. Las
+   que falten se avisan aquí, porque un total incompleto que parece completo es
+   peor que un total que avisa de lo que le falta. Nunca se rellenan sus huecos
+   con datos actuales: eso mezclaría dos meses en la misma cifra.
+{% endcomment %}
+{% if es_historico and unidades_sin_cierre %}
+<div class="alert alert-warning d-flex align-items-start mx-3 mb-3" role="alert">
+    <i class="bx bx-error-circle fs-5 me-2 mt-1"></i>
+    <div>
+        <strong>Este informe no incluye {{ unidades_sin_cierre|length }} unidad(es).</strong>
+        No declararon su cierre de {{ fuente_etiqueta }}, así que no tienen fotografía
+        de ese mes y quedan fuera del total:
+        <div class="mt-1">
+            {% for nombre in unidades_sin_cierre %}
+                <span class="badge bg-label-warning me-1">{{ nombre }}</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <script>
 $(document).ready(function() {
@@ -135,11 +187,45 @@ $(document).ready(function() {
         minimumResultsForSearch: -1
     });
 
-    // Redirección
+    // Al cambiar de informe se conserva la fuente elegida: si se está mirando el
+    // cierre de agosto, pasar al siguiente informe debe seguir mostrando agosto.
     $select.on('change', function () {
         var urlDestino = $(this).val();
-        if (urlDestino && urlDestino !== currentPath) window.location.href = urlDestino;
+        if (!urlDestino || urlDestino === currentPath) return;
+        var actuales = new URLSearchParams(window.location.search);
+        var conservar = new URLSearchParams();
+        ['fuente', 'periodo'].forEach(function (clave) {
+            if (actuales.has(clave)) conservar.set(clave, actuales.get(clave));
+        });
+        var cadena = conservar.toString();
+        window.location.href = urlDestino + (cadena ? '?' + cadena : '');
     });
+
+    // --- Fuente de datos ---
+    function aplicarFuente() {
+        var modo = $('#selector-fuente').val();
+        var periodo = $('#selector-periodo').val();
+        var params = new URLSearchParams(window.location.search);
+
+        if (modo === 'cierre' && periodo) {
+            params.set('fuente', 'cierre');
+            params.set('periodo', periodo);
+        } else {
+            params.delete('fuente');
+            params.delete('periodo');
+        }
+        window.location.search = params.toString();
+    }
+
+    $('#selector-fuente').on('change', function () {
+        var esCierre = $(this).val() === 'cierre';
+        $('#selector-periodo').prop('hidden', !esCierre);
+        // Sin cierres disponibles no hay nada que pedir; se queda en modo actual.
+        if (esCierre && !$('#selector-periodo option').length) return;
+        aplicarFuente();
+    });
+
+    $('#selector-periodo').on('change', aplicarFuente);
 });
 
 // Enlace de las funciones globales

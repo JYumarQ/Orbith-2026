@@ -1,0 +1,66 @@
+{% comment %}
+Contenido del modal de detalle. Los datos ya están congelados y serializados (ver
+`solicitudes/serializacion.py::capturar`), así que la comparación es una tabla simple
+Campo/Antes/Después sin ningún campo oculto u ofuscado.
+{% endcomment %}
+
+<div class="modal-dialog modal-lg">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">{{ evento.get_accion_display }} — {{ evento.descriptor|default:"—" }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+            <div class="row mb-3">
+                <div class="col-sm-6">
+                    <small class="text-muted d-block">Usuario</small>
+                    {{ evento.usuario_nombre|default:"—" }}
+                </div>
+                <div class="col-sm-6">
+                    <small class="text-muted d-block">Fecha</small>
+                    {{ evento.fecha|date:'d/m/Y H:i' }}
+                </div>
+                <div class="col-sm-6">
+                    <small class="text-muted d-block">Unidad Organizativa</small>
+                    {{ evento.unidad.descripcion|default:"Global" }}
+                </div>
+                <div class="col-sm-6">
+                    <small class="text-muted d-block">Solicitud de origen</small>
+                    {% if evento.solicitud %}
+                        <a href="{% url 'ver_solicitud' evento.solicitud.pk %}">{{ evento.solicitud }}</a>
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if filas %}
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Antes</th>
+                            <th>Después</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fila in filas %}
+                        <tr class="{% if fila.cambio %}table-warning{% endif %}">
+                            <td>{{ fila.campo }}</td>
+                            <td>{{ fila.antes }}</td>
+                            <td>{{ fila.despues }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">Esta acción no aplicó ningún cambio sobre un registro.</p>
+            {% endif %}
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+    </div>
+</div>

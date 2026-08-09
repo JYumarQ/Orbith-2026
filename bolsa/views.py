@@ -16,6 +16,9 @@ from .models import Aspirante
 from .forms import AspiranteForm
 from usuarios.decorators import write_required
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
+# Convierte la eliminación en una solicitud cuando la pide un Moderador; devuelve None
+# para el Administrador, que elimina directamente.
+from solicitudes.integracion import desviar_borrado
 
 ABR_PROVINCIAS = {
     'Isla de la Juventud': 'IJU',
@@ -349,19 +352,30 @@ class AspiranteUpdateView(AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixi
 # ----------------- BORRAR -----------------
 @method_decorator(write_required, name='dispatch')
 class AspiranteDeleteView(DeleteView):
+    """Eliminar un trabajador. Es el botón «Eliminar» de la Lista de Bajas, que RRHH
+    llama «eliminar contrato»: borra la persona y con ella su historial.
+
+    Para un Moderador genera una solicitud; el registro no se toca hasta que un
+    Administrador la apruebe.
+    """
     model = Aspirante
     http_method_names = ['post']  # SOLO POST
 
     def post(self, request, *args, **kwargs):
         aspirante = get_object_or_404(Aspirante, pk=kwargs['pk'])
-        
-        # Moderador: solo en sus UO
+
+        # Moderador: solo en sus UO. Se comprueba ANTES del desvío para que no pueda
+        # siquiera solicitar la eliminación de alguien fuera de su alcance.
         if getattr(request.user, 'es_moderador', False):
             permitidas = set(getattr(request.user, 'unidades').values_list('pk', flat=True))
             uo_id = getattr(aspirante, 'unidad_organizativa_id')
             if uo_id not in permitidas:
                 return HttpResponseForbidden("Fuera de su UO asignada.")
-        
+
+        desvio = desviar_borrado(self, request)
+        if desvio is not None:
+            return desvio
+
         try:
             nombre = aspirante.nombre  # Guardamos el nombre para el mensaje
             aspirante.delete()

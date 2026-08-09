@@ -1,0 +1,94 @@
+{% comment %}
+Cuerpo de la tabla de solicitudes. Se pinta incrustado en la carga inicial y se devuelve
+suelto en las peticiones HTMX de búsqueda, filtro y paginación.
+
+Las filas no llevan acciones: el patrón de Orbith es seleccionar la fila y usar la barra
+superior (igual que en Contratos). Cada `<tr>` transporta sus URLs ya resueltas y los
+flags de permiso que calculó la vista, y el JS del listado solo los copia a los botones.
+{% endcomment %}
+
+{% for solicitud in solicitudes %}
+<tr class="fila-solicitud cursor-pointer {% if solicitud.bloqueada %}fila-bloqueada{% endif %}"
+    onclick="seleccionarSolicitud(this)"
+    ondblclick="window.location.href='{% url 'ver_solicitud' solicitud.pk %}'"
+    data-id="{{ solicitud.pk }}"
+    data-descriptor="{{ solicitud.descriptor }}"
+    data-url-ver="{% url 'ver_solicitud' solicitud.pk %}"
+    data-url-revisar="{% url 'revisar_solicitud' solicitud.pk %}"
+    data-url-editar="{% url 'updt_solicitud' solicitud.pk %}"
+    data-url-rechazar="{% url 'rechazar_solicitud' solicitud.pk %}"
+    data-url-cancelar="{% url 'cancelar_revision' solicitud.pk %}"
+    data-url-devolver="{% url 'devolver_solicitud' solicitud.pk %}"
+    data-url-eliminar="{% url 'del_solicitud' solicitud.pk %}"
+    data-puede-revisar="{{ solicitud.puede_revisar|yesno:'true,false' }}"
+    data-puede-editar="{{ solicitud.puede_editar|yesno:'true,false' }}"
+    data-puede-rechazar="{{ solicitud.puede_rechazar|yesno:'true,false' }}"
+    data-puede-cancelar="{{ solicitud.puede_cancelar|yesno:'true,false' }}"
+    data-puede-devolver="{{ solicitud.puede_devolver|yesno:'true,false' }}"
+    data-puede-eliminar="{{ solicitud.puede_eliminar|yesno:'true,false' }}">
+
+    <td>
+        <i class="fas fa-user-circle text-muted me-1"></i>
+        {{ solicitud.solicitante_nombre|default:"—" }}
+    </td>
+
+    <td>
+        {% if solicitud.unidad %}
+            {{ solicitud.unidad.descripcion }}
+        {% else %}
+            {# NCargo es un nomenclador global: no pertenece a ninguna unidad. #}
+            <span class="badge bg-label-secondary">Global</span>
+        {% endif %}
+    </td>
+
+    <td>{{ solicitud.etiqueta_operacion }}</td>
+
+    <td>{{ solicitud.descriptor|default:"—" }}</td>
+
+    <td class="text-center">{{ solicitud.created_at|date:'d/m/Y' }}</td>
+
+    <td class="text-center">
+        {% if solicitud.bloqueada %}
+            {% comment %}
+            En revisión no es una pestaña aparte: se muestra dentro de En Espera con
+            este distintivo, porque sigue sin decidirse pero nadie más puede tocarla.
+            {% endcomment %}
+            <span class="badge bg-label-warning"
+                  title="Bloqueada mientras dure la revisión">
+                <i class="fas fa-lock me-1"></i>En revisión por {{ solicitud.bloqueada_por_nombre }}
+            </span>
+        {% elif solicitud.estado == 'E' or solicitud.estado == 'R' %}
+            <span class="badge bg-label-info">En Espera</span>
+        {% elif solicitud.estado == 'A' %}
+            <span class="badge bg-label-success">Aprobada</span>
+        {% elif solicitud.estado == 'X' %}
+            <span class="badge bg-label-danger"
+                  {% if solicitud.motivo_decision %}title="{{ solicitud.motivo_decision }}"{% endif %}>
+                Rechazada
+            </span>
+        {% endif %}
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="6" class="text-center text-muted py-4">
+        {% if hay_filtros %}
+            No hay solicitudes que coincidan con los filtros aplicados.
+        {% elif tab_activa == 'espera' %}
+            No hay solicitudes pendientes de revisión.
+        {% else %}
+            No hay registros disponibles.
+        {% endif %}
+    </td>
+</tr>
+{% endfor %}
+
+{% comment %}
+Paginación fuera de banda: el `hx-target` de la búsqueda es solo el `<tbody>`, así que el
+pie se actualiza aparte con `hx-swap-oob`. Mismo mecanismo que usa la tabla de Contratos.
+{% endcomment %}
+{% if request.META.HTTP_HX_REQUEST %}
+<div id="table-pagination-footer" hx-swap-oob="true">
+    {% include 'pages/solicitudes/partials/pagination.html' %}
+</div>
+{% endif %}

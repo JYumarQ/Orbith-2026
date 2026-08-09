@@ -35,6 +35,10 @@ from django.http import HttpResponse, Http404
 from datetime import datetime
 from .forms import ExportarContratoWordForm
 from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
+# Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
+# devuelve None para el Administrador, que sigue guardando directamente.
+from solicitudes.integracion import interceptar
+from solicitudes.models import AccionSolicitud
 
 
 
@@ -895,9 +899,17 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
 
     # --- MÉTODOS AÑADIDOS PARA SOPORTE AJAX ---
 
+    def post(self, request, *args, **kwargs):
+        # Para un Moderador esto registra la propuesta y sale: el contrato definitivo no
+        # se toca hasta que un Administrador la apruebe. Ver `solicitudes/integracion.py`.
+        desvio = interceptar(self, request, AccionSolicitud.EDITAR)
+        if desvio is not None:
+            return desvio
+        return super().post(request, *args, **kwargs)
+
     def form_valid(self, form):
         self.object = form.save(commit=False)
-        
+
         if self.object.cargo and self.object.cargo.rol:
             self.object.rol = self.object.cargo.rol
             

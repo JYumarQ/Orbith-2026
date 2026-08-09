@@ -145,7 +145,12 @@
     
     .btn-add-disabled {
         opacity: 0.4;
-        pointer-events: none;
+        cursor: not-allowed;
+        /* Sin `pointer-events: none`: a propósito, para que el `title` siga
+           apareciendo al pasar el ratón por encima. El clic no hace nada de
+           todos modos — `_cargarModal()` no hace nada con una URL vacía
+           (`disableAddBtn`/`disableAddBtn` la limpian a "") y los botones de
+           Cierres quitan `hx-post` por completo al deshabilitarse. */
         background-color: #e5e7eb !important;
         border-color: #e5e7eb !important;
         color: #9ca3af !important;
@@ -192,14 +197,41 @@
                         <i class="fas fa-sort ms-1 text-muted opacity-50 sort-icon" style="font-size: 0.7rem;"></i>
                     </div>
                     <div class="d-flex align-items-center gap-1">
+                        {% comment %}
+                        Crear y eliminar Unidad Organizativa son competencia EXCLUSIVA
+                        del Administrador (ver `strorganizativa/urls.py`): ni siquiera
+                        se pueden solicitar. Un Moderador solo edita las unidades que
+                        tiene asignadas, y ese envío se convierte en solicitud — por eso
+                        el botón de editar (lápiz) sí se mantiene para ambos roles.
+                        {% endcomment %}
                         <div id="toolbar-unit" class="btn-group btn-group-sm toolbar-disabled">
                             <button class="btn btn-xs btn-outline-secondary border-0" id="btn-edit-unit" onclick="abrir_modal_edicion(this.dataset.url)" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="btn btn-xs btn-outline-danger border-0" id="btn-del-unit" 
+                            {% comment %}
+                            Declarar la unidad al día es una acción de Cierres, pero vive
+                            aquí porque es aquí donde el Moderador acaba de cuadrar su
+                            plantilla. El Observador no las ve: `cierres/permisos.py` se
+                            las niega igualmente si fuerza la URL.
+                            {% endcomment %}
+                            {% if user.es_admin or user.es_moderador %}
+                            <button class="btn btn-xs btn-outline-success border-0 btn-add-disabled" id="btn-declarar-unit"
+                                    hx-post="" hx-swap="none"
+                                    hx-on::after-request="procesarRespuestaCierre(event)"
+                                    title="Declarar actualizada"><i class="fas fa-calendar-check"></i></button>
+                            <button class="btn btn-xs btn-outline-warning border-0 btn-add-disabled" id="btn-reabrir-unit"
+                                    hx-post="" hx-swap="none"
+                                    hx-on::after-request="procesarRespuestaCierre(event)"
+                                    title="Volver a Pendiente"><i class="fas fa-undo-alt"></i></button>
+                            {% endif %}
+                            {% if user.es_admin %}
+                            <button class="btn btn-xs btn-outline-danger border-0" id="btn-del-unit"
                                     hx-post="" hx-confirm="¿Eliminar Unidad?" hx-swap="none"
                                     hx-on::after-request="procesarRespuestaEliminar(event)" title="Eliminar"><i class="fas fa-trash"></i></button>
+                            {% endif %}
                         </div>
+                        {% if user.es_admin %}
                         <div class="vr mx-1 opacity-25"></div>
-                        <button class="btn btn-xs btn-primary px-2" onclick="abrir_modal_creacion('{% url 'add_uniorg' %}')"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-xs btn-primary px-2" onclick="abrir_modal_creacion('{% url 'add_uniorg' %}')" title="Añadir Unidad"><i class="fas fa-plus"></i></button>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -537,8 +569,36 @@
     }
 
     // --- MODALES ---
-    window.abrir_modal_creacion = function(url){ if(url) $('#modal_generic').load(url, function(){ $(this).modal('show'); htmx.process(this); }); }
-    window.abrir_modal_edicion = function(url){ if(url) $('#modal_generic').load(url, function(){ $(this).modal('show'); htmx.process(this); }); }
+    // `#modal_generic` es un ÚNICO contenedor compartido por Unidad, Departamento,
+    // Cargo y Contrato. jQuery `.load(url, callback)` solo reemplaza el HTML en éxito;
+    // si la petición falla (403, 404...), el `callback` se sigue ejecutando igual sobre
+    // el contenido ANTERIOR que haya quedado ahí — mostrando, por ejemplo, el modal de
+    // un contrato que se editó antes en vez de un mensaje de error. Se usa `$.ajax`
+    // directamente para poder distinguir éxito de error y no mostrar nada obsoleto.
+    function _cargarModal(url) {
+        if (!url) return;
+        $.ajax({
+            url: url,
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).done(function (html) {
+            const $modal = $('#modal_generic');
+            $modal.html(html);
+            $modal.modal('show');
+            htmx.process($modal[0]);
+        }).fail(function (jqXHR) {
+            const mensaje = jqXHR.status === 403
+                ? 'No tiene permisos para realizar esta acción.'
+                : 'No se pudo cargar el formulario. Inténtelo de nuevo.';
+            if (window.Swal) {
+                Swal.fire({ icon: 'error', text: mensaje });
+            } else {
+                alert(mensaje);
+            }
+        });
+    }
+    window.abrir_modal_creacion = _cargarModal;
+    window.abrir_modal_edicion = _cargarModal;
 
     // --- LÓGICA DE SELECCIÓN (CORE) ---
     window.selectUnit = function(item) {
@@ -673,7 +733,45 @@
         if(btnDel) {
             btnDel.setAttribute('hx-post', data.urlDel);
             btnDel.setAttribute('hx-confirm', `¿Eliminar "${data.desc}"?`);
-            htmx.process(btnDel); 
+            htmx.process(btnDel);
+        }
+
+        // Cierres: solo aplica a Unidades Organizativas. Si el servidor dice que
+        // esta unidad no puede declararse ahora (fuera de plazo, ya declarada, o
+        // no es del moderador), el botón queda deshabilitado.
+        if (type === 'unit') {
+            _configurarBotonCierre(
+                'btn-declarar-unit', data.urlDeclarar, data.puedeDeclarar === 'true',
+                `¿Declarar "${data.desc}" actualizada para el cierre de ${data.periodoDeclarable}?\n\n` +
+                `Se generará la fotografía de ese mes. Los cambios que haga una vez cerrado el plazo pertenecerán al mes siguiente.`);
+
+            _configurarBotonCierre(
+                'btn-reabrir-unit', data.urlReabrir, data.puedeReabrir === 'true',
+                `¿Volver "${data.desc}" a Pendiente?\n\n` +
+                `Se descartará la fotografía ya declarada y deberá volver a declarar antes de que termine el plazo.`);
+        }
+    }
+
+    // Mismo mecanismo que `enableAddBtn`/`disableAddBtn` («Añadir Departamento»,
+    // «Añadir Cargo»): la clase `.btn-add-disabled` ya existente, no un
+    // `disabled` nativo ni una opacidad inventada aparte. Así «Declarar» y
+    // «Reabrir» se ven, al pasar el ratón y al deshabilitarse, exactamente
+    // igual que el resto de botones individuales de esta misma toolbar.
+    function _configurarBotonCierre(id, url, habilitado, confirmacion) {
+        const btn = document.getElementById(id);
+        if (!btn) return;   // El Observador no tiene estos botones en el DOM.
+        if (habilitado) {
+            btn.classList.remove('btn-add-disabled');
+            btn.setAttribute('hx-post', url);
+            btn.setAttribute('hx-confirm', confirmacion);
+            htmx.process(btn);
+        } else {
+            btn.classList.add('btn-add-disabled');
+            // Limpiar la acción, no solo ocultarla: mismo criterio de
+            // `disableAddBtn`, que vacía `dataset.url` al deshabilitar.
+            btn.removeAttribute('hx-post');
+            btn.removeAttribute('hx-confirm');
+            htmx.process(btn);
         }
     }
 
@@ -706,6 +804,34 @@
     function resetPanel(id, msg) {
         let el = document.getElementById(id);
         if(el) el.innerHTML = `<div class="text-center mt-5 opacity-50"><small class="fw-bold">${msg}</small></div>`;
+    }
+
+    // Respuesta de Declarar / Reabrir. Mismo contrato JSON que el resto de la
+    // toolbar ({status, message}); solo cambia qué se refresca después.
+    window.procesarRespuestaCierre = function(evt) {
+        let response;
+        try {
+            response = JSON.parse(evt.detail.xhr.responseText);
+        } catch (e) {
+            console.error(e);
+            return Swal.fire('Error', 'No se pudo completar la operación.', 'error');
+        }
+
+        if (response.status !== 'ok') {
+            // Los mensajes de `ErrorDeCierre` explican en español por qué no se
+            // puede (fuera de plazo, mes ya declarado, unidad ajena): se muestran
+            // tal cual, sin traducirlos ni resumirlos.
+            return Swal.fire('No se pudo declarar', response.message, 'warning');
+        }
+
+        Swal.fire({
+            icon: 'success', title: 'Listo', text: response.message,
+            toast: true, position: 'top-end', showConfirmButton: false, timer: 4500
+        });
+
+        // Recargar la lista trae los data-* recalculados: el botón se deshabilita
+        // solo y el indicador de estado cambia de color sin tocar nada más.
+        document.body.dispatchEvent(new Event('updateUnitList'));
     }
 
     // --- EVENTOS ---
@@ -753,7 +879,12 @@
     document.body.addEventListener('htmx:afterSwap', function(evt) {
         if (evt.detail.target.id === 'lista-unidades-container' && selectedUnitId) {
             const item = document.querySelector(`#unit-${selectedUnitId}`);
-            if(item) item.classList.add('active-unit');
+            if(item) {
+                item.classList.add('active-unit');
+                // Los data-* vienen recalculados del servidor: hay que releerlos o
+                // el botón de declarar se quedaría habilitado tras haber declarado.
+                activateToolbar('unit', item.dataset);
+            }
         }
         if (evt.detail.target.id === 'col-departamentos' && selectedDeptId) {
             const item = document.querySelector(`#dept-${selectedDeptId}`);

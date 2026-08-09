@@ -1,0 +1,109 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Solicitud{% endblock %}
+
+{% comment %}
+Consulta en solo lectura. Es el destino del enlace «Abrir solicitud» de las
+notificaciones, así que tiene que funcionar tanto para una solicitud ya decidida —el caso
+que pidió RRHH: al abrirla desde la notificación de aprobación o rechazo, se ve pero no se
+toca— como para una pendiente que el Moderador quiere repasar.
+
+Reutiliza el mismo fragmento de comparación que la revisión, con `editable` en falso: la
+columna derecha se pinta como texto en lugar de widgets.
+{% endcomment %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+
+        <h4 class="fw-bold py-3 mb-1">
+            <span class="text-muted fw-light">
+                <a href="{% url 'list_solicitudes' %}" class="text-muted">Solicitudes</a> /
+            </span>
+            Detalle
+        </h4>
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <h5 class="mb-1">{{ definicion.etiqueta }}</h5>
+                    <div class="text-muted small">
+                        <span class="me-3"><i class="fas fa-user-circle me-1"></i>
+                            {{ solicitud.solicitante_nombre|default:"—" }}</span>
+                        <span class="me-3"><i class="far fa-calendar me-1"></i>
+                            {{ solicitud.created_at|date:'d/m/Y H:i' }}</span>
+                        {% if solicitud.unidad %}
+                        <span><i class="fas fa-sitemap me-1"></i> {{ solicitud.unidad.descripcion }}</span>
+                        {% else %}
+                        <span><i class="fas fa-globe me-1"></i> Nomenclador global</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    {% if solicitud.estado == 'A' %}
+                        <span class="badge bg-label-success">Aprobada</span>
+                    {% elif solicitud.estado == 'X' %}
+                        <span class="badge bg-label-danger">Rechazada</span>
+                    {% elif solicitud.bloqueada %}
+                        <span class="badge bg-label-warning">
+                            <i class="fas fa-lock me-1"></i> En revisión por {{ solicitud.bloqueada_por_nombre }}
+                        </span>
+                    {% else %}
+                        <span class="badge bg-label-info">En Espera</span>
+                    {% endif %}
+
+                    {% if solicitud.fecha_decision %}
+                    <div class="small text-muted mt-1">
+                        {{ solicitud.decidida_por.get_full_name|default:solicitud.decidida_por.username }}
+                        · {{ solicitud.fecha_decision|date:'d/m/Y H:i' }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card-body">
+                {% if solicitud.motivo %}
+                <div class="alert alert-secondary">
+                    <div class="small text-muted mb-1">Motivo indicado por el Moderador</div>
+                    {{ solicitud.motivo|linebreaksbr }}
+                </div>
+                {% endif %}
+
+                {% if solicitud.motivo_decision %}
+                <div class="alert alert-danger">
+                    <div class="small mb-1"><strong>Motivo del rechazo</strong></div>
+                    {{ solicitud.motivo_decision|linebreaksbr }}
+                </div>
+                {% endif %}
+
+                {% include 'pages/solicitudes/partials/comparacion.html' %}
+
+                <div class="d-flex justify-content-between mt-4 flex-wrap gap-2">
+                    <a href="{% url 'list_solicitudes' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i> Volver al listado
+                    </a>
+
+                    <div class="d-flex gap-2">
+                        {% comment %}
+                        Solo aparece si esta persona puede editarla de verdad: es su
+                        solicitud, sigue En Espera y nadie la está revisando.
+                        {% endcomment %}
+                        {% if puede_editar %}
+                        <a href="{% url 'updt_solicitud' solicitud.pk %}" class="btn btn-primary">
+                            <i class="fas fa-edit me-1"></i> Modificar mi solicitud
+                        </a>
+                        {% endif %}
+
+                        {% if puede_revisar %}
+                        <a href="{% url 'revisar_solicitud' solicitud.pk %}" class="btn btn-primary">
+                            <i class="fas fa-clipboard-check me-1"></i> Revisar
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
