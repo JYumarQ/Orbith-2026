@@ -295,6 +295,11 @@ document.addEventListener('DOMContentLoaded', function () {
             swap: 'innerHTML'
         });
 
+        if (window.jQuery) {
+            $('#listaFiltros .select-filtro-campo').each(function () {
+                if ($(this).data('select2')) $(this).select2('destroy');
+            });
+        }
         elem('listaFiltros').innerHTML = '';
         elem('resultadosContainer').innerHTML = '';
         elem('contadorRegistros').textContent = '—';
@@ -499,6 +504,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
         lista.appendChild(fila);
 
+        // Select2 sobre el desplegable de campo: con decenas de campos
+        // repartidos en varias categorías, poder escribir para filtrar la
+        // lista es mucho más rápido que desplazarse por un <select> nativo.
+        if (window.jQuery) {
+            const $selectCampo = $(fila.querySelector('.select-filtro-campo'));
+            $selectCampo.select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                dropdownAutoWidth: true,
+            });
+            // Select2 dispara 'change' por el sistema de eventos de jQuery,
+            // no como evento nativo del DOM: el listener delegado más abajo
+            // (addEventListener sobre #listaFiltros) nunca lo recibiría, así
+            // que aquí se engancha directo con jQuery sobre este elemento.
+            $selectCampo.on('change', function () {
+                pintarOperadores(fila, null);
+                pintarControlValor(fila, null);
+            });
+        }
+
         if (campoInicial) {
             pintarOperadores(fila, operadorInicial);
             pintarControlValor(fila, valorInicial);
@@ -527,7 +552,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     elem('listaFiltros')?.addEventListener('click', function (e) {
         if (e.target.closest('.btn-eliminar-filtro')) {
-            e.target.closest('.ii-filter-row').remove();
+            const filaEliminar = e.target.closest('.ii-filter-row');
+            if (window.jQuery) {
+                $(filaEliminar.querySelector('.select-filtro-campo')).select2('destroy');
+            }
+            filaEliminar.remove();
             actualizarAvisoFiltros();
             return;
         }
