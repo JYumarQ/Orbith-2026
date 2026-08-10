@@ -49,6 +49,26 @@ LOOKUP_POR_OPERADOR = {
 
 
 # ---------------------------------------------------------------------------
+# OPCIONES CARGADAS DINÁMICAMENTE DESDE LA BASE DE DATOS
+# ---------------------------------------------------------------------------
+# A diferencia de 'choices' (lista fija hardcodeada abajo), estas funciones se
+# usan en campos cuyo catálogo de valores lo administra el usuario en
+# Configuración/Nomencladores y puede crecer. Se evalúan en el momento de
+# construir el panel de filtros (una consulta fresca por request), nunca al
+# importar este módulo — por eso el import de los modelos va local a cada
+# función, para no acoplar la carga de metadata.py a que la BD ya exista.
+
+def _opciones_tipos_familia():
+    from nomencladores.models import NTipoFamilia
+    return list(NTipoFamilia.objects.order_by("nombre").values_list("nombre", "nombre"))
+
+
+def _opciones_familias_cargo():
+    from nomencladores.models import NFamiliaCargo
+    return list(NFamiliaCargo.objects.order_by("nombre").values_list("nombre", "nombre"))
+
+
+# ---------------------------------------------------------------------------
 # CATEGORÍAS PARA AGRUPAR LOS CAMPOS EN LA INTERFAZ
 # ---------------------------------------------------------------------------
 # Solo afectan a cómo se presentan los checkboxes al usuario, no a la consulta.
@@ -305,6 +325,28 @@ def _campos_calta():
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
+        },
+        "tipo_familia_cargo": {
+            "label": "Tipo de Familia de Cargos",
+            "ruta_orm": "cargo__ncargo__familias__tipo_familia__nombre",
+            "tipo": "opcion",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+            "choices_dinamicas": _opciones_tipos_familia,
+            # NCargo.familias es ManyToMany: esta ruta atraviesa esa relación.
+            # Ver motor.py (select_related/distinct) y views.py (_resolver_valor_por_ruta).
+            "es_m2m": True,
+        },
+        "familia_cargo": {
+            "label": "Familia de Cargos",
+            "ruta_orm": "cargo__ncargo__familias__nombre",
+            "tipo": "opcion",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+            "choices_dinamicas": _opciones_familias_cargo,
+            "es_m2m": True,
         },
 
         # ---------------- DATOS DEL CONTRATO ----------------
@@ -686,6 +728,26 @@ def _campos_cargoplantilla():
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
+        },
+        "tipo_familia_cargo": {
+            "label": "Tipo de Familia de Cargos",
+            "ruta_orm": "ncargo__familias__tipo_familia__nombre",
+            "tipo": "opcion",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+            "choices_dinamicas": _opciones_tipos_familia,
+            "es_m2m": True,
+        },
+        "familia_cargo": {
+            "label": "Familia de Cargos",
+            "ruta_orm": "ncargo__familias__nombre",
+            "tipo": "opcion",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+            "choices_dinamicas": _opciones_familias_cargo,
+            "es_m2m": True,
         },
     }
 
@@ -1268,6 +1330,8 @@ def opciones_visibles(campo):
     """
     if campo.get("grupos_valores"):
         return [(etiqueta, etiqueta) for etiqueta, _ in campo["grupos_valores"]]
+    if campo.get("choices_dinamicas"):
+        return list(campo["choices_dinamicas"]())
     return list(campo.get("choices") or [])
 
 

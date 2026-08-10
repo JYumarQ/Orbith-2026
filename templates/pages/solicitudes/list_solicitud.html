@@ -20,6 +20,17 @@
     }
     .toolbar-active { opacity: 1; pointer-events: auto; }
     .cursor-pointer { cursor: pointer; }
+    /* Deshabilitado por PERMISO, no porque no haya fila seleccionada (eso ya
+       lo cubre `.toolbar-disabled`). Deliberadamente NO se llama `.disabled`:
+       Bootstrap trae su propia regla `.btn.disabled { pointer-events: none }`
+       que bloquearía el `title` igual que lo hacía el estilo inline que
+       reemplaza. Con `pointer-events: auto` el ratón sigue mostrando el
+       tooltip; el clic lo bloquea el guard delegado de más abajo. */
+    .accion-inhabilitada {
+        opacity: 0.35;
+        cursor: not-allowed;
+        pointer-events: auto;
+    }
     .dropdown-header-custom {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -289,11 +300,25 @@
     function habilitar(id, permitido, url) {
         const boton = document.getElementById(id);
         if (!boton) return;
-        boton.classList.toggle('disabled', !permitido);
-        boton.style.pointerEvents = permitido ? 'auto' : 'none';
-        boton.style.opacity = permitido ? '1' : '0.35';
-        if (url !== undefined) boton.setAttribute('href', url);
+        boton.classList.toggle('accion-inhabilitada', !permitido);
+        // Nunca se deja una URL válida en un botón sin permiso: si el guard de
+        // clic de abajo fallara por cualquier motivo, un `href="#"` no navega
+        // a ningún sitio real. Segunda barrera, no la única.
+        if (url !== undefined) boton.setAttribute('href', permitido ? url : '#');
     }
+
+    // El clic en un botón `.accion-inhabilitada` no debe hacer nada: sin
+    // `pointer-events: none` (que es lo que bloqueaba el `title` al pasar el
+    // ratón), el navegador SÍ dispararía el clic normalmente. Se intercepta
+    // aquí, en captura, antes de que el `href` navegue o el `onclick` del
+    // propio botón llegue a ejecutarse.
+    document.getElementById('solicitud-toolbar').addEventListener('click', function (e) {
+        const inhabilitado = e.target.closest('.accion-inhabilitada');
+        if (inhabilitado) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
 
     function deseleccionarTodo() {
         document.querySelectorAll('.fila-solicitud').forEach(f => f.classList.remove('table-active-row'));

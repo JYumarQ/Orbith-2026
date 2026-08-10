@@ -75,33 +75,22 @@
         
         <div class="text-center text-xl-start flex-shrink-0">
             <h4 class="fw-bold mb-1 text-dark" style="letter-spacing: -0.5px;">
-                <span class="text-muted fw-light">Informes /</span> 
+                <span class="text-muted fw-light">Informes /</span>
                 <span class="text-primary">{{ titulo_informe }}</span>
             </h4>
-            <div class="d-flex align-items-center justify-content-center justify-content-xl-start text-muted small fw-medium mt-2">
-                <div class="bg-label-secondary rounded p-1 me-2 d-flex">
+
+            {% comment %} Fuente de datos: en tiempo real o contra un cierre mensual. Vive
+               aquí, junto al título, y no en el grupo de controles de la derecha, a
+               propósito: no es una opción de ESTE informe, es del conjunto de la
+               página — se conserva al cambiar de informe (ver el script de más abajo).
+               El desplegable de períodos solo ofrece cierres que existen de verdad, así
+               que no se puede pedir un mes del que no hay fotografía. El select ya dice
+               qué se está viendo, así que sustituye al texto fijo que había antes.
+            {% endcomment %}
+            <div class="d-flex align-items-center justify-content-center justify-content-xl-start flex-wrap gap-2 mt-2">
+                <div class="bg-label-secondary rounded p-1 d-flex">
                     <i class="bx bx-calendar-event" style="color: #FF6600 !important;"></i>
                 </div>
-                <span>
-                    {% if es_historico %}Cierre de:{% else %}Periodo actual:{% endif %}
-                    <strong class="text-dark ms-1">
-                    {% if mes_actual == '1' %}Enero{% elif mes_actual == '2' %}Febrero{% elif mes_actual == '3' %}Marzo{% elif mes_actual == '4' %}Abril{% elif mes_actual == '5' %}Mayo{% elif mes_actual == '6' %}Junio{% elif mes_actual == '7' %}Julio{% elif mes_actual == '8' %}Agosto{% elif mes_actual == '9' %}Septiembre{% elif mes_actual == '10' %}Octubre{% elif mes_actual == '11' %}Noviembre{% elif mes_actual == '12' %}Diciembre{% else %}{{ mes_actual }}{% endif %} {{ anno_actual|default:"2026" }}
-                </strong></span>
-                {% if es_historico %}
-                    <span class="badge bg-label-info ms-2">
-                        <i class="bx bx-camera me-1"></i>Fotografía histórica
-                    </span>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
-
-            {% comment %} Fuente de datos: en tiempo real o contra un cierre mensual.
-               El desplegable de períodos solo ofrece cierres que existen de verdad,
-               así que no se puede pedir un mes del que no hay fotografía.
-            {% endcomment %}
-            <div class="d-flex align-items-center gap-2" style="min-width: 250px;">
                 <select id="selector-fuente" class="form-select form-select-sm" style="width: auto;"
                         title="Fuente de datos del informe">
                     <option value="actual" {% if not es_historico %}selected{% endif %}>Información actual</option>
@@ -119,7 +108,16 @@
                         </option>
                     {% endfor %}
                 </select>
+
+                {% if es_historico %}
+                    <span class="badge bg-label-info">
+                        <i class="bx bx-camera me-1"></i>Fotografía histórica
+                    </span>
+                {% endif %}
             </div>
+        </div>
+
+        <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
 
             <div style="min-width: 260px; width: 100%; max-width: 350px;">
                 <select id="selector-informes" class="form-select w-100">

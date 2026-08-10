@@ -28,6 +28,71 @@
     {% endcomment %}
 
     <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card shadow-sm border-0 filtros-card">
+                <div class="card-body p-3">
+                    <div class="filtros-header">
+                        <span class="filtros-dot"></span>
+                        <span class="filtros-title">Filtros Organizativos</span>
+                        <a href="{% url 'dashboard' %}" class="filtros-reset ms-auto">
+                            <i class="bx bx-reset"></i> Restablecer filtros
+                        </a>
+                    </div>
+                    <form method="get" id="filtros-form">
+                        {# `cortes` viaja intacto aunque aquí no se edite: vive en la tarjeta de la Pirámide. #}
+                        <input type="hidden" name="cortes" value="{{ edades_cortes_str }}">
+                        <div class="row gy-3 gx-4">
+                            <div class="col-12 col-lg-6">
+                                <label class="filtro-label"><i class="bx bx-sitemap"></i> Unidad Organizativa</label>
+                                <div class="chip-multiselect">
+                                    <select class="chip-multiselect-native" name="uo" multiple hidden>
+                                        {% for uo in filtro_uo_opciones %}
+                                        <option value="{{ uo.pk }}" {% if uo.pk in filtro_uo_seleccionadas %}selected{% endif %}>{{ uo.descripcion }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="chip-multiselect-box" tabindex="0">
+                                        <div class="chip-multiselect-chips"></div>
+                                        <span class="chip-multiselect-badge">0</span>
+                                        <i class="bx bx-chevron-down chip-multiselect-arrow"></i>
+                                    </div>
+                                    <div class="chip-multiselect-panel">
+                                        <input type="text" class="chip-multiselect-search" placeholder="Buscar unidad...">
+                                        <div class="chip-multiselect-options"></div>
+                                    </div>
+                                </div>
+                                <small class="text-muted"><i class="bx bx-info-circle"></i> Haz clic para desplegar y buscar múltiples unidades.</small>
+                            </div>
+                            <div class="col-12 col-lg-6">
+                                <label class="filtro-label"><i class="bx bx-building-house"></i> Departamento</label>
+                                <div class="chip-multiselect">
+                                    <select class="chip-multiselect-native" name="depto" multiple hidden>
+                                        {% for depto in filtro_depto_opciones %}
+                                        <option value="{{ depto.pk }}" {% if depto.pk in filtro_depto_seleccionadas %}selected{% endif %}>{{ depto.descripcion }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="chip-multiselect-box" tabindex="0">
+                                        <div class="chip-multiselect-chips"></div>
+                                        <span class="chip-multiselect-badge">0</span>
+                                        <i class="bx bx-chevron-down chip-multiselect-arrow"></i>
+                                    </div>
+                                    <div class="chip-multiselect-panel">
+                                        <input type="text" class="chip-multiselect-search" placeholder="Buscar departamento...">
+                                        <div class="chip-multiselect-options"></div>
+                                    </div>
+                                </div>
+                                <small class="text-muted"><i class="bx bx-refresh"></i> Se actualiza dinámicamente según la UO aplicada.</small>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary btn-sm px-4">Aplicar filtros</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
                 <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
@@ -39,17 +104,17 @@
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
-                <div class="fw-bold fs-3">+{{ graficos.altas_total|default:"0" }}</div>
-                <span class="badge bg-label-primary mb-1">Mes Actual</span>
-                <small class="text-muted">Nuevos Contratos</small>
+                <div class="fw-bold fs-3">+{{ altas_30d|default:"0" }}</div>
+                <span class="badge bg-label-primary mb-1">Últimos 30 días</span>
+                <small class="text-muted">Nuevas Altas</small>
             </div>
         </div>
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
-                <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
-                <div class="fw-bold fs-4">${{ resumen_personal.salario_prom }}</div>
-                <span class="badge bg-label-secondary mb-1">Global</span>
-                <small class="text-muted">Salario Prom.</small>
+                <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-trending-down fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3 text-danger">-{{ bajas_30d|default:"0" }}</div>
+                <span class="badge bg-label-danger mb-1">Últimos 30 días</span>
+                <small class="text-muted">Nuevas Bajas</small>
             </div>
         </div>
         <div class="col-6 col-md-4 col-lg-2">
@@ -62,22 +127,22 @@
         </div>
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
-                <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-run fs-2 text-white"></i></div>
-                <div class="fw-bold fs-4">Sin Datos</div>
-                <span class="badge bg-label-secondary mb-1">Pendiente</span>
-                <small class="text-muted">Ausentismo</small>
+                <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
+                <div class="fw-bold fs-4">${{ salario_prom }}</div>
+                <span class="badge bg-label-secondary mb-1">Global</span>
+                <small class="text-muted">Salario Escala Promedio</small>
             </div>
         </div>
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
-                <div class="fw-bold fs-3">{{ dptos_count }}</div>
+                <div class="fw-bold fs-3">{{ uo_count }}</div>
                 <span class="badge bg-label-info mb-1">Estructura</span>
-                <small class="text-muted">Departamentos</small>
+                <small class="text-muted">Unidades Organizativas</small>
             </div>
         </div>
     </div>
-      
+
     <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0 animate__animated animate__fadeInLeft">
@@ -175,22 +240,9 @@
           </div>
       </div>
         <div class="col-12 col-lg-4">
-            <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
-                <div class="card-header pb-0"><h6 class="m-0 fw-bold">Indicadores Clave (KPIs)</h6></div>
-                <div class="card-body d-flex flex-column justify-content-evenly pt-3">
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="icon-circle bg-gradient-warning me-3" style="width:45px; height:45px;"><i class="bx bx-book-content fs-5 text-white"></i></div>
-                        <div><h5 class="mb-0 fw-bold text-warning">{{ resumen_personal.capacitaciones }}</h5><small class="text-muted">Adiestrados Activos</small></div>
-                    </div>
-                    <div class="d-flex align-items-center mb-3">
-                        <div class="icon-circle bg-gradient-primary me-3" style="width:45px; height:45px;"><i class="bx bx-timer fs-5 text-white"></i></div>
-                        <div><h5 class="mb-0 fw-bold text-primary">{{ resumen_personal.antiguedad }} años</h5><small class="text-muted">Antigüedad Promedio</small></div>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <div class="icon-circle bg-gradient-danger me-3" style="width:45px; height:45px;"><i class="bx bx-refresh fs-5 text-white"></i></div>
-                        <div><h5 class="mb-0 fw-bold text-danger">{{ resumen_personal.rotacion }}%</h5><small class="text-muted">Rotación Mensual</small></div>
-                    </div>
-                </div>
+            <div class="card h-100 shadow border-0" style="min-height: 280px;">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Raza</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="razaPieChart" style="width: 100%;"></div></div>
             </div>
         </div>
     </div>
@@ -211,8 +263,8 @@
         </div>
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Masa Salarial ($)</h6></div>
-                <div class="card-body pb-0 px-2 d-flex align-items-end"><div id="masaSalarialChart" style="width: 100%;"></div></div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Nivel Educacional (Activos)</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="educacionalPieChart" style="width: 100%;"></div></div>
             </div>
         </div>
         <div class="col-12 col-lg-4">
@@ -233,6 +285,14 @@
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
                 <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Pirámide de Edades</h6></div>
+                <form method="get" class="d-flex gap-2 align-items-center px-3 pt-2">
+                    {# UO/Departamento ya seleccionados viajan aquí para no perderse al aplicar solo los cortes. #}
+                    {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
+                    {% for id in filtro_depto_seleccionadas %}<input type="hidden" name="depto" value="{{ id }}">{% endfor %}
+                    <input type="text" name="cortes" value="{{ edades_cortes_str }}" class="form-control form-control-sm"
+                           placeholder="25,35,45,55,65" title="Cortes de edad, separados por coma">
+                    <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">Aplicar</button>
+                </form>
                 <div class="card-body p-0 d-flex justify-content-center align-items-end"><div id="edadesPyramidChart" style="width: 100%;"></div></div>
             </div>
         </div>
@@ -243,8 +303,9 @@
                 </div>
                 <div class="card-body p-0">
                     <ul class="nav nav-tabs nav-fill" role="tablist">
-                        <li class="nav-item"><button class="nav-link active py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-pre" style="font-size:0.8rem;">Edad Jubilación Próxima <span class="badge bg-warning text-dark">{{ pre_jubilacion|length }}</span></button></li>
-                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-rec" style="font-size:0.8rem;">Edad Jubilación Cumplida <span class="badge bg-secondary">{{ recontratados|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link active py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-pre" style="font-size:0.75rem;">Edad Jub. Próxima <span class="badge bg-warning text-dark">{{ pre_jubilacion|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-rec" style="font-size:0.75rem;">Edad Jub. Cumplida <span class="badge bg-secondary">{{ recontratados|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-jr" style="font-size:0.75rem;">Jubilados Recontratados <span class="badge bg-label-success">{{ jubilados_recontratados|length }}</span></button></li>
                     </ul>
                     <div class="tab-content p-0 m-0">
                         <div class="tab-pane fade show active" id="tab-pre">
@@ -271,6 +332,18 @@
                                 {% endfor %}
                             </ul>
                         </div>
+                        <div class="tab-pane fade" id="tab-jr">
+                            <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
+                                {% for p in jubilados_recontratados %}
+                                <li class="list-group-item px-3 py-2">
+                                    <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge {% if p.sexo == 'F' %}bg-label-danger{% else %}bg-label-info{% endif %}">{{ p.edad|default:"-" }}</span></div>
+                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">No hay jubilados recontratados.</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -280,8 +353,8 @@
     <div class="row g-3">
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Nivel Educacional (Aspirantes)</h6></div>
-                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="educacionalPieChart" style="width: 100%;"></div></div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Causas de Baja</h6></div>
+                <div class="card-body pb-0 px-2 d-flex align-items-end"><div id="causasBajaChart" style="width: 100%;"></div></div>
             </div>
         </div>
         <div class="col-12 col-lg-4">
@@ -292,12 +365,8 @@
         </div>
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center">
-                    <h6 class="m-0 fw-bold">Distribución por Raza</h6>
-                </div>
-                <div class="card-body d-flex justify-content-center align-items-center p-0">
-                    <div id="razaPieChart" style="width: 100%;"></div>
-                </div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Registro Militar</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="regMilitarChart" style="width: 100%;"></div></div>
             </div>
         </div>
     </div>
@@ -324,7 +393,172 @@
 .animate__fadeInLeft { animation-name: fadeInLeft; } @keyframes fadeInLeft { from { opacity: 0; transform: translate3d(-40px, 0, 0); } to { opacity: 1; transform: none; } }
 .animate__fadeInRight { animation-name: fadeInRight; } @keyframes fadeInRight { from { opacity: 0; transform: translate3d(40px, 0, 0); } to { opacity: 1; transform: none; } }
 .text-gradient { background: linear-gradient(90deg, #6366f1 60%, #3730a3 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* ===== Filtros organizativos (chip multi-select) ===== */
+.filtros-header { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.75rem; margin-bottom: 1rem; border-bottom: 1px solid #eef0f4; }
+.filtros-dot { width: 8px; height: 8px; border-radius: 50%; background: #6366f1; display: inline-block; }
+.filtros-title { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.03em; text-transform: uppercase; color: #475569; }
+.filtros-reset { font-size: 0.8rem; text-decoration: none; color: #6366f1; font-weight: 600; }
+.filtros-reset:hover { text-decoration: underline; }
+.filtro-label { display: flex; align-items: center; gap: 0.35rem; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.03em; text-transform: uppercase; color: #334155; margin-bottom: 0.5rem; }
+
+.chip-multiselect { position: relative; }
+.chip-multiselect-box {
+    display: flex; align-items: center; gap: 0.5rem; min-height: 44px;
+    border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
+    padding: 0.4rem 0.6rem; cursor: pointer; transition: border-color .15s ease;
+}
+.chip-multiselect-box:hover, .chip-multiselect.open .chip-multiselect-box { border-color: #6366f1; }
+.chip-multiselect-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; flex: 1 1 auto; }
+.chip-multiselect-chips:empty::before { content: 'Seleccionar...'; color: #94a3b8; font-size: 0.85rem; }
+.chip-multiselect-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem; background: #dbeafe; color: #1e40af;
+    border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap;
+}
+.chip-multiselect-chip button {
+    border: none; background: transparent; color: #1e40af; font-size: 0.9rem; line-height: 1;
+    cursor: pointer; padding: 0; opacity: 0.7;
+}
+.chip-multiselect-chip button:hover { opacity: 1; }
+.chip-multiselect-badge {
+    background: #1e293b; color: #fff; border-radius: 999px; min-width: 22px; height: 22px;
+    display: none; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.chip-multiselect-badge.show { display: inline-flex; }
+.chip-multiselect-arrow { color: #94a3b8; transition: transform .15s ease; flex-shrink: 0; }
+.chip-multiselect.open .chip-multiselect-arrow { transform: rotate(180deg); }
+
+.chip-multiselect-panel {
+    display: none; position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+    padding: 0.6rem; max-height: 260px; flex-direction: column;
+}
+.chip-multiselect.open .chip-multiselect-panel { display: flex; }
+.chip-multiselect-search {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.85rem;
+    margin-bottom: 0.4rem; flex-shrink: 0;
+}
+.chip-multiselect-options { overflow-y: auto; }
+.chip-multiselect-option {
+    padding: 0.4rem 0.6rem; border-radius: 8px; font-size: 0.85rem; cursor: pointer;
+    display: flex; align-items: center; gap: 0.5rem; color: #334155;
+}
+.chip-multiselect-option:hover { background: #f1f5f9; }
+.chip-multiselect-option.selected { background: #eef2ff; color: #3730a3; font-weight: 600; }
+.chip-multiselect-option.hidden { display: none; }
+.chip-multiselect-option .bx-check { visibility: hidden; color: #6366f1; }
+.chip-multiselect-option.selected .bx-check { visibility: visible; }
+.chip-multiselect-empty { padding: 0.5rem; text-align: center; color: #94a3b8; font-size: 0.8rem; }
 </style>
+
+<script>
+(function() {
+    // Multi-select de UO/Departamento: chips + buscador sobre un <select multiple>
+    // oculto. El <select> nativo sigue siendo la fuente de verdad que viaja en el
+    // GET al enviar el formulario — este componente solo construye una UI encima,
+    // sin cambiar en nada el envío por querystring ya acordado.
+    function initChipMultiselect(root) {
+        const nativeSelect = root.querySelector('.chip-multiselect-native');
+        const box = root.querySelector('.chip-multiselect-box');
+        const chipsEl = root.querySelector('.chip-multiselect-chips');
+        const badgeEl = root.querySelector('.chip-multiselect-badge');
+        const panel = root.querySelector('.chip-multiselect-panel');
+        const searchEl = root.querySelector('.chip-multiselect-search');
+        const optionsEl = root.querySelector('.chip-multiselect-options');
+        if (!nativeSelect) return;
+
+        const opciones = Array.from(nativeSelect.options).map(o => ({
+            value: o.value, label: o.text, el: o
+        }));
+
+        optionsEl.innerHTML = '';
+        opciones.forEach(op => {
+            const item = document.createElement('div');
+            item.className = 'chip-multiselect-option';
+            item.dataset.value = op.value;
+            item.innerHTML = '<i class="bx bx-check"></i><span></span>';
+            item.querySelector('span').textContent = op.label;
+            item.addEventListener('click', function (e) {
+                e.stopPropagation();
+                op.el.selected = !op.el.selected;
+                render();
+            });
+            optionsEl.appendChild(item);
+            op.itemEl = item;
+        });
+
+        const vacio = document.createElement('div');
+        vacio.className = 'chip-multiselect-empty';
+        vacio.textContent = 'Sin resultados.';
+        vacio.style.display = 'none';
+        optionsEl.appendChild(vacio);
+
+        function render() {
+            chipsEl.innerHTML = '';
+            let seleccionadas = 0;
+            opciones.forEach(op => {
+                const sel = op.el.selected;
+                op.itemEl.classList.toggle('selected', sel);
+                if (sel) {
+                    seleccionadas++;
+                    const chip = document.createElement('span');
+                    chip.className = 'chip-multiselect-chip';
+                    const label = document.createElement('span');
+                    label.textContent = op.label;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.innerHTML = '&times;';
+                    btn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        op.el.selected = false;
+                        render();
+                    });
+                    chip.appendChild(label);
+                    chip.appendChild(btn);
+                    chipsEl.appendChild(chip);
+                }
+            });
+            badgeEl.textContent = seleccionadas;
+            badgeEl.classList.toggle('show', seleccionadas > 0);
+        }
+
+        box.addEventListener('click', function (e) {
+            e.stopPropagation();
+            document.querySelectorAll('.chip-multiselect.open').forEach(el => {
+                if (el !== root) el.classList.remove('open');
+            });
+            root.classList.toggle('open');
+            if (root.classList.contains('open')) {
+                searchEl.value = '';
+                filtrar('');
+                searchEl.focus();
+            }
+        });
+
+        function filtrar(texto) {
+            const t = texto.trim().toLowerCase();
+            let visibles = 0;
+            opciones.forEach(op => {
+                const coincide = op.label.toLowerCase().includes(t);
+                op.itemEl.classList.toggle('hidden', !coincide);
+                if (coincide) visibles++;
+            });
+            vacio.style.display = visibles === 0 ? 'block' : 'none';
+        }
+
+        searchEl.addEventListener('click', e => e.stopPropagation());
+        searchEl.addEventListener('input', function () { filtrar(this.value); });
+        panel.addEventListener('click', e => e.stopPropagation());
+
+        render();
+    }
+
+    document.querySelectorAll('.chip-multiselect').forEach(initChipMultiselect);
+    document.addEventListener('click', function () {
+        document.querySelectorAll('.chip-multiselect.open').forEach(el => el.classList.remove('open'));
+    });
+})();
+</script>
 
 <script>
 (function() {
@@ -344,7 +578,7 @@
     // 2. Altas y Bajas
     renderChartSafely('#altasBajasAreaChart', {
         series: [{ name: 'Altas', data: {{ graficos.altas|safe|default:"[]" }} }, { name: 'Bajas', data: {{ graficos.bajas|safe|default:"[]" }} }],
-        chart: { type: 'area', height: 170, stacked: true, toolbar: { show: false }, parentHeightOffset: 0 },
+        chart: { type: 'area', height: 170, stacked: false, toolbar: { show: false }, parentHeightOffset: 0 },
         colors: ['#6366f1', '#ef4444'], fill: { type: 'gradient', gradient: { shadeIntensity: 0.7, opacityFrom: 0.7, opacityTo: 0.2 } },
         stroke: { curve: 'smooth', width: 2 },
         grid: { show: false, padding: { left: 15, right: 15, top: 0, bottom: -10 } },
@@ -352,15 +586,15 @@
         yaxis: { show: false }, dataLabels: { enabled: false }, legend: { show: false }, tooltip: { enabled: true }
     });
 
-    // 3. Masa Salarial
-    renderChartSafely('#masaSalarialChart', {
-        series: [{ name: 'Masa Salarial ($)', data: {{ ms_data|safe|default:"[]" }} }],
+    // 3. Top Causas de Baja
+    renderChartSafely('#causasBajaChart', {
+        series: [{ name: 'Bajas', data: {{ causas_baja_data|safe|default:"[]" }} }],
         chart: { type: 'bar', height: 200, toolbar: { show: false } },
-        colors: ['#14b8a6'],
+        colors: ['#ef4444'],
         plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
-        dataLabels: { enabled: false }, 
-        xaxis: { categories: {{ ms_labels|safe|default:"[]" }}, labels: { show: true, rotate: -45, style: { fontSize: '9px' } } },
-        yaxis: { show: false }, tooltip: { y: { formatter: function (val) { return "$" + val.toLocaleString(); } } }
+        dataLabels: { enabled: false },
+        xaxis: { categories: {{ causas_baja_labels|safe|default:"[]" }}, labels: { show: true, rotate: -45, style: { fontSize: '9px' } } },
+        yaxis: { show: false }, tooltip: { y: { formatter: function (val) { return val + " personas"; } } }
     });
 
     // 4. Categoría Ocupacional
@@ -369,21 +603,47 @@
         chart: { type: 'donut', height: 230 },
         labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
         colors: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'],
-        plotOptions: { donut: { size: '60%' } }, dataLabels: { enabled: false }, legend: { position: 'bottom', fontSize: '10px' }
+        plotOptions: { donut: { size: '60%' } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        legend: { position: 'bottom', fontSize: '10px' },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
     // 5. Pirámide Edades
-    const datosM = {{ edades_m|safe|default:"[0,0,0,0,0,0]" }}.map(x => -x);
+    // Las categorías del eje X y los cortes que las generan viven EN PYTHON
+    // (dashboard/views.py: _categorias_edad / _cortes_edad_desde_request) —
+    // aquí solo se dibuja lo que el backend ya calculó, sin ningún literal de
+    // rango de edad propio, para no volver a duplicar la fuente de verdad.
+    const edadesM = {{ edades_m|safe|default:"[]" }};
+    const edadesF = {{ edades_f|safe|default:"[]" }};
+    const datosM = edadesM.map(x => -x);
     renderChartSafely('#edadesPyramidChart', {
-        series: [{ name: 'Hombres', data: datosM }, { name: 'Mujeres', data: {{ edades_f|safe|default:"[0,0,0,0,0,0]" }} }],
+        series: [{ name: 'Hombres', data: datosM }, { name: 'Mujeres', data: edadesF }],
         chart: { type: 'bar', height: 220, stacked: true, toolbar: { show: false } },
         colors: ['#0ea5e9', '#f43f5e'],
         plotOptions: { bar: { horizontal: true, barHeight: '75%' } },
         dataLabels: { enabled: false },
-        xaxis: { categories: ['18-25', '26-35', '36-45', '46-55', '56-65', '66+'], labels: { formatter: function(val) { return Math.abs(Math.round(val)); }, style: {fontSize: '9px'} } },
+        xaxis: { categories: {{ edades_categorias|safe|default:"[]" }}, labels: { formatter: function(val) { return Math.abs(Math.round(val)); }, style: {fontSize: '9px'} } },
         yaxis: { labels: { style: {fontSize: '10px'} } },
         legend: { position: 'top', fontSize: '10px', markers: { width: 8, height: 8 } },
-        tooltip: { y: { formatter: function (val) { return Math.abs(val) + " pers."; } } }
+        tooltip: {
+            y: {
+                // Absolutos y porcentaje sobre el total de esa categoría (hombres +
+                // mujeres del mismo bucket), no sobre el total general.
+                formatter: function (val, opts) {
+                    const idx = opts.dataPointIndex;
+                    const total = Math.abs(edadesM[idx] || 0) + (edadesF[idx] || 0);
+                    const abs = Math.abs(val);
+                    const pct = total ? ((abs / total) * 100).toFixed(1) : '0.0';
+                    return abs + " pers. (" + pct + "%)";
+                }
+            }
+        }
     });
 
     // 6. Tipos de Contrato
@@ -392,19 +652,48 @@
         chart: { type: 'donut', height: 230 },
         labels: {{ tipos_contrato_labels|safe|default:"[]" }},
         colors: ['#8b5cf6', '#3b82f6', '#f43f5e', '#10b981', '#f59e0b', '#64748b'],
-        plotOptions: { donut: { size: '60%' } }, dataLabels: { enabled: false }, legend: { position: 'bottom', fontSize: '10px' }
+        plotOptions: { donut: { size: '60%' } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        legend: { position: 'bottom', fontSize: '10px' },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
+
+    // Paleta común del dashboard (misma que catOcupacionalDonut / razaPieChart /
+    // regMilitarChart) — se reutiliza aquí en vez de dejar que ApexCharts aplique
+    // su paleta por defecto, que desentonaba con el resto de gráficos.
+    const paletaDashboard = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#64748b'];
 
     // 7. Educacional
     renderChartSafely('#educacionalPieChart', {
         series: {{ nivel_educ_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
-        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' }, dataLabels: { enabled: false }
+        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' },
+        colors: paletaDashboard,
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
     // 8. Preparación
     renderChartSafely('#preparacionPieChart', {
         series: {{ nivel_prep_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
-        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' }, dataLabels: { enabled: false }
+        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' },
+        colors: paletaDashboard,
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
     // 9. Distribución por Raza (Pie Chart)
@@ -423,7 +712,7 @@
             style: { fontSize: '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        tooltip: { 
+        tooltip: {
             enabled: true,
             y: {
                 // Muestra la cantidad en Números Enteros al pasar el ratón
@@ -432,6 +721,23 @@
                 }
             }
         }
+    });
+
+    // 10. Registro Militar
+    renderChartSafely('#regMilitarChart', {
+        series: {{ reg_militar_data|safe|default:"[]" }},
+        chart: { type: 'donut', height: 230 },
+        labels: {{ reg_militar_labels|safe|default:"[]" }},
+        colors: ['#3b82f6', '#f59e0b', '#8b5cf6', '#64748b'],
+        plotOptions: { donut: { size: '60%' } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        legend: { position: 'bottom', fontSize: '10px' },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 })();
 </script>

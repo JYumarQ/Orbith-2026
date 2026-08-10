@@ -1,0 +1,31 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Movimiento de Nómina | Orbith{% endblock %}
+
+{% block content %}
+{% comment %} A diferencia de `updt_contrato.html`, `movimiento_nomina.html` YA trae su
+   propio `<div class="modal fade" id="modalMovimientoContrato">` (así lo carga hoy
+   `list_movimientos.html` vía AJAX + `bootstrap.Modal`). No hay que envolverlo en OTRO
+   `.modal` — eso duplicaría el id y dejaría el modal real oculto (`fade` sin `show`).
+   Aquí solo añadimos el backdrop y forzamos la visibilidad con clases, igual que
+   `updt_contrato_pagina.html` hace con el modal de "Editar contrato". {% endcomment %}
+<div class="modal-backdrop show"></div>
+{% include 'pages/contrato/movimiento_nomina.html' %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var modalNode = document.getElementById('modalMovimientoContrato');
+  if (modalNode) {
+    modalNode.classList.remove('fade');
+    modalNode.classList.add('show', 'd-block');
+    modalNode.style.zIndex = '1055';
+  }
+  var urlVolver = "{{ next|default:url_por_defecto }}";
+  document.querySelectorAll('#modalMovimientoContrato [data-bs-dismiss="modal"]').forEach(function (boton) {
+    boton.addEventListener('click', function () {
+      window.location.href = urlVolver;
+    });
+  });
+});
+</script>
+{% endblock %}

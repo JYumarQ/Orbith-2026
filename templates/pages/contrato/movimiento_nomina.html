@@ -28,14 +28,20 @@
             </div>
             
             <div class="modal-body p-0">
+                {% if not is_readonly and not is_wizard %}
+                <div class="p-3 pb-0">
+                    {% include 'base/partials/aviso_origen_edicion.html' %}
+                </div>
+                {% endif %}
                 <fieldset {% if is_readonly %}disabled="disabled"{% endif %}>
 
                 <form method="POST"
                     class=""
-                    action="{% if not is_readonly %}{% if is_wizard %}{% url 'finalizar_contrato_wizard' aspirante.doc_identidad %}{% else %}{% url 'movimiento_contrato' object.pk %}{% endif %}{% endif %}" 
+                    action="{% if not is_readonly %}{% if is_wizard %}{% url 'finalizar_contrato_wizard' aspirante.doc_identidad %}{% else %}{% url 'movimiento_contrato' object.pk %}{% endif %}{% endif %}"
                     id="movimientoForm">
                     {% csrf_token %}
                     <input type="hidden" name="generar_movimiento" id="inputGenerarMovimiento" value="true">
+                    <input type="hidden" name="next" value="{{ next }}">
 
                     <div class="row g-0 h-100">
                         
@@ -573,11 +579,15 @@
                                         console.error("No se recibió URL del PDF desde el servidor");
                                     }
                                 }
-                                
-                                // Recargar la página después de elegir (Sí o No)
+
+                                // Si se llegó aquí desde Recordatorios/Advertencias (u otro origen con
+                                // `next`), volvemos exactamente ahí; si no, recargamos como antes.
                                 setTimeout(() => {
-                                    // Recargamos la página actual para mantenernos en Bajas o Aspirantes según corresponda
-                                    window.location.reload();
+                                    if (response.success_url) {
+                                        window.location.href = response.success_url;
+                                    } else {
+                                        window.location.reload();
+                                    }
                                 }, 500);
                             });
                         }

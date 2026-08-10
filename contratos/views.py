@@ -1122,11 +1122,12 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
         
 
 
-class MovimientoUpdateView(RequiereEdicionMixin, UpdateView):
+class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CAlta
     form_class = MovimientoForm
     template_name = "pages/contrato/movimiento_nomina.html"
-    success_url = reverse_lazy('list_movimientos')
+    template_name_pagina = "pages/contrato/movimiento_nomina_pagina.html"
+    url_por_defecto = reverse_lazy('list_movimientos')
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -1302,12 +1303,12 @@ class MovimientoUpdateView(RequiereEdicionMixin, UpdateView):
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                
+
 
                 return JsonResponse({
-                    'form_is_valid': True, 
-                    'message': 'Movimiento registrado correctamente.', 
-                    'success_url': str(self.success_url),
+                    'form_is_valid': True,
+                    'message': 'Movimiento registrado correctamente.',
+                    'success_url': self.get_success_url(),
                     # Ahora sí existe 'nuevo_mov'
                     'pdf_url': reverse('imprimir_movimiento', kwargs={'pk': nuevo_mov.pk})
                 })

@@ -232,12 +232,24 @@ def _resolver_valor_por_ruta(objeto, ruta):
     Recorre una ruta tipo 'aspirante__nombre' sobre un objeto Django,
     o la lee directamente si es un atributo simple o una anotación
     (como 'edad' o 'salario_actual').
+
+    Si un paso intermedio es una relación ManyToMany (ej. 'familias' en
+    Familia de Cargos), getattr devuelve un RelatedManager, no un valor:
+    en ese caso se resuelve el resto de la ruta sobre cada elemento
+    relacionado y se unen los resultados con coma.
     """
     valor = objeto
-    for parte in ruta.split("__"):
+    partes = ruta.split("__")
+    for i, parte in enumerate(partes):
         if valor is None:
             return None
         valor = getattr(valor, parte, None)
+        if hasattr(valor, "all") and callable(valor.all):
+            resto = partes[i + 1:]
+            elementos = valor.all()
+            if not resto:
+                return ", ".join(str(e) for e in elementos)
+            return ", ".join(str(_resolver_valor_por_ruta(e, "__".join(resto))) for e in elementos)
     return valor
 
 

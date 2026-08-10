@@ -304,8 +304,19 @@ def _construir_queryset_filtrado(modelo_raiz, configuracion, usuario):
     queryset = _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos)
 
     # 3. Filtros del usuario, combinados con AND
+    usa_relacion_m2m = False
     for filtro in configuracion.get("filtros", []):
+        campo_filtro = _obtener_campo(definicion_modelo, filtro["campo"])
+        if campo_filtro.get("es_m2m"):
+            usa_relacion_m2m = True
         queryset = queryset.filter(_construir_q_de_filtro(definicion_modelo, filtro))
+
+    if usa_relacion_m2m:
+        # Filtrar por una relación ManyToMany (ej. familias de un cargo) hace
+        # JOIN y puede duplicar filas (un cargo con 2 familias duplicaría al
+        # trabajador). distinct() se aplica aquí, antes de paginar/agregar,
+        # para que tanto el listado como los indicadores usen el mismo total.
+        queryset = queryset.distinct()
 
     return queryset, definicion_modelo
 
@@ -490,6 +501,11 @@ def obtener_rutas_select_related(definicion_modelo, keys_campos):
     for key in keys_campos:
         campo = definicion_modelo["campos"].get(key)
         if not campo or not campo.get("ruta_orm"):
+            continue
+        if campo.get("es_m2m"):
+            # select_related() no admite relaciones ManyToMany (Django lanza
+            # FieldError). Estos campos se precargan implícitamente por el
+            # propio filtro/columna vía JOIN; no necesitan select_related.
             continue
         partes = campo["ruta_orm"].split("__")
         if len(partes) > 1:

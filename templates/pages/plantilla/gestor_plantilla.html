@@ -145,12 +145,10 @@
     
     .btn-add-disabled {
         opacity: 0.4;
-        cursor: not-allowed;
+        cursor: not-allowed !important;
         /* Sin `pointer-events: none`: a propósito, para que el `title` siga
-           apareciendo al pasar el ratón por encima. El clic no hace nada de
-           todos modos — `_cargarModal()` no hace nada con una URL vacía
-           (`disableAddBtn`/`disableAddBtn` la limpian a "") y los botones de
-           Cierres quitan `hx-post` por completo al deshabilitarse. */
+           apareciendo al pasar el ratón por encima. El clic queda bloqueado
+           por el guard delegado del script, no por CSS. */
         background-color: #e5e7eb !important;
         border-color: #e5e7eb !important;
         color: #9ca3af !important;
@@ -774,6 +772,23 @@
             htmx.process(btn);
         }
     }
+
+    // Sin `pointer-events: none` (retirado de `.btn-add-disabled` para que el
+    // `title` siga apareciendo al pasar el ratón), el clic SÍ llega al botón.
+    // `_cargarModal()` ya se protege sola con una URL vacía, pero
+    // `btn-declarar-unit`/`btn-reabrir-unit` nacen en el HTML con `hx-post=""`
+    // (para que `activateToolbar` los pueda rellenar más tarde con
+    // `setAttribute`) y ese registro inicial de htmx no se limpia del todo con
+    // `removeAttribute` + `htmx.process()`: el botón deshabilitado terminaba
+    // haciendo un POST a la propia página. Se corta aquí, en captura, antes de
+    // que el clic llegue al propio botón — ni su `onclick` ni el listener
+    // interno de htmx llegan a ejecutarse.
+    document.addEventListener('click', function (e) {
+        if (e.target.closest('.btn-add-disabled')) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    }, true);
 
     function disableToolbar(type) {
         const toolbar = document.getElementById('toolbar-' + type);
