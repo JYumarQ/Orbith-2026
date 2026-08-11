@@ -36,6 +36,26 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "2.4.1",
+        "fecha": "2026-08-11",
+        "titulo": "Modo mantenimiento, notificaciones y reportes mejorados",
+        "cambios": [
+            ("nuevo", "Modo mantenimiento: los usuarios no administradores ven "
+                    "una pantalla de mantenimiento cuando está activo."),
+            ("nuevo", "Reporte de problemas: los usuarios pueden adjuntar hasta "
+                    "4 imágenes y pegar el error de consola del navegador "
+                    "(F12) para facilitar la depuración."),
+            ("nuevo", "Sistema 100% offline: vendorizados Sortable.js y "
+                    "Chart.js, eliminada la dependencia de CDN externos."),
+            ("mejorado", "Integración del centro de notificaciones con el módulo "
+                        "de subsanación."),
+            ("mejorado", "Eliminados paquetes no usados del proyecto "
+                        "(google-generativeai, requests)."),
+            ("corregido", "Validación de imágenes en reportes con mensajes en "
+                        "español."),
+        ],
+    },
+    {
         "version": "2.4.0",
         "fecha": "2026-08-11",
         "titulo": "Rediseño del Dashboard, panel de administración y ajustes móviles",
