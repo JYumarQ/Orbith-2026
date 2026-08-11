@@ -104,19 +104,19 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_per_page, #hidden_sort, #hidden_order">
+                            hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_per_page, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
-                <a href="{% url 'exportar_contratos_excel' %}" 
-                    class="btn btn-success ms-2 me-1" 
-                    data-bs-toggle="tooltip" 
-                    data-bs-placement="top" 
-                    title="Exportar nómina completa de activos a Excel">
-                        <i class="fas fa-file-excel"></i>
-                </a>
-
                 <div class="d-flex ms-auto gap-2">
+                    <a href="{% url 'exportar_contratos_excel' %}"
+                        class="btn btn-success"
+                        data-bs-toggle="tooltip"
+                        data-bs-placement="top"
+                        title="Exportar nómina completa de activos a Excel">
+                            <i class="fas fa-file-excel"></i>
+                    </a>
+
                     <div class="btn-group">
                         <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
                             <i class="fas fa-filter"></i>
@@ -153,16 +153,39 @@
                                 <div class="col-6">
                                     <label class="small text-muted" for="filter_sexo">Sexo</label> <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
                                         <option value="">Todos</option>
-                                        <option value="M">M</option>
-                                        <option value="F">F</option>
+                                        <option value="M" {% if filtro_sexo == 'M' %}selected{% endif %}>M</option>
+                                        <option value="F" {% if filtro_sexo == 'F' %}selected{% endif %}>F</option>
                                     </select>
                                 </div>
                                 <div class="col-6">
                                     <label class="small text-muted" for="filter_raza">Raza</label> <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
                                         <option value="">Todas</option>
-                                        <option value="BL">Blanca</option>
-                                        <option value="NE">Negra</option>
-                                        <option value="ME">Mestiza</option>
+                                        <option value="BL" {% if filtro_raza == 'BL' %}selected{% endif %}>Blanca</option>
+                                        <option value="NE" {% if filtro_raza == 'NE' %}selected{% endif %}>Negra</option>
+                                        <option value="ME" {% if filtro_raza == 'ME' %}selected{% endif %}>Mestiza</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="dropdown-header-custom mt-3"><i class="fas fa-briefcase me-1"></i> Contrato</div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_cat_ocupacional">Cat. Ocupacional</label>
+                                    <select id="filter_cat_ocupacional" name="cat_ocupacional" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todas</option>
+                                        {% for k, v in categorias_ocupacionales %}
+                                        <option value="{{ k }}" {% if filtro_cat_ocupacional == k %}selected{% endif %}>{{ v }}</option>
+                                        {% endfor %}
+                                        <option value="CUA" {% if filtro_cat_ocupacional == 'CUA' %}selected{% endif %}>Cuadro (Directivo/Ejecutivo)</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_tipo">Tipo de Contrato</label>
+                                    <select id="filter_tipo" name="tipo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        {% for t in tipos_contrato_list %}
+                                        <option value="{{ t.descripcion }}" {% if filtro_tipo == t.descripcion %}selected{% endif %}>{{ t.descripcion }}</option>
+                                        {% endfor %}
                                     </select>
                                 </div>
                             </div>
@@ -177,7 +200,7 @@
                                     onchange="triggerSearch()">
                                     <option value="">Todos</option>
                                     {% for k, v in niveles_educ %}
-                                        <option value="{{ k }}">{{ v }}</option>
+                                        <option value="{{ k }}" {% if filtro_nivel_educ == k %}selected{% endif %}>{{ v }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -189,8 +212,8 @@
                             <div class="mb-2">
                                 <label class="small text-muted" for="filter_grado">Grado Científico</label> <select id="filter_grado" name="grado_cientifico" class="form-select form-select-sm" onchange="triggerSearch()">
                                     <option value="">Todos</option>
-                                    <option value="MC">Master</option>
-                                    <option value="DC">Doctor</option>
+                                    <option value="MC" {% if filtro_grado_cientifico == 'MC' %}selected{% endif %}>Master</option>
+                                    <option value="DC" {% if filtro_grado_cientifico == 'DC' %}selected{% endif %}>Doctor</option>
                                 </select>
                             </div>
                         </div>

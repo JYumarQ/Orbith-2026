@@ -1,0 +1,138 @@
+{% load informe_inteligente_extras %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ titulo_informe }}</title>
+    <style>
+        @page {
+            size: letter landscape;
+            margin: 1cm 1.5cm;
+            margin-top: 4cm;
+            margin-bottom: 1.5cm;
+
+            @frame header {
+                -pdf-frame-content: header_content;
+                top: 1cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 3cm;
+            }
+
+            @frame footer {
+                -pdf-frame-content: footer_content;
+                bottom: 0.5cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 1cm;
+            }
+        }
+
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 10pt; }
+        .uppercase { text-transform: uppercase; }
+        .bold { font-weight: bold; }
+
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        .data-table th {
+            padding: 6px 5px;
+            border: 1px solid #e2e8f0;
+            background-color: #0f172a;
+            color: white;
+            font-size: 9pt;
+            text-transform: uppercase;
+            text-align: left;
+        }
+        .data-table td {
+            padding: 4px 5px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 9pt;
+            vertical-align: middle;
+        }
+        .data-table tr:nth-child(even) td { background-color: #f8fafc; }
+        .col-indice { width: 3%; text-align: center; color: #94a3b8; }
+    </style>
+</head>
+<body>
+
+    <div id="header_content">
+        <table style="width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px;">
+            <tr>
+                <td style="width: 15%; vertical-align: middle; text-align: center;">
+                    {% if config.logo %}
+                        <img src="{{ config.logo.path }}" width="70" alt="Logo">
+                    {% else %}
+                        <div style="background-color: #1e3a8a; color: white; width: 45px; height: 45px; text-align: center; line-height: 45px; font-weight: bold; border-radius: 8px; font-size: 13px;">
+                            UNE
+                        </div>
+                    {% endif %}
+                </td>
+                <td style="width: 55%; vertical-align: middle; padding-left: 10px;">
+                    <h1 style="color: #1e3a8a; font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        {{ nombre_empresa }}
+                    </h1>
+                    <p style="color: #ea580c; font-size: 9px; font-weight: bold; margin: 0; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;">
+                        Gestión de Capital Humano
+                    </p>
+                </td>
+                <td style="width: 30%; text-align: right; vertical-align: middle;">
+                    <p style="color: #94a3b8; font-size: 9px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        Hoja # <pdf:pagenumber> de <pdf:pagecount>
+                    </p>
+                    <div style="background-color: #f1f5f9; padding: 4px; margin-top: 5px; text-align: center; border-radius: 4px;">
+                        <span style="color: #475569; font-size: 9px; font-weight: bold; text-transform: uppercase;">
+                            {{ total_registros }} registro{{ total_registros|pluralize }}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="footer_content">
+        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+            <tr>
+                <td style="width: 50%; color: #94a3b8; font-size: 8px; font-weight: bold; text-transform: uppercase; text-align: left;">
+                    Generado: {{ fecha_generacion }}
+                </td>
+                <td style="width: 50%; color: #94a3b8; font-size: 8px; font-weight: bold; text-transform: uppercase; text-align: right;">
+                    Orbith System RRHH | Camagüey - 2026
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 10px;">
+        <div style="font-size: 14px; color: #1e3a8a; text-transform: uppercase; font-weight: bold; font-style: italic; text-decoration: underline;">
+            {{ titulo_informe }}
+        </div>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th class="col-indice">#</th>
+                {% for campo in campos_elegidos %}
+                    <th>{{ campo.label }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for fila in filas %}
+                <tr>
+                    <td class="col-indice">{{ forloop.counter }}</td>
+                    {% for campo in campos_elegidos %}
+                        <td>{{ fila|get_item:campo.key|default:"—" }}</td>
+                    {% endfor %}
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="{{ campos_elegidos|length|add:1 }}" style="text-align: center; color: #94a3b8; padding: 20px;">
+                        No se encontraron registros que cumplan los filtros aplicados.
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>

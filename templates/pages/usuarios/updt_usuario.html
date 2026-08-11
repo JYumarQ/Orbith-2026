@@ -21,6 +21,31 @@
           {{ form.username }}
         </div>
 
+        <div class="mb-3">
+          <label for="{{ form.email.id_for_label }}" class="form-label">Correo electrónico</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <div class="text-danger small">{{ form.email.errors }}</div>
+          {% endif %}
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          {{ form.is_active }}
+          <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+            {{ form.is_active.label }}
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
+          {{ form.contrato }}
+        </div>
+
+        <div class="mb-3">
+          <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
+          {{ form.unidades }}
+        </div>
+
         <div class="form-check form-switch mb-3">
           {{ form.es_admin }}
           <label for="{{ form.es_admin.id_for_label }}" class="form-check-label">
@@ -38,16 +63,6 @@
         <div class="form-check form-switch mb-3">
           {{ form.es_observador }}
           <label for="{{ form.es_observador.id_for_label }}" class="form-check-label">{{ form.es_observador.label }}</label>
-        </div>
-
-        <div class="mb-3">
-          <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
-          {{ form.contrato }}
-        </div>
-
-        <div class="mb-3">
-          <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
-          {{ form.unidades }}
         </div>
       </div>
 

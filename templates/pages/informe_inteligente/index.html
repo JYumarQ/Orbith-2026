@@ -25,6 +25,29 @@
 
     .ii-wrapper { font-size: .925rem; background: #f1f5f9; }
 
+    /* ---------- Botones de exportación (mismo estilo que Informes: Puestos Clave) ---------- */
+    .ii-btn-export {
+        border-radius: 8px !important;
+        padding: 0.3rem 0.75rem;
+        font-weight: 600;
+        font-size: 0.78rem;
+        transition: all 0.2s ease;
+    }
+    .ii-btn-export:active { transform: scale(0.96); }
+    .ii-btn-pdf {
+        background-color: transparent;
+        color: #ff3e1d;
+        border: 1.5px solid #ff3e1d;
+    }
+    .ii-btn-pdf:hover { background-color: #ff3e1d; color: #fff; }
+    .ii-btn-word {
+        background: linear-gradient(135deg, #696cff 0%, #4346e3 100%);
+        color: white;
+        border: none;
+        box-shadow: 0 2px 6px rgba(105, 108, 255, 0.3);
+    }
+    .ii-btn-word:hover { color: white; box-shadow: 0 4px 10px rgba(105, 108, 255, 0.4); }
+
     /* ---------- Colores reutilizables ---------- */
     .ii-color-indigo    { --c: var(--ii-indigo);    --c-bg: var(--ii-indigo-bg); }
     .ii-color-violeta   { --c: var(--ii-violeta);   --c-bg: var(--ii-violeta-bg); }
@@ -649,7 +672,9 @@
         vistaPrevia: "{% url 'informe_inteligente:generar_vista_previa' %}",
         guardarFavorito: "{% url 'informe_inteligente:guardar_favorito' %}",
         cargarFavorito: "{% url 'informe_inteligente:cargar_favorito' 0 %}",
-        eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}"
+        eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}",
+        exportarPDF: "{% url 'informe_inteligente:exportar_pdf' %}",
+        exportarWord: "{% url 'informe_inteligente:exportar_word' %}"
     };
 </script>
 <script src="{% static 'js/informe_inteligente.js' %}"></script>

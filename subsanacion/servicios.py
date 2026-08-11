@@ -323,6 +323,70 @@ def reconciliar_regla(regla, ejecucion, contexto):
     }
 
 
+def reconciliar_hallazgos_en_caliente(instancia):
+    """Cierra, en el momento del guardado, los hallazgos que este guardado corrigió.
+
+    Por qué existe: sin esto, un hallazgo solo se marca «Corregido» cuando alguien
+    lanza un análisis completo (`ejecutar_analisis_completo()`), aunque el usuario ya
+    haya arreglado el dato hace rato desde su formulario — hasta entonces sigue
+    apareciendo como pendiente, lo cual confunde («ya lo arreglé, ¿por qué sigue
+    saliendo?»).
+
+    Por qué NO es un barrido en miniatura: `reconciliar_regla()` (arriba) necesita
+    recorrer TODA la tabla para poder decidir con certeza que un hallazgo
+    «desapareció» — si leyera solo una parte, los hallazgos de las filas no
+    revisadas se darían por corregidos siendo falso (ver el aviso al principio de
+    este archivo). Aquí no hay ese problema: se pregunta por UNA fila concreta, la
+    que se acaba de guardar, así que la respuesta es siempre completa y cierta. Por
+    eso esto solo puede existir para reglas `evaluable_en_caliente` (coste O(1),
+    ver `ReglaBase.evaluar_instancia()`) y solo mira los hallazgos de ESA fila: no
+    sustituye al barrido periódico, que sigue haciendo falta para las demás reglas
+    y para descubrir problemas NUEVOS que nadie ha guardado todavía.
+
+    Se llama desde el propio `save()` del modelo de negocio (mismo patrón que
+    `notificaciones.avisos.avisar_hallazgos_en_caliente`), en su propio try/except:
+    si esto fallara, el guardado tiene que completarse igual.
+    """
+    from .en_caliente import reglas_en_caliente_para
+
+    object_id = str(instancia.pk)
+    ahora = timezone.now()
+    revisiones = []
+
+    for regla in reglas_en_caliente_para(instancia):
+        detectados = regla.evaluar_instancia(instancia) or []
+        claves_activas = {(detectado.clave_extra or '') for detectado in detectados}
+
+        # Solo los ABIERTOS: un Ignorado o Falso positivo lo decidió una persona, y
+        # esa decisión sobrevive aunque el dato cambie (mismo criterio que la rama
+        # «desaparecidos» de `reconciliar_regla`, arriba).
+        pendientes = Hallazgo.objects.filter(
+            codigo_regla=regla.codigo, content_type=ContentType.objects.get_for_model(
+                instancia, for_concrete_model=True),
+            object_id=object_id, vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS,
+        ).exclude(clave_extra__in=claves_activas)
+
+        for hallazgo in pendientes:
+            estado_anterior = hallazgo.estado
+            hallazgo.vigente = False
+            hallazgo.fecha_resolucion = ahora
+            hallazgo.resuelto_automaticamente = True
+            hallazgo.estado = Hallazgo.CORREGIDO
+            hallazgo.save(update_fields=_CAMPOS_RESOLUCION)
+
+            nota = ('Ya no se detecta. El dato se corrigió desde el formulario '
+                    'correspondiente (cierre automático al guardar).')
+            RevisionHallazgo.objects.create(
+                hallazgo=hallazgo, estado_anterior=estado_anterior,
+                estado_nuevo=Hallazgo.CORREGIDO, usuario=None, nota=nota, automatica=True)
+            revisiones.append((hallazgo, estado_anterior, nota))
+
+    for hallazgo, estado_anterior, nota in revisiones:
+        hallazgo_revisado.send(
+            sender=Hallazgo, hallazgo=hallazgo, estado_anterior=estado_anterior,
+            estado_nuevo=Hallazgo.CORREGIDO, usuario=None, nota=nota, automatica=True)
+
+
 def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
     """Ejecuta todas las reglas de una categoría. Es la unidad de trabajo del barrido.
 

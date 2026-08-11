@@ -38,6 +38,13 @@ class Configuracion(Base):
         blank=True,
         verbose_name="Provincia de la Entidad"
     )
+
+    #?MANTENIMIENTO
+    # Interruptor global, independiente de is_active/is_staff/is_superuser/es_admin.
+    # No usar para nada más: solo bloquea el acceso de usuarios normales (ver
+    # usuarios.middleware.ControlAccesoMiddleware y CustomAuthenticationForm).
+    modo_mantenimiento = models.BooleanField(default=False, verbose_name="Modo de mantenimiento")
+
     class Meta:
         verbose_name = ("Configuracion")
         verbose_name_plural = ("Configuraciones")

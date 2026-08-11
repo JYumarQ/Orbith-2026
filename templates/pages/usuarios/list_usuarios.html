@@ -6,6 +6,35 @@
 
 {% load static %}
 
+<style>
+    .table-active-row > td {
+        background-color: rgba(105, 108, 255, 0.16) !important;
+        color: #696cff !important;
+        font-weight: 600;
+    }
+
+    .toolbar-disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+    .toolbar-active {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .cursor-pointer { cursor: pointer; }
+
+    /* A diferencia de los demás botones de #usuario-toolbar (que solo dependen
+       de .toolbar-disabled/.toolbar-active), "Expulsar sesión" además depende
+       de la fila seleccionada (conectada, no Administrador, no uno mismo). Se
+       atenúa con una clase, no con el atributo `disabled`: así conserva el
+       hover y el title como los demás botones; el clic explica por qué no
+       procede en lugar de quedar mudo. */
+    #btn-expulsar-sesion.accion-no-disponible {
+        opacity: 0.5;
+    }
+</style>
+
 <!-- Content wrapper -->
 <div class="content-wrapper">
   <!-- Content -->
@@ -15,11 +44,32 @@
 
     <!-- Hoverable Table rows -->
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+
+        <!-- Barra de acciones (se habilita al seleccionar una fila) -->
+        <div id="usuario-toolbar" class="d-flex gap-2 toolbar-disabled">
+          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-edit-usuario"
+              onclick="abrir_modal_edicion(this.dataset.url)" title="Editar Usuario">
+            <i class="fas fa-user-pen"></i>
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-warning" id="btn-password-usuario"
+              onclick="abrir_modal_cambiar_password(this.dataset.url)" title="Cambiar Contraseña">
+            <i class="fas fa-key"></i>
+          </button>
+          <a class="btn btn-sm btn-outline-danger btn-eliminar" id="btn-eliminar-usuario" href="#" title="Eliminar Usuario">
+            <i class="fas fa-trash"></i>
+          </a>
+          {% if request.user.es_admin %}
+          <button type="button" class="btn btn-sm btn-outline-dark accion-no-disponible" id="btn-expulsar-sesion"
+              onclick="expulsarSesion(this)" title="Expulsar Sesión" data-puede-expulsar="false">
+            <i class="fas fa-right-from-bracket"></i>
+          </button>
+          {% endif %}
+        </div>
 
         <!-- Barra de búsqueda -->
         <div id="search_container"
-          class="nav-item d-flex align-items-center flex-grow-1 d-none">
+          class="nav-item d-flex align-items-center flex-grow-1">
           <i class="fas fa-search fa-lg me-2"></i>
           <input
             id="search"
@@ -35,10 +85,22 @@
         </div>
 
         <!-- Grupo de botones a la derecha -->
-        <div class="d-flex ms-auto">
-          <button type="button" class="btn me-2" id="filter_button" onclick="show_hide_search()">
-            <i class="fas fa-filter"></i>
+        <div class="d-flex ms-auto gap-2 align-items-center flex-wrap">
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="actualizarConexiones()" title="Actualizar conexiones">
+            <i class="fas fa-rotate"></i> Actualizar conexiones
           </button>
+
+          {% if request.user.es_admin %}
+          <span id="badge-mantenimiento"
+              class="badge {% if configuracion.modo_mantenimiento %}bg-label-danger{% else %}bg-label-success{% endif %}">
+            {% if configuracion.modo_mantenimiento %}🔧 Mantenimiento ACTIVO{% else %}Mantenimiento inactivo{% endif %}
+          </span>
+          <button type="button" id="btn-toggle-mantenimiento"
+              class="btn btn-sm {% if configuracion.modo_mantenimiento %}btn-outline-success{% else %}btn-outline-danger{% endif %}"
+              data-activo="{% if configuracion.modo_mantenimiento %}true{% else %}false{% endif %}">
+            {% if configuracion.modo_mantenimiento %}Desactivar Mantenimiento{% else %}Activar Mantenimiento{% endif %}
+          </button>
+          {% endif %}
 
           <button type="button"
                 class="btn btn-primary"
@@ -52,10 +114,12 @@
         <table class="table table-hover">
           <thead>
             <tr>
+              <th class="text-center">No. Exp.</th>
               <th class="text-center">Nombre</th>
               <th class="text-center">Usuario</th>
               <th class="text-center">Departamento</th>
-              <th class="text-center">Acciones</th>
+              <th class="text-center">Estado</th>
+              <th class="text-center">Conexión</th>
             </tr>
           </thead>
           <tbody class="table-border-bottom-0" id="filter_usuarios_results">
@@ -197,16 +261,142 @@ function showToast(message, type = 'success') {
     });
   }
 
-  function show_hide_search() {
-    $('#search_container').toggleClass('d-none');
-    if ($('#search_container').hasClass('d-none')) {
-      $('#search').val('');
-      htmx.ajax('GET', "{% url 'search_usuarios' %}", {
-        target: '#filter_usuarios_results'
-      });
-    } else {
-      $('#search').focus();
+  // ---------------------------------------------------
+  // 2.1) Selección de fila y activación de la barra de acciones
+  // ---------------------------------------------------
+  function seleccionarUsuario(fila) {
+    document.querySelectorAll('.fila-usuario').forEach(function(f) {
+      f.classList.remove('table-active-row');
+    });
+    fila.classList.add('table-active-row');
+
+    const toolbar = document.getElementById('usuario-toolbar');
+    toolbar.classList.remove('toolbar-disabled');
+    toolbar.classList.add('toolbar-active');
+
+    document.getElementById('btn-edit-usuario').setAttribute('data-url', fila.dataset.urlEditar);
+    document.getElementById('btn-password-usuario').setAttribute('data-url', fila.dataset.urlPassword);
+    document.getElementById('btn-eliminar-usuario').setAttribute('href', fila.dataset.urlEliminar);
+
+    // "Expulsar sesión": solo si la fila está conectada, no es un Administrador
+    // y no es la propia fila del Administrador que está mirando la tabla. El
+    // backend (usuarios.views.expulsar_sesion) repite estas comprobaciones.
+    // Se marca con una clase (no con `disabled`) para que, igual que los demás
+    // botones de esta barra, conserve el hover y el title en todo momento; el
+    // propio expulsarSesion() explica por qué no procede si se hace clic igual.
+    const btnExpulsar = document.getElementById('btn-expulsar-sesion');
+    if (btnExpulsar) {
+      const puedeExpulsar = fila.dataset.conectado === 'true'
+        && fila.dataset.esAdmin !== 'true'
+        && fila.dataset.esYo !== 'true';
+      btnExpulsar.classList.toggle('accion-no-disponible', !puedeExpulsar);
+      btnExpulsar.setAttribute('data-puede-expulsar', puedeExpulsar ? 'true' : 'false');
+      btnExpulsar.setAttribute('data-url', fila.dataset.urlExpulsar || '');
+      btnExpulsar.setAttribute('data-username', fila.dataset.username || '');
     }
+  }
+
+  function deseleccionarTodo() {
+    document.querySelectorAll('.fila-usuario').forEach(function(f) {
+      f.classList.remove('table-active-row');
+    });
+    const toolbar = document.getElementById('usuario-toolbar');
+    toolbar.classList.add('toolbar-disabled');
+    toolbar.classList.remove('toolbar-active');
+    const btnExpulsar = document.getElementById('btn-expulsar-sesion');
+    if (btnExpulsar) {
+      btnExpulsar.classList.add('accion-no-disponible');
+      btnExpulsar.setAttribute('data-puede-expulsar', 'false');
+    }
+  }
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.fila-usuario') && !e.target.closest('#usuario-toolbar')) {
+      deseleccionarTodo();
+    }
+  });
+
+  // ---------------------------------------------------
+  // 2.2) Mantenimiento, expulsión de sesión y refresco de conexiones
+  // ---------------------------------------------------
+  function obtenerCookie(nombre) {
+    const coincidencia = document.cookie.match('(^|;)\\s*' + nombre + '\\s*=\\s*([^;]+)');
+    return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
+  }
+
+  function actualizarConexiones() {
+    htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
+  }
+
+  function expulsarSesion(boton) {
+    const url = boton.dataset.url;
+    const username = boton.dataset.username;
+    if (!url) return;
+
+    if (boton.dataset.puedeExpulsar !== 'true') {
+      showToast('Solo puedes expulsar la sesión de un usuario normal que esté conectado.', 'danger');
+      return;
+    }
+
+    Swal.fire({
+      title: '¿Expulsar sesión?',
+      text: 'Se cerrará la sesión de "' + username + '". Podrá volver a iniciar sesión de inmediato.',
+      icon: 'warning',
+      showCancelButton: true,
+      reverseButtons: true,
+      confirmButtonText: 'Expulsar',
+      cancelButtonText: 'Cancelar',
+      buttonsStyling: false,
+      customClass: { confirmButton: 'btn btn-danger ms-2', cancelButton: 'btn btn-secondary' }
+    }).then(function(resultado) {
+      if (!resultado.isConfirmed) return;
+      fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': obtenerCookie('csrftoken') } })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          showToast(data.mensaje, data.exito ? 'success' : 'danger');
+          if (data.exito) {
+            deseleccionarTodo();
+            actualizarConexiones();
+          }
+        })
+        .catch(function() { showToast('Hubo un problema al expulsar la sesión.', 'danger'); });
+    });
+  }
+
+  // `var`, no `const`: el bloque "extra_scripts" de esta página se renderiza dos
+  // veces (una vía base/scripts.html, otra vía base/base.html — ambas plantillas
+  // declaran ese mismo bloque), así que este script se ejecuta dos veces.
+  // `const`/`let` de nivel superior lanzarían "already been declared" en la
+  // segunda ejecución; `var` se puede redeclarar sin error, igual que el
+  // `var $ = jQuery.noConflict()` de arriba.
+  var btnToggleMantenimiento = document.getElementById('btn-toggle-mantenimiento');
+  if (btnToggleMantenimiento) {
+    btnToggleMantenimiento.addEventListener('click', function() {
+      const activo = btnToggleMantenimiento.dataset.activo === 'true';
+      const url = activo ? "{% url 'desactivar_mantenimiento' %}" : "{% url 'activar_mantenimiento' %}";
+      Swal.fire({
+        title: activo ? '¿Desactivar mantenimiento?' : '¿Activar mantenimiento?',
+        text: activo
+          ? 'Los usuarios normales podrán volver a iniciar sesión con normalidad.'
+          : 'Se cerrará la sesión de todos los usuarios normales conectados y no podrán iniciar sesión hasta que lo desactives. Los Administradores no se ven afectados.',
+        icon: 'warning',
+        showCancelButton: true,
+        reverseButtons: true,
+        confirmButtonText: activo ? 'Desactivar' : 'Activar',
+        cancelButtonText: 'Cancelar',
+        buttonsStyling: false,
+        customClass: { confirmButton: 'btn btn-danger ms-2', cancelButton: 'btn btn-secondary' }
+      }).then(function(resultado) {
+        if (!resultado.isConfirmed) return;
+        fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': obtenerCookie('csrftoken') } })
+          .then(function(res) { return res.json(); })
+          .then(function(data) {
+            showToast(data.mensaje, data.exito ? 'success' : 'danger');
+            if (data.exito) window.location.reload();
+          })
+          .catch(function() { showToast('Hubo un problema al cambiar el modo de mantenimiento.', 'danger'); });
+      });
+    });
   }
 
   // ---------------------------------------------------

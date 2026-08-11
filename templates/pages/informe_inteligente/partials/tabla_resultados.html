@@ -10,6 +10,16 @@
         <span class="d-flex align-items-center gap-2">
             <span class="badge ii-badge-contador">{{ campos_elegidos|length }} columnas</span>
             <span class="badge ii-badge-contador">Página {{ pagina.number }} de {{ paginator.num_pages }}</span>
+            {% if filas %}
+            <button type="button" class="btn ii-btn-export ii-btn-pdf d-flex align-items-center gap-1"
+                    onclick="window.ejecutarExportacionInformeInteligente('pdf')" title="Exportar a PDF">
+                <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+            </button>
+            <button type="button" class="btn ii-btn-export ii-btn-word d-flex align-items-center gap-1"
+                    onclick="window.ejecutarExportacionInformeInteligente('word')" title="Exportar a Word">
+                <i class="bi bi-file-earmark-word-fill"></i> Word
+            </button>
+            {% endif %}
         </span>
     </div>
 

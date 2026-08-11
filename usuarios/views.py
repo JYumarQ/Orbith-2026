@@ -7,11 +7,14 @@ from django.template.loader import render_to_string
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, View
+from django.utils import timezone
 from .models import CustomUser
 from .forms import (
     CustomUserCreationForm, CustomUserChangeForm, CustomPasswordChangeForm,
     CustomAuthenticationForm, AvatarForm,
 )
+from .decorators import admin_required
+from configuracion.models import Configuracion
 
 logger = logging.getLogger(__name__)
 from django.views.generic.edit import FormView
@@ -33,7 +36,8 @@ class UsuarioListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['form'] = CustomUserCreationForm()  
+        context['form'] = CustomUserCreationForm()
+        context['configuracion'] = Configuracion.objects.first()
         return context
 
 @login_required
@@ -201,7 +205,68 @@ class CustomUserDeleteView(LoginRequiredMixin, DeleteView):
         usuario.delete()
         messages.success(request, f'Usuario "{usuario.username}" eliminado correctamente.')
         return redirect('list_usuarios')
-    
+
+
+# =========================================================================
+# MODO DE MANTENIMIENTO Y GESTIÓN DE SESIONES
+# Estas tres vistas se envuelven con `admin_required` en usuarios/urls.py:
+# no basta con ocultar los botones en la plantilla, el backend también
+# rechaza la petición si quien la hace no es Administrador.
+# =========================================================================
+
+@require_POST
+def activar_mantenimiento(request):
+    config = Configuracion.objects.first()
+    if not config:
+        return JsonResponse({'exito': False, 'mensaje': 'No existe una Configuracion global.'}, status=400)
+    config.modo_mantenimiento = True
+    config.save()
+    return JsonResponse({'exito': True, 'mensaje': 'Modo de mantenimiento activado.', 'modo_mantenimiento': True})
+
+
+@require_POST
+def desactivar_mantenimiento(request):
+    config = Configuracion.objects.first()
+    if not config:
+        return JsonResponse({'exito': False, 'mensaje': 'No existe una Configuracion global.'}, status=400)
+    config.modo_mantenimiento = False
+    config.save()
+    return JsonResponse({'exito': True, 'mensaje': 'Modo de mantenimiento desactivado.', 'modo_mantenimiento': False})
+
+
+@require_POST
+def expulsar_sesion(request, pk):
+    """Invalida la sesión de un usuario normal conectado. No borra al usuario,
+    no toca is_active ni ningún campo de permisos: solo marca
+    `sesion_invalidada_en`, que usuarios.middleware.ControlAccesoMiddleware
+    compara contra `last_login` en la siguiente petición del usuario expulsado.
+
+    Solo puede expulsarse a usuarios normales (Moderador/Observador): un
+    Administrador nunca puede ser expulsado, ni siquiera por otro Administrador
+    ni por sí mismo. Estas comprobaciones se repiten aquí aunque la plantilla
+    ya deshabilite el botón: la validación real vive en el backend.
+    """
+    usuario = get_object_or_404(CustomUser, pk=pk)
+
+    if usuario.pk == request.user.pk:
+        return JsonResponse({'exito': False, 'mensaje': 'No puedes expulsar tu propia sesión.'}, status=400)
+
+    if usuario.es_admin:
+        return JsonResponse({'exito': False, 'mensaje': 'No se puede expulsar a un Administrador.'}, status=400)
+
+    if not usuario.esta_conectado:
+        return JsonResponse({'exito': False, 'mensaje': 'El usuario ya está desconectado.'}, status=400)
+
+    # `ultima_actividad` se limpia también: si no, "Conectado/Desconectado" seguiría
+    # mostrando verde hasta que expire el umbral, aunque la sesión ya esté invalidada.
+    CustomUser.objects.filter(pk=usuario.pk).update(
+        sesion_invalidada_en=timezone.now(), ultima_actividad=None,
+    )
+    return JsonResponse({
+        'exito': True,
+        'mensaje': f'Sesión de "{usuario.username}" cerrada correctamente.',
+    })
+
 
 class CustomLoginView(LoginView):
     form_class = CustomAuthenticationForm

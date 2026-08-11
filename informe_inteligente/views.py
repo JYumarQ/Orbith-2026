@@ -1,13 +1,22 @@
 """
 Vistas del módulo Informe Inteligente.
 """
+import io
 import json
+from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
+from django.template.loader import get_template
 from django.views.decorators.http import require_POST
+
+from docx import Document
+from docx.shared import Inches, RGBColor
+from xhtml2pdf import pisa
+
+from configuracion.models import Configuracion
 
 from .metadata import (
     REGISTRO_MODELOS,
@@ -79,6 +88,104 @@ def campos_del_modelo(request, modelo_raiz):
     return render(request, "pages/informe_inteligente/partials/panel_campos.html", context)
 
 
+def _preparar_datos_informe(request):
+    """
+    Lee la configuración enviada por POST (modelo raíz + configuración JSON)
+    y arma todo lo necesario para pintar o exportar un informe: definición
+    del modelo, queryset ya filtrado, columnas elegidas e indicadores/
+    desgloses. No pagina ni resuelve las filas — eso lo decide cada
+    llamador (la vista previa solo necesita una página; las exportaciones
+    necesitan el queryset completo).
+    """
+    modelo_raiz = request.POST.get("modelo_raiz", MODELO_RAIZ_POR_DEFECTO)
+    configuracion = _leer_configuracion(request.POST.get("configuracion"))
+    definicion_modelo = _obtener_definicion(modelo_raiz)
+
+    queryset = construir_queryset(modelo_raiz, configuracion, request.user)
+    keys_campos = configuracion["campos"]
+
+    rutas_precarga = obtener_rutas_select_related(definicion_modelo, keys_campos)
+    if rutas_precarga:
+        queryset = queryset.select_related(*rutas_precarga)
+
+    # ---- Panel de resumen: se calcula SIEMPRE, encima de la tabla ----
+    indicadores, total_registros = calcular_indicadores(queryset, definicion_modelo, modelo_raiz)
+
+    keys_desglose = _normalizar_desglose(
+        configuracion.get("desglosar_por") or definicion_modelo.get("desglose_por_defecto")
+    )
+    desgloses = []
+    for key_desglose in keys_desglose:
+        filas_desglose, etiqueta = calcular_desglose(queryset, definicion_modelo, key_desglose, total_registros)
+        desgloses.append({"clave": key_desglose, "etiqueta": etiqueta, "filas": filas_desglose})
+
+    campos_elegidos = [
+        {
+            "key": k,
+            "label": definicion_modelo["campos"][k]["label"],
+            "tipo": definicion_modelo["campos"][k]["tipo"],
+        }
+        for k in keys_campos
+    ]
+
+    return {
+        "modelo_raiz": modelo_raiz,
+        "configuracion": configuracion,
+        "definicion_modelo": definicion_modelo,
+        "queryset": queryset,
+        "keys_campos": keys_campos,
+        "campos_elegidos": campos_elegidos,
+        "indicadores": indicadores,
+        "desgloses": desgloses,
+        "total_registros": total_registros,
+    }
+
+
+def _construir_filas(definicion_modelo, keys_campos, objetos):
+    """
+    Traduce cada objeto del queryset a un dict {clave_campo: valor_a_mostrar}.
+
+    Para cada registro, extrae el valor de cada campo elegido según su
+    ruta_orm (o ruta_visual si existe, como en grupo_escala, donde se
+    filtra por número pero se muestra el romano). Los campos de opción se
+    traducen a su etiqueta visible: en la tabla debe leerse "Cuadro", nunca
+    el código CDI o CEJ. La usan tanto la vista previa como las
+    exportaciones, para que muestren siempre lo mismo.
+    """
+    traducciones = {
+        key: mapa_valor_a_etiqueta(definicion_modelo["campos"][key])
+        for key in keys_campos
+        if definicion_modelo["campos"][key]["tipo"] == "opcion"
+    }
+
+    filas = []
+    for objeto in objetos:
+        fila = {}
+        for key in keys_campos:
+            if key == "cumpleanos":
+                # Campo compuesto (mes_nacimiento + dia_nacimiento, ver
+                # motor.py): no tiene una única ruta ORM que recorrer.
+                mes = getattr(objeto, "mes_nacimiento", None)
+                dia = getattr(objeto, "dia_nacimiento", None)
+                fila[key] = f"{dia:02d} {MESES_ABREVIADOS.get(mes, '')}" if mes and dia else None
+                continue
+            campo = definicion_modelo["campos"][key]
+            ruta_para_mostrar = campo.get("ruta_visual") or campo["ruta_orm"] or key
+            valor = _resolver_valor_por_ruta(objeto, ruta_para_mostrar)
+            fila[key] = traducciones.get(key, {}).get(valor, valor)
+        filas.append(fila)
+    return filas
+
+
+def _fecha_generacion_es():
+    """Fecha/hora actual en español, mismo formato que usa el informe de Puestos Claves."""
+    dt = datetime.now()
+    meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+             'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+    dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+    return f"{dias[dt.weekday()]}, {dt.day:02d} de {meses[dt.month - 1]} de {dt.year} | {dt.strftime('%I:%M %p')}"
+
+
 @login_required
 @require_POST
 def generar_vista_previa(request):
@@ -89,88 +196,34 @@ def generar_vista_previa(request):
 
     También actualiza el 'último informe ejecutado' del usuario.
     """
-    modelo_raiz = request.POST.get("modelo_raiz", MODELO_RAIZ_POR_DEFECTO)
     pagina_num = request.POST.get("pagina", 1)
 
     try:
-        configuracion = _leer_configuracion(request.POST.get("configuracion"))
-        definicion_modelo = _obtener_definicion(modelo_raiz)
-
-        queryset = construir_queryset(modelo_raiz, configuracion, request.user)
-        keys_campos = configuracion["campos"]
-
-        rutas_precarga = obtener_rutas_select_related(definicion_modelo, keys_campos)
-        if rutas_precarga:
-            queryset = queryset.select_related(*rutas_precarga)
-
-        # ---- Panel de resumen: se calcula SIEMPRE, encima de la tabla ----
-        indicadores, total_registros = calcular_indicadores(queryset, definicion_modelo, modelo_raiz)
-
-        keys_desglose = _normalizar_desglose(
-            configuracion.get("desglosar_por") or definicion_modelo.get("desglose_por_defecto")
-        )
-        desgloses = []
-        for key_desglose in keys_desglose:
-            filas, etiqueta = calcular_desglose(queryset, definicion_modelo, key_desglose, total_registros)
-            desgloses.append({"clave": key_desglose, "etiqueta": etiqueta, "filas": filas})
+        datos = _preparar_datos_informe(request)
 
         # ---- Listado paginado ----
-        paginator = Paginator(queryset, REGISTROS_POR_PAGINA)
+        paginator = Paginator(datos["queryset"], REGISTROS_POR_PAGINA)
         pagina = paginator.get_page(pagina_num)
-
-        # Preparar las filas: para cada registro, extraer el valor de cada
-        # campo elegido según su ruta_orm (o ruta_visual si existe, como en
-        # grupo_escala, donde se filtra por número pero se muestra el romano).
-        # Los campos de opción se traducen a su etiqueta visible: en la tabla
-        # debe leerse "Cuadro", nunca el código CDI o CEJ.
-        traducciones = {
-            key: mapa_valor_a_etiqueta(definicion_modelo["campos"][key])
-            for key in keys_campos
-            if definicion_modelo["campos"][key]["tipo"] == "opcion"
-        }
-
-        filas = []
-        for objeto in pagina.object_list:
-            fila = {}
-            for key in keys_campos:
-                if key == "cumpleanos":
-                    # Campo compuesto (mes_nacimiento + dia_nacimiento, ver
-                    # motor.py): no tiene una única ruta ORM que recorrer.
-                    mes = getattr(objeto, "mes_nacimiento", None)
-                    dia = getattr(objeto, "dia_nacimiento", None)
-                    fila[key] = f"{dia:02d} {MESES_ABREVIADOS.get(mes, '')}" if mes and dia else None
-                    continue
-                campo = definicion_modelo["campos"][key]
-                ruta_para_mostrar = campo.get("ruta_visual") or campo["ruta_orm"] or key
-                valor = _resolver_valor_por_ruta(objeto, ruta_para_mostrar)
-                fila[key] = traducciones.get(key, {}).get(valor, valor)
-            filas.append(fila)
+        filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], pagina.object_list)
 
         # Recordar este informe como el último ejecutado por el usuario
         UltimoInformeEjecutado.objects.update_or_create(
             usuario=request.user,
             defaults={
-                "modelo_raiz": modelo_raiz,
-                "configuracion": configuracion,
-                "total_registros": total_registros,
+                "modelo_raiz": datos["modelo_raiz"],
+                "configuracion": datos["configuracion"],
+                "total_registros": datos["total_registros"],
             }
         )
 
         context = {
-            "indicadores": indicadores,
-            "desgloses": desgloses,
+            "indicadores": datos["indicadores"],
+            "desgloses": datos["desgloses"],
             "filas": filas,
-            "campos_elegidos": [
-                {
-                    "key": k,
-                    "label": definicion_modelo["campos"][k]["label"],
-                    "tipo": definicion_modelo["campos"][k]["tipo"],
-                }
-                for k in keys_campos
-            ],
+            "campos_elegidos": datos["campos_elegidos"],
             "pagina": pagina,
             "paginator": paginator,
-            "total_registros": total_registros,
+            "total_registros": datos["total_registros"],
         }
         return render(request, "pages/informe_inteligente/partials/resultados.html", context)
 
@@ -181,6 +234,118 @@ def generar_vista_previa(request):
             {"error": str(e)},
             status=400,
         )
+
+
+@login_required
+@require_POST
+def exportar_pdf(request):
+    """
+    Exporta a PDF exactamente lo que el usuario configuró en pantalla
+    (mismos filtros, columnas y orden que la vista previa), con el logo,
+    nombre de empresa y fecha en el mismo estilo que usa la exportación
+    del Informe de Puestos Claves (`informes/views.py::ExportarPuestosClavePDFView`).
+    """
+    try:
+        datos = _preparar_datos_informe(request)
+    except ConfiguracionInformeInvalida as e:
+        return HttpResponse(str(e), status=400)
+
+    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
+
+    config = Configuracion.objects.first()
+    context = {
+        "titulo_informe": datos["definicion_modelo"]["label"],
+        "campos_elegidos": datos["campos_elegidos"],
+        "filas": filas,
+        "total_registros": datos["total_registros"],
+        "config": config,
+        "nombre_empresa": config.nombre_empresa if config else "Empresa Eléctrica",
+        "fecha_generacion": _fecha_generacion_es(),
+    }
+
+    template = get_template("pages/informe_inteligente/partials/informe_pdf.html")
+    html = template.render(context)
+
+    response = HttpResponse(content_type="application/pdf")
+    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    pisa_status = pisa.CreatePDF(html, dest=response)
+    if pisa_status.err:
+        return HttpResponse("Hubo un error al generar el PDF", status=500)
+    return response
+
+
+@login_required
+@require_POST
+def exportar_word(request):
+    """
+    Igual que `exportar_pdf` pero en Word. Se genera directamente con
+    python-docx (sin plantilla .docx externa) porque el mecanismo de
+    plantilla que usa Puestos Claves (docxtpl) depende de un archivo
+    .docx que no existe en el repositorio.
+    """
+    try:
+        datos = _preparar_datos_informe(request)
+    except ConfiguracionInformeInvalida as e:
+        return HttpResponse(str(e), status=400)
+
+    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
+    campos_elegidos = datos["campos_elegidos"]
+
+    config = Configuracion.objects.first()
+    nombre_empresa = config.nombre_empresa if config else "Empresa Eléctrica"
+
+    documento = Document()
+
+    if config and config.logo:
+        try:
+            documento.add_picture(config.logo.path, width=Inches(1.0))
+        except Exception:
+            pass  # sin logo físico disponible: el documento se genera igual
+
+    encabezado = documento.add_heading(nombre_empresa, level=1)
+    encabezado.runs[0].font.color.rgb = RGBColor(0x1e, 0x3a, 0x8a)
+
+    subtitulo = documento.add_paragraph()
+    run_subtitulo = subtitulo.add_run("Gestión de Capital Humano")
+    run_subtitulo.font.color.rgb = RGBColor(0xea, 0x58, 0x0c)
+    run_subtitulo.font.bold = True
+
+    documento.add_heading(datos["definicion_modelo"]["label"], level=2)
+
+    meta = documento.add_paragraph()
+    meta.add_run(
+        f'Generado: {_fecha_generacion_es()}  |  Total de registros: {datos["total_registros"]}'
+    ).italic = True
+
+    tabla = documento.add_table(rows=1, cols=len(campos_elegidos))
+    tabla.style = "Light Grid Accent 1"
+
+    celdas_cabecera = tabla.rows[0].cells
+    for i, campo in enumerate(campos_elegidos):
+        celdas_cabecera[i].text = campo["label"]
+        for parrafo in celdas_cabecera[i].paragraphs:
+            for run in parrafo.runs:
+                run.font.bold = True
+
+    for fila in filas:
+        celdas = tabla.add_row().cells
+        for i, campo in enumerate(campos_elegidos):
+            valor = fila.get(campo["key"])
+            celdas[i].text = "" if valor in (None, "") else str(valor)
+
+    buffer = io.BytesIO()
+    documento.save(buffer)
+    buffer.seek(0)
+
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.docx'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 def _leer_configuracion(configuracion_cruda):

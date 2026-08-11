@@ -95,10 +95,14 @@ class NSalario(Base):
         unique_together = ('grupo_escala', 'rol', 'tridente')
 
     def __str__(self):
-        if self.rol and self.rol.es_cuadro:
-             return f"{self.grupo_escala} - {self.rol} (CUADRO): ${self.monto}"
-        elif self.rol and self.tridente:
+        # `NRol` ya no tiene `es_cuadro` (se movió a `NCargo.es_cuadro`, basado en
+        # `cat_ocupacional`). Una fila de escala de Cuadro se reconoce por tener `rol`
+        # pero NO `tridente`: así es como `calcular_salario()` la guarda y la busca
+        # (ver `contratos/salarios.py`) — un Cuadro cobra sin tridente.
+        if self.rol and self.tridente:
             return f"{self.grupo_escala} - {self.rol} - {self.tridente}: ${self.monto}"
+        elif self.rol:
+            return f"{self.grupo_escala} - {self.rol} (CUADRO): ${self.monto}"
         return f"Salario {self.pk}"
         
 class NTipoFamilia(Base):

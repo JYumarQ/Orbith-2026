@@ -213,7 +213,22 @@ class CAlta(ContratoBase):
     class Meta:
         verbose_name = ("Alta")
         verbose_name_plural = ("Altas")
-        
+        constraints = [
+            # Mitad de la "REGLA DE ORO" que SÍ se puede expresar en una CHECK de una
+            # sola tabla: un salario Fijo nunca debe tener tridente. Protege incluso
+            # contra escrituras que se saltan `save()` (bulk_update, SQL directo).
+            #
+            # La otra mitad (Cuadro ⇒ sin tridente) depende de NCargo.cat_ocupacional
+            # vía `cargo__ncargo`, una tabla relacionada: PostgreSQL no permite un
+            # CHECK entre tablas sin un trigger, así que esa mitad se queda a cargo
+            # del "escudo" de `save()`, de `CAltaForm.clean()` y de la regla CTR-009
+            # de Subsanación.
+            models.CheckConstraint(
+                check=~models.Q(tipo_salario='FIJ', tridente__isnull=False),
+                name='calta_fijo_sin_tridente',
+            ),
+        ]
+
     @staticmethod
     def actualizar_aspirante(doc_aspirante):
         # CAMBIO: Ahora actualizamos el ESTADO a 'ACTIVO'
@@ -361,11 +376,21 @@ class CAlta(ContratoBase):
                     cargo_anterior_id = anterior['cargo_id']
 
             # EL ESCUDO: Asignación y Limpieza real en base de datos
-            if self.tipo_salario == 'DIN' and not self.tridente:
+            #
+            # Misma "REGLA DE ORO" que `CAltaForm.clean()` (contratos/forms.py): un
+            # Cuadro no usa tridente (calcular_salario() lo ignora para ese caso), así
+            # que aquí también hay que anularlo, no solo cuando el salario es Fijo. Sin
+            # esta simetría, un guardado que no pase por el formulario (admin de
+            # Django, un script, un cargo que pasa a ser Cuadro después del alta)
+            # puede dejar un contrato dinámico de Cuadro con tridente asignado.
+            ncargo = self.cargo.ncargo if self.cargo_id else None
+            es_cuadro = bool(ncargo.es_cuadro) if ncargo else False
+
+            if es_cuadro or self.tipo_salario == 'FIJ':
+                self.tridente = None
+            elif self.tipo_salario == 'DIN' and not self.tridente:
                 from nomencladores.models import NTridente
                 self.tridente = NTridente.objects.filter(tipo='I').first()
-            elif self.tipo_salario == 'FIJ':
-                self.tridente = None  # Obligamos a que el fijo sea NULL
 
             if es_nuevo:
                 self.actualizar_aspirante(self.aspirante.doc_identidad)
@@ -417,6 +442,18 @@ class CAlta(ContratoBase):
                 logger.exception(
                     "No se pudieron evaluar/notificar las alertas de integridad "
                     "del contrato %s.", self.pk)
+
+            # Si este guardado corrigió un hallazgo de Subsanación (p. ej. CTR-009,
+            # el tridente indebido), lo cierra ya mismo en vez de esperar al próximo
+            # análisis completo. Ver el docstring de la función para por qué esto es
+            # seguro sin recorrer toda la tabla.
+            try:
+                from subsanacion.servicios import reconciliar_hallazgos_en_caliente
+                reconciliar_hallazgos_en_caliente(self)
+            except Exception:
+                logger.exception(
+                    "No se pudieron reconciliar los hallazgos de Subsanación del "
+                    "contrato %s.", self.pk)
 
             if es_nuevo:
                 try:

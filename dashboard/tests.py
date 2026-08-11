@@ -8,8 +8,9 @@ sobrecupo real. Ahora `totales` es siempre la plantilla aprobada, así que el
 porcentaje de ocupación puede superar el 100% cuando corresponde.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
+from django.contrib.contenttypes.models import ContentType
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
@@ -18,10 +19,11 @@ from contratos.models import CAlta, CBaja
 from dashboard.filtros import resolver_filtros, unidades_visibles
 from dashboard.views import (CORTES_EDAD_DEFECTO, DashboardView,
                               _bucket_edad, _categorias_edad,
-                              _cortes_edad_desde_request)
+                              _cortes_edad_desde_request, _rango_semana)
 from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio,
                                    NProvincia, NTipoContrato,
                                    NTipoUnidadOrganizativa)
+from notificaciones.models import Notificacion
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
 from usuarios.models import CustomUser
 
@@ -269,29 +271,24 @@ class FiltrosUOTests(TestCase):
         return request
 
     def test_moderador_solo_ve_su_propia_uo_por_defecto(self):
-        uo_ids, depto_ids, _ = resolver_filtros(self._request(self.moderador))
+        uo_ids, _ = resolver_filtros(self._request(self.moderador))
         self.assertEqual(uo_ids, {self.unidad_propia.pk})
 
     def test_moderador_no_puede_filtrar_uo_ajena_por_querystring(self):
-        uo_ids, depto_ids, _ = resolver_filtros(
+        uo_ids, _ = resolver_filtros(
             self._request(self.moderador, uo=self.unidad_ajena.pk))
         # El id ajeno se descarta; el resultado es el mismo que sin selección:
         # el alcance propio del moderador, nunca la UO ajena ni el universo vacío.
         self.assertEqual(uo_ids, {self.unidad_propia.pk})
         self.assertNotIn(self.unidad_ajena.pk, uo_ids)
 
-    def test_moderador_no_puede_filtrar_departamento_ajeno(self):
-        uo_ids, depto_ids, _ = resolver_filtros(
-            self._request(self.moderador, depto=self.depto_ajeno.pk))
-        self.assertNotIn(self.depto_ajeno.pk, depto_ids)
-
     def test_administrador_puede_filtrar_cualquier_uo(self):
-        uo_ids, depto_ids, _ = resolver_filtros(
+        uo_ids, _ = resolver_filtros(
             self._request(self.admin, uo=self.unidad_ajena.pk))
         self.assertEqual(uo_ids, {self.unidad_ajena.pk})
 
     def test_observador_puede_filtrar_cualquier_uo(self):
-        uo_ids, depto_ids, _ = resolver_filtros(
+        uo_ids, _ = resolver_filtros(
             self._request(self.observador, uo=self.unidad_propia.pk))
         self.assertEqual(uo_ids, {self.unidad_propia.pk})
 
@@ -302,3 +299,214 @@ class FiltrosUOTests(TestCase):
     def test_unidades_visibles_moderador_solo_las_asignadas(self):
         visibles = set(unidades_visibles(self.moderador).values_list('pk', flat=True))
         self.assertEqual(visibles, {self.unidad_propia.pk})
+
+    def test_uo_count_depto_count_sin_seleccion_es_alcance_completo(self):
+        # Admin sin seleccionar nada: ve las 2 UO y sus 2 departamentos.
+        _, contexto = resolver_filtros(self._request(self.admin))
+        self.assertEqual(contexto['uo_count'], 2)
+        self.assertEqual(contexto['depto_count'], 2)
+
+    def test_uo_count_depto_count_con_una_uo_seleccionada(self):
+        _, contexto = resolver_filtros(
+            self._request(self.admin, uo=self.unidad_propia.pk))
+        self.assertEqual(contexto['uo_count'], 1)
+        self.assertEqual(contexto['depto_count'], 1)
+
+    def test_uo_count_depto_count_con_varias_uo_seleccionadas(self):
+        query = f'uo={self.unidad_propia.pk}&uo={self.unidad_ajena.pk}'
+        request = self.factory.get(f'/dashboard/?{query}')
+        request.user = self.admin
+        _, contexto = resolver_filtros(request)
+        self.assertEqual(contexto['uo_count'], 2)
+        self.assertEqual(contexto['depto_count'], 2)
+
+
+class RecordatoriosContratoTests(TestCase):
+    """La tarjeta Recordatorios del Dashboard reutiliza
+    `notificaciones.recordatorios.detectar_contratos_por_vencer` — mismo
+    horizonte de 60 días y misma exclusión de contratos "Indeterminado" que
+    usa la pestaña Recordatorios de Notificaciones — para no tener dos
+    criterios distintos de "cuándo un contrato está por vencer"."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=cls.tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Contabilidad', unidad_organizativa=cls.unidad, orden_informe=1)
+        cls.grupo = NGrupoEscala.objects.create(nivel='IV')
+        cls.ncargo = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=cls.grupo, salario_basico=4000)
+        cls.cargo = CargoPlantilla.objects.create(
+            ncargo=cls.ncargo, departamento=cls.departamento, cant_aprobada=10, orden_informe=1)
+        cls.provincia, cls.municipio = _crear_provincia_municipio()
+        cls.tipo_determinado = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+        cls.tipo_indeterminado = NTipoContrato.objects.create(
+            descripcion='Contrato Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+
+        hoy = date.today()
+
+        def _crear_aspirante(seq):
+            return Aspirante.objects.create(
+                nombre=f'Trab{seq}', papellido='Prueba', sapellido='Test',
+                doc_identidad=_ci_para_edad(30, seq), estado='ACTIVO', sexo='F', raza='BL',
+                provincia=cls.provincia, municipio=cls.municipio)
+
+        # Vence en 30 días: dentro del horizonte de 60 días -> debe aparecer.
+        cls.asp_por_vencer = _crear_aspirante(10)
+        CAlta.objects.create(
+            aspirante=cls.asp_por_vencer, no_expediente='10001', tipo=cls.tipo_determinado,
+            cargo=cls.cargo, fecha_alta=hoy - timedelta(days=10), duracion=40)
+
+        # Vence en 90 días: fuera del horizonte -> no debe aparecer.
+        cls.asp_lejano = _crear_aspirante(11)
+        CAlta.objects.create(
+            aspirante=cls.asp_lejano, no_expediente='10002', tipo=cls.tipo_determinado,
+            cargo=cls.cargo, fecha_alta=hoy, duracion=90)
+
+        # Indeterminado, vence "pronto" en teoría -> excluido siempre.
+        cls.asp_indeterminado = _crear_aspirante(12)
+        CAlta.objects.create(
+            aspirante=cls.asp_indeterminado, no_expediente='10003', tipo=cls.tipo_indeterminado,
+            cargo=cls.cargo, fecha_alta=hoy - timedelta(days=10), duracion=40)
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_recordatorios', password='x', es_admin=True)
+
+    def test_recordatorios_incluye_solo_contratos_determinados_dentro_del_horizonte(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'))
+        titulos = [r['titulo'] for r in respuesta.context['recordatorios_contrato']]
+
+        self.assertTrue(any('Trab10' in t for t in titulos))
+        self.assertFalse(any('Trab11' in t for t in titulos))
+        self.assertFalse(any('Trab12' in t for t in titulos))
+
+
+class AdvertenciasTests(TestCase):
+    """La tarjeta Advertencias reutiliza
+    `notificaciones.filtros.filtrar_advertencias` (alcance por usuario/rol,
+    filtro de severidad) y además se acota por la UO del Dashboard."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=cls.tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.otra_unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=cls.tipo_unidad, grupo_nomina=2, orden_informe=2)
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_advertencias', password='x', es_admin=True)
+
+        ct = ContentType.objects.get_for_model(Aspirante)
+        cls.advertencia_critica = Notificacion.objects.create(
+            titulo='Advertencia crítica', mensaje='...', tipo=Notificacion.Tipo.ALERTA,
+            estado=Notificacion.Estado.ACTIVA, severidad=10,
+            content_type=ct, object_id='1', unidad=cls.unidad, destinatario=cls.admin)
+        cls.advertencia_otra_uo = Notificacion.objects.create(
+            titulo='Advertencia de otra UO', mensaje='...', tipo=Notificacion.Tipo.ALERTA,
+            estado=Notificacion.Estado.ACTIVA, severidad=20,
+            content_type=ct, object_id='2', unidad=cls.otra_unidad, destinatario=cls.admin)
+
+    def test_advertencias_aparecen_sin_filtro(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'))
+        titulos = [a.titulo for a in respuesta.context['advertencias']]
+        self.assertIn('Advertencia crítica', titulos)
+        self.assertIn('Advertencia de otra UO', titulos)
+
+    def test_advertencias_se_acotan_por_uo_seleccionada(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'), {'uo': self.unidad.pk})
+        titulos = [a.titulo for a in respuesta.context['advertencias']]
+        self.assertIn('Advertencia crítica', titulos)
+        self.assertNotIn('Advertencia de otra UO', titulos)
+
+    def test_advertencias_respeta_filtro_de_severidad(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'), {'severidad': 10})
+        titulos = [a.titulo for a in respuesta.context['advertencias']]
+        self.assertIn('Advertencia crítica', titulos)
+        self.assertNotIn('Advertencia de otra UO', titulos)
+
+
+class CumpleanosSemanaTests(TestCase):
+    """Las pestañas 'Semana actual' y 'Próxima semana' de Cumpleaños usan
+    `_rango_semana` (mismo criterio lunes-domingo que Informe Inteligente),
+    sin tocar la lógica de 'Cercanos' (que sigue basada en `doc_identidad`,
+    sin cambios)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=cls.tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Contabilidad', unidad_organizativa=cls.unidad, orden_informe=1)
+        cls.grupo = NGrupoEscala.objects.create(nivel='IV')
+        cls.ncargo = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=cls.grupo, salario_basico=4000)
+        cls.cargo = CargoPlantilla.objects.create(
+            ncargo=cls.ncargo, departamento=cls.departamento, cant_aprobada=10, orden_informe=1)
+        cls.provincia, cls.municipio = _crear_provincia_municipio()
+        cls.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+
+        lunes_actual, _domingo_actual = _rango_semana(0)
+        lunes_prox, _domingo_prox = _rango_semana(1)
+
+        def _fecha_nacimiento_para(fecha_mes_dia, edad=30):
+            """Fecha de nacimiento realista (edad ~30) que cae en el mismo
+            (mes, día) que `fecha_mes_dia` — el año de esta última es
+            irrelevante, solo importan mes/día para el cálculo de cumpleaños."""
+            anno = date.today().year - edad
+            try:
+                return date(anno, fecha_mes_dia.month, fecha_mes_dia.day)
+            except ValueError:
+                return date(anno, fecha_mes_dia.month, fecha_mes_dia.day - 1)
+
+        def _crear_con_cumple(seq, fecha_nacimiento):
+            century_digit = 0 if fecha_nacimiento.year < 2000 else 6
+            ci = (f"{fecha_nacimiento.year % 100:02d}{fecha_nacimiento.month:02d}"
+                  f"{fecha_nacimiento.day:02d}{century_digit}{seq:04d}")
+            asp = Aspirante.objects.create(
+                nombre=f'Cumple{seq}', papellido='Prueba', sapellido='Test',
+                doc_identidad=ci, estado='ACTIVO', sexo='F', raza='BL',
+                provincia=cls.provincia, municipio=cls.municipio)
+            CAlta.objects.create(
+                aspirante=asp, no_expediente=f'2000{seq}', tipo=cls.tipo_contrato,
+                cargo=cls.cargo, fecha_alta=date.today() - timedelta(days=365))
+            return asp
+
+        cls.asp_esta_semana = _crear_con_cumple(1, _fecha_nacimiento_para(lunes_actual))
+        cls.asp_prox_semana = _crear_con_cumple(
+            2, _fecha_nacimiento_para(lunes_prox + timedelta(days=3)))
+        cls.asp_fuera_de_rango = _crear_con_cumple(
+            3, _fecha_nacimiento_para(lunes_actual - timedelta(days=15)))
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_cumpleanos', password='x', es_admin=True)
+
+    def test_cumpleanos_semana_actual(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'))
+        nombres = [c['nombre'] for c in respuesta.context['cumpleanos_semana_actual']]
+        self.assertTrue(any('Cumple1' in n for n in nombres))
+        self.assertFalse(any('Cumple2' in n for n in nombres))
+        self.assertFalse(any('Cumple3' in n for n in nombres))
+
+    def test_cumpleanos_proxima_semana(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'))
+        nombres = [c['nombre'] for c in respuesta.context['cumpleanos_semana_prox']]
+        self.assertTrue(any('Cumple2' in n for n in nombres))
+        self.assertFalse(any('Cumple1' in n for n in nombres))
+        self.assertFalse(any('Cumple3' in n for n in nombres))

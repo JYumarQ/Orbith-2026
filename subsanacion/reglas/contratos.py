@@ -1,5 +1,6 @@
 """Reglas de integridad de los contratos de alta."""
 
+from django.apps import apps
 from django.db.models import Count, F, Q
 
 from ..constantes import (
@@ -474,43 +475,142 @@ class AspiranteConMultiplesContratos(ReglaContratos):
             )
 
 
-class SalarioFijoConTridente(ReglaContratos):
+def _tridente_indebido(tipo_salario, es_cuadro):
+    """Pura: recibe valores escalares, no un dict ni una instancia.
+
+    La usan `ejecutar()` (con valores de `.values()`) y, si en el futuro se activa
+    `evaluable_en_caliente` para esta regla, también `evaluar_instancia()` — mismo
+    patrón que `_grado_cientifico_sin_reflejar` (CTR-007) — para que el criterio
+    nunca pueda divergir de la "REGLA DE ORO" de `contratos/forms.py::CAltaForm.clean()`
+    ni de `contratos/salarios.py::calcular_salario()`: un salario Fijo, o un cargo de
+    categoría Cuadro, no usan tridente.
+
+    Devuelve la `clave_extra` del problema, o `''` si el tridente es correcto.
+    """
+    if tipo_salario == 'FIJ':
+        return 'fijo_con_tridente'
+    if es_cuadro:
+        return 'cuadro_con_tridente'
+    return ''
+
+
+class TridenteIndebido(ReglaContratos):
+    """Un mismo problema con dos variantes: fijo con tridente y cuadro con tridente.
+
+    Se agrupan en una sola clase porque comparten causa, impacto y solución (el
+    tridente solo aplica al salario dinámico en un cargo que no es de categoría
+    Cuadro); se distinguen con `clave_extra` para poder revisar cada variante por
+    separado, igual que `MotivoIncoherenteConTipo` (CTR-002) y
+    `GradoCientificoSinReflejar` (CTR-007).
+    """
+
     codigo = 'CTR-009'
-    nombre = 'Contrato de salario fijo con tridente asignado'
+    nombre = 'Contrato con tridente asignado indebidamente'
     criticidad = CRITICIDAD_BAJA
+    # Evaluable en caliente: O(1) — un único campo propio (`tipo_salario`) más un
+    # salto de FK ya resuelto por `calcular_salario_escala()` momentos antes en el
+    # mismo `save()` (`self.cargo.ncargo`), así que no añade una consulta nueva. Es
+    # lo que permite que `subsanacion.servicios.reconciliar_hallazgos_en_caliente()`
+    # cierre el hallazgo en el momento en que se corrige, sin esperar al barrido
+    # periódico (ver esa función para el porqué no todas las reglas hacen esto).
+    evaluable_en_caliente = True
 
     descripcion = (
-        'Un contrato de salario fijo no debería tener tridente: el tridente solo '
-        'aplica al salario dinámico por escala.')
+        'El tridente solo aplica a un contrato de salario dinámico cuyo cargo NO '
+        'es de categoría Cuadro (Directivo o Ejecutivo). Busca contratos que '
+        'tengan tridente asignado a pesar de no cumplir esa condición: salario '
+        'fijo, o cargo de Cuadro con salario dinámico.')
     causa_probable = (
-        'El contrato cambió de salario dinámico a fijo. CAlta.save() limpia el '
-        'tridente al guardar en ese caso, así que este dato solo puede quedar '
-        'así si la fila se escribió sin pasar por el formulario.')
+        'El contrato cambió de salario dinámico a fijo, o el cargo del contrato '
+        'cambió a una categoría ocupacional de Cuadro, después de que el '
+        'tridente ya estuviera asignado. CAlta.save() limpia el tridente al '
+        'guardar en ambos casos, así que este dato solo puede quedar así si la '
+        'fila se escribió sin pasar por el formulario (por ejemplo, desde el '
+        'admin de Django o un script).')
     impacto = (
         'Es una inconsistencia menor: el tridente no se usa para el cálculo '
-        '(el salario fijo toma el básico del cargo), pero indica que el registro '
-        'se escribió por una vía que no respeta las reglas del formulario.')
+        'en ninguno de los dos casos (el salario fijo toma el básico del cargo, '
+        'y un Cuadro cobra por su escala sin tridente), pero indica que el '
+        'registro se escribió por una vía que no respeta las reglas del '
+        'formulario.')
     solucion = (
-        'Abra el contrato y guárdelo: al guardar con salario fijo, Orbith limpia '
-        'el tridente automáticamente.')
+        'Abra el contrato y guárdelo: al guardar, Orbith limpia el tridente '
+        'automáticamente cuando el salario es fijo o el cargo es de Cuadro.')
 
     def ejecutar(self, contexto):
+        columnas = self.COLUMNAS_BASE + (
+            'tipo_salario', 'tridente__tipo', 'cargo__ncargo__cat_ocupacional')
+
         filas = (self.base_queryset()
-                 .filter(tipo_salario='FIJ', tridente__isnull=False)
-                 .values(*self.COLUMNAS_BASE, 'tridente__tipo')
+                 .filter(tridente__isnull=False)
+                 .values(*columnas)
                  .iterator(chunk_size=TAMANO_LOTE))
 
+        NCargo = apps.get_model('nomencladores', 'NCargo')
+
         for fila in filas:
+            categoria = fila.get('cargo__ncargo__cat_ocupacional')
+            es_cuadro = categoria in NCargo.CATEGORIAS_CUADRO
+            clave_extra = _tridente_indebido(fila.get('tipo_salario'), es_cuadro)
+            if not clave_extra:
+                continue
+
             tridente = fila.get('tridente__tipo') or '—'
+            if clave_extra == 'fijo_con_tridente':
+                sufijo = f'salario fijo con tridente «{tridente}»'
+                detalle = (
+                    f'El contrato es de salario fijo pero tiene el tridente '
+                    f'«{tridente}» asignado, cuando el salario fijo no usa tridente.')
+                tipo_de_salario = 'Fijo'
+            else:
+                sufijo = f'cargo de Cuadro con tridente «{tridente}»'
+                detalle = (
+                    f'El contrato es de salario dinámico en un cargo de categoría '
+                    f'Cuadro, pero tiene el tridente «{tridente}» asignado, cuando '
+                    f'un Cuadro no usa tridente.')
+                tipo_de_salario = 'Dinámico (Cuadro)'
+
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
-                titulo=self.titulo_de(fila, f'salario fijo con tridente «{tridente}»'),
-                detalle=(
-                    f'El contrato es de salario fijo pero tiene el tridente '
-                    f'«{tridente}» asignado, cuando el salario fijo no usa tridente.'),
-                datos={'tipo_de_salario': 'Fijo', 'tridente_asignado': tridente},
+                clave_extra=clave_extra,
+                titulo=self.titulo_de(fila, sufijo),
+                detalle=detalle,
+                datos={'tipo_de_salario': tipo_de_salario, 'tridente_asignado': tridente},
                 unidad_organizativa_id=self.unidad_de(fila),
             )
+
+    def evaluar_instancia(self, contrato):
+        # Mismo filtro que `ejecutar()`: sin tridente asignado no hay nada indebido
+        # que reportar, sea cual sea el tipo de salario o el cargo.
+        if not contrato.tridente_id:
+            return None
+
+        ncargo = contrato.cargo.ncargo if contrato.cargo_id else None
+        es_cuadro = bool(ncargo.es_cuadro) if ncargo else False
+        clave_extra = _tridente_indebido(contrato.tipo_salario, es_cuadro)
+        if not clave_extra:
+            return None
+
+        tridente = contrato.tridente.tipo
+        if clave_extra == 'fijo_con_tridente':
+            detalle = (
+                f'El contrato es de salario fijo pero tiene el tridente '
+                f'«{tridente}» asignado, cuando el salario fijo no usa tridente.')
+            tipo_de_salario = 'Fijo'
+        else:
+            detalle = (
+                f'El contrato es de salario dinámico en un cargo de categoría '
+                f'Cuadro, pero tiene el tridente «{tridente}» asignado, cuando '
+                f'un Cuadro no usa tridente.')
+            tipo_de_salario = 'Dinámico (Cuadro)'
+
+        return [HallazgoDetectado(
+            object_id=str(contrato.pk),
+            clave_extra=clave_extra,
+            titulo=f'Tridente «{tridente}» asignado indebidamente',
+            detalle=detalle,
+            datos={'tipo_de_salario': tipo_de_salario, 'tridente_asignado': tridente},
+        )]
 
 
 class NocturnidadesDuplicadas(ReglaContratos):

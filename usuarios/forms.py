@@ -14,18 +14,20 @@ class CustomUserCreationForm(UserCreationForm):
     )
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades')
+        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active')
         labels = {
             'es_admin': 'Es Administrador',
             'es_moderador': 'Es Moderador',
-            'es_observador': 'Es Observador'
+            'es_observador': 'Es Observador',
+            'is_active': 'Activo'
         }
 
         widgets = {
             'es_admin': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'es_moderador': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'es_observador': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+
             'unidades': forms.SelectMultiple(attrs={'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'}),
         }
 
@@ -64,14 +66,15 @@ class CustomUserChangeForm(UserChangeForm):
     )
     class Meta:
         model = CustomUser
-        fields = ('username', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades')
+        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active')
 
         labels = {
             'es_admin': 'Es Administrador',
             'es_moderador': 'Es Moderador',
-            'es_observador': 'Es Observador'
+            'es_observador': 'Es Observador',
+            'is_active': 'Activo'
         }
-        
+
     def clean_username(self):
         username = self.cleaned_data['username']
         if CustomUser.objects.exclude(pk=self.instance.pk).filter(username=username).exists():
@@ -82,9 +85,11 @@ class CustomUserChangeForm(UserChangeForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].widget.attrs.update({'class': 'form-control'})
+        self.fields['email'].widget.attrs.update({'class': 'form-control'})
         self.fields['es_admin'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['es_moderador'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['es_observador'].widget.attrs.update({'class': 'form-check-input'})
+        self.fields['is_active'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['contrato'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'})
         self.fields['unidades'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'})
         self.fields['contrato'].label_from_instance = lambda obj: (
@@ -194,7 +199,7 @@ class CustomAuthenticationForm(AuthenticationForm):
     def clean(self):
         cleaned_data = super().clean()
         user = self.get_user()
-        
+
         if user is not None:
             # Verificar que el usuario tenga al menos un rol activo
             if not (user.es_admin or user.es_moderador or user.es_observador):
@@ -202,5 +207,17 @@ class CustomAuthenticationForm(AuthenticationForm):
                     "Tu usuario no tiene un rol asignado. Contacta al administrador.",
                     code='invalid_login'
                 )
-        
+
+            # Modo de mantenimiento: solo los Administradores pueden entrar.
+            # Reutiliza el mismo singleton que usuarios.middleware.ControlAccesoMiddleware.
+            from configuracion.models import Configuracion
+            if not user.es_admin:
+                config = Configuracion.objects.first()
+                if config and config.modo_mantenimiento:
+                    raise ValidationError(
+                        "Orbith se encuentra temporalmente en mantenimiento. "
+                        "Por favor, intenta iniciar sesión más tarde.",
+                        code='invalid_login'
+                    )
+
         return cleaned_data

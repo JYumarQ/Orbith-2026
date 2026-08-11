@@ -28,6 +28,13 @@
           {% endif %}
         </div>
 
+        <div class="form-check form-switch mb-3">
+          {{ form.is_active }}
+          <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+            {{ form.is_active.label }}
+          </label>
+        </div>
+
         <div class="mb-3">
           <label for="{{ form.contrato.id_for_label }}" class="form-label">Contrato</label>
           {{ form.contrato }}

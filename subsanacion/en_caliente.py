@@ -17,21 +17,30 @@ siempre.
 from .reglas import obtener_reglas
 
 
+def reglas_en_caliente_para(instancia):
+    """Reglas evaluables en caliente cuyo `modelo` coincide con el de `instancia`.
+
+    A diferencia de `evaluar_reglas_de_instancia()`, esto NO evalúa nada: solo
+    resuelve la lista de reglas candidatas. Lo usa
+    `subsanacion.servicios.reconciliar_hallazgos_en_caliente()`, que necesita saber
+    qué reglas están en juego para esta instancia AUNQUE no detecten ningún problema
+    ahora mismo — es precisamente el caso «ya no detecta nada» el que le interesa,
+    para poder cerrar el hallazgo pendiente que quedó de antes.
+    """
+    etiqueta = f'{instancia._meta.app_label}.{instancia._meta.model_name}'
+    return [regla for regla in obtener_reglas()
+            if regla.evaluable_en_caliente and regla.modelo.lower() == etiqueta]
+
+
 def evaluar_reglas_de_instancia(instancia):
     """Reglas evaluables en caliente cuyo `modelo` coincide con el de `instancia`.
 
     Devuelve una lista de `(regla, [HallazgoDetectado, ...])`, solo para las reglas
     que de verdad detectaron algo (sin pares con lista vacía).
     """
-    etiqueta = f'{instancia._meta.app_label}.{instancia._meta.model_name}'
     resultados = []
 
-    for regla in obtener_reglas():
-        if not regla.evaluable_en_caliente:
-            continue
-        if regla.modelo.lower() != etiqueta:
-            continue
-
+    for regla in reglas_en_caliente_para(instancia):
         detectados = regla.evaluar_instancia(instancia)
         if detectados:
             resultados.append((regla, detectados))

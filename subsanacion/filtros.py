@@ -79,11 +79,22 @@ def filtrar_hallazgos(request):
         # eso cada regla tiene la obligación de escribir el nombre, el carnet y el
         # expediente en el título: es lo que hace encontrable el hallazgo.
         # `datos__icontains` funciona porque PostgreSQL puede convertir el JSONB a texto.
-        consulta = consulta.filter(
-            Q(titulo__icontains=busqueda)
-            | Q(detalle__icontains=busqueda)
-            | Q(datos__icontains=busqueda)
-            | Q(codigo_regla__icontains=busqueda))
+        #
+        # El título lo arma `formato.py::referencia_trabajador()` como «Apellidos,
+        # Nombre (doc)» — apellidos primero. Un solo `icontains` con la frase completa
+        # exige que el usuario la escriba EN ESE ORDEN EXACTO; si busca «Nombre
+        # Apellido» (el orden natural en que la gente escribe un nombre) no encuentra
+        # nada aunque el hallazgo exista. Se busca palabra por palabra en su lugar:
+        # cada palabra escrita tiene que aparecer en ALGUNO de los campos (da igual en
+        # cuál ni en qué orden), y se exigen TODAS las palabras (un `.filter()` por
+        # palabra, que Django encadena con AND). Así «Fvdb Fdbfdb» y «Fdbfdb Fvdb»
+        # encuentran el mismo hallazgo.
+        for palabra in busqueda.split():
+            consulta = consulta.filter(
+                Q(titulo__icontains=palabra)
+                | Q(detalle__icontains=palabra)
+                | Q(datos__icontains=palabra)
+                | Q(codigo_regla__icontains=palabra))
 
     filtros = {
         'q': busqueda,

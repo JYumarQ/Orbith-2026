@@ -304,6 +304,15 @@ class ExportacionTests(TestCase):
         """Busca por carnet, que es lo que las reglas escriben en el título."""
         self.assertEqual(self._comparar('?q=85010112345'), 2)
 
+    def test_la_busqueda_no_depende_del_orden_de_las_palabras(self):
+        """El título es «Apellidos, Nombre» (formato.py::referencia_trabajador).
+        Buscar «Nombre Apellido» — el orden natural en que la gente escribe un
+        nombre — tiene que encontrar el mismo hallazgo que «Apellido, Nombre»."""
+        from urllib.parse import urlencode
+
+        qs = '?' + urlencode({'q': 'Juan Pérez'})
+        self.assertEqual(self._comparar(qs), 2)
+
     def test_los_archivados_no_salen_salvo_que_se_pidan(self):
         Hallazgo.objects.filter(codigo_regla='EXP-003').update(vigente=False)
         self.assertEqual(self._comparar(''), 2)
@@ -635,6 +644,17 @@ class FuncionesPurasEnCalienteTests(TestCase):
         self.assertFalse(_c_formal_sin_res(True, 'RES-1'))
         self.assertFalse(_c_formal_sin_res(False, None))
 
+    def test_tridente_indebido(self):
+        from .reglas.contratos import _tridente_indebido
+
+        # Fijo con tridente: indebido sin importar si el cargo es Cuadro o no.
+        self.assertEqual(_tridente_indebido('FIJ', False), 'fijo_con_tridente')
+        self.assertEqual(_tridente_indebido('FIJ', True), 'fijo_con_tridente')
+        # Dinámico en cargo de Cuadro: indebido (el caso «Fvdb Fdbfdb Dfb»).
+        self.assertEqual(_tridente_indebido('DIN', True), 'cuadro_con_tridente')
+        # Dinámico en cargo que no es Cuadro: correcto, el tridente sí aplica.
+        self.assertEqual(_tridente_indebido('DIN', False), '')
+
 
 class EvaluarInstanciaTests(TestCase):
     """`evaluar_instancia()` de CTR-007/012/013 sobre una instancia real, no un dict.
@@ -803,6 +823,32 @@ class EvaluarInstanciaTests(TestCase):
 
         self.assertIsNone(ConformidadFormalSinCodigo().evaluar_instancia(contrato))
 
+    def test_tridente_indebido_en_cuadro_detectado(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import TridenteIndebido
+
+        contrato = SimpleNamespace(
+            pk=73, tipo_salario='DIN', tridente_id=1,
+            tridente=SimpleNamespace(tipo='I'),
+            cargo_id=6, cargo=SimpleNamespace(ncargo=SimpleNamespace(es_cuadro=True)))
+
+        detectados = TridenteIndebido().evaluar_instancia(contrato)
+
+        self.assertEqual(len(detectados), 1)
+        self.assertEqual(detectados[0].clave_extra, 'cuadro_con_tridente')
+
+    def test_tridente_sin_asignar_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import TridenteIndebido
+
+        contrato = SimpleNamespace(
+            pk=73, tipo_salario='DIN', tridente_id=None, tridente=None,
+            cargo_id=6, cargo=SimpleNamespace(ncargo=SimpleNamespace(es_cuadro=True)))
+
+        self.assertIsNone(TridenteIndebido().evaluar_instancia(contrato))
+
 
 class EvaluarReglasDeInstanciaTests(TestCase):
     """El despachador de `en_caliente.py`: solo reglas `evaluable_en_caliente` y del
@@ -834,3 +880,78 @@ class EvaluarReglasDeInstanciaTests(TestCase):
         regla, detectados = resultados[0]
         self.assertIs(regla, candidata)
         self.assertEqual(detectados, candidata.hallazgos)
+
+
+class ReconciliarHallazgosEnCalienteTests(TestCase):
+    """`servicios.reconciliar_hallazgos_en_caliente()`: cierre en caliente de un
+    hallazgo cuando la instancia recién guardada ya no lo detecta — sin esperar al
+    barrido periódico. Es lo que permite que corregir un dato desde su formulario
+    (p. ej. el tridente de CTR-009) marque el hallazgo como Corregido al instante."""
+
+    def _regla_en_caliente(self, hallazgos_actuales):
+        candidata = ReglaDePrueba()
+        candidata.evaluable_en_caliente = True
+        candidata.evaluar_instancia = lambda instancia: hallazgos_actuales
+        return candidata
+
+    def _crear_pendiente(self, instancia, estado=Hallazgo.PENDIENTE, clave_extra=''):
+        tipo = ContentType.objects.get_for_model(instancia, for_concrete_model=True)
+        return Hallazgo.objects.create(
+            codigo_regla='PRUEBA-001', content_type=tipo, object_id=str(instancia.pk),
+            clave_extra=clave_extra, modulo=MODULO_CONTRATOS, criticidad=CRITICIDAD_ALTA,
+            titulo='Hallazgo de prueba', ultima_deteccion=timezone.now(), estado=estado)
+
+    def test_cierra_el_hallazgo_que_ya_no_se_detecta(self):
+        from nomencladores.models import NProvincia
+
+        from . import en_caliente, servicios
+
+        instancia = NProvincia.objects.create(nombre='Provincia de reconciliación')
+        pendiente = self._crear_pendiente(instancia)
+        candidata = self._regla_en_caliente([])  # ya no detecta nada
+
+        with patch.object(en_caliente, 'obtener_reglas', return_value=[candidata]):
+            servicios.reconciliar_hallazgos_en_caliente(instancia)
+
+        pendiente.refresh_from_db()
+        self.assertEqual(pendiente.estado, Hallazgo.CORREGIDO)
+        self.assertFalse(pendiente.vigente)
+        self.assertTrue(pendiente.resuelto_automaticamente)
+        self.assertEqual(pendiente.revisiones.count(), 1)
+        self.assertEqual(pendiente.revisiones.first().estado_anterior, Hallazgo.PENDIENTE)
+
+    def test_no_toca_el_hallazgo_si_sigue_detectandose(self):
+        from nomencladores.models import NProvincia
+
+        from . import en_caliente, servicios
+
+        instancia = NProvincia.objects.create(nombre='Provincia todavía con problema')
+        pendiente = self._crear_pendiente(instancia)
+        # Sigue detectando el mismo `clave_extra` ('') que el hallazgo pendiente.
+        candidata = self._regla_en_caliente([hallazgo(instancia.pk)])
+
+        with patch.object(en_caliente, 'obtener_reglas', return_value=[candidata]):
+            servicios.reconciliar_hallazgos_en_caliente(instancia)
+
+        pendiente.refresh_from_db()
+        self.assertEqual(pendiente.estado, Hallazgo.PENDIENTE)
+        self.assertTrue(pendiente.vigente)
+        self.assertEqual(pendiente.revisiones.count(), 0)
+
+    def test_no_reabre_un_ignorado(self):
+        """Un Ignorado lo decidió una persona; no lo toca aunque el dato cambie —
+        mismo criterio que la rama «desaparecidos» de `reconciliar_regla()`."""
+        from nomencladores.models import NProvincia
+
+        from . import en_caliente, servicios
+
+        instancia = NProvincia.objects.create(nombre='Provincia ignorada')
+        ignorado = self._crear_pendiente(instancia, estado=Hallazgo.IGNORADO)
+        candidata = self._regla_en_caliente([])  # ya no detecta nada
+
+        with patch.object(en_caliente, 'obtener_reglas', return_value=[candidata]):
+            servicios.reconciliar_hallazgos_en_caliente(instancia)
+
+        ignorado.refresh_from_db()
+        self.assertEqual(ignorado.estado, Hallazgo.IGNORADO)
+        self.assertEqual(ignorado.revisiones.count(), 0)

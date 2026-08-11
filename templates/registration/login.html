@@ -149,6 +149,12 @@
                 
                 
 
+                {% if messages %}
+                {% for message in messages %}
+                <div class="django-error">{{ message }}</div>
+                {% endfor %}
+                {% endif %}
+
                 {% if form.errors %}
                 <div class="django-error">
                     {% if form.non_field_errors %}

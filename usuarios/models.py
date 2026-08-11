@@ -1,9 +1,13 @@
+from datetime import timedelta
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 from strorganizativa.models import UnidadOrganizativa
 from contratos.models import CAlta
 from django.core.exceptions import ValidationError
 from django.db.models import Q, CheckConstraint
+
+UMBRAL_CONECTADO = timedelta(minutes=5)
 
 # Create your models here.
 class CustomUser(AbstractUser):
@@ -26,6 +30,14 @@ class CustomUser(AbstractUser):
         verbose_name="Foto de perfil"
     )
 
+    #? SESIÓN / CONEXIÓN
+    # Campos operativos, NO de permisos. Se escriben SIEMPRE con
+    # CustomUser.objects.filter(pk=...).update(...), nunca con instancia.save():
+    # save() (ver más abajo) ejecuta full_clean() y reajusta roles en cada
+    # llamada, y estos campos se actualizan con demasiada frecuencia para pagar
+    # ese costo (mismo motivo por el que PreferenciasUsuario vive aparte).
+    ultima_actividad = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Última actividad")
+    sesion_invalidada_en = models.DateTimeField(null=True, blank=True, editable=False, verbose_name="Sesión invalidada en")
 
     class Meta:
         verbose_name = ("Usuario")
@@ -111,6 +123,15 @@ class CustomUser(AbstractUser):
         if self.es_observador:
             return "Observador"
         return "Sin rol asignado"
+
+    @property
+    def esta_conectado(self):
+        """Conectado = actividad registrada dentro del umbral. Independiente de
+        `is_active`: una cuenta desactivada puede, en teoría, seguir figurando
+        conectada hasta que su última actividad expire."""
+        if not self.ultima_actividad:
+            return False
+        return timezone.now() - self.ultima_actividad <= UMBRAL_CONECTADO
 
     def obtener_preferencias(self):
         """Devuelve las preferencias del usuario, creándolas la primera vez."""

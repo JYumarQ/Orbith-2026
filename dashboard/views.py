@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
 #from .models import Objeto
 from django.urls import reverse_lazy
-from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
+from strorganizativa.models import CargoPlantilla
 import os
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
@@ -17,7 +17,11 @@ from django.views.generic import TemplateView
 from datetime import datetime
 import json
 
-from .filtros import resolver_filtros
+from .filtros import _filtrar_por_uo, resolver_filtros
+from notificaciones.filtros import filtrar_advertencias
+from notificaciones.recordatorios import detectar_contratos_por_vencer
+from notificaciones.views import _color_prioridad
+from subsanacion.constantes import CRITICIDADES
 
 # Cortes por defecto de la Pirámide de Edades (única fuente de verdad: de aquí
 # salen tanto los buckets del bucle maestro como las categorías del eje X del
@@ -76,28 +80,52 @@ def _bucket_edad(edad, cortes):
     return len(cortes)
 
 
-def _filtrar_por_uo_depto(qs, campo_departamento, uo_ids, depto_ids):
-    """`campo_departamento` es la ruta ORM hasta Departamento (p.ej.
-    'cargo__departamento') a partir de la cual se cuelga
-    `__unidad_organizativa_id` / `_id`. Usado tanto por `DashboardView` como
-    por `piramide_edades_json` para no duplicar el criterio de alcance."""
-    if depto_ids:
-        qs = qs.filter(**{f"{campo_departamento}_id__in": depto_ids})
-    elif uo_ids:
-        qs = qs.filter(**{f"{campo_departamento}__unidad_organizativa_id__in": uo_ids})
-    return qs
+def _rango_semana(offset_semanas=0):
+    """(lunes, domingo) de la semana actual desplazada `offset_semanas`.
+
+    Mismo criterio que usa Informe Inteligente para su operador "semana"
+    (`informe_inteligente/motor.py::_construir_q_de_filtro`, lunes=weekday() 0),
+    pero replicado en vez de importado: allá vive mezclado con la construcción
+    de un `Q` de 7 combinaciones mes/día para filtrar por recurrencia anual
+    (un caso de uso distinto); aquí solo hace falta el rango de fechas en sí.
+    """
+    hoy = date.today()
+    lunes = hoy - timedelta(days=hoy.weekday()) + timedelta(weeks=offset_semanas)
+    domingo = lunes + timedelta(days=6)
+    return lunes, domingo
+
+
+def advertencias_json(request):
+    """Recalcula solo la tarjeta Advertencias (mismo alcance de UO y misma
+    reutilización de `filtrar_advertencias` que `DashboardView`) para que el
+    selector de severidad se pueda aplicar por fetch, sin recargar el resto
+    del Dashboard.
+    """
+    uo_ids, _ = resolver_filtros(request)
+    advertencias, ctx_advertencias = filtrar_advertencias(request, request.user)
+    if uo_ids:
+        advertencias = [a for a in advertencias if a.unidad_id in uo_ids]
+
+    return JsonResponse({
+        'advertencias': [
+            {'titulo': a.titulo, 'severidad_display': a.get_severidad_display()}
+            for a in advertencias[:8]
+        ],
+        'total': len(advertencias),
+        'severidad': ctx_advertencias['severidades_actuales'],
+    })
 
 
 def piramide_edades_json(request):
-    """Recalcula solo la Pirámide de Edades (respetando los mismos filtros de
-    UO/Departamento/cortes que `DashboardView`) para que la tarjeta se pueda
-    refrescar por fetch, sin recargar el resto del Dashboard.
+    """Recalcula solo la Pirámide de Edades (respetando el mismo alcance de UO
+    y cortes que `DashboardView`) para que la tarjeta se pueda refrescar por
+    fetch, sin recargar el resto del Dashboard.
     """
-    uo_ids, depto_ids, _ = resolver_filtros(request)
+    uo_ids, _ = resolver_filtros(request)
     cortes = _cortes_edad_desde_request(request)
 
     activos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related('aspirante')
-    activos = _filtrar_por_uo_depto(activos, 'cargo__departamento', uo_ids, depto_ids)
+    activos = _filtrar_por_uo(activos, 'cargo__departamento', uo_ids)
 
     n_buckets = len(cortes) + 1
     edades_m = [0] * n_buckets
@@ -131,19 +159,23 @@ class DashboardView(TemplateView):
         # ========== DEFINIR MESES AQUÍ (antes de cualquier uso) ==========
         meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
-        # ========== FILTROS GLOBALES (UO / Departamento) ==========
+        # ========== FILTRO GLOBAL (Unidad Organizativa) ==========
         # `resolver_filtros` ya valida los ids pedidos contra el alcance real
         # del usuario (ver dashboard/filtros.py) — nunca se confía en lo que
-        # llegue crudo por querystring.
-        uo_ids, depto_ids, filtro_ctx = resolver_filtros(self.request)
+        # llegue crudo por querystring. Ya no existe selección manual de
+        # Departamento: seleccionar una UO selecciona automáticamente todos
+        # sus Departamentos (`uo_count`/`depto_count` ya vienen resueltos en
+        # el contexto de filtro).
+        uo_ids, filtro_ctx = resolver_filtros(self.request)
         context.update(filtro_ctx)
 
         def _filtrar(qs, campo_departamento):
-            return _filtrar_por_uo_depto(qs, campo_departamento, uo_ids, depto_ids)
+            return _filtrar_por_uo(qs, campo_departamento, uo_ids)
 
         # 1. Consultas Base (Optimizadas)
         activos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
-            'aspirante', 'tipo', 'cargo__ncargo', 'cargo__departamento', 'cargo__nivel_preparacion'
+            'aspirante', 'aspirante__especialidad', 'aspirante__municipio',
+            'tipo', 'cargo__ncargo', 'cargo__departamento'
         )
         activos = _filtrar(activos, 'cargo__departamento')
 
@@ -155,12 +187,7 @@ class DashboardView(TemplateView):
 
         # Variables directas para las tarjetas
         context['contratos_count'] = activos.count()
-        # Estructura: cuenta Unidades Organizativas de primer nivel (padre=None).
-        # Una UO padre cuenta 1, sus subunidades (padre no nulo) no se cuentan aparte.
-        # No depende del filtro: es un dato de la estructura organizativa, no de
-        # la plantilla filtrada.
-        context['uo_count'] = UnidadOrganizativa.objects.filter(padre__isnull=True).count()
-        context['plazas'] = self.get_plazas(uo_ids, depto_ids)
+        context['plazas'] = self.get_plazas(uo_ids)
 
         # Nuevas Altas / Nuevas Bajas (ventana móvil de 30 días, distinta del
         # histórico mensual de más abajo). Las altas se combinan con CBaja.fecha_alta
@@ -177,17 +204,39 @@ class DashboardView(TemplateView):
 
         # 2. Diccionarios y contadores inicializados en 0 (Evita que el JS falle si no hay datos)
         cumpleaneros = []
-        avisos_contratos = []
         pre_jubilacion = []
         recontratados = []
         jubilados_recontratados = []
 
         cat_ocupacional = {'OPE': 0, 'TEC': 0, 'ADM': 0, 'SER': 0, 'CUA': 0}
         nivel_educ_counts = {}
-        nivel_prep_counts = {}
+        nivel_educ_codigos = {}
         tipos_contrato_counts = {}
         raza_counts = {}
-        reg_militar_counts = {}
+        raza_codigos = {}
+        especialidad_counts = {}   # {(id, nombre): cantidad}
+        municipio_counts = {}      # {(id, nombre): cantidad}
+        grado_cientifico_counts = {'MC': 0, 'DC': 0, 'NINGUNO': 0}
+
+        # Cumpleaños por semana (lunes-domingo, mismo criterio que Informe
+        # Inteligente — ver `_rango_semana`). Se comparan por (mes, día) para
+        # ignorar el año, igual que la recurrencia anual de un cumpleaños.
+        lunes_actual, domingo_actual = _rango_semana(0)
+        lunes_prox, domingo_prox = _rango_semana(1)
+
+        def _dias_de_semana(lunes):
+            """`{(mes, día): índice_de_orden}` de los 7 días de la semana que
+            empieza en `lunes`, para poder ordenar cronológicamente dentro de
+            la semana además de comparar por (mes, día)."""
+            return {
+                ((lunes + timedelta(days=i)).month, (lunes + timedelta(days=i)).day): i
+                for i in range(7)
+            }
+
+        dias_semana_actual = _dias_de_semana(lunes_actual)
+        dias_semana_prox = _dias_de_semana(lunes_prox)
+        cumpleanos_semana_actual = []
+        cumpleanos_semana_prox = []
 
         # Pirámide de Edades: cortes validados (o los de defecto) son la ÚNICA
         # fuente de verdad, tanto para el bucketing de aquí abajo como para las
@@ -222,33 +271,38 @@ class DashboardView(TemplateView):
             elif cat == 'SER': cat_ocupacional['SER'] += 1
             elif cat in ['CDI', 'CEJ']: cat_ocupacional['CUA'] += 1
 
-            # Niveles Educacional y Preparación
-            educ = asp.get_nivel_educ_display() if hasattr(asp, 'get_nivel_educ_display') and asp.nivel_educ else 'Sin Acreditar'
+            # Nivel Educacional (con código crudo paralelo, para el filtro de
+            # Contratos al hacer clic en la leyenda — ver sección 6/7 del plan)
+            if asp.nivel_educ:
+                educ = asp.get_nivel_educ_display()
+                nivel_educ_codigos[educ] = asp.nivel_educ
+            else:
+                educ = 'Sin Acreditar'
             nivel_educ_counts[educ] = nivel_educ_counts.get(educ, 0) + 1
 
-            prep = c.cargo.nivel_preparacion.nombre if c.cargo and getattr(c.cargo, 'nivel_preparacion', None) else 'No Definido'
-            nivel_prep_counts[prep] = nivel_prep_counts.get(prep, 0) + 1
+            # Especialidad (aspirante, no cargo) — Top 5 + Otros, ver empaquetado
+            esp_id = asp.especialidad_id
+            esp_nombre = asp.especialidad.nombre if asp.especialidad else 'Sin Definir'
+            clave_esp = (esp_id, esp_nombre)
+            especialidad_counts[clave_esp] = especialidad_counts.get(clave_esp, 0) + 1
 
-            # Registro Militar
-            reg = c.get_reg_militar_display() if c.reg_militar else 'No Definido'
-            reg_militar_counts[reg] = reg_militar_counts.get(reg, 0) + 1
+            # Municipio (Aspirante.municipio es obligatorio, sin bucket "Sin Definir")
+            clave_mun = (asp.municipio_id, asp.municipio.nombre)
+            municipio_counts[clave_mun] = municipio_counts.get(clave_mun, 0) + 1
+
+            # Grado Científico: 3 categorías fijas (Master/Doctor/Ninguno)
+            if asp.grado_cientifico == 'MC':
+                grado_cientifico_counts['MC'] += 1
+            elif asp.grado_cientifico == 'DC':
+                grado_cientifico_counts['DC'] += 1
+            else:
+                grado_cientifico_counts['NINGUNO'] += 1
 
             # Salario Escala Promedio
             salario = c.salario_total or 0
             total_salario_empresa += float(salario)
 
-            # Alertas de Contrato (Solución exacta de DeepSeek)
-            if c.tipo and "INDETERMINADO" not in t_desc.upper():
-                if hasattr(c, 'fecha_vencimiento') and c.fecha_vencimiento:
-                    dias_res = (c.fecha_vencimiento - hoy).days
-                    if dias_res <= 45: 
-                        avisos_contratos.append({
-                            'nombre': f"{asp.nombre} {asp.papellido}", 
-                            'dias': dias_res,
-                            'tipo': t_desc
-                        })
-
-            # Cálculos de CI (Cumpleaños y Edades)
+            # Cálculos de CI (Cumpleaños "Cercanos" — lógica intocada) y Edades
             ci = (asp.doc_identidad or "").strip()
             edad = asp.get_edad
 
@@ -258,9 +312,23 @@ class DashboardView(TemplateView):
                     f_cumple = date(hoy.year, mm, dd)
                     if f_cumple < hoy: f_cumple = date(hoy.year + 1, mm, dd)
                     dias_faltan = (f_cumple - hoy).days
-                    if dias_faltan <= 45: 
+                    if dias_faltan <= 45:
                         cumpleaneros.append({'nombre': f"{asp.nombre} {asp.papellido}", 'fecha_str': f"{dd} {meses[mm-1]}", 'dias': dias_faltan, 'sexo': sexo})
                 except ValueError: pass
+
+            # Cumpleaños por semana (Semana actual / Próxima semana): usa
+            # `fecha_nacimiento` (ya calculado desde el CI al guardar el
+            # aspirante) en vez de reparsear el CI, comparando solo (mes, día)
+            # para ignorar el año — misma idea que Informe Inteligente.
+            if asp.fecha_nacimiento:
+                clave_dia = (asp.fecha_nacimiento.month, asp.fecha_nacimiento.day)
+                dato_cumple = {'nombre': f"{asp.nombre} {asp.papellido}",
+                                'fecha_str': f"{asp.fecha_nacimiento.day} {meses[asp.fecha_nacimiento.month - 1]}",
+                                'sexo': sexo}
+                if clave_dia in dias_semana_actual:
+                    cumpleanos_semana_actual.append({**dato_cumple, 'orden': dias_semana_actual[clave_dia]})
+                if clave_dia in dias_semana_prox:
+                    cumpleanos_semana_prox.append({**dato_cumple, 'orden': dias_semana_prox[clave_dia]})
 
             nombre_full = f"{asp.nombre} {asp.papellido}"
 
@@ -288,16 +356,52 @@ class DashboardView(TemplateView):
                 elif sexo == 'M' and edad > 65:
                     recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc})
 
-            # I) Distribución por Raza
-            raza = asp.get_raza_display() if hasattr(asp, 'get_raza_display') and asp.raza else 'No Definida'
-            raza_counts[raza] = raza_counts.get(raza, 0) + 1 # <--- 2. AÑADIR ESTE BLOQUE
+            # I) Distribución por Raza (con código crudo paralelo, ver Nivel Educacional arriba)
+            if asp.raza:
+                raza = asp.get_raza_display()
+                raza_codigos[raza] = asp.raza
+            else:
+                raza = 'No Definida'
+            raza_counts[raza] = raza_counts.get(raza, 0) + 1
 
         # --- 3. ORDENACIÓN Y EMPAQUETADO ---
         cumpleaneros.sort(key=lambda x: x['dias'])
-        avisos_contratos.sort(key=lambda x: x['dias'])
+        cumpleanos_semana_actual.sort(key=lambda x: x['orden'])
+        cumpleanos_semana_prox.sort(key=lambda x: x['orden'])
         pre_jubilacion.sort(key=lambda x: x['edad'], reverse=True)
         recontratados.sort(key=lambda x: x['edad'], reverse=True)
         jubilados_recontratados.sort(key=lambda x: (x['edad'] is None, x['edad']), reverse=True)
+
+        # Recordatorios (vencimiento de contrato): única fuente de verdad
+        # compartida con la pestaña Recordatorios de Notificaciones — ver
+        # `notificaciones/recordatorios.py::detectar_contratos_por_vencer` y
+        # `notificaciones/views.py::_color_prioridad` (mismo horizonte de 60
+        # días, mismos cortes de color, misma exclusión de "INDETERMINADO").
+        recordatorios_contrato = []
+        for detectado in detectar_contratos_por_vencer(queryset=activos):
+            color = _color_prioridad(detectado.fecha_objetivo)
+            recordatorios_contrato.append({
+                'titulo': detectado.titulo,
+                'mensaje': detectado.mensaje,
+                'dias': color['dias'],
+                'etiqueta': color['etiqueta'],
+                'clave': color['clave'],
+                'emoji': color['emoji'],
+            })
+        recordatorios_contrato.sort(key=lambda x: x['dias'])
+        context['recordatorios_contrato_total'] = len(recordatorios_contrato)
+        context['recordatorios_contrato'] = recordatorios_contrato[:5]
+
+        # Advertencias: reutiliza tal cual `filtrar_advertencias` (alcance por
+        # usuario/rol, filtro de severidad ya validado contra request.GET) y
+        # se acota además por la UO del Dashboard.
+        advertencias, ctx_advertencias = filtrar_advertencias(self.request, self.request.user)
+        if uo_ids:
+            advertencias = [a for a in advertencias if a.unidad_id in uo_ids]
+        context['advertencias_total'] = len(advertencias)
+        context['advertencias'] = advertencias[:8]
+        context['severidades_disponibles'] = CRITICIDADES
+        context['severidad_actual'] = ctx_advertencias['severidades_actuales']
 
         # Top 5 Causas de Baja y Tipos de Contrato
         causas_baja_dict = {}
@@ -307,6 +411,22 @@ class DashboardView(TemplateView):
         causas_baja_ordenada = sorted(causas_baja_dict.items(), key=lambda x: x[1], reverse=True)[:5]
 
         tipos_ordenados = sorted(tipos_contrato_counts.items(), key=lambda x: x[1], reverse=True)
+
+        def _top5_mas_otros(counts_por_clave):
+            """`counts_por_clave`: `{(id, nombre): cantidad}`. Devuelve
+            `(labels, data, ids)` con las 5 categorías más numerosas y el
+            resto agrupado en 'Otros' (id `None`, no navegable desde la
+            leyenda)."""
+            ordenado = sorted(counts_por_clave.items(), key=lambda kv: kv[1], reverse=True)
+            top5, resto = ordenado[:5], ordenado[5:]
+            labels = [nombre for (_id, nombre), _cant in top5]
+            data = [cant for _clave, cant in top5]
+            ids = [_id for (_id, _nombre), _cant in top5]
+            if resto:
+                labels.append('Otros')
+                data.append(sum(cant for _clave, cant in resto))
+                ids.append(None)
+            return labels, data, ids
 
         total_g = hombres + mujeres
 
@@ -320,30 +440,46 @@ class DashboardView(TemplateView):
 
         # Listas
         context['cumpleannos'] = cumpleaneros[:5]
-        context['avisos_contratos'] = avisos_contratos[:5]
+        context['cumpleanos_semana_actual'] = cumpleanos_semana_actual
+        context['cumpleanos_semana_prox'] = cumpleanos_semana_prox
         context['pre_jubilacion'] = pre_jubilacion
         context['recontratados'] = recontratados
         context['jubilados_recontratados'] = jubilados_recontratados
-        context['cat_ocupacional'] = list(cat_ocupacional.values()) 
+        context['cat_ocupacional'] = list(cat_ocupacional.values())
+        context['cat_ocupacional_codigos'] = json.dumps(list(cat_ocupacional.keys()))
         context['edades_m'] = edades_m
         context['edades_f'] = edades_f
-        
+
         # ========== DATOS PARA GRÁFICOS (CORREGIDO: sin json.dumps en listas) ==========
         # Etiquetas (sí van con json.dumps para que queden como strings en JS)
         context['nivel_educ_labels'] = json.dumps(list(nivel_educ_counts.keys()))
         context['nivel_educ_data'] = list(nivel_educ_counts.values())   # Lista normal
-        
-        context['nivel_prep_labels'] = json.dumps(list(nivel_prep_counts.keys()))
-        context['nivel_prep_data'] = list(nivel_prep_counts.values())   # Lista normal
+        context['nivel_educ_codigos'] = json.dumps([nivel_educ_codigos.get(k, '') for k in nivel_educ_counts.keys()])
 
         context['tipos_contrato_labels'] = json.dumps([item[0] for item in tipos_ordenados])
         context['tipos_contrato_data'] = [item[1] for item in tipos_ordenados]  # Lista normal
 
         context['raza_labels'] = json.dumps(list(raza_counts.keys()))
         context['raza_data'] = json.dumps(list(raza_counts.values()))
+        context['raza_codigos'] = json.dumps([raza_codigos.get(k, '') for k in raza_counts.keys()])
 
-        context['reg_militar_labels'] = json.dumps(list(reg_militar_counts.keys()))
-        context['reg_militar_data'] = list(reg_militar_counts.values())
+        # Especialidad / Municipio: Top 5 + Otros
+        esp_labels, esp_data, esp_ids = _top5_mas_otros(especialidad_counts)
+        context['especialidad_labels'] = json.dumps(esp_labels)
+        context['especialidad_data'] = esp_data
+        context['especialidad_codigos'] = json.dumps(esp_ids)
+
+        mun_labels, mun_data, mun_ids = _top5_mas_otros(municipio_counts)
+        context['municipio_labels'] = json.dumps(mun_labels)
+        context['municipio_data'] = mun_data
+        context['municipio_codigos'] = json.dumps(mun_ids)
+
+        # Grado Científico: 3 categorías fijas, sin Top-N
+        context['grado_cientifico_labels'] = json.dumps(['Master', 'Doctor', 'Ninguno'])
+        context['grado_cientifico_data'] = [
+            grado_cientifico_counts['MC'], grado_cientifico_counts['DC'], grado_cientifico_counts['NINGUNO']
+        ]
+        context['grado_cientifico_codigos'] = json.dumps(['MC', 'DC', 'NINGUNO'])
 
         context['causas_baja_labels'] = json.dumps([item[0] for item in causas_baja_ordenada])
         context['causas_baja_data'] = [item[1] for item in causas_baja_ordenada]
@@ -397,11 +533,9 @@ class DashboardView(TemplateView):
 
         return context
 
-    def get_plazas(self, uo_ids=None, depto_ids=None):
+    def get_plazas(self, uo_ids=None):
         cargos = CargoPlantilla.objects.filter(activo=True)
-        if depto_ids:
-            cargos = cargos.filter(departamento_id__in=depto_ids)
-        elif uo_ids:
+        if uo_ids:
             cargos = cargos.filter(departamento__unidad_organizativa_id__in=uo_ids)
         t_cubiertas = sum(c.cant_cubierta or 0 for c in cargos)
         t_aprobadas = sum(c.cant_aprobada or 0 for c in cargos)

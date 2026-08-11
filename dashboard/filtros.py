@@ -1,4 +1,4 @@
-"""Alcance y validación de los filtros globales del Dashboard (UO / Departamento).
+"""Alcance y validación del filtro global del Dashboard (Unidad Organizativa).
 
 `unidades_visibles()` es el único punto donde se decide qué Unidades
 Organizativas puede ver cada usuario, mismo patrón que
@@ -10,6 +10,11 @@ todas las UO; un Moderador solo las que tiene asignadas en
 nunca confía en los ids que pida el cliente, siempre los intersecta contra el
 alcance real del usuario. Esto es lo que impide que un Moderador vea datos
 ajenos aunque edite la URL a mano.
+
+No existe selección manual de Departamento: seleccionar una UO selecciona
+automáticamente todos sus Departamentos. `_filtrar_por_uo()` es el único punto
+de filtrado por alcance, reutilizado por todos los componentes del Dashboard
+(activos, altas, bajas, pirámide, plazas, recordatorios, advertencias, etc.).
 """
 
 from strorganizativa.models import Departamento, UnidadOrganizativa
@@ -45,8 +50,8 @@ def departamentos_visibles(usuario, unidades_qs=None):
 
 
 def resolver_filtros(request):
-    """Lee `?uo=` y `?depto=` de la querystring y los valida contra el alcance
-    real del usuario. Devuelve `(uo_ids, depto_ids, contexto)`.
+    """Lee `?uo=` de la querystring y lo valida contra el alcance real del
+    usuario. Devuelve `(uo_ids, contexto)`.
 
     Reglas:
     - Los ids de UO pedidos se intersectan contra `unidades_visibles()`. Un
@@ -57,9 +62,10 @@ def resolver_filtros(request):
       seleccionada (no pidió ninguna, o solo pidió ids ajenos/inválidos), el
       alcance por defecto es TODAS sus UO asignadas — nunca el universo
       completo ni un conjunto vacío.
-    - Los ids de Departamento se validan en un segundo paso, ya acotados por
-      las UO resultantes del paso anterior: un Departamento que no cuelgue de
-      ninguna UO visible/seleccionada queda descartado igual que una UO ajena.
+    - `uo_count`/`depto_count` reflejan el alcance EFECTIVO (con o sin
+      selección explícita): sin selección, la cantidad total permitida para el
+      usuario; con selección, la cantidad de UO elegidas y la de Departamentos
+      que cuelgan de ellas.
     """
     usuario = request.user
     unidades_qs = unidades_visibles(usuario)
@@ -77,24 +83,25 @@ def resolver_filtros(request):
     if not uo_ids and es_moderador_puro:
         uo_ids = set(unidades_ids_visibles)
 
-    if uo_ids:
-        uo_ids_para_deptos = uo_ids
-    else:
-        uo_ids_para_deptos = unidades_ids_visibles
-
-    deptos_validos_qs = Departamento.objects.filter(
-        unidad_organizativa_id__in=uo_ids_para_deptos
-    ).select_related('unidad_organizativa')
-    deptos_ids_validos = set(deptos_validos_qs.values_list('pk', flat=True))
-
-    depto_pedidos = request.GET.getlist('depto')
-    depto_ids = {int(v) for v in depto_pedidos if v.isdigit()}
-    depto_ids &= deptos_ids_validos
+    uo_ids_efectivas = uo_ids if uo_ids else unidades_ids_visibles
+    depto_count = Departamento.objects.filter(
+        unidad_organizativa_id__in=uo_ids_efectivas
+    ).count()
 
     contexto = {
         'filtro_uo_opciones': unidades_qs.order_by('descripcion'),
         'filtro_uo_seleccionadas': uo_ids,
-        'filtro_depto_opciones': deptos_validos_qs.order_by('descripcion'),
-        'filtro_depto_seleccionadas': depto_ids,
+        'uo_count': len(uo_ids_efectivas),
+        'depto_count': depto_count,
     }
-    return uo_ids, depto_ids, contexto
+    return uo_ids, contexto
+
+
+def _filtrar_por_uo(qs, campo_departamento, uo_ids):
+    """`campo_departamento` es la ruta ORM hasta Departamento (p.ej.
+    'cargo__departamento') a partir de la cual se cuelga
+    `__unidad_organizativa_id`. Único punto de filtrado por alcance,
+    reutilizado por todos los componentes del Dashboard."""
+    if uo_ids:
+        return qs.filter(**{f"{campo_departamento}__unidad_organizativa_id__in": uo_ids})
+    return qs

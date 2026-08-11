@@ -108,6 +108,14 @@ def _contexto_listado(request):
     }
 
 
+def _es_peticion_fragmento(request):
+    """Igual criterio que `core.mixins.ModalOPaginaCompletaMixin`: jQuery añade
+    `X-Requested-With` en toda petición `.load()`/`.ajax()` y HTMX añade `HX-Request`.
+    Cualquier otra petición (navegación directa por URL) es «página completa»."""
+    return (request.headers.get('x-requested-with') == 'XMLHttpRequest'
+            or request.headers.get('HX-Request') == 'true')
+
+
 def _error(request, mensaje, estado=400):
     """Fragmento de error en español, nunca un 500 opaco.
 
@@ -138,9 +146,26 @@ def panel_dashboard(request):
 
 @admin_required
 def panel_hallazgos(request):
-    """Listado con filtros, búsqueda y paginación."""
-    return render(request, 'pages/subsanacion/partials/panel_hallazgos.html',
-                  _contexto_listado(request))
+    """Listado con filtros, búsqueda y paginación.
+
+    Fuera de HTMX (navegación completa por esta URL, no un swap de pestaña) se
+    devuelve la página completa de Subsanación con la pestaña de Hallazgos ya activa
+    y estos mismos filtros ya aplicados, en vez del fragmento crudo sin el resto de
+    la interfaz. Es el caso de `next` (`core.mixins.VolverAlOrigenMixin`): al
+    guardar un registro corregido desde el enlace de un hallazgo, el usuario vuelve
+    aquí con el mismo `?q=...` que tenía puesto — el filtro se conserva porque
+    `hx-push-url="true"` en el formulario de filtros (ver `panel_hallazgos.html`)
+    mantiene la barra de direcciones sincronizada con lo que hay en pantalla.
+    """
+    contexto = _contexto_listado(request)
+
+    if _es_peticion_fragmento(request):
+        return render(request, 'pages/subsanacion/partials/panel_hallazgos.html', contexto)
+
+    contexto.update(_contexto_dashboard())
+    contexto['claves_modulos'] = CLAVES_MODULOS
+    contexto['tab_activo'] = 'hallazgos'
+    return render(request, 'pages/subsanacion/index.html', contexto)
 
 
 @admin_required

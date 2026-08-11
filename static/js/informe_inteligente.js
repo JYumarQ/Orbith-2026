@@ -745,6 +745,47 @@ document.addEventListener('DOMContentLoaded', function () {
         generarVistaPrevia(enlace.dataset.pagina);
     });
 
+    /**
+     * Exporta el informe con la configuración actual (mismos filtros,
+     * columnas y orden que se ven en pantalla) a PDF o Word. Usa un
+     * formulario oculto con submit() real en vez de fetch: así el
+     * navegador dispara la descarga a partir del Content-Disposition
+     * que devuelve el servidor.
+     */
+    function ejecutarExportacionInformeInteligente(tipo) {
+        const configuracion = obtenerConfiguracion();
+        if (!configuracion.campos.length) {
+            notificar('Seleccione al menos un campo para exportar el informe.', 'warning');
+            return;
+        }
+
+        const url = tipo === 'word' ? URLS.exportarWord : URLS.exportarPDF;
+        if (!url) return;
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+        form.style.display = 'none';
+
+        const campos = {
+            csrfmiddlewaretoken: csrftoken,
+            modelo_raiz: modeloRaizActual(),
+            configuracion: JSON.stringify(configuracion)
+        };
+        Object.keys(campos).forEach(function (nombre) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = nombre;
+            input.value = campos[nombre];
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+    }
+    window.ejecutarExportacionInformeInteligente = ejecutarExportacionInformeInteligente;
+
     // =====================================================================
     // 6. PLANTILLAS RÁPIDAS, FAVORITOS E HISTORIAL
     // =====================================================================

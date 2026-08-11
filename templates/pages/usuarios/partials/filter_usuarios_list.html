@@ -1,6 +1,23 @@
-{% if usuarios %} 
+{% if usuarios %}
     {% for u in usuarios %}
-        <tr>
+        <tr class="fila-usuario cursor-pointer"
+            onclick="seleccionarUsuario(this)"
+            data-id="{{ u.pk }}"
+            data-username="{{ u.username }}"
+            data-url-editar="{% url 'updt_usuario' u.id %}"
+            data-url-password="{% url 'cambiar_password' u.id %}"
+            data-url-eliminar="{% url 'del_usuario' u.id %}"
+            data-url-expulsar="{% url 'expulsar_sesion' u.id %}"
+            data-conectado="{% if u.esta_conectado %}true{% else %}false{% endif %}"
+            data-es-admin="{% if u.es_admin %}true{% else %}false{% endif %}"
+            data-es-yo="{% if u.pk == request.user.pk %}true{% else %}false{% endif %}">
+            <td class="text-center">
+                {% if u.contrato %}
+                    <a>{{ u.contrato.no_expediente }}</a>
+                {% else %}
+                    <a>-</a>
+                {% endif %}
+            </td>
             <td class="text-center">
                 {% if u.contrato %}
                     <a>{{ u.contrato.aspirante.nombre }} {{ u.contrato.aspirante.papellido }} {{ u.contrato.aspirante.sapellido }}</a>
@@ -22,20 +39,22 @@
                 <br />
                 <small>{{ u.contrato.cargo.departamento.unidad_organizativa.descripcion }}</small>
             </td>
-            <td class="project-actions text-center">
-                <button class="btn btn-sm" onclick="abrir_modal_edicion('{% url 'updt_usuario' u.id %}')">
-                    <i class="fas fa-user-pen"></i>
-                </button>
-                <button class="btn btn-sm" onclick="abrir_modal_cambiar_password('{% url 'cambiar_password' u.id %}')">
-                    <i class="fas fa-key"></i>
-                </button>
-
-                <a class="btn btn-sm btn-eliminar" href="{% url 'del_usuario' u.id %}">
-                    <i class="fas fa-trash"></i>
-                </a>
+            <td class="text-center">
+                {% if u.is_active %}
+                    <span class="badge bg-label-success">Activo</span>
+                {% else %}
+                    <span class="badge bg-label-secondary">Inactivo</span>
+                {% endif %}
+            </td>
+            <td class="text-center">
+                {% if u.esta_conectado %}
+                    <span title="Conectado" style="font-size: 1.1rem;">🟢</span>
+                {% else %}
+                    <span title="Desconectado" style="font-size: 1.1rem;">⚪</span>
+                {% endif %}
             </td>
         </tr>
-    {% endfor %} 
+    {% endfor %}
 {% else %}
-    <tr><td colspan="5">No hay registros disponibles.</td></tr>
+    <tr><td colspan="6">No hay registros disponibles.</td></tr>
 {% endif %}

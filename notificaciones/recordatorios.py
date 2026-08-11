@@ -93,10 +93,19 @@ def detectar_cumpleanos():
         )
 
 
-def detectar_contratos_por_vencer():
-    """Contratos de alta (no indeterminados) próximos a vencer, de trabajadores activos."""
-    contratos = (CAlta.objects.filter(aspirante__estado='ACTIVO')
-                 .select_related('aspirante', 'tipo', 'cargo__departamento__unidad_organizativa'))
+def detectar_contratos_por_vencer(queryset=None):
+    """Contratos de alta (no indeterminados) próximos a vencer, de trabajadores activos.
+
+    `queryset`: permite reutilizar este mismo criterio (horizonte, exclusión de
+    "INDETERMINADO", cálculo de días) sobre un queryset ya acotado por otro
+    llamador — p.ej. el Dashboard, que ya filtra `CAlta` por Unidad
+    Organizativa antes de pasarlo aquí, para no tener una segunda fuente de
+    verdad sobre cuándo un contrato "está por vencer". Por defecto (sin
+    argumento) construye el mismo queryset de siempre.
+    """
+    contratos = queryset if queryset is not None else (
+        CAlta.objects.filter(aspirante__estado='ACTIVO')
+        .select_related('aspirante', 'tipo', 'cargo__departamento__unidad_organizativa'))
     for contrato in contratos:
         if contrato.tipo and 'INDETERMINADO' in (contrato.tipo.descripcion or '').upper():
             continue

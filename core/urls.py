@@ -9,6 +9,7 @@ urlpatterns = [
     # DASHBOARD PRINCIPAL
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/piramide-edades/', dashboard_views.piramide_edades_json, name='dashboard_piramide_json'),
+    path('dashboard/advertencias/', dashboard_views.advertencias_json, name='dashboard_advertencias_json'),
 
     ## ---------------------------------------------------------
     # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)

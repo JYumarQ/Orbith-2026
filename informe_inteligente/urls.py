@@ -10,6 +10,8 @@ urlpatterns = [
     # Endpoints HTMX / AJAX
     path("campos/<str:modelo_raiz>/", views.campos_del_modelo, name="campos_del_modelo"),
     path("vista-previa/", views.generar_vista_previa, name="generar_vista_previa"),
+    path("exportar-pdf/", views.exportar_pdf, name="exportar_pdf"),
+    path("exportar-word/", views.exportar_word, name="exportar_word"),
     path("guardar-favorito/", views.guardar_favorito, name="guardar_favorito"),
     path("favorito/<int:informe_id>/", views.cargar_favorito, name="cargar_favorito"),
     path("favorito/<int:informe_id>/eliminar/", views.eliminar_favorito, name="eliminar_favorito"),

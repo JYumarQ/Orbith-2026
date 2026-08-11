@@ -11,7 +11,7 @@ from bolsa.models import Aspirante
 from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
 from strorganizativa.models import Departamento, CargoPlantilla
-from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia, NTipoContrato
+from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia, NTipoContrato, NCargo
 from django.urls import reverse_lazy, reverse
 from configuracion.models import Configuracion
 from django.template.loader import get_template
@@ -35,6 +35,7 @@ from django.http import HttpResponse, Http404
 from datetime import datetime
 from .forms import ExportarContratoWordForm
 from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
+from .filtros import aplicar_filtros
 # Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
 # devuelve None para el Administrador, que sigue guardando directamente.
 from solicitudes.integracion import interceptar
@@ -65,8 +66,14 @@ class ContratoListView(ListView):
         `c.cargo.rol`, `c.rol` y `c.tridente`. Sin esto Django resolvía cada salto
         con una consulta suelta por fila: la vista disparaba 95 consultas (36 de
         ellas repetidas) con apenas 51 empleados.
+
+        `aplicar_filtros()` aplica los mismos filtros de `?raza=`/`?nivel_educ=`/
+        etc. que ya usa `search_contratos` — sin esto, un enlace externo (p.ej.
+        desde el Dashboard) con un filtro en la URL no filtraba nada hasta que
+        el usuario tocaba un `<select>`, porque la carga inicial no leía la
+        querystring.
         """
-        return super().get_queryset().select_related(
+        return aplicar_filtros(self.request, super().get_queryset().select_related(
             'aspirante',
             'tipo',
             'motivo',
@@ -78,15 +85,15 @@ class ContratoListView(ListView):
             'cargo__rol',
             'cargo__departamento',
             'cargo__departamento__unidad_organizativa',
-        )
+        ))
 
     def get_paginate_by(self, queryset):
         # PROTECCIÓN: Si viene vacío (''), usar 8 por defecto
         page_size = self.request.GET.get('per_page')
         return int(page_size) if page_size else 8
-        
-    ordering = ['-fecha_alta']  
-    
+
+    ordering = ['-fecha_alta']
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CAltaForm()
@@ -94,6 +101,22 @@ class ContratoListView(ListView):
         context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
         context['provincias_list'] = NProvincia.objects.all()
         context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
+        context['categorias_ocupacionales'] = NCargo._meta.get_field('cat_ocupacional').choices
+        context['tipos_contrato_list'] = NTipoContrato.objects.all().order_by('descripcion')
+
+        # Preselección visual de los filtros al llegar con una querystring ya
+        # armada (p.ej. desde un gráfico del Dashboard) — la tabla ya viene
+        # filtrada por `get_queryset()`, esto solo hace que el `<select>`
+        # correspondiente se muestre marcado.
+        context['filtro_provincia'] = self.request.GET.get('provincia', '')
+        context['filtro_municipio'] = self.request.GET.get('municipio', '')
+        context['filtro_nivel_educ'] = self.request.GET.get('nivel_educ', '')
+        context['filtro_especialidad'] = self.request.GET.get('especialidad', '')
+        context['filtro_sexo'] = self.request.GET.get('sexo', '')
+        context['filtro_raza'] = self.request.GET.get('raza', '')
+        context['filtro_grado_cientifico'] = self.request.GET.get('grado_cientifico', '')
+        context['filtro_cat_ocupacional'] = self.request.GET.get('cat_ocupacional', '')
+        context['filtro_tipo'] = self.request.GET.get('tipo', '')
 
         # LA CLAVE: Enviar la variable al HTML desde la carga inicial
         page_size = self.request.GET.get('per_page')
@@ -247,18 +270,9 @@ def search_contratos(request):
     if not page_size:
         page_size = '8'
     
-    # Filtros del Aspirante asociado
-    provincia_id = request.GET.get('provincia')
-    municipio_id = request.GET.get('municipio')
-    nivel_educ = request.GET.get('nivel_educ')
-    especialidad_id = request.GET.get('especialidad')
-    sexo = request.GET.get('sexo')
-    raza = request.GET.get('raza')
-    grado_cientifico = request.GET.get('grado_cientifico')
-
     # 2. QuerySet Base con el Grafo Relacional expandido (Corrección N+1)
     qs = CAlta.objects.select_related(
-        'aspirante', 
+        'aspirante',
         'cargo',
         'cargo__departamento',
         'cargo__ncargo',
@@ -268,21 +282,9 @@ def search_contratos(request):
         'tridente'
     ).all().order_by('-fecha_alta')
 
-    # 3. Aplicar Filtros "Embudo" (Relación aspirante__)
-    if provincia_id:
-        qs = qs.filter(aspirante__provincia_id=provincia_id)
-    if municipio_id:
-        qs = qs.filter(aspirante__municipio_id=municipio_id)
-    if nivel_educ:
-        qs = qs.filter(aspirante__nivel_educ=nivel_educ)
-    if especialidad_id:
-        qs = qs.filter(aspirante__especialidad_id=especialidad_id)
-    if sexo:
-        qs = qs.filter(aspirante__sexo=sexo)
-    if raza:
-        qs = qs.filter(aspirante__raza=raza)
-    if grado_cientifico:
-        qs = qs.filter(aspirante__grado_cientifico=grado_cientifico)
+    # 3. Aplicar Filtros "Embudo" (mismo criterio que la carga inicial de
+    # ContratoListView — ver contratos/filtros.py::aplicar_filtros)
+    qs = aplicar_filtros(request, qs)
 
     # 4. Buscador Inteligente (Concatenación)
     if query:

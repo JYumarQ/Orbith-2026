@@ -33,20 +33,25 @@ def orbith(request):
 
 
 def _contar_advertencias_pendientes(usuario):
-    """Advertencias ACTIVA visibles para `usuario` (por unidad organizativa o
-    asignación directa; TODAS si `es_admin`), para el badge de `sidebar.html` —
-    visible en TODA la app, no solo en la página de Notificaciones. Mismo criterio de
-    "pertenencia" que `notificaciones.views._notificaciones_visibles`, reescrito aquí
-    en pequeño en vez de importado: ese helper es privado de su módulo y este context
-    processor corre en CADA petición autenticada, así que conviene que no dependa de
-    las vistas de otra app.
+    """Advertencias ACTIVA y sin leer, visibles para `usuario` (por unidad
+    organizativa o asignación directa; TODAS si `es_admin`), para el badge de
+    `sidebar.html` — visible en TODA la app, no solo en la página de Notificaciones.
+    Mismo criterio de "pertenencia" que `notificaciones.views._notificaciones_visibles`,
+    reescrito aquí en pequeño en vez de importado: ese helper es privado de su módulo y
+    este context processor corre en CADA petición autenticada, así que conviene que no
+    dependa de las vistas de otra app.
+
+    `leido=False` es imprescindible: sin él, el contador nunca baja aunque el usuario
+    lea (o incluso descarte) todas sus advertencias, porque "leído" y "resuelto" son
+    ejes independientes en el modelo (ver `Notificacion.leido`) y `estado=ACTIVA` por
+    sí solo no dice nada sobre si el usuario ya las vio.
     """
     from django.db.models import Q
 
     from notificaciones.models import Notificacion
 
     base = Notificacion.objects.filter(
-        tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA)
+        tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA, leido=False)
 
     if usuario.es_admin:
         return base.count()

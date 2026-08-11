@@ -487,8 +487,14 @@
                         }
                     });
                 } else {
-                    // Comportamiento normal si no es wizard: solo cerrar el modal
-                    $('#modalMovimientoContrato').modal('hide'); 
+                    // Mismo cierre que el botón "X" (`data-bs-dismiss="modal"`), en vez
+                    // de `.modal('hide')` directo: así funciona igual tanto si el modal
+                    // se abrió por AJAX (bootstrap.Modal real, `list_movimientos.html`)
+                    // como en página completa (p. ej. desde un Recordatorio), donde el
+                    // "X" no cierra un modal real sino que navega de vuelta al origen
+                    // (ver `movimiento_nomina_pagina.html`). `.modal('hide')` a secas no
+                    // dispara esa navegación y dejaba el modal/backdrop bloqueado.
+                    document.querySelector('#modalMovimientoContrato .btn-close').click();
                 }
             });
 

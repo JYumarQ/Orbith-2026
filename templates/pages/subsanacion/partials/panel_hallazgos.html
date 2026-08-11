@@ -4,7 +4,8 @@
 <form id="formFiltrosHallazgos"
       hx-get="{% url 'subsanacion:panel_hallazgos' %}"
       hx-target="#paneHallazgos" hx-swap="innerHTML"
-      hx-trigger="submit, change from:.sub-filtro, keyup changed delay:400ms from:#buscadorHallazgos">
+      hx-trigger="submit, change from:.sub-filtro, keyup changed delay:400ms from:#buscadorHallazgos"
+      hx-push-url="true">
 
   <div class="sub-panel">
     <div class="sub-panel-head sub-color-indigo">
@@ -75,7 +76,8 @@
           {% if filtros.hay_filtros %}
             <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2"
                     hx-get="{% url 'subsanacion:panel_hallazgos' %}"
-                    hx-target="#paneHallazgos" hx-swap="innerHTML">
+                    hx-target="#paneHallazgos" hx-swap="innerHTML"
+                    hx-push-url="true">
               <i class="bi bi-x-lg me-1"></i>Quitar filtros
             </button>
           {% endif %}
@@ -174,7 +176,7 @@
               <button class="page-link"
                       {% if pagina.has_previous %}
                         hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.previous_page_number }}{{ querystring }}"
-                        hx-target="#paneHallazgos" hx-swap="innerHTML"
+                        hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true"
                       {% endif %}>
                 <i class="bi bi-chevron-left"></i>
               </button>
@@ -186,7 +188,7 @@
                 <li class="page-item">
                   <button class="page-link"
                           hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ numero }}{{ querystring }}"
-                          hx-target="#paneHallazgos" hx-swap="innerHTML">{{ numero }}</button>
+                          hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true">{{ numero }}</button>
                 </li>
               {% endif %}
             {% endfor %}
@@ -194,7 +196,7 @@
               <button class="page-link"
                       {% if pagina.has_next %}
                         hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.next_page_number }}{{ querystring }}"
-                        hx-target="#paneHallazgos" hx-swap="innerHTML"
+                        hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true"
                       {% endif %}>
                 <i class="bi bi-chevron-right"></i>
               </button>

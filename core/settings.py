@@ -50,6 +50,8 @@ MIDDLEWARE = [
     'auditoria.middleware.CurrentUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Al final a propósito: ver docstring de ControlAccesoMiddleware.
+    'usuarios.middleware.ControlAccesoMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'

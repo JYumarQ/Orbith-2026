@@ -42,7 +42,7 @@
                         {# `cortes` viaja intacto aunque aquí no se edite: vive en la tarjeta de la Pirámide. #}
                         <input type="hidden" name="cortes" value="{{ edades_cortes_str }}">
                         <div class="row gy-3 gx-4">
-                            <div class="col-12 col-lg-6">
+                            <div class="col-12 col-lg-8">
                                 <label class="filtro-label"><i class="bx bx-sitemap"></i> Unidad Organizativa</label>
                                 <div class="chip-multiselect">
                                     <select class="chip-multiselect-native" name="uo" multiple hidden>
@@ -60,27 +60,7 @@
                                         <div class="chip-multiselect-options"></div>
                                     </div>
                                 </div>
-                                <small class="text-muted"><i class="bx bx-info-circle"></i> Haz clic para desplegar y buscar múltiples unidades.</small>
-                            </div>
-                            <div class="col-12 col-lg-6">
-                                <label class="filtro-label"><i class="bx bx-building-house"></i> Departamento</label>
-                                <div class="chip-multiselect">
-                                    <select class="chip-multiselect-native" name="depto" multiple hidden>
-                                        {% for depto in filtro_depto_opciones %}
-                                        <option value="{{ depto.pk }}" {% if depto.pk in filtro_depto_seleccionadas %}selected{% endif %}>{{ depto.descripcion }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <div class="chip-multiselect-box" tabindex="0">
-                                        <div class="chip-multiselect-chips"></div>
-                                        <span class="chip-multiselect-badge">0</span>
-                                        <i class="bx bx-chevron-down chip-multiselect-arrow"></i>
-                                    </div>
-                                    <div class="chip-multiselect-panel">
-                                        <input type="text" class="chip-multiselect-search" placeholder="Buscar departamento...">
-                                        <div class="chip-multiselect-options"></div>
-                                    </div>
-                                </div>
-                                <small class="text-muted"><i class="bx bx-refresh"></i> Se actualiza dinámicamente según la UO aplicada.</small>
+                                <small class="text-muted"><i class="bx bx-info-circle"></i> Haz clic para desplegar y buscar múltiples unidades. Selecciona una UO para incluir automáticamente todos sus Departamentos.</small>
                             </div>
                         </div>
                         <div class="mt-3">
@@ -93,7 +73,7 @@
     </div>
 
     <div class="row g-3 mb-3">
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
                 <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ contratos_count }}</div>
@@ -101,7 +81,7 @@
                 <small class="text-muted">Empleados Activos</small>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">+{{ altas_30d|default:"0" }}</div>
@@ -109,7 +89,7 @@
                 <small class="text-muted">Nuevas Altas</small>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
                 <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-trending-down fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3 text-danger">-{{ bajas_30d|default:"0" }}</div>
@@ -117,7 +97,7 @@
                 <small class="text-muted">Nuevas Bajas</small>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
                 <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-user-voice fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ plazas.vacantes }}</div>
@@ -125,7 +105,7 @@
                 <small class="text-muted">Vacantes Libres</small>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
                 <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">${{ salario_prom }}</div>
@@ -133,12 +113,20 @@
                 <small class="text-muted">Salario Escala Promedio</small>
             </div>
         </div>
-        <div class="col-6 col-md-4 col-lg-2">
+        <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ uo_count }}</div>
                 <span class="badge bg-label-info mb-1">Estructura</span>
                 <small class="text-muted">Unidades Organizativas</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg">
+            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
+                <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-sitemap fs-2 text-white"></i></div>
+                <div class="fw-bold fs-3">{{ depto_count }}</div>
+                <span class="badge bg-label-info mb-1">Estructura</span>
+                <small class="text-muted">Departamentos</small>
             </div>
         </div>
     </div>
@@ -182,55 +170,79 @@
     <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
-                <div class="card-header bg-label-primary d-flex align-items-center"><i class="bx bx-cake fs-4 text-primary me-2"></i><span class="fw-bold">Cumpleaños Cercanos</span></div>
-                <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
-                    {% for c in cumpleannos %}
-                    <li class="list-group-item d-flex align-items-center py-2">
-                        <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
-                        <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
-                        <span class="badge bg-label-primary ms-auto">{% if c.dias == 0 %}¡Hoy!{% else %}{{ c.fecha_str }}{% endif %}</span>
-                    </li>
-                    {% empty %}
-                    <li class="list-group-item text-center text-muted py-4">No hay cumpleaños en 45 días</li>
-                    {% endfor %}
-                </ul>
+                <div class="card-header bg-label-primary d-flex align-items-center"><i class="bx bx-cake fs-4 text-primary me-2"></i><span class="fw-bold">Cumpleaños</span></div>
+                <div class="card-body p-0">
+                    <ul class="nav nav-tabs nav-fill" role="tablist">
+                        <li class="nav-item"><button class="nav-link active py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-cercanos" style="font-size:0.75rem;">Cercanos <span class="badge bg-label-primary">{{ cumpleannos|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-semana" style="font-size:0.75rem;">Semana actual <span class="badge bg-label-primary">{{ cumpleanos_semana_actual|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-prox" style="font-size:0.75rem;">Próxima semana <span class="badge bg-label-primary">{{ cumpleanos_semana_prox|length }}</span></button></li>
+                    </ul>
+                    <div class="tab-content p-0 m-0">
+                        <div class="tab-pane fade show active" id="tab-cumple-cercanos">
+                            <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                                {% for c in cumpleannos %}
+                                <li class="list-group-item d-flex align-items-center py-2">
+                                    <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
+                                    <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
+                                    <span class="badge bg-label-primary ms-auto">{% if c.dias == 0 %}¡Hoy!{% else %}{{ c.fecha_str }}{% endif %}</span>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">No hay cumpleaños en 45 días</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="tab-pane fade" id="tab-cumple-semana">
+                            <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                                {% for c in cumpleanos_semana_actual %}
+                                <li class="list-group-item d-flex align-items-center py-2">
+                                    <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
+                                    <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
+                                    <span class="badge bg-label-primary ms-auto">{{ c.fecha_str }}</span>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">No hay cumpleaños esta semana</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="tab-pane fade" id="tab-cumple-prox">
+                            <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                                {% for c in cumpleanos_semana_prox %}
+                                <li class="list-group-item d-flex align-items-center py-2">
+                                    <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
+                                    <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
+                                    <span class="badge bg-label-primary ms-auto">{{ c.fecha_str }}</span>
+                                </li>
+                                {% empty %}
+                                <li class="list-group-item text-center text-muted py-4">No hay cumpleaños la próxima semana</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="col-12 col-lg-4">
           <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
               <div class="card-header bg-label-danger d-flex align-items-center">
                   <i class="bx bx-error-circle fs-4 text-danger me-2"></i>
-                  <span class="fw-bold">Avisos de Contratos</span>
+                  <span class="fw-bold">Recordatorios</span>
+                  <a href="{% url 'lista_notificaciones' %}?tab=recordatorios&sub=sistema" class="btn btn-primary btn-sm ms-auto">Ver más</a>
               </div>
               <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
-                  {% for c in avisos_contratos %}
+                  {% for r in recordatorios_contrato %}
                   <li class="list-group-item d-flex align-items-center py-2">
-                      <i class="bx bx-time text-danger fs-4 me-2"></i>
+                      <span class="me-2" style="font-size:1.1rem;">{{ r.emoji }}</span>
                       <span style="font-size:0.85rem;">
-                          <b>{{ c.nombre }}</b>
-                          <small class="text-muted d-block">{{ c.tipo }}</small>
+                          <b>{{ r.titulo }}</b>
+                          <small class="text-muted d-block">{{ r.mensaje }}</small>
                       </span>
-                      
-                      <!-- BADGE CON REGLAS DEL INFORME OFICIAL -->
-                      <span class="badge rounded-pill px-3 py-1 ms-auto 
-                          {% if c.dias < 0 %}bg-danger
-                          {% elif c.dias <= 5 %}bg-danger fw-bold
-                          {% elif c.dias <= 15 %}bg-danger
-                          {% elif c.dias <= 30 %}bg-warning text-dark
-                          {% else %}bg-success{% endif %}" 
+                      <span class="badge rounded-pill px-3 py-1 ms-auto
+                          {% if r.clave == 'rojo' %}bg-danger
+                          {% elif r.clave == 'amarillo' %}bg-warning text-dark
+                          {% elif r.clave == 'naranja' %}bg-label-warning
+                          {% else %}bg-success{% endif %}"
                           style="font-size: 0.75rem;">
-                          
-                          {% if c.dias < 0 %}
-                              <i class="fas fa-exclamation-triangle me-1"></i> Vencido ({{ c.dias }} d)
-                          {% elif c.dias <= 5 %}
-                              <i class="fas fa-exclamation-triangle me-1"></i> {{ c.dias }} días
-                          {% elif c.dias <= 15 %}
-                              {{ c.dias }} días
-                          {% elif c.dias <= 30 %}
-                              {{ c.dias }} días
-                          {% else %}
-                              {{ c.dias }} días
-                          {% endif %}
+                          {{ r.etiqueta }} ({{ r.dias }} d)
                       </span>
                   </li>
                   {% empty %}
@@ -240,9 +252,35 @@
           </div>
       </div>
         <div class="col-12 col-lg-4">
-            <div class="card h-100 shadow border-0" style="min-height: 280px;">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Raza</h6></div>
-                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="razaPieChart" style="width: 100%;"></div></div>
+            <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
+                <div class="card-header bg-label-warning d-flex align-items-center flex-wrap gap-2">
+                    <i class="bx bx-shield-quarter fs-4 text-warning me-2"></i>
+                    <span class="fw-bold">Advertencias</span>
+                    <form id="form-advertencias" method="get" class="ms-auto d-flex align-items-center gap-2">
+                        {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
+                        <input type="hidden" name="cortes" value="{{ edades_cortes_str }}">
+                        <select id="select-severidad" name="severidad" class="form-select form-select-sm" style="width: auto;">
+                            <option value="">Todas</option>
+                            {% for valor, etiqueta in severidades_disponibles %}
+                            <option value="{{ valor }}" {% if valor in severidad_actual %}selected{% endif %}>{{ etiqueta }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    <a id="advertencias-ver-mas" href="{% url 'lista_notificaciones' %}?tab=advertencias{% for s in severidad_actual %}&severidad={{ s }}{% endfor %}" class="btn btn-primary btn-sm">Ver más</a>
+                </div>
+                <ul id="advertencias-lista" class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                    {% for a in advertencias %}
+                    <li class="list-group-item d-flex align-items-center py-2">
+                        <i class="bx bx-error fs-4 text-warning me-2"></i>
+                        <span style="font-size:0.85rem;">
+                            <b>{{ a.titulo }}</b>
+                            <small class="text-muted d-block">{{ a.get_severidad_display }}</small>
+                        </span>
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-center text-muted py-4">Sin advertencias activas</li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
     </div>
@@ -287,12 +325,11 @@
                 <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Pirámide de Edades</h6></div>
                 <form id="form-cortes-edad" method="get" class="d-flex gap-2 align-items-center px-3 pt-2">
                     {% comment %}
-                    UO/Departamento ya seleccionados viajan aquí: si el fetch de abajo
+                    La UO ya seleccionada viaja aquí: si el fetch de abajo
                     falla por algún motivo, el submit normal (recarga completa) sigue
                     funcionando como red de seguridad y no pierde el filtro aplicado.
                     {% endcomment %}
                     {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
-                    {% for id in filtro_depto_seleccionadas %}<input type="hidden" name="depto" value="{{ id }}">{% endfor %}
                     <input type="text" name="cortes" value="{{ edades_cortes_str }}" class="form-control form-control-sm"
                            placeholder="25,35,45,55,65" title="Cortes de edad, separados por coma">
                     <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">
@@ -357,7 +394,7 @@
         </div>
     </div>
 
-    <div class="row g-3">
+    <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
                 <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Causas de Baja</h6></div>
@@ -366,14 +403,29 @@
         </div>
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Nivel Preparación (Plantilla)</h6></div>
-                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="preparacionPieChart" style="width: 100%;"></div></div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Raza</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="razaPieChart" style="width: 100%;"></div></div>
             </div>
         </div>
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Registro Militar</h6></div>
-                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="regMilitarChart" style="width: 100%;"></div></div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Especialidad</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="especialidadPieChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Municipio</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="municipioPieChart" style="width: 100%;"></div></div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-6">
+            <div class="card h-100 shadow border-0">
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Distribución por Grado Científico</h6></div>
+                <div class="card-body d-flex justify-content-center align-items-center p-0"><div id="gradoCientificoPieChart" style="width: 100%;"></div></div>
             </div>
         </div>
     </div>
@@ -615,6 +667,23 @@
         });
     }
 
+    // Navegación por leyenda: los gráficos de distribución redirigen a Contratos
+    // filtrado SOLO al hacer clic en la leyenda (evento dedicado `legendClick` de
+    // ApexCharts) — el clic sobre un segmento del gráfico sigue su comportamiento
+    // nativo intacto, no se toca `dataPointSelection` en ningún gráfico.
+    const urlContratos = '{% url "list_contrato" %}';
+    function irAContratos(param, valor) {
+        if (valor === null || valor === undefined || valor === '') return;
+        window.location.href = urlContratos + '?' + param + '=' + encodeURIComponent(valor);
+    }
+    // `codigos` es un array paralelo a `labels`/`series` en el mismo orden; si la
+    // posición no tiene código (p.ej. la porción "Otros" de Top5+Otros) no navega.
+    function legendClickHaciaContratos(param, codigos) {
+        return function (chartContext, seriesIndex) {
+            irAContratos(param, codigos[seriesIndex]);
+        };
+    }
+
     // 1. Plazas
     const porcCubiertas = parseFloat('{{ plazas.porc_cubiertas|default:"0" }}'.replace(',', '.')) || 0;
     renderChartSafely('#plazasGaugeChart', {
@@ -645,9 +714,16 @@
     });
 
     // 4. Categoría Ocupacional
+    const catOcupacionalCodigos = {{ cat_ocupacional_codigos|safe|default:"[]" }};
     renderChartSafely('#catOcupacionalDonut', {
         series: {{ cat_ocupacional|safe|default:"[]" }},
-        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#catOcupacionalDonut', {{ cat_ocupacional|safe|default:"[]" }}); } } },
+        chart: {
+            type: 'donut', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#catOcupacionalDonut', {{ cat_ocupacional|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('cat_ocupacional', catOcupacionalCodigos)
+            }
+        },
         labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
         colors: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'],
         plotOptions: { donut: { size: '60%' } },
@@ -657,7 +733,7 @@
             style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
@@ -740,11 +816,75 @@
         });
     }
 
-    // 6. Tipos de Contrato
+    // Severidad de Advertencias: se aplica por fetch (solo esta tarjeta se
+    // recalcula) en vez de recargar el Dashboard completo, igual que los
+    // cortes de la Pirámide de arriba. El `<form>` normal sigue como red de
+    // seguridad si el fetch falla.
+    const selectSeveridad = document.getElementById('select-severidad');
+    const formAdvertencias = document.getElementById('form-advertencias');
+    const listaAdvertencias = document.getElementById('advertencias-lista');
+    const verMasAdvertencias = document.getElementById('advertencias-ver-mas');
+    if (selectSeveridad && formAdvertencias && listaAdvertencias) {
+        selectSeveridad.addEventListener('change', function () {
+            const params = new URLSearchParams(new FormData(formAdvertencias));
+            selectSeveridad.disabled = true;
+
+            fetch('{% url "dashboard_advertencias_json" %}?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                })
+                .then(function (data) {
+                    listaAdvertencias.innerHTML = '';
+                    if (!data.advertencias.length) {
+                        const vacio = document.createElement('li');
+                        vacio.className = 'list-group-item text-center text-muted py-4';
+                        vacio.textContent = 'Sin advertencias activas';
+                        listaAdvertencias.appendChild(vacio);
+                    } else {
+                        data.advertencias.forEach(function (a) {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item d-flex align-items-center py-2';
+                            li.innerHTML = '<i class="bx bx-error fs-4 text-warning me-2"></i>'
+                                + '<span style="font-size:0.85rem;"><b></b><small class="text-muted d-block"></small></span>';
+                            // `textContent` (no innerHTML) para el título/severidad: son
+                            // datos de usuario (títulos de advertencia), no HTML de confianza.
+                            li.querySelector('b').textContent = a.titulo;
+                            li.querySelector('small').textContent = a.severidad_display;
+                            listaAdvertencias.appendChild(li);
+                        });
+                    }
+                    if (verMasAdvertencias) {
+                        let url = '{% url "lista_notificaciones" %}?tab=advertencias';
+                        data.severidad.forEach(function (s) { url += '&severidad=' + s; });
+                        verMasAdvertencias.setAttribute('href', url);
+                    }
+                })
+                .catch(function (err) {
+                    console.error('No se pudo actualizar Advertencias por fetch, recargando la página.', err);
+                    formAdvertencias.submit();
+                })
+                .finally(function () {
+                    selectSeveridad.disabled = false;
+                });
+        });
+    }
+
+    // 6. Tipos de Contrato — el label ES el valor de filtro (la `descripcion`
+    // real de NTipoContrato), no hace falta un array de códigos aparte.
+    const tiposContratoLabels = {{ tipos_contrato_labels|safe|default:"[]" }};
     renderChartSafely('#tiposContratoChart', {
         series: {{ tipos_contrato_data|safe|default:"[]" }},
-        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#tiposContratoChart', {{ tipos_contrato_data|safe|default:"[]" }}); } } },
-        labels: {{ tipos_contrato_labels|safe|default:"[]" }},
+        chart: {
+            type: 'donut', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#tiposContratoChart', {{ tipos_contrato_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('tipo', tiposContratoLabels)
+            }
+        },
+        labels: tiposContratoLabels,
         colors: ['#8b5cf6', '#3b82f6', '#f43f5e', '#10b981', '#f59e0b', '#64748b'],
         plotOptions: { donut: { size: '60%' } },
         dataLabels: {
@@ -753,19 +893,28 @@
             style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
-    // Paleta común del dashboard (misma que catOcupacionalDonut / razaPieChart /
-    // regMilitarChart) — se reutiliza aquí en vez de dejar que ApexCharts aplique
-    // su paleta por defecto, que desentonaba con el resto de gráficos.
+    // Paleta común del dashboard (misma que catOcupacionalDonut / razaPieChart) —
+    // se reutiliza aquí en vez de dejar que ApexCharts aplique su paleta por
+    // defecto, que desentonaba con el resto de gráficos.
     const paletaDashboard = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#0ea5e9', '#64748b'];
 
     // 7. Educacional
+    const nivelEducCodigos = {{ nivel_educ_codigos|safe|default:"[]" }};
     renderChartSafely('#educacionalPieChart', {
-        series: {{ nivel_educ_data|safe|default:"[]" }}, chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#educacionalPieChart', {{ nivel_educ_data|safe|default:"[]" }}); } } },
-        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
+        series: {{ nivel_educ_data|safe|default:"[]" }},
+        chart: {
+            type: 'pie', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#educacionalPieChart', {{ nivel_educ_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('nivel_educ', nivelEducCodigos)
+            }
+        },
+        labels: {{ nivel_educ_labels|safe|default:"[]" }},
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
         colors: paletaDashboard,
         dataLabels: {
             enabled: true,
@@ -776,61 +925,98 @@
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
-    // 8. Preparación
-    renderChartSafely('#preparacionPieChart', {
-        series: {{ nivel_prep_data|safe|default:"[]" }}, chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#preparacionPieChart', {{ nivel_prep_data|safe|default:"[]" }}); } } },
-        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
-        colors: paletaDashboard,
-        dataLabels: {
-            enabled: true,
-            formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
-            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
-        },
-        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
-    });
-
-    // 9. Distribución por Raza (Pie Chart)
+    // 8. Distribución por Raza (Pie Chart)
+    const razaCodigos = {{ raza_codigos|safe|default:"[]" }};
     renderChartSafely('#razaPieChart', {
         series: {{ raza_data|safe|default:"[]" }},
-        chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#razaPieChart', {{ raza_data|safe|default:"[]" }}); } } },
+        chart: {
+            type: 'pie', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#razaPieChart', {{ raza_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('raza', razaCodigos)
+            }
+        },
         labels: {{ raza_labels|safe|default:"[]" }},
         colors: ['#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#64748b'],
-        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
-        dataLabels: { 
-            enabled: true,
-            // Muestra el Porcentaje en la tajada del pastel
-            formatter: function (val) {
-                return Math.round(val) + "%";
-            },
-            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
-            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
-        },
-        tooltip: {
-            enabled: true,
-            y: {
-                // Muestra la cantidad en Números Enteros al pasar el ratón
-                formatter: function(val) {
-                    return val + " personas";
-                }
-            }
-        }
-    });
-
-    // 10. Registro Militar
-    renderChartSafely('#regMilitarChart', {
-        series: {{ reg_militar_data|safe|default:"[]" }},
-        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#regMilitarChart', {{ reg_militar_data|safe|default:"[]" }}); } } },
-        labels: {{ reg_militar_labels|safe|default:"[]" }},
-        colors: ['#3b82f6', '#f59e0b', '#8b5cf6', '#64748b'],
-        plotOptions: { donut: { size: '60%' } },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
             style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
+    });
+
+    // 9. Distribución por Especialidad (Top 5 + Otros; "Otros" no navega porque
+    // su código en el array paralelo es `null`)
+    const especialidadCodigos = {{ especialidad_codigos|safe|default:"[]" }};
+    renderChartSafely('#especialidadPieChart', {
+        series: {{ especialidad_data|safe|default:"[]" }},
+        chart: {
+            type: 'pie', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#especialidadPieChart', {{ especialidad_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('especialidad', especialidadCodigos)
+            }
+        },
+        labels: {{ especialidad_labels|safe|default:"[]" }},
+        colors: paletaDashboard,
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
+    });
+
+    // 10. Distribución por Municipio (Top 5 + Otros)
+    const municipioCodigos = {{ municipio_codigos|safe|default:"[]" }};
+    renderChartSafely('#municipioPieChart', {
+        series: {{ municipio_data|safe|default:"[]" }},
+        chart: {
+            type: 'donut', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#municipioPieChart', {{ municipio_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('municipio', municipioCodigos)
+            }
+        },
+        labels: {{ municipio_labels|safe|default:"[]" }},
+        colors: paletaDashboard,
+        plotOptions: { donut: { size: '60%' } },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
+        tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
+    });
+
+    // 11. Distribución por Grado Científico (3 categorías fijas)
+    const gradoCientificoCodigos = {{ grado_cientifico_codigos|safe|default:"[]" }};
+    renderChartSafely('#gradoCientificoPieChart', {
+        series: {{ grado_cientifico_data|safe|default:"[]" }},
+        chart: {
+            type: 'donut', height: esMovil ? 258 : 230,
+            events: {
+                mounted: function () { agregarCantidadALeyenda('#gradoCientificoPieChart', {{ grado_cientifico_data|safe|default:"[]" }}); },
+                legendClick: legendClickHaciaContratos('grado_cientifico', gradoCientificoCodigos)
+            }
+        },
+        labels: {{ grado_cientifico_labels|safe|default:"[]" }},
+        colors: ['#8b5cf6', '#3b82f6', '#64748b'],
+        plotOptions: { donut: { size: '60%' } },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px', onItemClick: { toggleDataSeries: false } },
+        dataLabels: {
+            enabled: true,
+            formatter: function (val) { return Math.round(val) + "%"; },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
+            dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
+        },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 })();
