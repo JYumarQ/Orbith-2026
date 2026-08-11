@@ -36,6 +36,42 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "2.4.0",
+        "fecha": "2026-08-11",
+        "titulo": "Rediseño del Dashboard, panel de administración y ajustes móviles",
+        "cambios": [
+            ("nuevo", "Dashboard: los filtros de Unidad Organizativa y "
+                      "Departamento ahora son selectores modernos con chips, "
+                      "buscador y contador, en vez del selector múltiple "
+                      "clásico, con botón «Restablecer filtros»."),
+            ("nuevo", "Dashboard: la Pirámide de Edades permite definir "
+                      "libremente los cortes de edad (ej. 25,35,45,55,65) y "
+                      "se recalcula al instante sin recargar la página; el "
+                      "tooltip muestra cantidad y porcentaje por franja."),
+            ("nuevo", "Radar de Jubilaciones: nueva pestaña «Jubilados "
+                      "Recontratados» a partir del campo del contrato, junto "
+                      "a las ya existentes de edad próxima y cumplida."),
+            ("mejorado", "Dashboard: se intercambiaron las tarjetas «Salario "
+                         "Escala Promedio» y «Nuevas Bajas» y se unificó la "
+                         "paleta de colores de los gráficos de pastel de "
+                         "Nivel Educacional y Nivel de Preparación con el "
+                         "resto de gráficos."),
+            ("mejorado", "Dashboard: el cálculo histórico de Altas/Bajas "
+                         "recorre las tablas una sola vez en vez de una vez "
+                         "por cada mes mostrado."),
+            ("nuevo", "Panel de administración de Django ampliado en todas "
+                      "las apps (listados con búsqueda, filtros y "
+                      "autocompletado) y nueva vista de Movimientos de "
+                      "Nómina agrupada por trabajador; se sumaron los "
+                      "módulos de Cierres y Subsanación."),
+            ("mejorado", "Ajustes de experiencia en móvil: objetivos táctiles "
+                         "más grandes, menú de Gestor de Plantilla con botón "
+                         "«Ver opciones», barras de herramientas fijas al "
+                         "hacer scroll y un nuevo widget de paginación "
+                         "reutilizable en los listados largos."),
+        ],
+    },
+    {
         "version": "2.3.1",
         "fecha": "2026-08-10",
         "titulo": "Filtros del Dashboard y recordatorio de contrato",

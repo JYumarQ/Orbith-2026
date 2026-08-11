@@ -124,12 +124,13 @@ SUBTABS_RECORDATORIOS = ('sistema', 'administracion')
 
 def _querystring_sin_pagina(request):
     """La querystring actual (pestaña + filtros) sin `pagina`, para que los enlaces de
-    paginación no pierdan el resto del contexto. Mismo patrón que
-    `subsanacion/filtros.py::querystring_sin_pagina`."""
+    paginación no pierdan el resto del contexto. Mismo patrón (y mismo formato, con
+    "&" inicial) que `subsanacion/filtros.py::querystring_sin_pagina`, consumido por
+    `base/partials/paginacion_ventana.html` como `?pagina=N{{ querystring }}`."""
     parametros = request.GET.copy()
     parametros.pop('pagina', None)
     codificada = parametros.urlencode()
-    return f'{codificada}&' if codificada else ''
+    return f'&{codificada}' if codificada else ''
 
 
 def _paginar_con_enlaces(request, queryset, origen_label):

@@ -64,20 +64,4 @@
   </div>
 </div>
 
-{% if recordatorios.paginator.num_pages > 1 %}
-  <nav class="mt-3">
-    <ul class="pagination pagination-sm justify-content-center">
-      <li class="page-item {% if not recordatorios.has_previous %}disabled{% endif %}">
-        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if recordatorios.has_previous %}{{ recordatorios.previous_page_number }}{% else %}1{% endif %}">Anterior</a>
-      </li>
-      {% for numero in recordatorios.paginator.page_range %}
-        <li class="page-item {% if numero == recordatorios.number %}active{% endif %}">
-          <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={{ numero }}">{{ numero }}</a>
-        </li>
-      {% endfor %}
-      <li class="page-item {% if not recordatorios.has_next %}disabled{% endif %}">
-        <a class="page-link" href="?{{ querystring_sin_pagina }}pagina={% if recordatorios.has_next %}{{ recordatorios.next_page_number }}{% else %}{{ recordatorios.paginator.num_pages }}{% endif %}">Siguiente</a>
-      </li>
-    </ul>
-  </nav>
-{% endif %}
+{% include 'base/partials/paginacion_ventana.html' with pagina=recordatorios querystring=querystring_sin_pagina %}

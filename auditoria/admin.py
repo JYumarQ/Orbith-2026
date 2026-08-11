@@ -12,6 +12,7 @@ class EventoAuditoriaAdmin(admin.ModelAdmin):
     list_filter = ('accion', 'modulo', 'content_type')
     search_fields = ('descriptor', 'usuario_nombre')
     date_hierarchy = 'fecha'
+    list_select_related = ('content_type', 'solicitud')
 
     def has_add_permission(self, request):
         return False

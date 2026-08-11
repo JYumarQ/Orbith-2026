@@ -1,6 +1,4 @@
 from django.db import models
-from django.conf import settings
-from strorganizativa.models import UnidadOrganizativa
 
 class PlanMensualRegistro(models.Model):
     mes = models.CharField(max_length=2)

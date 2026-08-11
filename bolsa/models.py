@@ -2,7 +2,7 @@ import logging
 
 from django.db import models
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
-from nomencladores.models import NTridente, NSalario, NJornada, NEspecialidad, NMunicipio, NProvincia
+from nomencladores.models import NEspecialidad, NMunicipio, NProvincia
 from django.core.validators import MinValueValidator
 from datetime import date, timedelta
 from auditoria.models import Base

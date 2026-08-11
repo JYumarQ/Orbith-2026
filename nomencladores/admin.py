@@ -7,8 +7,10 @@ from import_export.admin import ImportExportModelAdmin
 from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
-    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad, 
-    NTipoUnidadOrganizativa, NTipoContrato, NMotivoContrato # <--- Añadidos aquí
+    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad,
+    NTipoUnidadOrganizativa, NTipoContrato, NMotivoContrato, # <--- Añadidos aquí
+    NTipoFamilia, NFamiliaCargo, NNocturnidad, NCondicionLaboralAnormal,
+    NCausaAltaBaja, NNivelPreparacion,
 )
 
 
@@ -53,12 +55,14 @@ class NMunicipioAdmin(ImportExportModelAdmin):
     list_filter = ('provincia',)
     search_fields = ('nombre',)
     autocomplete_fields = ['provincia']
+    list_select_related = ('provincia',)
 @admin.register(NCargo)
 class NCargoAdmin(admin.ModelAdmin):
     list_display = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
     search_fields = ('descripcion',)
     list_filter = ('cat_ocupacional', 'grupo_escala')
-    
+    list_select_related = ('grupo_escala',)
+
     # CORRECCIÓN 1: Ruta exacta a tu archivo existente
     change_list_template = "pages/catalogos/ncargo/admin_change_list.html"
 
@@ -121,7 +125,55 @@ class NMotivoContratoAdmin(admin.ModelAdmin):
     list_display = ('descripcion', 'tipo_contrato')
     list_editable = ('tipo_contrato',) # Permite asignar el tipo rápidamente desde la tabla
     list_filter = ('tipo_contrato',)
+    list_select_related = ('tipo_contrato',)
 # admin.site.register(NCargo) <--- OJO: Ya está registrado arriba con @admin.register
 admin.site.register(NHorario)
 admin.site.register(NJornada)
-admin.site.register(NEspecialidad)
+
+@admin.register(NEspecialidad)
+class NEspecialidadAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'educ_superior')
+    search_fields = ('nombre',)
+    list_filter = ('educ_superior',)
+
+
+# --- Nomencladores sin registrar previamente ---
+
+@admin.register(NTipoFamilia)
+class NTipoFamiliaAdmin(admin.ModelAdmin):
+    list_display = ('nombre',)
+    search_fields = ('nombre',)
+
+
+@admin.register(NFamiliaCargo)
+class NFamiliaCargoAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tipo_familia')
+    search_fields = ('nombre',)
+    list_filter = ('tipo_familia',)
+    list_select_related = ('tipo_familia',)
+
+
+@admin.register(NNocturnidad)
+class NNocturnidadAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'hora_inicio', 'hora_fin')
+    search_fields = ('codigo',)
+
+
+@admin.register(NCondicionLaboralAnormal)
+class NCondicionLaboralAnormalAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'tarifa_hora', 'nocturnidad')
+    search_fields = ('nombre',)
+    autocomplete_fields = ['nocturnidad']
+
+
+@admin.register(NCausaAltaBaja)
+class NCausaAltaBajaAdmin(admin.ModelAdmin):
+    list_display = ('descripcion', 'alta')
+    search_fields = ('descripcion',)
+    list_filter = ('alta',)
+
+
+@admin.register(NNivelPreparacion)
+class NNivelPreparacionAdmin(admin.ModelAdmin):
+    list_display = ('nombre',)
+    search_fields = ('nombre',)

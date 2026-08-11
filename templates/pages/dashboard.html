@@ -128,7 +128,7 @@
         <div class="col-6 col-md-4 col-lg-2">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
                 <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
-                <div class="fw-bold fs-4">${{ salario_prom }}</div>
+                <div class="fw-bold fs-3">${{ salario_prom }}</div>
                 <span class="badge bg-label-secondary mb-1">Global</span>
                 <small class="text-muted">Salario Escala Promedio</small>
             </div>
@@ -285,13 +285,20 @@
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
                 <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Pirámide de Edades</h6></div>
-                <form method="get" class="d-flex gap-2 align-items-center px-3 pt-2">
-                    {# UO/Departamento ya seleccionados viajan aquí para no perderse al aplicar solo los cortes. #}
+                <form id="form-cortes-edad" method="get" class="d-flex gap-2 align-items-center px-3 pt-2">
+                    {% comment %}
+                    UO/Departamento ya seleccionados viajan aquí: si el fetch de abajo
+                    falla por algún motivo, el submit normal (recarga completa) sigue
+                    funcionando como red de seguridad y no pierde el filtro aplicado.
+                    {% endcomment %}
                     {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
                     {% for id in filtro_depto_seleccionadas %}<input type="hidden" name="depto" value="{{ id }}">{% endfor %}
                     <input type="text" name="cortes" value="{{ edades_cortes_str }}" class="form-control form-control-sm"
                            placeholder="25,35,45,55,65" title="Cortes de edad, separados por coma">
-                    <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">Aplicar</button>
+                    <button type="submit" class="btn btn-outline-primary btn-sm text-nowrap">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        <span class="btn-label">Aplicar</span>
+                    </button>
                 </form>
                 <div class="card-body p-0 d-flex justify-content-center align-items-end"><div id="edadesPyramidChart" style="width: 100%;"></div></div>
             </div>
@@ -565,7 +572,47 @@
     // FUNCIÓN SEGURA PARA INICIALIZAR GRÁFICOS (Evita que uno malo rompa al resto)
     function renderChartSafely(selector, options) {
         let el = document.querySelector(selector);
-        if (el) { try { new ApexCharts(el, options).render(); } catch (e) { console.error("Error en " + selector, e); } }
+        if (!el) return null;
+        try {
+            const chart = new ApexCharts(el, options);
+            chart.render();
+            return chart;
+        } catch (e) {
+            console.error("Error en " + selector, e);
+            return null;
+        }
+    }
+
+    // Leyendas/etiquetas más grandes en móvil: en desktop mantienen su tamaño actual.
+    const esMovil = window.innerWidth < 768;
+
+    // En móvil no hay hover para consultar el tooltip con la cifra exacta de cada
+    // porción (tocar solo resalta), así que se muestra la cantidad directamente
+    // encima de cada leyenda de color (además del % ya visible en la propia porción).
+    // El HTML de la leyenda a veces todavía no existe cuando dispara "mounted"
+    // (ApexCharts la termina de montar un instante después), así que se reintenta
+    // en el siguiente frame en vez de asumir que ya está lista.
+    function agregarCantidadALeyenda(selector, series, intentosRestantes) {
+        if (!esMovil) return;
+        intentosRestantes = intentosRestantes === undefined ? 20 : intentosRestantes;
+        const contenedor = document.querySelector(selector);
+        if (!contenedor) return;
+        const spans = contenedor.querySelectorAll('.apexcharts-legend-text');
+        if (!spans.length) {
+            if (intentosRestantes > 0) {
+                requestAnimationFrame(function () { agregarCantidadALeyenda(selector, series, intentosRestantes - 1); });
+            }
+            return;
+        }
+        spans.forEach(function (span) {
+            if (span.dataset.cantidadAgregada) return; // evita duplicar si se invoca más de una vez
+            const indice = parseInt(span.getAttribute('i'), 10);
+            const cantidad = series[indice];
+            if (cantidad === undefined || cantidad === null) return;
+            const etiqueta = span.textContent;
+            span.innerHTML = '<span style="display:block;font-weight:700;line-height:1.2;">' + cantidad + '</span>' + etiqueta;
+            span.dataset.cantidadAgregada = '1';
+        });
     }
 
     // 1. Plazas
@@ -593,24 +640,24 @@
         colors: ['#ef4444'],
         plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
         dataLabels: { enabled: false },
-        xaxis: { categories: {{ causas_baja_labels|safe|default:"[]" }}, labels: { show: true, rotate: -45, style: { fontSize: '9px' } } },
+        xaxis: { categories: {{ causas_baja_labels|safe|default:"[]" }}, labels: { show: true, rotate: -45, style: { fontSize: esMovil ? '11px' : '9px' } } },
         yaxis: { show: false }, tooltip: { y: { formatter: function (val) { return val + " personas"; } } }
     });
 
     // 4. Categoría Ocupacional
     renderChartSafely('#catOcupacionalDonut', {
         series: {{ cat_ocupacional|safe|default:"[]" }},
-        chart: { type: 'donut', height: 230 },
+        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#catOcupacionalDonut', {{ cat_ocupacional|safe|default:"[]" }}); } } },
         labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
         colors: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'],
         plotOptions: { donut: { size: '60%' } },
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
@@ -619,18 +666,18 @@
     // (dashboard/views.py: _categorias_edad / _cortes_edad_desde_request) —
     // aquí solo se dibuja lo que el backend ya calculó, sin ningún literal de
     // rango de edad propio, para no volver a duplicar la fuente de verdad.
-    const edadesM = {{ edades_m|safe|default:"[]" }};
-    const edadesF = {{ edades_f|safe|default:"[]" }};
+    let edadesM = {{ edades_m|safe|default:"[]" }};
+    let edadesF = {{ edades_f|safe|default:"[]" }};
     const datosM = edadesM.map(x => -x);
-    renderChartSafely('#edadesPyramidChart', {
+    const chartEdades = renderChartSafely('#edadesPyramidChart', {
         series: [{ name: 'Hombres', data: datosM }, { name: 'Mujeres', data: edadesF }],
         chart: { type: 'bar', height: 220, stacked: true, toolbar: { show: false } },
         colors: ['#0ea5e9', '#f43f5e'],
         plotOptions: { bar: { horizontal: true, barHeight: '75%' } },
         dataLabels: { enabled: false },
-        xaxis: { categories: {{ edades_categorias|safe|default:"[]" }}, labels: { formatter: function(val) { return Math.abs(Math.round(val)); }, style: {fontSize: '9px'} } },
-        yaxis: { labels: { style: {fontSize: '10px'} } },
-        legend: { position: 'top', fontSize: '10px', markers: { width: 8, height: 8 } },
+        xaxis: { categories: {{ edades_categorias|safe|default:"[]" }}, labels: { formatter: function(val) { return Math.abs(Math.round(val)); }, style: {fontSize: esMovil ? '11px' : '9px'} } },
+        yaxis: { labels: { style: {fontSize: esMovil ? '12px' : '10px'} } },
+        legend: { position: 'top', fontSize: esMovil ? '12px' : '10px', markers: { width: 8, height: 8 } },
         tooltip: {
             y: {
                 // Absolutos y porcentaje sobre el total de esa categoría (hombres +
@@ -646,20 +693,67 @@
         }
     });
 
+    // Cortes de la Pirámide: se aplican por fetch (solo esta tarjeta se
+    // recalcula) en vez de recargar el Dashboard completo. El `<form>` normal
+    // sigue ahí como red de seguridad: si el fetch falla, se hace submit real.
+    const formCortes = document.getElementById('form-cortes-edad');
+    if (formCortes && chartEdades) {
+        formCortes.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const btn = formCortes.querySelector('button[type="submit"]');
+            const spinner = btn.querySelector('.spinner-border');
+            const label = btn.querySelector('.btn-label');
+            const params = new URLSearchParams(new FormData(formCortes));
+
+            btn.disabled = true;
+            spinner.classList.remove('d-none');
+            label.textContent = 'Aplicando...';
+
+            fetch('{% url "dashboard_piramide_json" %}?' + params.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (resp) {
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                })
+                .then(function (data) {
+                    edadesM = data.edades_m;
+                    edadesF = data.edades_f;
+                    chartEdades.updateOptions({ xaxis: { categories: data.categorias } }, false, false);
+                    chartEdades.updateSeries([
+                        { name: 'Hombres', data: edadesM.map(x => -x) },
+                        { name: 'Mujeres', data: edadesF }
+                    ]);
+                    // Refleja los cortes REALMENTE aplicados (el backend cae al
+                    // default si la entrada era inválida — el input debe mostrarlo).
+                    formCortes.querySelector('input[name="cortes"]').value = data.cortes;
+                })
+                .catch(function (err) {
+                    console.error('No se pudo actualizar la Pirámide de Edades por fetch, recargando la página.', err);
+                    formCortes.submit();
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                    spinner.classList.add('d-none');
+                    label.textContent = 'Aplicar';
+                });
+        });
+    }
+
     // 6. Tipos de Contrato
     renderChartSafely('#tiposContratoChart', {
         series: {{ tipos_contrato_data|safe|default:"[]" }},
-        chart: { type: 'donut', height: 230 },
+        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#tiposContratoChart', {{ tipos_contrato_data|safe|default:"[]" }}); } } },
         labels: {{ tipos_contrato_labels|safe|default:"[]" }},
         colors: ['#8b5cf6', '#3b82f6', '#f43f5e', '#10b981', '#f59e0b', '#64748b'],
         plotOptions: { donut: { size: '60%' } },
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 
@@ -670,13 +764,13 @@
 
     // 7. Educacional
     renderChartSafely('#educacionalPieChart', {
-        series: {{ nivel_educ_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
-        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' },
+        series: {{ nivel_educ_data|safe|default:"[]" }}, chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#educacionalPieChart', {{ nivel_educ_data|safe|default:"[]" }}); } } },
+        labels: {{ nivel_educ_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         colors: paletaDashboard,
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
@@ -684,13 +778,13 @@
 
     // 8. Preparación
     renderChartSafely('#preparacionPieChart', {
-        series: {{ nivel_prep_data|safe|default:"[]" }}, chart: { type: 'pie', height: 230 },
-        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: '10px' },
+        series: {{ nivel_prep_data|safe|default:"[]" }}, chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#preparacionPieChart', {{ nivel_prep_data|safe|default:"[]" }}); } } },
+        labels: {{ nivel_prep_labels|safe|default:"[]" }}, legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         colors: paletaDashboard,
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
@@ -699,17 +793,17 @@
     // 9. Distribución por Raza (Pie Chart)
     renderChartSafely('#razaPieChart', {
         series: {{ raza_data|safe|default:"[]" }},
-        chart: { type: 'pie', height: 230 },
+        chart: { type: 'pie', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#razaPieChart', {{ raza_data|safe|default:"[]" }}); } } },
         labels: {{ raza_labels|safe|default:"[]" }},
         colors: ['#0ea5e9', '#f59e0b', '#8b5cf6', '#10b981', '#64748b'],
-        legend: { position: 'bottom', fontSize: '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         dataLabels: { 
             enabled: true,
             // Muestra el Porcentaje en la tajada del pastel
             formatter: function (val) {
                 return Math.round(val) + "%";
             },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
         tooltip: {
@@ -726,17 +820,17 @@
     // 10. Registro Militar
     renderChartSafely('#regMilitarChart', {
         series: {{ reg_militar_data|safe|default:"[]" }},
-        chart: { type: 'donut', height: 230 },
+        chart: { type: 'donut', height: esMovil ? 258 : 230, events: { mounted: function () { agregarCantidadALeyenda('#regMilitarChart', {{ reg_militar_data|safe|default:"[]" }}); } } },
         labels: {{ reg_militar_labels|safe|default:"[]" }},
         colors: ['#3b82f6', '#f59e0b', '#8b5cf6', '#64748b'],
         plotOptions: { donut: { size: '60%' } },
         dataLabels: {
             enabled: true,
             formatter: function (val) { return Math.round(val) + "%"; },
-            style: { fontSize: '10px', colors: ['#fff'] },
+            style: { fontSize: esMovil ? '12px' : '10px', colors: ['#fff'] },
             dropShadow: { enabled: true, top: 1, left: 1, blur: 1, opacity: 0.5 }
         },
-        legend: { position: 'bottom', fontSize: '10px' },
+        legend: { position: 'bottom', fontSize: esMovil ? '12px' : '10px' },
         tooltip: { enabled: true, y: { formatter: function(val) { return val + " personas"; } } }
     });
 })();

@@ -1,3 +1,9 @@
 from django.contrib import admin
+from .models import PlanMensualRegistro
 
-# Register your models here.
+
+@admin.register(PlanMensualRegistro)
+class PlanMensualRegistroAdmin(admin.ModelAdmin):
+    list_display = ('anno', 'mes', 'ueb_id', 'familia_id', 'valor')
+    list_filter = ('anno', 'mes')
+    search_fields = ('ueb_id', 'familia_id')

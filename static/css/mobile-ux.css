@@ -1,0 +1,196 @@
+/* ==========================================================================
+   mobile-ux.css — Ajustes de experiencia móvil de Orbith.
+
+   Todo aquí va gateado por @media (max-width: ...) y actúa sobre clases o
+   selectores que ya existen en el proyecto (Bootstrap o del propio Orbith),
+   para no alterar el comportamiento de escritorio ni duplicar CSS del tema.
+   Cargado al final de la cadena de <link> en templates/base/base.html.
+   ========================================================================== */
+
+/* -----------------------------------------------------------------------
+   C1 — Botón táctil de expansión del submenú "Gestor de Plantilla"
+   (templates/base/sidebar.html). Su visibilidad la controla la utilidad
+   Bootstrap d-xl-none aplicada en el propio template, así que no necesita
+   media query aquí: en ≥1200px el botón está oculto y estas reglas no
+   tienen efecto visible.
+   ----------------------------------------------------------------------- */
+.gestor-plantilla-expandir-movil {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: .5rem 1rem .5rem 2.5rem;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: .9375rem;
+  cursor: pointer;
+}
+.gestor-plantilla-expandir-movil i {
+  transition: transform .2s ease;
+}
+.gestor-plantilla-item.abierto > .gestor-plantilla-expandir-movil i {
+  transform: rotate(180deg);
+}
+
+/* -----------------------------------------------------------------------
+   C2b — Dropdowns de #acciones-usuario (campana y avatar): en pantallas
+   ≤1199.98px quedan cortados fuera del viewport. #acciones-usuario es
+   position:fixed y estos menús se posicionan con Popper (o CSS) relativo a
+   su <li>, pero en ese contexto el cálculo termina desplazándolos fuera de
+   pantalla (comprobado en vivo: el menú de usuario, width:260px, renderiza
+   con su borde derecho ~210px más allá del viewport en 375px de ancho).
+   Se fuerza position:fixed anclado al viewport, igual que #acciones-usuario,
+   en vez de confiar en ese cálculo.
+   ----------------------------------------------------------------------- */
+@media (max-width: 1199.98px) {
+  #menu-user,
+  #menu-notificaciones {
+    position: fixed !important;
+    left: auto !important;
+    right: .75rem !important;
+    top: 4rem !important;
+    width: min(260px, calc(100vw - 1.5rem)) !important;
+    min-width: 0 !important;
+    max-height: min(400px, calc(100vh - 5rem)) !important;
+    overflow-y: auto !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C3 — Header de página (<h4 class="fw-bold py-3 mb-4">): reduce el
+   espacio vertical reservado antes del contenido en listados.
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  h4.fw-bold.py-3.mb-4 {
+    padding-top: .5rem !important;
+    padding-bottom: .5rem !important;
+    margin-bottom: 1rem !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C4 — Toolbar de fila-seleccionada: sticky al fondo del viewport en
+   móvil. Reutiliza la clase .toolbar-active que el JS de cada módulo
+   (Contrato, Solicitud, Aspirante, Movimiento, Salarios, Reportes,
+   Notificaciones) ya alterna al seleccionar/deseleccionar una fila.
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  .toolbar-active {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1030; /* por debajo de .modal-backdrop (1040) y .modal (1050) */
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    gap: .5rem;
+    background: #fff;
+    border-top: 1px solid #eceef1;
+    box-shadow: 0 -.25rem .75rem rgba(161, 172, 184, .35);
+    padding: .5rem .75rem calc(.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  .toolbar-active .btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C5 — Panel de filtros-embudo: disparador y panel adaptados al ancho
+   real del viewport (Contrato, Aspirante, Solicitudes, Auditoría,
+   Advertencias comparten el mismo HTML/CSS inline).
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  .btn-icon.dropdown-toggle {
+    width: 44px;
+    height: 44px;
+    font-size: .9rem;
+  }
+  .dropdown-menu[style*="min-width: 280px"] {
+    min-width: 0 !important;
+    width: calc(100vw - 2rem) !important;
+    max-width: 320px !important;
+    max-height: 70vh !important;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C6 — Paginación: objetivos táctiles más grandes en todos los módulos
+   que usan "pagination pagination-sm".
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  .pagination-sm .page-link {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: .375rem .5rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C8b — Dashboard: leyendas de los gráficos de pastel/anillo con la
+   cantidad exacta encima de cada etiqueta (inyectada por JS en
+   templates/pages/dashboard.html, función agregarCantidadALeyenda). Al
+   pasar cada ítem de una a dos líneas, el contenedor que ApexCharts ya
+   había calculado con la altura de una sola línea recorta el número; se
+   deja overflow visible y algo de aire para que no se solape con el propio
+   gráfico (la altura del chart ya se amplía en esMovil para compensar).
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  #catOcupacionalDonut .apexcharts-legend,
+  #tiposContratoChart .apexcharts-legend,
+  #educacionalPieChart .apexcharts-legend,
+  #preparacionPieChart .apexcharts-legend,
+  #razaPieChart .apexcharts-legend,
+  #regMilitarChart .apexcharts-legend {
+    overflow: visible !important;
+    padding-top: .5rem !important;
+    row-gap: .25rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C7 — Modales de formularios densos: header y footer fijos, scroll solo
+   en el cuerpo (misma técnica que .modal-dialog-scrollable de Bootstrap,
+   bajo un nombre propio para no afectar el resto de modales del proyecto
+   ni el comportamiento en escritorio).
+   ----------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  .modal-dialog-scrollable-movil {
+    height: calc(100% - 1rem);
+  }
+  .modal-dialog-scrollable-movil .modal-content {
+    max-height: 100%;
+    overflow: hidden;
+  }
+  .modal-dialog-scrollable-movil .modal-body {
+    overflow-y: auto;
+  }
+
+  /* movimiento_nomina.html: neutraliza el min-height:550px inline de las
+     columnas comparativas, que en una sola columna móvil generaría un
+     scroll excesivo antes de llegar al footer. */
+  #modalMovimientoContrato .modal-movimiento [style*="min-height: 550px"] {
+    min-height: 0 !important;
+  }
+
+  /* El footer vive DENTRO de .modal-body (dentro del <form>, no como hermano
+     de .modal-body), así que constreñir y dar scroll a .modal-body no basta
+     para dejarlo siempre visible: se pega al fondo del propio scroll con
+     sticky, sangrando hasta los bordes del padding de .modal-body (1.5rem). */
+  .modal-dialog-scrollable-movil .modal-body .modal-footer {
+    position: sticky;
+    bottom: -1.5rem;
+    margin: 1rem -1.5rem -1.5rem;
+    padding: .75rem 1.5rem;
+    background: #fff;
+    border-top: 1px solid #eceef1;
+    box-shadow: 0 -.25rem .75rem rgba(161, 172, 184, .25);
+  }
+}

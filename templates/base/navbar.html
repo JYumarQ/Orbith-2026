@@ -58,7 +58,15 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
       }
 
       @media (max-width: 1199.98px) {
-        #acciones-usuario { top: .75rem; right: .75rem; }
+        #acciones-usuario { top: .75rem; right: .75rem; gap: .5rem; }
+        /* Objetivo táctil mínimo recomendado (44px); .w-px-40 fija 40px con
+           !important, así que hay que igualarlo en especificidad. */
+        #acciones-usuario .avatar-usuario.w-px-40 { width: 44px !important; height: 44px !important; }
+        /* El ancho/posición de #menu-notificaciones y #menu-user (más abajo,
+           cortado en pantallas angostas) se corrigen en mobile-ux.css, forzando
+           position:fixed en vez de confiar en el cálculo de Popper/CSS relativo
+           a #acciones-usuario, que en este contexto (position:fixed anidado)
+           termina desplazando el menú fuera del viewport. */
       }
 
       {% if route_name != 'dashboard' and route_name != 'index' %}
@@ -74,6 +82,20 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
       .content-wrapper .container-p-y:not([class^="pt-"]):not([class*=" pt-"]),
       .layout-page > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) {
         padding-top: 4.25rem !important;
+      }
+
+      /* En móvil el grupo de iconos es más compacto (ver @media 1199.98px
+         arriba: top .75rem + avatar 44px + padding), así que puede reservarse
+         menos espacio que en escritorio. Va después de la regla de arriba
+         para ganar por orden de cascada (misma especificidad, ambas !important). */
+      @media (max-width: 1199.98px) {
+        /* El grupo de iconos aquí es más compacto (top .75rem + avatar 44px +
+           padding, ver @media 1199.98px de arriba: borde inferior ≈62.8px),
+           así que puede reservarse algo menos que en escritorio sin solaparlo. */
+        .content-wrapper .container-p-y:not([class^="pt-"]):not([class*=" pt-"]),
+        .layout-page > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) {
+          padding-top: 4rem !important;
+        }
       }
       {% endif %}
 

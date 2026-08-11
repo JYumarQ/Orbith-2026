@@ -72,6 +72,9 @@ OrbithNotificaciones.activarBarraDeAcciones = function (tablaContenedorSelector,
     actualizarBoton(botones.marcarLeida, '');
     actualizarBoton(botones.descartar, '');
     actualizarBoton(botones.reactivar, '');
+    // Misma clase que ya alternan Contrato/Solicitud/Aspirante (`.toolbar-active`),
+    // para que el CSS de toolbar sticky en móvil (mobile-ux.css) también aplique aquí.
+    toolbar.classList.remove('toolbar-active');
   }
 
   contenedor.addEventListener('click', function (evento) {
@@ -82,6 +85,7 @@ OrbithNotificaciones.activarBarraDeAcciones = function (tablaContenedorSelector,
       f.classList.remove('table-active-row');
     });
     fila.classList.add('table-active-row');
+    toolbar.classList.add('toolbar-active');
 
     actualizarBoton(botones.enlace, fila.dataset.urlEnlace);
     actualizarBoton(botones.marcarLeida, fila.dataset.urlMarcarLeida);

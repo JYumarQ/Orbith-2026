@@ -608,6 +608,8 @@ class TMovimiento(models.Model):
     observaciones = models.TextField(null=True, blank=True)
 
     class Meta:
+        verbose_name = "T Movimiento (detalle sin agrupar)"
+        verbose_name_plural = "T Movimientos (detalle sin agrupar)"
         ordering = ['-fecha_efectiva']
         indexes = [
             # Sirve exactamente al `partition_by=[aspirante_id]` +
@@ -624,3 +626,16 @@ class TMovimiento(models.Model):
             models.Index(fields=['aspirante', 'fecha_efectiva', 'id'],
                          name='contratos_tmov_asp_fecha_id'),
         ]
+
+
+class TMovimientoAgrupado(TMovimiento):
+    """Proxy de solo-navegación para el Admin: una fila por (aspirante, no_expediente).
+
+    No añade tabla ni columnas — es la única forma de registrar en Django Admin una
+    vista alternativa agrupada de los mismos datos sin duplicar la tabla real. El
+    detalle de cada movimiento se sigue editando en TMovimiento/TMovimientoAdmin.
+    """
+    class Meta:
+        proxy = True
+        verbose_name = "T Movimiento"
+        verbose_name_plural = "T Movimientos"

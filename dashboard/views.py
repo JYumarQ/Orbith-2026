@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 import os
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from docxtpl import DocxTemplate
 import calendar
 from datetime import date, timedelta
@@ -76,6 +76,50 @@ def _bucket_edad(edad, cortes):
     return len(cortes)
 
 
+def _filtrar_por_uo_depto(qs, campo_departamento, uo_ids, depto_ids):
+    """`campo_departamento` es la ruta ORM hasta Departamento (p.ej.
+    'cargo__departamento') a partir de la cual se cuelga
+    `__unidad_organizativa_id` / `_id`. Usado tanto por `DashboardView` como
+    por `piramide_edades_json` para no duplicar el criterio de alcance."""
+    if depto_ids:
+        qs = qs.filter(**{f"{campo_departamento}_id__in": depto_ids})
+    elif uo_ids:
+        qs = qs.filter(**{f"{campo_departamento}__unidad_organizativa_id__in": uo_ids})
+    return qs
+
+
+def piramide_edades_json(request):
+    """Recalcula solo la Pirámide de Edades (respetando los mismos filtros de
+    UO/Departamento/cortes que `DashboardView`) para que la tarjeta se pueda
+    refrescar por fetch, sin recargar el resto del Dashboard.
+    """
+    uo_ids, depto_ids, _ = resolver_filtros(request)
+    cortes = _cortes_edad_desde_request(request)
+
+    activos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related('aspirante')
+    activos = _filtrar_por_uo_depto(activos, 'cargo__departamento', uo_ids, depto_ids)
+
+    n_buckets = len(cortes) + 1
+    edades_m = [0] * n_buckets
+    edades_f = [0] * n_buckets
+    for c in activos:
+        edad = c.aspirante.get_edad
+        if edad is None:
+            continue
+        idx = _bucket_edad(edad, cortes)
+        if c.aspirante.sexo == 'M':
+            edades_m[idx] += 1
+        elif c.aspirante.sexo == 'F':
+            edades_f[idx] += 1
+
+    return JsonResponse({
+        'edades_m': edades_m,
+        'edades_f': edades_f,
+        'categorias': _categorias_edad(cortes),
+        'cortes': ','.join(str(c) for c in cortes),
+    })
+
+
 # Create your views here.
 class DashboardView(TemplateView):
     template_name = "pages/dashboard.html"
@@ -94,27 +138,20 @@ class DashboardView(TemplateView):
         uo_ids, depto_ids, filtro_ctx = resolver_filtros(self.request)
         context.update(filtro_ctx)
 
-        def _filtrar_por_uo_depto(qs, campo_departamento):
-            """`campo_departamento` es la ruta ORM hasta Departamento
-            (p.ej. 'cargo__departamento') a partir de la cual se cuelga
-            `__unidad_organizativa_id` / `_id`."""
-            if depto_ids:
-                qs = qs.filter(**{f"{campo_departamento}_id__in": depto_ids})
-            elif uo_ids:
-                qs = qs.filter(**{f"{campo_departamento}__unidad_organizativa_id__in": uo_ids})
-            return qs
+        def _filtrar(qs, campo_departamento):
+            return _filtrar_por_uo_depto(qs, campo_departamento, uo_ids, depto_ids)
 
         # 1. Consultas Base (Optimizadas)
         activos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
             'aspirante', 'tipo', 'cargo__ncargo', 'cargo__departamento', 'cargo__nivel_preparacion'
         )
-        activos = _filtrar_por_uo_depto(activos, 'cargo__departamento')
+        activos = _filtrar(activos, 'cargo__departamento')
 
         todos_altas = CAlta.objects.all().select_related('aspirante', 'tipo')
-        todos_altas = _filtrar_por_uo_depto(todos_altas, 'cargo__departamento')
+        todos_altas = _filtrar(todos_altas, 'cargo__departamento')
 
         todas_bajas = CBaja.objects.all().select_related('causa_baja')
-        todas_bajas = _filtrar_por_uo_depto(todas_bajas, 'cargo__departamento')
+        todas_bajas = _filtrar(todas_bajas, 'cargo__departamento')
 
         # Variables directas para las tarjetas
         context['contratos_count'] = activos.count()
@@ -131,10 +168,10 @@ class DashboardView(TemplateView):
         # fue contratado y ya se fue dentro de la ventana desaparecería del conteo.
         hace_30 = hoy - timedelta(days=30)
         context['altas_30d'] = (
-            _filtrar_por_uo_depto(CAlta.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
-            + _filtrar_por_uo_depto(CBaja.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
+            _filtrar(CAlta.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
+            + _filtrar(CBaja.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
         )
-        context['bajas_30d'] = _filtrar_por_uo_depto(
+        context['bajas_30d'] = _filtrar(
             CBaja.objects.filter(fecha_baja__range=(hace_30, hoy)), 'cargo__departamento'
         ).count()
 

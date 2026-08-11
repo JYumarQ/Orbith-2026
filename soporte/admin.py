@@ -15,6 +15,7 @@ class ReporteProblemaAdmin(admin.ModelAdmin):
     list_display = ('fecha_creado', 'usuario', 'estado', 'url_origen')
     list_filter = ('estado', 'fecha_creado')
     search_fields = ('mensaje', 'error_consola', 'usuario__username')
+    list_select_related = ('usuario',)
     readonly_fields = (
         'usuario', 'mensaje', 'error_consola', 'url_origen',
         'fecha_creado', 'fecha_actualizado',

@@ -120,6 +120,9 @@
               <i class="menu-icon tf-icons bx bx-sitemap"></i>
               <div data-i18n="Basic">Gestor de Plantilla</div>
             </a>
+            <button type="button" class="gestor-plantilla-expandir-movil d-xl-none" id="btnExpandirGestorPlantilla" aria-controls="acordeonGestorPlantilla" aria-expanded="false">
+              <span>Ver opciones</span><i class="bx bx-chevron-down"></i>
+            </button>
             <ul class="gestor-plantilla-acordeon" id="acordeonGestorPlantilla" data-titulo="Gestor de Plantilla">
               {% if not user.es_moderador %}
               <li class="gestor-plantilla-subitem">
@@ -605,6 +608,20 @@ window.orbithMenu = (function () {
   const item = document.getElementById('menuItemGestorPlantilla');
   const link = document.getElementById('menuLinkGestorPlantilla');
   if (!item || !link) return;
+
+  const botonExpandir = document.getElementById('btnExpandirGestorPlantilla');
+  if (botonExpandir) {
+    /* Alternativa táctil al doble clic: en móvil no hay gesto equivalente
+       para descubrir el submenú, así que un botón dedicado hace el mismo
+       toggle('abierto') que ya interpreta el CSS existente. No toca el
+       click/dblclick del enlace. */
+    botonExpandir.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const abierto = item.classList.toggle('abierto');
+      botonExpandir.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    });
+  }
 
   const DEMORA_CLIC_MS = 250; // margen para distinguir un clic de un doble clic
   let temporizador = null;
