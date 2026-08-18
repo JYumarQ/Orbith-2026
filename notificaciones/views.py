@@ -106,11 +106,13 @@ def _con_enlace(notificacion, next_url=None, origen_label=None):
     ct = notificacion.content_type
     modelo = ct.model_class()
     etiqueta = f'{ct.app_label}.{modelo.__name__}' if modelo else None
-    # REC-CONTRATO (contrato próximo a vencer) no se corrige editando el contrato: la
-    # acción real es un Movimiento de Nómina. Único código que se desvía del destino
-    # por defecto de `ENLACES_POR_MODELO['contratos.CAlta']` — REC-CHOFER y las
-    # Advertencias de Subsanación sobre CAlta siguen abriendo «Editar contrato».
-    forzar_url = 'movimiento_contrato' if notificacion.codigo_regla == 'REC-CONTRATO' else None
+    # REC-CONTRATO (contrato próximo a vencer) y REC-ANTIGUEDAD (nuevo año de
+    # antigüedad próximo) no se corrigen editando el contrato: la acción real es un
+    # Movimiento de Nómina. Únicos códigos que se desvían del destino por defecto de
+    # `ENLACES_POR_MODELO['contratos.CAlta']` — REC-CHOFER y las Advertencias de
+    # Subsanación sobre CAlta siguen abriendo «Editar contrato».
+    forzar_url = ('movimiento_contrato'
+                   if notificacion.codigo_regla in ('REC-CONTRATO', 'REC-ANTIGUEDAD') else None)
     notificacion.enlace = construir_enlace(
         etiqueta, notificacion.object_id, forzar_url=forzar_url,
         next_url=next_url, origen_label=origen_label

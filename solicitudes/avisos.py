@@ -21,10 +21,25 @@ import logging
 
 from django.contrib.contenttypes.models import ContentType
 
+from notificaciones.avisos import _registrar_notificacion
 from notificaciones.models import Notificacion
 from solicitudes.models import EstadoSolicitud
 
 logger = logging.getLogger(__name__)
+
+# Identifican la FASE del ciclo de vida que generó el aviso (una Solicitud pasa por
+# «nueva» una sola vez, por «decisión» una o más veces si se reabre, y por «reabierta»
+# cada vez que se devuelve a espera). Ocupan `codigo_regla`, igual que una regla de
+# Subsanación o un detector de Recordatorios: es lo que engancha estos avisos a la
+# `UniqueConstraint` de `Notificacion.Meta` (que solo protege filas con
+# `codigo_regla != ''`) y a la protección de concurrencia de `_registrar_notificacion`.
+# Antes estas filas se creaban con `bulk_create()` y `codigo_regla=''` (el valor por
+# defecto de un EVENTO), sin ninguna clave natural que las distinguiera de un alta o una
+# baja de contrato — así que no podían protegerse sin arriesgar bloquear esos otros
+# eventos, que sí deben poder repetirse para el mismo registro a lo largo del tiempo.
+CODIGO_NUEVA = 'SOL-NUEVA'
+CODIGO_DECISION = 'SOL-DECISION'
+CODIGO_REABIERTA = 'SOL-REABIERTA'
 
 
 def _administradores():
@@ -38,7 +53,18 @@ def _administradores():
     return CustomUser.objects.filter(es_admin=True, is_active=True)
 
 
-def _crear(solicitud, destinatarios, titulo, mensaje):
+def _crear(solicitud, destinatarios, codigo, titulo, mensaje):
+    """Una fila de `Notificacion` por destinatario, para la fase `codigo` del ciclo de
+    vida de `solicitud`.
+
+    Reutiliza `notificaciones.avisos._registrar_notificacion` — el MISMO punto de
+    escritura, con la MISMA protección de concurrencia, que ya usan Advertencias y
+    Recordatorios — en vez de `bulk_create()` sin deduplicar. `object_id` es el pk de
+    la propia solicitud (nunca se reutiliza), así que `(solicitud, destinatario, codigo)`
+    es una clave natural real: dos avisos «nueva solicitud» para la MISMA solicitud y el
+    MISMO destinatario son, por definición, el mismo hecho notificado dos veces — nunca
+    un caso legítimo de repetición, a diferencia de un alta/baja de contrato.
+    """
     destinatarios = list(destinatarios)
     if not destinatarios:
         # Degradar, nunca fallar: que no haya a quién avisar no puede impedir que la
@@ -48,18 +74,19 @@ def _crear(solicitud, destinatarios, titulo, mensaje):
             solicitud.pk, titulo)
         return
 
-    Notificacion.objects.bulk_create([
-        Notificacion(
-            titulo=titulo,
-            mensaje=mensaje,
-            tipo=Notificacion.Tipo.EVENTO,
-            content_type=ContentType.objects.get_for_model(solicitud),
-            object_id=str(solicitud.pk),
-            unidad=solicitud.unidad,
-            destinatario=destinatario,
+    tipo_ct = ContentType.objects.get_for_model(solicitud)
+    for destinatario in destinatarios:
+        _registrar_notificacion(
+            tipo_ct=tipo_ct, object_id=str(solicitud.pk), destinatario=destinatario,
+            codigo_regla=codigo, clave_extra='',
+            defaults={
+                'titulo': titulo,
+                'mensaje': mensaje,
+                'tipo': Notificacion.Tipo.EVENTO,
+                'estado': Notificacion.Estado.ACTIVA,
+                'unidad': solicitud.unidad,
+            },
         )
-        for destinatario in destinatarios
-    ])
 
 
 def avisar_nueva_solicitud(solicitud):
@@ -68,6 +95,7 @@ def avisar_nueva_solicitud(solicitud):
     _crear(
         solicitud,
         _administradores(),
+        CODIGO_NUEVA,
         titulo='Nueva Solicitud Pendiente',
         mensaje=f'{autor} solicitó: {solicitud.etiqueta_operacion} — {solicitud.descriptor}.',
     )
@@ -93,7 +121,7 @@ def avisar_decision(solicitud):
     else:
         return
 
-    _crear(solicitud, [solicitud.solicitante], titulo=titulo, mensaje=mensaje)
+    _crear(solicitud, [solicitud.solicitante], CODIGO_DECISION, titulo=titulo, mensaje=mensaje)
 
 
 def avisar_devuelta_a_espera(solicitud):
@@ -103,6 +131,7 @@ def avisar_devuelta_a_espera(solicitud):
     _crear(
         solicitud,
         [solicitud.solicitante],
+        CODIGO_REABIERTA,
         titulo='Solicitud reabierta',
         mensaje=f'La solicitud "{solicitud.descriptor}" volvió a quedar en espera de revisión.',
     )

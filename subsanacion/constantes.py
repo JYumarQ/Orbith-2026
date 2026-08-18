@@ -19,6 +19,10 @@ MODULO_ESTRUCTURA = 'estructura'
 MODULO_OCULTOS = 'ocultos'
 MODULO_CALIDAD = 'calidad'
 MODULO_CONFIGURACION = 'configuracion'
+# Datos complementarios: útiles tenerlos completos, pero su ausencia no es un
+# problema de calidad de datos que deba penalizar la salud general (ver
+# `servicios.finalizar_ejecucion()`, que excluye estos códigos del índice global).
+MODULO_EXTRAS = 'extras'
 
 MODULOS = [
     (MODULO_CONTRATOS, 'Contratos', 'bi-file-earmark-text-fill'),
@@ -29,6 +33,7 @@ MODULOS = [
     (MODULO_OCULTOS, 'Ocultos', 'bi-eye-slash-fill'),
     (MODULO_CALIDAD, 'Calidad de datos', 'bi-spellcheck'),
     (MODULO_CONFIGURACION, 'Configuración', 'bi-sliders'),
+    (MODULO_EXTRAS, 'Extras', 'bi-stars'),
 ]
 
 MODULOS_CHOICES = [(clave, etiqueta) for clave, etiqueta, _ in MODULOS]

@@ -1,6 +1,50 @@
 {% load static %}
 
 <script src="{% static 'vendor/libs/jquery/jquery-3.7.1.min.js' %}"></script>
+<script src="{% static 'js/sweetalert2.js' %}"></script>
+<script>
+  /* Toast único del proyecto: fondo blanco, borde y sombra, esquina superior
+     derecha. Reemplaza las variantes sueltas (modal centrado, toast plano de
+     Bootstrap) que convivían en distintos módulos con estilos distintos. */
+  window.mostrarToast = function (mensaje, icono = 'success') {
+    if (typeof Swal === 'undefined') { console.warn(mensaje); return; }
+    const tipo = { danger: 'error', debug: 'info' }[icono] || icono;
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: ['success', 'error', 'warning', 'info', 'question'].includes(tipo) ? tipo : 'info',
+      title: mensaje,
+      showConfirmButton: false,
+      timer: 3000,
+      timerProgressBar: true,
+      background: '#fff',
+      color: '#697a8d',
+      customClass: { popup: 'border shadow-lg' },
+      didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer);
+        toast.addEventListener('mouseleave', Swal.resumeTimer);
+      }
+    });
+  };
+
+  /* Escucha única del evento showMessage (HX-Trigger): cubre todos los flujos
+     HTMX del proyecto (contratos, solicitudes, cargos, departamentos, unidades
+     organizativas, aspirantes...), incluidos los que hasta ahora no tenían
+     ningún listener propio. Soporta los tres formatos de payload usados hoy
+     por el backend: string plano, objeto {icon, text}, y HX-Trigger sin
+     detalle (lista de eventos separada por comas, ej. strorganizativa/views.py
+     al eliminar una unidad organizativa — htmx entrega evt.detail vacío ahí). */
+  document.body.addEventListener('showMessage', function (evt) {
+    const detalle = (evt.detail && evt.detail.value !== undefined) ? evt.detail.value : evt.detail;
+    if (typeof detalle === 'string' && detalle) {
+      window.mostrarToast(detalle, 'success');
+    } else if (detalle && typeof detalle === 'object' && Object.keys(detalle).length) {
+      window.mostrarToast(detalle.text || 'Operación realizada.', detalle.icon || 'success');
+    } else {
+      window.mostrarToast('Operación realizada.', 'success');
+    }
+  });
+</script>
 
 <script src="{% static 'vendor/js/helpers.js' %}"></script>
 <script src="{% static 'js/popper.min.js' %}"></script> 
@@ -15,7 +59,6 @@
 <script src="{% static 'js/apexcharts.min.js' %}"></script>
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'vendor/js/buttons.js' %}"></script>
-<script src="{% static 'js/sweetalert2.js' %}"></script>
 
 <script>
   function getCookie(name) {
@@ -71,35 +114,6 @@
       }
     });
   }, true);
-</script>
-
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            didOpen: (toast) => {
-                toast.addEventListener('mouseenter', Swal.stopTimer)
-                toast.addEventListener('mouseleave', Swal.resumeTimer)
-            }
-        });
-
-        {% if messages %}
-            {% for message in messages %}
-                var type = "{{ message.tags }}";
-                if(type === 'danger') type = 'error';
-                if(type === 'debug') type = 'info';
-
-                Toast.fire({
-                    icon: type, 
-                    title: "{{ message }}"
-                });
-            {% endfor %}
-        {% endif %}
-    });
 </script>
 
 {% block extra_scripts %}{% endblock %}

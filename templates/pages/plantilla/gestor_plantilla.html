@@ -506,21 +506,21 @@
             inputSearchId = "#search-unit";
         } 
         else if (type === 'dept') {
-            if (!selectedUnitId) return Swal.fire('Atención', 'Seleccione una unidad primero', 'warning');
+            if (!selectedUnitId) return window.mostrarToast('Seleccione una unidad primero', 'warning');
             parentId = selectedUnitId;
             url = "{% url 'htmx_load_departamentos' 0 %}".replace('0', parentId);
             target = "#col-departamentos";
             inputSearchId = "#search-dept";
         }
         else if (type === 'cargo') {
-            if (!selectedDeptId) return Swal.fire('Atención', 'Seleccione un departamento primero', 'warning');
+            if (!selectedDeptId) return window.mostrarToast('Seleccione un departamento primero', 'warning');
             parentId = selectedDeptId;
             url = "{% url 'htmx_load_cargos' 0 %}".replace('0', parentId);
             target = "#col-cargos";
             inputSearchId = "#search-cargo";
         }
         else if (type === 'contrato') {
-            if (!selectedCargoId) return Swal.fire('Atención', 'Seleccione un cargo primero', 'warning');
+            if (!selectedCargoId) return window.mostrarToast('Seleccione un cargo primero', 'warning');
             parentId = selectedCargoId;
             url = "{% url 'htmx_load_contratos' 0 %}".replace('0', parentId);
             target = "#col-contratos";
@@ -588,8 +588,8 @@
             const mensaje = jqXHR.status === 403
                 ? 'No tiene permisos para realizar esta acción.'
                 : 'No se pudo cargar el formulario. Inténtelo de nuevo.';
-            if (window.Swal) {
-                Swal.fire({ icon: 'error', text: mensaje });
+            if (typeof window.mostrarToast === 'function') {
+                window.mostrarToast(mensaje, 'error');
             } else {
                 alert(mensaje);
             }
@@ -829,20 +829,17 @@
             response = JSON.parse(evt.detail.xhr.responseText);
         } catch (e) {
             console.error(e);
-            return Swal.fire('Error', 'No se pudo completar la operación.', 'error');
+            return window.mostrarToast('No se pudo completar la operación.', 'error');
         }
 
         if (response.status !== 'ok') {
             // Los mensajes de `ErrorDeCierre` explican en español por qué no se
             // puede (fuera de plazo, mes ya declarado, unidad ajena): se muestran
             // tal cual, sin traducirlos ni resumirlos.
-            return Swal.fire('No se pudo declarar', response.message, 'warning');
+            return window.mostrarToast(response.message, 'warning');
         }
 
-        Swal.fire({
-            icon: 'success', title: 'Listo', text: response.message,
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 4500
-        });
+        window.mostrarToast(response.message || 'Listo.', 'success');
 
         // Recargar la lista trae los data-* recalculados: el botón se deshabilita
         // solo y el indicador de estado cambia de color sin tocar nada más.
@@ -855,10 +852,7 @@
             const response = JSON.parse(evt.detail.xhr.responseText);
             if(response.status === 'ok') {
                 // 1. Mostrar mensaje de éxito sin interrumpir
-                Swal.fire({
-                    icon: 'success', title: 'Eliminado', text: response.message,
-                    toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
-                });
+                window.mostrarToast(response.message || 'Eliminado.', 'success');
 
                 // 2. Identificar qué botón se presionó para recargar solo esa columna
                 const btnId = evt.detail.elt.id;
@@ -885,7 +879,7 @@
                 }
             } 
             else {
-                Swal.fire('Error', response.message, 'error'); 
+                window.mostrarToast(response.message, 'error');
             }
         } catch(e) { console.error(e); }
     }
@@ -972,17 +966,7 @@
         }
     });
 
-    // Mensajes Toast
-    document.body.addEventListener('showMessage', (evt) => {
-        const data = evt.detail.value || evt.detail;
-        Swal.fire({
-            icon: data.icon || 'success',
-            title: data.text || 'Éxito',
-            toast: true, position: 'top-end', showConfirmButton: false, timer: 3000
-        });
-    });
-
-    // Botón Contratar
+// Botón Contratar
     const btnAddPersonal = document.getElementById('btn-add-personal');
     if (btnAddPersonal) {
         btnAddPersonal.addEventListener('click', function(e) {
@@ -1002,7 +986,7 @@
         const url = btn.dataset.urlSolicitar;
         const enMovimiento = btn.dataset.enMovimiento === 'true'; // Leemos el estado
 
-        if (!url || url === '#' || url === '') return Swal.fire({ toast: true, position: 'top-end', icon: 'warning', title: 'Seleccione un contrato válido.', showConfirmButton: false, timer: 3000 });
+        if (!url || url === '#' || url === '') return window.mostrarToast('Seleccione un contrato válido.', 'warning');
 
         // Textos y colores dinámicos para el SweetAlert
         const titulo = enMovimiento ? '¿Desea Cancelar el Movimiento de Nómina?' : '¿Desea Permitir un Movimiento de Nómina?';
@@ -1022,11 +1006,11 @@
                     data: { 'cancelar': enMovimiento }, // <-- AQUÍ ENVIAMOS LA ORDEN EXACTA
                     success: function(response) {
                         if (response.success) {
-                            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: response.message, showConfirmButton: false, timer: 3000 });
+                            window.mostrarToast(response.message, 'success');
                             document.body.dispatchEvent(new Event('updateContratoList')); // Recarga contratos
-                        } else Swal.fire('Error', response.message, 'error');
+                        } else window.mostrarToast(response.message, 'error');
                     },
-                    error: () => Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error')
+                    error: () => window.mostrarToast('Ocurrió un error al procesar la solicitud.', 'error')
                 });
             }
         });
@@ -1065,7 +1049,7 @@
         const completarCargo = document.getElementById('switchCompletarCargo').checked;
         const actividadRealizada = document.getElementById('baja_actividad').value;
 
-        if (!fecha || !causa || !fechaEfectiva) return Swal.fire({ icon: 'warning', title: 'Campos incompletos', text: 'Seleccione fechas y causa.'});
+        if (!fecha || !causa || !fechaEfectiva) return window.mostrarToast('Campos incompletos: seleccione fechas y causa.', 'warning');
 
         $('#modalBajaContrato').modal('hide');
         Swal.fire({
@@ -1086,14 +1070,14 @@
                         'csrfmiddlewaretoken': '{{ csrf_token }}' 
                     },
                     success: function() {
-                        Swal.fire({ icon: 'success', title: 'Baja procesada', showConfirmButton: false, timer: 1500 });
+                        window.mostrarToast('Baja procesada.', 'success');
                         // MODIFICADO: Disparamos AMBOS eventos
-                        document.body.dispatchEvent(new Event('updateCargoList')); 
-                        document.body.dispatchEvent(new Event('updateContratoList')); 
+                        document.body.dispatchEvent(new Event('updateCargoList'));
+                        document.body.dispatchEvent(new Event('updateContratoList'));
                     },
                     error: function(xhr) {
                         let msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error de conexión.';
-                        Swal.fire('No se puede procesar', msg, 'error');
+                        window.mostrarToast(msg, 'error');
                     }
                 });
             } else $('#modalBajaContrato').modal('show');

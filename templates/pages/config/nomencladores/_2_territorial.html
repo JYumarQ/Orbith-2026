@@ -194,8 +194,8 @@
                       } else {
                           desactivarBotonesMuni();
                       }
-                      Swal.fire({icon: 'success', title: 'Eliminado', showConfirmButton: false, timer: 1500});
-                  }).catch(err => Swal.fire('No se puede eliminar', err.message, 'warning'));
+                      window.mostrarToast('Eliminado.', 'success');
+                  }).catch(err => window.mostrarToast(err.message || 'No se puede eliminar.', 'warning'));
               }
           });
       } else {
@@ -279,8 +279,8 @@
                       } else {
                           document.querySelector(`#provincias-tbody tr[data-id="${stateGeo.provId}"]`).click(); // Recargar vía HTMX
                       }
-                      Swal.fire({icon: 'success', title: 'Guardado', showConfirmButton: false, timer: 1500});
-                  }).catch(err => Swal.fire('Error', err.message, 'error'));
+                      window.mostrarToast('Guardado.', 'success');
+                  }).catch(err => window.mostrarToast(err.message || 'No se pudo guardar.', 'error'));
               }
           });
       }

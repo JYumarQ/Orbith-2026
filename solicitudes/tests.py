@@ -12,6 +12,7 @@ No se prueban las plantillas ni el HTML: se prueba `solicitudes/servicios.py`, q
 import json
 from datetime import date, timedelta
 
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -20,7 +21,7 @@ from bolsa.models import Aspirante
 from contratos.models import CAlta, CBaja
 from nomencladores.forms import NCargoForm
 from nomencladores.models import NCargo, NGrupoEscala
-from solicitudes import serializacion, servicios
+from solicitudes import filtros, serializacion, servicios
 from solicitudes.models import EstadoSolicitud, Solicitud
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
 from usuarios.models import CustomUser
@@ -106,6 +107,85 @@ class CreacionDeSolicitud(BaseSolicitudes):
         """NCargo es un nomenclador global: se notifica a todos los administradores."""
         solicitud = self._solicitud_de_edicion(salario_basico=9999)
         self.assertIsNone(solicitud.unidad)
+
+
+class NotificacionesDeSolicitud(BaseSolicitudes):
+    """`solicitudes/avisos.py`: una fila de `Notificacion` por administrador y por
+    solicitud, sin duplicarse aunque el aviso se dispare más de una vez para el mismo
+    hecho (doble envío, reintento de red, workers concurrentes) — el bug real reportado
+    en producción: una misma solicitud nueva le aparecía repetida varias veces (tantas
+    como procesos/intentos coincidieran) a cada administrador."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.otro_admin = CustomUser.objects.create_user(
+            username='admin_dos', password='x', es_admin=True)
+
+    def _notificaciones_nueva_solicitud(self, solicitud):
+        from notificaciones.models import Notificacion
+        from solicitudes.avisos import CODIGO_NUEVA
+        return Notificacion.objects.filter(
+            content_type=ContentType.objects.get_for_model(solicitud),
+            object_id=str(solicitud.pk), codigo_regla=CODIGO_NUEVA)
+
+    def test_una_notificacion_por_administrador_activo(self):
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+
+        notificaciones = self._notificaciones_nueva_solicitud(solicitud)
+        self.assertEqual(notificaciones.count(), 2)  # self.admin + self.otro_admin
+        self.assertEqual(
+            set(notificaciones.values_list('destinatario_id', flat=True)),
+            {self.admin.pk, self.otro_admin.pk})
+
+    def test_repetir_el_aviso_de_la_misma_solicitud_no_duplica(self):
+        """Simula el disparo repetido del mismo aviso (reintento/doble envío): debe
+        actualizar la fila existente, no crear una segunda."""
+        from solicitudes import avisos
+
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        for _ in range(7):  # mismo orden de magnitud que el caso real en producción
+            avisos.avisar_nueva_solicitud(solicitud)
+
+        notificaciones = self._notificaciones_nueva_solicitud(solicitud)
+        self.assertEqual(notificaciones.count(), 2)  # sigue siendo una por administrador
+
+    def test_la_restriccion_de_bd_impide_el_duplicado_directo(self):
+        """La misma `UniqueConstraint` que protege Advertencias/Recordatorios cubre
+        también estos avisos, ahora que llevan `codigo_regla` no vacío."""
+        from django.db import IntegrityError, transaction
+
+        from notificaciones.models import Notificacion
+        from solicitudes.avisos import CODIGO_NUEVA
+
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        tipo_ct = ContentType.objects.get_for_model(solicitud)
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Notificacion.objects.create(
+                    content_type=tipo_ct, object_id=str(solicitud.pk),
+                    destinatario=self.admin, codigo_regla=CODIGO_NUEVA, clave_extra='',
+                    titulo='Duplicado directo', mensaje='...', tipo=Notificacion.Tipo.EVENTO)
+
+    def test_decision_no_duplica_al_repetirse(self):
+        from notificaciones.models import Notificacion
+        from solicitudes.avisos import CODIGO_DECISION
+
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        servicios.iniciar_revision(solicitud, self.admin)
+        servicios.rechazar(solicitud, self.admin, 'No procede.')
+        solicitud.refresh_from_db()
+
+        from solicitudes import avisos
+        for _ in range(3):
+            avisos.avisar_decision(solicitud)
+
+        notificaciones = Notificacion.objects.filter(
+            content_type=ContentType.objects.get_for_model(solicitud),
+            object_id=str(solicitud.pk), codigo_regla=CODIGO_DECISION,
+            destinatario=self.moderador)
+        self.assertEqual(notificaciones.count(), 1)
 
 
 class Visibilidad(BaseSolicitudes):
@@ -310,6 +390,51 @@ class FormularioDePropuesta(BaseSolicitudes):
         self.assertTrue(formulario.is_valid(), formulario.errors)
         self.assertEqual(int(formulario.cleaned_data['salario_basico']), 4000)
 
+    def test_campos_condicionales_respetan_lo_que_llega_en_el_post(self):
+        """A diferencia de un campo con el widget deshabilitado a secas,
+        `campos_condicionales` sí deja pasar lo que el Moderador propuso —lo habilitó su
+        propio JavaScript según otra elección del formulario (ver `motivo` de
+        `CAltaForm`, condicionado al tipo de contrato)."""
+        from contratos.forms import CAltaForm
+
+        Propuesta = serializacion.formulario_de_propuesta(
+            CAltaForm, campos_condicionales=('motivo',))
+        formulario = Propuesta()
+
+        self.assertFalse(formulario.fields['motivo'].disabled)
+        # El resto de los campos con widget deshabilitado sigue protegido igual.
+        self.assertTrue(formulario.fields['fecha_alta'].disabled)
+
+
+class FormularioDeAprobacion(BaseSolicitudes):
+    """La pantalla de aprobación no tiene el JavaScript que la pantalla de edición usa
+    para poder enviar campos con `disabled` fijo en el widget (ver
+    `contratos/forms.py::CAltaForm.Meta.widgets`). `formulario_de_aprobacion` protege
+    esos campos igual que `formulario_de_propuesta`, pero sin tocar `campos_solo_admin`:
+    esos el Administrador sí debe poder decidirlos en este paso."""
+
+    def test_neutraliza_los_campos_con_widget_deshabilitado(self):
+        from contratos.forms import CAltaForm
+
+        Aprobacion = serializacion.formulario_de_aprobacion(CAltaForm)
+        formulario = Aprobacion()
+
+        for nombre in ('fecha_alta', 'motivo', 'duracion', 'fecha_vence_lic',
+                       'fecha_vence_recal', 'fecha_vence_seg', 'c_formal_res',
+                       'funcionario_res', 'designado_res', 'pais'):
+            self.assertTrue(formulario.fields[nombre].disabled, nombre)
+        # Un campo normal, editable en cualquier pantalla, no se toca.
+        self.assertFalse(formulario.fields['no_expediente'].disabled)
+
+    def test_no_neutraliza_campos_solo_admin(self):
+        """A diferencia de `formulario_de_propuesta`, esta variante no recibe
+        `campos_solo_admin`: no tiene forma de deshabilitarlos aunque quisiera, y es
+        justo lo que se necesita, porque el Administrador sí puede decidirlos aquí."""
+        Aprobacion = serializacion.formulario_de_aprobacion(NCargoForm)
+        formulario = Aprobacion()
+
+        self.assertFalse(formulario.fields['salario_basico'].disabled)
+
 
 class Comparacion(BaseSolicitudes):
 
@@ -365,6 +490,43 @@ class SolicitudDeCreacion(BaseSolicitudes):
         servicios.aprobar(solicitud, self.admin, self._datos_nuevo())
 
         self.assertTrue(NCargo.objects.filter(descripcion='Analista A').exists())
+
+
+class ContadorDePendientes(BaseSolicitudes):
+    """`solicitudes.filtros.contar_pendientes`, la fuente del badge rojo de "Solicitudes"
+    en la sidebar (ver `core/context_processors.py::_contar_solicitudes_pendientes`)."""
+
+    def _solicitud_de_alta(self, usuario, descripcion='Analista A'):
+        formulario = NCargoForm({
+            'descripcion': descripcion, 'cat_ocupacional': 'TEC',
+            'grupo_escala': self.grupo.pk, 'salario_basico': 3000,
+            'puesto_clave': False,
+        })
+        self.assertTrue(formulario.is_valid(), formulario.errors)
+        return servicios.crear_solicitud(
+            operacion='ncargo_add', usuario=usuario, formulario=formulario,
+            objeto=None, motivo='Nueva plaza')
+
+    def test_el_administrador_ve_el_total_de_todas(self):
+        self._solicitud_de_edicion(salario_basico=9999)
+        self._solicitud_de_alta(self.otro_moderador)
+
+        self.assertEqual(filtros.contar_pendientes(self.admin), 2)
+
+    def test_el_moderador_ve_solo_las_suyas(self):
+        self._solicitud_de_edicion(salario_basico=9999)
+        self._solicitud_de_alta(self.otro_moderador)
+
+        self.assertEqual(filtros.contar_pendientes(self.moderador), 1)
+        self.assertEqual(filtros.contar_pendientes(self.otro_moderador), 1)
+
+    def test_no_cuenta_las_ya_decididas(self):
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        servicios.iniciar_revision(solicitud, self.admin)
+        servicios.aprobar(solicitud, self.admin, self._datos_ncargo(salario_basico=5000))
+
+        self.assertEqual(filtros.contar_pendientes(self.admin), 0)
+        self.assertEqual(filtros.contar_pendientes(self.moderador), 0)
 
 
 class Pantallas(BaseSolicitudes):
@@ -748,6 +910,39 @@ class DesvioDeFormulariosExistentes(BaseDepartamento):
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
+    def test_el_moderador_no_puede_solicitar_edicion_fuera_de_su_unidad(self):
+        otra_unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Ajena', tipo=self.tipo, grupo_nomina=2)
+        ajeno = Departamento.objects.create(
+            descripcion='Nómina', unidad_organizativa=otra_unidad, orden_informe=1)
+        self.client.force_login(self.moderador)
+
+        respuesta = self.client.post(reverse('updt_dpto', args=[ajeno.pk]), {
+            'descripcion': 'Nómina Modificada',
+            'unidad_organizativa': otra_unidad.pk,
+            'orden_informe': 1,
+        }, HTTP_HX_REQUEST='true')
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(Solicitud.objects.count(), 0)
+        ajeno.refresh_from_db()
+        self.assertEqual(ajeno.descripcion, 'Nómina')
+
+    def test_el_moderador_no_puede_crear_departamento_en_otra_unidad(self):
+        otra_unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Ajena', tipo=self.tipo, grupo_nomina=2)
+        self.client.force_login(self.moderador)
+
+        respuesta = self.client.post(reverse('add_dpto'), {
+            'descripcion': 'Intruso',
+            'unidad_organizativa': otra_unidad.pk,
+            'orden_informe': 5,
+        }, HTTP_HX_REQUEST='true')
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(Solicitud.objects.count(), 0)
+        self.assertFalse(Departamento.objects.filter(descripcion='Intruso').exists())
+
 
 class CargoPlantillaDesviado(BaseDepartamento):
     """Cargo Plantilla sigue el mismo criterio que Departamento."""
@@ -853,6 +1048,24 @@ class CargoPlantillaDesviado(BaseDepartamento):
             ncargo=self.otro_ncargo.pk, orden_informe=5), HTTP_HX_REQUEST='true')
 
         self.assertEqual(CargoPlantilla.objects.count(), 2)
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_el_moderador_no_puede_solicitar_edicion_fuera_de_su_unidad(self):
+        otra_unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Ajena', tipo=self.tipo, grupo_nomina=2)
+        otro_departamento = Departamento.objects.create(
+            descripcion='Otro', unidad_organizativa=otra_unidad, orden_informe=1)
+        ajeno = CargoPlantilla.objects.create(
+            ncargo=self.ncargo, departamento=otro_departamento, rol=self.rol,
+            cant_aprobada=1, orden_informe=1)
+        self.client.force_login(self.moderador)
+
+        respuesta = self.client.post(
+            reverse('updt_cargo', args=[ajeno.pk]),
+            self._datos_cargo(departamento=otro_departamento.pk, unidad=otra_unidad.pk),
+            HTTP_HX_REQUEST='true')
+
+        self.assertEqual(respuesta.status_code, 403)
         self.assertEqual(Solicitud.objects.count(), 0)
 
 
@@ -966,13 +1179,16 @@ class ContratoDesviado(BaseDepartamento):
     def setUpTestData(cls):
         super().setUpTestData()
         from nomencladores.models import (
-            NGrupoEscala, NMunicipio, NProvincia, NRol, NTipoContrato, NTridente)
+            NGrupoEscala, NMotivoContrato, NMunicipio, NProvincia, NRol, NTipoContrato,
+            NTridente)
 
         cls.grupo = NGrupoEscala.objects.create(nivel='VII')
         cls.rol = NRol.objects.create(tipo='Técnico')
         cls.otro_rol = NRol.objects.create(tipo='Operario')
         cls.tridente = NTridente.objects.create(tipo='I')
         cls.tipo_contrato = NTipoContrato.objects.create(descripcion='Indeterminado')
+        cls.motivo = NMotivoContrato.objects.create(
+            descripcion='Renovación', tipo_contrato=cls.tipo_contrato)
         cls.ncargo = NCargo.objects.create(
             descripcion='Especialista C', cat_ocupacional='TEC',
             grupo_escala=cls.grupo, salario_basico=3500)
@@ -1009,6 +1225,12 @@ class ContratoDesviado(BaseDepartamento):
             'reg_militar': 'NIN',
             'maestria': 0,
             'doctorado': 0,
+            # `cnci`/`instructor` tienen valor por defecto ('0.00') a nivel de modelo, no
+            # None: si se omiten, el ModelForm los limpia a None y cualquier comparación
+            # contra el estado real (p. ej. `_solo_cambia_campos_libres`) los vería como
+            # «cambiados» aunque nadie los haya tocado.
+            'cnci': 0,
+            'instructor': 0,
         }
         datos.update(cambios)
         return datos
@@ -1029,6 +1251,78 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(solicitud.unidad, self.unidad)
         self.assertIn('Carlos', solicitud.descriptor)
         self.assertIn('00500', solicitud.descriptor)
+
+    def test_el_moderador_guarda_directo_si_solo_cambia_reg_militar(self):
+        """`reg_militar` está en `campos_libres` de `contrato_upd`: no requiere
+        aprobación cuando es lo único que cambia."""
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(reg_militar='IMP'), HTTP_HX_REQUEST='true')
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.reg_militar, 'IMP')
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_el_moderador_guarda_directo_si_solo_cambia_motivo(self):
+        """`motivo` también está en `campos_libres`. A diferencia del formulario de
+        propuesta (que lo vería siempre como "sin cambios" por su widget deshabilitado
+        en `Meta.widgets`), el atajo se decide con el ModelForm normal, que sí refleja
+        el valor real que el Moderador quiso guardar."""
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(motivo=self.motivo.pk), HTTP_HX_REQUEST='true')
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.motivo, self.motivo)
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_el_moderador_sigue_necesitando_aprobacion_si_ademas_cambia_algo_sensible(self):
+        """Si el envío toca `reg_militar` (libre) Y `maestria` (sensible) a la vez, todo
+        el envío —incluido `reg_militar`— vuelve a pasar por el flujo normal."""
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(reg_militar='IMP', maestria=2),
+                         HTTP_HX_REQUEST='true')
+
+        self.contrato.refresh_from_db()
+        # Ninguno de los dos se aplicó: al no ser subconjunto de `campos_libres`, todo
+        # el envío pasa por el flujo normal de aprobación.
+        self.assertIsNone(self.contrato.reg_militar)
+        self.assertEqual(self.contrato.maestria, 0)
+
+        solicitud = Solicitud.objects.get()
+        self.assertEqual(solicitud.datos_propuestos['reg_militar'], 'IMP')
+        self.assertEqual(solicitud.datos_propuestos['maestria'], 2)
+
+    def test_el_motivo_propuesto_sobrevive_a_la_propuesta_y_a_la_aprobacion(self):
+        """`motivo` es `campos_condicionales`: su widget nace deshabilitado igual que
+        `fecha_alta` (ver `contratos/forms.py::CAltaForm.Meta.widgets`), pero a
+        diferencia de ese sí debe aplicarse el valor que el Moderador eligió, no el que
+        ya tenía el contrato. Se combina con `maestria` (sensible) para que NO entre por
+        el atajo de `campos_libres` y pase por el flujo normal de propuesta/aprobación,
+        que es donde antes se perdía en silencio."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(motivo=self.motivo.pk, maestria=2),
+                         HTTP_HX_REQUEST='true')
+
+        solicitud = Solicitud.objects.get()
+        # La propuesta ya lo capturó bien: no quedó en el valor anterior (None).
+        self.assertEqual(solicitud.datos_propuestos['motivo'], self.motivo.pk)
+
+        servicios.iniciar_revision(solicitud, self.admin)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
+                         self._datos_contrato(motivo=self.motivo.pk, maestria=2))
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.motivo, self.motivo)
+        self.assertEqual(self.contrato.maestria, 2)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
     def test_al_aprobar_se_aplica_y_el_rol_sale_del_cargo(self):
         """`ContratoUpdateView.form_valid` deriva el rol del cargo en lugar de tomarlo
@@ -1061,6 +1355,64 @@ class ContratoDesviado(BaseDepartamento):
         self.contrato.refresh_from_db()
         self.assertEqual(self.contrato.maestria, 3)
         self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_al_aprobar_no_se_pierde_fecha_alta_aunque_el_post_no_la_incluya(self):
+        """Regresión: la pantalla de aprobación (`aprobar_solicitud`) no tiene el
+        JavaScript que `updt_contrato.html` usa para poder enviar `fecha_alta` pese a su
+        `disabled` fijo en el widget — un navegador real nunca la manda ahí.
+        `_datos_contrato()` sí la incluye porque refleja el POST real de la pantalla de
+        EDICIÓN; aquí se quita a propósito para reproducir el POST real de la pantalla
+        de APROBACIÓN. Antes del arreglo, esto dejaba `fecha_alta` en `None`."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(maestria=2), HTTP_HX_REQUEST='true')
+
+        solicitud = Solicitud.objects.get()
+        servicios.iniciar_revision(solicitud, self.admin)
+
+        datos_aprobacion = self._datos_contrato(maestria=5)
+        del datos_aprobacion['fecha_alta']
+
+        self.client.force_login(self.admin)
+        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]), datos_aprobacion)
+
+        self.contrato.refresh_from_db()
+        # No se tocó: sigue con el valor real, no None.
+        self.assertEqual(self.contrato.fecha_alta, date(2026, 1, 15))
+        # Lo que sí cambió (maestria) se aplicó con normalidad.
+        self.assertEqual(self.contrato.maestria, 5)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
+
+    def test_el_moderador_no_puede_solicitar_edicion_fuera_de_su_unidad(self):
+        otra_unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Ajena', tipo=self.tipo, grupo_nomina=2)
+        otro_departamento = Departamento.objects.create(
+            descripcion='Otro Depto', unidad_organizativa=otra_unidad, orden_informe=1)
+        otro_cargo = CargoPlantilla.objects.create(
+            ncargo=self.ncargo, departamento=otro_departamento, rol=self.rol,
+            cant_aprobada=2, orden_informe=1)
+        otro_aspirante = Aspirante.objects.create(
+            nombre='Luis', papellido='Diaz', sapellido='Rey',
+            doc_identidad='90020198765', estado='ACTIVO', sexo='M', raza='BL',
+            unidad_organizativa=otra_unidad,
+            provincia=self.provincia, municipio=self.municipio)
+        ajeno = CAlta.objects.create(
+            aspirante=otro_aspirante, no_expediente='00999',
+            tipo=self.tipo_contrato, cargo=otro_cargo, tridente=self.tridente,
+            fecha_alta=date(2026, 2, 1), tipo_salario='DIN', rol=self.rol)
+        self.client.force_login(self.moderador)
+
+        respuesta = self.client.post(
+            reverse('updt_contrato', args=[ajeno.pk]),
+            self._datos_contrato(cargo=otro_cargo.pk, departamento=otro_departamento.pk,
+                                 unidad=otra_unidad.pk),
+            HTTP_HX_REQUEST='true')
+
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(Solicitud.objects.count(), 0)
+        ajeno.refresh_from_db()
+        self.assertEqual(ajeno.no_expediente, '00999')
 
 
 class BorradoDeTrabajador(BaseDepartamento):

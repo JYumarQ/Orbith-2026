@@ -378,13 +378,15 @@ class RecordatoriosContratoTests(TestCase):
             username='admin_recordatorios', password='x', es_admin=True)
 
     def test_recordatorios_incluye_solo_contratos_determinados_dentro_del_horizonte(self):
+        """La tarjeta ya no repinta su propia lista (ver `dashboard/views.py`): solo
+        expone el conteo total, con el mismo criterio de siempre — el detalle vive en
+        Notificaciones → Recordatorios, a un clic de "Ver más"."""
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('dashboard'))
-        titulos = [r['titulo'] for r in respuesta.context['recordatorios_contrato']]
 
-        self.assertTrue(any('Trab10' in t for t in titulos))
-        self.assertFalse(any('Trab11' in t for t in titulos))
-        self.assertFalse(any('Trab12' in t for t in titulos))
+        # Solo `asp_por_vencer` cuenta: `asp_lejano` está fuera del horizonte de 60
+        # días y `asp_indeterminado` se excluye siempre, sea cual sea su fecha.
+        self.assertEqual(respuesta.context['recordatorios_contrato_total'], 1)
 
 
 class AdvertenciasTests(TestCase):

@@ -62,12 +62,16 @@
                                     {{ form.motivo.label }}  
                                     {{ form.motivo }}
                                 </div>
-                                <div class="col-md-6">
-                                    {{ form.fecha_alta.label }}  
+                                <div class="col-md-4">
+                                    {{ form.fecha_alta.label }}
                                     {{ form.fecha_alta }}
                                 </div>
-                                <div class="col-md-6">
-                                    {{ form.duracion.label }}  
+                                <div class="col-md-4">
+                                    {{ form.fecha_alta_entidad.label }}
+                                    {{ form.fecha_alta_entidad }}
+                                </div>
+                                <div class="col-md-4">
+                                    {{ form.duracion.label }}
                                     {{ form.duracion }}
                                 </div>
                                 
@@ -532,6 +536,28 @@
         }
         initSelect2Cargo();
 
+        // Unidad Organizativa y Departamento: mismo patrón que el cargo (búsqueda por
+        // escritura, single-select), sin badge de plazas porque no aplica aquí.
+        function initSelect2Cascada(selector) {
+            const $select = $(selector);
+            if (!$select.length) return;
+            if ($select.hasClass('select2-hidden-accessible')) $select.select2('destroy');
+            $select.select2({ dropdownParent: $select.parent(), width: '100%', theme: 'bootstrap-5', templateSelection: s => s.text });
+
+            // PUENTE HTMX <-> SELECT2: Select2 dispara 'change' con el trigger()
+            // sintético de jQuery, que HTMX (basado en addEventListener nativo) no
+            // detecta, así que el hx-get de este campo nunca se disparaba. Se
+            // escucha el evento propio de Select2 (no 'change', para no crear un
+            // bucle infinito al despachar el 'change' nativo) y se despacha un
+            // 'change' real del DOM, que sí dispara el hx-trigger="change".
+            $select.off('select2:select.htmxBridge select2:unselect.htmxBridge select2:clear.htmxBridge')
+                   .on('select2:select.htmxBridge select2:unselect.htmxBridge select2:clear.htmxBridge', function () {
+                       this.dispatchEvent(new Event('change', { bubbles: true }));
+                   });
+        }
+        initSelect2Cascada('#id_unidad');
+        initSelect2Cascada('#id_departamento');
+
         function validarCargoCruado() {
             const valCargo = $cargoSelect.val();
             let $errPlaza = $('#error_plaza_agotada');
@@ -576,6 +602,9 @@
         $cargoSelect.on('change', validarCargoCruado);
 
         $form.off('change.cascada').on('change.cascada', '#id_unidad, #id_departamento', function() {
+            if ($(this).is('#id_unidad')) {
+                $('#id_departamento').empty().trigger('change.select2');
+            }
             $('#id_cargo').empty().trigger('change.select2');
             if (window.htmx) htmx.trigger('#disparador-salarios', 'actualizarSalarios');
         });
@@ -630,10 +659,30 @@
             }
         });
 
+        // 5.b F. ALTA ENTIDAD: nunca posterior a F. de Contratación.
+        // Tope 'max' dinámico + autocompletado (solo mientras el usuario no la
+        // haya tocado a mano) para que coincida con la validación del servidor.
+        $('#id_fecha_alta').off('change.altaEntidad').on('change.altaEntidad', function() {
+            var $altaEntidad = $('#id_fecha_alta_entidad');
+            var nuevaFecha = $(this).val() || '';
+            $altaEntidad.attr('max', nuevaFecha);
+
+            if (!$altaEntidad.data('tocadoManualmente')) {
+                $altaEntidad.val(nuevaFecha);
+            } else if (nuevaFecha && $altaEntidad.val() > nuevaFecha) {
+                $altaEntidad.val(nuevaFecha);
+            }
+            $altaEntidad.trigger('change.val');
+        });
+
+        $('#id_fecha_alta_entidad').off('change.tocado').on('change.tocado', function() {
+            $(this).data('tocadoManualmente', true);
+        });
+
         // 6. VALIDACIÓN VISUAL UNIVERSAL
         const reglas = {
-            numericos: ['duracion', 'no_expediente'], 
-            obligatorios: [ 'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'fecha_alta', 'duracion', 'unidad', 'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar' ]
+            numericos: ['duracion', 'no_expediente'],
+            obligatorios: [ 'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion', 'unidad', 'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar' ]
         };
 
         var timerExp = null;
@@ -754,6 +803,8 @@
         setTimeout(() => { 
             $('#id_tipo').trigger('change.plaza'); 
             $('#id_fecha_alta').removeAttr('disabled').trigger('change.val');
+            $('#id_fecha_alta_entidad').removeAttr('disabled').trigger('change.val');
+            $('#id_fecha_alta').trigger('change.altaEntidad');
             reglas.obligatorios.forEach(name => { $form.find(`[name="${name}"]`).trigger('change.val'); });
             
             // LA CURA DEL ESTILO: Quitamos las clases de Select2 para que se rendericen nativos y hermosos

@@ -17,6 +17,7 @@
 
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
+                <input type="hidden" name="origen" value="{{ origen }}">
 
                 {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
 

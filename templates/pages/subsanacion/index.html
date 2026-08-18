@@ -174,6 +174,11 @@
   </div>
 
   <ul class="nav nav-tabs mb-3" role="tablist">
+    {% comment %} Dashboard, Historial de revisiones, Estadísticas y Ejecutar análisis
+       describen o lanzan el barrido COMPLETO de toda la empresa — son exclusivos del
+       Administrador (ver `subsanacion/permisos.py`). Un Moderador solo tiene la
+       pestaña de Hallazgos, ya acotada a sus propias Unidades Organizativas. {% endcomment %}
+    {% if user.es_admin %}
     <li class="nav-item">
       <button class="nav-link{% if tab_activo != 'hallazgos' %} active{% endif %}"
               data-bs-toggle="tab" data-bs-target="#paneDashboard" type="button"
@@ -182,8 +187,9 @@
         <i class="bi bi-speedometer2 me-1"></i>Dashboard
       </button>
     </li>
+    {% endif %}
     <li class="nav-item">
-      <button class="nav-link{% if tab_activo == 'hallazgos' %} active{% endif %}"
+      <button class="nav-link{% if tab_activo == 'hallazgos' or not user.es_admin %} active{% endif %}"
               data-bs-toggle="tab" data-bs-target="#paneHallazgos" type="button"
               hx-get="{% url 'subsanacion:panel_hallazgos' %}"
               hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true">
@@ -191,6 +197,7 @@
         {% if total_vigentes %}<span class="badge bg-label-danger ms-1">{{ total_vigentes }}</span>{% endif %}
       </button>
     </li>
+    {% if user.es_admin %}
     <li class="nav-item">
       <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneRevisiones" type="button"
               hx-get="{% url 'subsanacion:panel_revisiones' %}"
@@ -212,25 +219,30 @@
         <i class="bi bi-play-circle me-1"></i>Ejecutar nuevo análisis
       </button>
     </li>
+    {% endif %}
   </ul>
 
   <div class="tab-content p-0">
+    {% if user.es_admin %}
     {% comment %} El dashboard se pinta ya renderizado: no hace falta una segunda petición para
        ver la pantalla principal. {% endcomment %}
     <div class="tab-pane fade{% if tab_activo != 'hallazgos' %} show active{% endif %}" id="paneDashboard">
       {% include 'pages/subsanacion/partials/panel_dashboard.html' %}
     </div>
-    <div class="tab-pane fade{% if tab_activo == 'hallazgos' %} show active{% endif %}" id="paneHallazgos">
-      {% if tab_activo == 'hallazgos' %}
+    {% endif %}
+    <div class="tab-pane fade{% if tab_activo == 'hallazgos' or not user.es_admin %} show active{% endif %}" id="paneHallazgos">
+      {% if tab_activo == 'hallazgos' or not user.es_admin %}
         {% comment %} Llegada por navegación completa (p. ej. al volver aquí tras
            corregir un hallazgo desde otra pestaña — ver
-           `core.mixins.VolverAlOrigenMixin` y `subsanacion.views.panel_hallazgos`):
-           se pinta ya con estos mismos filtros, sin una segunda petición. {% endcomment %}
+           `core.mixins.VolverAlOrigenMixin` y `subsanacion.views.panel_hallazgos`), o
+           un Moderador (que solo tiene esta pestaña): se pinta ya con estos mismos
+           filtros, sin una segunda petición. {% endcomment %}
         {% include 'pages/subsanacion/partials/panel_hallazgos.html' %}
       {% else %}
         <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando hallazgos…</div>
       {% endif %}
     </div>
+    {% if user.es_admin %}
     {% comment %} El contenedor interior permite que la paginación del historial se
        recargue sola sin volver a pedir la pestaña entera. {% endcomment %}
     <div class="tab-pane fade" id="paneRevisiones">
@@ -244,6 +256,7 @@
     <div class="tab-pane fade" id="paneAnalisis">
       <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando…</div>
     </div>
+    {% endif %}
   </div>
 </div>
 

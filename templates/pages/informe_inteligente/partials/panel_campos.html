@@ -54,6 +54,7 @@
                                                data-filtrable="{{ item.campo.filtrable|yesno:'1,0' }}"
                                                data-ordenable="{{ item.campo.ordenable|yesno:'1,0' }}"
                                                data-agrupable="{{ item.campo.agrupable|yesno:'1,0' }}"
+                                               data-recurrente="{{ item.campo.recurrente_anual|yesno:'1,0' }}"
                                                data-choices="{{ item.opciones|como_json }}">
                                         <label class="form-check-label flex-grow-1" for="campo_{{ item.key }}">
                                             {{ item.campo.label }}

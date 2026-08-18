@@ -12,7 +12,8 @@ datos actuales.
 
 from datetime import date
 
-from django.test import TestCase
+from django.contrib.admin.sites import AdminSite
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from bolsa.models import Aspirante
@@ -23,6 +24,8 @@ from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
                                   NTipoContrato, NTipoUnidadOrganizativa)
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
 from usuarios.models import CustomUser
+
+from .models import PlanMensualRegistro
 
 EN_VENTANA = date(2026, 8, 22)
 
@@ -320,3 +323,48 @@ class FiltroHistoricoPorUnidadPrincipal(BaseInformes):
             fuente='cierre', periodo='2026-08', ueb=str(self.hija_a.pk))
 
         self.assertEqual(respuesta.context['totales']['aprob'], 6)
+
+
+class AuditoriaAdminTests(TestCase):
+    """Crear/eliminar un PlanMensualRegistro desde el Admin de Django ahora deja
+    rastro en `auditoria.EventoAuditoria`, gracias a `AuditoriaAdminMixin`
+    (compartido con el resto de apps, ver `contratos.tests.AuditoriaAdminTests`
+    para el caso original que motivó esto)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_planmensual', password='x', es_admin=True)
+
+    def test_eliminar_un_registro_en_el_admin_queda_auditado(self):
+        from auditoria.models import EventoAuditoria
+
+        registro = PlanMensualRegistro.objects.create(
+            mes='08', anno='2026', ueb_id='1', familia_id='1', valor=5)
+        self.client.force_login(self.admin)
+
+        url = reverse('admin:informes_planmensualregistro_delete', args=[registro.pk])
+        self.client.post(url, {'post': 'yes'})
+
+        self.assertFalse(PlanMensualRegistro.objects.filter(pk=registro.pk).exists())
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(registro.pk), accion='DEL').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)
+        self.assertEqual(evento.modulo, 'informes')
+
+    def test_editar_un_registro_desde_el_admin_queda_auditado(self):
+        from auditoria.models import EventoAuditoria
+        from informes.admin import PlanMensualRegistroAdmin
+
+        registro = PlanMensualRegistro.objects.create(
+            mes='08', anno='2026', ueb_id='2', familia_id='1', valor=5)
+
+        admin_instance = PlanMensualRegistroAdmin(PlanMensualRegistro, AdminSite())
+        request = RequestFactory().get('/')
+        request.user = self.admin
+        registro.valor = 9
+        admin_instance.save_model(request, registro, form=None, change=True)
+
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(registro.pk), accion='UPD').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)

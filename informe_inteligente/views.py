@@ -3,8 +3,10 @@ Vistas del módulo Informe Inteligente.
 """
 import io
 import json
+import re
 from datetime import datetime
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
@@ -14,6 +16,9 @@ from django.views.decorators.http import require_POST
 
 from docx import Document
 from docx.shared import Inches, RGBColor
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
 from xhtml2pdf import pisa
 
 from configuracion.models import Configuracion
@@ -225,6 +230,12 @@ def generar_vista_previa(request):
             "paginator": paginator,
             "total_registros": datos["total_registros"],
         }
+
+        from progreso.servicios import completar_tarea
+        tarea = completar_tarea(request.user, 'primer_informe_generado')
+        if tarea:
+            messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+
         return render(request, "pages/informe_inteligente/partials/resultados.html", context)
 
     except ConfiguracionInformeInvalida as e:
@@ -348,6 +359,51 @@ def exportar_word(request):
     return response
 
 
+@login_required
+@require_POST
+def exportar_excel(request):
+    """
+    Igual que `exportar_pdf`/`exportar_word` pero en Excel, con `openpyxl`
+    (misma librería que ya usa `contratos/views.py::exportar_contratos_excel`
+    para sus exportaciones). Las columnas son dinámicas: salen de
+    `campos_elegidos`, no de una lista fija como en Contratos.
+    """
+    try:
+        datos = _preparar_datos_informe(request)
+    except ConfiguracionInformeInvalida as e:
+        return HttpResponse(str(e), status=400)
+
+    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
+    campos_elegidos = datos["campos_elegidos"]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    # Excel limita el nombre de hoja a 31 caracteres y prohíbe \ / * ? : [ ]
+    # (el label del modelo, p. ej. "Contratos / Trabajadores Activos", trae "/").
+    titulo_hoja = re.sub(r'[\\/*?:\[\]]', '-', datos["definicion_modelo"]["label"])[:31]
+    ws.title = titulo_hoja
+
+    negrita_blanca = Font(bold=True, color="FFFFFF")
+    fondo_indigo = PatternFill(start_color="696CFF", end_color="696CFF", fill_type="solid")
+    alineacion_centro = Alignment(horizontal="center", vertical="center")
+
+    ws.append([campo["label"] for campo in campos_elegidos])
+    for col_num, cell in enumerate(ws[1], 1):
+        cell.font = negrita_blanca
+        cell.fill = fondo_indigo
+        cell.alignment = alineacion_centro
+        ws.column_dimensions[get_column_letter(col_num)].width = 22
+
+    for fila in filas:
+        ws.append([fila.get(campo["key"]) if fila.get(campo["key"]) not in (None, "") else "" for campo in campos_elegidos])
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.xlsx'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(response)
+    return response
+
+
 def _leer_configuracion(configuracion_cruda):
     """
     Convierte el JSON recibido del formulario en un diccionario validado.
@@ -451,6 +507,11 @@ def guardar_favorito(request):
         es_plantilla=False,
     )
     InformeFavorito.objects.create(usuario=request.user, informe=informe)
+
+    from progreso.servicios import completar_tarea
+    tarea = completar_tarea(request.user, 'primer_informe_favorito')
+    if tarea:
+        messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
 
     return JsonResponse({"ok": True, "informe_id": informe.id, "nombre": informe.nombre})
 

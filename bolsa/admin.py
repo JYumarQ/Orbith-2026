@@ -1,9 +1,13 @@
 from django.contrib import admin
+
+from auditoria.admin_mixins import AuditoriaAdminMixin
+
 from .models import Aspirante
 
 
 @admin.register(Aspirante)
-class AspiranteAdmin(admin.ModelAdmin):
+class AspiranteAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'bolsa'
     list_display = ('doc_identidad', 'nombre', 'papellido', 'sapellido', 'estado', 'unidad_organizativa')
     search_fields = ('doc_identidad', 'nombre', 'papellido', 'sapellido')
     list_filter = ('estado', 'sexo', 'unidad_organizativa')

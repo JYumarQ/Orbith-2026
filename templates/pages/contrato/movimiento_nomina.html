@@ -42,6 +42,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="generar_movimiento" id="inputGenerarMovimiento" value="true">
                     <input type="hidden" name="next" value="{{ next }}">
+                    <input type="hidden" name="origen" value="{{ origen }}">
 
                     <div class="row g-0 h-100">
                         
@@ -507,7 +508,7 @@
 
                 if(!fechaInput && isWizard === false) {
                     // Si es wizard, quizás no quieras que sea obligatoria la fecha, lo maneja el backend
-                    Swal.fire('Atención', 'Debe seleccionar una Fecha Efectiva.', 'warning');
+                    window.mostrarToast('Debe seleccionar una Fecha Efectiva.', 'warning');
                     return;
                 }
 
@@ -515,21 +516,13 @@
                 // corregir después. Se bloquea antes de llegar al servidor.
                 var salarioNuevo = parseFloat($('#salarioEscala').val());
                 if (!salarioNuevo || salarioNuevo <= 0) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Salario no calculado',
-                        text: 'No se encontró un salario de escala para la combinación de cargo, rol y tridente seleccionada. Revise esos datos antes de confirmar el movimiento.'
-                    });
+                    window.mostrarToast('Salario no calculado: no se encontró un salario de escala para la combinación de cargo, rol y tridente seleccionada. Revise esos datos antes de confirmar el movimiento.', 'warning');
                     return;
                 }
 
                 if (!isWizard && fechaAlta && fechaInput < fechaAlta) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Fecha Inválida',
-                        text: 'La fecha del movimiento debe ser posterior a la fecha de Alta (' + fechaAlta + ').'
-                    });
-                    return; 
+                    window.mostrarToast('Fecha inválida: debe ser posterior a la fecha de Alta (' + fechaAlta + ').', 'error');
+                    return;
                 }
 
                 var textoAlerta = isWizard 
@@ -602,12 +595,12 @@
                         var res = xhr.responseJSON;
                         if (res && res.error_popup) {
                             // Cubre TANTO errores críticos (500) COMO errores de validación (400)
-                            Swal.fire('No se pudo completar el movimiento', res.error_popup, 'error');
+                            window.mostrarToast(res.error_popup, 'error');
                         } else if (xhr.status === 400) {
                             // El backend devolvió el formulario repintado pero sin mensaje.
-                            Swal.fire('Datos incompletos', 'Revise los campos obligatorios del movimiento.', 'warning');
+                            window.mostrarToast('Datos incompletos: revise los campos obligatorios del movimiento.', 'warning');
                         } else {
-                            Swal.fire('Error', 'Error de comunicación inesperado.', 'error');
+                            window.mostrarToast('Error de comunicación inesperado.', 'error');
                         }
                     }
                 });
@@ -625,6 +618,15 @@
         }, 400); // 400ms es el tiempo ideal para esperar a que el modal se asiente
 
     })();
+
+    // Todo lo que sigue se envuelve en su propia IIFE: este modal se recarga por
+    // AJAX cada vez que se abre (ver abrir_modal_movimiento/.load()), y el
+    // <script> se vuelve a ejecutar en el mismo scope global de la página. Sin
+    // este envoltorio, los `const`/`let` de nivel superior (p.ej. $cargoSelect)
+    // rompían con "Identifier ... has already been declared" a la segunda
+    // apertura, abortando el resto del script (de ahí que dejaran de pintarse
+    // los bordes verdes/amarillos de validación).
+    (function () {
 
     // =======================================================
     // MOTOR DE VALIDACIÓN DE MOVIMIENTO ORBITH (CORREGIDO)
@@ -911,7 +913,7 @@
             
             if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
                 e.preventDefault();
-                if(typeof Swal !== 'undefined') Swal.fire({toast: true, position: 'top-end', icon: 'error', title: 'Cargo sin vacantes oficiales', showConfirmButton: false, timer: 3000});
+                window.mostrarToast('Cargo sin vacantes oficiales.', 'error');
             }
         });
     }
@@ -954,9 +956,39 @@
     
     // Limpieza en Cascada de Cargo al cambiar Unidad o Dpto
     $('#id_unidad, #id_departamento').off('change.cascada').on('change.cascada', function() {
+        if ($(this).is('#id_unidad')) {
+            $('#id_departamento').empty().trigger('change.select2');
+        }
         $cargoSelect.empty().trigger('change.select2');
         if (window.htmx) htmx.trigger('#disparador-salarios', 'actualizarSalarios');
     });
+
+    // Unidad Organizativa y Departamento: mismo select2 que el cargo (búsqueda por
+    // escritura, single-select), sin badge de plazas porque no aplica aquí.
+    function initSelect2Cascada(selector) {
+        const $select = $(selector);
+        if (!$select.length) return;
+        if ($select.hasClass('select2-hidden-accessible')) $select.select2('destroy');
+        $select.select2({
+            dropdownParent: $select.closest('.modal').length ? $select.closest('.modal') : $(document.body),
+            width: '100%',
+            theme: 'bootstrap-5',
+            templateSelection: function(state) { return state.text; }
+        });
+
+        // PUENTE HTMX <-> SELECT2: Select2 dispara 'change' con el trigger()
+        // sintético de jQuery, que HTMX (basado en addEventListener nativo) no
+        // detecta, así que el hx-get de este campo nunca se disparaba. Se
+        // escucha el evento propio de Select2 (no 'change', para no crear un
+        // bucle infinito al despachar el 'change' nativo) y se despacha un
+        // 'change' real del DOM, que sí dispara el hx-trigger="change".
+        $select.off('select2:select.htmxBridge select2:unselect.htmxBridge select2:clear.htmxBridge')
+               .on('select2:select.htmxBridge select2:unselect.htmxBridge select2:clear.htmxBridge', function () {
+                   this.dispatchEvent(new Event('change', { bubbles: true }));
+               });
+    }
+    initSelect2Cascada('#id_unidad');
+    initSelect2Cascada('#id_departamento');
     
         $cargoSelect.off('change.grupoEscala').on('change.grupoEscala', function() {
         let $option = $(this).find('option:selected');
@@ -984,13 +1016,14 @@
         if (window.htmx) htmx.trigger('#disparador-salarios', 'actualizarSalarios');
     });
 
-    // 6. ARRANQUE INICIAL 
+    // 6. ARRANQUE INICIAL
     setTimeout(() => {
-        actualizarReglaPlaza(); 
+        actualizarReglaPlaza();
         if ($cargoSelect.val()) {
             $cargoSelect.trigger('change.grupoEscala');
         }
     }, 400);
 
+    })();
 
 </script>

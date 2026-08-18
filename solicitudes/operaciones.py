@@ -81,6 +81,36 @@ def _unidad_de_aspirante(objeto, datos):
 
 
 # ----------------------------------------------------------------------
+# Campos calculados desde el Cargo (no desde lo que guardó la propuesta)
+# ----------------------------------------------------------------------
+# `rol` y `grupo_escala` de `CAltaForm` son texto de solo lectura que la vista deriva
+# del Cargo; `funcionario`/`designado` ya no existen en el modelo `CAlta` desde
+# `contratos.0007_remove_calta_designado_remove_calta_funcionario` y también los decide
+# el Cargo. Los cuatro son inputs sueltos en `updt_contrato.html` sin ningún JavaScript
+# que los recalcule si el Moderador cambia de Cargo, así que lo que quedó guardado en
+# `datos_originales`/`datos_propuestos` no es de fiar. La pantalla de revisión nunca los
+# lee de ahí: siempre le pide a estos resolutores que los recalculen a partir del Cargo
+# real de esa columna (ver `solicitudes/views.py::_filas_de_comparacion`).
+
+def _rol_de_cargo(cargo):
+    return cargo.rol.tipo if cargo and cargo.rol_id else None
+
+
+def _grupo_escala_de_cargo(cargo):
+    if not cargo or not cargo.ncargo_id or not cargo.ncargo.grupo_escala_id:
+        return None
+    return cargo.ncargo.grupo_escala.nivel
+
+
+def _funcionario_de_cargo(cargo):
+    return bool(cargo.funcionario) if cargo else False
+
+
+def _designado_de_cargo(cargo):
+    return bool(cargo.designado) if cargo else False
+
+
+# ----------------------------------------------------------------------
 # Descriptores legibles
 # ----------------------------------------------------------------------
 # Se congelan al crear la solicitud (`Solicitud.descriptor`). Tienen que funcionar
@@ -267,6 +297,22 @@ def _ejecutar_contrato(solicitud, formulario, objeto):
 #                     ejecuta al proponer.
 #   campos_solo_admin Opcional. Campos que el Moderador no puede proponer: llegan
 #                     deshabilitados en su formulario y conservan su valor actual.
+#   campos_libres     Opcional. Lo contrario de `campos_solo_admin`: campos que el
+#                     Moderador puede guardar directamente, sin solicitud, cuando son los
+#                     ÚNICOS que cambian en el envío (ver
+#                     `solicitudes/integracion.py::_solo_cambia_campos_libres`). Si el
+#                     envío también toca cualquier otro campo, todo —incluidos estos—
+#                     vuelve a pasar por el flujo normal de aprobación.
+#   campos_condicionales Opcional. Campos cuyo widget nace deshabilitado en el
+#                     formulario original —por eso caerían en el mismo trato que
+#                     `campos_solo_admin` si no se declaran aquí— pero que un
+#                     JavaScript propio habilita según otra elección del formulario
+#                     (p. ej. `motivo` de `CAltaForm`, solo si el tipo de contrato lo
+#                     exige). Se respeta lo que el Moderador proponga para ellos, y en
+#                     la pantalla de revisión quedan editables para el Administrador
+#                     igual que cualquier otro campo (ver
+#                     `solicitudes/serializacion.py::formulario_de_aprobacion`): lo que
+#                     él deje en el POST al aprobar es lo que se guarda.
 #   ejecutor          Opcional. Cómo se aplica al aprobar, cuando no basta el
 #                     comportamiento por defecto (guardar el formulario, o borrar el
 #                     objeto en las eliminaciones).
@@ -403,6 +449,35 @@ OPERACIONES = {
         'unidad': _unidad_de_contrato,
         'descriptor': _descriptor_contrato,
         'ejecutor': _ejecutar_contrato,
+        # Decisión de negocio (2026-08): estos dos no tienen impacto en nómina ni en la
+        # estructura organizativa, así que un cambio que toque solo uno de ellos (o
+        # ambos) se guarda directo, sin pasar por el Administrador.
+        'campos_libres': ('motivo', 'reg_militar'),
+        # Todos estos nacen deshabilitados en `CAltaForm.Meta.widgets` y un JavaScript
+        # propio los habilita según otra elección del formulario: `motivo` si el tipo de
+        # contrato lo exige, `duracion` si el tipo no es indeterminado, `c_formal_res`/
+        # `funcionario_res`/`designado_res` si el switch correspondiente está activo,
+        # `fecha_vence_lic`/`fecha_vence_recal`/`fecha_vence_seg` si es Chofer Profesional,
+        # y `pais` si hay Misión. Sin declararlos aquí, `formulario_de_propuesta()` los
+        # trata igual que `campos_solo_admin` y descarta en silencio lo que el Moderador
+        # sí llegó a escribir (el mismo bug ya detectado y corregido para `motivo`, pero
+        # que seguía abierto para el resto: un Moderador que marcaba «Funcionario» y
+        # escribía el número de resolución veía la propuesta llegar con ese campo vacío).
+        'campos_condicionales': (
+            'motivo', 'duracion', 'c_formal_res', 'funcionario_res', 'designado_res',
+            'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais',
+        ),
+        # Ver el bloque «Campos calculados desde el Cargo» más arriba: `rol` y
+        # `grupo_escala` los deriva el Cargo (por su NCargo); `funcionario`/`designado`
+        # también los decide el Cargo, no el contrato. Se recalculan siempre en la
+        # pantalla de revisión, tanto para la columna Original (Cargo actual) como para
+        # la Propuesta (Cargo propuesto, si el Moderador también lo cambió).
+        'campos_calculados': {
+            'rol': _rol_de_cargo,
+            'grupo_escala': _grupo_escala_de_cargo,
+            'funcionario': _funcionario_de_cargo,
+            'designado': _designado_de_cargo,
+        },
     },
 
     # --- Eliminar trabajador desde la Lista de Bajas ---
@@ -496,7 +571,20 @@ def form_de_propuesta(definicion):
     """
     from solicitudes.serializacion import formulario_de_propuesta
     return formulario_de_propuesta(
-        definicion['form'], definicion.get('campos_solo_admin', ()))
+        definicion['form'], definicion.get('campos_solo_admin', ()),
+        definicion.get('campos_condicionales', ()))
+
+
+def form_de_aprobacion(definicion):
+    """ModelForm para la pantalla de revisión y para aplicar el cambio al aprobar.
+
+    Ver `solicitudes/serializacion.py::formulario_de_aprobacion`. A diferencia de
+    `form_de_propuesta`, no deshabilita `campos_solo_admin`: esos el Administrador sí
+    puede decidirlos en este paso.
+    """
+    from solicitudes.serializacion import formulario_de_aprobacion
+    return formulario_de_aprobacion(
+        definicion['form'], definicion.get('campos_condicionales', ()))
 
 
 def preparar_ejecucion(solicitud, definicion, datos, objeto):

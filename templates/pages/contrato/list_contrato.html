@@ -109,13 +109,13 @@
                 </div>
 
                 <div class="d-flex ms-auto gap-2">
-                    <a href="{% url 'exportar_contratos_excel' %}"
+                    <button type="button"
                         class="btn btn-success"
-                        data-bs-toggle="tooltip"
-                        data-bs-placement="top"
-                        title="Exportar nómina completa de activos a Excel">
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalExportarExcel"
+                        title="Exportar a Excel">
                             <i class="fas fa-file-excel"></i>
-                    </a>
+                    </button>
 
                     <div class="btn-group">
                         <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
@@ -278,6 +278,47 @@
 <div class="modal fade" id="crear_empl" tabindex="-1" aria-hidden="true"></div>
 <div class="modal fade" id="editar_aspir" tabindex="-1" aria-hidden="true"></div>
 
+<!-- ============ EXPORTAR EXCEL: selección previa de Unidad Organizativa ============ -->
+<div class="modal fade" id="modalExportarExcel" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-label-success">
+                <h5 class="modal-title"><i class="fas fa-file-excel me-2"></i>Exportar a Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                {% if mostrar_opcion_todas_uo %}
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="chkExportarTodasUO" checked>
+                    <label class="form-check-label fw-semibold" for="chkExportarTodasUO">
+                        Toda la aplicación (todas las Unidades Organizativas)
+                    </label>
+                </div>
+                {% endif %}
+                <div id="bloqueExportarUnidades" {% if mostrar_opcion_todas_uo %}class="d-none"{% endif %}>
+                    <label class="form-label" for="selectExportarUnidades">
+                        {% if mostrar_opcion_todas_uo %}Seleccione una o varias Unidades Organizativas{% else %}Sus Unidades Organizativas asignadas{% endif %}
+                    </label>
+                    <select id="selectExportarUnidades" class="form-select" multiple>
+                        {% for unidad in unidades_export %}
+                            <option value="{{ unidad.pk }}">{{ unidad.descripcion }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if not unidades_export %}
+                        <small class="text-danger d-block mt-1">No tiene Unidades Organizativas asignadas.</small>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnGenerarExcel">
+                    <i class="fas fa-file-excel me-1"></i>Generar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -437,14 +478,7 @@
         const url = btn.getAttribute('data-url-solicitar');
 
         if (!url || url === '#' || url === '') {
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'warning',
-                title: 'Seleccione un contrato válido primero.',
-                showConfirmButton: false,
-                timer: 3000
-            });
+            window.mostrarToast('Seleccione un contrato válido primero.', 'warning');
             return;
         }
 
@@ -491,23 +525,16 @@
                     }, 
                     success: function(response) {
                         if (response.success) {
-                            Swal.fire({
-                                toast: true,
-                                position: 'top-end',
-                                icon: 'success',
-                                // Usamos el mensaje dinámico que devuelve tu views.py
-                                title: response.message, 
-                                showConfirmButton: false,
-                                timer: 3000
-                            });
+                            // Usamos el mensaje dinámico que devuelve tu views.py
+                            window.mostrarToast(response.message, 'success');
                             // Recargamos la tabla para ver u ocultar el borde amarillo
                             triggerSearch();
                         } else {
-                            Swal.fire('Error', response.message, 'error');
+                            window.mostrarToast(response.message, 'error');
                         }
                     },
                     error: function(xhr) {
-                        Swal.fire('Error', 'Ocurrió un error al procesar la solicitud.', 'error');
+                        window.mostrarToast('Ocurrió un error al procesar la solicitud.', 'error');
                     }
                 });
             }
@@ -779,19 +806,7 @@
         }
     });
 
-    document.body.addEventListener('showMessage', function(evt) {
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: evt.detail.value,
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true
-        });
-    });
-
-    document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function(e) {
         if (e.key === 'Delete' || e.key === 'Del') {
             const tag = document.activeElement.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -848,6 +863,52 @@
         triggerSearch();
     }
 
+    // ---------------------------------------------------------------
+    // EXPORTAR EXCEL: paso intermedio de selección de Unidad Organizativa
+    // ---------------------------------------------------------------
+    (function () {
+        const $modal = $('#modalExportarExcel');
+        const $selectUnidades = $('#selectExportarUnidades');
+        const $chkTodas = $('#chkExportarTodasUO');
+        const $bloqueUnidades = $('#bloqueExportarUnidades');
+        const $btnGenerar = $('#btnGenerarExcel');
+
+        $modal.on('shown.bs.modal', function () {
+            if ($selectUnidades.length && !$selectUnidades.hasClass('select2-hidden-accessible')) {
+                $selectUnidades.select2({
+                    dropdownParent: $modal,
+                    width: '100%',
+                    placeholder: 'Buscar unidades...',
+                    theme: 'bootstrap-5'
+                });
+            }
+        });
+
+        if ($chkTodas.length) {
+            $chkTodas.on('change', function () {
+                $bloqueUnidades.toggleClass('d-none', this.checked);
+            });
+        }
+
+        $btnGenerar.on('click', function () {
+            const todas = $chkTodas.length ? $chkTodas.is(':checked') : false;
+            let params = '';
+
+            if (!todas) {
+                const seleccion = $selectUnidades.val() || [];
+                if (seleccion.length === 0) {
+                    window.mostrarToast('Seleccione al menos una Unidad Organizativa.', 'warning');
+                    return;
+                }
+                params = seleccion.map(id => 'unidades=' + encodeURIComponent(id)).join('&');
+            }
+
+            window.mostrarToast('Preparando documento…', 'info');
+            const url = "{% url 'exportar_contratos_excel' %}" + (params ? '?' + params : '');
+            window.location.href = url;
+            $modal.modal('hide');
+        });
+    })();
 
 </script>
 {% include 'pages/contrato/partials/modal_historico_include.html' %}

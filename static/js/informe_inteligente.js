@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ['5', 'Mayo'], ['6', 'Junio'], ['7', 'Julio'], ['8', 'Agosto'],
         ['9', 'Septiembre'], ['10', 'Octubre'], ['11', 'Noviembre'], ['12', 'Diciembre'],
     ];
+    const DIAS_DEL_MES = Array.from({ length: 31 }, function (_, i) { return String(i + 1); });
     const MESES_LARGOS = MESES.map(par => par[1].toLowerCase());
 
     /** Lunes de la semana actual desplazada `offsetSemanas` semanas. */
@@ -78,19 +79,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /** Aviso breve, con el mismo estilo que usa el resto de Orbith. */
     function notificar(mensaje, icono = 'success') {
-        if (!window.Swal) return;
-        Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: icono,
-            title: mensaje,
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            background: '#fff',
-            color: '#697a8d',
-            customClass: { popup: 'border shadow-lg' }
-        });
+        if (typeof window.mostrarToast !== 'function') return;
+        window.mostrarToast(mensaje, icono);
     }
 
     function confirmar(titulo, texto) {
@@ -339,15 +329,68 @@ document.addEventListener('DOMContentLoaded', function () {
      * Dibuja el control de valor apropiado según el tipo de campo y el
      * operador elegido: fecha, número, desplegable de opciones o texto.
      */
+    /** Destruye cualquier instancia Select2 que quede dentro del contenedor antes de repintarlo. */
+    function limpiarSelect2(contenedor) {
+        if (!window.jQuery) return;
+        contenedor.querySelectorAll('select').forEach(function (sel) {
+            if ($(sel).data('select2')) $(sel).select2('destroy');
+        });
+    }
+
+    /** Select2 en modo "tags": permite elegir de la lista o escribir un valor libre. */
+    function inicializarSelectInteligente(select, multiple) {
+        if (!window.jQuery) return;
+        $(select).select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            tags: true,
+            multiple: !!multiple,
+            placeholder: multiple ? 'Escriba o elija una o varias opciones…' : 'Escriba o elija una opción…',
+            language: {
+                noResults: function () { return 'Sin coincidencias — puede escribir un valor manual.'; },
+            },
+        });
+    }
+
     function pintarControlValor(fila, valorInicial) {
         const contenedor = fila.querySelector('.ii-filtro-valor');
         const selectCampo = fila.querySelector('.select-filtro-campo');
         const operador = fila.querySelector('.select-filtro-operador').value;
         const opcionCampo = selectCampo.options[selectCampo.selectedIndex];
         const tipo = opcionCampo ? opcionCampo.dataset.tipo : '';
+        const esRecurrenteAnual = opcionCampo ? opcionCampo.dataset.recurrente === '1' : false;
+
+        limpiarSelect2(contenedor);
 
         if (OPERADORES_SIN_VALOR.includes(operador)) {
             contenedor.innerHTML = '<input type="text" class="form-control form-control-sm" disabled placeholder="No aplica">';
+            return;
+        }
+
+        if (operador === 'entre_fechas' && esRecurrenteAnual) {
+            // Cumpleaños y campos similares: se compara solo día+mes, el año
+            // no importa. Mismos <select> de meses que ya usa "Mes de", más
+            // un <select> de día, para no depender de parsear texto libre.
+            const desde = (valorInicial && valorInicial.desde) ? valorInicial.desde.split('-') : ['1', '1'];
+            const hasta = (valorInicial && valorInicial.hasta) ? valorInicial.hasta.split('-') : ['12', '31'];
+            function opcionesDia(seleccionado) {
+                return DIAS_DEL_MES.map(function (d) {
+                    return '<option value="' + d + '"' + (d === seleccionado ? ' selected' : '') + '>' + d + '</option>';
+                }).join('');
+            }
+            function opcionesMes(seleccionado) {
+                return MESES.map(function (par) {
+                    return '<option value="' + par[0] + '"' + (par[0] === seleccionado ? ' selected' : '') + '>' + par[1] + '</option>';
+                }).join('');
+            }
+            contenedor.innerHTML =
+                '<div class="d-flex align-items-center gap-1 flex-wrap ii-rango-diames">' +
+                '  <select class="form-select form-select-sm input-dia-desde" style="width:auto;">' + opcionesDia(desde[1]) + '</select>' +
+                '  <select class="form-select form-select-sm input-mes-desde" style="width:auto;">' + opcionesMes(desde[0]) + '</select>' +
+                '  <span class="text-muted small px-1">a</span>' +
+                '  <select class="form-select form-select-sm input-dia-hasta" style="width:auto;">' + opcionesDia(hasta[1]) + '</select>' +
+                '  <select class="form-select form-select-sm input-mes-hasta" style="width:auto;">' + opcionesMes(hasta[0]) + '</select>' +
+                '</div>';
             return;
         }
 
@@ -396,27 +439,54 @@ document.addEventListener('DOMContentLoaded', function () {
             choices = [];
         }
 
-        if (OPERADORES_MULTIVALOR.includes(operador)) {
+        if (OPERADORES_MULTIVALOR.includes(operador) && choices.length) {
             // Selección múltiple: permite expresar "es CDI o CEJ" en un solo filtro.
+            // Select2 con tags:true, igual que "Desglosar por Resumen": se puede
+            // buscar escribiendo, elegir de la lista o teclear un valor manual.
             const yaElegidos = Array.isArray(valorInicial) ? valorInicial.map(String) : [];
-            let html = '<select class="form-select form-select-sm input-filtro-valor" multiple size="' +
-                Math.min(choices.length || 3, 6) + '">';
+            let html = '<select class="form-select form-select-sm input-filtro-valor" multiple>';
             choices.forEach(function (par) {
                 const seleccionado = yaElegidos.includes(String(par[0])) ? ' selected' : '';
                 html += '<option value="' + par[0] + '"' + seleccionado + '>' + par[1] + '</option>';
             });
-            html += '</select><div class="form-text" style="font-size:10px;">Mantenga Ctrl para elegir varios.</div>';
+            // Valores ya elegidos que no están en el catálogo (se escribieron a mano
+            // la vez anterior): se agregan como <option> aparte para que no se pierdan.
+            yaElegidos.filter(function (v) { return !choices.some(function (par) { return String(par[0]) === v; }); })
+                .forEach(function (v) { html += '<option value="' + v + '" selected>' + v + '</option>'; });
+            html += '</select>';
             contenedor.innerHTML = html;
+            inicializarSelectInteligente(contenedor.querySelector('.input-filtro-valor'), true);
+            return;
+        }
+
+        if (OPERADORES_MULTIVALOR.includes(operador)) {
+            // Campo multivalor sin catálogo conocido (choices vacío): escritura libre,
+            // Select2 en modo tags puro (cada Enter agrega un valor a la lista).
+            contenedor.innerHTML = '<select class="form-select form-select-sm input-filtro-valor" multiple></select>';
+            const select = contenedor.querySelector('.input-filtro-valor');
+            (Array.isArray(valorInicial) ? valorInicial : []).forEach(function (v) {
+                const opcion = document.createElement('option');
+                opcion.value = v; opcion.textContent = v; opcion.selected = true;
+                select.appendChild(opcion);
+            });
+            inicializarSelectInteligente(select, true);
             return;
         }
 
         if (tipo === 'opcion' && choices.length) {
             let html = '<select class="form-select form-select-sm input-filtro-valor">';
+            html += '<option value=""></option>';
             choices.forEach(function (par) {
                 const seleccionado = String(par[0]) === valor ? ' selected' : '';
                 html += '<option value="' + par[0] + '"' + seleccionado + '>' + par[1] + '</option>';
             });
+            // Igual que arriba: si el valor guardado no está en el catálogo actual
+            // (se escribió a mano), se preserva como opción propia.
+            if (valor && !choices.some(function (par) { return String(par[0]) === valor; })) {
+                html += '<option value="' + valor + '" selected>' + valor + '</option>';
+            }
             contenedor.innerHTML = html + '</select>';
+            inicializarSelectInteligente(contenedor.querySelector('.input-filtro-valor'), false);
         } else if (tipo === 'fecha') {
             contenedor.innerHTML = '<input type="date" class="form-control form-control-sm input-filtro-valor" value="' + valor + '">';
         } else if (tipo === 'numero') {
@@ -480,6 +550,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const seleccionado = cb.value === campoInicial ? ' selected' : '';
             opcionesHtml += '<option value="' + cb.value + '"' +
                 ' data-tipo="' + cb.dataset.tipo + '"' +
+                ' data-recurrente="' + (cb.dataset.recurrente || '0') + '"' +
                 " data-choices='" + (cb.dataset.choices || '[]') + "'" +
                 seleccionado + '>' + cb.dataset.label + '</option>';
         });
@@ -598,6 +669,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (OPERADORES_SIN_VALOR.includes(operador)) {
                 configuracion.filtros.push({ campo: campo, operador: operador, valor: null });
+                return;
+            }
+
+            if (operador === 'entre_fechas' && fila.querySelector('.ii-rango-diames')) {
+                // Cumpleaños y campos recurrentes anuales: valor como "MM-DD",
+                // sin año (ver informe_inteligente/motor.py::_q_rango_dia_mes).
+                const diaDesde = fila.querySelector('.input-dia-desde')?.value;
+                const mesDesde = fila.querySelector('.input-mes-desde')?.value;
+                const diaHasta = fila.querySelector('.input-dia-hasta')?.value;
+                const mesHasta = fila.querySelector('.input-mes-hasta')?.value;
+                if (!diaDesde || !mesDesde || !diaHasta || !mesHasta) return;
+                configuracion.filtros.push({
+                    campo: campo, operador: operador,
+                    valor: { desde: mesDesde + '-' + diaDesde, hasta: mesHasta + '-' + diaHasta }
+                });
                 return;
             }
 
@@ -747,7 +833,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /**
      * Exporta el informe con la configuración actual (mismos filtros,
-     * columnas y orden que se ven en pantalla) a PDF o Word. Usa un
+     * columnas y orden que se ven en pantalla) a PDF, Word o Excel. Usa un
      * formulario oculto con submit() real en vez de fetch: así el
      * navegador dispara la descarga a partir del Content-Disposition
      * que devuelve el servidor.
@@ -759,7 +845,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const url = tipo === 'word' ? URLS.exportarWord : URLS.exportarPDF;
+        const URLS_EXPORTACION = { word: URLS.exportarWord, excel: URLS.exportarExcel, pdf: URLS.exportarPDF };
+        const url = URLS_EXPORTACION[tipo] || URLS.exportarPDF;
         if (!url) return;
 
         const form = document.createElement('form');
@@ -779,6 +866,11 @@ document.addEventListener('DOMContentLoaded', function () {
             input.value = campos[nombre];
             form.appendChild(input);
         });
+
+        // Es un submit de formulario normal (no AJAX): no hay forma de confirmar
+        // desde aquí que la descarga terminó ni que el documento se generó bien.
+        const NOMBRES_TIPO = { word: 'documento Word', excel: 'archivo Excel', pdf: 'documento PDF' };
+        notificar('Preparando el ' + (NOMBRES_TIPO[tipo] || NOMBRES_TIPO.pdf) + '…', 'info');
 
         document.body.appendChild(form);
         form.submit();

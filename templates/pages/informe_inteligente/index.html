@@ -47,6 +47,12 @@
         box-shadow: 0 2px 6px rgba(105, 108, 255, 0.3);
     }
     .ii-btn-word:hover { color: white; box-shadow: 0 4px 10px rgba(105, 108, 255, 0.4); }
+    .ii-btn-excel {
+        background-color: transparent;
+        color: #059669;
+        border: 1.5px solid #059669;
+    }
+    .ii-btn-excel:hover { background-color: #059669; color: #fff; }
 
     /* ---------- Colores reutilizables ---------- */
     .ii-color-indigo    { --c: var(--ii-indigo);    --c-bg: var(--ii-indigo-bg); }
@@ -674,7 +680,8 @@
         cargarFavorito: "{% url 'informe_inteligente:cargar_favorito' 0 %}",
         eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}",
         exportarPDF: "{% url 'informe_inteligente:exportar_pdf' %}",
-        exportarWord: "{% url 'informe_inteligente:exportar_word' %}"
+        exportarWord: "{% url 'informe_inteligente:exportar_word' %}",
+        exportarExcel: "{% url 'informe_inteligente:exportar_excel' %}"
     };
 </script>
 <script src="{% static 'js/informe_inteligente.js' %}"></script>

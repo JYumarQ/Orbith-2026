@@ -61,6 +61,14 @@ def solicitudes_visibles(usuario):
     return consulta.filter(solicitante=usuario)
 
 
+def contar_pendientes(usuario):
+    """Solicitudes en espera/en revisión visibles para `usuario`, para el badge de
+    "Solicitudes" en `sidebar.html`. Mismo alcance que el listado: reutiliza
+    `solicitudes_visibles`, que es el único punto donde se decide qué puede ver cada rol.
+    """
+    return solicitudes_visibles(usuario).filter(estado__in=EstadoSolicitud.pendientes()).count()
+
+
 def opciones_de_filtro(usuario):
     """Opciones de los desplegables, derivadas de los datos que existen de verdad.
 

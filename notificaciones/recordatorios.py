@@ -1,6 +1,5 @@
 """Recordatorios automáticos: vencimientos y eventos previsibles que ya pueden
-calcularse con la información existente (cumpleaños, contrato por vencer, documentos
-de chófer, jubilación próxima).
+calcularse con la información existente (contrato por vencer, documentos de chófer).
 
 No pasan por la maquinaria de reglas de Subsanación (no hay `Hallazgo`/
 `EjecucionAnalisis` para un Recordatorio: no es una auditoría de integridad, es un
@@ -18,15 +17,21 @@ que una Advertencia) o hasta la purga automática a 60 días de RESUELTA
 
 Fuera de esta ronda (decisión ya tomada): "Fin de misión" — no existe ningún campo de
 fecha que lo respalde hoy; se añadirá un detector más cuando exista.
+
+Cumpleaños (`REC-CUMPLE`) y jubilación próxima (`REC-JUBILACION`) dejaron de
+calcularse por decisión de RRHH (no eran una de las categorías que querían conservar):
+sus detectores se retiraron de `DETECTORES`. Las filas `ACTIVA` que ya existían se
+resolvieron en la migración `0012_resolver_cumpleanos_y_jubilacion_existentes`. La
+tarjeta de Cumpleaños del Dashboard es independiente de todo esto: calcula la fecha
+directamente desde `Aspirante`, nunca dependió de este módulo.
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from django.contrib.contenttypes.models import ContentType
 
-from bolsa.models import Aspirante
 from contratos.models import CAlta
 
 from .avisos import _registrar_recordatorio, _resolver_notificaciones_obsoletas
@@ -34,6 +39,12 @@ from .destinatarios import destinatarios_de_unidad
 from .models import Notificacion
 
 HORIZONTE_DIAS = 60
+
+# Ventana propia y más corta para REC-ANTIGUEDAD: a diferencia de un vencimiento de
+# contrato (donde avisar con 60 días de margen tiene sentido para gestionar el
+# trámite), sumar un año de antigüedad no requiere ninguna acción salvo dejar
+# constancia en un Movimiento de Nómina — 10 días de aviso es lo que RRHH pidió.
+HORIZONTE_ANTIGUEDAD_DIAS = 10
 
 
 @dataclass(frozen=True)
@@ -54,43 +65,6 @@ def _unidad_del_contrato(contrato):
     if contrato.aspirante_id:
         return contrato.aspirante.unidad_organizativa_id
     return None
-
-
-def _unidad_del_aspirante(aspirante):
-    """Unidad organizativa de un aspirante: la propia si la tiene, si no la de su
-    contrato de alta vigente.
-
-    Respaldo inverso al de `_unidad_del_contrato`: `Aspirante.unidad_organizativa` es
-    el campo que se usa mientras la persona es candidata (`estado='ASPIRANTE'`); al
-    pasar a trabajador activo, su unidad real la fija el cargo del contrato y ese
-    campo propio normalmente se queda vacío. Sin este respaldo, `detectar_cumpleanos`
-    y `detectar_jubilacion_proxima` mandaban el recordatorio a todos los
-    administradores en vez de a la unidad del trabajador."""
-    if aspirante.unidad_organizativa_id:
-        return aspirante.unidad_organizativa_id
-    contrato = (aspirante.calta_contratos.filter(cargo__departamento__isnull=False)
-                .select_related('cargo__departamento').first())
-    return contrato.cargo.departamento.unidad_organizativa_id if contrato else None
-
-
-def detectar_cumpleanos():
-    """Cumpleaños dentro del horizonte, de trabajadores activos."""
-    hoy = date.today()
-    aspirantes = (Aspirante.objects.filter(estado='ACTIVO', fecha_nacimiento__isnull=False)
-                  .only('id', 'nombre', 'papellido', 'sapellido', 'fecha_nacimiento',
-                        'unidad_organizativa_id'))
-    for aspirante in aspirantes:
-        dias = aspirante.dias_hasta_cumpleanos
-        if dias is None or dias > HORIZONTE_DIAS:
-            continue
-        fecha_objetivo = hoy + timedelta(days=dias)
-        yield RecordatorioDetectado(
-            object_id=str(aspirante.pk),
-            titulo=f'Cumpleaños de {aspirante}',
-            mensaje=f'{aspirante} cumple años el {fecha_objetivo.strftime("%d/%m/%Y")}.',
-            fecha_objetivo=fecha_objetivo,
-            unidad_organizativa_id=_unidad_del_aspirante(aspirante),
-        )
 
 
 def detectar_contratos_por_vencer(queryset=None):
@@ -156,25 +130,52 @@ def detectar_documentos_chofer():
             )
 
 
-def detectar_jubilacion_proxima():
-    """Trabajadores activos que entran (o ya están) en la ventana de pre-jubilación."""
+def detectar_proximo_aniversario_antiguedad(queryset=None):
+    """Contratos de trabajadores activos a `HORIZONTE_ANTIGUEDAD_DIAS` o menos de
+    cumplir un nuevo año de antigüedad, contado desde `fecha_alta_entidad` (misma
+    fecha base que usa la tarjeta "Años de Servicio" del Dashboard —
+    `dashboard/views.py::antiguedad_html` — para no tener dos criterios distintos de
+    qué fecha marca el aniversario).
+
+    El "próximo aniversario" es la primera fecha con el mismo (mes, día) de
+    `fecha_alta_entidad` que sea hoy o futura (mismo truco que el cálculo de
+    cumpleaños de `dashboard/views.py`, adaptado a años en vez de a edad).
+    Un aniversario que caiga en 29 de febrero de un año no bisiesto se descarta ese
+    año en vez de fallar (no hay una convención de RRHH sobre a qué día correr un
+    29-feb en un año normal, y no es razonable inventarla aquí).
+    """
+    contratos = queryset if queryset is not None else (
+        CAlta.objects.filter(aspirante__estado='ACTIVO')
+        .select_related('aspirante', 'cargo__departamento__unidad_organizativa'))
     hoy = date.today()
-    aspirantes = Aspirante.objects.filter(estado='ACTIVO', fecha_nacimiento__isnull=False)
-    for aspirante in aspirantes:
-        dias = aspirante.dias_hasta_jubilacion
-        if dias is None or dias > HORIZONTE_DIAS:
+    for contrato in contratos:
+        if not contrato.fecha_alta_entidad:
             continue
-        fecha_objetivo = hoy + timedelta(days=dias)
-        if dias >= 0:
-            mensaje = f'{aspirante} alcanza la edad de pre-jubilación el {fecha_objetivo.strftime("%d/%m/%Y")}.'
-        else:
-            mensaje = f'{aspirante} ya está en edad de pre-jubilación.'
+        base = contrato.fecha_alta_entidad
+        try:
+            aniversario = base.replace(year=hoy.year)
+        except ValueError:
+            continue  # 29 de febrero, año no bisiesto: sin aniversario este año.
+        if aniversario < hoy:
+            try:
+                aniversario = base.replace(year=hoy.year + 1)
+            except ValueError:
+                continue
+        dias = (aniversario - hoy).days
+        if dias > HORIZONTE_ANTIGUEDAD_DIAS:
+            continue
+        anios_cumplidos = aniversario.year - base.year
+        if anios_cumplidos <= 0:
+            continue
         yield RecordatorioDetectado(
-            object_id=str(aspirante.pk),
-            titulo=f'Jubilación próxima: {aspirante}',
-            mensaje=mensaje,
-            fecha_objetivo=fecha_objetivo,
-            unidad_organizativa_id=_unidad_del_aspirante(aspirante),
+            object_id=str(contrato.pk),
+            titulo=f'{contrato.aspirante} cumple {anios_cumplidos} años de antigüedad',
+            mensaje=(
+                f'{contrato.aspirante} cumplirá {anios_cumplidos} años de antigüedad '
+                f'ininterrumpida el {aniversario.strftime("%d/%m/%Y")}. Registrar el '
+                f'Movimiento de Nómina correspondiente.'),
+            fecha_objetivo=aniversario,
+            unidad_organizativa_id=_unidad_del_contrato(contrato),
         )
 
 
@@ -183,15 +184,14 @@ def detectar_jubilacion_proxima():
 # alerta; es también la clave que usa `_resolver_notificaciones_obsoletas()` para saber
 # qué filas ACTIVA de un destinatario hay que revisar en cada pasada.
 DETECTORES = (
-    (Aspirante, 'REC-CUMPLE', detectar_cumpleanos),
     (CAlta, 'REC-CONTRATO', detectar_contratos_por_vencer),
     (CAlta, 'REC-CHOFER', detectar_documentos_chofer),
-    (Aspirante, 'REC-JUBILACION', detectar_jubilacion_proxima),
+    (CAlta, 'REC-ANTIGUEDAD', detectar_proximo_aniversario_antiguedad),
 )
 
 
 def generar_recordatorios():
-    """Corre los 4 detectores, reparte cada recordatorio a los destinatarios de la
+    """Corre los detectores, reparte cada recordatorio a los destinatarios de la
     unidad correspondiente (moderador(es) + administradores, vía
     `destinatarios_de_unidad()`; sin unidad -> todos los administradores activos,
     mismo criterio que `notificaciones/escaneo.py`) y resuelve los que ya no aplican.

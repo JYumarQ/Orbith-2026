@@ -4,12 +4,21 @@
    plantilla envolvente simula un modal con un `.modal-backdrop.show` que tiene su propio
    z-index de Bootstrap. Un aviso fuera de `.modal`/`.modal-content` queda por debajo de ese
    backdrop en el eje de apilamiento aunque el DOM lo pinte antes — por eso no basta con
-   reordenar el HTML, hay que moverlo dentro. Sin `next` no se renderiza nada, así que el
-   flujo normal (abrir el modal desde el propio listado del módulo) no cambia visualmente. {% endcomment %}
-{% if next %}
+   reordenar el HTML, hay que moverlo dentro.
+
+   Se condiciona a `origen`, NO a `next`: `next` es el parámetro genérico de "volver a
+   donde estaba" (`core.mixins.VolverAlOrigenMixin`) y lo usan también enlaces que no
+   tienen nada que ver con una advertencia — p. ej. "Editar Personal" desde la lista de
+   Contratos (`filter_contratos_list.html`) manda `?next={% url 'list_contrato' %}` sin
+   `origen`, solo para volver al listado al terminar. Solo
+   `subsanacion/enlaces.py::construir_enlace()` (el único punto que genera enlaces desde
+   Advertencias/Notificaciones) añade `origen` junto con `next`, así que es la única señal
+   fiable de que se llegó aquí corrigiendo un hallazgo. Con `next` solo, el flujo normal
+   (abrir el modal desde el propio listado del módulo) no cambia visualmente. {% endcomment %}
+{% if origen %}
   <div class="alert alert-info mb-3">
     <i class="bx bx-info-circle me-1"></i>
-    Está corrigiendo un registro desde {{ origen|default:"una advertencia" }}. Al guardar, volverá
-    automáticamente {% if origen %}a {{ origen }}{% else %}a donde estaba{% endif %}.
+    Está corrigiendo un registro desde {{ origen }}. Al guardar, volverá
+    automáticamente a {{ origen }}.
   </div>
 {% endif %}

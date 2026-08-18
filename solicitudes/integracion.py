@@ -39,7 +39,7 @@ Para conectar una vista nueva basta una llamada al PRINCIPIO de su `post()`:
 
 import json
 
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 
 from solicitudes import servicios
 from solicitudes.models import AccionSolicitud
@@ -60,6 +60,72 @@ def requiere_solicitud(usuario):
     formularios y no necesita pedirse permiso a sí mismo.
     """
     return es_moderador(usuario)
+
+
+def _fuera_de_alcance(usuario, definicion, objeto, datos):
+    """¿La Unidad Organizativa de `objeto`/`datos` no está entre las asignadas a
+    `usuario`?
+
+    Solo tiene sentido llamarla para un Moderador (ver `requiere_solicitud`): un
+    Administrador no tiene restricción de UO. Si la operación no pertenece a ninguna
+    unidad —el resolutor `unidad` de la definición devuelve `None`, como el nomenclador
+    global de Cargos— no hay nada que restringir.
+
+    Se comprueba aquí, en el único punto de desvío de TODAS las operaciones, y no en cada
+    vista por separado: así protege también las que ya se piden hoy y las que se añadan
+    al catálogo en el futuro, sin depender de que cada vista nueva recuerde añadir el
+    chequeo.
+    """
+    unidad = definicion['unidad'](objeto, datos)
+    if unidad is None:
+        return False
+    return not usuario.unidades.filter(pk=unidad.pk).exists()
+
+
+def _solo_cambia_campos_libres(definicion, objeto, request):
+    """¿El envío, comparado con el registro real, solo toca campos de `campos_libres`?
+
+    Se valida con el ModelForm normal —NO el de propuesta (`form_de_propuesta`)—: ese
+    deshabilita a nivel de Django cualquier campo cuyo widget ya nazca con `disabled` en
+    `Meta.widgets` (ver `serializacion._widget_deshabilitado`), como `motivo` de
+    `CAltaForm`, que solo se habilita por JavaScript cuando el tipo de contrato lo exige.
+    Mirar el cambio a través del formulario de propuesta lo vería SIEMPRE como «sin
+    cambios» —Django ignora el POST y usa el valor actual—, así que esta comprobación
+    nunca podría activarse para ese campo. El ModelForm normal es, además, el mismo que
+    usará `super().post()` para guardar de verdad si esta función devuelve `True`.
+
+    Se valida sobre una COPIA releída de la base de datos, no sobre `objeto`: validar un
+    ModelForm con `instance=` aplica los datos del formulario sobre esa instancia en
+    memoria (`_post_clean`), y `objeto` todavía tiene que servir sin tocar para construir
+    el formulario de propuesta si esta comprobación no autoriza el atajo.
+    """
+    campos_libres = set(definicion.get('campos_libres', ()))
+    if not campos_libres or objeto is None:
+        return False
+
+    from solicitudes import serializacion
+
+    form_kwargs = form_kwargs_de(definicion, request.user)
+    originales = serializacion.capturar(objeto, definicion['form'], form_kwargs=form_kwargs)
+
+    copia = type(objeto)._default_manager.get(pk=objeto.pk)
+    formulario = serializacion.construir_formulario(
+        definicion['form'], instancia=copia, datos=request.POST, form_kwargs=form_kwargs)
+    if not formulario.is_valid():
+        return False
+
+    propuestos = serializacion.serializar(formulario)
+    cambiados = serializacion.comparar(originales, propuestos)
+    # Restringido a los campos que el ModelForm realmente persiste (`Meta.fields`).
+    # `CAltaForm` también declara campos puramente visuales que nunca se guardan —`rol`
+    # y `grupo_escala` son texto de solo lectura derivado del cargo, `funcionario` y
+    # `designado` son casillas sin campo en el modelo desde que se les quitó en
+    # `contratos.0007_remove_calta_designado_remove_calta_funcionario`— y esos, al no
+    # tener un valor inicial real, aparecerían como «cambiados» en CUALQUIER envío
+    # aunque nada de lo que se guarda haya cambiado, bloqueando el atajo siempre.
+    campos_persistidos = set(getattr(definicion['form']._meta, 'fields', ()) or ())
+    cambiados &= campos_persistidos
+    return bool(cambiados) and cambiados.issubset(campos_libres)
 
 
 def interceptar(vista, request, accion):
@@ -85,6 +151,17 @@ def interceptar(vista, request, accion):
 
     definicion = definicion_de(clave)
     objeto = vista.get_object() if accion == AccionSolicitud.EDITAR else None
+
+    # Un Moderador solo puede proponer sobre sus propias UO. Se comprueba ANTES de
+    # construir la propuesta para que ni siquiera pueda intentarlo manipulando la
+    # petición (URL, PK, o el desplegable de unidad en una creación).
+    if _fuera_de_alcance(request.user, definicion, objeto, request.POST):
+        return HttpResponseForbidden('Fuera de su Unidad Organizativa asignada.')
+
+    if _solo_cambia_campos_libres(definicion, objeto, request):
+        # Nada que proponer: se deja seguir como si fuera un Administrador, y
+        # `super().post()` guarda el cambio con el ModelForm normal.
+        return None
 
     # Formulario de PROPUESTA: valida las reglas de negocio pero omite las restricciones
     # que solo importan al persistir, porque aquí no se persiste nada. Ver
@@ -116,6 +193,12 @@ def _respuesta_enviada(request, mensaje='Solicitud enviada. Un Administrador la 
 
     Las plantillas de Estructura Organizativa envían por HTMX y esperan un 204 con
     `HX-Trigger`; devolver otra cosa dejaría el modal abierto y la lista sin refrescar.
+
+    El formulario de Contrato (`updt_contrato.html`), en cambio, NO envía por HTMX: lo
+    hace con `$.ajax(..., dataType: 'json')` y su `success` solo mira `form_is_valid` /
+    `success_url` — el mismo contrato que ya usa `ContratoUpdateView.form_valid()` para el
+    Administrador. Sin `success_url` explícito el JS cae a su propio valor por defecto
+    (`list_contrato`), así que no hace falta más para que el modal se cierre y navegue.
     """
     if request.headers.get('HX-Request'):
         respuesta = HttpResponse(status=204)
@@ -131,6 +214,17 @@ def _respuesta_enviada(request, mensaje='Solicitud enviada. Un Administrador la 
 
 
 def _respuesta_error(request, mensaje):
+    """Espejo de `_respuesta_enviada` para el camino de error.
+
+    La rama no-HTMX tenía que llevar `error_popup`: es la clave que el `success` de
+    `updt_contrato.html` (y de cualquier otro formulario que envíe por `$.ajax` en lugar
+    de HTMX, como `ContratoUpdateView.form_invalid`) usa para mostrar el SweetAlert. Sin
+    ella, el JS entraba de todas formas por la rama de "formulario inválido" —porque
+    `form_is_valid` es `False`— pero no encontraba ni `error_popup` ni `html_form`, así
+    que el `.html(undefined)` de esa rama actúa como GETTER en jQuery (no como setter) y
+    no hace absolutamente nada: ni popup, ni modal cerrado, ni pista de que la solicitud
+    falló (p. ej. por «ya existe una solicitud pendiente sobre este registro»).
+    """
     if request.headers.get('HX-Request'):
         respuesta = HttpResponse(status=204)
         respuesta['HX-Trigger'] = json.dumps({
@@ -138,7 +232,10 @@ def _respuesta_error(request, mensaje):
             'showMessage': {'icon': 'error', 'text': mensaje},
         })
         return respuesta
-    return JsonResponse({'status': 'error', 'form_is_valid': False, 'message': mensaje})
+    return JsonResponse({
+        'status': 'error', 'form_is_valid': False, 'message': mensaje,
+        'error_popup': mensaje,
+    })
 
 
 def desviar_borrado(vista, request):
@@ -153,12 +250,18 @@ def desviar_borrado(vista, request):
     if clave is None:
         return None
 
+    definicion = definicion_de(clave)
+    objeto = vista.get_object()
+
+    if _fuera_de_alcance(request.user, definicion, objeto, None):
+        return HttpResponseForbidden('Fuera de su Unidad Organizativa asignada.')
+
     try:
         servicios.crear_solicitud(
             operacion=clave,
             usuario=request.user,
             formulario=None,
-            objeto=vista.get_object(),
+            objeto=objeto,
             motivo=request.POST.get(CAMPO_MOTIVO, ''))
     except servicios.ErrorDeSolicitud as error:
         return _respuesta_error(request, str(error))

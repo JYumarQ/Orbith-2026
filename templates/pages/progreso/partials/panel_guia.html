@@ -1,0 +1,68 @@
+{% comment %}
+Contenido del modal "Guía de Orbith", cargado bajo demanda (fetch) desde
+templates/base/partials/modales_usuario.html al abrir el modal.
+{% endcomment %}
+
+<div class="mb-3">
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <span class="fw-semibold" style="font-size: .875rem;">
+      {{ completadas }}/{{ total }} completado
+    </span>
+    <span class="text-muted" style="font-size: .8125rem;">{{ porcentaje }}%</span>
+  </div>
+  <div class="progress" style="height: 6px;">
+    <div class="progress-bar bg-info" role="progressbar" style="width: {{ porcentaje }}%;"
+         aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100"></div>
+  </div>
+</div>
+
+<p class="text-muted small mb-4">
+  Reconoce las primeras veces que trabajas con cada parte de Orbith, siempre
+  sobre información real — todavía no has descubierto algunas de estas partes.
+</p>
+
+{% for grupo in grupos %}
+  <h6 class="fw-bold text-uppercase text-muted mb-2" style="font-size: .7rem;">
+    {{ grupo.icono }} {{ grupo.etiqueta }}
+  </h6>
+  <ul class="list-unstyled mb-4">
+    {% for item in grupo.tareas %}
+      <li class="mb-2 {% if not item.completada %}opacity-75{% endif %}">
+        <div class="d-flex align-items-start gap-2">
+          <i class="bx {% if item.completada %}bx-check-circle text-success{% else %}bx-circle text-muted{% endif %} mt-1"></i>
+          <div class="flex-grow-1">
+            <span style="font-size: .875rem;" class="{% if item.completada %}fw-semibold{% endif %}">
+              {{ item.tarea.titulo }}
+            </span>
+            <small class="text-muted d-block">{{ item.tarea.descripcion }}</small>
+
+            {% if item.tarea.pasos %}
+              <button type="button" class="btn btn-link btn-sm p-0 mt-1" style="font-size: .75rem;"
+                      data-bs-toggle="collapse" data-bs-target="#comoSeHace{{ item.tarea.id }}">
+                <i class="bx bx-help-circle me-1"></i>¿Cómo se hace?
+              </button>
+
+              <div class="collapse mt-2" id="comoSeHace{{ item.tarea.id }}">
+                <div class="bg-light rounded p-2 ps-3" style="font-size: .8125rem;">
+                  <ol class="mb-2 ps-3">
+                    {% for paso in item.tarea.pasos %}
+                      <li class="mb-1">{{ paso }}</li>
+                    {% endfor %}
+                  </ol>
+                  {% if item.tarea.url_relacionada %}
+                    <a href="{{ item.tarea.url_relacionada }}" class="btn btn-sm btn-outline-info"
+                       onclick="window.orbithIniciarGuia && window.orbithIniciarGuia('{{ item.tarea.codigo }}')">
+                      Ir a {{ item.tarea.modulo|default:"la sección" }} <i class="bx bx-right-arrow-alt"></i>
+                    </a>
+                  {% endif %}
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% empty %}
+  <p class="text-center text-muted mb-0">Todavía no hay tareas configuradas en la Guía.</p>
+{% endfor %}

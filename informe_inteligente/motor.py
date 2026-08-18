@@ -97,6 +97,15 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
                     output_field=CharField()
                 )
             )
+        elif key == "antiguedad":
+            # Años cumplidos en la entidad, misma lógica que "edad" pero sobre
+            # fecha_alta_entidad, que vive directo en CAlta (sin pasar por
+            # aspirante__): un contrato puede tener antigüedad distinta a la
+            # de otro del mismo trabajador si fue recontratado.
+            from django.db.models import IntegerField
+            queryset = queryset.annotate(
+                antiguedad=EdadExacta(F("fecha_alta_entidad"), output_field=IntegerField())
+            )
         elif key == "cumpleanos":
             # Mes y día de nacimiento por separado: permiten mostrar "15 AGO"
             # (formateado en views.py) y ordenar cronológicamente sin depender
@@ -108,6 +117,28 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
         # Si en el futuro se añade otro campo calculado, su anotación va aquí.
 
     return queryset
+
+
+def _q_rango_dia_mes(ruta, mes_desde, dia_desde, mes_hasta, dia_hasta):
+    """
+    Q de "día+mes entre A y B" ignorando el año, sin enumerar cada día (a
+    diferencia del operador 'semana', que sí enumera 7 combinaciones porque
+    ahí el rango nunca crece). Se arma con comparaciones puras de mes/día:
+
+      no cruza fin de año (A <= B): mes,día debe caer DESPUÉS de A Y ANTES de B
+      cruza fin de año (A > B, ej. 20/12 a 05/01): DESPUÉS de A O ANTES de B
+    """
+    desde_o_despues = (
+        Q(**{f"{ruta}__month__gt": mes_desde}) |
+        Q(**{f"{ruta}__month": mes_desde, f"{ruta}__day__gte": dia_desde})
+    )
+    hasta_o_antes = (
+        Q(**{f"{ruta}__month__lt": mes_hasta}) |
+        Q(**{f"{ruta}__month": mes_hasta, f"{ruta}__day__lte": dia_hasta})
+    )
+    if (mes_desde, dia_desde) <= (mes_hasta, dia_hasta):
+        return desde_o_despues & hasta_o_antes
+    return desde_o_despues | hasta_o_antes
 
 
 def _construir_q_de_filtro(definicion_modelo, filtro):
@@ -131,6 +162,18 @@ def _construir_q_de_filtro(definicion_modelo, filtro):
     if operador == "no_es_nulo":
         return Q(**{f"{ruta}__isnull": False})
     if operador == "entre_fechas":
+        if campo.get("recurrente_anual"):
+            # Cumpleaños y campos similares: el rango solo compara día+mes,
+            # el año de nacimiento es irrelevante. 'valor' trae
+            # {"desde": "MM-DD", "hasta": "MM-DD"}, ver informe_inteligente.js.
+            try:
+                mes_desde, dia_desde = (int(parte) for parte in valor.get("desde", "").split("-"))
+                mes_hasta, dia_hasta = (int(parte) for parte in valor.get("hasta", "").split("-"))
+            except (ValueError, AttributeError):
+                raise ConfiguracionInformeInvalida(
+                    f"El rango de fechas del filtro «{campo['label']}» no es válido."
+                )
+            return _q_rango_dia_mes(ruta, mes_desde, dia_desde, mes_hasta, dia_hasta)
         return Q(**{f"{ruta}__range": (valor.get("desde"), valor.get("hasta"))})
     if operador == "mes":
         # El <select> de meses en el JS envía "1".."12" como string.

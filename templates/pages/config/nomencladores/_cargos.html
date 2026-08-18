@@ -546,10 +546,10 @@
                             const row = document.querySelector(`tr.fila-cargo[data-id="${cargoSeleccionadoID}"]`);
                             if(row) row.remove();
                             deseleccionarCargos();
-                            Swal.fire({ icon: 'success', title: 'Eliminado', text: 'El cargo ha sido eliminado correctamente.', timer: 1500, showConfirmButton: false });
+                            window.mostrarToast('El cargo ha sido eliminado correctamente.', 'success');
                             paginateCargos();
                         })
-                        .catch(err => Swal.fire({ icon: 'warning', title: 'No se puede eliminar', text: err.message }));
+                        .catch(err => window.mostrarToast(err.message || 'No se puede eliminar el cargo.', 'warning'));
                     }
                 });
             });

@@ -600,3 +600,74 @@ class ContratoSinMovimientos(ReglaBase):
                 unidad_organizativa_id=fila.get(
                     'cargo__departamento__unidad_organizativa_id'),
             )
+
+
+class BajaSinMovimientosNiCargo(ReglaBase):
+    """Caso real reportado: se eliminó desde el Admin de Django TODO el histórico de
+    movimientos (`TMovimiento`) de un trabajador. `contratos.models._al_eliminar_movimiento`
+    reacciona a eso cerrando el ciclo (si tenía `CAlta` vigente, la cierra; si no,
+    marca al aspirante 'BAJA' directamente) y crea un `CBaja` SIN `cargo`, porque ya
+    no queda ningún rastro documental de en qué cargo o Unidad Organizativa trabajó.
+    Esta regla es la que hace visible esa pérdida de información en Subsanación."""
+
+    codigo = 'MOV-007'
+    nombre = 'Contrato en Bajas sin movimientos ni registro de cargo'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'contratos.CBaja'
+
+    descripcion = (
+        'Busca registros de Baja que no tienen cargo asignado NI ningún movimiento '
+        'de nómina (TMovimiento) en el histórico del trabajador: no pertenecen a '
+        'ninguna Unidad Organizativa ni Departamento.')
+    causa_probable = (
+        'Se eliminó por completo, desde el Admin de Django, el histórico de '
+        'movimientos de nómina del trabajador (uno, varios o todos los TMovimiento), '
+        'dejando la baja sin cargo, UO ni Departamento asociado.')
+    impacto = (
+        'El trabajador aparece en el listado de Bajas sin ninguna trazabilidad: no '
+        'se puede saber qué cargo tuvo ni en qué Unidad Organizativa o Departamento '
+        'trabajó. Cualquier certificación laboral o informe histórico sobre esta '
+        'persona queda sin base documental.')
+    solucion = (
+        'Si el borrado del histórico fue un error, restáurelo desde una copia de '
+        'seguridad. Si fue intencional, no hay más acción posible sobre el dato: '
+        'considere documentar el motivo en las Observaciones de la Baja.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+
+        filas = (self.base_queryset()
+                 .filter(cargo__isnull=True)
+                 .values('id', 'no_expediente', 'aspirante_id',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            aspirante_id = fila.get('aspirante_id')
+            if aspirante_id and TMovimiento.objects.filter(aspirante_id=aspirante_id).exists():
+                # Sin cargo pero con histórico intacto: no es este caso (por ejemplo,
+                # una baja antigua cuyo cargo se dejó sin completar a propósito).
+                continue
+
+            referencia = referencia_contrato(
+                fila.get('aspirante__nombre'), fila.get('aspirante__papellido'),
+                fila.get('aspirante__sapellido'), fila.get('aspirante__doc_identidad'),
+                fila.get('no_expediente'))
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{referencia} · baja sin movimientos ni cargo asociado',
+                detalle=(
+                    'Este registro de Baja no tiene cargo asignado ni ningún '
+                    'movimiento de nómina en su histórico: no pertenece a ninguna '
+                    'Unidad Organizativa.'),
+                datos={
+                    'expediente': fila.get('no_expediente') or '—',
+                    'cargo': 'Sin cargo',
+                    'movimientos_registrados': 0,
+                },
+                unidad_organizativa_id=None,
+            )

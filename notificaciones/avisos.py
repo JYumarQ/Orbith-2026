@@ -8,6 +8,7 @@ y `contratos/models.py` solo llama a las funciones de aquí, sin saber nada de r
 import logging
 
 from django.contrib.contenttypes.models import ContentType
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from auditoria.middleware import get_current_user
@@ -35,31 +36,57 @@ def _unidad_del_contrato(contrato):
     return None
 
 
-def _registrar_notificacion_de_hallazgo(*, tipo_ct, object_id, destinatario, regla, hallazgo):
-    """Un `HallazgoDetectado` + un destinatario -> una fila `Notificacion`.
+def _registrar_notificacion(*, tipo_ct, object_id, destinatario, codigo_regla, clave_extra, defaults):
+    """Punto único de escritura para Advertencias Y Recordatorios: un hecho detectado
+    (un hallazgo de Subsanación o un recordatorio automático) + un destinatario ->
+    una fila `Notificacion`. Antes existían dos copias casi idénticas de esta lógica
+    (una por tipo); se unificaron aquí para que la protección de concurrencia de abajo
+    no tuviera que mantenerse dos veces.
 
-    Deduplica por `(content_type, object_id, destinatario, codigo_regla, clave_extra)`
-    vía `update_or_create()`: volver a detectar el mismo problema actualiza la MISMA
-    fila en vez de crear una nueva — es la base de que tanto el aviso en caliente como
-    el escaneo en lote (`notificaciones/escaneo.py`) sean idempotentes. No resuelve
-    nada — solo escribe esta fila. La usan ambos flujos para no poder divergir.
+    Deduplica por `(content_type, object_id, destinatario, codigo_regla, clave_extra)`:
+    volver a detectar el mismo problema actualiza la MISMA fila en vez de crear una
+    nueva. Un descarte manual (falso positivo / caso aceptado, o "no molestar" en
+    Recordatorios) no lo revierte la próxima evaluación automática.
+
+    Concurrencia: el SELECT de `existente` de arriba y el `update_or_create()` de abajo
+    NO son atómicos entre sí frente a OTRO proceso — dos moderadores pulsando "Buscar
+    incidencias" casi a la vez, el comando programado solapándose con un clic manual, o
+    varios workers evaluando la misma regla, pueden pasar ambos el SELECT (ninguno ve
+    la fila del otro, que aún no confirmó) y los dos intentar crear la fila. Sin nada
+    más, eso duplicaba la notificación tantas veces como procesos concurrentes
+    coincidieran — el origen real de los duplicados vistos en producción. La restricción
+    `UniqueConstraint` de `Notificacion.Meta` (misma clave, `codigo_regla != ''`) hace
+    que el segundo INSERT falle con `IntegrityError` en vez de duplicar; aquí se captura
+    y el perdedor de la carrera simplemente actualiza la fila que el ganador acaba de
+    crear, en vez de propagar el error o crear una fila nueva.
     """
-    clave_extra = hallazgo.clave_extra or ''
+    clave_extra = clave_extra or ''
+    filtro = dict(content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+                  codigo_regla=codigo_regla, clave_extra=clave_extra)
 
-    existente = Notificacion.objects.filter(
-        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
-        codigo_regla=regla.codigo, clave_extra=clave_extra,
-    ).first()
-
+    existente = Notificacion.objects.filter(**filtro).first()
     if existente and existente.estado == Notificacion.Estado.DESCARTADA:
-        # Un descarte manual (falso positivo / caso aceptado) no lo revierte la
-        # próxima evaluación automática — mismo criterio que Subsanación ya aplica a
-        # sus hallazgos «Ignorado»/«Falso positivo».
-        return
+        return existente
 
-    Notificacion.objects.update_or_create(
-        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
-        codigo_regla=regla.codigo, clave_extra=clave_extra,
+    try:
+        with transaction.atomic():
+            notificacion, _creada = Notificacion.objects.update_or_create(
+                **filtro, defaults=defaults)
+    except IntegrityError:
+        notificacion = Notificacion.objects.get(**filtro)
+        for campo, valor in defaults.items():
+            setattr(notificacion, campo, valor)
+        notificacion.save(update_fields=list(defaults.keys()))
+    return notificacion
+
+
+def _registrar_notificacion_de_hallazgo(*, tipo_ct, object_id, destinatario, regla, hallazgo):
+    """Un `HallazgoDetectado` + un destinatario -> una fila `Notificacion` de tipo
+    Advertencia. Ver `_registrar_notificacion` para la clave de deduplicación y la
+    protección de concurrencia."""
+    return _registrar_notificacion(
+        tipo_ct=tipo_ct, object_id=object_id, destinatario=destinatario,
+        codigo_regla=regla.codigo, clave_extra=hallazgo.clave_extra or '',
         defaults={
             'titulo': hallazgo.titulo,
             'mensaje': hallazgo.detalle,
@@ -79,25 +106,13 @@ def _registrar_notificacion_de_hallazgo(*, tipo_ct, object_id, destinatario, reg
 def _registrar_recordatorio(*, tipo_ct, object_id, destinatario, codigo, clave_extra,
                              titulo, mensaje, fecha_objetivo, unidad_id):
     """Un recordatorio automático detectado (`notificaciones/recordatorios.py`) + un
-    destinatario -> una fila `Notificacion`.
-
-    Reutiliza la MISMA clave de deduplicación que `_registrar_notificacion_de_hallazgo`
-    (content_type+object_id+destinatario+codigo_regla+clave_extra) y el mismo criterio
-    de no revertir un descarte manual — es el patrón ya establecido para Advertencias,
-    aplicado aquí a Recordatorios en vez de inventar uno paralelo. `codigo` ocupa el
-    campo `codigo_regla` (identifica el TIPO de recordatorio: 'REC-CUMPLE', etc.), igual
-    que una regla de Subsanación identifica un tipo de alerta.
-    """
-    existente = Notificacion.objects.filter(
-        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
-        codigo_regla=codigo, clave_extra=clave_extra,
-    ).first()
-
-    if existente and existente.estado == Notificacion.Estado.DESCARTADA:
-        return
-
-    Notificacion.objects.update_or_create(
-        content_type=tipo_ct, object_id=object_id, destinatario=destinatario,
+    destinatario -> una fila `Notificacion` de tipo Recordatorio. Reutiliza el MISMO
+    punto de escritura que Advertencias (`_registrar_notificacion`) en vez de un
+    mecanismo paralelo — `codigo` ocupa el campo `codigo_regla` (identifica el TIPO de
+    recordatorio: 'REC-CUMPLE', etc.), igual que una regla de Subsanación identifica un
+    tipo de alerta."""
+    return _registrar_notificacion(
+        tipo_ct=tipo_ct, object_id=object_id, destinatario=destinatario,
         codigo_regla=codigo, clave_extra=clave_extra,
         defaults={
             'titulo': titulo,
@@ -203,10 +218,25 @@ def avisar_hallazgos_en_caliente(instancia):
         alcance={'content_type': tipo_ct, 'object_id': object_id})
 
 
+#: Códigos de los eventos de contratación/plantilla — cumplen el mismo papel que
+#: `codigo_regla` de una regla de Subsanación o un detector de Recordatorios: son la
+#: clave que engancha estas filas a la `UniqueConstraint` de `Notificacion.Meta` (que
+#: solo protege `codigo_regla != ''`) y a la protección de concurrencia de
+#: `_registrar_notificacion`. Antes se creaban con `bulk_create()` y `codigo_regla=''`
+#: (el valor por defecto de un EVENTO), sin ninguna clave natural que las protegiera —
+#: el mismo hueco que causó los avisos de Solicitud duplicados en producción.
+CODIGO_ALTA_CONTRATO = 'EVT-ALTA'
+CODIGO_BAJA_CONTRATO = 'EVT-BAJA'
+CODIGO_NUEVO_CARGO = 'EVT-CARGO'
+
+
 def avisar_alta_contrato(contrato):
     """Notifica el alta de un contrato a los destinatarios de su unidad.
 
     Evento, no alerta: `tipo=EVENTO`, sin `severidad` (no describe un problema).
+
+    `object_id=str(contrato.pk)` ya es único por sí solo (una `CAlta` se crea una
+    sola vez), así que `clave_extra=''` no puede colisionar con la de otra alta.
     """
     unidad = _unidad_del_contrato(contrato)
     destinatarios = list(destinatarios_de_unidad(unidad)) if unidad else []
@@ -223,14 +253,16 @@ def avisar_alta_contrato(contrato):
     # `Aspirante.__str__` ya devuelve "nombre papellido sapellido" limpio.
     mensaje = f"Se ha creado el contrato {contrato.no_expediente} de {contrato.aspirante}."
 
-    Notificacion.objects.bulk_create([
-        Notificacion(
-            titulo=titulo, mensaje=mensaje, tipo=Notificacion.Tipo.EVENTO,
-            content_type=tipo_ct, object_id=str(contrato.pk),
-            unidad=unidad, destinatario=destinatario,
+    for destinatario in destinatarios:
+        _registrar_notificacion(
+            tipo_ct=tipo_ct, object_id=str(contrato.pk), destinatario=destinatario,
+            codigo_regla=CODIGO_ALTA_CONTRATO, clave_extra='',
+            defaults={
+                'titulo': titulo, 'mensaje': mensaje,
+                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
+                'unidad': unidad,
+            },
         )
-        for destinatario in destinatarios
-    ])
 
 
 def avisar_baja_contrato(contrato):
@@ -239,6 +271,13 @@ def avisar_baja_contrato(contrato):
     Se llama ANTES de `super().delete()`: el `content_type`/`object_id` apuntan al
     `Aspirante` (que sigue existiendo), no al `CAlta` que está a punto de borrarse y
     quedaría inaccesible después.
+
+    `object_id` es el `Aspirante`, que puede tener varias bajas reales a lo largo del
+    tiempo (recontratación) — a diferencia del alta, aquí `object_id` por sí solo NO
+    discrimina eventos distintos. Por eso `clave_extra=str(contrato.pk)` (la `CAlta`
+    concreta que se está dando de baja): cada baja real tiene una clave propia, y solo
+    colapsa con otra si es literalmente el mismo evento repetido por una carrera de
+    escritura, nunca con la baja de un contrato distinto del mismo trabajador.
     """
     if not contrato.aspirante_id:
         return
@@ -257,11 +296,47 @@ def avisar_baja_contrato(contrato):
     titulo = "Baja de contrato"
     mensaje = f"Se ha dado de baja el contrato {contrato.no_expediente} de {contrato.aspirante}."
 
-    Notificacion.objects.bulk_create([
-        Notificacion(
-            titulo=titulo, mensaje=mensaje, tipo=Notificacion.Tipo.EVENTO,
-            content_type=tipo_ct, object_id=str(contrato.aspirante_id),
-            unidad=unidad, destinatario=destinatario,
+    for destinatario in destinatarios:
+        _registrar_notificacion(
+            tipo_ct=tipo_ct, object_id=str(contrato.aspirante_id), destinatario=destinatario,
+            codigo_regla=CODIGO_BAJA_CONTRATO, clave_extra=str(contrato.pk),
+            defaults={
+                'titulo': titulo, 'mensaje': mensaje,
+                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
+                'unidad': unidad,
+            },
         )
-        for destinatario in destinatarios
-    ])
+
+
+def avisar_nuevo_cargo(cargo):
+    """Notifica un cargo nuevo en la plantilla a los destinatarios de su unidad.
+
+    Movida aquí desde `strorganizativa/models.py::CargoPlantilla.save()` (donde vivía
+    inline, con un `bulk_create()` sin protección) para que reutilice el mismo punto de
+    escritura que el resto de eventos de este módulo. `object_id=str(cargo.pk)` ya es
+    único (un `CargoPlantilla` se crea una sola vez), así que `clave_extra=''` basta.
+    """
+    unidad = cargo.departamento.unidad_organizativa
+    destinatarios = list(destinatarios_de_unidad(unidad)) if unidad else []
+
+    if not destinatarios:
+        logger.warning(
+            "Nuevo cargo %s sin ningún destinatario que notificar "
+            "(unidad=%s sin moderador ni administradores activos).",
+            cargo.pk, unidad)
+        return
+
+    tipo_ct = ContentType.objects.get_for_model(cargo)
+    titulo = "Nuevo Cargo creado"
+    mensaje = f"Se ha creado un nuevo cargo: {cargo.ncargo.descripcion} en {cargo.departamento}."
+
+    for destinatario in destinatarios:
+        _registrar_notificacion(
+            tipo_ct=tipo_ct, object_id=str(cargo.pk), destinatario=destinatario,
+            codigo_regla=CODIGO_NUEVO_CARGO, clave_extra='',
+            defaults={
+                'titulo': titulo, 'mensaje': mensaje,
+                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
+                'unidad': unidad,
+            },
+        )

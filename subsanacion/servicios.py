@@ -42,6 +42,7 @@ from .constantes import (
     LIMITE_HALLAZGOS_POR_REGLA,
     MINIMO_REGISTROS_PARA_PORCENTAJE,
     MINUTOS_EJECUCION_ABANDONADA,
+    MODULO_EXTRAS,
     MODULOS,
     TAMANO_LOTE,
     VERSION_INDICE_SALUD,
@@ -634,7 +635,15 @@ def finalizar_ejecucion(ejecucion):
         codigos_regla = ejecucion.codigos_regla_ejecutados
         ejecucion.hallazgos_vigentes = Hallazgo.objects.filter(
             vigente=True, codigo_regla__in=codigos_regla).count()
-        ejecucion.indice_salud = calcular_indice_salud(total, codigos_regla)
+
+        # Extras (datos complementarios: útiles pero no importantes, ver
+        # `reglas/extras.py`) se excluye del índice de SALUD global — se sigue
+        # detectando y contando en `hallazgos_vigentes` de arriba y en su propia
+        # tarjeta de `resumen_por_modulo()`, pero no debe bajar la nota general por
+        # un dato que RRHH decidió que no es un problema de calidad.
+        codigos_extras = {r.codigo for r in obtener_reglas() if r.modulo == MODULO_EXTRAS}
+        codigos_para_indice = [c for c in codigos_regla if c not in codigos_extras]
+        ejecucion.indice_salud = calcular_indice_salud(total, codigos_para_indice)
     else:
         # No se reconcilió ninguna regla (ejecución FALLIDA): no hay nada que contar,
         # y un 0.00 % o un 100 % serían ambos una afirmación falsa sobre la salud.

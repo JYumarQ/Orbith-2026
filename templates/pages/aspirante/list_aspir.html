@@ -51,7 +51,17 @@
         border-radius: 0.25rem !important;
         height: 30px !important;
     }
-    
+
+    /* Bajas sin datos reales: se le eliminó todo el histórico de nómina desde el
+       Admin de Django. No es una baja documentada, solo certifica que existió. */
+    .fila-baja-sin-datos {
+        background-color: rgba(220, 53, 69, 0.12) !important;
+        box-shadow: inset 4px 0 0 0 #dc3545;
+    }
+    .fila-baja-sin-datos:hover {
+        background-color: rgba(220, 53, 69, 0.2) !important;
+    }
+
 </style>
 
 {% load static %}

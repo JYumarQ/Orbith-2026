@@ -14,6 +14,7 @@
                 data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
+                <input type="hidden" name="origen" value="{{ origen }}">
                 <div class="row g-3">
                     <div class="col-md-4">
                         {{ form.doc_identidad.label_tag }}  

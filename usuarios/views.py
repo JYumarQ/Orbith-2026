@@ -18,6 +18,17 @@ from configuracion.models import Configuracion
 
 logger = logging.getLogger(__name__)
 from django.views.generic.edit import FormView
+
+
+def _con_progreso(queryset):
+    """Anota el conteo de tareas de la Guía de Orbith completadas por cada
+    usuario, en una sola consulta (evita N+1 al listar). `distinct=True` es
+    una precaución defensiva: no hay otro join que multiplique filas hoy,
+    pero cuesta nada y evita un bug silencioso si `search_usuarios` gana un
+    filtro con join en el futuro.
+    """
+    from django.db.models import Count
+    return queryset.annotate(progreso_completadas_count=Count('tareas_guia', distinct=True))
 from django.urls import reverse_lazy
 from django.db.models import Q
 from django.contrib.auth import get_user_model, update_session_auth_hash
@@ -32,25 +43,30 @@ class UsuarioListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         # Excluye al usuario con username "superadmin"
-        return CustomUser.objects.exclude(username='admin').order_by('username')
+        return _con_progreso(CustomUser.objects.exclude(username='admin')).order_by('username')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CustomUserCreationForm()
         context['configuracion'] = Configuracion.objects.first()
+        from progreso.models import TareaGuia
+        context['progreso_total_catalogo'] = TareaGuia.objects.filter(activo=True).count()
         return context
 
 @login_required
 def search_usuarios(request):
     query = request.GET.get('filter_usuario', '')
     
-    results = CustomUser.objects.filter(
+    results = _con_progreso(CustomUser.objects.filter(
         Q(username__icontains=query)|
         Q(contrato__aspirante__nombre__icontains=query)|
         Q(contrato__aspirante__papellido__icontains=query)|
         Q(contrato__aspirante__sapellido__icontains=query)
-    ).exclude(username='admin').order_by('username')
-    return render(request, 'pages/usuarios/partials/filter_usuarios_list.html', {'usuarios':results})
+    ).exclude(username='admin')).order_by('username')
+
+    from progreso.models import TareaGuia
+    contexto = {'usuarios': results, 'progreso_total_catalogo': TareaGuia.objects.filter(activo=True).count()}
+    return render(request, 'pages/usuarios/partials/filter_usuarios_list.html', contexto)
 
 User = get_user_model()
 
@@ -142,9 +158,21 @@ class CustomUserUpdateView(LoginRequiredMixin, AdvertenciasDelRegistroMixin, Mod
         return super().form_invalid(form)
 
 class CambiarPasswordView(LoginRequiredMixin, FormView):
+    """Cambia la contraseña de `pk`. Un usuario siempre puede cambiar la suya
+    propia; para cambiar la de otro usuario hace falta ser Administrador."""
     template_name = 'pages/usuarios/partials/cambiar_password_form.html'
     form_class = CustomPasswordChangeForm
-    
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)  # deja que LoginRequiredMixin redirija al login
+        objetivo = self.get_user()
+        es_propia_cuenta = objetivo.pk == request.user.pk
+        if not es_propia_cuenta and not getattr(request.user, 'es_admin', False):
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("No tienes permiso para cambiar la contraseña de otro usuario.")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['user'] = self.get_user()

@@ -366,13 +366,7 @@
         $('#formExportarContrato').on('submit', function(e) {
             if (!$('#{{ form.firma_cuadro.id_for_label }}').val()) {
                 e.preventDefault();
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Campo Requerido',
-                    text: 'Debe seleccionar obligatoriamente un Cuadro Directivo para la firma.',
-                    customClass: { confirmButton: 'btn btn-primary' },
-                    buttonsStyling: false
-                });
+                window.mostrarToast('Debe seleccionar obligatoriamente un Cuadro Directivo para la firma.', 'warning');
                 return false;
             }
 
@@ -386,8 +380,13 @@
                 }
             });
 
-            // Cerrar el alert diferido tras la respuesta del servidor
-            setTimeout(() => { Swal.close(); }, 3500);
+            // Cerrar el alert diferido tras la respuesta del servidor. Es un submit
+            // de formulario normal (no AJAX), así que no hay forma de confirmar que
+            // el documento se generó bien: el mensaje se limita a lo verificable.
+            setTimeout(() => {
+                Swal.close();
+                window.mostrarToast('La descarga debería comenzar en breve.', 'info');
+            }, 3500);
         });
     });
 

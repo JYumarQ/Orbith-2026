@@ -448,7 +448,7 @@
         
         const noct_id = row.find('.input-nocturnidad').val() || null;
         
-        if (!nombre) return Swal.fire('Atención', 'El nombre es obligatorio', 'warning');
+        if (!nombre) return window.mostrarToast('El nombre es obligatorio.', 'warning');
         
         // 🔥 VALIDACIÓN FRONTEND: Nocturnidad ocupada
         if (noct_id) {
@@ -467,7 +467,7 @@
                 }
             });
             if (ocupado) {
-                return Swal.fire('Atención', `La nocturnidad ya está asignada a "${ocupadoPor}".`, 'warning');
+                return window.mostrarToast(`La nocturnidad ya está asignada a "${ocupadoPor}".`, 'warning');
             }
         }
         
@@ -527,10 +527,10 @@
                 }
             });
             
-            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Condición Guardada', showConfirmButton: false, timer: 3000 });
-            
+            window.mostrarToast('Condición Guardada.', 'success');
+
         } catch (err) {
-            Swal.fire('Error', err.message, 'error');
+            window.mostrarToast(err.message, 'error');
         }
     });
 
@@ -722,13 +722,8 @@
         const prevVal = $select.attr('data-prev-val');
 
         if (ocupadoPor && ocupadoPor.trim() !== '') {
-            // Si está ocupado, SweetAlert y restauramos el valor previo
-            Swal.fire({
-                icon: 'warning',
-                title: 'Nocturnidad Ocupada',
-                text: `La nocturnidad ${codigo} ya está asignada a la condición laboral "${ocupadoPor}".`,
-                confirmButtonColor: '#4f46e5'
-            });
+            // Si está ocupado, avisamos y restauramos el valor previo
+            window.mostrarToast(`La nocturnidad ${codigo} ya está asignada a la condición laboral "${ocupadoPor}".`, 'warning');
             $select.val(prevVal);
         } else {
             // Actualizamos memoria
@@ -802,7 +797,7 @@
         const ampm2 = row.find('.input-fin-ampm').val();
         const id = row.attr('data-id') || null;
         
-        if(!codigo || !h1 || !h2) return Swal.fire('Atención', 'Todos los campos son obligatorios', 'warning');
+        if(!codigo || !h1 || !h2) return window.mostrarToast('Todos los campos son obligatorios.', 'warning');
         
         // Traducimos al vuelo para enviar de forma compatible a Django
         const hora_inicio = get24hString(h1, m1, ampm1);
@@ -843,10 +838,10 @@
                 $(this).append(`<option value="${data.id}" data-codigo="${data.codigo}">${data.codigo}</option>`);
             });
 
-            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Guardado correctamente', showConfirmButton: false, timer: 3000 });
+            window.mostrarToast('Guardado correctamente.', 'success');
 
         } catch (err) {
-            Swal.fire('Error', err.message, 'error');
+            window.mostrarToast(err.message, 'error');
         }
     });
 
@@ -875,8 +870,8 @@
                 if ($('#tabla-nocturnidad tbody tr').length <= 1) {
                     $('#tabla-nocturnidad tbody').append('<tr id="empty-nocturnidad"><td colspan="5" class="text-center text-muted py-3">No hay nocturnidades registradas</td></tr>');
                 }
-                Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Eliminado', showConfirmButton: false, timer: 3000 });
-            } catch (err) { Swal.fire('Error', err.message, 'error'); }
+                window.mostrarToast('Eliminado.', 'success');
+            } catch (err) { window.mostrarToast(err.message, 'error'); }
         }
     };
 

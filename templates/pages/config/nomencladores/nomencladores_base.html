@@ -665,11 +665,11 @@
           })
           .then(() => {
             tr.remove();
-            Swal.fire({ icon: 'success', title: 'Eliminado', text: 'Registro eliminado con éxito.', timer: 1000, showConfirmButton: false });
+            window.mostrarToast('Registro eliminado con éxito.', 'success');
             if (tableId === 'grupos-table') paginateGrupos();
           })
           .catch(err => {
-            Swal.fire('No se puede eliminar', err.message, 'warning');
+            window.mostrarToast(err.message || 'No se puede eliminar.', 'warning');
           });
       }
     });

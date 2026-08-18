@@ -230,11 +230,11 @@
       if (!result.isConfirmed) return;
       llamarEndpoint(toolbar.dataset.urlEstado, { estado })
         .then(d => {
-          if (!d.exito) { Swal.fire('Error', d.mensaje, 'error'); return; }
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: d.mensaje, showConfirmButton: false, timer: 2000 });
+          if (!d.exito) { window.mostrarToast(d.mensaje, 'error'); return; }
+          window.mostrarToast(d.mensaje, 'success');
           setTimeout(() => window.location.reload(), 800);
         })
-        .catch(() => Swal.fire('Error', 'No se pudo contactar con el servidor.', 'error'));
+        .catch(() => window.mostrarToast('No se pudo contactar con el servidor.', 'error'));
     });
   };
 
@@ -251,11 +251,11 @@
       if (!result.isConfirmed) return;
       llamarEndpoint(toolbar.dataset.urlEliminar)
         .then(d => {
-          if (!d.exito) { Swal.fire('Error', d.mensaje, 'error'); return; }
-          Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: d.mensaje, showConfirmButton: false, timer: 2000 });
+          if (!d.exito) { window.mostrarToast(d.mensaje, 'error'); return; }
+          window.mostrarToast(d.mensaje, 'success');
           setTimeout(() => window.location.reload(), 800);
         })
-        .catch(() => Swal.fire('Error', 'No se pudo contactar con el servidor.', 'error'));
+        .catch(() => window.mostrarToast('No se pudo contactar con el servidor.', 'error'));
     });
   };
 })();

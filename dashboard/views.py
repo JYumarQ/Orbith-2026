@@ -7,6 +7,9 @@ from django.urls import reverse_lazy
 from strorganizativa.models import CargoPlantilla
 import os
 from django.conf import settings
+from django.core.paginator import Paginator
+from django.db.models import Q, F, Value, CharField, IntegerField
+from django.db.models.functions import Concat
 from django.http import HttpResponse, JsonResponse
 from docxtpl import DocxTemplate
 import calendar
@@ -18,9 +21,9 @@ from datetime import datetime
 import json
 
 from .filtros import _filtrar_por_uo, resolver_filtros
-from notificaciones.filtros import filtrar_advertencias
-from notificaciones.recordatorios import detectar_contratos_por_vencer
-from notificaciones.views import _color_prioridad
+from informe_inteligente.motor import EdadExacta
+from notificaciones.filtros import filtrar_advertencias, filtrar_recordatorios
+from notificaciones.models import Notificacion
 from subsanacion.constantes import CRITICIDADES
 
 # Cortes por defecto de la Pirámide de Edades (única fuente de verdad: de aquí
@@ -145,6 +148,56 @@ def piramide_edades_json(request):
         'edades_f': edades_f,
         'categorias': _categorias_edad(cortes),
         'cortes': ','.join(str(c) for c in cortes),
+    })
+
+
+def antiguedad_html(request):
+    """Tarjeta 'Antigüedad': lista de contratos ACTIVOS ordenada por más
+    antiguo primero (fecha_alta_entidad ascendente), con el mismo alcance de
+    UO/rol que el resto del Dashboard (ver dashboard/filtros.py) y un
+    buscador único que filtra a la vez por nombre+apellidos, CI y No.
+    Expediente (mismo criterio que `contratos/views.py::search_contratos`).
+
+    Las bajas no tienen antigüedad (si el trabajador es recontratado, su
+    antigüedad vuelve a contar desde cero en el nuevo contrato — ver
+    fecha_alta_entidad en contratos/models.py), así que esta tarjeta solo
+    considera contratos de aspirantes en estado ACTIVO.
+    """
+    uo_ids, _ = resolver_filtros(request)
+    query = (request.GET.get('q') or '').strip()
+    page_num = request.GET.get('page', 1)
+
+    qs = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
+        'aspirante', 'cargo', 'cargo__departamento'
+    )
+    qs = _filtrar_por_uo(qs, 'cargo__departamento', uo_ids)
+
+    qs = qs.annotate(
+        antiguedad=EdadExacta(F('fecha_alta_entidad'), output_field=IntegerField()),
+        nombre_completo=Concat(
+            'aspirante__nombre', Value(' '),
+            'aspirante__papellido', Value(' '),
+            'aspirante__sapellido',
+            output_field=CharField(),
+        ),
+    )
+
+    if query:
+        qs = qs.filter(
+            Q(no_expediente__icontains=query) |
+            Q(nombre_completo__icontains=query) |
+            Q(aspirante__doc_identidad__icontains=query)
+        )
+
+    qs = qs.order_by(F('fecha_alta_entidad').asc(nulls_last=True))
+
+    paginator = Paginator(qs, 10)
+    page_obj = paginator.get_page(page_num)
+
+    return render(request, 'pages/dashboard/partials/antiguedad_tabla.html', {
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'query': query,
     })
 
 
@@ -372,25 +425,20 @@ class DashboardView(TemplateView):
         recontratados.sort(key=lambda x: x['edad'], reverse=True)
         jubilados_recontratados.sort(key=lambda x: (x['edad'] is None, x['edad']), reverse=True)
 
-        # Recordatorios (vencimiento de contrato): única fuente de verdad
-        # compartida con la pestaña Recordatorios de Notificaciones — ver
-        # `notificaciones/recordatorios.py::detectar_contratos_por_vencer` y
-        # `notificaciones/views.py::_color_prioridad` (mismo horizonte de 60
-        # días, mismos cortes de color, misma exclusión de "INDETERMINADO").
-        recordatorios_contrato = []
-        for detectado in detectar_contratos_por_vencer(queryset=activos):
-            color = _color_prioridad(detectado.fecha_objetivo)
-            recordatorios_contrato.append({
-                'titulo': detectado.titulo,
-                'mensaje': detectado.mensaje,
-                'dias': color['dias'],
-                'etiqueta': color['etiqueta'],
-                'clave': color['clave'],
-                'emoji': color['emoji'],
-            })
-        recordatorios_contrato.sort(key=lambda x: x['dias'])
-        context['recordatorios_contrato_total'] = len(recordatorios_contrato)
-        context['recordatorios_contrato'] = recordatorios_contrato[:5]
+        # Recordatorios: mismos datos que la pestaña Notificaciones → Recordatorios
+        # (sub "Sistema", `filtrar_recordatorios`, que ya calcula prioridad/color y
+        # deduplica destinatarios), acotados por la UO del Dashboard igual que
+        # Advertencias. Antes esta tarjeta solo mostraba un conteo; ahora enseña los
+        # 10 más urgentes (ya vienen ordenados por `fecha_objetivo` ascendente).
+        from notificaciones.views import _color_prioridad
+        recordatorios, _ctx_recordatorios = filtrar_recordatorios(
+            self.request, self.request.user, origen=Notificacion.Origen.SISTEMA)
+        if uo_ids:
+            recordatorios = [r for r in recordatorios if r.unidad_id in uo_ids]
+        for r in recordatorios:
+            r.prioridad = _color_prioridad(r.fecha_objetivo)
+        context['recordatorios_total'] = len(recordatorios)
+        context['recordatorios'] = recordatorios[:10]
 
         # Advertencias: reutiliza tal cual `filtrar_advertencias` (alcance por
         # usuario/rol, filtro de severidad ya validado contra request.GET) y

@@ -36,6 +36,20 @@
         </a>
       </li>
 
+      {% comment %} Subsanación: Administrador (ve y actúa sobre toda la empresa) y
+         Moderador (solo sus propias Unidades Organizativas, acotado en el backend por
+         `subsanacion/permisos.py` — ocultar este enlace NO es la protección real).
+         El Observador no la ve: el control de acceso real está en las vistas, esto
+         solo evita mostrar un enlace que le devolvería 403. {% endcomment %}
+      {% if user.es_admin or user.es_moderador %}
+      <li class="menu-item {% if 'subsanacion' in request.path %} active {% endif %}">
+        <a href="{% url 'subsanacion:index' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-check-shield"></i>
+          <div data-i18n="Basic">Subsanación</div>
+        </a>
+      </li>
+      {% endif %}
+
       {% comment %} Configuración es exclusiva del Administrador: contiene los nomencladores
          de los que depende todo el sistema (cargos, escalas salariales, tipos de contrato).
          Antes también la veían Moderador y staff. Lo único que un Moderador puede pedir de
@@ -65,14 +79,16 @@
       {% endif %}
 
       {% comment %} ==================== ADMINISTRACIÓN ====================
-         Acordeón que agrupa Usuarios, Reportes de Problemas, Subsanación y Auditoría.
-         Solo `es_admin` ve la cabecera y todo su contenido — ni moderador ni staff,
-         decisión explícita del usuario (aunque antes «Usuarios» viviera en
-         «Configuración», visible también para ellos: al moverlo aquí, un moderador
-         deja de verlo). {% endcomment %}
+         Acordeón que agrupa Usuarios, Reportes de Problemas y Auditoría. Subsanación
+         se movió fuera de aquí (ver el enlace propio junto a «Notificaciones», arriba):
+         ya no es exclusiva del Administrador, así que no tenía sentido seguir dentro
+         de un acordeón que sí lo es. Solo `es_admin` ve la cabecera y todo su
+         contenido — ni moderador ni staff, decisión explícita del usuario (aunque
+         antes «Usuarios» viviera en «Configuración», visible también para ellos: al
+         moverlo aquí, un moderador deja de verlo). {% endcomment %}
       {% if user.es_admin %}
           {# Si el usuario está en una de estas páginas, el acordeón se pinta ya abierto. #}
-          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'subsanacion' in request.path or 'auditoria' in request.path %}active abierto{% endif %}"
+          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'auditoria' in request.path %}active abierto{% endif %}"
               id="menuItemAdministracion">
             <a href="javascript:void(0);" class="menu-link orb-acordeon-toggle" id="menuLinkAdministracion"
                aria-expanded="false" title="Clic para desplegar">
@@ -91,11 +107,6 @@
                 <a href="{% url 'soporte:lista_reportes' %}"
                    class="orb-acordeon-sublink {% if request.resolver_match.url_name == 'lista_reportes' %}activo{% endif %}">
                   <i class="bx bx-bug"></i><span>Reportes de Problemas</span>
-                </a>
-
-                <a href="{% url 'subsanacion:index' %}"
-                   class="orb-acordeon-sublink {% if 'subsanacion' in request.path %}activo{% endif %}">
-                  <i class="bx bx-check-shield"></i><span>Subsanación</span>
                 </a>
 
                 <a href="{% url 'auditoria:index' %}"
@@ -218,14 +229,206 @@
         <a href="{% url 'list_solicitudes' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-clipboard"></i>
           <div data-i18n="Basic">Solicitudes</div>
+          {% if solicitudes_pendientes %}
+            <div class="badge bg-danger rounded-pill ms-auto" title="Solicitudes pendientes">{{ solicitudes_pendientes }}</div>
+          {% endif %}
         </a>
       </li>
       {% endif %}
 
     </ul>
+
+    {% comment %} Notificaciones y Usuario: antes vivían anclados a la navbar
+       (position:fixed sobre el contenido); ahora viven en la zona inferior fija
+       de la sidebar. Es el MISMO <ul id="acciones-usuario"> con la misma
+       estructura interna e ids (notificacionesDropdown, menu-notificaciones,
+       userDropdown, menu-user, badge-notificaciones...) — solo cambia dónde se
+       pinta. El script que los maneja (templates/base/navbar.html) sigue
+       intacto: usa getElementById, no le importa en qué parte del DOM vivan.
+       `dropdown-menu-end` se quita y se añade `dropup` en ambos <li>: antes el
+       menú abría hacia abajo desde la esquina superior derecha; aquí, desde la
+       esquina inferior izquierda, abrir hacia abajo lo sacaría de la pantalla. {% endcomment %}
+    {% if user.is_authenticated %}
+    <div class="menu-inner-bottom" id="sidebarAccionesUsuario">
+      <ul class="navbar-nav flex-row align-items-center" id="acciones-usuario">
+        <li class="nav-item dropdown dropup">
+          <a
+            class="btn btn-m position-relative"
+            href="#"
+            id="notificacionesDropdown"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <i class="fas fa-bell fa-lg"></i>
+            <span
+              id="badge-notificaciones"
+              class="position-absolute badge rounded-pill bg-danger"
+              style="display: none; top: 0.1rem; right: 0.1rem; transform: none;"
+            >0
+              <span class="visually-hidden">notificaciones</span>
+            </span>
+          </a>
+          <ul id="menu-notificaciones" class="dropdown-menu p-2" aria-labelledby="notificacionesDropdown" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+            <div id="lista-notificaciones">
+              <li class="text-center">Cargando notificaciones...</li>
+            </div>
+            <li><hr class="dropdown-divider"></li>
+            <li class="d-flex justify-content-between px-2">
+              <button class="btn btn-link btn-sm p-0" id="marcar-todas-leidas" type="button">
+                Marcar todas como leídas
+              </button>
+              <a class="btn btn-link btn-sm p-0" href="{% url 'lista_notificaciones' %}">
+                Ver más
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li class="nav-item navbar-dropdown dropdown-user dropdown dropup position-relative">
+          <a
+            class="nav-link dropdown-toggle hide-arrow p-1"
+            href="javascript:void(0);"
+            id="userDropdown"
+            role="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            <div class="avatar avatar-online">
+              <img
+                src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
+                alt="Avatar"
+                class="w-px-40 h-auto rounded-circle avatar-usuario"
+                style="object-fit: cover; aspect-ratio: 1;"
+              />
+            </div>
+          </a>
+
+          <ul
+            id="menu-user"
+            class="dropdown-menu p-0 shadow border-0 rounded-2"
+            aria-labelledby="userDropdown"
+            style="width: 260px;"
+          >
+            <li class="px-3 py-2 bg-light rounded-top">
+              <div class="d-flex align-items-center">
+                <div class="shrink-0 me-2">
+                  <div class="avatar avatar-online">
+                    <img
+                      src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
+                      alt="Avatar"
+                      class="w-px-40 h-auto rounded-circle avatar-usuario"
+                      style="object-fit: cover; aspect-ratio: 1;"
+                    />
+                  </div>
+                </div>
+                <div class="grow overflow-hidden">
+                  <span class="fw-semibold d-block text-truncate">
+                    {{ user.nombre_completo|default:user.username }}
+                  </span>
+                  <small class="text-muted">{{ user.rol_descripcion }}</small>
+                </div>
+              </div>
+            </li>
+            <li><hr class="dropdown-divider m-0"></li>
+
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalMiPerfil">
+                <i class="bx bx-user me-2"></i>
+                <span class="align-middle">Mi Perfil</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2 d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalGuiaOrbith">
+                <i class="bx bx-compass me-2"></i>
+                <span class="align-middle">Guía de Orbith</span>
+                <span
+                  id="badge-guia-orbith"
+                  class="badge bg-label-info rounded-pill ms-auto"
+                  style="{% if not progreso_sin_ver %}display: none;{% endif %}"
+                >{{ progreso_sin_ver|default:0 }}</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalPreferencias">
+                <i class="bx bx-cog me-2"></i>
+                <span class="align-middle">Configuración</span>
+              </button>
+            </li>
+            <li><hr class="dropdown-divider m-0"></li>
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalAcercaDe">
+                <i class="bx bx-info-circle me-2"></i>
+                <span class="align-middle">Acerca de Orbith</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalNovedades">
+                <i class="bx bx-gift me-2"></i>
+                <span class="align-middle">Novedades de la versión</span>
+                <span class="badge bg-label-primary ms-1">{{ orbith_version }}</span>
+              </button>
+            </li>
+            <li><hr class="dropdown-divider m-0"></li>
+
+            <li>
+              {# Reutiliza el confirmador universal de base.html (form.swal-confirm) #}
+              <form method="POST" action="{% url 'logout' %}" id="logout-form"
+                    class="swal-confirm"
+                    data-confirm-title="¿Desea cerrar sesión?"
+                    data-confirm-text="Su sesión actual será finalizada."
+                    data-confirm-button="Cerrar sesión"
+                    data-confirm-icon="question">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item px-3 py-2">
+                  <i class="bx bx-power-off me-2"></i>
+                  <span class="align-middle">Cerrar sesión</span>
+                </button>
+              </form>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+    {% endif %}
   </aside>
 
 <style>
+  /* ============ Zona inferior fija: Notificaciones + Usuario ============
+     `<aside id="layout-menu">` ya es un flex-column de altura completa y
+     position:fixed en TODOS los anchos (ver core.css: `.menu-vertical .menu-inner
+     { flex: 1 1 auto }` para el <ul> con scroll de PerfectScrollbar, y
+     `.layout-menu { position: fixed; height:100% }` tanto en el modo fijo de
+     escritorio como en el off-canvas de <1200px). Basta con que esta zona sea un
+     hermano de `.menu-inner` con `flex: 0 0 auto`: crece según su contenido, se
+     queda pegada abajo y `.menu-inner` (que sigue siendo el único que hace
+     scroll) le cede exactamente el espacio que ocupa — sin position:fixed
+     propio, sin JS nuevo, y sin tocar el contenedor que gestiona PerfectScrollbar. */
+  .menu-inner-bottom {
+    flex: 0 0 auto;
+    border-top: 1px solid rgba(67, 89, 113, .1);
+    padding: .625rem .5rem;
+  }
+  .menu-inner-bottom #acciones-usuario {
+    justify-content: center;
+    gap: 1rem;
+  }
+  /* Con la barra colapsada (solo iconos, 3rem) no caben lado a lado: se apilan,
+     igual que el resto de la sidebar pasa a mostrar solo iconos centrados. */
+  @media (min-width: 1200px) {
+    html.menu-colapsado .menu-inner-bottom #acciones-usuario {
+      flex-direction: column;
+      gap: .5rem;
+    }
+  }
+  /* Objetivo táctil mínimo recomendado (44px) en pantallas <1200px, igual que
+     el resto de los ajustes móviles del proyecto (ver static/css/mobile-ux.css).
+     .w-px-40 fija 40px con !important, así que hay que igualarlo en especificidad. */
+  @media (max-width: 1199.98px) {
+    .menu-inner-bottom .avatar-usuario.w-px-40 { width: 44px !important; height: 44px !important; }
+    .menu-inner-bottom #notificacionesDropdown { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  }
+
   /* ============ Acordeón genérico "orb-acordeon" ============
      Se usa hoy en «Administración». Es independiente a propósito del acordeón del
      Gestor de Plantilla (clases `gestor-plantilla-*`), que se queda intacto: ese ya

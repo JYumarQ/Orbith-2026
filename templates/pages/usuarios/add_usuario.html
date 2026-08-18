@@ -216,7 +216,7 @@
               if (window.htmx) {
                 htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
               }
-              if (window.showToast) showToast(data.message || 'Usuario guardado', 'success');
+              window.mostrarToast(data.message || 'Usuario guardado', 'success');
             } else if (data.html_form) {
               // Reemplazar el contenido del modal (manteniendo el modal padre)
               const $modal = $('#nuevo_usuario').closest('.modal');
@@ -235,11 +235,11 @@
                 window.toggleUnidades();
               }, 200);
             } else {
-              if (window.showToast) showToast('No se pudo guardar.', 'danger');
+              window.mostrarToast('No se pudo guardar.', 'error');
             }
           },
           error: function () {
-            if (window.showToast) showToast('Error de red al guardar.', 'danger');
+            window.mostrarToast('Error de red al guardar.', 'error');
           }
         });
       };

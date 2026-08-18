@@ -83,16 +83,48 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
 
               <dt class="col-5">Usuario creado el</dt>
               <dd class="col-7">{{ user.fecha_creado|date:"d/m/Y"|default:"—" }}</dd>
+
+              {% if user.es_admin %}
+                <dt class="col-5">Unidades Asignadas</dt>
+                <dd class="col-7">
+                  <span class="badge bg-label-info">Todas</span>
+                </dd>
+              {% elif user.es_moderador %}
+                <dt class="col-5">Unidades Asignadas</dt>
+                <dd class="col-7">
+                  {% for unidad in user.unidades.all %}
+                    <span class="badge bg-label-secondary me-1 mb-1">{{ unidad.descripcion }}</span>
+                  {% empty %}
+                    <span class="text-muted">Sin unidades asignadas</span>
+                  {% endfor %}
+                </dd>
+              {% endif %}
             </dl>
 
             <hr class="my-3">
 
-            {# Funcionalidad futura: el botón queda visible pero inactivo a propósito. #}
-            <button type="button" class="btn btn-sm btn-label-secondary w-100" disabled
-                    title="Esta funcionalidad todavía no está disponible">
+            {# --- Resumen de la Guía de Orbith --- #}
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="fw-semibold" style="font-size: .8125rem;">
+                <i class="bx bx-compass me-1"></i>Guía de Orbith
+              </span>
+              <button type="button" class="btn btn-link btn-sm p-0" style="font-size: .8125rem;"
+                      data-bs-toggle="modal" data-bs-target="#modalGuiaOrbith" data-bs-dismiss="modal">
+                Ver guía completa
+              </button>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <small class="text-muted">{{ progreso_completadas|default:0 }}/{{ progreso_total|default:0 }} completado</small>
+              <small class="text-muted">{{ progreso_porcentaje|default:0 }}%</small>
+            </div>
+            <div class="progress mb-3" style="height: 6px;">
+              <div class="progress-bar bg-info" role="progressbar" style="width: {{ progreso_porcentaje|default:0 }}%;"
+                   aria-valuenow="{{ progreso_porcentaje|default:0 }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-label-secondary w-100" id="btnCambiarPasswordPropia">
               <i class="bx bx-lock-alt me-1"></i>
-              Solicitar cambio de contraseña
-              <span class="badge bg-label-secondary ms-1">Próximamente</span>
+              Cambiar contraseña
             </button>
           </div>
 
@@ -105,6 +137,9 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
     </div>
   </div>
 </div>
+
+<!-- Contenedor donde se inyecta el formulario de cambio de contraseña propia (usuarios/views.CambiarPasswordView) -->
+<div class="modal fade" id="modalCambiarPasswordPropia" tabindex="-1" aria-hidden="true"></div>
 
 
 <!-- ================= CONFIGURACIÓN (PREFERENCIAS) ================= -->
@@ -317,14 +352,38 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
 </div>
 
 
+<!-- ================= GUÍA DE ORBITH ================= -->
+<div class="modal fade" id="modalGuiaOrbith" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-label-info py-2">
+        <h5 class="modal-title fs-5"><i class="bx bx-compass me-2"></i>Guía de Orbith</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body" id="contenidoGuiaOrbith">
+        <div class="text-center text-muted py-4">
+          <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+          Cargando tu guía...
+        </div>
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script>
 (function () {
   const csrf = document.querySelector('#formAvatar [name=csrfmiddlewaretoken]');
   const tokenCsrf = csrf ? csrf.value : '';
 
   function avisar(icono, titulo, texto) {
-    if (typeof Swal === 'undefined') { alert(texto || titulo); return; }
-    Swal.fire({ icon: icono, title: titulo, text: texto || '', confirmButtonColor: '#696cff' });
+    if (typeof window.mostrarToast !== 'function') { alert(texto || titulo); return; }
+    window.mostrarToast(texto || titulo, icono);
   }
 
   // ---------------------------------------------------------------
@@ -396,6 +455,23 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
         avisar('success', 'Listo', d.mensaje);
       })
       .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'));
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // CAMBIAR CONTRASEÑA PROPIA
+  // Reutiliza la misma vista/plantilla que usa el Administrador para cambiar
+  // la contraseña de otros usuarios (usuarios.views.CambiarPasswordView):
+  // aquí el pk siempre es el del propio usuario logueado.
+  // ---------------------------------------------------------------
+  const btnCambiarPasswordPropia = document.getElementById('btnCambiarPasswordPropia');
+  if (btnCambiarPasswordPropia) {
+    btnCambiarPasswordPropia.addEventListener('click', function () {
+      const url = "{% url 'cambiar_password' pk=user.id %}";
+      const $modal = $('#modalCambiarPasswordPropia');
+      $modal.load(url, function () {
+        $modal.modal('show');
+      });
     });
   }
 
@@ -584,6 +660,40 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
       })
       .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'))
       .finally(() => { boton.disabled = false; });
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // GUÍA DE ORBITH
+  // El contenido se carga bajo demanda al abrir el modal (no en cada
+  // carga de página): mismo criterio de "no calcular listas completas en
+  // el context processor" que ya se aplicó al resumen de Mi Perfil.
+  // ---------------------------------------------------------------
+  const modalGuia = document.getElementById('modalGuiaOrbith');
+  const contenidoGuia = document.getElementById('contenidoGuiaOrbith');
+  const badgeGuia = document.getElementById('badge-guia-orbith');
+
+  if (modalGuia && contenidoGuia) {
+    modalGuia.addEventListener('show.bs.modal', function () {
+      fetch("{% url 'progreso_panel' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' })
+        .then(r => r.text())
+        .then(html => { contenidoGuia.innerHTML = html; })
+        .catch(() => {
+          contenidoGuia.innerHTML = '<p class="text-center text-muted mb-0">No se pudo cargar tu guía en este momento.</p>';
+        });
+
+      // Marca las novedades como vistas y oculta el badge de inmediato
+      // (sin esperar a recargar la página).
+      if (badgeGuia && badgeGuia.style.display !== 'none') {
+        const cuerpo = new FormData();
+        cuerpo.append('csrfmiddlewaretoken', tokenCsrf);
+        fetch("{% url 'progreso_marcar_vistas' %}", {
+          method: 'POST', body: cuerpo,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(() => { badgeGuia.style.display = 'none'; })
+        .catch(() => {});
+      }
     });
   }
 })();

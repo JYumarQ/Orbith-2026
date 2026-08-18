@@ -691,8 +691,8 @@ class FiltrosRecordatoriosTests(TestCase):
         hoy = timezone.localdate()
 
         self.lejano = Notificacion.objects.create(
-            titulo='Cumpleaños de Ana', mensaje='...', tipo=Notificacion.Tipo.RECORDATORIO,
-            origen=Notificacion.Origen.SISTEMA, codigo_regla='REC-CUMPLE',
+            titulo='Vencimiento lejano de Ana', mensaje='...', tipo=Notificacion.Tipo.RECORDATORIO,
+            origen=Notificacion.Origen.SISTEMA, codigo_regla='REC-VENCE-LEJOS',
             estado=Notificacion.Estado.ACTIVA, fecha_objetivo=hoy + timedelta(days=90),
             content_type=tipo_ct, object_id=str(provincia.pk), destinatario=self.usuario)
         self.vencido = Notificacion.objects.create(
@@ -701,10 +701,14 @@ class FiltrosRecordatoriosTests(TestCase):
             estado=Notificacion.Estado.ACTIVA, fecha_objetivo=hoy - timedelta(days=1),
             content_type=tipo_ct, object_id=str(provincia.pk), destinatario=self.usuario)
         # Mismo origen SISTEMA pero RESUELTA: nunca debe aparecer (la bandeja de
-        # Recordatorios, igual que Advertencias, solo muestra lo vigente).
+        # Recordatorios, igual que Advertencias, solo muestra lo vigente). Código de
+        # regla distinto al de `self.lejano`: `notificacion_unica_por_regla_destinatario`
+        # (notificaciones/migrations/0009) admite una sola fila por
+        # (content_type, object_id, destinatario, codigo_regla, clave_extra),
+        # sin importar el estado.
         Notificacion.objects.create(
             titulo='Ya resuelto', mensaje='...', tipo=Notificacion.Tipo.RECORDATORIO,
-            origen=Notificacion.Origen.SISTEMA, codigo_regla='REC-CUMPLE',
+            origen=Notificacion.Origen.SISTEMA, codigo_regla='REC-CUMPLE-VIEJA',
             estado=Notificacion.Estado.RESUELTA, fecha_objetivo=hoy,
             content_type=tipo_ct, object_id=str(provincia.pk), destinatario=self.usuario)
         # Mismo origen y estado, pero ADMINISTRACION: no debe mezclarse con SISTEMA.
@@ -790,3 +794,448 @@ class ReclasificarCriticasMigrationTests(TestCase):
 
     def test_no_falla_si_nunca_hubo_ninguna_ejecucion(self):
         self._reclasificar()  # no debe lanzar, aunque no exista ningún EjecucionAnalisis
+
+
+class RecodificarAvisosDeSolicitudMigrationTests(TestCase):
+    """Migración de datos `0010_recodificar_avisos_de_solicitud`: las notificaciones de
+    Solicitudes creadas antes de que `solicitudes/avisos.py` empezara a pasar un
+    `codigo_regla` real quedaban sin ninguna clave natural que las protegiera de la
+    `UniqueConstraint` — de ahí que un reintento o varios workers concurrentes pudieran
+    dejar el mismo aviso duplicado varias veces (el bug reportado en producción). Esta
+    migración les asigna el código que les corresponde según su `titulo` y colapsa los
+    duplicados que ya existieran.
+
+    Mismo patrón que `ReclasificarCriticasMigrationTests`: se invoca la función
+    directamente contra el registro de apps real, porque la migración solo cambia
+    datos (`.update()`/`.delete()`, nunca `.create()`), así que nunca puede violar la
+    restricción ya aplicada en este esquema.
+    """
+
+    def setUp(self):
+        from usuarios.models import CustomUser
+        from solicitudes.models import EstadoSolicitud, Solicitud
+
+        self.admin = CustomUser(username='admin_migracion_sol', is_active=True, es_admin=True)
+        self.admin.set_password('contraseña-de-prueba')
+        self.admin.save()
+        self.moderador = CustomUser(username='mod_migracion_sol', is_active=True, es_moderador=True)
+        self.moderador.set_password('contraseña-de-prueba')
+        self.moderador.save()
+
+        self.solicitud = Solicitud.objects.create(
+            operacion='ncargo_upd', estado=EstadoSolicitud.EN_ESPERA,
+            solicitante=self.moderador, solicitante_nombre='Moderador de prueba',
+            content_type=ContentType.objects.get_for_model(NProvincia),
+            object_id='1', descriptor='Solicitud de prueba')
+        self.tipo_ct = ContentType.objects.get_for_model(self.solicitud)
+
+    def _recodificar(self):
+        import importlib
+
+        from django.apps import apps
+
+        modulo = importlib.import_module(
+            'notificaciones.migrations.0010_recodificar_avisos_de_solicitud')
+        modulo.recodificar_y_deduplicar(apps, None)
+
+    def test_asigna_el_codigo_segun_el_titulo_y_colapsa_duplicados(self):
+        comunes = dict(
+            content_type=self.tipo_ct, object_id=str(self.solicitud.pk),
+            destinatario=self.admin, mensaje='...', tipo=Notificacion.Tipo.EVENTO,
+            estado=Notificacion.Estado.ACTIVA)
+
+        # Tres filas «Nueva Solicitud Pendiente» duplicadas (el bug real) más una
+        # decisión posterior, todas sin codigo_regla (como las creaba el código viejo).
+        Notificacion.objects.create(**comunes, titulo='Nueva Solicitud Pendiente', leido=True)
+        Notificacion.objects.create(**comunes, titulo='Nueva Solicitud Pendiente', leido=False)
+        ganadora_nueva = Notificacion.objects.create(
+            **comunes, titulo='Nueva Solicitud Pendiente', leido=True)
+        decision = Notificacion.objects.create(**comunes, titulo='Solicitud rechazada')
+
+        self._recodificar()
+
+        restantes_nueva = Notificacion.objects.filter(
+            content_type=self.tipo_ct, object_id=str(self.solicitud.pk),
+            titulo='Nueva Solicitud Pendiente')
+        self.assertEqual(restantes_nueva.count(), 1)
+        self.assertEqual(restantes_nueva.first().pk, ganadora_nueva.pk)
+        self.assertEqual(restantes_nueva.first().codigo_regla, 'SOL-NUEVA')
+
+        decision.refresh_from_db()
+        self.assertEqual(decision.codigo_regla, 'SOL-DECISION')
+
+    def test_no_toca_notificaciones_de_otro_origen_ni_falla_sin_solicitudes(self):
+        from solicitudes.models import Solicitud
+
+        otra = Notificacion.objects.create(
+            content_type=ContentType.objects.get_for_model(NProvincia), object_id='1',
+            destinatario=self.admin, titulo='Nuevo Cargo creado', mensaje='...',
+            tipo=Notificacion.Tipo.EVENTO)
+
+        self._recodificar()
+
+        otra.refresh_from_db()
+        self.assertEqual(otra.codigo_regla, '')  # sin tocar: no es de Solicitud
+
+        Solicitud.objects.all().delete()
+        self._recodificar()  # no debe lanzar aunque no quede ninguna Solicitud
+
+
+class EventosDeContratacionYPlantillaTests(TestCase):
+    """`avisar_alta_contrato`/`avisar_baja_contrato`/`avisar_nuevo_cargo`
+    (`notificaciones/avisos.py`) y `avisar_criticas_nuevas`
+    (`notificaciones/receptores.py`): los 3 productores que escribían con
+    `bulk_create()` sin ninguna protección, ahora reutilizan `_registrar_notificacion`
+    igual que Advertencias/Recordatorios/Solicitudes."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from bolsa.models import Aspirante
+        from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
+                                           NTipoContrato, NTipoUnidadOrganizativa)
+        from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
+        from usuarios.models import CustomUser
+
+        cls.admin = CustomUser(username='admin_eventos', is_active=True, es_admin=True)
+        cls.admin.set_password('contraseña-de-prueba')
+        cls.admin.save()
+
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Eventos', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Dirección', unidad_organizativa=cls.unidad, orden_informe=1)
+
+        grupo = NGrupoEscala.objects.create(nivel='IV')
+        cls.ncargo = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=grupo, salario_basico=4000)
+
+        provincia = NProvincia.objects.create(nombre='Provincia eventos')
+        municipio = NMunicipio.objects.create(nombre='Municipio eventos', provincia=provincia)
+        cls.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(
+            nombre='Trab', papellido='Eventos', sapellido='Test',
+            doc_identidad='90010154321', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.hoy = date.today()
+        cls.CargoPlantilla = CargoPlantilla
+
+    def _crear_cargo(self, orden=1):
+        return self.CargoPlantilla.objects.create(
+            ncargo=self.ncargo, departamento=self.departamento,
+            cant_aprobada=1, orden_informe=orden)
+
+    def _crear_alta(self, cargo, no_expediente):
+        from contratos.models import CAlta
+        return CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente=no_expediente, tipo=self.tipo_contrato,
+            cargo=cargo, fecha_alta=self.hoy, tipo_salario='FIJ')
+
+    def test_alta_de_contrato_una_fila_por_destinatario(self):
+        cargo = self._crear_cargo(orden=1)
+        self._crear_alta(cargo, '00001')
+
+        filas = Notificacion.objects.filter(codigo_regla='EVT-ALTA')
+        self.assertEqual(filas.count(), 1)  # solo self.admin es destinatario
+        self.assertEqual(filas.first().destinatario_id, self.admin.pk)
+
+    def test_repetir_avisar_alta_no_duplica(self):
+        from notificaciones.avisos import avisar_alta_contrato
+
+        cargo = self._crear_cargo(orden=1)
+        contrato = self._crear_alta(cargo, '00002')
+        for _ in range(5):
+            avisar_alta_contrato(contrato)
+
+        self.assertEqual(
+            Notificacion.objects.filter(codigo_regla='EVT-ALTA', object_id=str(contrato.pk)).count(), 1)
+
+    def test_dos_bajas_del_mismo_aspirante_no_se_fusionan(self):
+        """Recontratación: dos `CAlta` distintas del mismo trabajador, cada una dada de
+        baja, deben dejar DOS notificaciones de baja — no una sola actualizada."""
+        from notificaciones.avisos import avisar_baja_contrato
+
+        cargo = self._crear_cargo(orden=1)
+        primer_contrato = self._crear_alta(cargo, '00003')
+        primer_pk = primer_contrato.pk
+        avisar_baja_contrato(primer_contrato)
+        primer_contrato.delete()
+
+        segundo_contrato = self._crear_alta(cargo, '00004')
+        avisar_baja_contrato(segundo_contrato)
+
+        filas = Notificacion.objects.filter(codigo_regla='EVT-BAJA', destinatario=self.admin)
+        self.assertEqual(filas.count(), 2)
+        self.assertEqual(
+            set(filas.values_list('clave_extra', flat=True)),
+            {str(primer_pk), str(segundo_contrato.pk)})
+
+    def test_repetir_la_misma_baja_no_duplica(self):
+        from notificaciones.avisos import avisar_baja_contrato
+
+        cargo = self._crear_cargo(orden=1)
+        contrato = self._crear_alta(cargo, '00005')
+        for _ in range(5):
+            avisar_baja_contrato(contrato)
+
+        self.assertEqual(
+            Notificacion.objects.filter(
+                codigo_regla='EVT-BAJA', clave_extra=str(contrato.pk)).count(), 1)
+
+    def test_cargo_nuevo_una_fila_por_destinatario_y_no_duplica(self):
+        from notificaciones.avisos import avisar_nuevo_cargo
+
+        cargo = self._crear_cargo(orden=2)
+        for _ in range(5):
+            avisar_nuevo_cargo(cargo)
+
+        filas = Notificacion.objects.filter(codigo_regla='EVT-CARGO', object_id=str(cargo.pk))
+        self.assertEqual(filas.count(), 1)
+        self.assertEqual(filas.first().destinatario_id, self.admin.pk)
+
+    def test_dos_cargos_distintos_generan_dos_filas(self):
+        cargo_a = self._crear_cargo(orden=3)
+        cargo_b = self._crear_cargo(orden=4)
+
+        filas = Notificacion.objects.filter(
+            codigo_regla='EVT-CARGO', object_id__in=[str(cargo_a.pk), str(cargo_b.pk)])
+        self.assertEqual(filas.count(), 2)
+
+    def test_criticas_nuevas_no_duplica_al_repetirse(self):
+        from subsanacion.constantes import CRITICIDAD_CRITICA
+        from subsanacion.models import EjecucionAnalisis, Hallazgo
+
+        from .receptores import avisar_criticas_nuevas
+
+        ejecucion = EjecucionAnalisis.objects.create(estado=EjecucionAnalisis.COMPLETA)
+        Hallazgo.objects.create(
+            ejecucion=ejecucion, codigo_regla='PRUEBA-CRIT', criticidad=CRITICIDAD_CRITICA,
+            content_type=ContentType.objects.get_for_model(self.aspirante),
+            object_id=str(self.aspirante.pk), titulo='Hallazgo crítico de prueba',
+            detalle='...', primera_deteccion=ejecucion.iniciada_en,
+            ultima_deteccion=ejecucion.iniciada_en)
+
+        for _ in range(5):
+            avisar_criticas_nuevas(sender=None, ejecucion=ejecucion)
+
+        filas = Notificacion.objects.filter(codigo_regla='ALE-CRITICAS', object_id=str(ejecucion.pk))
+        self.assertEqual(filas.count(), 1)
+        self.assertEqual(filas.first().destinatario_id, self.admin.pk)
+
+    def test_la_restriccion_de_bd_impide_el_duplicado_directo_de_evt_alta(self):
+        from django.db import IntegrityError, transaction
+
+        cargo = self._crear_cargo(orden=5)
+        contrato = self._crear_alta(cargo, '00006')
+        tipo_ct = ContentType.objects.get_for_model(contrato)
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Notificacion.objects.create(
+                    content_type=tipo_ct, object_id=str(contrato.pk),
+                    destinatario=self.admin, codigo_regla='EVT-ALTA', clave_extra='',
+                    titulo='Duplicado directo', mensaje='...', tipo=Notificacion.Tipo.EVENTO)
+
+
+class RecodificarEventosMigrationTests(TestCase):
+    """Migración `0011_recodificar_eventos_de_contratacion_y_plantilla`: recodifica y
+    (para EVT-ALTA/EVT-CARGO/ALE-CRITICAS) deduplica los eventos de contratación y
+    plantilla creados antes de que estos productores pasaran un `codigo_regla` real.
+    EVT-BAJA es el caso delicado: nunca colapsa filas, porque `object_id` (el
+    `Aspirante`) no discrimina por sí solo entre bajas reales distintas del mismo
+    trabajador (recontratación) — solo les da a cada una su propio `clave_extra`
+    para protegerlas hacia adelante sin fusionar nada hacia atrás."""
+
+    def setUp(self):
+        from django.db import connection
+
+        self.provincia = NProvincia.objects.create(nombre='Provincia migración eventos')
+        self.tipo_ct = ContentType.objects.get_for_model(self.provincia)
+
+        from usuarios.models import CustomUser
+        self.admin = CustomUser(username='admin_migracion_eventos', is_active=True, es_admin=True)
+        self.admin.set_password('contraseña-de-prueba')
+        self.admin.save()
+
+        constraint = next(
+            c for c in Notificacion._meta.constraints
+            if c.name == 'notificacion_unica_por_regla_destinatario')
+        with connection.schema_editor() as editor:
+            editor.remove_constraint(Notificacion, constraint)
+
+    def _recodificar(self):
+        import importlib
+
+        from django.apps import apps
+
+        modulo = importlib.import_module(
+            'notificaciones.migrations.0011_recodificar_eventos_de_contratacion_y_plantilla')
+        modulo.recodificar(apps, None)
+
+    def test_dos_bajas_historicas_del_mismo_aspirante_no_se_fusionan(self):
+        from bolsa.models import Aspirante
+
+        tipo_aspirante = ContentType.objects.get_for_model(Aspirante)
+        primera = Notificacion.objects.create(
+            content_type=tipo_aspirante, object_id='999', destinatario=self.admin,
+            titulo='Baja de contrato', mensaje='Se ha dado de baja el contrato 00001 de Trab.',
+            tipo=Notificacion.Tipo.EVENTO)
+        segunda = Notificacion.objects.create(
+            content_type=tipo_aspirante, object_id='999', destinatario=self.admin,
+            titulo='Baja de contrato', mensaje='Se ha dado de baja el contrato 00002 de Trab.',
+            tipo=Notificacion.Tipo.EVENTO)
+
+        self._recodificar()
+
+        primera.refresh_from_db()
+        segunda.refresh_from_db()
+        self.assertEqual(primera.codigo_regla, 'EVT-BAJA')
+        self.assertEqual(segunda.codigo_regla, 'EVT-BAJA')
+        # Ambas sobreviven, cada una con su propio clave_extra.
+        self.assertNotEqual(primera.clave_extra, segunda.clave_extra)
+        self.assertEqual(primera.clave_extra, str(primera.pk))
+        self.assertEqual(segunda.clave_extra, str(segunda.pk))
+
+    def test_altas_duplicadas_por_la_carrera_se_colapsan(self):
+        from contratos.models import CAlta
+
+        tipo_calta = ContentType.objects.get_for_model(CAlta)
+        perdedora = Notificacion.objects.create(
+            content_type=tipo_calta, object_id='888', destinatario=self.admin,
+            titulo='Nuevo contrato de alta', mensaje='...', tipo=Notificacion.Tipo.EVENTO,
+            estado=Notificacion.Estado.ACTIVA, leido=False)
+        ganadora = Notificacion.objects.create(
+            content_type=tipo_calta, object_id='888', destinatario=self.admin,
+            titulo='Nuevo contrato de alta', mensaje='...', tipo=Notificacion.Tipo.EVENTO,
+            estado=Notificacion.Estado.ACTIVA, leido=True)
+
+        self._recodificar()
+
+        restantes = Notificacion.objects.filter(content_type=tipo_calta, object_id='888')
+        self.assertEqual(restantes.count(), 1)
+        self.assertEqual(restantes.first().pk, ganadora.pk)
+        self.assertFalse(Notificacion.objects.filter(pk=perdedora.pk).exists())
+        self.assertEqual(restantes.first().codigo_regla, 'EVT-ALTA')
+
+    def test_no_falla_sin_ninguna_fila_que_recodificar(self):
+        self._recodificar()  # no debe lanzar aunque no exista ninguna fila EVENTO
+
+
+class ResolverCumpleanosYJubilacionMigrationTests(TestCase):
+    """Migración `0012_resolver_cumpleanos_y_jubilacion_existentes`: al retirar los
+    detectores `REC-CUMPLE`/`REC-JUBILACION` (decisión de RRHH), las filas `ACTIVA`
+    que ya existían había que resolverlas a mano — nadie las iba a volver a evaluar
+    nunca, porque sus detectores ya no corren."""
+
+    def _resolver(self):
+        import importlib
+
+        from django.apps import apps
+
+        modulo = importlib.import_module(
+            'notificaciones.migrations.0012_resolver_cumpleanos_y_jubilacion_existentes')
+        modulo.resolver(apps, None)
+
+    def setUp(self):
+        from usuarios.models import CustomUser
+
+        self.usuario = CustomUser(username='usuario_resolver_cumple', is_active=True, es_admin=True)
+        self.usuario.set_password('contraseña-de-prueba')
+        self.usuario.save()
+        self.provincia = NProvincia.objects.create(nombre='Provincia resolver cumple')
+        self.tipo_ct = ContentType.objects.get_for_model(self.provincia)
+
+    def _crear(self, codigo_regla, estado, leido=False):
+        return Notificacion.objects.create(
+            content_type=self.tipo_ct, object_id='1', destinatario=self.usuario,
+            titulo='...', mensaje='...', tipo=Notificacion.Tipo.RECORDATORIO,
+            codigo_regla=codigo_regla, estado=estado, leido=leido)
+
+    def test_resuelve_activas_de_cumple_y_jubilacion_sin_tocar_leido(self):
+        cumple = self._crear('REC-CUMPLE', Notificacion.Estado.ACTIVA, leido=True)
+        jubilacion = self._crear('REC-JUBILACION', Notificacion.Estado.ACTIVA, leido=False)
+
+        self._resolver()
+
+        cumple.refresh_from_db()
+        jubilacion.refresh_from_db()
+        self.assertEqual(cumple.estado, Notificacion.Estado.RESUELTA)
+        self.assertIsNotNone(cumple.fecha_resolucion)
+        self.assertTrue(cumple.leido)  # intacto
+        self.assertEqual(jubilacion.estado, Notificacion.Estado.RESUELTA)
+        self.assertFalse(jubilacion.leido)  # intacto
+
+    def test_no_toca_otros_codigos_ni_ya_resueltas(self):
+        contrato = self._crear('REC-CONTRATO', Notificacion.Estado.ACTIVA)
+        ya_resuelta = self._crear('REC-CUMPLE', Notificacion.Estado.RESUELTA)
+        fecha_original = ya_resuelta.fecha_resolucion
+
+        self._resolver()
+
+        contrato.refresh_from_db()
+        ya_resuelta.refresh_from_db()
+        self.assertEqual(contrato.estado, Notificacion.Estado.ACTIVA)  # sin tocar
+        self.assertEqual(ya_resuelta.fecha_resolucion, fecha_original)  # sin re-resolver
+
+    def test_no_falla_sin_ninguna_fila_que_resolver(self):
+        self._resolver()  # no debe lanzar aunque no exista ninguna REC-CUMPLE/REC-JUBILACION
+
+
+class AuditoriaAdminTests(TestCase):
+    """Crear/editar/eliminar una Notificacion desde el Admin de Django ahora deja
+    rastro en `auditoria.EventoAuditoria`, gracias a `AuditoriaAdminMixin`
+    (compartido con el resto de apps, ver `contratos.tests.AuditoriaAdminTests`
+    para el caso original que motivó esto)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from usuarios.models import CustomUser
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_notificaciones', password='x', es_admin=True)
+        cls.provincia = NProvincia.objects.create(nombre='Provincia auditoría admin')
+        cls.tipo_ct = ContentType.objects.get_for_model(cls.provincia)
+
+    def test_eliminar_una_notificacion_en_el_admin_queda_auditado(self):
+        from auditoria.models import EventoAuditoria
+        from django.urls import reverse
+
+        notificacion = Notificacion.objects.create(
+            titulo='Aviso de prueba', mensaje='Mensaje de prueba',
+            tipo=Notificacion.Tipo.SISTEMA, content_type=self.tipo_ct,
+            object_id=str(self.provincia.pk))
+        self.client.force_login(self.admin)
+
+        url = reverse('admin:notificaciones_notificacion_delete', args=[notificacion.pk])
+        self.client.post(url, {'post': 'yes'})
+
+        self.assertFalse(Notificacion.objects.filter(pk=notificacion.pk).exists())
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(notificacion.pk), accion='DEL').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)
+        self.assertEqual(evento.modulo, 'notificaciones')
+
+    def test_editar_una_notificacion_desde_el_admin_queda_auditado(self):
+        from auditoria.models import EventoAuditoria
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+        from notificaciones.admin import NotificacionAdmin
+
+        notificacion = Notificacion.objects.create(
+            titulo='Aviso de prueba', mensaje='Mensaje de prueba',
+            tipo=Notificacion.Tipo.SISTEMA, content_type=self.tipo_ct,
+            object_id=str(self.provincia.pk))
+
+        admin_instance = NotificacionAdmin(Notificacion, AdminSite())
+        request = RequestFactory().get('/')
+        request.user = self.admin
+        notificacion.titulo = 'Aviso corregido'
+        admin_instance.save_model(request, notificacion, form=None, change=True)
+
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(notificacion.pk), accion='UPD').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)

@@ -15,6 +15,7 @@ sigue siendo válido aunque el registro apuntado cambie de nombre después.
 import datetime
 from decimal import Decimal
 
+from django import forms
 from django.db.models import Model, QuerySet
 
 # Lo que se muestra en la columna «Situación Actual» cuando un campo no tiene valor.
@@ -86,7 +87,7 @@ def construir_formulario(form_class, *, instancia=None, datos=None, initial=None
     return form_class(**kwargs)
 
 
-def formulario_de_propuesta(form_class, campos_solo_admin=()):
+def formulario_de_propuesta(form_class, campos_solo_admin=(), campos_condicionales=()):
     """Variante del ModelForm para CONSTRUIR una propuesta, no para guardarla.
 
     Enviar una solicitud no escribe nada en la base de datos, así que las comprobaciones
@@ -116,13 +117,22 @@ def formulario_de_propuesta(form_class, campos_solo_admin=()):
     * Los que el formulario original ya pinta deshabilitados, como el «Estado
       (Automático)» de Cargo Plantilla: el modelo lo calcula solo, y sin esto llegaría
       vacío en el POST y aparecería como un cambio propuesto que nadie pidió.
+
+    Excepción: `campos_condicionales`. Son campos cuyo widget también nace deshabilitado
+    en `Meta.widgets` —por eso `_widget_deshabilitado` los marcaría igual que a los del
+    punto anterior—, pero que SÍ representan una decisión real del Moderador: su propio
+    JavaScript los habilita según otra elección del formulario (p. ej. `motivo` de
+    `CAltaForm`, que se habilita solo si el tipo de contrato lo exige). Deshabilitarlos
+    aquí también descartaría en silencio un valor que el Moderador sí llegó a elegir y
+    el navegador sí llegó a enviar.
     """
     class _Propuesta(form_class):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self._neutralizar_conflicto_de_orden()
             for nombre, campo in self.fields.items():
-                if nombre in campos_solo_admin or _widget_deshabilitado(campo.widget):
+                condicionado = _widget_deshabilitado(campo.widget) and nombre not in campos_condicionales
+                if nombre in campos_solo_admin or condicionado:
                     campo.disabled = True
 
         def _neutralizar_conflicto_de_orden(self):
@@ -149,6 +159,51 @@ def formulario_de_propuesta(form_class, campos_solo_admin=()):
 
     _Propuesta.__name__ = f'Propuesta{form_class.__name__}'
     return _Propuesta
+
+
+def formulario_de_aprobacion(form_class, campos_condicionales=()):
+    """Variante del ModelForm para APROBAR: protege del POST los campos que de verdad
+    nadie edita desde esta pantalla —hoy, solo `fecha_alta` de `CAltaForm`—, sin tocar
+    los de `campos_solo_admin` ni los de `campos_condicionales`.
+
+    Es la versión para el Administrador de `formulario_de_propuesta`, y comparte su
+    mismo criterio para `campos_condicionales`: nacen con el widget deshabilitado en el
+    formulario original, pero representan una decisión real (`motivo`, `duracion`, los
+    tres «No. Resolución», los vencimientos del Chofer, `pais`...) que el Administrador
+    debe poder ajustar al revisar, igual que ya puede ajustar `cargo` o `tridente`. Antes
+    esta pantalla los deshabilitaba a TODOS sin distinción —tratando `motivo` igual que
+    `fecha_alta`—, así que el Administrador no podía tocarlos aunque quisiera, y
+    `solicitudes/servicios.py::aprobar` tenía que forzar por su cuenta el valor de
+    `datos_propuestos` para que la propuesta del Moderador no se perdiera. Con el campo
+    ya editable aquí, ese forzado sobra: lo que quede en el POST del Administrador es lo
+    que manda, igual que para cualquier otro campo.
+
+    `campos_solo_admin` no se deshabilitan aquí porque son justo los campos que el
+    Moderador NO puede proponer pero el Administrador SÍ puede decidir al aprobar (p. ej.
+    `orden_informe`).
+    """
+    class _Aprobacion(form_class):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            for nombre, campo in self.fields.items():
+                if not _widget_deshabilitado(campo.widget):
+                    continue
+                if nombre in campos_condicionales:
+                    # El widget nace con `disabled: 'disabled'` puesto a fuego en
+                    # `CAltaForm.Meta.widgets` —pensado para la edición normal, donde un
+                    # JavaScript propio se lo quita cuando corresponde—. `campo.disabled
+                    # = False` (el valor con el que ya nace) NO alcanza para que el
+                    # campo se pueda editar: ese flag de Django solo decide si se usa el
+                    # POST o el `initial` al limpiar, pero el atributo `disabled` del
+                    # HTML lo sigue poniendo el propio widget, así que el navegador
+                    # jamás llega a enviarlo. Por eso, aquí SÍ hay que quitárselo al
+                    # widget, no solo dejar el campo sin marcar como deshabilitado.
+                    campo.widget.attrs.pop('disabled', None)
+                else:
+                    campo.disabled = True
+
+    _Aprobacion.__name__ = f'Aprobacion{form_class.__name__}'
+    return _Aprobacion
 
 
 def _widget_deshabilitado(widget):
@@ -227,6 +282,16 @@ def _texto_de_campo(campo, valor):
     """Valor legible de un campo: 'Especialista B', no '47'."""
     if valor is None or valor == '' or valor == []:
         return VACIO
+
+    # Las fechas se guardan en ISO (`_normalizar()`) porque es lo que JSONField acepta,
+    # pero eso las mostraría en la revisión como «2026-01-15» (año/mes/día). RRHH lee
+    # fechas en día/mes/año en el resto de la aplicación (formularios, PDFs, Excel), así
+    # que aquí se reformatea igual solo para mostrar; lo guardado no cambia.
+    if isinstance(campo, forms.DateField) and isinstance(valor, str):
+        try:
+            return datetime.date.fromisoformat(valor).strftime('%d/%m/%Y')
+        except ValueError:
+            pass
 
     if hasattr(campo, 'queryset') and campo.queryset is not None:
         pks = valor if isinstance(valor, list) else [valor]

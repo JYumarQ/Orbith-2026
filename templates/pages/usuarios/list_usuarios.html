@@ -120,6 +120,7 @@
               <th class="text-center">Departamento</th>
               <th class="text-center">Estado</th>
               <th class="text-center">Conexión</th>
+              <th class="text-center">Guía de Orbith</th>
             </tr>
           </thead>
           <tbody class="table-border-bottom-0" id="filter_usuarios_results">
@@ -151,42 +152,7 @@
   // 1) Función genérica para mostrar los toasts
   // ---------------------------------------------------
 function showToast(message, type = 'success') {
-  const toastContainer = document.getElementById('toastContainer');
-  // Limpiar cualquier toast anterior
-  toastContainer.innerHTML = '';
-
-  // Crear el contenedor del toast SIN 'fade' ni 'show'
-  const toastEl = document.createElement('div');
-  toastEl.className = `bs-toast toast bg-${type}`;
-  toastEl.setAttribute('role', 'alert');
-  toastEl.setAttribute('aria-live', 'assertive');
-  toastEl.setAttribute('aria-atomic', 'true');
-
-  // Obtener hora actual en formato HH:mm
-  const now = new Date();
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  // Rellenar el HTML igual al de Cargos
-  toastEl.innerHTML = `
-    <div class="toast-header">
-      <i class="fas fa-bell me-2"></i>
-      <div class="me-auto fw-semibold">Notificación</div>
-      <small>${time}</small>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body">
-      ${message}
-    </div>
-  `;
-
-  // Añadir al contenedor y dejar que Bootstrap agregue la clase 'show'
-  toastContainer.appendChild(toastEl);
-
-  // Inicializar y mostrar
-  new bootstrap.Toast(toastEl, {
-    autohide: true,
-    delay: 3000
-  }).show();
+  window.mostrarToast(message, type === 'danger' ? 'error' : type);
 }
 
 

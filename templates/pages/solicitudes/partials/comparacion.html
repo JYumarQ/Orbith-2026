@@ -133,3 +133,227 @@ permite al Administrador ajustar la propuesta antes de aprobar.
         </tbody>
     </table>
 </div>
+
+<script>
+    // Los switches C. Formal / Chofer Profesional / Misión de Contrato solo habilitan su
+    // campo de detalle si están activos (ver `solicitudes/views.py::_filas_de_comparacion`,
+    // que ya calcula el estado inicial acorde al valor propuesto). Esto es lo que hace que
+    // reaccione EN VIVO si el Administrador cambia el switch en esta misma pantalla, antes
+    // de aprobar. Los `getElementById` no encuentran nada en el resto de operaciones
+    // (Departamento, Cargo, Unidad, Aspirante) ni en la pantalla de solo lectura —donde no
+    // se pintan widgets—, así que este bloque no hace nada ahí.
+    (function () {
+        function enlazarSwitch(idSwitch, idsDetalle) {
+            var interruptor = document.getElementById(idSwitch);
+            if (!interruptor) return;
+            interruptor.addEventListener('change', function () {
+                idsDetalle.forEach(function (idDetalle) {
+                    var detalle = document.getElementById(idDetalle);
+                    if (detalle) detalle.disabled = !interruptor.checked;
+                });
+            });
+        }
+        enlazarSwitch('id_c_formal', ['id_c_formal_res']);
+        enlazarSwitch('id_profesional', ['id_fv_lic', 'id_fv_rec', 'id_fv_seg']);
+        enlazarSwitch('id_mision', ['id_pais']);
+    })();
+
+    // Mismo motor de «Tipo de Contrato» y de validación visual que ya usa
+    // `updt_contrato.html` con el Moderador (ver su bloque 3 y 6): Indeterminado
+    // deshabilita Duración y limpia Motivo; el resto de tipos recalculan si Motivo es
+    // obligatorio y con qué opciones. Sin esto, el Administrador podía dejar la
+    // pantalla de revisión en un estado que ni el propio formulario de Contrato
+    // permite —p. ej. Motivo relleno con un Indeterminado, o vacío con un tipo que sí
+    // lo exige— porque aquí nunca se ejecutaba ese cálculo, solo al crear/editar.
+    //
+    // Igual que el bloque de arriba, `if (!form || !tipoSelect) return;` hace que esto
+    // no haga nada en las otras nueve operaciones del catálogo ni en la pantalla de
+    // solo lectura (`ver_solicitud.html`), donde no existen estos ids.
+    (function () {
+        var form = document.getElementById('form_aprobacion');
+        var tipoSelect = document.getElementById('id_tipo');
+        if (!form || !tipoSelect) return;
+
+        var duracion = document.getElementById('id_duracion');
+        var motivo = document.getElementById('id_motivo');
+        var btnAprobar = document.getElementById('btn_aprobar');
+
+        // Campos obligatorios de Contrato — mismo criterio que `reglas.obligatorios`
+        // en `updt_contrato.html`. `fecha_alta` queda fuera a propósito: no se toca
+        // desde esta pantalla.
+        var CAMPOS_OBLIGATORIOS = [
+            'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'duracion', 'unidad',
+            'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic',
+            'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar'
+        ];
+
+        function actualizarPorTipo() {
+            var tipoId = tipoSelect.value;
+            if (!tipoId) {
+                if (duracion) { duracion.disabled = true; duracion.value = ''; }
+                if (motivo) { motivo.disabled = true; motivo.innerHTML = '<option value="">---------</option>'; }
+                evaluarCampos();
+                return;
+            }
+            fetch("{% url 'tipo_contrato_info' 0 %}".replace('0', tipoId))
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    var desc = data.descripcion ? data.descripcion.toUpperCase() : '';
+                    if (duracion) {
+                        if (desc.indexOf('INDETERMINADO') !== -1) {
+                            duracion.disabled = true;
+                            duracion.value = '';
+                        } else {
+                            duracion.disabled = false;
+                        }
+                    }
+                    if (motivo) {
+                        var actual = motivo.value;
+                        motivo.innerHTML = '<option value="">---------</option>';
+                        (data.motivos_asociados || []).forEach(function (m) {
+                            var opcion = document.createElement('option');
+                            opcion.value = m.id;
+                            opcion.text = m.descripcion;
+                            if (String(m.id) === String(actual)) opcion.selected = true;
+                            motivo.appendChild(opcion);
+                        });
+                        motivo.disabled = !data.requiere_motivo;
+                        if (!data.requiere_motivo) motivo.value = '';
+                    }
+                    evaluarCampos();
+                })
+                .catch(function () {
+                    // Si la consulta falla, se deja como estaba en vez de bloquear la
+                    // pantalla: es la misma degradación que ya tiene `updt_contrato.html`.
+                    evaluarCampos();
+                });
+        }
+
+        function evaluarCampos() {
+            var hayInvalido = false;
+            CAMPOS_OBLIGATORIOS.forEach(function (nombre) {
+                var campo = form.querySelector('[name="' + nombre + '"]');
+                if (!campo) return;
+                if (campo.disabled) {
+                    campo.classList.remove('border-warning', 'is-invalid');
+                    return;
+                }
+                var vacio = !campo.value || !campo.value.trim();
+                campo.classList.toggle('border-warning', vacio);
+                if (vacio) hayInvalido = true;
+            });
+            if (btnAprobar) btnAprobar.disabled = hayInvalido;
+        }
+
+        tipoSelect.addEventListener('change', actualizarPorTipo);
+        form.addEventListener('input', evaluarCampos);
+        form.addEventListener('change', evaluarCampos);
+
+        // Estado inicial: recalcula Motivo/Duración según el Tipo ya propuesto, en vez
+        // de confiar en lo que trajera `datos_propuestos` (ver el mismo motivo por el
+        // que Rol/Grupo Escala se recalculan desde el Cargo y no desde la solicitud).
+        actualizarPorTipo();
+    })();
+
+    // Validación cruzada de plazas del Cargo — mismo motor que `updt_contrato.html`
+    // (sección 4, «MOTOR DE PLAZAS Y VALIDACIÓN CRUZADA»): pinta el Select2 con el
+    // badge ocupadas/aprobadas, tacha y colorea en rojo los cargos sin vacante cuando
+    // el Tipo de Contrato propuesto exige plaza oficial, e impide seleccionar (o deja
+    // seleccionado) un cargo lleno en ese caso. Los datos (`data-aprobadas`,
+    // `data-ocupadas`, `data-grupo`) ya vienen en las opciones del `<select>` porque
+    // `CAltaForm` usa el mismo `SelectCargosConPlazasWidget` aquí que en la edición
+    // normal; esto solo le agrega la capa visual e interactiva de Select2.
+    //
+    // Igual que los bloques anteriores, si no encuentra `#id_cargo` con la clase que le
+    // pone ese widget, no hace nada: solo aplica a `contrato_upd`.
+    (function () {
+        if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') return;
+        var $cargoSelect = $('#id_cargo');
+        if (!$cargoSelect.length || !$cargoSelect.hasClass('select2-cargo')) return;
+
+        var $tipoSelect = $('#id_tipo');
+        var ocupaPlazaOficial = false;
+
+        function formatCargoOption(state) {
+            if (!state.id) return state.text;
+            var $el = $(state.element);
+            var grupo = $el.data('grupo') || '';
+            var aprobadas = parseInt($el.data('aprobadas')) || 0;
+            var ocupadas = parseInt($el.data('ocupadas')) || 0;
+            var estaLleno = (aprobadas - ocupadas) <= 0;
+            var color = 'bg-secondary', tachado = '';
+            if (ocupaPlazaOficial) {
+                if (estaLleno) { color = 'bg-danger'; tachado = 'text-decoration-line-through text-muted'; }
+                else { color = 'bg-success'; }
+            }
+            var textoCargo = grupo
+                ? '<span title="Grupo Escala: ' + grupo + '" style="cursor: help;">' + state.text + '</span>'
+                : state.text;
+            return $(
+                '<div class="d-flex justify-content-between align-items-center w-100 ' + tachado + '">'
+                + '<span>' + textoCargo + '</span>'
+                + '<span class="badge ' + color + ' rounded-pill">' + ocupadas + ' / ' + aprobadas + '</span>'
+                + '</div>');
+        }
+
+        function initSelect2Cargo() {
+            if ($cargoSelect.hasClass('select2-hidden-accessible')) $cargoSelect.select2('destroy');
+            $cargoSelect.select2({
+                dropdownParent: $cargoSelect.parent(),
+                width: '100%',
+                theme: 'bootstrap-5',
+                templateResult: formatCargoOption,
+                templateSelection: function (s) { return s.text; }
+            });
+        }
+
+        function validarCargoCruzado() {
+            var valCargo = $cargoSelect.val();
+            var $errPlaza = $('#error_plaza_agotada_revision');
+            if ($errPlaza.length === 0) {
+                $errPlaza = $('<small id="error_plaza_agotada_revision" class="text-danger fw-bold d-none mt-1"></small>');
+                $cargoSelect.next('.select2-container').after($errPlaza);
+            }
+            $errPlaza.addClass('d-none');
+            $cargoSelect.next('.select2-container').find('.select2-selection').removeClass('border-danger');
+            if (!valCargo) return;
+
+            var $opcionSeleccionada = $cargoSelect.find('option:selected');
+            var aprobadas = parseInt($opcionSeleccionada.data('aprobadas')) || 0;
+            var ocupadas = parseInt($opcionSeleccionada.data('ocupadas')) || 0;
+
+            if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
+                $cargoSelect.val(null).trigger('change.select2');
+                $cargoSelect.trigger('change');
+                $errPlaza.html('<i class="fas fa-exclamation-triangle me-1"></i> El tipo de contrato exige vacante. El cargo seleccionado estaba lleno.').removeClass('d-none');
+                $cargoSelect.next('.select2-container').find('.select2-selection').addClass('border-danger');
+            }
+        }
+
+        function actualizarOcupaPlaza() {
+            var radar = $tipoSelect.attr('data-ocupa-plaza');
+            var tipoId = $tipoSelect.val();
+            ocupaPlazaOficial = tipoId ? (radar ? JSON.parse(radar).indexOf(parseInt(tipoId)) !== -1 : false) : false;
+            initSelect2Cargo();
+            validarCargoCruzado();
+        }
+
+        $tipoSelect.on('change.plazaRevision', actualizarOcupaPlaza);
+
+        $cargoSelect.on('select2:selecting', function (e) {
+            var $el = $(e.params.args.data.element);
+            var aprobadas = parseInt($el.data('aprobadas')) || 0;
+            var ocupadas = parseInt($el.data('ocupadas')) || 0;
+            if (ocupaPlazaOficial && (aprobadas - ocupadas) <= 0) {
+                e.preventDefault();
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'error', title: 'Cargo sin vacantes', showConfirmButton: false, timer: 3000 });
+                }
+            }
+        });
+
+        $cargoSelect.on('change', validarCargoCruzado);
+
+        actualizarOcupaPlaza();
+    })();
+</script>

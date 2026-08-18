@@ -195,9 +195,11 @@
 
 <script>
     function ejecutarWord() {
+        window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_puestos_clave_word' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
     }
     function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_puestos_clave_pdf' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
     }
 </script>

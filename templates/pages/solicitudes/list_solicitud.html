@@ -417,15 +417,10 @@
         triggerSearch();
     });
 
-    document.body.addEventListener('showMessage', function (evt) {
-        const detalle = evt.detail;
-        Swal.fire({
-            icon: detalle.icon || 'success',
-            text: detalle.text || detalle,
-            timer: detalle.icon === 'error' ? undefined : 2200,
-            showConfirmButton: detalle.icon === 'error'
-        });
-    });
+    // El toast (éxito y error) ya lo cubre el listener global de
+    // base/scripts.html — ambos listeners viven en document.body y no hay
+    // forma fiable de que uno registrado aquí se ejecute ANTES que el
+    // global para suprimirlo, así que no se duplica un handler local.
 </script>
 {% endblock %}
 {% endblock %}

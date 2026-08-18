@@ -35,7 +35,7 @@ from django.http import HttpResponse, Http404
 from datetime import datetime
 from .forms import ExportarContratoWordForm
 from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
-from .filtros import aplicar_filtros
+from .filtros import aplicar_filtros, contratos_visibles
 # Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
 # devuelve None para el Administrador, que sigue guardando directamente.
 from solicitudes.integracion import interceptar
@@ -73,7 +73,9 @@ class ContratoListView(ListView):
         el usuario tocaba un `<select>`, porque la carga inicial no leía la
         querystring.
         """
-        return aplicar_filtros(self.request, super().get_queryset().select_related(
+        qs = super().get_queryset().filter(
+            pk__in=contratos_visibles(self.request.user).values_list('pk', flat=True))
+        return aplicar_filtros(self.request, qs.select_related(
             'aspirante',
             'tipo',
             'motivo',
@@ -121,6 +123,19 @@ class ContratoListView(ListView):
         # LA CLAVE: Enviar la variable al HTML desde la carga inicial
         page_size = self.request.GET.get('per_page')
         context['current_page_size'] = str(page_size) if page_size else '8'
+
+        # Modal de exportación a Excel filtrada por Unidad Organizativa (ver
+        # exportar_contratos_excel): Admin y Observador pueden elegir "Todas" o
+        # una/varias UO de toda la app; el Moderador solo puede elegir entre las
+        # suyas (mismo criterio de alcance que contratos_visibles()).
+        usuario = self.request.user
+        if getattr(usuario, 'es_moderador', False):
+            context['unidades_export'] = usuario.unidades.all().order_by('descripcion')
+            context['mostrar_opcion_todas_uo'] = False
+        else:
+            from strorganizativa.models import UnidadOrganizativa
+            context['unidades_export'] = UnidadOrganizativa.objects.all().order_by('descripcion')
+            context['mostrar_opcion_todas_uo'] = True
         return context
     
 
@@ -270,8 +285,9 @@ def search_contratos(request):
     if not page_size:
         page_size = '8'
     
-    # 2. QuerySet Base con el Grafo Relacional expandido (Corrección N+1)
-    qs = CAlta.objects.select_related(
+    # 2. QuerySet Base con el Grafo Relacional expandido (Corrección N+1),
+    # acotado al alcance del usuario (ver contratos/filtros.py::contratos_visibles)
+    qs = contratos_visibles(request.user).select_related(
         'aspirante',
         'cargo',
         'cargo__departamento',
@@ -280,7 +296,7 @@ def search_contratos(request):
         'cargo__rol',
         'rol',
         'tridente'
-    ).all().order_by('-fecha_alta')
+    ).order_by('-fecha_alta')
 
     # 3. Aplicar Filtros "Embudo" (mismo criterio que la carga inicial de
     # ContratoListView — ver contratos/filtros.py::aplicar_filtros)
@@ -492,15 +508,29 @@ def historico_trabajador(request, aspirante_id):
         .order_by('fecha_efectiva')
     )
     movimientos_aspirante = [m for m in movs_todos if str(m.aspirante_id) == str(aspirante_id)]
+    movs_por_pk = {m.pk: m for m in movs_todos}
 
-    # Índice por (expediente, tipo). El original usaba .first() sobre el orden por
-    # defecto del modelo ('-fecha_efectiva'), es decir el MÁS RECIENTE.
-    indice_por_tipo = {}
-    for m in sorted(movimientos_aspirante, key=lambda x: x.fecha_efectiva, reverse=True):
-        indice_por_tipo.setdefault((m.no_expediente, m.tipo_movimiento), m.pk)
+    # Índice por (expediente, tipo, fecha). Antes se indexaba solo por
+    # (expediente, tipo) y se quedaba con el MÁS RECIENTE de ese tipo — con
+    # expedientes reutilizados en varias recontrataciones, todos los ciclos
+    # antiguos de "Alta Inicial"/"Baja" de un mismo expediente terminaban
+    # apuntando al mismo TMovimiento (el del ciclo más reciente), aunque fueran
+    # eventos distintos en fechas distintas. Se añade la fecha a la clave para
+    # que cada ciclo encuentre SU PROPIO movimiento, no el de otro ciclo.
+    #
+    # Se construye desde `movs_todos` (no `movimientos_aspirante`): los TMovimiento
+    # de tipo 'Alta Inicial'/'Baja' a veces solo están enlazados vía `contrato`
+    # (con `aspirante_id` a NULL en el propio TMovimiento), así que quedaban fuera
+    # de `movimientos_aspirante` y su fila del histórico se guardaba con id=None
+    # -> el botón "Exportar Movimiento" nunca se habilitaba para esas filas
+    # aunque el movimiento sí existiera.
+    indice_por_tipo_fecha = {}
+    for m in movs_todos:
+        indice_por_tipo_fecha[(m.no_expediente, m.tipo_movimiento, m.fecha_efectiva)] = m.pk
 
-    def obtener_id_movimiento(aspirante_id, expediente, tipo_busqueda):
-        return indice_por_tipo.get((expediente, tipo_busqueda))
+    def obtener_id_movimiento(expediente, tipo_busqueda, fecha):
+        """Busca el TMovimiento de un ciclo concreto por su fecha exacta."""
+        return indice_por_tipo_fecha.get((expediente, tipo_busqueda, fecha))
 
     def primer_movimiento_real(expediente=None, contrato=None):
         """Movimiento más antiguo del contrato/expediente, ignorando el alta automática.
@@ -526,17 +556,28 @@ def historico_trabajador(request, aspirante_id):
     )
     for a in altas_activas:
         # CORRECCIÓN: Ignorar el movimiento fantasma de "Alta Inicial" para buscar el pasado real
-        mov_id = obtener_id_movimiento(aspirante_id, a.no_expediente, 'Alta Inicial')
-        primer_mov = primer_movimiento_real(contrato=a)
-        
-        if primer_mov and primer_mov.cargo_anterior != "---":
-            cargo_inicial = primer_mov.cargo_anterior
-            unidad_inicial = primer_mov.unidad_anterior or "---"
-            salario_inicial = primer_mov.salario_anterior
+        mov_id = obtener_id_movimiento(a.no_expediente, 'Alta Inicial', a.fecha_alta)
+        mov_alta_real = movs_por_pk.get(mov_id) if mov_id else None
+
+        # PRIORIDAD 1: si existe el TMovimiento "Alta Inicial" y tiene datos propios,
+        # se usan tal cual están guardados. Así, editar ese registro en el admin de
+        # Django (o borrarlo, dejando mov_alta_real en None) se refleja de inmediato
+        # aquí en vez de reconstruirse en silencio a partir del contrato actual.
+        if mov_alta_real and mov_alta_real.cargo_nuevo and mov_alta_real.cargo_nuevo != "---":
+            cargo_inicial = mov_alta_real.cargo_nuevo
+            unidad_inicial = mov_alta_real.unidad_nueva or "---"
+            salario_inicial = mov_alta_real.salario_nuevo
         else:
-            cargo_inicial = a.cargo.ncargo.descripcion if a.cargo else "---"
-            unidad_inicial = a.cargo.departamento.unidad_organizativa.descripcion if (a.cargo and a.cargo.departamento) else "---"
-            salario_inicial = a.calcular_salario_escala()
+            primer_mov = primer_movimiento_real(contrato=a)
+
+            if primer_mov and primer_mov.cargo_anterior != "---":
+                cargo_inicial = primer_mov.cargo_anterior
+                unidad_inicial = primer_mov.unidad_anterior or "---"
+                salario_inicial = primer_mov.salario_anterior
+            else:
+                cargo_inicial = a.cargo.ncargo.descripcion if a.cargo else "---"
+                unidad_inicial = a.cargo.departamento.unidad_organizativa.descripcion if (a.cargo and a.cargo.departamento) else "---"
+                salario_inicial = a.calcular_salario_escala()
 
         hitos.append({
             'id': mov_id,
@@ -557,19 +598,28 @@ def historico_trabajador(request, aspirante_id):
     )
     for b in altas_viejas:
         if b.fecha_alta:
-            mov_id_alta = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Alta Inicial')
-            mov_id_baja = obtener_id_movimiento(aspirante_id, b.no_expediente, 'Baja')
-            # CORRECCIÓN: Igual que arriba, ignoramos "Alta Inicial"
-            primer_mov_baja = primer_movimiento_real(expediente=b.no_expediente)
+            mov_id_alta = obtener_id_movimiento(b.no_expediente, 'Alta Inicial', b.fecha_alta)
+            mov_id_baja = obtener_id_movimiento(b.no_expediente, 'Baja', b.fecha_baja)
+            mov_alta_real = movs_por_pk.get(mov_id_alta) if mov_id_alta else None
 
-            if primer_mov_baja and primer_mov_baja.cargo_anterior != "---":
-                cargo_baja_ini = primer_mov_baja.cargo_anterior
-                unidad_baja_ini = primer_mov_baja.unidad_anterior or "---"
-                salario_baja_ini = primer_mov_baja.salario_anterior
+            # Mismo criterio que en FUENTE A: si el TMovimiento "Alta Inicial" existe
+            # y tiene datos propios, se usan directamente en vez de reconstruirlos.
+            if mov_alta_real and mov_alta_real.cargo_nuevo and mov_alta_real.cargo_nuevo != "---":
+                cargo_baja_ini = mov_alta_real.cargo_nuevo
+                unidad_baja_ini = mov_alta_real.unidad_nueva or "---"
+                salario_baja_ini = mov_alta_real.salario_nuevo
             else:
-                cargo_baja_ini = b.cargo.ncargo.descripcion if b.cargo else "---"
-                unidad_baja_ini = b.cargo.departamento.unidad_organizativa.descripcion if (b.cargo and b.cargo.departamento) else "---"
-                salario_baja_ini = b.cargo.ncargo.salario_basico if b.cargo else 0
+                # CORRECCIÓN: Igual que arriba, ignoramos "Alta Inicial"
+                primer_mov_baja = primer_movimiento_real(expediente=b.no_expediente)
+
+                if primer_mov_baja and primer_mov_baja.cargo_anterior != "---":
+                    cargo_baja_ini = primer_mov_baja.cargo_anterior
+                    unidad_baja_ini = primer_mov_baja.unidad_anterior or "---"
+                    salario_baja_ini = primer_mov_baja.salario_anterior
+                else:
+                    cargo_baja_ini = b.cargo.ncargo.descripcion if b.cargo else "---"
+                    unidad_baja_ini = b.cargo.departamento.unidad_organizativa.descripcion if (b.cargo and b.cargo.departamento) else "---"
+                    salario_baja_ini = b.cargo.ncargo.salario_basico if b.cargo else 0
 
             hitos.append({
                 'id': mov_id_alta,
@@ -921,18 +971,19 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
             
         self.object.save()
 
-        # Hay una redirección real posterior SOLO cuando se llegó desde una
-        # advertencia (`next` presente, ver `VolverAlOrigenMixin`): las ramas AJAX/HTMX
-        # de abajo cierran el modal en la MISMA página cuando no hay `next`, así que un
-        # `messages.success()` incondicional aquí quedaría «colgado» en la sesión y
-        # podría aparecer en una navegación posterior no relacionada.
+        # La rama HTMX de abajo cierra el modal en la MISMA página (responde 204,
+        # sin recargar), así que un `messages.success()` incondicional ahí quedaría
+        # «colgado» en la sesión y podría aparecer en una navegación posterior no
+        # relacionada — el guard `hay_origen` solo protege esa rama.
+        # La rama AJAX normal, en cambio, SIEMPRE termina en una navegación completa
+        # (`window.location.href` en updt_contrato.html), así que el mensaje se
+        # genera siempre: se consumirá correctamente en la página siguiente.
         hay_origen = bool(self.request.POST.get('next') or self.request.GET.get('next'))
 
         # ✅ PARA PETICIONES AJAX NORMALES (esto va ANTES del bloque HTMX)
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             from django.http import JsonResponse
-            if hay_origen:
-                messages.success(self.request, self.mensaje_de_guardado_exitoso('Contrato actualizado correctamente.'))
+            messages.success(self.request, self.mensaje_de_guardado_exitoso('Contrato actualizado correctamente.'))
             return JsonResponse({
                 'form_is_valid': True,
                 'success_url': str(self.get_success_url())
@@ -1106,8 +1157,13 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
             # Usamos el PK del único movimiento creado (ruta explícita de TMovimiento)
             pdf_url = reverse('imprimir_movimiento', kwargs={'pk': movimiento_baja.pk})
 
+            from progreso.servicios import completar_tarea
+            tarea = completar_tarea(request.user, 'primera_baja')
+            if tarea:
+                messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+
             return JsonResponse({
-                'success': True, 
+                'success': True,
                 'message': 'Contrato dado de baja y archivado correctamente.',
                 'pdf_url': pdf_url
             })
@@ -1304,6 +1360,11 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
+            from progreso.servicios import completar_tarea
+            tarea = completar_tarea(self.request.user, 'primer_movimiento_nomina')
+            if tarea:
+                messages.info(self.request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
 
 
@@ -1424,12 +1485,14 @@ class ModeloMovimientoDocxView(View):
             if "ADMINISTRATIVO" in cat: return "A"
             return cat[0]
 
-        def romano_a_arabigo(tri_obj):
+        def formatear_tridente(tri_obj):
+            """Extrae el numeral romano (I/II/III) del texto guardado ("Tridente I", etc.)
+            para el Word: el modelo del documento exige números romanos, no arábigos."""
             if not tri_obj or str(tri_obj) in ["None", "---"]: return ""
             t = str(tri_obj).upper()
-            if "III" in t: return "3"
-            if "II" in t: return "2"
-            if "I" in t: return "1"
+            if "III" in t: return "III"
+            if "II" in t: return "II"
+            if "I" in t: return "I"
             return t
 
         # --- DETECCIÓN DE BAJA ---
@@ -1478,6 +1541,15 @@ class ModeloMovimientoDocxView(View):
         rol_n = getattr(obj, 'rol_nuevo', "") if es_movimiento_real else ""
         if not rol_n or rol_n == "---":
             rol_n = contrato_base.cargo.rol.tipo if contrato_base and contrato_base.cargo and getattr(contrato_base.cargo, 'rol', None) else ""
+
+        # Tridente: se muestra tal cual quedó guardado en el TMovimiento histórico.
+        # NO se rellena con el tridente ACTUAL del contrato como respaldo: este es
+        # un documento histórico y el contrato pudo cambiar de tridente después de
+        # este movimiento, así que inventar el dato falsearía el registro. Si sale
+        # vacío es porque el TMovimiento se guardó sin tridente_nuevo — ver la causa
+        # raíz real en los puntos donde se crea TMovimiento con tipo_movimiento=
+        # "Alta Inicial"/"Recontratación" sin ese campo.
+        tri_n = getattr(obj, 'tridente_nuevo', "") if es_movimiento_real else ""
 
         # Ajuste de tamaño de texto para Cargo
         if len(cargo_texto) > 35:
@@ -1561,7 +1633,7 @@ class ModeloMovimientoDocxView(View):
             
             # --- FILA "A:" ---
             'rol_nue': "" if es_baja else rol_n,
-            'tri_nue': "" if es_baja else romano_a_arabigo(getattr(obj, 'tridente_nuevo', contrato_base.tridente if contrato_base else "")),
+            'tri_nue': "" if es_baja else formatear_tridente(tri_n),
             'sal_nue': "" if es_baja else salario_str,
             'otros': "" if es_baja else otros_str,
             'total_sal': "" if es_baja else total_str,
@@ -1598,7 +1670,7 @@ class ModeloMovimientoDocxView(View):
             
             context.update({
                 'rol_ant': "" if rol_ant_bd == "None" else rol_ant_bd,
-                'tri_ant': romano_a_arabigo(getattr(obj, 'tridente_anterior', "")),
+                'tri_ant': formatear_tridente(getattr(obj, 'tridente_anterior', "")),
                 'sal_ant': f"{sal_ant_num:.2f} ({tarifa_ant_num:.5f})" if sal_ant_num > 0 else "",
                 'otros_ant': otros_ant_str,
                 'total_ant': total_ant_str,
@@ -2007,9 +2079,14 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 del request.session['contrato_borrador']
                 if 'aspirante_borrador' in request.session:
                     del request.session['aspirante_borrador']
-                
+
+                from progreso.servicios import completar_tarea
+                tarea = completar_tarea(request.user, 'primera_contratacion')
+                if tarea:
+                    messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+
                 return JsonResponse({
-                    'form_is_valid': True, 
+                    'form_is_valid': True,
                     'success_url': reverse('list_contrato'),
                     'pdf_url': pdf_url
                 })
@@ -2049,8 +2126,18 @@ def exportar_contratos_excel(request):
         cell.alignment = alineacion_centro
         ws.column_dimensions[get_column_letter(col_num)].width = 20
 
-    # Consulta Optimizada
-    contratos = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
+    # Consulta Optimizada, acotada al alcance del usuario
+    # (ver contratos/filtros.py::contratos_visibles). Si además viene una
+    # selección explícita de Unidades Organizativas (paso intermedio del modal
+    # de exportación), se acota más: para el Moderador esto es una intersección
+    # con su propio alcance (nunca puede ampliarlo, aunque manipule la URL),
+    # porque contratos_visibles() ya lo limitó a sus UO antes de este filtro.
+    unidades_ids = [u for u in request.GET.getlist('unidades') if u.isdigit()]
+    qs = contratos_visibles(request.user).filter(aspirante__estado='ACTIVO')
+    if unidades_ids:
+        qs = qs.filter(cargo__departamento__unidad_organizativa_id__in=unidades_ids)
+
+    contratos = qs.select_related(
         'aspirante', 'aspirante__municipio', 'aspirante__provincia', 'aspirante__especialidad',
         'tipo', 'motivo', 'cargo', 'cargo__ncargo', 'cargo__ncargo__grupo_escala',
         'cargo__departamento', 'cargo__departamento__unidad_organizativa', 'rol', 'tridente'
@@ -2138,6 +2225,7 @@ class ExportarContratoWordView(FormView):
             ).get(pk=pk)
         except CAlta.DoesNotExist:
             raise Http404("El contrato solicitado no existe.")
+        return self._contrato_cache
 
     def get_form_kwargs(self):
         """Inyecta el queryset de cuadros activos al formulario."""

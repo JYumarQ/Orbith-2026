@@ -29,6 +29,7 @@ def avisar_criticas_nuevas(sender, ejecucion, **kwargs):
     from subsanacion.models import Hallazgo
     from usuarios.models import CustomUser
 
+    from .avisos import _registrar_notificacion
     from .models import Notificacion
 
     nuevas_criticas = Hallazgo.objects.filter(
@@ -55,13 +56,20 @@ def avisar_criticas_nuevas(sender, ejecucion, **kwargs):
         f'{"n" if total != 1 else ""} visto antes. Revíselo{"s" if total != 1 else ""} '
         f'en Subsanación.')
 
-    Notificacion.objects.bulk_create([
-        Notificacion(
-            titulo=titulo, mensaje=mensaje, destinatario=admin,
-            content_type=tipo_ejecucion, object_id=str(ejecucion.pk),
-            # Es una alerta de integridad, no un evento informativo — sin esto caía
-            # en el default EVENTO y aparecía mezclada con altas/bajas/cargos nuevos
-            # en vez de en la pestaña de Advertencias.
-            tipo=Notificacion.Tipo.ALERTA)
-        for admin in admins
-    ])
+    # `object_id` (el pk de esta `EjecucionAnalisis`) ya es único por ejecución, así
+    # que `codigo_regla='ALE-CRITICAS'` con `clave_extra=''` basta — el caso real que
+    # protege es la MISMA señal `analisis_finalizado` disparándose dos veces para la
+    # MISMA ejecución (antes se escribía con `bulk_create()` y `codigo_regla=''`, sin
+    # ninguna clave natural que lo impidiera).
+    for admin in admins:
+        _registrar_notificacion(
+            tipo_ct=tipo_ejecucion, object_id=str(ejecucion.pk), destinatario=admin,
+            codigo_regla='ALE-CRITICAS', clave_extra='',
+            defaults={
+                'titulo': titulo, 'mensaje': mensaje,
+                # Es una alerta de integridad, no un evento informativo — sin esto caía
+                # en el default EVENTO y aparecía mezclada con altas/bajas/cargos nuevos
+                # en vez de en la pestaña de Advertencias.
+                'tipo': Notificacion.Tipo.ALERTA, 'estado': Notificacion.Estado.ACTIVA,
+            },
+        )

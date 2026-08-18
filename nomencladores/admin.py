@@ -4,6 +4,9 @@ from .forms import ImportarCargosForm
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from import_export.admin import ImportExportModelAdmin
+
+from auditoria.admin_mixins import AuditoriaAdminMixin
+
 from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
@@ -25,7 +28,7 @@ class NMunicipioResource(resources.ModelResource):
     class Meta:
         model = NMunicipio
         fields = ('id', 'provincia', 'nombre')
-        import_id_fields = ('nombre', 'provincia') 
+        import_id_fields = ('nombre', 'provincia')
         skip_unchanged = True
         report_skipped = True
 
@@ -43,13 +46,18 @@ class NMunicipioInline(admin.TabularInline):
     show_change_link = True
 
 @admin.register(NProvincia)
-class NProvinciaAdmin(admin.ModelAdmin):
+class NProvinciaAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('id', 'nombre')
     search_fields = ('nombre',)
     inlines = [NMunicipioInline]
 
 @admin.register(NMunicipio)
-class NMunicipioAdmin(ImportExportModelAdmin):
+class NMunicipioAdmin(AuditoriaAdminMixin, ImportExportModelAdmin):
+    # NOTA: la importación masiva desde Excel (botón "Import" de django-import-export)
+    # crea/actualiza registros sin pasar por save_model, así que esos cambios NO
+    # quedan auditados. El CRUD normal del Admin (fila a fila) sí queda cubierto.
+    modulo_auditoria = 'nomencladores'
     resource_class = NMunicipioResource
     list_display = ('id', 'nombre', 'provincia')
     list_filter = ('provincia',)
@@ -57,7 +65,11 @@ class NMunicipioAdmin(ImportExportModelAdmin):
     autocomplete_fields = ['provincia']
     list_select_related = ('provincia',)
 @admin.register(NCargo)
-class NCargoAdmin(admin.ModelAdmin):
+class NCargoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    # NOTA: `importar_cargos_view` (import desde Excel) crea/actualiza registros
+    # llamando directo a `importar_cargos_excel()`, sin pasar por save_model, así
+    # que esos cambios NO quedan auditados. El CRUD normal del Admin sí.
+    modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
     search_fields = ('descripcion',)
     list_filter = ('cat_ocupacional', 'grupo_escala')
@@ -81,9 +93,9 @@ class NCargoAdmin(admin.ModelAdmin):
             if form.is_valid():
                 archivo = request.FILES['archivo_excel']
                 estrategia = form.cleaned_data['estrategia']
-                
+
                 res = importar_cargos_excel(archivo, estrategia)
-                
+
                 if 'fatal' in res:
                     messages.error(request, f"Error crítico: {res['fatal']}")
                 else:
@@ -106,32 +118,66 @@ class NCargoAdmin(admin.ModelAdmin):
         return render(request, "pages/catalogos/ncargo/admin_import_form.html", context)
 
 @admin.register(NTipoUnidadOrganizativa)
-class NTipoUnidadAdmin(admin.ModelAdmin):
+class NTipoUnidadAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'es_principal', 'es_subunidad', 'es_temporal')
     search_fields = ('descripcion',)
 
-# Resto de modelos
-admin.site.register(NTridente)
-admin.site.register(NRol)
-admin.site.register(NGrupoEscala)
-admin.site.register(NSalario)
+
+# Resto de modelos: antes registrados con `admin.site.register(Modelo)` (sin clase
+# propia). Se les da una clase mínima para poder engancharlos a AuditoriaAdminMixin.
+class _NomencladorAdminBase(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
+
+
+@admin.register(NTridente)
+class NTridenteAdmin(_NomencladorAdminBase):
+    pass
+
+
+@admin.register(NRol)
+class NRolAdmin(_NomencladorAdminBase):
+    pass
+
+
+@admin.register(NGrupoEscala)
+class NGrupoEscalaAdmin(_NomencladorAdminBase):
+    pass
+
+
+@admin.register(NSalario)
+class NSalarioAdmin(_NomencladorAdminBase):
+    pass
+
+
 @admin.register(NTipoContrato)
-class NTipoContratoAdmin(admin.ModelAdmin):
+class NTipoContratoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'ocupa_plaza', 'requiere_motivo', 'es_adiestrado')
     list_editable = ('es_adiestrado',) # Permite marcar el check sin entrar al detalle
 
 @admin.register(NMotivoContrato)
-class NMotivoContratoAdmin(admin.ModelAdmin):
+class NMotivoContratoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'tipo_contrato')
     list_editable = ('tipo_contrato',) # Permite asignar el tipo rápidamente desde la tabla
     list_filter = ('tipo_contrato',)
     list_select_related = ('tipo_contrato',)
 # admin.site.register(NCargo) <--- OJO: Ya está registrado arriba con @admin.register
-admin.site.register(NHorario)
-admin.site.register(NJornada)
+
+
+@admin.register(NHorario)
+class NHorarioAdmin(_NomencladorAdminBase):
+    pass
+
+
+@admin.register(NJornada)
+class NJornadaAdmin(_NomencladorAdminBase):
+    pass
 
 @admin.register(NEspecialidad)
-class NEspecialidadAdmin(admin.ModelAdmin):
+class NEspecialidadAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('nombre', 'educ_superior')
     search_fields = ('nombre',)
     list_filter = ('educ_superior',)
@@ -140,13 +186,15 @@ class NEspecialidadAdmin(admin.ModelAdmin):
 # --- Nomencladores sin registrar previamente ---
 
 @admin.register(NTipoFamilia)
-class NTipoFamiliaAdmin(admin.ModelAdmin):
+class NTipoFamiliaAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('nombre',)
     search_fields = ('nombre',)
 
 
 @admin.register(NFamiliaCargo)
-class NFamiliaCargoAdmin(admin.ModelAdmin):
+class NFamiliaCargoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('nombre', 'tipo_familia')
     search_fields = ('nombre',)
     list_filter = ('tipo_familia',)
@@ -154,26 +202,30 @@ class NFamiliaCargoAdmin(admin.ModelAdmin):
 
 
 @admin.register(NNocturnidad)
-class NNocturnidadAdmin(admin.ModelAdmin):
+class NNocturnidadAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('codigo', 'hora_inicio', 'hora_fin')
     search_fields = ('codigo',)
 
 
 @admin.register(NCondicionLaboralAnormal)
-class NCondicionLaboralAnormalAdmin(admin.ModelAdmin):
+class NCondicionLaboralAnormalAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('nombre', 'tarifa_hora', 'nocturnidad')
     search_fields = ('nombre',)
     autocomplete_fields = ['nocturnidad']
 
 
 @admin.register(NCausaAltaBaja)
-class NCausaAltaBajaAdmin(admin.ModelAdmin):
+class NCausaAltaBajaAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'alta')
     search_fields = ('descripcion',)
     list_filter = ('alta',)
 
 
 @admin.register(NNivelPreparacion)
-class NNivelPreparacionAdmin(admin.ModelAdmin):
+class NNivelPreparacionAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'nomencladores'
     list_display = ('nombre',)
     search_fields = ('nombre',)

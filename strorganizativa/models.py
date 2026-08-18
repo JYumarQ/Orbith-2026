@@ -214,27 +214,12 @@ class CargoPlantilla(Base):
             # Personal por destinatario (moderador de la unidad + administradores),
             # no una sola fila «por unidad»: así cada quien puede marcarla como
             # leída de forma independiente. `unidad` se conserva como contexto.
-            from notificaciones.destinatarios import destinatarios_de_unidad
-
-            unidad = self.departamento.unidad_organizativa
-            destinatarios = list(destinatarios_de_unidad(unidad))
-            if not destinatarios:
-                logger.warning(
-                    "Nuevo cargo %s sin ningún destinatario que notificar "
-                    "(unidad=%s sin moderador ni administradores activos).",
-                    self.pk, unidad)
-            else:
-                Notificacion.objects.bulk_create([
-                    Notificacion(
-                        titulo="Nuevo Cargo creado",
-                        mensaje=f"Se ha creado un nuevo cargo: {self.ncargo.descripcion} en {self.departamento}.",
-                        tipo=Notificacion.Tipo.EVENTO,
-                        content_type=ContentType.objects.get_for_model(self),
-                        object_id=str(self.pk),
-                        unidad=unidad, destinatario=destinatario,
-                    )
-                    for destinatario in destinatarios
-                ])
+            # La escritura en sí vive en `notificaciones/avisos.py::avisar_nuevo_cargo`
+            # (mismo punto de escritura, con protección de concurrencia, que el resto
+            # de eventos del módulo — antes esto se hacía inline con `bulk_create()`
+            # sin ninguna protección).
+            from notificaciones.avisos import avisar_nuevo_cargo
+            avisar_nuevo_cargo(self)
 
 
     @property

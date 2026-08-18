@@ -1,10 +1,15 @@
 {% load static %}
 {% if user.is_authenticated %}
 {% comment %}
+Notificaciones y Usuario se movieron a la zona inferior fija de la sidebar
+(templates/base/sidebar.html, #sidebarAccionesUsuario) — aquí solo queda el
+botón de hamburguesa que abre la sidebar en móvil/tablet (<1200px, d-xl-none).
 En el dashboard la barra ocupa su sitio en el flujo normal; en el resto de
-páginas se superpone al contenido (así lo hacía el diseño original). Ese modo
-"flotante" es el que obliga a reservar espacio para los iconos anclados, por eso
-la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
+páginas se superpone al contenido (así lo hacía el diseño original desde antes
+de mover los iconos). Ese modo "flotante" es el que obliga a reservar espacio
+para el botón, por eso la condición aparece dos veces: en el estilo del <nav> y
+en el bloque <style>. En ≥1200px la barra queda vacía (sin hamburguesa ni
+iconos), así que no hace falta reservar nada ahí.
 {% endcomment %}
 {% with route_name=request.resolver_match.url_name %}
   <nav
@@ -28,80 +33,27 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
     >
 
     <style>
-      /* Los iconos sí reciben clics aunque la barra los deje pasar. */
-      #layout-navbar .navbar-nav,
-      #layout-navbar #acciones-usuario { pointer-events: auto; }
+      /* El botón de hamburguesa sí recibe clics aunque la barra los deje pasar. */
+      #layout-navbar .navbar-nav { pointer-events: auto; }
       #layout-navbar a { color: inherit !important; } /* Asegura color gris */
 
-      /* ANCLAJE A LA DERECHA
-         El <nav> vive dentro de un .container-xxl, que en pantallas anchas se
-         centra con márgenes automáticos: por eso los iconos no llegaban al borde
-         real de la ventana y se solapaban con el contenido de la página.
-         Anclamos el grupo al viewport, independientemente del contenedor. */
-      #acciones-usuario {
-        position: fixed;
-        top: 1rem;
-        right: 1.5rem;
-        z-index: 1055;      /* por encima del contenido, por debajo de los modales */
-        display: flex;
-        align-items: center;
-        gap: .25rem;
-      }
-
-      /* Fondo propio para que los iconos se lean sobre cualquier contenido. */
-      #acciones-usuario {
-        background: rgba(255, 255, 255, .85);
-        backdrop-filter: blur(6px);
-        border-radius: 2rem;
-        padding: .15rem .35rem;
-        box-shadow: 0 .125rem .5rem rgba(161, 172, 184, .25);
-      }
-
-      @media (max-width: 1199.98px) {
-        #acciones-usuario { top: .75rem; right: .75rem; gap: .5rem; }
-        /* Objetivo táctil mínimo recomendado (44px); .w-px-40 fija 40px con
-           !important, así que hay que igualarlo en especificidad. */
-        #acciones-usuario .avatar-usuario.w-px-40 { width: 44px !important; height: 44px !important; }
-        /* El ancho/posición de #menu-notificaciones y #menu-user (más abajo,
-           cortado en pantallas angostas) se corrigen en mobile-ux.css, forzando
-           position:fixed en vez de confiar en el cálculo de Popper/CSS relativo
-           a #acciones-usuario, que en este contexto (position:fixed anidado)
-           termina desplazando el menú fuera del viewport. */
-      }
-
       {% if route_name != 'dashboard' and route_name != 'index' %}
-      /* El grupo va anclado al viewport y flota sobre el contenido, así que hay
-         que reservarle sitio: sin esto, en pantallas estrechas el título de la
-         página queda justo debajo de los iconos. Se reserva arriba (no a la
-         derecha) para no recortar el ancho útil de las tablas.
+      /* Solo queda el botón de hamburguesa (<1200px, d-xl-none) flotando sobre el
+         contenido, así que hay que reservarle sitio arriba: sin esto, en móvil el
+         título de la página queda justo debajo. En ≥1200px la barra está vacía
+         (ni hamburguesa ni iconos), así que no se reserva nada ahí.
 
          Se repiten los :not([class^="pt-"]) del tema (core.css) por dos motivos:
          para superar su especificidad —si no, gana él y esta regla no hace nada—
          y para conservar su intención: una página que fije su propia clase pt-*
          sigue mandando. */
-      .content-wrapper .container-p-y:not([class^="pt-"]):not([class*=" pt-"]),
-      .layout-page > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) {
-        padding-top: 4.25rem !important;
-      }
-
-      /* En móvil el grupo de iconos es más compacto (ver @media 1199.98px
-         arriba: top .75rem + avatar 44px + padding), así que puede reservarse
-         menos espacio que en escritorio. Va después de la regla de arriba
-         para ganar por orden de cascada (misma especificidad, ambas !important). */
       @media (max-width: 1199.98px) {
-        /* El grupo de iconos aquí es más compacto (top .75rem + avatar 44px +
-           padding, ver @media 1199.98px de arriba: borde inferior ≈62.8px),
-           así que puede reservarse algo menos que en escritorio sin solaparlo. */
         .content-wrapper .container-p-y:not([class^="pt-"]):not([class*=" pt-"]),
         .layout-page > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) {
-          padding-top: 4rem !important;
+          padding-top: 3rem !important;
         }
       }
       {% endif %}
-
-      /* Los desplegables se sacan del flujo con Popper, así que el anclaje del
-         contenedor no les afecta; solo aseguramos que queden por encima. */
-      #acciones-usuario .dropdown-menu { z-index: 1060; }
 
       .orbith-avatar-preview {
         width: 96px; height: 96px; object-fit: cover;
@@ -120,135 +72,6 @@ la condición aparece dos veces: en el estilo del <nav> y en el bloque <style>.
       </a>
     </div>
 
-    {# Grupo anclado al borde derecho del viewport: notificaciones + usuario #}
-    <ul class="navbar-nav flex-row align-items-center" id="acciones-usuario">
-      <li class="nav-item dropdown">
-        <a
-          class="btn btn-m position-relative"
-          href="#"
-          id="notificacionesDropdown"
-          role="button"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <i class="fas fa-bell fa-lg"></i>
-          <span
-            id="badge-notificaciones"
-            class="position-absolute badge rounded-pill bg-danger"
-            style="display: none; top: 0.1rem; right: 0.1rem; transform: none;"
-          >0
-            <span class="visually-hidden">notificaciones</span>
-          </span>
-        </a>
-        <ul id="menu-notificaciones" class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="notificacionesDropdown" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
-          <div id="lista-notificaciones">
-            <li class="text-center">Cargando notificaciones...</li>
-          </div>
-          <li><hr class="dropdown-divider"></li>
-          <li class="d-flex justify-content-between px-2">
-            <button class="btn btn-link btn-sm p-0" id="marcar-todas-leidas" type="button">
-              Marcar todas como leídas
-            </button>
-            <a class="btn btn-link btn-sm p-0" href="{% url 'lista_notificaciones' %}">
-              Ver más
-            </a>
-          </li>
-        </ul>
-      </li>
-
-      <li class="nav-item navbar-dropdown dropdown-user dropdown position-relative">
-        <a
-          class="nav-link dropdown-toggle hide-arrow p-1"
-          href="javascript:void(0);"
-          id="userDropdown"
-          role="button"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-        >
-          <div class="avatar avatar-online">
-            <img
-              src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
-              alt="Avatar"
-              class="w-px-40 h-auto rounded-circle avatar-usuario"
-              style="object-fit: cover; aspect-ratio: 1;"
-            />
-          </div>
-        </a>
-
-        <ul
-          id="menu-user"
-          class="dropdown-menu dropdown-menu-end p-0 shadow border-0 rounded-2"
-          aria-labelledby="userDropdown"
-          style="width: 260px;"
-        >
-          <li class="px-3 py-2 bg-light rounded-top">
-            <div class="d-flex align-items-center">
-              <div class="shrink-0 me-2">
-                <div class="avatar avatar-online">
-                  <img
-                    src="{% if user.avatar %}{{ user.avatar.url }}{% else %}{% static 'img/avatars/1.png' %}{% endif %}"
-                    alt="Avatar"
-                    class="w-px-40 h-auto rounded-circle avatar-usuario"
-                    style="object-fit: cover; aspect-ratio: 1;"
-                  />
-                </div>
-              </div>
-              <div class="grow overflow-hidden">
-                <span class="fw-semibold d-block text-truncate">
-                  {{ user.nombre_completo|default:user.username }}
-                </span>
-                <small class="text-muted">{{ user.rol_descripcion }}</small>
-              </div>
-            </div>
-          </li>
-          <li><hr class="dropdown-divider m-0"></li>
-
-          <li>
-            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalMiPerfil">
-              <i class="bx bx-user me-2"></i>
-              <span class="align-middle">Mi Perfil</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalPreferencias">
-              <i class="bx bx-cog me-2"></i>
-              <span class="align-middle">Configuración</span>
-            </button>
-          </li>
-          <li><hr class="dropdown-divider m-0"></li>
-          <li>
-            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalAcercaDe">
-              <i class="bx bx-info-circle me-2"></i>
-              <span class="align-middle">Acerca de Orbith</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalNovedades">
-              <i class="bx bx-gift me-2"></i>
-              <span class="align-middle">Novedades de la versión</span>
-              <span class="badge bg-label-primary ms-1">{{ orbith_version }}</span>
-            </button>
-          </li>
-          <li><hr class="dropdown-divider m-0"></li>
-
-          <li>
-            {# Reutiliza el confirmador universal de base.html (form.swal-confirm) #}
-            <form method="POST" action="{% url 'logout' %}" id="logout-form"
-                  class="swal-confirm"
-                  data-confirm-title="¿Desea cerrar sesión?"
-                  data-confirm-text="Su sesión actual será finalizada."
-                  data-confirm-button="Cerrar sesión"
-                  data-confirm-icon="question">
-              {% csrf_token %}
-              <button type="submit" class="dropdown-item px-3 py-2">
-                <i class="bx bx-power-off me-2"></i>
-                <span class="align-middle">Cerrar sesión</span>
-              </button>
-            </form>
-          </li>
-        </ul>
-      </li>
-    </ul>
   </nav>
 
   {% include 'base/partials/modales_usuario.html' %}

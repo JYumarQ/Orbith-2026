@@ -10,6 +10,7 @@ urlpatterns = [
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/piramide-edades/', dashboard_views.piramide_edades_json, name='dashboard_piramide_json'),
     path('dashboard/advertencias/', dashboard_views.advertencias_json, name='dashboard_advertencias_json'),
+    path('dashboard/antiguedad/', dashboard_views.antiguedad_html, name='dashboard_antiguedad_html'),
 
     ## ---------------------------------------------------------
     # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)
@@ -30,6 +31,7 @@ urlpatterns = [
     path('config/', include('configuracion.urls')),
     path('nomencladores/', include('nomencladores.urls')),
     path('notificaciones/', include('notificaciones.urls')),
+    path('progreso/', include('progreso.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),
     path('soporte/', include('soporte.urls')),

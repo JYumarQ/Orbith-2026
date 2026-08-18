@@ -297,55 +297,11 @@ class SexoIncompatibleConCarnet(ReglaAspirantes):
 def _campo_de_texto_vacio(valor):
     """Pura: la usan ejecutar() y evaluar_instancia() sin repetir el criterio.
 
-    Vacío = None o cadena en blanco tras strip(). La reutilizan ASP-005 y ASP-006:
-    ambas son «campo de contacto sin completar», con el mismo criterio de vacío.
+    Vacío = None o cadena en blanco tras strip(). La reutiliza ASP-006 (dirección) y,
+    fuera de este archivo, `subsanacion/reglas/extras.py` (móvil, tallas): todas son
+    «campo de contacto/complementario sin completar», con el mismo criterio de vacío.
     """
     return not (valor or '').strip()
-
-
-class MovilPersonalVacio(ReglaAspirantes):
-    codigo = 'ASP-005'
-    nombre = 'Móvil personal sin completar'
-    criticidad = CRITICIDAD_BAJA
-    # Evaluable en caliente: O(1), solo un campo propio de la instancia.
-    evaluable_en_caliente = True
-
-    descripcion = (
-        'Comprueba que el trabajador tenga registrado un número de móvil personal.')
-    causa_probable = (
-        'El trabajador no facilitó un móvil al registrarse, o el dato llegará más '
-        'adelante.')
-    impacto = (
-        'Sin un móvil registrado, Orbith no tiene ninguna vía rápida de contacto '
-        'directo con el trabajador. No es obligatorio a nivel de formulario porque '
-        'el dato puede llegar después del alta.')
-    solucion = 'Abra el trabajador y complete el móvil personal.'
-
-    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
-        return HallazgoDetectado(
-            object_id=object_id,
-            titulo=titulo,
-            detalle='El trabajador no tiene registrado ningún móvil personal.',
-            datos={'movil_personal': 'Vacío'},
-            unidad_organizativa_id=unidad_organizativa_id,
-            campo_formulario='movil_personal',
-        )
-
-    def ejecutar(self, contexto):
-        filas = (self.base_queryset()
-                 .filter(Q(movil_personal__isnull=True) | Q(movil_personal=''))
-                 .values(*self.COLUMNAS_BASE)
-                 .iterator(chunk_size=TAMANO_LOTE))
-
-        for fila in filas:
-            yield self._hallazgo(
-                str(fila['id']), self.titulo_de(fila, 'sin móvil personal'),
-                fila.get('unidad_organizativa_id'))
-
-    def evaluar_instancia(self, aspirante):
-        if not _campo_de_texto_vacio(aspirante.movil_personal):
-            return None
-        return [self._hallazgo(str(aspirante.pk), 'Sin móvil personal')]
 
 
 class DireccionVacia(ReglaAspirantes):

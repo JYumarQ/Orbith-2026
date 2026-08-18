@@ -7,8 +7,9 @@ que el usuario exporta es lo que está viendo en pantalla.
 
 from django.db.models import Q
 
-from .constantes import CLAVES_MODULOS, ETIQUETA_CRITICIDAD
+from .constantes import CLAVES_MODULOS, ETIQUETA_CRITICIDAD, MODULO_EXTRAS
 from .models import Hallazgo
+from .permisos import es_administrador, unidades_visibles
 
 
 def _lista_de(request, parametro, validos=None, convertir=None):
@@ -56,6 +57,16 @@ def filtrar_hallazgos(request):
     # botón «Abrir registro» lo necesita para construir la url.
     consulta = Hallazgo.objects.select_related('content_type')
 
+    # Alcance por rol (`subsanacion/permisos.py`): un Moderador solo ve hallazgos de
+    # sus propias Unidades Organizativas. Un hallazgo SIN unidad (algunos globales,
+    # de Configuración o de Usuarios) queda fuera de su alcance — mismo criterio que
+    # ya usa `notificaciones/escaneo.py` para repartir avisos: sin unidad, es cosa
+    # del Administrador. Se aplica ANTES que cualquier otro filtro para que ninguno
+    # de los de abajo pueda ensanchar el alcance por error.
+    if not es_administrador(request.user):
+        uo_ids_visibles = unidades_visibles(request.user).values_list('pk', flat=True)
+        consulta = consulta.filter(unidad_organizativa_id__in=uo_ids_visibles)
+
     if not incluir_archivados:
         consulta = consulta.filter(vigente=True)
 
@@ -72,6 +83,13 @@ def filtrar_hallazgos(request):
 
     if modulos:
         consulta = consulta.filter(modulo__in=modulos)
+    else:
+        # «Todas» no incluye Extras: son datos complementarios (ver
+        # `reglas/extras.py`), no problemas de calidad, y mezclarlos aquí es ruido.
+        # Solo aparecen si el usuario los pide explícitamente filtrando por la
+        # categoría Extras (mismo criterio que ya excluye Extras del índice de
+        # salud en `servicios.finalizar_ejecucion()`).
+        consulta = consulta.exclude(modulo=MODULO_EXTRAS)
 
     if busqueda:
         # La búsqueda NO puede hacer JOIN al registro original (el listado no resuelve

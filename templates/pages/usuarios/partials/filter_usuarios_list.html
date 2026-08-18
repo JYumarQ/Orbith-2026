@@ -53,8 +53,11 @@
                     <span title="Desconectado" style="font-size: 1.1rem;">⚪</span>
                 {% endif %}
             </td>
+            <td class="text-center">
+                <small class="text-muted">{{ u.progreso_completadas_count }}/{{ progreso_total_catalogo }}</small>
+            </td>
         </tr>
     {% endfor %}
 {% else %}
-    <tr><td colspan="6">No hay registros disponibles.</td></tr>
+    <tr><td colspan="7">No hay registros disponibles.</td></tr>
 {% endif %}

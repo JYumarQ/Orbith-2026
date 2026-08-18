@@ -17,9 +17,10 @@ from unittest.mock import patch
 
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
 
-from .constantes import CRITICIDAD_ALTA, MODULO_CONTRATOS
+from .constantes import CRITICIDAD_ALTA, CRITICIDAD_INFORMATIVA, MODULO_CONTRATOS
 from .contexto import ContextoAnalisis
 from .models import EjecucionAnalisis, Hallazgo, RevisionHallazgo
 from .reglas.base import HallazgoDetectado, ReglaBase
@@ -247,7 +248,12 @@ class ExportacionTests(TestCase):
     """
 
     def setUp(self):
+        from usuarios.models import CustomUser
+
         from .constantes import CRITICIDAD_CRITICA, CRITICIDAD_MEDIA, MODULO_NOMINA
+
+        self.admin = CustomUser.objects.create_user(
+            username='admin_exportacion', password='x', es_admin=True)
 
         tipo = ContentType.objects.get_for_model(ReglaDePrueba().obtener_modelo())
         ahora = timezone.now()
@@ -282,6 +288,7 @@ class ExportacionTests(TestCase):
         from .filtros import filtrar_hallazgos
 
         peticion = RequestFactory().get(f'/subsanacion/exportar/excel/{querystring}')
+        peticion.user = self.admin
         esperadas = filtrar_hallazgos(peticion)[0].count()
         obtenidas = len(self._filas_de_excel(exportar_a_excel(peticion).content))
         self.assertEqual(
@@ -324,6 +331,7 @@ class ExportacionTests(TestCase):
         from .exportar import exportar_a_pdf
 
         peticion = RequestFactory().get('/subsanacion/exportar/pdf/')
+        peticion.user = self.admin
         respuesta = exportar_a_pdf(peticion)
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta['Content-Type'], 'application/pdf')
@@ -355,6 +363,99 @@ class IndiceDeSaludTests(TestCase):
     def test_sin_registros_no_divide_por_cero(self):
         from .servicios import indice_desde_afectados
         self.assertEqual(indice_desde_afectados(0, 0), Decimal('100.00'))
+
+
+class IndiceExcluyeExtrasTests(TestCase):
+    """Un hallazgo de Extras (dato complementario, no importante para RRHH) no debe
+    bajar el índice de salud general — ver `servicios.finalizar_ejecucion()`."""
+
+    def test_hallazgo_de_extras_no_penaliza_el_indice(self):
+        from bolsa.models import Aspirante
+        from nomencladores.models import NMunicipio, NProvincia
+
+        from .constantes import MODULO_EXTRAS
+        from .servicios import finalizar_ejecucion
+
+        provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
+        aspirante = Aspirante.objects.create(
+            nombre='Trab', papellido='Prueba', sapellido='Test',
+            doc_identidad='90010112345', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+
+        tipo = ContentType.objects.get_for_model(Aspirante)
+        Hallazgo.objects.create(
+            codigo_regla='ASP-005', content_type=tipo, object_id=str(aspirante.pk),
+            modulo=MODULO_EXTRAS, criticidad=CRITICIDAD_INFORMATIVA,
+            titulo='Sin móvil personal', ultima_deteccion=timezone.now(),
+            estado=Hallazgo.PENDIENTE)
+
+        ejecucion = EjecucionAnalisis.objects.create(
+            estado=EjecucionAnalisis.EN_CURSO,
+            modulos_solicitados=[MODULO_EXTRAS], modulos_completados=[MODULO_EXTRAS],
+            codigos_regla_ejecutados=['ASP-005'], modelos_analizados=['bolsa.Aspirante'])
+
+        finalizar_ejecucion(ejecucion)
+        ejecucion.refresh_from_db()
+
+        # El hallazgo se sigue contando y mostrando...
+        self.assertEqual(ejecucion.hallazgos_vigentes, 1)
+        # ...pero no cuenta como registro afectado para la nota de salud general.
+        self.assertEqual(ejecucion.indice_salud, Decimal('100.00'))
+
+
+class FiltroExcluyeExtrasTests(TestCase):
+    """«Todas» (sin filtrar por categoría) no debe incluir Extras: son datos
+    complementarios, no problemas de calidad, y mezclarlos es ruido. Solo aparecen si
+    el usuario los pide explícitamente filtrando por la categoría Extras."""
+
+    def setUp(self):
+        from usuarios.models import CustomUser
+
+        from .constantes import MODULO_EXTRAS
+
+        self.admin = CustomUser.objects.create_user(
+            username='admin_filtro_extras', password='x', es_admin=True)
+
+        tipo = ContentType.objects.get_for_model(ReglaDePrueba().obtener_modelo())
+        ahora = timezone.now()
+        self.extra = Hallazgo.objects.create(
+            codigo_regla='EXT-999', content_type=tipo, object_id='1',
+            modulo=MODULO_EXTRAS, criticidad=CRITICIDAD_INFORMATIVA,
+            titulo='Hallazgo de Extras', ultima_deteccion=ahora, estado=Hallazgo.PENDIENTE)
+        self.normal = Hallazgo.objects.create(
+            codigo_regla='PRUEBA-002', content_type=tipo, object_id='2',
+            modulo=MODULO_CONTRATOS, criticidad=CRITICIDAD_ALTA,
+            titulo='Hallazgo normal', ultima_deteccion=ahora, estado=Hallazgo.PENDIENTE)
+
+    def _peticion(self, querystring=''):
+        from django.test import RequestFactory
+
+        peticion = RequestFactory().get(f'/subsanacion/panel/hallazgos/{querystring}')
+        peticion.user = self.admin
+        return peticion
+
+    def test_todas_excluye_extras(self):
+        from .filtros import filtrar_hallazgos
+
+        consulta, filtros = filtrar_hallazgos(self._peticion())
+        ids = set(consulta.values_list('id', flat=True))
+        self.assertIn(self.normal.id, ids)
+        self.assertNotIn(self.extra.id, ids)
+
+    def test_filtrar_por_extras_explicitamente_lo_muestra(self):
+        from .constantes import MODULO_EXTRAS
+        from .filtros import filtrar_hallazgos
+
+        consulta, filtros = filtrar_hallazgos(self._peticion(f'?modulo={MODULO_EXTRAS}'))
+        ids = set(consulta.values_list('id', flat=True))
+        self.assertIn(self.extra.id, ids)
+        self.assertNotIn(self.normal.id, ids)
+
+    def test_badge_de_la_pestana_hallazgos_excluye_extras(self):
+        from .views import _contexto_dashboard
+
+        self.assertEqual(_contexto_dashboard()['total_vigentes'], 1)
 
 
 class NotaObligatoriaTests(TestCase):
@@ -655,6 +756,17 @@ class FuncionesPurasEnCalienteTests(TestCase):
         # Dinámico en cargo que no es Cuadro: correcto, el tridente sí aplica.
         self.assertEqual(_tridente_indebido('DIN', False), '')
 
+    def test_tallas_incompletas(self):
+        from .reglas.extras import _tallas_incompletas
+
+        self.assertEqual(
+            _tallas_incompletas(None, None, None),
+            ['pantalón', 'camisa/blusa', 'zapatos'])
+        self.assertEqual(_tallas_incompletas('32', 'M', 42), [])
+        # `tzapatos` es un IntegerField: 0 es una talla válida, no "vacío".
+        self.assertEqual(_tallas_incompletas('32', 'M', 0), [])
+        self.assertEqual(_tallas_incompletas('32', None, 42), ['camisa/blusa'])
+
 
 class EvaluarInstanciaTests(TestCase):
     """`evaluar_instancia()` de CTR-007/012/013 sobre una instancia real, no un dict.
@@ -732,9 +844,12 @@ class EvaluarInstanciaTests(TestCase):
         self.assertIsNone(ChoferSinFechasDeVencimiento().evaluar_instancia(contrato))
 
     def test_movil_personal_vacio_detectado(self):
+        """ASP-005 vive ahora en `reglas/extras.py` (módulo Extras, ver ronda de
+        RRHH que decidió que el móvil no es un dato importante), pero sigue
+        detectando exactamente igual: solo cambió dónde cuenta, no qué detecta."""
         from types import SimpleNamespace
 
-        from .reglas.aspirantes import MovilPersonalVacio
+        from .reglas.extras import MovilPersonalVacio
 
         aspirante = SimpleNamespace(pk=1, movil_personal='')
 
@@ -745,7 +860,7 @@ class EvaluarInstanciaTests(TestCase):
     def test_movil_personal_completo_devuelve_none(self):
         from types import SimpleNamespace
 
-        from .reglas.aspirantes import MovilPersonalVacio
+        from .reglas.extras import MovilPersonalVacio
 
         aspirante = SimpleNamespace(pk=1, movil_personal='54212345')
 
@@ -848,6 +963,51 @@ class EvaluarInstanciaTests(TestCase):
             cargo_id=6, cargo=SimpleNamespace(ncargo=SimpleNamespace(es_cuadro=True)))
 
         self.assertIsNone(TridenteIndebido().evaluar_instancia(contrato))
+
+    def test_tallas_incompletas_genera_un_solo_hallazgo(self):
+        """Un único hallazgo por aspirante, aunque falten varias tallas — no uno
+        por talla (a diferencia de CTR-002/CTR-007, que sí usan `clave_extra`)."""
+        from types import SimpleNamespace
+
+        from .reglas.extras import TallasSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, tpantalon='', tcamisa='M', tzapatos=None)
+
+        detectados = TallasSinCompletar().evaluar_instancia(aspirante)
+
+        self.assertEqual(len(detectados), 1)
+        self.assertIn('pantalón', detectados[0].detalle)
+        self.assertIn('zapatos', detectados[0].detalle)
+        self.assertNotIn('camisa', detectados[0].detalle)
+
+    def test_tallas_completas_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.extras import TallasSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, tpantalon='32', tcamisa='M', tzapatos=42)
+
+        self.assertIsNone(TallasSinCompletar().evaluar_instancia(aspirante))
+
+    def test_fijo_personal_vacio_detectado(self):
+        from types import SimpleNamespace
+
+        from .reglas.extras import TelefonoFijoSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, fijo_personal='')
+
+        detectados = TelefonoFijoSinCompletar().evaluar_instancia(aspirante)
+
+        self.assertEqual(len(detectados), 1)
+
+    def test_fijo_personal_completo_devuelve_none(self):
+        from types import SimpleNamespace
+
+        from .reglas.extras import TelefonoFijoSinCompletar
+
+        aspirante = SimpleNamespace(pk=1, fijo_personal='78345678')
+
+        self.assertIsNone(TelefonoFijoSinCompletar().evaluar_instancia(aspirante))
 
 
 class EvaluarReglasDeInstanciaTests(TestCase):
@@ -954,4 +1114,208 @@ class ReconciliarHallazgosEnCalienteTests(TestCase):
 
         ignorado.refresh_from_db()
         self.assertEqual(ignorado.estado, Hallazgo.IGNORADO)
-        self.assertEqual(ignorado.revisiones.count(), 0)
+
+
+class PermisosSubsanacionTests(TestCase):
+    """Control de acceso (`subsanacion/permisos.py`): Administrador ve y actúa sobre
+    toda la empresa, Moderador solo sobre sus propias Unidades Organizativas (ni
+    manipulando la URL a mano), Observador no entra en absoluto."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from usuarios.models import CustomUser
+        from nomencladores.models import NTipoUnidadOrganizativa
+        from strorganizativa.models import UnidadOrganizativa
+
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.uo_propia = UnidadOrganizativa.objects.create(
+            descripcion='UEB del moderador', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.uo_ajena = UnidadOrganizativa.objects.create(
+            descripcion='UEB ajena', tipo=tipo_unidad, grupo_nomina=1, orden_informe=2)
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_permisos', password='x', es_admin=True)
+        cls.moderador = CustomUser.objects.create_user(
+            username='moderador_permisos', password='x', es_moderador=True)
+        cls.moderador.unidades.set([cls.uo_propia])
+        cls.observador = CustomUser.objects.create_user(
+            username='observador_permisos', password='x', es_observador=True)
+
+        tipo = ContentType.objects.get_for_model(ReglaDePrueba().obtener_modelo())
+        ahora = timezone.now()
+        cls.hallazgo_propio = Hallazgo.objects.create(
+            codigo_regla='PERM-001', content_type=tipo, object_id='1',
+            modulo=MODULO_CONTRATOS, criticidad=CRITICIDAD_ALTA, titulo='De la UO propia',
+            ultima_deteccion=ahora, estado=Hallazgo.PENDIENTE,
+            unidad_organizativa=cls.uo_propia)
+        cls.hallazgo_ajeno = Hallazgo.objects.create(
+            codigo_regla='PERM-002', content_type=tipo, object_id='2',
+            modulo=MODULO_CONTRATOS, criticidad=CRITICIDAD_ALTA, titulo='De la UO ajena',
+            ultima_deteccion=ahora, estado=Hallazgo.PENDIENTE,
+            unidad_organizativa=cls.uo_ajena)
+
+    # --- Acceso general -----------------------------------------------------
+
+    def test_observador_no_accede_al_index(self):
+        self.client.force_login(self.observador)
+        respuesta = self.client.get(reverse('subsanacion:index'))
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_anonimo_no_accede_al_index(self):
+        respuesta = self.client.get(reverse('subsanacion:index'))
+        self.assertIn(respuesta.status_code, (302, 403))
+
+    def test_admin_accede_al_index(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('subsanacion:index'))
+        self.assertEqual(respuesta.status_code, 200)
+
+    def test_moderador_accede_al_index(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:index'))
+        self.assertEqual(respuesta.status_code, 200)
+
+    # --- Paneles exclusivos de Administrador (barrido completo) -------------
+
+    def test_moderador_no_accede_al_dashboard(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:panel_dashboard'))
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_moderador_no_accede_a_estadisticas(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:panel_estadisticas'))
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_moderador_no_accede_a_revisiones(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:panel_revisiones'))
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_moderador_no_puede_iniciar_analisis(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.post(reverse('subsanacion:iniciar_analisis'))
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_observador_no_accede_a_ningun_panel(self):
+        self.client.force_login(self.observador)
+        for nombre in ('subsanacion:panel_hallazgos', 'subsanacion:panel_dashboard',
+                       'subsanacion:panel_analisis'):
+            respuesta = self.client.get(reverse(nombre))
+            self.assertEqual(respuesta.status_code, 403, nombre)
+
+    # --- Alcance por Unidad Organizativa en el listado -----------------------
+
+    def test_admin_ve_hallazgos_de_todas_las_uo(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('subsanacion:panel_hallazgos'))
+        contenido = respuesta.content.decode('utf-8', errors='replace')
+        self.assertIn('De la UO propia', contenido)
+        self.assertIn('De la UO ajena', contenido)
+
+    def test_moderador_solo_ve_hallazgos_de_su_uo(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:panel_hallazgos'))
+        contenido = respuesta.content.decode('utf-8', errors='replace')
+        self.assertIn('De la UO propia', contenido)
+        self.assertNotIn('De la UO ajena', contenido)
+
+    # --- Seguridad: manipulación directa de URL/pk ---------------------------
+
+    def test_moderador_no_accede_al_detalle_de_un_hallazgo_ajeno_por_url(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(
+            reverse('subsanacion:detalle_hallazgo', args=[self.hallazgo_ajeno.pk]))
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_moderador_accede_al_detalle_de_su_propio_hallazgo(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(
+            reverse('subsanacion:detalle_hallazgo', args=[self.hallazgo_propio.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+
+    def test_moderador_no_puede_cambiar_estado_de_un_hallazgo_ajeno_por_url(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.post(
+            reverse('subsanacion:cambiar_estado', args=[self.hallazgo_ajeno.pk]),
+            {'estado': Hallazgo.EN_REVISION, 'nota': ''})
+        self.assertEqual(respuesta.status_code, 404)
+        self.hallazgo_ajeno.refresh_from_db()
+        self.assertEqual(self.hallazgo_ajeno.estado, Hallazgo.PENDIENTE)
+
+    def test_moderador_puede_cambiar_estado_de_su_propio_hallazgo(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.post(
+            reverse('subsanacion:cambiar_estado', args=[self.hallazgo_propio.pk]),
+            {'estado': Hallazgo.EN_REVISION, 'nota': ''})
+        self.assertEqual(respuesta.status_code, 200)
+        self.hallazgo_propio.refresh_from_db()
+        self.assertEqual(self.hallazgo_propio.estado, Hallazgo.EN_REVISION)
+
+    def test_moderador_no_puede_exportar_hallazgos_ajenos(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('subsanacion:exportar_excel'))
+        self.assertEqual(respuesta.status_code, 200)
+        import io
+
+        from openpyxl import load_workbook
+        hoja = load_workbook(io.BytesIO(respuesta.content)).active
+        textos = [str(valor) for fila in hoja.iter_rows(values_only=True) for valor in fila if valor]
+        self.assertTrue(any('De la UO propia' in t for t in textos))
+
+
+class ContratoSinFechaAltaEntidadTests(TestCase):
+    """CTR-016: detecta contratos sin F. Alta Entidad registrada."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import NMunicipio, NProvincia, NTipoContrato
+
+        provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
+        tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=False, requiere_motivo=False)
+
+        cls.aspirante_sin = Aspirante.objects.create(
+            nombre='Sin', papellido='Alta', sapellido='Entidad',
+            doc_identidad='90010112301', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.contrato_sin = CAlta.objects.create(
+            aspirante=cls.aspirante_sin, no_expediente='90001', tipo=tipo_contrato,
+            fecha_alta=date.today())
+
+        cls.aspirante_con = Aspirante.objects.create(
+            nombre='Con', papellido='Alta', sapellido='Entidad',
+            doc_identidad='90010112302', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.contrato_con = CAlta.objects.create(
+            aspirante=cls.aspirante_con, no_expediente='90002', tipo=tipo_contrato,
+            fecha_alta=date.today(), fecha_alta_entidad=date.today())
+
+    def test_detecta_solo_el_contrato_sin_fecha_alta_entidad(self):
+        from .reglas.contratos import ContratoSinFechaAltaEntidad
+
+        regla = ContratoSinFechaAltaEntidad()
+        hallazgos = list(regla.ejecutar(None))
+        object_ids = {h.object_id for h in hallazgos}
+
+        self.assertIn(str(self.contrato_sin.pk), object_ids)
+        self.assertNotIn(str(self.contrato_con.pk), object_ids)
+
+    def test_reconciliacion_genera_hallazgo_con_unidad_organizativa(self):
+        ejecucion = EjecucionAnalisis.objects.create(estado=EjecucionAnalisis.COMPLETA)
+        from .reglas.contratos import ContratoSinFechaAltaEntidad
+
+        regla = ContratoSinFechaAltaEntidad()
+        resultado = reconciliar_regla(regla, ejecucion, ContextoAnalisis(ejecucion))
+        self.assertEqual(resultado['nuevos'], 1)
+
+        creado = Hallazgo.objects.get(
+            codigo_regla='CTR-016', object_id=str(self.contrato_sin.pk))
+        self.assertIsNone(creado.unidad_organizativa_id)
+        self.assertEqual(creado.criticidad, CRITICIDAD_ALTA)

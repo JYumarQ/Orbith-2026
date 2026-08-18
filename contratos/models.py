@@ -1,6 +1,7 @@
 import logging
 import threading
 from decimal import Decimal
+from django.contrib.contenttypes.models import ContentType
 from django.core.signals import request_started
 from django.db import models
 from django.db.models.signals import post_delete, post_save
@@ -181,6 +182,7 @@ class CAlta(ContratoBase):
     fecha_vence_seg = models.DateField(null=True, blank=True)
     
     fecha_alta = models.DateField(null=True, blank=True)
+    fecha_alta_entidad = models.DateField(null=True, blank=True)
 
     jubilado_recontratado = models.BooleanField(default=False)
     en_proceso_movimiento = models.BooleanField(default=False, verbose_name="En Proceso de Movimiento")
@@ -676,3 +678,168 @@ class TMovimientoAgrupado(TMovimiento):
         proxy = True
         verbose_name = "T Movimiento"
         verbose_name_plural = "T Movimientos"
+
+
+# ==================== BORRADO DE TMOVIMIENTO DESDE EL ADMIN ====================
+# Decisión tomada con el usuario tras un caso real en producción: el Admin de Django
+# puede borrar movimientos de nómina libremente (uno, varios o todo el histórico), pero
+# eso NUNCA debe quedar en silencio ni dejar datos a medias.
+#
+# Va en `post_delete` (no en `TMovimiento.delete()`) porque `post_delete` se dispara
+# también en los borrados masivos (`QuerySet.delete()`, la acción «Eliminar
+# seleccionados» y la acción agrupada de `TMovimientoAgrupadoAdmin`), que NO pasan por
+# el `.delete()` de una instancia concreta.
+def _al_eliminar_movimiento(sender, instance, **kwargs):
+    """Audita CADA borrado de TMovimiento y, si deja al trabajador sin ningún
+    movimiento de nómina, cierra su ciclo de contratación.
+
+    «Sin ningún movimiento» se comprueba sobre TODOS los expedientes del aspirante,
+    no solo el de `instance`: lo que dispara este cierre es vaciar el histórico
+    COMPLETO del trabajador, no un expediente suelto.
+
+    Vaciar el histórico completo de alguien es una decisión deliberada del
+    administrador (quiere borrar sus datos de la BD), así que aquí SÍ se borra todo
+    lo que se pueda borrar: si el aspirante todavía tenía un `CAlta` vigente, se
+    elimina por completo (cargo, unidad, salario, tridente, todo) — solo sobrevive
+    el `no_expediente`, para no perder la trazabilidad del expediente. Se crea un
+    `CBaja` "vacío" (sin cargo, sin fecha_alta) que sirve de marcador: certifica que
+    el trabajador existió y fue dado de baja, pero deja explícito que no tiene
+    ningún dato real porque su histórico se borró desde el Admin, no por una baja
+    real documentada. `list_aspir.html`/`BajaListView` lo resalta en rojo cuando lo
+    detecta (`fecha_alta is None`), para que quede claro a simple vista que esa
+    fila no tiene información real detrás.
+
+    Ese `fecha_alta=None` es también la clave de que, si se recontrata a este
+    trabajador más adelante, el nuevo ciclo se vea como «Alta Inicial» y no como
+    «Recontratación»: `historico_trabajador()` (`contratos/views.py`) solo genera
+    un hito de alta para un `CBaja` que tenga `fecha_alta` (`if b.fecha_alta:`), así
+    que este marcador vacío no cuenta para esa cronología — no tendría sentido
+    "recontratar" a alguien de quien no queda ningún rastro documental.
+
+    Envuelto en try/except: una excepción aquí NUNCA debe impedir que el borrado que
+    el usuario pidió se complete.
+    """
+    from auditoria.middleware import get_current_user
+    from auditoria.models import AccionAuditoria
+    from auditoria.servicios import registrar as registrar_auditoria
+
+    usuario_actual = get_current_user()
+
+    try:
+        registrar_auditoria(
+            usuario=usuario_actual, accion=AccionAuditoria.ELIMINAR, modulo='contratos',
+            content_type=ContentType.objects.get_for_model(TMovimiento),
+            object_id=str(instance.pk),
+            descriptor=f'Movimiento de nómina eliminado (expediente '
+                       f'{instance.no_expediente or "—"}, {instance.tipo_movimiento}) '
+                       f'de {instance.aspirante or "trabajador desconocido"}.')
+    except Exception:
+        logger.exception(
+            "No se pudo registrar en Auditoría la eliminación del movimiento %s.",
+            instance.pk)
+
+    if str(instance.tipo_movimiento or '').strip().lower() == TIPO_MOVIMIENTO_BAJA.lower():
+        _borrar_cbaja_asociada(instance, usuario_actual)
+
+    aspirante_id = instance.aspirante_id
+    if not aspirante_id:
+        return
+
+    try:
+        if TMovimiento.objects.filter(aspirante_id=aspirante_id).exists():
+            return  # todavía le quedan movimientos: nada que cerrar
+
+        aspirante = Aspirante.objects.filter(pk=aspirante_id).first()
+        if aspirante is None or aspirante.estado == 'BAJA':
+            return  # ya está de baja (o no existe): no hay nada que reconciliar
+
+        no_expediente = instance.no_expediente
+        contrato = CAlta.objects.filter(aspirante_id=aspirante_id).first()
+        if contrato:
+            no_expediente = contrato.no_expediente
+            object_id_contrato = str(contrato.pk)
+            descriptor_contrato = str(contrato)
+            contrato.delete()  # deja al aspirante en BAJA, notifica y recalcula la plaza
+            registrar_auditoria(
+                usuario=usuario_actual, accion=AccionAuditoria.ELIMINAR, modulo='contratos',
+                content_type=ContentType.objects.get_for_model(CAlta),
+                object_id=object_id_contrato,
+                descriptor=f'Contrato de {descriptor_contrato} cerrado automáticamente: '
+                           f'se quedó sin ningún movimiento de nómina en su histórico.')
+        else:
+            aspirante.estado = 'BAJA'
+            aspirante.save(update_fields=['estado'])
+
+        if not no_expediente:
+            return
+
+        ya_existe = CBaja.objects.filter(
+            aspirante_id=aspirante_id, no_expediente=no_expediente,
+            cargo__isnull=True, fecha_alta__isnull=True).exists()
+        if ya_existe:
+            return
+
+        baja = CBaja.objects.create(
+            aspirante=aspirante, no_expediente=no_expediente,
+            fecha_alta=None, fecha_baja=timezone.now().date(),
+            observaciones=(
+                'Baja generada automáticamente por Orbith: se eliminó todo el '
+                'histórico de movimientos de nómina de este trabajador desde el '
+                'Admin de Django, sin dejar cargo, Unidad Organizativa ni '
+                'Departamento asociado. Este registro no tiene datos reales, solo '
+                'certifica que el expediente existió.'))
+        registrar_auditoria(
+            usuario=usuario_actual, accion=AccionAuditoria.CREAR, instancia=baja,
+            modulo='contratos',
+            descriptor=f'Baja automática de {aspirante} al vaciarse su histórico de '
+                       f'movimientos de nómina (expediente {no_expediente}).')
+    except Exception:
+        logger.exception(
+            "No se pudo cerrar automáticamente el ciclo del aspirante %s tras "
+            "quedarse sin histórico de movimientos.", aspirante_id)
+
+
+def _borrar_cbaja_asociada(instance, usuario_actual):
+    """Borra el `CBaja` que corresponde al mismo evento que el `TMovimiento` tipo
+    «Baja» que se acaba de eliminar.
+
+    Se empareja por (aspirante, expediente, fecha) en vez de por una FK directa
+    porque nunca existió ese enlace en el modelo. `fecha_efectiva` del movimiento
+    de Baja y `fecha_baja` del CBaja se escriben SIEMPRE con el mismo valor en el
+    único lugar del código que crea ambos a la vez (ver `dar_baja` en
+    `contratos/views.py`), así que la pareja (aspirante_id, no_expediente,
+    fecha_baja) identifica sin ambigüedad un único ciclo de contratación — el
+    mismo criterio que ya usa `historico_trabajador()` para asociar cada Baja a
+    su ciclo cuando hay expedientes reutilizados por recontratación.
+    """
+    from auditoria.models import AccionAuditoria
+    from auditoria.servicios import registrar as registrar_auditoria
+
+    if not instance.aspirante_id or not instance.no_expediente or not instance.fecha_efectiva:
+        return
+
+    try:
+        baja = CBaja.objects.filter(
+            aspirante_id=instance.aspirante_id,
+            no_expediente=instance.no_expediente,
+            fecha_baja=instance.fecha_efectiva,
+        ).first()
+        if not baja:
+            return
+
+        object_id, descriptor = str(baja.pk), str(baja)
+        baja.delete()
+        registrar_auditoria(
+            usuario=usuario_actual, accion=AccionAuditoria.ELIMINAR, modulo='contratos',
+            content_type=ContentType.objects.get_for_model(CBaja),
+            object_id=object_id,
+            descriptor=f'Baja de {descriptor} eliminada junto con su movimiento de '
+                       f'nómina asociado.')
+    except Exception:
+        logger.exception(
+            "No se pudo eliminar el CBaja asociado al movimiento de Baja %s.",
+            instance.pk)
+
+
+post_delete.connect(_al_eliminar_movimiento, sender=TMovimiento,
+                     dispatch_uid='contratos_al_eliminar_movimiento')

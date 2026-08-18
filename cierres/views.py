@@ -58,6 +58,13 @@ def declarar(request, unidad_id):
     except servicios.ErrorDeCierre as error:
         return _error(str(error))
 
+    from django.contrib import messages
+
+    from progreso.servicios import completar_tarea
+    tarea = completar_tarea(request.user, 'primer_cierre_declarado')
+    if tarea:
+        messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+
     return _ok(
         f'«{unidad.descripcion}» declarada actualizada para el cierre de '
         f'{cierre.periodo.etiqueta} ({cierre.estado_plazo.lower()}).',

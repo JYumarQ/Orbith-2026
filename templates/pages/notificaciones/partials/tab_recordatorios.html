@@ -142,17 +142,12 @@
       fetch("{% url 'actualizar_recordatorios' %}", { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
         .then(function (res) { return res.json(); })
         .then(function (data) {
-          Swal.fire({
-            toast: true, position: 'top-end', icon: 'success',
-            title: data.mensaje, showConfirmButton: false, timer: 3000, timerProgressBar: true,
-          }).then(function () { window.location.reload(); });
+          window.mostrarToast(data.mensaje, 'success');
+          setTimeout(function () { window.location.reload(); }, 1200);
         })
         .catch(function () {
           btnActualizarRecordatorios.disabled = false;
-          Swal.fire({
-            toast: true, position: 'top-end', icon: 'error',
-            title: 'No se pudo actualizar los recordatorios.', showConfirmButton: false, timer: 3000,
-          });
+          window.mostrarToast('No se pudo actualizar los recordatorios.', 'error');
         });
     });
   }

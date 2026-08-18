@@ -459,11 +459,7 @@
 
     // VALIDACIÓN ESTRICTA
     if (esSubunidad && (!padreId || padreId.trim() === '')) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'Falta información',
-            text: 'Debe seleccionar la Unidad Principal a la que pertenece esta subunidad.'
-        });
+        window.mostrarToast('Debe seleccionar la Unidad Principal a la que pertenece esta subunidad.', 'warning');
         return; // Detiene la ejecución
     }
 
@@ -488,7 +484,7 @@
         const data = await response.json();
         
         if (response.ok && data.success) {
-            Swal.fire({ icon: 'success', title: '¡Guardado!', showConfirmButton: false, timer: 1500 });
+            window.mostrarToast('¡Guardado!', 'success');
             $('#modalTipoUnidad').modal('hide');
             
             const tbody = document.getElementById('tbody-tipos-unidad');
@@ -538,12 +534,12 @@
             } else if (data.error) {
                 errorText = data.error;
             }
-            Swal.fire('No se pudo guardar', errorText, 'warning');
+            window.mostrarToast(errorText || 'No se pudo guardar.', 'warning');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        Swal.fire('Error', 'Error de conexión con el servidor.', 'error');
+        window.mostrarToast('Error de conexión con el servidor.', 'error');
     });
   }
 
@@ -562,11 +558,11 @@
               .then(response => response.json())
               .then(data => {
                   if(data.success) {
-                      Swal.fire({ icon: 'success', title: '¡Eliminado!', showConfirmButton: false, timer: 1500 });
+                      window.mostrarToast('¡Eliminado!', 'success');
                       const tr = document.getElementById('tu-row-' + id);
                       if (tr) tr.remove();
                   } else {
-                      Swal.fire('No se puede eliminar', data.error, 'error');
+                      window.mostrarToast(data.error || 'No se puede eliminar.', 'error');
                   }
               });
           }
@@ -591,7 +587,7 @@
       const id = document.getElementById('tf_id').value;
       
       if (!nombre) {
-          Swal.fire('Error', 'El nombre es obligatorio', 'warning');
+          window.mostrarToast('El nombre es obligatorio.', 'warning');
           return;
       }
 
@@ -606,7 +602,7 @@
               // Recargar forzando la vista en la pestaña Nomencladores
               window.location.href = "?tab=nomencladores";
           } else {
-              Swal.fire('Error', data.error, 'error');
+              window.mostrarToast(data.error || 'No se pudo crear.', 'error');
           }
       });
   }
@@ -633,7 +629,7 @@
                       // Recargar forzando la vista en la pestaña Nomencladores
                       window.location.href = "?tab=nomencladores";
                   } else {
-                      Swal.fire('Error', data.error || 'Error al eliminar', 'error');
+                      window.mostrarToast(data.error || 'Error al eliminar.', 'error');
                   }
               }).catch(err => console.error('Error:', err));
           }

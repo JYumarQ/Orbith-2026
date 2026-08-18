@@ -22,7 +22,7 @@ from auditoria.servicios import registrar as registrar_auditoria
 from solicitudes import avisos
 from solicitudes.models import AccionSolicitud, EstadoSolicitud, Solicitud
 from solicitudes.operaciones import (
-    definicion_de, ejecutar, form_kwargs_de, preparar_ejecucion)
+    definicion_de, ejecutar, form_de_aprobacion, form_kwargs_de, preparar_ejecucion)
 
 #: AccionSolicitud y AccionAuditoria comparten valores (ADD/UPD/DEL) para CREAR/
 #: EDITAR/ELIMINAR, así que el mapeo es directo salvo por el nombre distinto de EDITAR.
@@ -317,8 +317,18 @@ def aprobar(solicitud, usuario, datos=None):
 
         preparar_ejecucion(solicitud, definicion, datos, objeto)
 
+        # `form_de_aprobacion`, no `definicion['form']` a secas: los campos que de
+        # verdad nadie edita desde esta pantalla —hoy, solo `fecha_alta` de
+        # `CAltaForm`— siguen naciendo deshabilitados, así que Django usa el valor
+        # actual de `objeto` en vez de interpretar su ausencia en el POST como "vacío".
+        # Los de `campos_condicionales` (p. ej. `motivo`, `duracion`, los «No.
+        # Resolución»...) SÍ quedan editables aquí para el Administrador —ver
+        # `solicitudes/serializacion.py::formulario_de_aprobacion`—, así que ya no hace
+        # falta forzarles ningún valor: lo que traiga `datos` (su POST) es lo que se usa,
+        # igual que para cualquier otro campo editable de la pantalla.
         formulario = serializacion.construir_formulario(
-            definicion['form'], instancia=objeto, datos=datos, form_kwargs=form_kwargs)
+            form_de_aprobacion(definicion), instancia=objeto, datos=datos,
+            form_kwargs=form_kwargs)
         if not formulario.is_valid():
             raise PropuestaInvalida(formulario)
 

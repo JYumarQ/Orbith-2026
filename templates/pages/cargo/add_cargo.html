@@ -296,17 +296,7 @@
         if (checkFuncionario && checkDesignado) {
             
             function notificarAjusteAutomatico() {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({ 
-                        toast: true, 
-                        position: 'top-end', 
-                        icon: 'info', 
-                        title: 'Ajuste automático', 
-                        text: 'Un cargo no puede ser Funcionario y Designado simultáneamente.', 
-                        showConfirmButton: false, 
-                        timer: 3000 
-                    });
-                }
+                window.mostrarToast('Un cargo no puede ser Funcionario y Designado simultáneamente.', 'info');
             }
 
             checkFuncionario.addEventListener('change', function() {

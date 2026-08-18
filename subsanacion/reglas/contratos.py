@@ -1021,3 +1021,39 @@ class ConformidadFormalSinCodigo(ReglaContratos):
         if not _c_formal_sin_res(contrato.c_formal, contrato.c_formal_res):
             return None
         return [self._hallazgo(str(contrato.pk), 'C. Formal sin código de resolución')]
+
+
+class ContratoSinFechaAltaEntidad(ReglaContratos):
+    codigo = 'CTR-016'
+    nombre = 'Contrato sin F. Alta Entidad'
+    criticidad = CRITICIDAD_ALTA
+
+    descripcion = 'Busca contratos sin la fecha de alta inicial en la entidad registrada.'
+    causa_probable = (
+        'El campo se incorporó después de que estos contratos ya existieran en '
+        'producción, así que quedó vacío para todo el histórico previo a su '
+        'creación.')
+    impacto = (
+        'La F. Alta Entidad es la base para calcular en el futuro los años de '
+        'servicio ininterrumpido del trabajador dentro de la Unión Eléctrica. '
+        'Sin ella, ese cálculo no puede hacerse correctamente para este contrato.')
+    solucion = (
+        'Abra el contrato y registre la fecha en que el trabajador fue dado de '
+        'alta por primera vez en la entidad (puede coincidir con la F. de '
+        'Contratación).')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(fecha_alta_entidad__isnull=True)
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, 'sin F. Alta Entidad'),
+                detalle='El contrato no tiene registrada la fecha de alta inicial en la entidad.',
+                datos={'expediente': fila.get('no_expediente') or '—'},
+                unidad_organizativa_id=self.unidad_de(fila),
+                campo_formulario='fecha_alta_entidad',
+            )

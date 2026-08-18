@@ -329,7 +329,13 @@
 
     function exportarMovimiento() {
         if (movimientoSeleccionado) {
-            window.open(`/contrato/reporte/modelo_movimiento/${movimientoSeleccionado}/`, '_blank');
+            // Ruta explícita ('imprimir_movimiento', con origen='movimiento'), no la
+            // genérica 'imprimir_modelo_movimiento': esa prueba primero el pk como
+            // CAlta, y como las secuencias de CAlta y TMovimiento arrancan ambas en 1,
+            // un choque de pk exportaba el movimiento de OTRO trabajador (ver
+            // ModeloMovimientoDocxView en contratos/views.py).
+            var url = "{% url 'imprimir_movimiento' 0 %}".replace('0', movimientoSeleccionado);
+            window.open(url, '_blank');
         }
     }
 

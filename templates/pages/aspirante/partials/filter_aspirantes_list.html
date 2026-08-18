@@ -1,9 +1,12 @@
 {% for aspirante in aspirantes %}
 <tr id="row-{{ aspirante.pk }}"
-    class="cursor-pointer fila-aspirante"
+    class="cursor-pointer fila-aspirante{% if es_baja_view and aspirante.ultima_baja_fecha_alta == None and aspirante.ultima_baja_cargo_id == None %} fila-baja-sin-datos{% endif %}"
     onclick="seleccionarAspirante(this)"
     style="cursor: pointer;"
-    data-id="{{ aspirante.pk }}" 
+    {% if es_baja_view and aspirante.ultima_baja_fecha_alta == None and aspirante.ultima_baja_cargo_id == None %}
+    title="Esta baja no tiene datos reales: se eliminó todo el histórico de nómina de este trabajador desde el Admin de Django. Solo certifica que el expediente existió."
+    {% endif %}
+    data-id="{{ aspirante.pk }}"
     data-url-editar="{% url 'updt_aspir' aspirante.pk %}?next={% url 'list_aspir' %}"
     
     {# --- LÓGICA DE WIZARD PARA BAJAS --- #}

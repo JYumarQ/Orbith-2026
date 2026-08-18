@@ -1,0 +1,61 @@
+{% comment %}
+Contenido dinámico de la tarjeta compacta "Antigüedad": lista + paginación
+mínima en un solo bloque, reemplazado entero en cada búsqueda o cambio de
+página vía HTMX, targeteando siempre #antiguedad-resultado. Formato lista
+(no tabla) para caber en una tarjeta del mismo tamaño que sus vecinas
+(Distribución por Municipio / Grado Científico).
+{% endcomment %}
+<ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
+    {% for c in page_obj %}
+    <li class="list-group-item d-flex align-items-center py-2 px-3">
+        <div class="avatar avatar-sm me-2 flex-shrink-0"><span class="avatar-initial rounded-circle bg-label-success"><i class="bx bx-user"></i></span></div>
+        <div class="text-truncate me-2">
+            <div class="fw-bold text-truncate" style="font-size:0.8rem;">{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}</div>
+            <small class="text-muted" style="font-size:0.7rem;">Exp. {{ c.no_expediente }}</small>
+        </div>
+        {% if c.antiguedad is not None %}
+            <span class="badge bg-label-success ms-auto flex-shrink-0">{{ c.antiguedad }} a</span>
+        {% else %}
+            <span class="text-muted ms-auto flex-shrink-0" title="Sin F. Alta Entidad registrada">&mdash;</span>
+        {% endif %}
+    </li>
+    {% empty %}
+    <li class="list-group-item text-center text-muted py-4" style="font-size:0.8rem;">
+        {% if query %}
+            Sin resultados para «{{ query }}».
+        {% else %}
+            No hay contratos activos.
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+<div class="d-flex justify-content-between align-items-center px-3 py-1 border-top">
+    <small class="text-muted" style="font-size:0.68rem;">
+        {{ page_obj.paginator.count }} contrato{{ page_obj.paginator.count|pluralize }}
+    </small>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="btn-group btn-group-sm">
+        {% if page_obj.has_previous %}
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"
+                hx-get="{% url 'dashboard_antiguedad_html' %}?page={{ page_obj.previous_page_number }}&q={{ query|urlencode }}"
+                hx-target="#antiguedad-resultado"
+                hx-include="#antiguedad-uo">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        {% else %}
+        <span class="btn btn-outline-secondary py-0 px-2 disabled" style="font-size:0.7rem;"><i class="fas fa-chevron-left"></i></span>
+        {% endif %}
+        <span class="btn btn-outline-secondary py-0 px-2 disabled" style="font-size:0.7rem;">{{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:0.7rem;"
+                hx-get="{% url 'dashboard_antiguedad_html' %}?page={{ page_obj.next_page_number }}&q={{ query|urlencode }}"
+                hx-target="#antiguedad-resultado"
+                hx-include="#antiguedad-uo">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+        {% else %}
+        <span class="btn btn-outline-secondary py-0 px-2 disabled" style="font-size:0.7rem;"><i class="fas fa-chevron-right"></i></span>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

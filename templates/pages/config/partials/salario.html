@@ -185,16 +185,7 @@
     document.getElementById('btn-edit-salary').addEventListener('click', function() {
         // VALIDACIÓN MEJORADA (Toast)
         if(!selectedGrupoId) {
-            if(typeof Swal !== 'undefined'){
-                Swal.fire({
-                    toast: true,
-                    position: 'top-end',
-                    icon: 'warning',
-                    title: 'Seleccione un grupo primero',
-                    showConfirmButton: false,
-                    timer: 2000
-                });
-            }
+            window.mostrarToast('Seleccione un grupo primero', 'warning');
             return;
         }
 
@@ -203,7 +194,7 @@
         // Carga con jQuery y manejo de errores
         $('#editar_salario_modal').load(url, function(response, status, xhr) {
             if (status === "error") {
-                Swal.fire('Error', 'No se pudo cargar el formulario: ' + xhr.status + " " + xhr.statusText, 'error');
+                window.mostrarToast('No se pudo cargar el formulario: ' + xhr.status + " " + xhr.statusText, 'error');
             } else {
                 var myModal = new bootstrap.Modal(document.getElementById('editar_salario_modal'));
                 myModal.show();
@@ -235,13 +226,13 @@
                 .then(response => response.json())
                 .then(data => {
                     if(data.success) {
-                        Swal.fire('Eliminado!', data.message, 'success')
-                        .then(() => location.reload()); 
+                        window.mostrarToast(data.message || 'Eliminado.', 'success');
+                        setTimeout(() => location.reload(), 1200);
                     } else {
-                        Swal.fire('Error', data.error || 'No se pudo eliminar', 'error');
+                        window.mostrarToast(data.error || 'No se pudo eliminar.', 'error');
                     }
                 })
-                .catch(err => Swal.fire('Error', 'Error de conexión', 'error'));
+                .catch(err => window.mostrarToast('Error de conexión.', 'error'));
             }
         });
     });

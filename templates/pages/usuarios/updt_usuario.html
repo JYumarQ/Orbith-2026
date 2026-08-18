@@ -1,5 +1,5 @@
 <!-- pages/usuarios/updt_usuario.html -->
-<div class="modal-dialog" role="document" id="editar_usuario">
+<div class="modal-dialog" role="document">
   <div class="modal-content">
     <form method="post"
           action="{% url 'updt_usuario' object.id %}"
@@ -8,6 +8,7 @@
           data-confirm-text="¿Estás seguro de guardar los cambios para el usuario {{ object.username }}?">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ next }}">
+      <input type="hidden" name="origen" value="{{ origen }}">
 
       <div class="modal-header">
         <h5 class="modal-title">Editar Usuario</h5>
@@ -193,7 +194,7 @@
               if (typeof data.es_moderador !== 'undefined') {
                 $('#id_es_moderador').prop('checked', !!data.es_moderador);
               }
-              if (window.showToast) showToast(data.message || 'Usuario actualizado', 'success');
+              window.mostrarToast(data.message || 'Usuario actualizado', 'success');
             } else if (data.html_form) {
               const $modal = $('#editar_usuario');
               const $newContent = $(data.html_form);
@@ -211,11 +212,11 @@
                 window.toggleUnidades();
               }, 300);
             } else {
-              if (window.showToast) showToast('No se pudo guardar.', 'danger');
+              window.mostrarToast('No se pudo guardar.', 'error');
             }
           },
           error: function () {
-            if (window.showToast) showToast('Error de red al guardar.', 'danger');
+            window.mostrarToast('Error de red al guardar.', 'error');
           }
         });
       };

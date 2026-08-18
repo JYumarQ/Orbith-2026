@@ -35,25 +35,22 @@
 }
 
 /* -----------------------------------------------------------------------
-   C2b — Dropdowns de #acciones-usuario (campana y avatar): en pantallas
-   ≤1199.98px quedan cortados fuera del viewport. #acciones-usuario es
-   position:fixed y estos menús se posicionan con Popper (o CSS) relativo a
-   su <li>, pero en ese contexto el cálculo termina desplazándolos fuera de
-   pantalla (comprobado en vivo: el menú de usuario, width:260px, renderiza
-   con su borde derecho ~210px más allá del viewport en 375px de ancho).
-   Se fuerza position:fixed anclado al viewport, igual que #acciones-usuario,
-   en vez de confiar en ese cálculo.
+   C2b — Dropdowns de Notificaciones/Usuario, ahora en la zona inferior fija
+   de la sidebar (templates/base/sidebar.html, #sidebarAccionesUsuario) con
+   `dropup` en vez de `dropdown-menu-end`: abren hacia arriba desde la
+   esquina inferior izquierda. Al vivir en un <li> normal en flujo (ya no
+   dentro de un contenedor position:fixed con backdrop-filter, la causa del
+   desplazamiento fuera del viewport que tenían anclados a la navbar), Popper
+   los posiciona bien solo; aquí únicamente se acota el ancho para que quepan
+   sin desbordar en viewports angostos.
    ----------------------------------------------------------------------- */
 @media (max-width: 1199.98px) {
   #menu-user,
   #menu-notificaciones {
-    position: fixed !important;
-    left: auto !important;
-    right: .75rem !important;
-    top: 4rem !important;
-    width: min(260px, calc(100vw - 1.5rem)) !important;
+    width: min(260px, calc(100vw - 2rem)) !important;
     min-width: 0 !important;
-    max-height: min(400px, calc(100vh - 5rem)) !important;
+    max-width: calc(100vw - 2rem) !important;
+    max-height: min(400px, calc(100vh - 6rem)) !important;
     overflow-y: auto !important;
   }
 }
@@ -152,6 +149,51 @@
     overflow: visible !important;
     padding-top: .5rem !important;
     row-gap: .25rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C9 — Informe Inteligente: encabezado "Detalle de registros"
+   (templates/pages/informe_inteligente/partials/tabla_resultados.html).
+   .ii-panel-head.ii-head-tabla es un flex sin wrap y su padre .ii-panel
+   tiene overflow:hidden (templates/pages/informe_inteligente/index.html):
+   en ≤575px el título + los badges + los botones Exportar PDF/Word no
+   caben en una sola fila y lo que sobra queda recortado, no oculto —
+   los botones existían en el DOM pero fuera del área visible. Se permite
+   que la fila haga wrap y los botones pasan a una franja propia de ancho
+   completo, con tamaño táctil.
+   ----------------------------------------------------------------------- */
+@media (max-width: 575.98px) {
+  .ii-head-tabla {
+    flex-wrap: wrap;
+    row-gap: .5rem;
+  }
+  .ii-head-tabla > span:last-child {
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .ii-head-tabla .ii-btn-export {
+    min-height: 38px;
+    padding: .4rem .9rem;
+    font-size: .82rem;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   C10 — Sidebar global (templates/base/sidebar.html): en el overlay móvil
+   (<1200px) .menu-inner queda con overflow-y:hidden (lo fija Perfect
+   Scrollbar) y su scrollHeight real supera al clientHeight disponible —
+   comprobado en vivo: el último ítem, "Solicitudes", queda parcialmente
+   cortado y sin ningún mecanismo táctil para alcanzarlo. Se fuerza scroll
+   nativo solo en este rango de ancho; en escritorio (≥1200px) sigue
+   intacto el comportamiento de Perfect Scrollbar.
+   ----------------------------------------------------------------------- */
+@media (max-width: 1199.98px) {
+  .layout-menu .menu-inner {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
 

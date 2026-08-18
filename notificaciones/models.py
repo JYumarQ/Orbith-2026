@@ -109,6 +109,31 @@ class Notificacion(models.Model):
         # (NULL) quedan al final con PostgreSQL (NULLS LAST es el comportamiento por
         # defecto de ORDER BY ASC), que es la posición correcta.
         ordering = ['severidad', '-fecha_creado']
+        constraints = [
+            # Respalda en la base de datos la clave de deduplicación que
+            # `notificaciones/avisos.py::_registrar_notificacion` ya aplicaba a mano
+            # (SELECT + `update_or_create`): sin esta restricción, dos procesos que
+            # evalúan la misma regla casi a la vez (dos moderadores pulsando "Buscar
+            # incidencias", el comando programado solapándose con un clic manual, varios
+            # workers de un mismo despliegue) pueden pasar el SELECT antes de que
+            # cualquiera de los dos confirme su INSERT, y ambos crean fila — el origen
+            # real de las notificaciones duplicadas vistas en producción. Con esta
+            # restricción, el segundo INSERT falla con `IntegrityError` en vez de
+            # duplicar, y `_registrar_notificacion` lo captura para converger a una sola
+            # fila (ver ese módulo).
+            #
+            # Acotada a `codigo_regla != ''` (las únicas filas que pasan por esa clave de
+            # deduplicación: Advertencias y Recordatorios). Los EVENTO (alta/baja de
+            # contrato, `codigo_regla=''`) quedan fuera a propósito: un mismo aspirante
+            # puede tener varias bajas a lo largo del tiempo con el mismo
+            # `content_type`+`object_id`+`destinatario`, y cada una es un hecho real
+            # distinto, no un duplicado.
+            models.UniqueConstraint(
+                fields=['content_type', 'object_id', 'destinatario', 'codigo_regla', 'clave_extra'],
+                condition=models.Q(codigo_regla__gt=''),
+                name='notificacion_unica_por_regla_destinatario',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.titulo} - {self.mensaje}"

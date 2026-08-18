@@ -385,8 +385,8 @@
         .then(data => {
             if (btn) btn.style.opacity = '1';
             if (data.status === 'ok') {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: 'Plan guardado correctamente', showConfirmButton: false, timer: 2000 });
+                if (typeof window.mostrarToast === 'function') {
+                    window.mostrarToast('Plan guardado correctamente', 'success');
                 }
             }
         })

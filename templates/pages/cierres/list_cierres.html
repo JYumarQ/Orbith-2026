@@ -115,7 +115,7 @@
                 $modal.modal('show');
             })
             .fail(function () {
-                Swal.fire({ icon: 'error', text: 'No se pudo cargar la información.' });
+                window.mostrarToast('No se pudo cargar la información.', 'error');
             });
     }
 
@@ -156,14 +156,12 @@
                 'X-Requested-With': 'XMLHttpRequest'
             }
         }).done(function (data) {
-            Swal.fire({
-                icon: 'success', title: 'Procesamiento completado', text: data.message,
-                customClass: { confirmButton: 'btn btn-primary' }, buttonsStyling: false
-            }).then(function () { triggerSearch(); });
+            window.mostrarToast('Procesamiento completado' + (data.message ? ': ' + data.message : ''), 'success');
+            triggerSearch();
         }).fail(function (xhr) {
             var mensaje = 'No se pudo completar el procesamiento.';
             try { mensaje = JSON.parse(xhr.responseText).message || mensaje; } catch (e) {}
-            Swal.fire('Error', mensaje, 'error');
+            window.mostrarToast(mensaje, 'error');
         }).always(function () {
             $boton.prop('disabled', false);
         });

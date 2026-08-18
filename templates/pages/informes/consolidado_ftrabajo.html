@@ -69,10 +69,12 @@
 <script>
     function ejecutarWord() {
         const params = new URLSearchParams(new FormData(document.getElementById('form-exportar'))).toString();
+        window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_consolidado_word' %}?" + params;
     }
     function ejecutarPDF() {
         const ueb = document.querySelector('[name="ueb"]').value;
+        window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_consolidado_pdf' %}?ueb=" + ueb;
     }
 </script>

@@ -10,6 +10,27 @@ vistas llaman a la misma función, mismo patrón que `cierres/filtros.py` /
 
 from django.db.models import Q
 
+from .permisos import es_administrador, es_moderador
+
+
+def contratos_visibles(usuario):
+    """Base del listado: alcance por rol, único punto donde se decide.
+
+    Administrador y Observador ven todos los contratos (el listado es
+    informativo, no expone acciones de edición). El Moderador solo ve los
+    contratos cuyo cargo cuelga de una de sus Unidades Organizativas
+    asignadas (`CustomUser.unidades`), mismo criterio que
+    `cierres/filtros.py::unidades_visibles()` y
+    `solicitudes/filtros.py::solicitudes_visibles()`.
+    """
+    from .models import CAlta
+
+    qs = CAlta.objects.all()
+    if es_moderador(usuario):
+        return qs.filter(
+            cargo__departamento__unidad_organizativa__in=usuario.unidades.all())
+    return qs
+
 
 def aplicar_filtros(request, qs):
     """Aplica sobre `qs` (queryset de `CAlta`) los filtros presentes en

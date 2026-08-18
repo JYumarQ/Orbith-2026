@@ -1,11 +1,15 @@
 # usuarios/admin.py
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
+
+from auditoria.admin_mixins import AuditoriaAdminMixin
+
 from .models import CustomUser, PreferenciasUsuario
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 @admin.register(CustomUser)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(AuditoriaAdminMixin, UserAdmin):
+    modulo_auditoria = 'usuarios'
     add_form = CustomUserCreationForm
     form = CustomUserChangeForm
     model = CustomUser
@@ -60,7 +64,8 @@ class CustomUserAdmin(UserAdmin):
 
 
 @admin.register(PreferenciasUsuario)
-class PreferenciasUsuarioAdmin(admin.ModelAdmin):
+class PreferenciasUsuarioAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'usuarios'
     list_display = ('usuario', 'sidebar_colapsada', 'animaciones_activas', 'fecha_actualizado')
     list_filter = ('sidebar_colapsada', 'animaciones_activas')
     search_fields = ('usuario__username',)

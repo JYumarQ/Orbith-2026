@@ -35,7 +35,7 @@ INSTALLED_APPS = [
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
     'solicitudes', 'informes',  'informe_inteligente', 'informes_anexo',
-    'soporte', 'subsanacion', 'cierres',
+    'soporte', 'subsanacion', 'cierres', 'progreso',
 ]
 
 MIDDLEWARE = [
@@ -50,6 +50,9 @@ MIDDLEWARE = [
     'auditoria.middleware.CurrentUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Después de MessageMiddleware a propósito: ver docstring de
+    # DeteccionExportacionMiddleware (necesita messages.info() disponible).
+    'progreso.middleware.DeteccionExportacionMiddleware',
     # Al final a propósito: ver docstring de ControlAccesoMiddleware.
     'usuarios.middleware.ControlAccesoMiddleware',
 ]

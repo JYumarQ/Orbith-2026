@@ -263,12 +263,9 @@
         });
     }
 
-    // 4. FEEDBACK VISUAL
+    // 4. FEEDBACK VISUAL — el toast ya lo cubre el listener global de
+    // base/scripts.html; aquí solo se conserva la recarga de la lista.
     document.body.addEventListener('showMessage', function(evt){
-        Swal.fire({
-            toast: true, position: 'top-end', icon: 'success',
-            title: evt.detail.value, showConfirmButton: false, timer: 2000
-        });
         setTimeout(() => { location.reload(); }, 1500);
     });
 </script>

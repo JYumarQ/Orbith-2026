@@ -189,3 +189,54 @@ class UsuarioInactivoTests(TestCase):
         )
         logueado = self.client.login(username='inactivo_test', password='ClaveSegura123')
         self.assertFalse(logueado)
+
+
+class AuditoriaAdminTests(TestCase):
+    """Crear/editar/eliminar un usuario desde el Admin de Django ahora deja rastro
+    en `auditoria.EventoAuditoria`, gracias a `AuditoriaAdminMixin` (compartido con
+    el resto de apps, ver `contratos.tests.AuditoriaAdminTests` para el caso
+    original que motivó esto). `CustomUserAdmin` ya tenía su propio `save_model`
+    (valida que solo quede un rol marcado); esta prueba confirma que ambos
+    cooperan por `super()` en vez de que uno pise al otro."""
+
+    def setUp(self):
+        self.admin = CustomUser.objects.create_user(
+            username='admin_usuarios', password='ClaveSegura123', es_admin=True)
+
+    def test_eliminar_un_usuario_en_el_admin_queda_auditado(self):
+        from django.urls import reverse
+
+        from auditoria.models import EventoAuditoria
+
+        objetivo = CustomUser.objects.create_user(
+            username='usuario_a_borrar', password='ClaveSegura123', es_moderador=True)
+        self.client.force_login(self.admin)
+
+        url = reverse('admin:usuarios_customuser_delete', args=[objetivo.pk])
+        self.client.post(url, {'post': 'yes'})
+
+        self.assertFalse(CustomUser.objects.filter(pk=objetivo.pk).exists())
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(objetivo.pk), accion='DEL').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)
+        self.assertEqual(evento.modulo, 'usuarios')
+
+    def test_editar_un_usuario_desde_el_admin_queda_auditado(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        from auditoria.models import EventoAuditoria
+        from usuarios.admin import CustomUserAdmin
+
+        objetivo = CustomUser.objects.create_user(
+            username='usuario_a_editar', password='ClaveSegura123', es_moderador=True)
+
+        admin_instance = CustomUserAdmin(CustomUser, AdminSite())
+        request = RequestFactory().get('/')
+        request.user = self.admin
+        objetivo.email = 'nuevo@correo.test'
+        admin_instance.save_model(request, objetivo, form=None, change=True)
+
+        evento = EventoAuditoria.objects.filter(
+            object_id=str(objetivo.pk), accion='UPD').latest('fecha')
+        self.assertEqual(evento.usuario_id, self.admin.pk)

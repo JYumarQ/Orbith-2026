@@ -25,7 +25,8 @@ from solicitudes import serializacion, servicios
 from solicitudes.filtros import PESTANAS, filtrar_solicitudes, pestanas_con_contadores
 from solicitudes.forms import MotivoDecisionForm, SolicitudDesdeTablaForm
 from solicitudes.models import AccionSolicitud, EstadoSolicitud, Solicitud
-from solicitudes.operaciones import OperacionDesconocida, definicion_de, form_kwargs_de
+from solicitudes.operaciones import (
+    OperacionDesconocida, definicion_de, form_de_aprobacion, form_kwargs_de)
 from solicitudes.permisos import (
     AccesoSolicitudesMixin, acceso_solicitudes, es_administrador, solo_admin)
 
@@ -100,6 +101,10 @@ def _filas_de_comparacion(solicitud, usuario, formulario=None):
     form_class = definicion['form']
     if form_class is None:
         return [], None
+    # `form_de_aprobacion`, no `form_class` a secas: es la misma clase que valida al
+    # aprobar (ver `solicitudes/servicios.py::aprobar`), para que el formulario que se
+    # pinta aquí y el que de verdad procesa el POST sean siempre el mismo.
+    form_class = form_de_aprobacion(definicion)
 
     form_kwargs = form_kwargs_de(definicion, usuario)
     es_eliminacion = definicion['accion'] == AccionSolicitud.ELIMINAR
@@ -122,6 +127,71 @@ def _filas_de_comparacion(solicitud, usuario, formulario=None):
     cambiados = set() if es_eliminacion else serializacion.comparar(
         solicitud.datos_originales, solicitud.datos_propuestos)
 
+    # Campos que no se leen de `datos_originales`/`datos_propuestos` sino que se
+    # recalculan a partir del Cargo real de cada columna (ver el bloque «Campos
+    # calculados desde el Cargo» en `solicitudes/operaciones.py`). Nunca son editables
+    # ni cuentan para `cambiados`: no describen una decisión que nadie tomó, describen
+    # una consecuencia del Cargo de esa columna.
+    campos_calculados = definicion.get('campos_calculados') or {}
+    if campos_calculados:
+        from strorganizativa.models import CargoPlantilla
+
+        def _cargo_de(datos):
+            pk = (datos or {}).get('cargo')
+            return CargoPlantilla.objects.select_related('rol', 'ncargo__grupo_escala').filter(
+                pk=pk).first() if pk else None
+
+        def _texto_calculado(valor):
+            if valor is None or valor == '':
+                return serializacion.VACIO
+            if isinstance(valor, bool):
+                return 'Sí' if valor else 'No'
+            return str(valor)
+
+        cargo_original = _cargo_de(solicitud.datos_originales)
+        cargo_propuesto = cargo_original if es_eliminacion else _cargo_de(datos_derecha)
+
+        for nombre, resolver in campos_calculados.items():
+            originales[nombre] = _texto_calculado(resolver(cargo_original))
+            propuestos_texto[nombre] = _texto_calculado(resolver(cargo_propuesto))
+            cambiados.discard(nombre)
+
+        # El widget editable de `funcionario_res`/`designado_res` se deshabilita cuando
+        # el Cargo PROPUESTO no exige esa condición: no tiene sentido dejar que el
+        # Administrador escriba un número de resolución para un cargo que no es
+        # Funcionario/Designado. Se evalúa una sola vez, al cargar la pantalla — el
+        # Cargo no tiene un switch que el Administrador pueda tocar aquí mismo, así que
+        # a diferencia del bloque de abajo no hace falta JavaScript para esto.
+        if formulario is not None:
+            _NUMERO_RES_POR_CONDICION = {
+                'funcionario': 'funcionario_res',
+                'designado': 'designado_res',
+            }
+            for nombre_condicion, nombre_numero in _NUMERO_RES_POR_CONDICION.items():
+                if nombre_condicion in campos_calculados and nombre_numero in formulario.fields:
+                    if not campos_calculados[nombre_condicion](cargo_propuesto):
+                        formulario.fields[nombre_numero].disabled = True
+
+    # Los switches C. Formal / Chofer Profesional / Misión siguen el mismo criterio que
+    # `updt_contrato.html` ya usa con el Moderador: su campo de detalle solo se habilita
+    # si el switch está activo. Se evalúa aquí contra el valor PROPUESTO para que la
+    # pantalla no se abra con «No. Res. C. Formal» habilitado si C. Formal está en «No».
+    # `comparacion.html` trae el JavaScript que reacciona en vivo si el Administrador
+    # cambia el switch en esta misma pantalla antes de aprobar.
+    _CAMPOS_POR_SWITCH = {
+        'c_formal': ('c_formal_res',),
+        'profesional': ('fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg'),
+        'mision': ('pais',),
+    }
+    if formulario is not None:
+        for switch, detalles in _CAMPOS_POR_SWITCH.items():
+            if switch not in formulario.fields:
+                continue
+            activo = bool(datos_derecha.get(switch))
+            for detalle in detalles:
+                if detalle in formulario.fields and not activo:
+                    formulario.fields[detalle].disabled = True
+
     # Se recorre un formulario vacío para fijar el orden y las etiquetas incluso cuando
     # no hay formulario editable (eliminaciones).
     referencia = formulario or serializacion.construir_formulario(
@@ -134,7 +204,7 @@ def _filas_de_comparacion(solicitud, usuario, formulario=None):
             'etiqueta': campo.label or nombre.replace('_', ' ').capitalize(),
             'original': originales.get(nombre, serializacion.VACIO),
             'propuesto_texto': propuestos_texto.get(nombre, serializacion.VACIO),
-            'campo': None if es_eliminacion else referencia[nombre],
+            'campo': None if (es_eliminacion or nombre in campos_calculados) else referencia[nombre],
             'cambiado': nombre in cambiados,
         })
     return filas, (None if es_eliminacion else formulario)

@@ -4,7 +4,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView
 from django.urls import reverse, reverse_lazy
-from django.db.models import Q, ProtectedError, Value, RestrictedError
+from django.db.models import Q, ProtectedError, Value, RestrictedError, OuterRef, Subquery
 from django.db.models.functions import Concat
 from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
@@ -19,6 +19,21 @@ from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin,
 # Convierte la eliminación en una solicitud cuando la pide un Moderador; devuelve None
 # para el Administrador, que elimina directamente.
 from solicitudes.integracion import desviar_borrado
+
+def _anotar_baja_sin_datos(qs):
+    """Marca cada Aspirante con si su BAJA más reciente es un registro "vacío"
+    (sin cargo ni fecha_alta): el marcador que crea `contratos.models
+    ._al_eliminar_movimiento` cuando se borra TODO el histórico de nómina de
+    alguien desde el Admin de Django. No representa una baja real documentada,
+    así que la plantilla la resalta en rojo para que no se confunda con una.
+    """
+    from contratos.models import CBaja
+    ultima_baja = CBaja.objects.filter(aspirante_id=OuterRef('pk')).order_by('-fecha_baja', '-pk')
+    return qs.annotate(
+        ultima_baja_fecha_alta=Subquery(ultima_baja.values('fecha_alta')[:1]),
+        ultima_baja_cargo_id=Subquery(ultima_baja.values('cargo_id')[:1]),
+    )
+
 
 ABR_PROVINCIAS = {
     'Isla de la Juventud': 'IJU',
@@ -154,7 +169,7 @@ class BajaListView(ListView):
     template_name = "pages/aspirante/list_aspir.html" # Reutilizamos el template
 
     def get_queryset(self):
-        return Aspirante.objects.filter(estado='BAJA').order_by('-id')
+        return _anotar_baja_sin_datos(Aspirante.objects.filter(estado='BAJA')).order_by('-id')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -188,7 +203,7 @@ class BajaListView(ListView):
 @never_cache
 def search_bajas(request):
     query = request.GET.get('filter_aspirante', '').strip() # Usamos mismo nombre de input para no tocar template
-    qs = Aspirante.objects.filter(estado='BAJA').order_by('-id')
+    qs = _anotar_baja_sin_datos(Aspirante.objects.filter(estado='BAJA')).order_by('-id')
 
     
 
@@ -269,7 +284,14 @@ class AspiranteCreateView(CreateView):
         kwargs['user'] = self.request.user   # pasar user al form (para limitar UO si es moderador)
         return kwargs
 
-    # En AspiranteCreateView:
+    # NOTA (no relacionada con la Guía de Orbith): este método y el de abajo
+    # tienen el mismo nombre `form_valid` dentro de la MISMA clase
+    # (`AspiranteCreateView`) — el comentario "En AspiranteUpdateView" es
+    # engañoso, nunca se declaró esa clase aparte. Python se queda con la
+    # ÚLTIMA definición, así que este primer `form_valid` nunca se ejecuta;
+    # es código muerto ya presente antes de este cambio. Se deja así (no es
+    # el alcance de esta tarea) y la instrumentación de la Guía se coloca en
+    # el método que sí corre de verdad, más abajo.
     def form_valid(self, form):
         # Eliminamos la validación de unidad_organizativa porque los Aspirantes no pertenecen a ninguna UO
         self.object = form.save(commit=False)
@@ -277,7 +299,6 @@ class AspiranteCreateView(CreateView):
         messages.success(self.request, f'Aspirante "{nombre}" ha sido creado correctamente.')
         return super().form_valid(form)
 
-# En AspiranteUpdateView:
     def form_valid(self, form):
         # 1. Pausamos el guardado para hacer las validaciones
         aspirante = form.save(commit=False)
@@ -287,23 +308,28 @@ class AspiranteCreateView(CreateView):
             aspirante.especialidad = None
         if aspirante.nivel_educ == 'NS' and not aspirante.especialidad:
             messages.warning(self.request, 'Debe seleccionar una especialidad si el nivel educativo es Nivel Superior')
-            
+
         # 3. Guardamos directamente
         aspirante.save()
-        
+
         # ---> LA LÍNEA CLAVE PARA EVITAR EL ERROR <---
         self.object = aspirante
+
+        from progreso.servicios import completar_tarea
+        tarea = completar_tarea(self.request.user, 'primer_aspirante')
+        if tarea:
+            messages.info(self.request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
 
         # 4. Cerramos el modal sin recargar página (HTMX)
         if self.request.headers.get('HX-Request'):
             import json
             from django.http import HttpResponse
             response = HttpResponse(status=204)
-            
+
             # CORRECCIÓN: Mandamos un texto simple para que list_aspir.html no colapse
             response['HX-Trigger'] = json.dumps({
-                'updateContratoList': '', 
-                'searchFilters': '',      
+                'updateContratoList': '',
+                'searchFilters': '',
                 'closeModal': '',
                 'showMessage': f'Datos de "{aspirante.nombre}" guardados correctamente.'
             })

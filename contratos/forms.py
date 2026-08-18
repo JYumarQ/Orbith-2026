@@ -33,19 +33,35 @@ class NocturnidadModelChoiceField(forms.ModelChoiceField):
         return f"{obj.nombre} | {codigo} | {obj.tarifa_hora}"
 
 class SelectUnidadWidget(forms.Select):
-    """Widget inteligente que inhabilita las Unidades Organizativas que son Padres (sin departamentos)"""
+    """Widget inteligente que inhabilita las Unidades Organizativas que no tienen
+    Departamentos propios (serían un callejón sin salida en la cascada UO ->
+    Departamento -> Cargo).
+
+    Antes esto se decidía mirando `tipo.es_principal`, asumiendo que solo las
+    Unidades Principales carecen de departamentos propios y que los Departamentos
+    siempre cuelgan de una Subunidad. Esa suposición no siempre se cumple (hay
+    Unidades Principales con Departamentos propios), así que se dejaban
+    deshabilitadas Unidades Organizativas perfectamente válidas y asignadas a
+    Moderadores, que ni siquiera podían seleccionarlas. Ahora se comprueba
+    directamente si la unidad tiene Departamentos.
+    """
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         if value:
             try:
                 pk = int(getattr(value, 'value', value))
                 from strorganizativa.models import UnidadOrganizativa
-                # Consultamos la unidad y verificamos si la relación 'departamentos' está vacía
                 unidad = UnidadOrganizativa.objects.select_related('tipo').get(pk=pk)
-                if unidad.tipo and unidad.tipo.es_principal:
-                    option['attrs']['disabled'] = True
-                    option['attrs']['class'] = 'text-muted bg-light' # Fuerza el color gris en el select
-                    option['label'] = f"📁 {label} (Unidad Principal)"
+                if not unidad.departamentos.exists():
+                    # No se deshabilita si ya es la unidad seleccionada: un <select> nativo
+                    # sigue mostrando el texto de una <option selected disabled>, pero Select2
+                    # no lo hace y la deja en blanco. Con esto el contrato conserva su unidad
+                    # actual visible aunque no tenga departamentos; solo se bloquea para
+                    # NUEVAS selecciones.
+                    if not selected:
+                        option['attrs']['disabled'] = True
+                        option['attrs']['class'] = 'text-muted bg-light' # Fuerza el color gris en el select
+                    option['label'] = f"📁 {label} (Sin Departamentos)"
             except Exception:
                 pass
         return option
@@ -75,20 +91,20 @@ class CAltaForm(forms.ModelForm):
 
     unidad = forms.ModelChoiceField(
         label='Unidad Organizativa',
-        queryset=UnidadOrganizativa.objects.all(), 
+        queryset=UnidadOrganizativa.objects.all(),
         widget=SelectUnidadWidget(attrs={  # <--- APLICADO AQUÍ
-            'class': 'form-select',
-            'hx-get': reverse_lazy('cargar_departamentos'),  
+            'class': 'form-select select2-unidad',
+            'hx-get': reverse_lazy('cargar_departamentos'),
             'hx-target': '#id_departamento',
-            'hx-trigger': 'change',  
+            'hx-trigger': 'change',
             'required': True
         }))
 
     departamento = forms.ModelChoiceField(
         label='Departamento',
-        queryset=Departamento.objects.none(), 
+        queryset=Departamento.objects.none(),
         widget=forms.Select(attrs={
-            'class': 'form-select',
+            'class': 'form-select select2-departamento',
             'hx-get': reverse_lazy('cargar_cargos_contrato'),  # <--- URL CORRECTA
             'hx-target': '#id_cargo',
             'hx-trigger': 'change',
@@ -155,7 +171,7 @@ class CAltaForm(forms.ModelForm):
             
         model = CAlta        
         fields = (
-            'no_expediente', 'tipo', 'motivo', 'fecha_alta', 'duracion', 'cargo', 'reg_militar',
+            'no_expediente', 'tipo', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion', 'cargo', 'reg_militar',
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
@@ -167,6 +183,7 @@ class CAltaForm(forms.ModelForm):
             'tipo': 'Tipo de Contrato',
             'motivo' : 'Motivo de Contrato',
             'fecha_alta': 'F. de Contratación',
+            'fecha_alta_entidad': 'F. Alta Entidad',
             'duracion': 'D. de Contrato',
             'reg_militar': 'Registro Militar',
             'tridente': 'Tridente',
@@ -177,9 +194,9 @@ class CAltaForm(forms.ModelForm):
             'c_formal': 'C. Formal',
             'funcionario': 'Funcionario',
             'designado': 'Designado', 
-            'c_formal_res': 'No. Resolución',
-            'funcionario_res': 'No. Resolución',
-            'designado_res':'No. Resolución',
+            'c_formal_res': 'No. Res. C. Formal',
+            'funcionario_res': 'No. Res. Funcionario',
+            'designado_res':'No. Res. Designado',
             'tipo_salario': 'Tipo de Salario',
             'maestria': 'Maetría',
             'cnci': 'CNCI',
@@ -192,6 +209,7 @@ class CAltaForm(forms.ModelForm):
             'tipo': forms.Select(attrs={'class':'form-select'}),
             'motivo': forms.Select(attrs={'class':'form-select', 'id': 'id_motivo', 'disabled': 'disabled'}),
             'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled'}),
+            'fecha_alta_entidad': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fecha_alta_entidad', 'disabled': 'disabled'}),
             'duracion': forms.NumberInput(attrs={'class':'form-control', 'disabled': 'disabled'}),
             'reg_militar': forms.Select(attrs={'class':'form-select'}),
             'tridente': forms.Select(attrs={
@@ -302,9 +320,40 @@ class CAltaForm(forms.ModelForm):
                         f_cargo.queryset = CargoPlantilla.objects.filter(departamento=dpto_id)
             except (ValueError, TypeError):
                 pass
+
+        # 3. TERCERO: ampliar los querysets cuando el formulario no viene de un POST
+        # (`self.data` vacío) sino de un `initial` explícito con una unidad/departamento
+        # propuestos que NO son los de la instancia — el caso de la pantalla de revisión
+        # de Solicitudes (`solicitudes/views.py::_filas_de_comparacion`), que construye
+        # el formulario con `instancia=objeto_actual` pero `initial=datos_propuestos`.
+        # Sin esto, si el Moderador propuso otro Departamento/Cargo, ese pk no está entre
+        # las opciones del `<select>` (que solo trae las del Departamento/Cargo actuales)
+        # y el campo se ve vacío al Administrador aunque el dato sí esté guardado.
+        if not self.is_bound and self.initial:
+            try:
+                unidad_id = self.initial.get('unidad')
+                if unidad_id:
+                    f_dpto = self.fields['departamento']
+                    if isinstance(f_dpto, forms.ModelChoiceField):
+                        f_dpto.queryset = (f_dpto.queryset | Departamento.objects.filter(
+                            unidad_organizativa=unidad_id)).distinct()
+            except (ValueError, TypeError):
+                pass
+            try:
+                dpto_id = self.initial.get('departamento')
+                if dpto_id:
+                    f_cargo = self.fields['cargo']
+                    if isinstance(f_cargo, forms.ModelChoiceField):
+                        f_cargo.queryset = (f_cargo.queryset | CargoPlantilla.objects.filter(
+                            departamento=dpto_id)).distinct()
+            except (ValueError, TypeError):
+                pass
                 
         if 'reg_militar' in self.fields:
             self.fields['reg_militar'].required = True
+
+        if 'fecha_alta_entidad' in self.fields:
+            self.fields['fecha_alta_entidad'].required = True
 
         # --- EL ESCUDO DEL SERVIDOR ---
         # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
@@ -414,7 +463,18 @@ class CAltaForm(forms.ModelForm):
             if check_capacity:
                 if cargo.cant_cubierta_real >= cargo.cant_aprobada:
                     self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada}).')
-        
+
+        # --- 3. F. ALTA ENTIDAD NUNCA POSTERIOR A F. DE CONTRATACIÓN ---
+        # Solo aplica al formulario normal: el Django Admin usa el ModelForm
+        # autogenerado (no este CAltaForm), así que ahí no corre esta regla.
+        fecha_alta = cleaned_data.get('fecha_alta')
+        fecha_alta_entidad = cleaned_data.get('fecha_alta_entidad')
+        if fecha_alta and fecha_alta_entidad and fecha_alta_entidad > fecha_alta:
+            self.add_error(
+                'fecha_alta_entidad',
+                'La F. Alta Entidad no puede ser posterior a la F. de Contratación.'
+            )
+
         return cleaned_data
     
 
@@ -469,7 +529,11 @@ class MovimientoForm(CAltaForm):
         if 'fecha_alta' in self.fields:
             self.fields['fecha_alta'].widget = forms.HiddenInput()
             self.fields['fecha_alta'].required = False
-            
+
+        if 'fecha_alta_entidad' in self.fields:
+            self.fields['fecha_alta_entidad'].widget = forms.HiddenInput()
+            self.fields['fecha_alta_entidad'].required = False
+
         # 3. Campos obligatorios para el movimiento
         self.fields['unidad'].required = True
         self.fields['departamento'].required = True

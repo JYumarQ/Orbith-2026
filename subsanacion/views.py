@@ -1,13 +1,17 @@
 """Vistas del Centro de Diagnóstico de Integridad de Datos.
 
-Todas las vistas exigen `admin_required`. El barrido lee toda la empresa (ver el
-docstring de `servicios`), así que no puede lanzarlo un moderador: si lo hiciera con
-alcance parcial, la reconciliación daría por corregidos los hallazgos de las unidades
-que no leyó.
+Todas las vistas exigen `permisos.acceso_subsanacion` (Administrador o Moderador) o
+`permisos.solo_admin_subsanacion` (solo Administrador) — ver `subsanacion/permisos.py`
+para el reparto completo. El barrido completo lee toda la empresa (ver el docstring
+de `servicios`), así que no puede lanzarlo un moderador: si lo hiciera con alcance
+parcial, la reconciliación daría por corregidos los hallazgos de las unidades que no
+leyó. Por eso Dashboard, Estadísticas, Historial y la cadena de análisis son solo de
+Administrador, mientras que el listado de Hallazgos sí lo puede ver un Moderador,
+acotado a sus propias Unidades Organizativas.
 
 `LoginRequiredMiddleware` ya está activo en todo el proyecto, así que
-`@login_required` sería redundante; se mantiene `@admin_required` porque el permiso
-tiene que leerse en el propio archivo.
+`@login_required` sería redundante; se mantienen los decoradores de `permisos.py`
+porque el permiso tiene que leerse en el propio archivo.
 
 Estilo: vistas basadas en función con fragmentos HTMX, igual que
 `informe_inteligente` y `soporte`.
@@ -21,9 +25,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from usuarios.decorators import admin_required
-
-from . import servicios
+from . import permisos, servicios
 from .constantes import (
     CLAVES_MODULOS,
     COLOR_POR_CRITICIDAD,
@@ -31,6 +33,7 @@ from .constantes import (
     DIAS_RESULTADO_ANTIGUO,
     ETIQUETA_MODULO,
     ICONO_POR_CRITICIDAD,
+    MODULO_EXTRAS,
     MODULOS,
     color_de_indice,
 )
@@ -84,8 +87,12 @@ def _contexto_dashboard():
         'resultado_antiguo': antiguo,
         'dias_antiguo': DIAS_RESULTADO_ANTIGUO,
         'ejecucion_en_curso': servicios.obtener_ejecucion_en_curso(),
+        # Excluye Extras, igual que `filtros.filtrar_hallazgos()` con «Todas»: el
+        # badge de la pestaña Hallazgos tiene que coincidir con lo que esa pestaña
+        # muestra por defecto, o parecería que faltan filas.
         'total_vigentes': Hallazgo.objects.filter(
-            vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS).count(),
+            vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS)
+            .exclude(modulo=MODULO_EXTRAS).count(),
     }
 
 
@@ -130,21 +137,35 @@ def _error(request, mensaje, estado=400):
 # Pantalla principal y paneles
 # ---------------------------------------------------------------------------
 
-@admin_required
+@permisos.acceso_subsanacion
 def index(request):
-    """Página completa. El dashboard se pinta ya renderizado, sin una segunda petición."""
-    contexto = _contexto_dashboard()
-    contexto['claves_modulos'] = CLAVES_MODULOS
+    """Página completa.
+
+    Administrador: el dashboard se pinta ya renderizado, sin una segunda petición
+    (como siempre). Moderador: no ve Dashboard/Estadísticas/Historial/Análisis (son
+    del barrido completo, ver `permisos.py`) — entra directo a Hallazgos, ya acotado
+    a sus propias Unidades Organizativas, con el mismo mecanismo de página completa
+    que usa `panel_hallazgos()` para «volver aquí» tras corregir un registro.
+    """
+    if permisos.es_administrador(request.user):
+        contexto = _contexto_dashboard()
+        contexto['claves_modulos'] = CLAVES_MODULOS
+        return render(request, 'pages/subsanacion/index.html', contexto)
+
+    contexto = _contexto_listado(request)
+    contexto['total_reglas'] = total_reglas()
+    contexto['total_vigentes'] = contexto['total_resultados']
+    contexto['tab_activo'] = 'hallazgos'
     return render(request, 'pages/subsanacion/index.html', contexto)
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 def panel_dashboard(request):
     return render(request, 'pages/subsanacion/partials/panel_dashboard.html',
                   _contexto_dashboard())
 
 
-@admin_required
+@permisos.acceso_subsanacion
 def panel_hallazgos(request):
     """Listado con filtros, búsqueda y paginación.
 
@@ -162,13 +183,18 @@ def panel_hallazgos(request):
     if _es_peticion_fragmento(request):
         return render(request, 'pages/subsanacion/partials/panel_hallazgos.html', contexto)
 
-    contexto.update(_contexto_dashboard())
-    contexto['claves_modulos'] = CLAVES_MODULOS
+    if permisos.es_administrador(request.user):
+        contexto.update(_contexto_dashboard())
+        contexto['claves_modulos'] = CLAVES_MODULOS
+    else:
+        # Mismo recorte que `index()`: un Moderador no tiene Dashboard que mostrar.
+        contexto['total_reglas'] = total_reglas()
+        contexto['total_vigentes'] = contexto['total_resultados']
     contexto['tab_activo'] = 'hallazgos'
     return render(request, 'pages/subsanacion/index.html', contexto)
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 def panel_revisiones(request):
     """Historial de revisiones: quién revisó qué, cuándo y con qué observación.
 
@@ -187,7 +213,7 @@ def panel_revisiones(request):
     })
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 def panel_estadisticas(request):
     """Distribución por categoría, gravedad y regla, más la tendencia del índice."""
     ejecucion = servicios.ultima_ejecucion_terminada()
@@ -210,19 +236,26 @@ def panel_estadisticas(request):
 # Exportaciones
 # ---------------------------------------------------------------------------
 
-@admin_required
+@permisos.acceso_subsanacion
 def exportar_excel(request):
-    """Excel de lo que hay en pantalla, con los mismos filtros y la misma búsqueda."""
+    """Excel de lo que hay en pantalla, con los mismos filtros y la misma búsqueda.
+
+    `exportar_a_excel()` llama a `filtros.filtrar_hallazgos(request)`, que ya acota
+    por Unidad Organizativa para un Moderador — no hace falta repetir el alcance aquí.
+    """
     return exportar_a_excel(request)
 
 
-@admin_required
+@permisos.acceso_subsanacion
 def exportar_pdf(request):
-    """PDF de lo que hay en pantalla, con los mismos filtros y la misma búsqueda."""
+    """PDF de lo que hay en pantalla, con los mismos filtros y la misma búsqueda.
+
+    Mismo alcance que `exportar_excel()`: lo hereda de `filtrar_hallazgos(request)`.
+    """
     return exportar_a_pdf(request)
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 def panel_analisis(request):
     """Panel de «Ejecutar nuevo análisis»: el botón, o el aviso de que ya hay uno."""
     return render(request, 'pages/subsanacion/partials/panel_analisis.html', {
@@ -233,11 +266,23 @@ def panel_analisis(request):
     })
 
 
-@admin_required
+def _hallazgos_visibles(usuario):
+    """Mismo alcance que `filtros.filtrar_hallazgos()`, para lookups por `pk`
+    (detalle, cambio de estado): un Moderador no puede alcanzar el hallazgo de otra
+    Unidad Organizativa ni manipulando la URL a mano — `get_object_or_404` sobre este
+    queryset devuelve 404 en vez de filtrar datos ajenos.
+    """
+    consulta = Hallazgo.objects.select_related('content_type', 'revisado_por', 'ejecucion')
+    if not permisos.es_administrador(usuario):
+        uo_ids_visibles = permisos.unidades_visibles(usuario).values_list('pk', flat=True)
+        consulta = consulta.filter(unidad_organizativa_id__in=uo_ids_visibles)
+    return consulta
+
+
+@permisos.acceso_subsanacion
 def detalle_hallazgo(request, pk):
     """Detalle: qué encontró, por qué es un problema, cómo se corrige y a dónde ir."""
-    hallazgo = get_object_or_404(
-        Hallazgo.objects.select_related('content_type', 'revisado_por', 'ejecucion'), pk=pk)
+    hallazgo = get_object_or_404(_hallazgos_visibles(request.user), pk=pk)
 
     # La regla puede haber desaparecido del código (se retiró en una versión
     # posterior). El hallazgo histórico sigue siendo válido y se muestra sin la guía.
@@ -264,16 +309,17 @@ def detalle_hallazgo(request, pk):
 # Cambio de estado: la única escritura que origina el usuario
 # ---------------------------------------------------------------------------
 
-@admin_required
+@permisos.acceso_subsanacion
 @require_POST
 def cambiar_estado(request, pk):
     """Marca un hallazgo como revisado, ignorado o falso positivo.
 
     Solo escribe en tablas de Subsanación. No existe —ni existirá— una vista que
     modifique un dato de negocio: la corrección la hace el usuario desde el
-    formulario correspondiente.
+    formulario correspondiente. Un Moderador solo puede hacerlo sobre hallazgos de
+    sus propias Unidades Organizativas (`_hallazgos_visibles()`, arriba).
     """
-    hallazgo = get_object_or_404(Hallazgo.objects.select_related('content_type'), pk=pk)
+    hallazgo = get_object_or_404(_hallazgos_visibles(request.user), pk=pk)
     nuevo_estado = (request.POST.get('estado') or '').strip()
     nota = (request.POST.get('nota') or '').strip()
 
@@ -307,7 +353,7 @@ def _siguiente_modulo(ejecucion, clave_actual):
     return None
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 @require_POST
 def iniciar_analisis(request):
     """Crea la ejecución y devuelve el primer paso de la cadena."""
@@ -340,7 +386,7 @@ def iniciar_analisis(request):
     })
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 @require_POST
 def ejecutar_modulo(request, pk, clave):
     """Ejecuta una categoría y devuelve su resultado más el disparador de la siguiente.
@@ -369,7 +415,7 @@ def ejecutar_modulo(request, pk, clave):
     })
 
 
-@admin_required
+@permisos.solo_admin_subsanacion
 @require_POST
 def finalizar_analisis(request, pk):
     """Cierra la ejecución, calcula el índice de salud y devuelve el resumen final."""

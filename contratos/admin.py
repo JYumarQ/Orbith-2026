@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 from django.contrib import admin
@@ -5,11 +6,16 @@ from django.db.models import Count, F, Window
 from django.http import Http404, HttpResponseRedirect
 from django.urls import reverse
 
+from auditoria.admin_mixins import AuditoriaAdminMixin, AuditoriaSoloEdicionAdminMixin
+
 from .models import CAlta, CBaja, TMovimiento, TMovimientoAgrupado
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(CAlta)
-class CAltaAdmin(admin.ModelAdmin):
+class CAltaAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'contratos'
     list_display = (
         'no_expediente', 'aspirante', 'cargo', 'tipo',
         'fecha_alta', 'salario_actual', 'en_proceso_movimiento'
@@ -23,9 +29,20 @@ class CAltaAdmin(admin.ModelAdmin):
     autocomplete_fields = ['aspirante', 'cargo']
     readonly_fields = ('salario_actual',)
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'fecha_alta_entidad' in form.base_fields:
+            form.base_fields['fecha_alta_entidad'].help_text = (
+                'Excepción de Admin: aquí se permite una fecha posterior a '
+                '"F. de Contratación" (fecha_alta), a diferencia de los '
+                'formularios normales de contrato.'
+            )
+        return form
+
 
 @admin.register(CBaja)
-class CBajaAdmin(admin.ModelAdmin):
+class CBajaAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'contratos'
     list_display = ('no_expediente', 'aspirante', 'fecha_baja', 'causa_baja')
     search_fields = (
         'aspirante__nombre', 'aspirante__papellido', 'aspirante__sapellido',
@@ -61,7 +78,50 @@ class TMovimientoAgrupadoAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        # `obj is None`: permiso "general" que Django consulta para decidir si
+        # ofrece acciones de borrado en la lista — se concede, para habilitar la
+        # acción `eliminar_historico_completo` de abajo (que no declara permisos
+        # propios, así que no depende de esto, pero se deja consistente).
+        #
+        # `obj` concreto: permiso para el borrado de UN objeto (el icono de la fila
+        # y la página `.../<id>/delete/`) — se NIEGA siempre. Cada fila de este
+        # queryset es solo la "representante" del grupo (ver `get_queryset`); borrar
+        # solo esa fila con el flujo estándar de Django dejaría el resto del grupo
+        # huérfano. La única forma de borrado válida aquí es la acción de abajo.
+        return obj is None
+
+    def get_actions(self, request):
+        acciones = super().get_actions(request)
+        acciones.pop('delete_selected', None)
+        return acciones
+
+    actions = ['eliminar_historico_completo']
+
+    @admin.action(description='Eliminar TODO el histórico de nómina de los '
+                               'trabajadores seleccionados')
+    def eliminar_historico_completo(self, request, queryset):
+        """Borra, para cada (aspirante, no_expediente) seleccionado, TODOS sus
+        TMovimiento — no solo la fila "representante" que se ve en la lista.
+
+        Se borra instancia por instancia (no con un `.delete()` sobre el
+        queryset filtrado completo) para que `post_delete`
+        (`contratos.models._al_eliminar_movimiento`) se dispare por cada uno:
+        es lo que audita cada borrado y, cuando el último movimiento de un
+        trabajador desaparece, cierra su ciclo de contratación.
+        """
+        total_grupos = 0
+        total_movimientos = 0
+        for fila in queryset:
+            movimientos = list(TMovimiento.objects.filter(
+                aspirante_id=fila.aspirante_id, no_expediente=fila.no_expediente))
+            for movimiento in movimientos:
+                movimiento.delete()
+            total_movimientos += len(movimientos)
+            total_grupos += 1
+        self.message_user(
+            request,
+            f'Histórico completo eliminado: {total_grupos} trabajador(es), '
+            f'{total_movimientos} movimiento(s) en total.')
 
     def get_queryset(self, request):
         return (
@@ -122,7 +182,8 @@ class TMovimientoAgrupadoAdmin(admin.ModelAdmin):
 
 
 @admin.register(TMovimiento)
-class TMovimientoAdmin(admin.ModelAdmin):
+class TMovimientoAdmin(AuditoriaSoloEdicionAdminMixin, admin.ModelAdmin):
+    modulo_auditoria = 'contratos'
     # Columnas que se verán en la lista principal
     list_display = (
         'id',

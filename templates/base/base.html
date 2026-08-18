@@ -154,29 +154,18 @@
       {% endif %}
     </div>
 
-    <script src="{% static 'js/sweetalert2.js' %}"></script>
     <script>
-      /* Sistema unificado: reemplaza el código largo de creación de Toasts */
+      /* Consume los mensajes de Django (messages.success/error/...) y los
+         muestra con el toast único del proyecto (window.mostrarToast,
+         definido en base/scripts.html, cargado antes que este bloque). */
       document.addEventListener('DOMContentLoaded', function() {
         const hidden = document.getElementById('djangoMessages');
-        if (!hidden || !window.Swal) return;
+        if (!hidden || typeof window.mostrarToast !== 'function') return;
 
         hidden.querySelectorAll('.msg').forEach(function(node) {
           const text = (node.textContent || '').trim();
           const tags = node.dataset.tags || 'info';
-          
-          Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: (tags.includes('error') || tags.includes('danger')) ? 'error' : 'success',
-            title: text,
-            showConfirmButton: false,
-            timer: 3000,
-            timerProgressBar: true,
-            background: '#fff',
-            color: '#697a8d',
-            customClass: { popup: 'border shadow-lg' }
-          });
+          window.mostrarToast(text, (tags.includes('error') || tags.includes('danger')) ? 'error' : 'success');
           node.remove();
         });
         hidden.innerHTML = '';
@@ -242,6 +231,7 @@
     </script>
 
     <script src="{% static 'js/ui-toasts.js' %}"></script>
+    <script src="{% static 'js/progreso_guia.js' %}"></script>
     <script src="{% static 'vendor/js/htmx.min.js' %}"></script>
     <script>
       document.body.addEventListener('htmx:configRequest', function (e) {
@@ -249,8 +239,6 @@
         if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
       });
     </script>
-
-    <div id="toastContainer" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
 
     {% block extra_scripts %}{% endblock %}
 </body>

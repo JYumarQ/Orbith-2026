@@ -118,12 +118,17 @@ class AdvertenciasDelRegistroMixin:
     def mensaje_de_guardado_exitoso(self, mensaje_por_defecto):
         """Sustituye `mensaje_por_defecto` por el mensaje de cierre cuando, tras
         guardar, el registro ya no tiene ninguna advertencia activa — pero solo si se
-        llegó aquí desde una advertencia (`next` presente). Sin `next` no hay una
-        redirección real de vuelta a ningún sitio (ver `VolverAlOrigenMixin`), así que
-        el mensaje de cierre no debe sustituir al genérico: quedaría «colgado» en la
-        sesión de Django y podría aparecer en una navegación posterior no relacionada.
+        llegó aquí desde una advertencia (`origen` presente).
+
+        Se comprueba `origen`, no `next`: `next` es el parámetro genérico de "volver a
+        donde estaba" y lo usan también enlaces sin relación con Advertencias (p. ej.
+        "Editar Personal" desde la lista de Contratos, que solo quiere volver al
+        listado). Usar `next` aquí hacía que, al editar por ese camino un registro que
+        ya no tuviera advertencias, apareciera «ya no tiene advertencias pendientes»
+        aunque el usuario nunca hubiera venido de ninguna — ver
+        `base/partials/aviso_origen_edicion.html`, que tiene el mismo criterio.
         """
-        if not (self.request.POST.get('next') or self.request.GET.get('next')):
+        if not (self.request.POST.get('origen') or self.request.GET.get('origen')):
             return mensaje_por_defecto
         if self._advertencias_del_registro()['activas']:
             return mensaje_por_defecto

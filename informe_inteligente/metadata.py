@@ -68,6 +68,78 @@ def _opciones_familias_cargo():
     return list(NFamiliaCargo.objects.order_by("nombre").values_list("nombre", "nombre"))
 
 
+def _opciones_departamentos():
+    from strorganizativa.models import Departamento
+    return list(Departamento.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_unidades_organizativas():
+    from strorganizativa.models import UnidadOrganizativa
+    return list(UnidadOrganizativa.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_cargos():
+    from nomencladores.models import NCargo
+    return list(NCargo.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_especialidades():
+    from nomencladores.models import NEspecialidad
+    return list(NEspecialidad.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+
+
+def _opciones_niveles_preparacion():
+    from nomencladores.models import NNivelPreparacion
+    return list(NNivelPreparacion.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+
+
+def _opciones_tipos_contrato():
+    from nomencladores.models import NTipoContrato
+    return list(NTipoContrato.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_motivos_contrato():
+    from nomencladores.models import NMotivoContrato
+    return list(NMotivoContrato.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_jornadas():
+    from nomencladores.models import NJornada
+    return list(NJornada.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_condiciones_laborales_anormales():
+    # Usado por CLA y por Nocturnidad 1/2: los tres FKs de CAlta apuntan al
+    # mismo modelo NCondicionLaboralAnormal (ver contratos/models.py).
+    from nomencladores.models import NCondicionLaboralAnormal
+    return list(NCondicionLaboralAnormal.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+
+
+def _opciones_roles():
+    from nomencladores.models import NRol
+    return list(NRol.objects.order_by("tipo").values_list("tipo", "tipo").distinct())
+
+
+def _opciones_tridentes():
+    from nomencladores.models import NTridente
+    return list(NTridente.objects.order_by("tipo").values_list("tipo", "tipo").distinct())
+
+
+def _opciones_causas_alta_baja():
+    from nomencladores.models import NCausaAltaBaja
+    return list(NCausaAltaBaja.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+
+
+def _opciones_municipios():
+    from nomencladores.models import NMunicipio
+    return list(NMunicipio.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+
+
+def _opciones_provincias():
+    from nomencladores.models import NProvincia
+    return list(NProvincia.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+
+
 # ---------------------------------------------------------------------------
 # CATEGORÍAS PARA AGRUPAR LOS CAMPOS EN LA INTERFAZ
 # ---------------------------------------------------------------------------
@@ -145,6 +217,10 @@ def _campos_calta():
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": True,
+            # "Entre fechas" sobre este campo compara solo día+mes, ignorando
+            # el año (para buscar cumpleaños en un rango sin importar en qué
+            # año nació cada quien). Ver motor.py::_construir_q_de_filtro.
+            "recurrente_anual": True,
         },
         "cumpleanos": {
             "label": "Cumpleaños",
@@ -199,10 +275,11 @@ def _campos_calta():
         "especialidad": {
             "label": "Especialidad",
             "ruta_orm": "aspirante__especialidad__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_especialidades,
         },
         "reg_militar": {
             "label": "Registro Militar",
@@ -237,10 +314,11 @@ def _campos_calta():
         "cargo": {
             "label": "Cargo",
             "ruta_orm": "cargo__ncargo__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_cargos,
         },
         "categoria_ocupacional": {
             "label": "Categoría Ocupacional",
@@ -273,26 +351,29 @@ def _campos_calta():
         "departamento": {
             "label": "Departamento",
             "ruta_orm": "cargo__departamento__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_departamentos,
         },
         "unidad_organizativa": {
             "label": "Unidad Organizativa",
             "ruta_orm": "cargo__departamento__unidad_organizativa__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_unidades_organizativas,
         },
         "nivel_preparacion": {
             "label": "Nivel de Preparación",
             "ruta_orm": "cargo__nivel_preparacion__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_niveles_preparacion,
         },
         "funcionario": {
             "label": "Funcionario",
@@ -353,15 +434,32 @@ def _campos_calta():
         "tipo_contrato": {
             "label": "Tipo de Contrato",
             "ruta_orm": "tipo__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_tipos_contrato,
         },
         "fecha_alta": {
             "label": "Fecha de Alta",
             "ruta_orm": "fecha_alta",
             "tipo": "fecha",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "fecha_alta_entidad": {
+            "label": "F. Alta Entidad",
+            "ruta_orm": "fecha_alta_entidad",
+            "tipo": "fecha",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "antiguedad": {
+            "label": "Antigüedad (años)",
+            "ruta_orm": None,  # se resuelve por anotación sobre fecha_alta_entidad
+            "tipo": "numero",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
@@ -377,10 +475,11 @@ def _campos_calta():
         "motivo": {
             "label": "Motivo de Contrato",
             "ruta_orm": "motivo__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_motivos_contrato,
         },
         "duracion": {
             "label": "Duración",
@@ -393,10 +492,11 @@ def _campos_calta():
         "jornada": {
             "label": "Jornada",
             "ruta_orm": "jornada__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_jornadas,
         },
         "mision": {
             "label": "Misión",
@@ -425,26 +525,29 @@ def _campos_calta():
         "cla": {
             "label": "Condición Laboral Anormal (CLA)",
             "ruta_orm": "cla__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
         },
         "nocturnidad_1": {
             "label": "Nocturnidad 1",
             "ruta_orm": "nocturnidad_1__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
         },
         "nocturnidad_2": {
             "label": "Nocturnidad 2",
             "ruta_orm": "nocturnidad_2__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
         },
         "fecha_vence_lic": {
             "label": "Vencimiento de Licencia",
@@ -483,18 +586,20 @@ def _campos_calta():
         "rol": {
             "label": "Rol de Pago",
             "ruta_orm": "rol__tipo",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_roles,
         },
         "tridente": {
             "label": "Tridente",
             "ruta_orm": "tridente__tipo",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_tridentes,
         },
         "tipo_salario": {
             "label": "Tipo de Salario",
@@ -561,10 +666,11 @@ def _campos_cbaja():
         "causa_baja": {
             "label": "Causa de Baja",
             "ruta_orm": "causa_baja__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "baja",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_causas_alta_baja,
         },
         "fecha_baja": {
             "label": "Fecha de Baja",
@@ -628,10 +734,11 @@ def _campos_cargoplantilla():
         "cargo": {
             "label": "Cargo",
             "ruta_orm": "ncargo__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_cargos,
         },
         "categoria_ocupacional": {
             "label": "Categoría Ocupacional",
@@ -660,34 +767,38 @@ def _campos_cargoplantilla():
         "rol": {
             "label": "Rol",
             "ruta_orm": "rol__tipo",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_roles,
         },
         "nivel_preparacion": {
             "label": "Nivel de Preparación",
             "ruta_orm": "nivel_preparacion__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_niveles_preparacion,
         },
         "departamento": {
             "label": "Departamento",
             "ruta_orm": "departamento__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_departamentos,
         },
         "unidad_organizativa": {
             "label": "Unidad Organizativa",
             "ruta_orm": "departamento__unidad_organizativa__descripcion",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_unidades_organizativas,
         },
         "funcionario": {
             "label": "Funcionario",
@@ -808,6 +919,7 @@ def _campos_aspirante():
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": True,
+            "recurrente_anual": True,
         },
         "cumpleanos": {
             "label": "Cumpleaños",
@@ -859,10 +971,11 @@ def _campos_aspirante():
         "especialidad": {
             "label": "Especialidad",
             "ruta_orm": "especialidad__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_especialidades,
         },
         "movil_personal": {
             "label": "Móvil",
@@ -891,18 +1004,20 @@ def _campos_aspirante():
         "municipio": {
             "label": "Municipio",
             "ruta_orm": "municipio__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_municipios,
         },
         "provincia": {
             "label": "Provincia",
             "ruta_orm": "provincia__nombre",
-            "tipo": "texto",
+            "tipo": "opcion",
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
+            "choices_dinamicas": _opciones_provincias,
         },
     }
 
