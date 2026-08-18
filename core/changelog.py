@@ -36,6 +36,32 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "2.5.0",
+        "fecha": "2026-08-18",
+        "titulo": "Guía de progreso, permisos granulares y auditoría en admin",
+        "cambios": [
+            ("nuevo", "Guía de Progreso: sistema de tareas guiadas para nuevos "
+                    "usuarios, con seguimiento de pasos completados, "
+                    "instrucciones contextuales y barra de progreso."),
+            ("nuevo", "Permisos granulares en contratos y subsanación para un "
+                    "control más fino de accesos."),
+            ("nuevo", "Mixins de auditoría en el panel de administración para "
+                    "registrar automáticamente quién crea o modifica registros."),
+            ("nuevo", "Campo 'fecha_alta_entidad' en contratos para registrar "
+                    "la fecha real de alta en la entidad."),
+            ("mejorado", "Reestructuración de templates del Dashboard para "
+                        "facilitar su mantenimiento."),
+            ("mejorado", "Recodificación y deduplicación de eventos de "
+                        "notificaciones para evitar duplicados y mejorar "
+                        "el rendimiento."),
+            ("mejorado", "Actualización masiva de vistas, formularios y "
+                        "plantillas en contratos, subsanación y solicitudes."),
+            ("corregido", "Corrección en la gestión de cumpleaños y jubilaciones "
+                        "en el sistema de notificaciones."),
+        ],
+    },
+
+    {
         "version": "2.4.1",
         "fecha": "2026-08-11",
         "titulo": "Modo mantenimiento, notificaciones y reportes mejorados",
