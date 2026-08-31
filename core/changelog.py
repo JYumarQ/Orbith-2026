@@ -76,6 +76,17 @@ CHANGELOG = [
                         "trazas con detalles internos."),
             ("seguridad", "La cookie de sesión pasa a ser inaccesible desde "
                         "JavaScript y no viaja en peticiones de otros sitios."),
+            ("seguridad", "Las contraseñas siguen ahora un único criterio en los "
+                        "tres sitios donde se fijan: alta de usuario, cambio "
+                        "desde «Mi Perfil» y panel de administración. Antes el "
+                        "cambio aceptaba contraseñas que el alta rechazaba, "
+                        "entre ellas algunas de las más usadas del mundo. Se "
+                        "mantienen las exigencias de longitud, mayúscula y "
+                        "número, y se añaden el rechazo de contraseñas comunes "
+                        "y de las parecidas al nombre de usuario."),
+            ("corregido", "Los avisos de contraseña al dar de alta un usuario "
+                        "salían en inglés. Ahora están en español, como el "
+                        "resto del sistema."),
             ("corregido", "Estáticos: la carpeta generada por «collectstatic» "
                         "estaba versionada y desactualizada, de modo que en "
                         "producción faltaban recursos que carga toda la "

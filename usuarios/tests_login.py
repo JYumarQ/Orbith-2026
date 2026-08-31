@@ -303,3 +303,91 @@ class AyudaDeAccesoSinLoginTests(TestCase):
 
         self.assertEqual(respuesta.status_code, 429)
         self.assertEqual(ReporteProblema.objects.count(), MAXIMO_AYUDAS_POR_IP_HORA)
+
+
+class ReglasDeContrasenaTests(TestCase):
+    """Un único criterio de contraseña en los tres sitios donde se fija una.
+
+    Antes cada camino aplicaba reglas distintas: el alta usaba los validadores
+    de Django (con los mensajes en inglés) y el cambio desde «Mi Perfil» tres
+    comprobaciones escritas a mano que se saltaban la lista de contraseñas
+    comunes. El agujero concreto que se cierra aquí: el cambio ACEPTABA claves
+    que el alta rechazaba.
+    """
+
+    CLAVE_VALIDA = 'NuevaClave123'
+
+    def setUp(self):
+        crear_configuracion()
+        self.moderador = CustomUser.objects.create_user(
+            username='mod_test', password='ClaveSegura123', es_moderador=True,
+        )
+        self.client.login(username='mod_test', password='ClaveSegura123')
+        self.url = reverse('cambiar_password', args=[self.moderador.pk])
+
+    def _cambiar(self, clave):
+        return self.client.post(
+            self.url, {'new_password1': clave, 'new_password2': clave, 'next': ''})
+
+    def _errores(self, respuesta):
+        return respuesta.context['form'].errors.get('new_password1', [])
+
+    # ---------- el agujero que motivó el cambio ----------
+    def test_una_clave_comun_ya_no_pasa_el_cambio(self):
+        """`Password1` cumple las tres reglas antiguas (8 caracteres, mayúscula
+        y dígito) y es de las contraseñas más usadas del mundo."""
+        respuesta = self._cambiar('Password1')
+
+        self.assertEqual(respuesta.status_code, 200)  # no redirige: no se guardó
+        self.moderador.refresh_from_db()
+        self.assertFalse(self.moderador.check_password('Password1'))
+
+    def test_una_clave_parecida_al_usuario_se_rechaza(self):
+        respuesta = self._cambiar('Mod_test1')
+
+        self.moderador.refresh_from_db()
+        self.assertFalse(self.moderador.check_password('Mod_test1'))
+        self.assertTrue(self._errores(respuesta))
+
+    # ---------- las reglas que ya existían siguen ahí ----------
+    def test_sigue_exigiendose_mayuscula(self):
+        self.assertTrue(self._errores(self._cambiar('clavelarga123')))
+
+    def test_sigue_exigiendose_un_digito(self):
+        self.assertTrue(self._errores(self._cambiar('ClaveLargaSinNumero')))
+
+    def test_sigue_exigiendose_la_longitud_minima(self):
+        self.assertTrue(self._errores(self._cambiar('Cort1')))
+
+    # ---------- una clave buena sigue funcionando ----------
+    def test_una_clave_valida_se_guarda(self):
+        self._cambiar(self.CLAVE_VALIDA)
+
+        self.moderador.refresh_from_db()
+        self.assertTrue(self.moderador.check_password(self.CLAVE_VALIDA))
+
+    # ---------- idioma ----------
+    def test_los_mensajes_estan_en_espanol(self):
+        """El proyecto va con LANGUAGE_CODE='en-us', así que sin los validadores
+        propios el usuario leería "This password is too common."."""
+        errores = ' '.join(str(e) for e in self._errores(self._cambiar('password')))
+
+        self.assertNotIn('This password', errores)
+        self.assertIn('contraseña', errores)
+
+    # ---------- el mismo criterio en el alta ----------
+    def test_el_alta_de_usuario_aplica_las_mismas_reglas(self):
+        from .forms import CustomUserCreationForm
+
+        comun = CustomUserCreationForm(data={
+            'username': 'nuevo', 'password1': 'Password1', 'password2': 'Password1',
+            'es_observador': True,
+        })
+        self.assertFalse(comun.is_valid())
+        self.assertIn('password2', comun.errors)
+
+        valida = CustomUserCreationForm(data={
+            'username': 'nuevo', 'password1': self.CLAVE_VALIDA,
+            'password2': self.CLAVE_VALIDA, 'es_observador': True,
+        })
+        self.assertTrue(valida.is_valid(), valida.errors.as_data())

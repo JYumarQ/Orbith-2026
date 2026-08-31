@@ -111,19 +111,30 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
+# Reglas de contraseña. Apuntan a `usuarios.validadores` y no directamente a los
+# de Django porque estos emiten sus mensajes en el idioma de LANGUAGE_CODE
+# ('en-us' aquí), y en Orbith todo mensaje va en español: al dar de alta una
+# cuenta se leía "This password is too common.". Las subclases reutilizan la
+# lógica de Django intacta —incluida la lista de 20.000 contraseñas comunes— y
+# solo sustituyen el texto. Ver el docstring de ese módulo.
+#
+# Declararlas AQUÍ es lo que hace que se apliquen solas en los TRES sitios donde
+# se fija una contraseña: el alta de usuario, el cambio desde «Mi Perfil» y el
+# panel de administración de Django. Antes cada uno aplicaba reglas distintas, y
+# el cambio aceptaba claves que el alta rechazaba (`Password1` entre ellas).
 AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'usuarios.validadores.NoParecidaAlUsuario'},
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        'NAME': 'usuarios.validadores.LongitudMinima',
+        # Explícito aunque coincida con el defecto de Django: es el número que
+        # aparece en el mensaje que lee el usuario.
+        'OPTIONS': {'min_length': 8},
     },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'usuarios.validadores.NoDemasiadoComun'},
+    {'NAME': 'usuarios.validadores.NoSoloNumeros'},
+    # Regla propia de Orbith: Django no la trae. Ya se exigía en el cambio de
+    # contraseña; ahora alcanza también al alta y al panel de administración.
+    {'NAME': 'usuarios.validadores.MayusculaYDigito'},
 ]
 
 

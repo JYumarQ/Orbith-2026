@@ -142,6 +142,7 @@ class CustomUserChangeForm(UserChangeForm):
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 
 User = get_user_model()
@@ -161,17 +162,22 @@ class CustomPasswordChangeForm(forms.Form):
         super().__init__(*args, **kwargs)
 
     def clean_new_password1(self):
-        new_password1 = self.cleaned_data.get('new_password1')
-        # Aquí agregamos las validaciones para la nueva contraseña
-        if len(new_password1) < 8:
-            raise ValidationError("La nueva contraseña debe tener al menos 8 caracteres.")
-        if not any(char.isupper() for char in new_password1):
-            raise ValidationError("La nueva contraseña debe tener al menos una letra mayúscula.")
-        if not any(char.isdigit() for char in new_password1):
-            raise ValidationError("La nueva contraseña debe tener al menos un número.")
-#        if not any(char in "!@#$%^&*()-_+=<>?/" for char in new_password1):
-#            raise ValidationError("La nueva contraseña debe tener al menos un carácter especial.")
-        return new_password1
+        """Aplica AUTH_PASSWORD_VALIDATORS: las MISMAS reglas que el alta de
+        usuario y el panel de administración de Django.
+
+        Antes aquí vivían tres comprobaciones escritas a mano (8 caracteres,
+        una mayúscula y un dígito) que se saltaban la lista de contraseñas
+        comunes y el parecido con el nombre de usuario. El resultado era que
+        este formulario ACEPTABA claves que el alta rechazaba: `Password1`
+        cumple las tres y es de las contraseñas más usadas del mundo.
+
+        Se pasa `self.user` —el usuario al que se le cambia la clave, que no es
+        necesariamente quien está rellenando el formulario— para que el
+        validador de parecido compare contra los datos correctos.
+        """
+        password = self.cleaned_data.get('new_password1')
+        validate_password(password, self.user)
+        return password
 
     def clean_new_password2(self):
         new_password1 = self.cleaned_data.get('new_password1')
