@@ -1,0 +1,190 @@
+{% comment %}
+  Crear, editar y duplicar una plantilla: el mismo formulario en tres modos.
+
+  Hereda el marcado de selección de conceptos del antiguo «Conceptos del
+  reporte» —los tres grupos y los importes automáticos sin casilla— y le añade
+  la descripción. Aquel modal se retiró: este es ahora el único sitio donde se
+  eligen conceptos.
+
+  La validación en vivo va por HTMX: cualquier cambio en la descripción o en las
+  casillas pide a `validar_plantilla` el aviso y el botón de guardar, que llegan
+  ya resueltos desde el servidor (ver `aviso_plantilla.html`). Por eso el botón
+  vive FUERA del `<form>` y se le asocia con `form="form_plantilla"`: así el
+  intercambio de HTMX puede reemplazarlo sin tocar lo que el usuario lleve
+  marcado.
+
+  Las reglas por modo:
+  * crear y editar → basta descripción + al menos un concepto;
+  * duplicar → además, descripción distinta Y al menos un concepto distinto.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable" role="document">
+  <div class="modal-content">
+
+    <div class="modal-header">
+      <div>
+        <h5 class="modal-title mb-0">
+          {% if modo == 'duplicar' %}Duplicar plantilla
+          {% elif plantilla %}Editar plantilla
+          {% else %}Nueva plantilla{% endif %}
+        </h5>
+        <small class="text-muted">
+          {% if modo == 'duplicar' %}
+            Copia de «{{ original.descripcion }}» — cambie la descripción y algún concepto
+          {% else %}
+            Conceptos que llevará el reporte generado con ella
+          {% endif %}
+        </small>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+
+    <div class="modal-body">
+      {% if error %}
+        <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+          <i class="fas fa-circle-exclamation me-2 mt-1"></i>
+          <div class="small">{{ error }}</div>
+        </div>
+      {% endif %}
+
+      {% comment %}
+        `hx-trigger` con `delay` en la descripción para no consultar en cada
+        tecla; las casillas responden al instante porque son un solo clic.
+      {% endcomment %}
+      <form id="form_plantilla"
+            hx-post="{% if modo == 'duplicar' %}{% url 'prenomina:duplicar_plantilla' original.pk %}{% elif plantilla %}{% url 'prenomina:editar_plantilla' plantilla.pk %}{% else %}{% url 'prenomina:nueva_plantilla' %}{% endif %}"
+            hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="modo" value="{{ modo }}">
+        {% if original %}<input type="hidden" name="original" value="{{ original.pk }}">{% endif %}
+
+        <div class="mb-3">
+          <label class="form-label small fw-bold text-muted" for="id_descripcion_plantilla">
+            Descripción *
+          </label>
+          <input type="text" id="id_descripcion_plantilla" name="descripcion"
+                 class="form-control" maxlength="30" required
+                 placeholder="Por ejemplo: Oficina Central"
+                 value="{{ descripcion }}"
+                 hx-get="{% url 'prenomina:validar_plantilla' %}"
+                 hx-trigger="input changed delay:400ms"
+                 hx-include="#form_plantilla"
+                 hx-target="#aviso_plantilla" hx-swap="innerHTML">
+          <div class="form-text" style="font-size: .72rem;">
+            Máximo 30 caracteres. No puede repetirse en sus plantillas.
+          </div>
+        </div>
+
+        <p class="text-muted small">
+          Marque los conceptos que llevará el reporte. Al generar un reporte con
+          esta plantilla, la selección queda <strong>congelada</strong> en él: si
+          después edita la plantilla, ese reporte no cambia.
+        </p>
+
+        {% comment %}
+          Cada cambio en las casillas revalida contra el servidor: es lo que
+          mantiene el botón de guardar en sincronía con lo que el backend
+          aceptaría.
+        {% endcomment %}
+        <div hx-get="{% url 'prenomina:validar_plantilla' %}"
+             hx-trigger="change"
+             hx-include="#form_plantilla"
+             hx-target="#aviso_plantilla" hx-swap="innerHTML">
+
+          <h6 class="fw-bold text-success mt-3 mb-2">
+            <i class="fas fa-user-clock me-1"></i>Claves de ausencia
+          </h6>
+          {% for clave in claves_ausencia %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="ausencias"
+                     value="{{ clave.codigo }}" id="pl_ausencia_{{ clave.codigo }}"
+                     {% if clave.codigo in marcadas_ausencia %}checked{% endif %}>
+              <label class="form-check-label small" for="pl_ausencia_{{ clave.codigo }}">
+                {{ clave.etiqueta }}
+                {% if not clave.resta_horas_mes %}
+                  <span class="badge bg-label-secondary">no resta horas</span>
+                {% endif %}
+                {% if clave.relacionado_con %}
+                  <span class="text-muted">
+                    <i class="fas fa-arrow-right-long mx-1"></i>alimenta
+                    «{{ clave.relacionado_con.descripcion }}»
+                  </span>
+                {% endif %}
+              </label>
+            </div>
+          {% empty %}
+            <p class="text-muted small">No hay claves de ausencia configuradas.</p>
+          {% endfor %}
+
+          <h6 class="fw-bold mt-4 mb-2" style="color: #7030a0;">
+            <i class="fas fa-hourglass-half me-1"></i>Pagos asociados por horas
+          </h6>
+          {% for pago in pagos_horas %}
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="horas"
+                     value="{{ pago.codigo }}" id="pl_horas_{{ pago.codigo }}"
+                     {% if pago.codigo in marcadas_horas %}checked{% endif %}>
+              <label class="form-check-label small" for="pl_horas_{{ pago.codigo }}">
+                {{ pago.etiqueta }}
+              </label>
+            </div>
+          {% empty %}
+            <p class="text-muted small">No hay pagos por horas configurados.</p>
+          {% endfor %}
+
+          <h6 class="fw-bold mt-4 mb-2" style="color: #c00000;">
+            <i class="fas fa-money-bill-wave me-1"></i>Pagos asociados por importe
+          </h6>
+          {% for pago in pagos_importe %}
+            {% if pago.codigo in automaticos %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" checked disabled>
+                <label class="form-check-label small text-muted">
+                  {{ pago.etiqueta }}
+                  <span class="badge bg-label-info">
+                    se añade solo con «{{ pago.relacionado_con.descripcion }}»
+                  </span>
+                </label>
+              </div>
+            {% else %}
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="importes"
+                       value="{{ pago.codigo }}" id="pl_importe_{{ pago.codigo }}"
+                       {% if pago.codigo in marcadas_importe %}checked{% endif %}>
+                <label class="form-check-label small" for="pl_importe_{{ pago.codigo }}">
+                  {{ pago.etiqueta }}
+                  {% if pago.relacionado_con %}
+                    <span class="text-muted">
+                      (toma las horas de «{{ pago.relacionado_con.descripcion }}»)
+                    </span>
+                  {% endif %}
+                </label>
+              </div>
+            {% endif %}
+          {% empty %}
+            <p class="text-muted small">No hay pagos por importe configurados.</p>
+          {% endfor %}
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-footer d-flex align-items-center gap-2">
+      {% comment %}
+        El aviso y el botón de guardar llegan juntos desde el servidor. El estado
+        inicial se pinta aquí con la misma lógica: en un duplicado nada ha
+        cambiado todavía, y en un alta no hay conceptos marcados.
+      {% endcomment %}
+      <div id="aviso_plantilla" class="flex-grow-1 d-flex align-items-center gap-2 justify-content-end">
+        {% if modo == 'duplicar' %}
+          {% include 'pages/prenomina/partials/aviso_plantilla.html' with aviso='Debe cambiar la descripción de esta plantilla y agregar o eliminar, al menos, uno de los conceptos seleccionables.' %}
+        {% elif not marcadas_ausencia and not marcadas_horas and not marcadas_importe %}
+          {% include 'pages/prenomina/partials/aviso_plantilla.html' with aviso='Debe seleccionar al menos un concepto.' %}
+        {% else %}
+          {% include 'pages/prenomina/partials/aviso_plantilla.html' with aviso=None %}
+        {% endif %}
+      </div>
+      <button type="button" class="btn btn-sm btn-outline-secondary order-first"
+              data-bs-dismiss="modal">Cancelar</button>
+    </div>
+
+  </div>
+</div>

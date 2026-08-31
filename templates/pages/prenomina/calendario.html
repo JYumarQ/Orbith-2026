@@ -1,0 +1,88 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% comment %}
+  Pre-Nómina → Calendario.
+
+  Tres tarjetas independientes, cada una con su propio endpoint de refresco por
+  HTMX (`recargarCalendarios`, `recargarPeriodo`, `recargarTrabajadores`), para
+  que editar unas horas no repinte la lista de trabajadores.
+
+  El marcado sigue el patrón del Nomenclador de Cargos (`_cargos.html`): tarjeta
+  con cabecera de icono + título, barra de acciones con lápiz y papelera que
+  arrancan deshabilitados (`toolbar-disabled`) y se habilitan al seleccionar una
+  fila (`table-active-row`), y botón primario de alta siempre disponible. Las
+  clases y el CSS son los que ya existen en `static/css/nomencladores.css`; no se
+  introduce ningún componente nuevo.
+{% endcomment %}
+
+{% block title %}Calendario | ORBITH{% endblock %}
+
+{% block extra_head %}
+{% comment %}
+  `nomencladores.css` trae `table-active-row` y `toolbar-disabled`, que esta
+  pantalla reutiliza del Nomenclador de Cargos en vez de redefinirlas.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/nomencladores.css' %}">
+<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="pn-encabezado">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="pn-titulo">Calendario</h1>
+        <p class="pn-subtitulo">Jornadas laborales y horas por quincena</p>
+      </div>
+    </div>
+  </div>
+
+  {# --- Tarjeta 1: catálogo de jornadas --- #}
+  <div id="zona_calendarios"
+       hx-get="{% url 'prenomina:tarjeta_calendarios' %}"
+       hx-trigger="recargarCalendarios from:body"
+       hx-swap="innerHTML">
+    {% include 'pages/prenomina/partials/tarjeta_calendarios.html' %}
+  </div>
+
+  {# --- Tarjeta 2: período con sus horas --- #}
+  <div id="zona_periodo" class="mt-4"
+       hx-get="{% url 'prenomina:tarjeta_periodo' %}"
+       hx-trigger="recargarPeriodo from:body"
+       hx-include="#filtro_anno, #filtro_mes"
+       hx-swap="innerHTML">
+    {% include 'pages/prenomina/partials/tarjeta_periodo.html' %}
+  </div>
+
+  {% comment %}
+    La asignación de trabajadores vive en su propia pantalla («Pre-Nómina →
+    Asignación de Trabajadores»): es una tabla de plantilla entera y aquí
+    obligaba a desplazarse demasiado para alcanzarla.
+  {% endcomment %}
+
+</div>
+
+<div class="modal fade" id="modal_generic" role="dialog" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script src="{% static 'js/calendario.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_generic');
+  window.orbith.cablearConfirmacionHtmx();
+
+  /* Tras crear un período, la tarjeta 2 tiene que mostrar ESE período y no el
+     que hubiera seleccionado antes: se sincronizan los selects con el recién
+     creado y se recarga. Sin esto, crear Septiembre dejaría la vista en Agosto. */
+  document.body.addEventListener('periodoCreado', function (evento) {
+    const datos = evento.detail || {};
+    const anno = document.getElementById('filtro_anno');
+    const mes = document.getElementById('filtro_mes');
+    if (anno && datos.anno) anno.value = datos.anno;
+    if (mes && datos.mes) mes.value = datos.mes;
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% comment %}
+  Resultado de comprobar una fórmula mientras se escribe.
+
+  El aviso de «usa {{horas}}» no es un error: la comprobación de que exista un
+  concepto relacionado la hace `NPagoImporte.clean()` al guardar, con el contexto
+  completo del formulario. Aquí solo se recuerda, para que el Administrador no
+  llegue al botón Guardar sin saberlo.
+{% endcomment %}
+{% if vacia %}
+  {# Sin fórmula todavía: no se dice nada, para no marcar en rojo un campo aún vacío. #}
+{% elif error %}
+  <div class="alert alert-danger d-flex align-items-start p-2 mb-0" role="alert">
+    <i class="fas fa-circle-exclamation me-2 mt-1"></i>
+    <div class="small">{{ error }}</div>
+  </div>
+{% elif valida %}
+  <div class="alert alert-success d-flex align-items-start p-2 mb-0" role="alert">
+    <i class="fas fa-circle-check me-2 mt-1"></i>
+    <div class="small">
+      Fórmula válida.
+      {% if variables_usadas %}
+        Usa: {% for variable in variables_usadas %}<code>&#123;&#123;{{ variable }}&#125;&#125;</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
+      {% else %}
+        Es una constante: dará el mismo valor a todos los trabajadores.
+      {% endif %}
+      {% if usa_horas %}
+        <br><span class="text-muted">Recuerde indicar el concepto en «Relacionado con».</span>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}

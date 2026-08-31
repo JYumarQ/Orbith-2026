@@ -7,7 +7,7 @@ from django.db import models
 from django.db.models.signals import post_delete, post_save
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
-from nomencladores.models import NTridente, NSalario, NJornada, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
+from nomencladores.models import NTridente, NSalario, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
 from django.core.validators import MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
@@ -153,7 +153,9 @@ class CAlta(ContratoBase):
     instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
     
     
-    jornada = models.ForeignKey(NJornada, blank=True, null=True, on_delete=models.RESTRICT)
+    # El campo `jornada` (FK a NJornada) se eliminó: ningún contrato lo tenía
+    # relleno y el nomenclador estaba vacío y sin interfaz. El tipo de jornada de
+    # cada trabajador se gestiona ahora en Pre-Nómina → Calendario.
 
     cla = models.ForeignKey(
         'nomencladores.NCondicionLaboralAnormal', 

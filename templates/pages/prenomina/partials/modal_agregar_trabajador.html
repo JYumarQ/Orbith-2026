@@ -1,0 +1,64 @@
+{% comment %}
+  Volver a añadir al reporte un trabajador que se había quitado.
+
+  Solo se ofrecen los que tienen contrato activo en la unidad y no están ya en
+  el reporte: añadir a alguien exige releer su `CAlta` viva para congelar
+  salario, categoría y antigüedad. El reporte nunca inventa esos datos.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:agregar_trabajador' reporte.pk %}"
+          hx-target="#modal_generic" hx-swap="innerHTML">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">Añadir trabajador al reporte</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if error %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-circle-exclamation me-2 mt-1"></i>
+            <div class="small">{{ error }}</div>
+          </div>
+        {% endif %}
+
+        {% if candidatos %}
+          <label class="form-label small fw-bold text-muted" for="id_no_expediente">
+            Trabajador
+          </label>
+          <select name="no_expediente" id="id_no_expediente"
+                  class="form-select form-select-sm" required>
+            {% for contrato in candidatos %}
+              <option value="{{ contrato.no_expediente }}">
+                {{ contrato.no_expediente }} —
+                {{ contrato.aspirante.nombre }} {{ contrato.aspirante.papellido }}
+                {{ contrato.aspirante.sapellido }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="form-text" style="font-size: .72rem;">
+            Sus datos (salario, categoría y antigüedad) se congelarán en el
+            reporte tal como estén ahora mismo.
+          </div>
+        {% else %}
+          <p class="text-muted text-center py-3 mb-0">
+            Todos los trabajadores activos de la unidad ya están en el reporte.
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        {% if candidatos %}
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-user-plus me-1"></i>Añadir
+          </button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>

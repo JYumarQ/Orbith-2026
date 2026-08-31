@@ -900,3 +900,61 @@ class FechaAltaEntidadTests(TestCase):
         form = MovimientoForm()
         self.assertNotIn('fecha_alta', form.fields)
         self.assertNotIn('fecha_alta_entidad', form.fields)
+
+
+class BotonesSoloLecturaContratosTests(TestCase):
+    """El Observador solo conserva las acciones que NO modifican nada.
+
+    En el listado de Contratos eso es el botón de exportar el Word (Contrato o
+    Modificación al Contrato, según el caso) y la exportación a Excel. Editar
+    contrato, editar datos personales, enviar a Movimiento de Nómina y dar de
+    baja salen inhabilitados. El backend ya los bloquea
+    (`RequiereEdicionMixin`/`requiere_edicion` en contratos/views.py); esto
+    comprueba que además se VEA.
+    """
+
+    ESCRITURA = ('btn-edit-contrato', 'btn-edit-personal', 'btn-movimiento', 'btn-baja')
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.observador = CustomUser.objects.create_user(
+            username='obs_contratos', password='ClaveSegura123', es_observador=True)
+        cls.moderador = CustomUser.objects.create_user(
+            username='mod_contratos', password='ClaveSegura123', es_moderador=True)
+
+    def _html(self, usuario):
+        self.client.force_login(usuario)
+        return self.client.get(reverse('list_contrato')).content.decode()
+
+    def _etiqueta(self, html, id_boton):
+        import re
+        encontrado = re.search(r'<button[^>]*id="%s".*?>' % re.escape(id_boton), html, re.S)
+        self.assertIsNotNone(encontrado, f'No se encontró el botón {id_boton}')
+        return encontrado.group(0)
+
+    def test_observador_no_puede_usar_las_acciones_de_escritura(self):
+        html = self._html(self.observador)
+        for boton in self.ESCRITURA:
+            with self.subTest(boton=boton):
+                self.assertIn('disabled', self._etiqueta(html, boton))
+
+    def test_observador_si_conserva_la_exportacion_a_word(self):
+        html = self._html(self.observador)
+        self.assertIn('id="btn-pdf"', html)
+        # btn-pdf es un <a>: si estuviera bloqueado llevaría la clase `disabled`.
+        import re
+        etiqueta = re.search(r'<a[^>]*id="btn-pdf".*?>', html, re.S).group(0)
+        self.assertNotIn('disabled', etiqueta)
+
+    def test_observador_si_conserva_la_exportacion_a_excel(self):
+        self.assertIn('modalExportarExcel', self._html(self.observador))
+
+    def test_observador_no_ve_el_boton_nuevo(self):
+        self.assertNotIn('id="btn-nuevo-contrato"', self._html(self.observador))
+
+    def test_moderador_conserva_todas_las_acciones(self):
+        html = self._html(self.moderador)
+        for boton in self.ESCRITURA:
+            with self.subTest(boton=boton):
+                self.assertNotIn('disabled', self._etiqueta(html, boton))
+        self.assertIn('id="btn-nuevo-contrato"', html)

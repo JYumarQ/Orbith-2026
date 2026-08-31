@@ -1,0 +1,106 @@
+{% comment %}
+  Tarjeta 1 — Calendario: el catálogo personal de jornadas del usuario.
+
+  Selección de fila y toolbar con el mismo mecanismo que el Nomenclador de
+  Cargos: `table-active-row` marca la fila y `toolbar-disabled` apaga el grupo de
+  botones mientras no haya ninguna. El JS común está en `static/js/calendario.js`,
+  que reengancha los manejadores en cada intercambio de HTMX.
+{% endcomment %}
+<div class="card shadow-none border" id="card-calendarios">
+  <div class="card-header border-bottom d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 py-3 bg-transparent">
+    <div class="d-flex align-items-center gap-3">
+      <div class="avatar avatar-md bg-label-primary rounded d-flex align-items-center justify-content-center">
+        <i class="fas fa-calendar-days fs-5"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold text-heading">Calendario</h5>
+        <small class="text-muted">Tipos de jornada laboral disponibles</small>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap flex-md-nowrap align-items-center gap-3 ms-lg-auto">
+      <div class="input-group input-group-merge shadow-sm" style="min-width: 200px; max-width: 250px;">
+        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+        <input type="text" id="buscar-calendario" class="form-control border-start-0"
+               placeholder="Buscar calendario...">
+      </div>
+
+      {% comment %}
+        Mismo patrón que la barra de acciones de la lista de contratos
+        (`contrato/list_contrato.html`): `d-flex gap-2` con botones
+        `btn-outline-*` sueltos y su `title`. En concreto **sin `bg-white`**: esa
+        clase fija el fondo con `!important`, así que al pasar el ratón el icono
+        se volvía blanco sobre blanco y desaparecía.
+      {% endcomment %}
+      <div id="calendarios-toolbar" class="d-flex gap-2 toolbar-disabled">
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                id="btn-editar-calendario" title="Editar el calendario seleccionado">
+          <i class="fas fa-pencil-alt"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger"
+                id="btn-eliminar-calendario" title="Eliminar el calendario seleccionado">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+
+      <button class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2"
+              hx-get="{% url 'prenomina:nuevo_calendario' %}"
+              hx-target="#modal_generic" hx-swap="innerHTML">
+        <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Añadir Calendario</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="tabla-calendarios">
+      <thead class="bg-lighter">
+        <tr>
+          <th style="width: 20%;" class="text-uppercase">
+            <span class="text-muted fw-semibold" style="font-size: .75rem;">Código</span>
+          </th>
+          <th class="text-uppercase">
+            <span class="text-muted fw-semibold" style="font-size: .75rem;">Descripción</span>
+          </th>
+          <th style="width: 20%;" class="text-uppercase text-center">
+            <span class="text-muted fw-semibold" style="font-size: .75rem;">Estado</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="calendarios-tbody" class="table-border-bottom-0">
+        {% for calendario in calendarios %}
+          <tr class="fila-calendario" style="cursor: pointer;"
+              data-id="{{ calendario.pk }}"
+              data-editar="{% url 'prenomina:editar_calendario' calendario.pk %}"
+              data-eliminar="{% url 'prenomina:eliminar_calendario' calendario.pk %}"
+              data-descripcion="{{ calendario.descripcion }}">
+            <td class="fw-bold text-heading font-monospace">{{ calendario.codigo|stringformat:"02d" }}</td>
+            <td class="fw-semibold text-heading">{{ calendario.descripcion }}</td>
+            <td class="text-center">
+              {% if calendario.activo %}
+                <span class="badge bg-label-success rounded-pill px-3">Activo</span>
+              {% else %}
+                <span class="badge bg-label-secondary rounded-pill px-3">Inactivo</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-muted py-5">
+              <i class="fas fa-calendar-days fs-3 d-block mb-2 opacity-50"></i>
+              Todavía no ha creado ningún calendario.<br>
+              <small>Empiece por «Añadir Calendario» para definir sus tipos de jornada.</small>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if calendarios %}
+    <div class="card-footer bg-transparent border-top py-2">
+      <small class="text-muted">
+        {{ calendarios|length }} calendario{{ calendarios|length|pluralize:"s" }}
+      </small>
+    </div>
+  {% endif %}
+</div>

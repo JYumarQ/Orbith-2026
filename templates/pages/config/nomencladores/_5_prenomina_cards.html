@@ -1,0 +1,74 @@
+{% load static %}
+{% comment %}
+  Conceptos de Pre-Nómina dentro de «Tiempo de Trabajo».
+
+  Este fichero es la ÚNICA huella del módulo Pre-Nómina sobre la pantalla de
+  Parámetros Generales: `_3_tiempo.html` lo incluye con una sola línea.
+
+  Está escrito para no depender de nada de esa pantalla:
+
+  * No usa ninguna variable de contexto. Cada tarjeta se trae su propio
+    contenido por HTMX, así que `configuracion/views.py::ParametrosGeneralesView`
+    no hay que tocarla.
+  * `hx-trigger="revealed"` y no `load`: mientras el acordeón siga colapsado no
+    se lanza ninguna consulta. Quien no usa Pre-Nómina no paga nada.
+  * NO se reutiliza ninguna de las clases del JS delegado de
+    `nomencladores_base.html` (`add-row-btn`, `edit-btn`, `delete-btn`,
+    `save-create-btn`, `save-edit-btn`, `cancel-edit-btn`, `cancel-btn`,
+    `insert-row`). Ese `switch` despacha por `table.id` contra una lista cerrada,
+    así que con nombres propios sus manejadores salen sin hacer nada. Es el único
+    contrato de compatibilidad que hay que respetar aquí.
+  * El modal es propio (`#modal_prenomina`): la pantalla de Parámetros no declara
+    ningún `#modal_generic`.
+
+  Los estilos son los de `static/css/nomencladores.css`, que esta pantalla ya
+  carga. No se añade ni una regla de CSS.
+{% endcomment %}
+
+<div class="col-12 pt-3 pb-1">
+  <div class="d-flex align-items-center gap-2">
+    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">
+      PRE-NÓMINA · CONCEPTOS DE PAGO
+    </small>
+    <hr class="flex-grow-1 my-0" style="border-color: #e2e8f0;">
+  </div>
+</div>
+
+<div class="col-lg-4 ps-0 pn-tarjeta"
+     hx-get="{% url 'prenomina:tarjeta_nomenclador' 'pagos-horas' %}"
+     hx-trigger="revealed, prenominaPagosHorasActualizado from:body"
+     hx-swap="innerHTML">
+  {% include "pages/prenomina/partials/tarjeta_cargando.html" with titulo="Pagos por Horas" %}
+</div>
+
+<div class="col-lg-4 px-lg-2 px-0 pn-tarjeta"
+     hx-get="{% url 'prenomina:tarjeta_nomenclador' 'pagos-importe' %}"
+     hx-trigger="revealed, prenominaPagosImporteActualizado from:body"
+     hx-swap="innerHTML">
+  {% include "pages/prenomina/partials/tarjeta_cargando.html" with titulo="Pagos por Importe" %}
+</div>
+
+<div class="col-lg-4 pe-0 pn-tarjeta"
+     hx-get="{% url 'prenomina:tarjeta_nomenclador' 'claves-ausencia' %}"
+     hx-trigger="revealed, prenominaClavesAusenciaActualizado from:body"
+     hx-swap="innerHTML">
+  {% include "pages/prenomina/partials/tarjeta_cargando.html" with titulo="Claves de Ausencia" %}
+</div>
+
+<div class="col-lg-4 ps-0 pt-2 pn-tarjeta"
+     hx-get="{% url 'prenomina:tarjeta_nomenclador' 'escala-annos' %}"
+     hx-trigger="revealed, prenominaEscalaAnnosActualizado from:body"
+     hx-swap="innerHTML">
+  {% include "pages/prenomina/partials/tarjeta_cargando.html" with titulo="Escala de Años de Servicio" %}
+</div>
+
+<div class="modal fade" id="modal_prenomina" tabindex="-1" role="dialog" aria-hidden="true"></div>
+
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script>
+  /* El cableado vive en `static/js/prenomina.js`: crea la instancia de
+     Bootstrap DESPUES de cada intercambio de htmx, que es lo unico que evita el
+     «Illegal invocation» con contenedores que nacen vacios. */
+  window.orbith.cablearModalHtmx('modal_prenomina');
+  window.orbith.cablearConfirmacionHtmx();
+</script>

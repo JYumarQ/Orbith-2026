@@ -1,0 +1,26 @@
+{% comment %}
+  Cabecera común de las cuatro tarjetas de configuración: icono, título,
+  subtítulo y botón de alta.
+
+  El botón NO lleva la clase `add-row-btn`: esa la engancha el JS de
+  `nomencladores_base.html` en tiempo de parseo y nos metería en su `switch`.
+  Ver el comentario de `_5_prenomina_cards.html`.
+
+  Parámetros: icono, color, titulo, subtitulo, tipo.
+{% endcomment %}
+<div class="card-header-flex">
+  <div class="d-flex align-items-center gap-2">
+    <div class="{{ color }}"><i class="fas {{ icono }}"></i></div>
+    <div>
+      <h6 class="m-0 fw-bold text-slate-800">{{ titulo }}</h6>
+      <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">{{ subtitulo }}</small>
+    </div>
+  </div>
+  <button type="button" class="btn-add-modern"
+          title="Añadir"
+          hx-get="{% url 'prenomina:nuevo_nomenclador' tipo %}"
+          hx-target="#modal_prenomina"
+          hx-swap="innerHTML">
+    <i class="fas fa-plus"></i>
+  </button>
+</div>

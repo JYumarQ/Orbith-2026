@@ -1,0 +1,102 @@
+{% comment %}
+  Listado de plantillas, colapsado por defecto.
+
+  Se usa el acordeón de Bootstrap (`data-bs-toggle="collapse"`), el mismo que
+  Parámetros Generales → Nomencladores, en vez de inventar otro mecanismo.
+
+  Colapsada, la tarjeta enseña solo la descripción y las tres acciones; al
+  desplegarla se cargan por HTMX los conceptos y la vista previa de la
+  estructura. Se cargan **al desplegar** y no de entrada (`hx-trigger="revealed"`
+  no vale aquí porque el contenido nace oculto): con diez plantillas serían diez
+  rejillas que casi nadie mira.
+
+  «Eliminar» va deshabilitado si la plantilla ya se usó en algún reporte. Ocultar
+  el botón no es la protección: `servicios_plantilla.eliminar_plantilla()` lo
+  vuelve a comprobar, y la clave foránea es `PROTECT`.
+{% endcomment %}
+{% if plantillas %}
+  <div class="accordion" id="acordeonPlantillas">
+    {% for plantilla in plantillas %}
+      <div class="accordion-item border rounded-3 shadow-sm mb-2">
+        <div class="d-flex align-items-center gap-2 pe-3">
+
+          <h2 class="accordion-header flex-grow-1" id="cabPlantilla{{ plantilla.pk }}">
+            <button class="accordion-button collapsed rounded-3 bg-white" type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#plantilla{{ plantilla.pk }}"
+                    aria-expanded="false"
+                    aria-controls="plantilla{{ plantilla.pk }}">
+              <div class="avatar avatar-sm bg-label-primary rounded d-flex align-items-center justify-content-center me-3">
+                <i class="fas fa-table-list"></i>
+              </div>
+              <div>
+                <span class="fw-bold text-heading">{{ plantilla.descripcion }}</span>
+                <small class="text-muted d-block">
+                  {{ plantilla.total_conceptos }} concepto{{ plantilla.total_conceptos|pluralize:"s" }}
+                  {% if plantilla.esta_usada %}
+                    · <span class="text-primary">en uso</span>
+                  {% endif %}
+                </small>
+              </div>
+            </button>
+          </h2>
+
+          <div class="d-flex gap-2 flex-shrink-0">
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    title="Duplicar esta plantilla"
+                    hx-get="{% url 'prenomina:duplicar_plantilla' plantilla.pk %}"
+                    hx-target="#modal_generic" hx-swap="innerHTML">
+              <i class="fas fa-copy"></i>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    title="Editar esta plantilla"
+                    hx-get="{% url 'prenomina:editar_plantilla' plantilla.pk %}"
+                    hx-target="#modal_generic" hx-swap="innerHTML">
+              <i class="fas fa-pencil-alt"></i>
+            </button>
+            {% if plantilla.esta_usada %}
+              <button type="button" class="btn btn-sm btn-outline-danger" disabled
+                      title="No se puede eliminar: ya se ha utilizado en un reporte de pago">
+                <i class="fas fa-trash"></i>
+              </button>
+            {% else %}
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      title="Eliminar esta plantilla"
+                      hx-post="{% url 'prenomina:eliminar_plantilla' plantilla.pk %}"
+                      hx-swap="none"
+                      data-titulo="¿Eliminar la plantilla?"
+                      data-confirmar="Se eliminará «{{ plantilla.descripcion }}». Esta acción no se puede deshacer.">
+                <i class="fas fa-trash"></i>
+              </button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div id="plantilla{{ plantilla.pk }}" class="accordion-collapse collapse"
+             aria-labelledby="cabPlantilla{{ plantilla.pk }}">
+          <div class="accordion-body bg-lighter p-3"
+               hx-get="{% url 'prenomina:previa_plantilla' plantilla.pk %}"
+               hx-trigger="intersect once"
+               hx-swap="innerHTML">
+            <div class="text-center text-muted py-4">
+              <span class="spinner-border spinner-border-sm me-2"></span>
+              Cargando la estructura…
+            </div>
+          </div>
+        </div>
+
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card shadow-none border">
+    <div class="card-body text-center text-muted py-5">
+      <i class="fas fa-table-list fs-3 d-block mb-2 opacity-50"></i>
+      Todavía no ha creado ninguna plantilla.<br>
+      <small>
+        Empiece por «Nueva Plantilla»: necesitará al menos una para poder crear
+        un reporte de pago.
+      </small>
+    </div>
+  </div>
+{% endif %}

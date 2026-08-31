@@ -1,0 +1,159 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% comment %}
+  Gestión de Reportes de Pagos: la pantalla de entrada del módulo.
+
+  Es la que abre «Pre-Nómina» en la barra lateral. Sigue el mismo esquema que
+  Solicitudes y Cierres: buscador y filtros que recargan solo el cuerpo de la
+  tabla por HTMX, y un modal único para las acciones.
+
+  El encabezado usa las mismas piezas (`pn-encabezado`, `pn-ficha`) que la
+  pantalla de detalle, para que las dos se reconozcan como el mismo módulo.
+{% endcomment %}
+
+{% block title %}Reportes de Pago | ORBITH{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="pn-encabezado">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="pn-titulo">Gestión de Reportes de Pagos</h1>
+        <p class="pn-subtitulo">Pre-Nómina mensual por Unidad Organizativa</p>
+      </div>
+      {% if puede_crear %}
+        <button type="button" class="btn btn-primary"
+                hx-get="{% url 'prenomina:nuevo_reporte' %}"
+                hx-target="#modal_generic"
+                hx-swap="innerHTML">
+          <i class="fas fa-plus me-1"></i>Nuevo reporte
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+
+    {% comment %}
+      Todos los filtros comparten `#filtros_reportes` en su `hx-include`, así que
+      cada uno manda el estado completo de la barra y no hace falta ir listando
+      los identificadores de los demás uno a uno — que era lo que había antes y
+      lo que hacía que añadir un filtro nuevo obligara a tocar los otros tres.
+    {% endcomment %}
+    <div class="pn-barra" id="filtros_reportes">
+      <div class="pn-barra__buscador">
+        <select id="search" name="q" class="form-select form-select-sm select2"
+                data-placeholder="Buscar por unidad organizativa…"
+                hx-get="{% url 'prenomina:buscar_reportes' %}"
+                hx-trigger="change, recargarTabla"
+                hx-target="#resultados_reportes"
+                hx-include="#filtros_reportes">
+          <option value=""></option>
+          {% for unidad in unidades %}
+            <option value="{{ unidad.pk }}" {% if q == unidad.pk|stringformat:"s" %}selected{% endif %}>
+              {{ unidad.descripcion }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <select id="filtro_anno" name="anno" class="form-select form-select-sm w-auto"
+              hx-get="{% url 'prenomina:buscar_reportes' %}"
+              hx-target="#resultados_reportes"
+              hx-include="#filtros_reportes">
+        <option value="">Todos los años</option>
+        {% for valor in annos_disponibles %}
+          <option value="{{ valor }}" {% if anno_actual == valor|stringformat:"s" %}selected{% endif %}>
+            {{ valor }}
+          </option>
+        {% endfor %}
+      </select>
+
+      {% comment %}
+        El mes solo acota junto al año (ver `filtros.filtrar_reportes`): se deja
+        siempre visible para no hacer aparecer y desaparecer controles, pero
+        elegir un mes sin año no filtra nada.
+      {% endcomment %}
+      <select id="filtro_mes" name="mes" class="form-select form-select-sm w-auto"
+              hx-get="{% url 'prenomina:buscar_reportes' %}"
+              hx-target="#resultados_reportes"
+              hx-include="#filtros_reportes">
+        <option value="">Todos los meses</option>
+        {% for numero, nombre in meses %}
+          <option value="{{ numero }}" {% if mes_actual == numero|stringformat:"s" %}selected{% endif %}>
+            {{ nombre }}
+          </option>
+        {% endfor %}
+      </select>
+
+      <select id="filtro_estado" name="estado" class="form-select form-select-sm w-auto"
+              hx-get="{% url 'prenomina:buscar_reportes' %}"
+              hx-target="#resultados_reportes"
+              hx-include="#filtros_reportes">
+        <option value="">Todos los estados</option>
+        {% for valor, etiqueta in opciones_estado %}
+          <option value="{{ valor }}" {% if estado_actual == valor %}selected{% endif %}>
+            {{ etiqueta }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div id="resultados_reportes">
+      {% include 'pages/prenomina/partials/tabla_reportes.html' %}
+    </div>
+
+  </div>
+</div>
+
+<div class="modal fade" id="modal_generic" role="dialog" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_generic');
+  window.orbith.cablearConfirmacionHtmx();
+
+  /* Recarga el cuerpo de la tabla conservando búsqueda y filtros: se dispara el
+     evento del buscador en vez de pedir la URL a pelo, que es el patrón que ya
+     usa Solicitudes. */
+  document.body.addEventListener('actualizarListaReportes', function () {
+    htmx.trigger('#search', 'recargarTabla');
+  });
+
+  /* Select2 con búsqueda por escritura, mismo patrón que Unidad Organizativa
+     en contrato/add_contrato.html (tema 'bootstrap-5' obligatorio: sin él el
+     control encoge unos px al inicializarse). El puente con HTMX es necesario
+     porque Select2 selecciona disparando el 'change' sintético de jQuery, que
+     HTMX —basado en addEventListener nativo— no detecta: se escucha el evento
+     propio de Select2 y se despacha un 'change' real del DOM. */
+  (function () {
+    const $search = $('#search');
+    $search.select2({
+      width: '100%', theme: 'bootstrap-5',
+      placeholder: $search.data('placeholder'), allowClear: true,
+    });
+    $search.on('select2:select select2:clear', function () {
+      this.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  })();
+
+  /* Doble clic en la fila = mismo destino que el botón "Abrir el reporte":
+     delegado en `body` porque `#resultados_reportes` se reemplaza por HTMX en
+     cada búsqueda/filtro/paginación. Se ignora si el doble clic cae sobre un
+     enlace o botón de la fila (acciones propias, "Cerrar", "Reabrir"...), para
+     no interferir con su comportamiento normal. */
+  document.body.addEventListener('dblclick', function (e) {
+    const fila = e.target.closest('.pn-fila-reporte');
+    if (!fila || e.target.closest('a, button')) return;
+    window.location.href = fila.dataset.href;
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% comment %}
+  La plantilla vista como estructura de reporte, sin trabajadores.
+
+  Reutiliza `rejilla.html` tal cual, con `filas` vacío: el usuario ve exactamente
+  las columnas que tendrá el reporte que genere, con la misma cabecera de dos
+  niveles y los mismos colores por zona. Un marcado propio se desincronizaría del
+  real a la primera.
+
+  Lo que se pasan son los nomencladores vivos, no copias congeladas: la rejilla
+  solo les pide `etiqueta`, `resta_horas_mes` y `es_derivado`, y los tres
+  existen. La fotografía se hace al aplicar la plantilla a un reporte, no aquí.
+{% endcomment %}
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+  <span class="badge bg-label-secondary rounded-pill px-3">
+    {{ conceptos_ausencia|length }} clave{{ conceptos_ausencia|length|pluralize:"s" }} de ausencia
+  </span>
+  <span class="badge bg-label-secondary rounded-pill px-3">
+    {{ conceptos_horas|length }} pago{{ conceptos_horas|length|pluralize:"s" }} por horas
+  </span>
+  <span class="badge bg-label-secondary rounded-pill px-3">
+    {{ conceptos_importe|length }} pago{{ conceptos_importe|length|pluralize:"s" }} por importe
+  </span>
+  <small class="text-muted ms-auto">
+    <i class="fas fa-circle-info me-1"></i>
+    Estructura del reporte. Los trabajadores y sus valores se cargan al crearlo.
+  </small>
+</div>
+
+{% include 'pages/prenomina/partials/rejilla.html' %}

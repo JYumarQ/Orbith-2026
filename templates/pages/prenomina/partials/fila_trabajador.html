@@ -1,0 +1,72 @@
+{% comment %}
+  Una fila de la rejilla.
+
+  Se incluye en la carga inicial y la devuelve `fila_trabajador` al guardar el
+  modal, así que el marcado vive en un solo sitio y no puede divergir entre las
+  dos rutas. El `id` es lo que permite el intercambio puntual con
+  `hx-swap="outerHTML"`.
+
+  Toda la fila es clicable, como pedía el requisito: en Excel se escribe en
+  cualquier celda de la línea del trabajador.
+
+  Los ceros se pintan atenuados (`pn-cero`) y los valores reales resaltados
+  (`pn-valor`). En una tabla de 34 columnas donde casi todo es 0.00, es lo que
+  hace que se vea de un vistazo dónde hay algo.
+{% endcomment %}
+<tr id="fila-{{ fila.trabajador.pk }}"
+    {% if puede_editar %}
+      class="pn-fila"
+      hx-get="{% url 'prenomina:valores_trabajador' reporte.pk fila.trabajador.pk %}"
+      hx-target="#modal_generic"
+      hx-swap="innerHTML"
+      title="Introducir ausencias y pagos por horas de {{ fila.trabajador.nombre_completo }}"
+    {% endif %}>
+
+  <td class="pn-col--trabajador pn-zona-inicio pn-col-fija pn-col-fija-1">
+    <span class="pn-expediente">{{ fila.trabajador.no_expediente }}</span>
+  </td>
+  <td class="pn-col-fija pn-col-fija-2 pn-nombre">
+    {{ fila.trabajador.nombre_completo }}
+  </td>
+  <td class="pn-col-fija pn-col-fija-3 text-center">
+    {% if fila.trabajador.cat_ocupacional %}
+      <span class="pn-categoria" title="{{ fila.trabajador.cat_ocupacional_desc }}">
+        {{ fila.trabajador.cat_ocupacional }}
+      </span>
+    {% endif %}
+  </td>
+  <td class="pn-col-fija pn-col-fija-4 pn-numero pn-valor">
+    {{ fila.trabajador.salario_escala }}
+  </td>
+  <td class="pn-col--jornada pn-numero">
+    <span class="pn-jornada" title="{{ fila.trabajador.calendario_descripcion|default:'Sin jornada asignada' }}">
+      {{ fila.trabajador.horas_mes|floatformat:2 }}
+    </span>
+  </td>
+
+  {% for horas in fila.ausencias %}
+    <td class="pn-col--ausencia pn-numero {% if forloop.first %}pn-zona-inicio{% endif %} {% if horas %}pn-valor{% else %}pn-cero{% endif %}">
+      {{ horas|default:"0.00" }}
+    </td>
+  {% endfor %}
+  {% if fila.ausencias %}
+    <td class="pn-col--ausencia pn-numero {% if fila.trabajador.total_horas_descontadas %}pn-total{% else %}pn-cero{% endif %}">
+      {{ fila.trabajador.total_horas_descontadas }}
+    </td>
+  {% endif %}
+
+  <td class="pn-col--trabajadas pn-zona-inicio pn-numero pn-trabajadas">
+    {{ fila.trabajador.horas_trabajadas }}
+  </td>
+
+  {% for horas in fila.horas %}
+    <td class="pn-col--horas pn-numero {% if forloop.first %}pn-zona-inicio{% endif %} {% if horas %}pn-valor{% else %}pn-cero{% endif %}">
+      {{ horas|default:"0.00" }}
+    </td>
+  {% endfor %}
+  {% for importe in fila.importes %}
+    <td class="pn-col--importe pn-numero {% if forloop.first %}pn-zona-inicio{% endif %} {% if importe %}pn-importe{% else %}pn-cero{% endif %}">
+      {{ importe|default:"0.00" }}
+    </td>
+  {% endfor %}
+</tr>

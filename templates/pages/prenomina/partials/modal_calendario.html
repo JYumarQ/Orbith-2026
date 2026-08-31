@@ -1,0 +1,174 @@
+{% comment %}
+  Alta y edición de un calendario, y —cuando hace falta— la decisión sobre el
+  histórico.
+
+  El mismo fragmento cubre los dos momentos porque son el mismo formulario en
+  dos pasos: si al editar cambia la descripción de un calendario ya usado en
+  algún período, la vista devuelve este parcial con `decidir_historico`, que
+  reemplaza el cuerpo por las dos opciones y arrastra los valores ya tecleados en
+  campos ocultos. Así no se pierde nada de lo escrito ni hay un segundo modal
+  que mantener en sincronía.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered {% if decidir_historico %}modal-lg{% endif %}" role="document">
+  <div class="modal-content">
+
+    {% if decidir_historico %}
+      {# ---------- Paso 2: qué hacer con los períodos que ya lo usan ---------- #}
+      <form hx-post="{% url 'prenomina:editar_calendario' calendario.pk %}"
+            hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+        {% csrf_token %}
+        <input type="hidden" name="codigo" value="{{ codigo_nuevo }}">
+        <input type="hidden" name="descripcion" value="{{ descripcion_nueva }}">
+        {% if activo_nuevo %}<input type="hidden" name="activo" value="1">{% endif %}
+
+        <div class="modal-header">
+          <div class="d-flex align-items-center gap-3">
+            <div class="avatar avatar-md bg-label-warning rounded d-flex align-items-center justify-content-center">
+              <i class="fas fa-triangle-exclamation fs-5"></i>
+            </div>
+            <div>
+              <h5 class="modal-title mb-0">Este calendario ya se usó en períodos anteriores</h5>
+              <small class="text-muted">Decida cómo aplicar el cambio de descripción</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-3 bg-lighter rounded p-3 mb-3 flex-wrap">
+            <span class="fw-bold font-monospace text-heading">{{ calendario.codigo|stringformat:"02d" }}</span>
+            <span class="text-muted text-decoration-line-through">{{ calendario.descripcion }}</span>
+            <i class="fas fa-arrow-right text-muted"></i>
+            <span class="fw-bold text-heading">{{ descripcion_nueva }}</span>
+            <small class="text-muted ms-auto">
+              Usado en {{ periodos_afectados|length }} Calendario{{ periodos_afectados|length|pluralize:"s" }} de Pago
+            </small>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="card border h-100 p-3 cursor-pointer" style="cursor: pointer;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <input class="form-check-input mt-0" type="radio" name="actualizar_historico" value="1">
+                  <span class="fw-bold text-heading">Actualizar histórico</span>
+                </div>
+                <p class="small text-muted mb-2">
+                  El nombre nuevo se aplica también a todos los Calendarios de Pago
+                  que ya usan este calendario, incluidos los cerrados.
+                </p>
+                <div class="bg-lighter rounded p-2">
+                  {% for p in periodos_afectados|slice:":4" %}
+                    <div class="d-flex justify-content-between small">
+                      <span class="text-muted">{{ p.etiqueta }}</span>
+                      <span class="text-primary fw-semibold">{{ descripcion_nueva }}</span>
+                    </div>
+                  {% endfor %}
+                </div>
+              </label>
+            </div>
+
+            <div class="col-md-6">
+              <label class="card border h-100 p-3" style="cursor: pointer;">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <input class="form-check-input mt-0" type="radio" name="actualizar_historico" value="0" checked>
+                  <span class="fw-bold text-heading">Mantener histórico</span>
+                </div>
+                <p class="small text-muted mb-2">
+                  Los períodos ya creados conservan la descripción que tenían. El
+                  nombre nuevo solo se usará en Calendarios de Pago nuevos.
+                </p>
+                <div class="bg-lighter rounded p-2">
+                  {% for p in periodos_afectados|slice:":4" %}
+                    <div class="d-flex justify-content-between small">
+                      <span class="text-muted">{{ p.etiqueta }}</span>
+                      <span class="text-heading">{{ calendario.descripcion }}</span>
+                    </div>
+                  {% endfor %}
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="alert alert-info d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+            <i class="fas fa-circle-info me-2 mt-1"></i>
+            <div class="small">
+              La decisión afecta <strong>solo a la descripción</strong>. El código
+              <strong>{{ calendario.codigo|stringformat:"02d" }}</strong> y las horas
+              registradas en cada período se mantienen intactos.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-primary">Aplicar cambio</button>
+        </div>
+      </form>
+
+    {% else %}
+      {# ---------- Paso 1: el formulario ---------- #}
+      <form hx-post="{% if calendario %}{% url 'prenomina:editar_calendario' calendario.pk %}{% else %}{% url 'prenomina:nuevo_calendario' %}{% endif %}"
+            hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="modal-header">
+          <h5 class="modal-title">
+            {% if calendario %}Editar Calendario{% else %}Nuevo Calendario{% endif %}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+
+        <div class="modal-body">
+          {% if error %}
+            <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+              <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+              <div>{{ error }}</div>
+            </div>
+          {% endif %}
+
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label small fw-bold text-muted" for="id_codigo">Código *</label>
+              <input type="text" inputmode="numeric" pattern="[0-9]*" id="id_codigo" name="codigo"
+                     class="form-control" placeholder="01" required
+                     value="{% if valores %}{{ valores.codigo }}{% elif calendario %}{{ calendario.codigo }}{% endif %}">
+              <div class="form-text" style="font-size: .72rem;">Solo números enteros</div>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label small fw-bold text-muted" for="id_descripcion">Descripción *</label>
+              <input type="text" id="id_descripcion" name="descripcion" class="form-control"
+                     maxlength="20" placeholder="Jornada Normal" required
+                     value="{% if valores %}{{ valores.descripcion }}{% elif calendario %}{{ calendario.descripcion }}{% endif %}">
+              <div class="form-text" style="font-size: .72rem;">Máximo 20 caracteres</div>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label small fw-bold text-muted d-block">Estado *</label>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="activo" id="id_activo_si" value="1"
+                     {% if not calendario or calendario.activo %}checked{% endif %}>
+              <label class="form-check-label" for="id_activo_si">Activo</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="radio" name="activo" id="id_activo_no" value="0"
+                     {% if calendario and not calendario.activo %}checked{% endif %}>
+              <label class="form-check-label" for="id_activo_no">Inactivo</label>
+            </div>
+            <div class="form-text" style="font-size: .72rem;">
+              Solo los calendarios activos pueden seleccionarse en un Calendario de Pago.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-save me-1"></i>Guardar
+          </button>
+        </div>
+      </form>
+    {% endif %}
+
+  </div>
+</div>

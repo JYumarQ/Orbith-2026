@@ -1,0 +1,102 @@
+{% comment %}
+  Ficha de alta/edición de cualquiera de los cuatro nomencladores.
+
+  El formulario apunta a sí mismo con `hx-target="#modal_prenomina"`: si la
+  validación falla, la vista devuelve este mismo fragmento con los errores
+  dentro y el usuario los ve junto al campo. Si va bien, la vista devuelve 204 y
+  los `HX-Trigger` cierran el modal y refrescan la tarjeta. Es el protocolo que
+  ya usan Solicitudes, Contratos y Estructura Organizativa.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{{ request.get_full_path }}"
+          hx-target="#modal_prenomina"
+          hx-swap="innerHTML"
+          autocomplete="off">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          {% if objeto %}Editar {{ titulo|lower }}{% else %}Nuevo {{ titulo|lower }}{% endif %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger d-flex align-items-center p-2 mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <div>
+              {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="row g-3">
+          {% for campo in form %}
+            <div class="{% if campo.name == 'descripcion' or campo.name == 'formula' %}col-12{% else %}col-md-6{% endif %}">
+              {% if campo.field.widget.input_type == 'checkbox' %}
+                <div class="form-check form-switch mt-4">
+                  {{ campo }}
+                  <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+                </div>
+              {% else %}
+                <label class="form-label small fw-bold text-slate-500" for="{{ campo.id_for_label }}">
+                  {{ campo.label }}
+                </label>
+                {{ campo }}
+              {% endif %}
+
+              {% if campo.help_text %}
+                <div class="form-text" style="font-size: 0.72rem;">{{ campo.help_text }}</div>
+              {% endif %}
+              {% if campo.errors %}
+                <div class="text-danger small mt-1 fw-bold">{{ campo.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          {% if con_formula %}
+            {% comment %}
+              Comprobador en vivo. Llama a la MISMA `formulas.validar()` del
+              backend: no hay una segunda gramática escrita en JavaScript que
+              pueda desalinearse. Es ayuda de escritura; la validación de verdad
+              sigue ocurriendo al guardar.
+            {% endcomment %}
+            <div class="col-12">
+              <div id="pn-formula-feedback"
+                   hx-post="{% url 'prenomina:validar_formula' %}"
+                   hx-trigger="keyup changed delay:400ms from:#id_formula"
+                   hx-include="#id_formula"
+                   hx-swap="innerHTML"></div>
+
+              <details class="mt-2">
+                <summary class="small text-slate-500" style="cursor: pointer;">
+                  Variables disponibles
+                </summary>
+                <div class="d-flex flex-wrap gap-1 mt-2">
+                  {% for variable in variables %}
+                    <code class="badge bg-light text-muted">&#123;&#123;{{ variable }}&#125;&#125;</code>
+                  {% endfor %}
+                </div>
+                <div class="form-text" style="font-size: 0.72rem;">
+                  Operaciones admitidas: + &minus; * / y paréntesis.
+                  &#123;&#123;horas&#125;&#125; toma las horas del concepto indicado en «Relacionado con».
+                </div>
+              </details>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="fas fa-save me-1"></i>Guardar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,59 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% comment %}
+  Pre-Nómina → Asignación de Trabajadores.
+
+  Pantalla propia y no una tarjeta más del Calendario: es una tabla de plantilla
+  completa, y compartir pantalla con los calendarios obligaba a desplazarse
+  demasiado para llegar hasta ella.
+
+  Reutiliza tal cual el parcial `tarjeta_trabajadores.html` y el mismo
+  `calendario.js`, así que el comportamiento (selección múltiple, asignación
+  masiva, refresco por HTMX) es exactamente el mismo que tenía.
+{% endcomment %}
+
+{% block title %}Asignación de Trabajadores | ORBITH{% endblock %}
+
+{% block extra_head %}
+{% comment %}
+  `nomencladores.css` trae `table-active-row` y `toolbar-disabled`, que esta
+  pantalla reutiliza del Nomenclador de Cargos en vez de redefinirlas.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'css/nomencladores.css' %}">
+<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="pn-encabezado">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="pn-titulo">Asignación de Trabajadores</h1>
+        <p class="pn-subtitulo">Qué calendario le corresponde a cada trabajador</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="zona_trabajadores"
+       hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
+       hx-trigger="recargarTrabajadores from:body"
+       hx-include="#filtro_unidad_trabajadores"
+       hx-swap="innerHTML">
+    {% include 'pages/prenomina/partials/tarjeta_trabajadores.html' %}
+  </div>
+
+</div>
+
+<div class="modal fade" id="modal_generic" role="dialog" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script src="{% static 'js/calendario.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_generic');
+  window.orbith.cablearConfirmacionHtmx();
+</script>
+{% endblock %}

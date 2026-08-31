@@ -1,0 +1,58 @@
+{% comment %}
+  Pagos asociados por importe. Grupo ROJO del reporte.
+
+  La columna «Valor» resume las tres formas de obtenerlo sin abrir la ficha: un
+  importe fijo, una fórmula o la escala de años de servicio.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(255, 0, 0, 0.5);">
+  {% include "pages/prenomina/partials/_encabezado_tarjeta.html" with icono="fa-money-bill-wave" color="icon-rose" titulo="Pagos por Importe" subtitulo="CONCEPTOS EN DINERO" tipo="pagos-importe" %}
+
+  <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th style="width: 55px;">Código</th>
+          <th>Descripción</th>
+          <th>Valor</th>
+          <th>Toma horas de</th>
+          <th class="text-center" style="width: 70px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pago in pagos_importe %}
+          <tr>
+            <td class="font-monospace fw-bold text-slate-500">{{ pago.codigo }}</td>
+            <td>{{ pago.descripcion }}</td>
+            <td>
+              {% if pago.tipo_valor == 'IMP' %}
+                <span class="font-monospace text-slate-500">{{ pago.importe_fijo }}</span>
+              {% elif pago.tipo_valor == 'FOR' %}
+                <code class="text-slate-500" style="font-size: 0.7rem;">{{ pago.formula }}</code>
+              {% else %}
+                <span class="badge bg-light text-muted" title="Se busca la cuantía según los años de servicio del trabajador">
+                  <i class="fas fa-table-list me-1"></i>Escala
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-slate-500">
+              {% if pago.relacionado_con %}
+                <span title="Este importe se añade solo al reporte cuando se seleccione ese concepto por horas">
+                  <i class="fas fa-link me-1" style="color: #a855f7;"></i>{{ pago.relacionado_con.descripcion }}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              {% include "pages/prenomina/partials/_acciones_fila.html" with tipo="pagos-importe" objeto=pago nombre=pago.etiqueta %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-slate-400 py-4">
+              Sin conceptos por importe. Añádalos con el botón +.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

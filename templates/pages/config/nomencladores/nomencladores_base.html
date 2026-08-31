@@ -380,123 +380,6 @@
       return;
     }
 
-    /* ----------  EDICIÓN HORARIOS  ---------- */
-    if (tableId === 'horarios-table') {
-      const descCell = tr.querySelector('td:nth-child(1)');
-      const iniCell  = tr.querySelector('td:nth-child(2)');
-      const finCell  = tr.querySelector('td:nth-child(3)');
-
-      const oldDesc = descCell.textContent.trim();
-      const oldIni  = iniCell.textContent.trim();
-      const oldFin  = finCell.textContent.trim();
-
-      const actionCell = tr.querySelector('td:nth-child(4)');
-      const originalButtons = actionCell.innerHTML;
-
-      descCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-desc" value="${oldDesc}">`;
-      iniCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-ini" value="${oldIni}">`;
-      finCell.innerHTML  = `<input type="time" class="form-control form-control-sm input-edit-fin" value="${oldFin}">`;
-
-      actionCell.innerHTML = `
-        <div class="btn-group btn-group-sm">
-          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
-          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
-        </div>`;
-
-      let actionTaken = false;
-      const finishEdit = (save = false) => {
-        if (actionTaken) return;
-        actionTaken = true;
-        if (save) {
-          const newDesc = descCell.querySelector('.input-edit-desc').value.trim();
-          const newIni  = iniCell.querySelector('.input-edit-ini').value.trim();
-          const newFin  = finCell.querySelector('.input-edit-fin').value.trim();
-          if (!newDesc || !newIni || !newFin) { alert('Complete todos los campos'); return; }
-
-          fetch(`/nomencladores/api/horarios/${tr.dataset.id}/`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ descripcion: newDesc, hora_inicio: newIni, hora_fin: newFin })
-          })
-            .then(r => r.json())
-            .then(d => {
-              descCell.textContent = d.descripcion;
-              iniCell.textContent  = d.hora_inicio;
-              finCell.textContent  = d.hora_fin;
-              actionCell.innerHTML = originalButtons;
-            })
-            .catch(err => alert(err));
-        } else {
-          descCell.textContent = oldDesc;
-          iniCell.textContent  = oldIni;
-          finCell.textContent  = oldFin;
-          actionCell.innerHTML = originalButtons;
-        }
-      };
-
-      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
-      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
-      return;
-    }
-
-    /* ----------  EDICIÓN JORNADAS  ---------- */
-    if (tableId === 'jornadas-table') {
-      const tipoCell = tr.querySelector('td:nth-child(1)');
-      const horaCell = tr.querySelector('td:nth-child(2)');
-
-      const oldTipo = tipoCell.textContent.trim();
-      const oldHoraId = tr.dataset.horarioId || '';
-
-      const actionCell = tr.querySelector('td:nth-child(3)');
-      const originalButtons = actionCell.innerHTML;
-
-      let opts = '<option value="">—</option>';
-      {% for h in horarios %}
-        opts += `<option value="{{ h.id }}" ${oldHoraId == "{{ h.id }}" ? 'selected' : ''}>{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
-      {% endfor %}
-
-      tipoCell.innerHTML = `<input type="text" class="form-control form-control-sm input-edit-tipo" value="${oldTipo}">`;
-      horaCell.innerHTML = `<select class="form-control form-control-sm input-edit-hora">${opts}</select>`;
-
-      actionCell.innerHTML = `
-        <div class="btn-group btn-group-sm">
-          <button class="btn btn-sm save-edit-btn" title="Guardar"><i class="fas fa-save text-primary"></i></button>
-          <button class="btn btn-sm cancel-edit-btn" title="Cancelar"><i class="fas fa-times text-danger"></i></button>
-        </div>`;
-
-      let actionTaken = false;
-      const finishEdit = (save = false) => {
-        if (actionTaken) return;
-        actionTaken = true;
-        if (save) {
-          const newTipo = tipoCell.querySelector('.input-edit-tipo').value.trim();
-          const newHora = horaCell.querySelector('.input-edit-hora').value;
-          if (!newTipo) { alert('Campo obligatorio'); return; }
-
-          fetch(`/nomencladores/api/jornadas/${tr.dataset.id}/`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-            body: JSON.stringify({ tipo: newTipo, horario: newHora || null })
-          })
-            .then(r => r.json())
-            .then(d => {
-              tipoCell.textContent = d.tipo;
-              horaCell.textContent = d.horario ? `${d.horario}` : '—';
-              actionCell.innerHTML = originalButtons;
-            })
-            .catch(err => alert(err));
-        } else {
-          tipoCell.textContent = oldTipo;
-          horaCell.textContent = oldHoraId ? horaCell.querySelector(`option[value="${oldHoraId}"]`)?.text || '—' : '—';
-          actionCell.innerHTML = originalButtons;
-        }
-      };
-
-      actionCell.querySelector('.save-edit-btn').addEventListener('click', () => finishEdit(true));
-      actionCell.querySelector('.cancel-edit-btn').addEventListener('click', () => finishEdit(false));
-      return;
-    }
-
     /* ----------  EDICIÓN CAUSAS  ---------- */
     if (tableId === 'causas-table') {
       const descCell = tr.querySelector('td:nth-child(1)');
@@ -619,8 +502,6 @@
     else if (tableId === 'grupos-table') endpoint = 'grupos';
     else if (tableId === 'provincias-table') endpoint = 'provincias';
     else if (tableId === 'municipios-table') endpoint = 'municipios';
-    else if (tableId === 'horarios-table') endpoint = 'horarios';
-    else if (tableId === 'jornadas-table') endpoint = 'jornadas';
     else if (tableId === 'causas-table') endpoint = 'causas';
     else if (tableId === 'condiciones-table') endpoint = 'condiciones';
     else if (tableId === 'especialidades-table') endpoint = 'especialidades';
@@ -750,40 +631,6 @@
           const provinciaActivaName = document.querySelector('#provincias-table tbody tr.active')?.querySelector('.nombre-cell')?.textContent?.trim() || '—';
           const provinciaCell = row.querySelector('td:nth-child(2)');
           if (provinciaCell) provinciaCell.textContent = provinciaActivaName;
-          break;
-
-        case 'horarios-table':
-          row.innerHTML = `
-            <td><input type="text" class="form-control form-control-sm input-descripcion" placeholder="Nombre"></td>
-            <td><input type="time" class="form-control form-control-sm input-desde text-center"></td>
-            <td><input type="time" class="form-control form-control-sm input-hasta text-center"></td>
-            <td class="text-center">
-              <div class="btn-group btn-group-sm">
-                <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
-                <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
-              </div>
-            </td>`;
-          break;
-
-        case 'jornadas-table':
-          let horariosOptions = '<option value="">—</option>';
-              {% for h in horarios %}
-                horariosOptions += `<option value="{{ h.id }}">{{ h.descripcion }} ({{ h.hora_inicio|time:"H:i" }} - {{ h.hora_fin|time:"H:i" }})</option>`;
-              {% endfor %}
-
-              row.innerHTML = `
-                <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Nombre"></td>
-                <td>
-                  <select class="form-control form-control-sm input-horas">
-                    ${horariosOptions}
-                  </select>
-                </td>
-                <td class="text-center">
-                  <div class="btn-group btn-group-sm">
-                    <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>
-                    <button class="btn btn-sm cancel-btn"><i class="fas fa-times text-danger"></i></button>
-                  </div>
-                </td>`;
           break;
 
         case 'causas-table':
@@ -916,12 +763,6 @@
         break;
       case 'municipios-table':
         await guardarMunicipio(row);
-        break;
-      case 'horarios-table':
-        await guardarHorario(row);
-        break;
-      case 'jornadas-table':
-        await guardarJornada(row);
         break;
       case 'causas-table':
         await guardarCausa(row);

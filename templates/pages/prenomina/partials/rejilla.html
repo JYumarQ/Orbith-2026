@@ -1,0 +1,176 @@
+{% comment %}
+  La tabla del reporte, con la organización visual del Excel de RRHH.
+
+  Está en su propio partial y no dentro de `detalle_reporte.html` para que exista
+  un único marcado de la rejilla: lo usa la pantalla y lo usan las pruebas
+  visuales, así que no pueden divergir.
+
+  Adaptaciones a web de lo que en Excel hacen los paneles inmovilizados: la
+  cabecera de dos niveles queda pegada al hacer scroll vertical y las cuatro
+  columnas de identidad al hacerlo horizontal. Sin ellas, al llegar a los
+  importes ya no se sabe de quién es la fila.
+
+  El color identifica la zona en la cabecera y en la línea de separación; en las
+  celdas es casi imperceptible, para que el peso visual lo tengan los datos.
+  Ver la explicación completa en `static/css/prenomina.css`.
+{% endcomment %}
+<div class="pn-rejilla-contenedor">
+  <table class="pn-rejilla">
+    <thead>
+      <tr>
+        <th class="pn-grupo pn-grupo--trabajador pn-col-fija pn-col-fija-1 pn-zona-inicio pn-col--trabajador" rowspan="2">Expediente</th>
+        <th class="pn-grupo pn-grupo--trabajador pn-col-fija pn-col-fija-2" rowspan="2">Nombres y Apellidos</th>
+        <th class="pn-grupo pn-grupo--trabajador pn-col-fija pn-col-fija-3" rowspan="2" title="Categoría Ocupacional">Cat.</th>
+        <th class="pn-grupo pn-grupo--trabajador pn-col-fija pn-col-fija-4" rowspan="2">Salario Escala</th>
+        {% comment %}
+          «Horas del mes» pasó a ser de cada trabajador (sale del Calendario de
+          Pago según su jornada), así que se muestra como columna y no solo en la
+          cabecera del reporte: con dos jornadas distintas en la misma unidad, el
+          número de la cabecera ya no explica de dónde salen las horas de cada fila.
+        {% endcomment %}
+        <th class="pn-grupo pn-grupo--trabajador pn-col--jornada" rowspan="2"
+            title="Horas del mes según la jornada asignada al trabajador">Jornada</th>
+
+        {% if conceptos_ausencia %}
+          <th class="pn-grupo pn-grupo--ausencia pn-zona-inicio pn-col--ausencia"
+              colspan="{{ conceptos_ausencia|length|add:1 }}">
+            Descuentos en horas (ausencias)
+          </th>
+        {% endif %}
+
+        <th class="pn-grupo pn-grupo--trabajadas pn-zona-inicio pn-col--trabajadas" rowspan="2">
+          Horas trabajadas
+        </th>
+
+        {% if conceptos_horas %}
+          <th class="pn-grupo pn-grupo--horas pn-zona-inicio pn-col--horas"
+              colspan="{{ conceptos_horas|length }}">
+            Pagos asociados por horas
+          </th>
+        {% endif %}
+        {% if conceptos_importe %}
+          <th class="pn-grupo pn-grupo--importe pn-zona-inicio pn-col--importe"
+              colspan="{{ conceptos_importe|length }}">
+            Pagos asociados por Importe
+          </th>
+        {% endif %}
+      </tr>
+      <tr>
+        {% for concepto in conceptos_ausencia %}
+          <th class="pn-vertical pn-col--ausencia {% if forloop.first %}pn-zona-inicio{% endif %}"
+              title="{{ concepto.etiqueta }}{% if not concepto.resta_horas_mes %} — no resta de las horas del mes{% endif %}">
+            {{ concepto.etiqueta }}
+          </th>
+        {% endfor %}
+        {% if conceptos_ausencia %}
+          <th class="pn-vertical pn-col--ausencia" title="Suma de las ausencias que restan del mes">
+            <i class="fas fa-lock pn-calculada"></i> Total a descontar
+          </th>
+        {% endif %}
+
+        {% for concepto in conceptos_horas %}
+          <th class="pn-vertical pn-col--horas {% if forloop.first %}pn-zona-inicio{% endif %}"
+              title="{{ concepto.etiqueta }}{% if concepto.es_derivado %} — calculado a partir de las ausencias relacionadas{% endif %}">
+            {% if concepto.es_derivado %}<i class="fas fa-lock pn-calculada"></i> {% endif %}{{ concepto.etiqueta }}
+          </th>
+        {% endfor %}
+        {% for concepto in conceptos_importe %}
+          <th class="pn-vertical pn-col--importe {% if forloop.first %}pn-zona-inicio{% endif %}"
+              title="{{ concepto.etiqueta }}">
+            <i class="fas fa-lock pn-calculada"></i> {{ concepto.etiqueta }}
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+
+    {% if grupos %}
+      {% for grupo in grupos %}
+        {% if grupo.descripcion %}
+          <tbody>
+            <tr class="pn-fila-subunidad">
+              <td colspan="{{ total_columnas }}" class="pn-subunidad-header">
+                <i class="fas fa-sitemap me-1"></i>{{ grupo.descripcion }}
+              </td>
+            </tr>
+          </tbody>
+        {% endif %}
+        {% for depto in grupo.departamentos %}
+          <tbody>
+            <tr class="pn-fila-departamento">
+              <td colspan="{{ total_columnas }}">
+                <button type="button" class="pn-depto-toggle" data-bs-toggle="collapse"
+                        data-bs-target="#{{ depto.id_dom }}" aria-expanded="true"
+                        aria-controls="{{ depto.id_dom }}">
+                  <i class="bx bx-chevron-down pn-depto-chevron"></i>
+                  {{ depto.descripcion|default:"Sin departamento" }}
+                  <span class="pn-depto-contador">{{ depto.filas|length }}</span>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+          <tbody id="{{ depto.id_dom }}" class="collapse show">
+            {% for fila in depto.filas %}
+              {% include 'pages/prenomina/partials/fila_trabajador.html' %}
+            {% endfor %}
+          </tbody>
+        {% endfor %}
+      {% endfor %}
+    {% else %}
+      <tbody>
+        <tr>
+          <td colspan="{{ total_columnas|default:40 }}">
+            {% comment %}
+              La misma rejilla sirve para el reporte real y para la vista previa
+              de una plantilla, que por definición no tiene trabajadores. El
+              mensaje de «no hay trabajadores» sería ahí un falso problema, así
+              que `previa` lo cambia por la explicación que corresponde.
+            {% endcomment %}
+            <div class="pn-vacio">
+              {% if previa %}
+                <div class="pn-vacio__icono"><i class="fas fa-table-columns"></i></div>
+                <div class="pn-vacio__titulo">Así quedará la estructura del reporte</div>
+                <p class="pn-vacio__texto">
+                  Una plantilla define solo las columnas. Los trabajadores, sus
+                  horas y sus importes se cargan al crear el reporte de pago.
+                </p>
+              {% else %}
+                <div class="pn-vacio__icono"><i class="fas fa-users-slash"></i></div>
+                <div class="pn-vacio__titulo">El reporte no tiene trabajadores</div>
+                <p class="pn-vacio__texto">
+                  Se cargan solos al crear el reporte. Si los quitó todos, puede
+                  volver a añadirlos desde «Añadir trabajador».
+                </p>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    {% endif %}
+
+    {% if filas %}
+      <tfoot>
+        <tr>
+          <td class="pn-col-fija pn-col-fija-1"></td>
+          <td class="pn-col-fija pn-col-fija-2 pn-rotulo-totales">Totales del reporte</td>
+          <td class="pn-col-fija pn-col-fija-3"></td>
+          <td class="pn-col-fija pn-col-fija-4"></td>
+          <td class="pn-col--jornada"></td>
+          {% for concepto in conceptos_ausencia %}<td></td>{% endfor %}
+          {% if conceptos_ausencia %}<td></td>{% endif %}
+          <td class="pn-numero pn-trabajadas">{{ reporte.total_horas_trabajadas }}</td>
+          {% for concepto in conceptos_horas %}<td></td>{% endfor %}
+          {% for concepto in conceptos_importe %}<td></td>{% endfor %}
+        </tr>
+      </tfoot>
+    {% endif %}
+  </table>
+</div>
+
+<div class="pn-leyenda">
+  <span><i class="pn-muestra--trabajador"></i>Datos del trabajador</span>
+  <span><i class="pn-muestra--ausencia"></i>Horas de ausencia</span>
+  <span><i class="pn-muestra--trabajadas"></i>Horas reales trabajadas</span>
+  <span><i class="pn-muestra--horas"></i>Pagos por horas</span>
+  <span><i class="pn-muestra--importe"></i>Pagos por importe</span>
+  <span class="ms-auto"><i class="fas fa-lock pn-calculada"></i>Columna calculada, no editable</span>
+</div>

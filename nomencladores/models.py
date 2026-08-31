@@ -303,31 +303,10 @@ class NCausaAltaBaja(Base):
 
 
 #?TIEMPO DE TRABAJO
-class NHorario(Base):
-
-    descripcion = models.CharField(max_length=50)
-    hora_inicio = models.TimeField(blank=True, null=True)
-    hora_fin = models.TimeField(blank=True, null=True)
-
-    class Meta:
-        verbose_name = ("NHorario")
-        verbose_name_plural = ("NHorarios")
-
-    def __str__(self):
-        return self.descripcion
-
-class NJornada(Base):
-
-    tipo = models.CharField(max_length=50, unique=True)
-    descripcion = models.CharField(max_length=50, blank=False, null=False)
-    horario = models.ForeignKey(NHorario, blank=True, null=True, on_delete=models.RESTRICT)
-    
-    class Meta:
-        verbose_name = ("NJornada")
-        verbose_name_plural = ("NJornadas")
-
-    def __str__(self):
-        return self.tipo
+# `NHorario` y `NJornada` se eliminaron: sus tarjetas se habían retirado del
+# acordeón «Tiempo de Trabajo» hacía tiempo, ninguna plantilla las usaba, las
+# dos tablas estaban vacías y ningún contrato tenía jornada asignada. El tiempo
+# de trabajo se gestiona ahora desde Pre-Nómina → Calendario.
 
 #?PROFESIONES
 class NEspecialidad(models.Model):

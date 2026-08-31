@@ -1,0 +1,59 @@
+{% comment %}
+  Claves de ausencia. Grupo VERDE del reporte.
+
+  Las tres columnas de resta se pintan como puntos de color y no como texto: son
+  tres banderas independientes y en una tabla estrecha el texto no cabe. El
+  `title` de cada una explica qué hace, porque «H / P / U» no se entiende solo.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(146, 208, 80, 0.6);">
+  {% include "pages/prenomina/partials/_encabezado_tarjeta.html" with icono="fa-user-clock" color="icon-emerald" titulo="Claves de Ausencia" subtitulo="DESCUENTOS EN HORAS" tipo="claves-ausencia" %}
+
+  <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th style="width: 55px;">Código</th>
+          <th>Descripción</th>
+          <th class="text-center" style="width: 78px;" title="Resta de horas mes · Resta de sistema de pago · Resta utilidades">H·P·U</th>
+          <th>Alimenta</th>
+          <th class="text-center" style="width: 70px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for clave in claves_ausencia %}
+          <tr>
+            <td class="font-monospace fw-bold text-slate-500">{{ clave.codigo }}</td>
+            <td>{{ clave.descripcion }}</td>
+            <td class="text-center">
+              <span title="Resta de horas mes: {% if clave.resta_horas_mes %}sí{% else %}no{% endif %}"
+                    class="badge rounded-pill {% if clave.resta_horas_mes %}bg-success{% else %}bg-light text-muted{% endif %}"
+                    style="width: 18px; padding: 0.2rem 0;">H</span>
+              <span title="Resta de sistema de pago: {% if clave.resta_sistema_pago %}sí{% else %}no{% endif %}"
+                    class="badge rounded-pill {% if clave.resta_sistema_pago %}bg-success{% else %}bg-light text-muted{% endif %}"
+                    style="width: 18px; padding: 0.2rem 0;">P</span>
+              <span title="Resta utilidades: {% if clave.resta_utilidades %}sí{% else %}no{% endif %}"
+                    class="badge rounded-pill {% if clave.resta_utilidades %}bg-success{% else %}bg-light text-muted{% endif %}"
+                    style="width: 18px; padding: 0.2rem 0;">U</span>
+            </td>
+            <td class="text-slate-500">
+              {% if clave.relacionado_con %}
+                <span title="Sus horas alimentan este pago por horas, que pasa a ser de solo lectura">
+                  <i class="fas fa-arrow-right-long me-1" style="color: #a855f7;"></i>{{ clave.relacionado_con.descripcion }}
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="text-center">
+              {% include "pages/prenomina/partials/_acciones_fila.html" with tipo="claves-ausencia" objeto=clave nombre=clave.etiqueta %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-slate-400 py-4">
+              Sin claves de ausencia. Añada las que utilice RRHH con el botón +.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

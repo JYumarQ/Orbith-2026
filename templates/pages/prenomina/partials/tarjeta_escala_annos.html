@@ -1,0 +1,45 @@
+{% comment %}
+  Escala de años de servicio: cuánto dinero corresponde a cada tramo de años.
+
+  Orbith ya sabe CUÁNTOS años lleva cada trabajador (se derivan de la fecha de
+  alta en la entidad). Esta tabla es la otra mitad: CUÁNTO se paga por ellos.
+  Venía en la hoja «Rangos» del Excel de RRHH y se sembró por migración; el
+  Administrador la corrige aquí cuando cambie la resolución salarial.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(99, 102, 241, 0.5);">
+  {% comment %}
+    `fa-layer-group` y no `fa-ranking-star`: el proyecto trae Font Awesome
+    6.0.0 (`static/css/all.min.css`) y ese glifo no llegó hasta la 6.1.
+  {% endcomment %}
+  {% include "pages/prenomina/partials/_encabezado_tarjeta.html" with icono="fa-layer-group" color="icon-indigo" titulo="Escala de Años de Servicio" subtitulo="AÑOS → CUANTÍA" tipo="escala-annos" %}
+
+  <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th style="width: 70px;">Años</th>
+          <th>Cuantía</th>
+          <th class="text-center" style="width: 70px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tramo in escala_annos %}
+          <tr>
+            <td class="font-monospace fw-bold text-slate-500">{{ tramo.annos }}</td>
+            <td class="font-monospace">{{ tramo.cuantia }}</td>
+            <td class="text-center">
+              {% include "pages/prenomina/partials/_acciones_fila.html" with tipo="escala-annos" objeto=tramo nombre=tramo %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-slate-400 py-4">
+              Escala vacía. Sin ella no se pueden usar conceptos por importe de
+              tipo «Escala».
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

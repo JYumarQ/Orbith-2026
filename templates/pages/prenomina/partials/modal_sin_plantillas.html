@@ -1,0 +1,45 @@
+{% comment %}
+  Se muestra en lugar del alta de reporte cuando el usuario todavía no tiene
+  ninguna plantilla.
+
+  Los conceptos del reporte salen de una plantilla, así que sin ninguna el
+  formulario solo podría ofrecer un desplegable vacío y un error al enviarlo.
+  Es mejor decir qué falta y llevar directamente a donde se arregla.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+
+    <div class="modal-header">
+      <div class="d-flex align-items-center gap-3">
+        <div class="avatar avatar-md bg-label-warning rounded d-flex align-items-center justify-content-center">
+          <i class="fas fa-table-list fs-5"></i>
+        </div>
+        <div>
+          <h5 class="modal-title mb-0">Primero necesita una plantilla</h5>
+          <small class="text-muted">Es la que define los conceptos del reporte</small>
+        </div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+
+    <div class="modal-body">
+      <p class="mb-0 small">
+        Un reporte de pago toma sus columnas —claves de ausencia, pagos por horas
+        y pagos por importe— de una plantilla. Cree al menos una en
+        <strong>Pre-Nómina → Mis Plantillas</strong> y podrá usarla después para
+        cualquiera de sus Unidades Organizativas y para todos los períodos que
+        necesite.
+      </p>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+        Cancelar
+      </button>
+      <a href="{% url 'prenomina:plantillas' %}" class="btn btn-sm btn-primary">
+        <i class="fas fa-plus me-1"></i>Ir a Mis Plantillas
+      </a>
+    </div>
+
+  </div>
+</div>

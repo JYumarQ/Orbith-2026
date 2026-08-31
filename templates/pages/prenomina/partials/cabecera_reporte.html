@@ -1,0 +1,121 @@
+{% comment %}
+  Cabecera del reporte: lo que en el Excel son las filas 1 a 5 (unidad, período,
+  horas del mes y firmas), más las acciones.
+
+  Los datos van en fichas y no en una línea de texto corrido: «Horas del mes» es
+  el número contra el que el Moderador contrasta todo lo que teclea, y tenía que
+  leerse de un vistazo, no buscarse dentro de una frase.
+{% endcomment %}
+<div class="pn-encabezado">
+
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1" style="font-size: .75rem;">
+          <li class="breadcrumb-item">
+            <a href="{% url 'prenomina:lista_reportes' %}">Reportes de Pago</a>
+          </li>
+          <li class="breadcrumb-item active">{{ reporte.periodo.etiqueta }}</li>
+        </ol>
+      </nav>
+      <h1 class="pn-titulo">
+        {{ reporte.unidad_descripcion }}
+        <span class="badge bg-label-{{ reporte.color_badge }} align-middle ms-1"
+              style="font-size: .7rem; vertical-align: 3px;">
+          {{ reporte.get_estado_display }}
+        </span>
+      </h1>
+      <p class="pn-subtitulo">Pre-Nómina de {{ reporte.periodo.etiqueta }}</p>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2">
+      {% comment %}
+        Exportar es una lectura: lo puede hacer cualquiera que vea el reporte,
+        incluido el Observador. Importar es escritura y va con el resto.
+      {% endcomment %}
+      <a href="{% url 'prenomina:exportar_reporte' reporte.pk %}"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-file-excel me-1"></i>Exportar
+      </a>
+      {% if puede_editar %}
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                hx-get="{% url 'prenomina:importar_reporte' reporte.pk %}"
+                hx-target="#modal_generic" hx-swap="innerHTML">
+          <i class="fas fa-file-import me-1"></i>Importar
+        </button>
+        {% comment %}
+          Antes abría el marcado de conceptos suelto. Ahora se elige una
+          plantilla: la configuración vive en Mis Plantillas y aquí solo se
+          aplica, para que no queden dos formas de configurar un reporte.
+        {% endcomment %}
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                hx-get="{% url 'prenomina:cambiar_plantilla' reporte.pk %}"
+                hx-target="#modal_generic" hx-swap="innerHTML">
+          <i class="fas fa-table-list me-1"></i>Plantilla
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary"
+                hx-get="{% url 'prenomina:agregar_trabajador' reporte.pk %}"
+                hx-target="#modal_generic" hx-swap="innerHTML">
+          <i class="fas fa-user-plus me-1"></i>Añadir trabajador
+        </button>
+        <button type="button" class="btn btn-sm btn-success"
+                hx-post="{% url 'prenomina:cerrar_reporte' reporte.pk %}"
+                hx-swap="none"
+                data-titulo="¿Cerrar el reporte?"
+                data-confirmar="Tras cerrarlo dejará de admitir cambios. Podrá reabrirlo mientras sea el último reporte de esta unidad."
+                hx-on::after-request="if(event.detail.successful) window.location.reload()">
+          <i class="fas fa-lock me-1"></i>Cerrar
+        </button>
+      {% elif puede_reabrir %}
+        <button type="button" class="btn btn-sm btn-warning"
+                hx-post="{% url 'prenomina:reabrir_reporte' reporte.pk %}"
+                hx-swap="none"
+                data-titulo="¿Reabrir el reporte?"
+                data-confirmar="Volverá a Borrador y admitirá cambios."
+                hx-on::after-request="if(event.detail.successful) window.location.reload()">
+          <i class="fas fa-lock-open me-1"></i>Reabrir
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="pn-fichas">
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">Horas del mes</span>
+      <span class="pn-ficha__valor">{{ reporte.fondo_tiempo }}</span>
+    </div>
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">Período de pago</span>
+      <span class="pn-ficha__valor" style="font-size: .9rem;">
+        {{ reporte.fecha_desde|date:"d/m/Y" }}
+        <small>a</small>
+        {{ reporte.fecha_hasta|date:"d/m/Y" }}
+      </span>
+    </div>
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">Trabajadores</span>
+      <span class="pn-ficha__valor">{{ reporte.total_trabajadores }}</span>
+    </div>
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">Horas trabajadas</span>
+      <span class="pn-ficha__valor">{{ reporte.total_horas_trabajadas }}</span>
+    </div>
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">Total importes</span>
+      <span class="pn-ficha__valor">{{ reporte.total_importes }}</span>
+    </div>
+    <div class="pn-ficha">
+      <span class="pn-ficha__etiqueta">
+        {% if reporte.cerrado_por_nombre %}Cerrado por{% else %}Hecho por{% endif %}
+      </span>
+      <span class="pn-ficha__valor" style="font-size: .85rem;">
+        {% if reporte.cerrado_por_nombre %}
+          {{ reporte.cerrado_por_nombre }}
+          <small>{{ reporte.fecha_cierre|date:"d/m/Y" }}</small>
+        {% else %}
+          {{ reporte.hecho_por|default:"—" }}
+        {% endif %}
+      </span>
+    </div>
+  </div>
+</div>

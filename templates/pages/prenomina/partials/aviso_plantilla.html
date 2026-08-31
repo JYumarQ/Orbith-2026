@@ -1,0 +1,23 @@
+{% comment %}
+  Aviso de validación y botón de guardar, juntos a propósito.
+
+  Los devuelve `validar_plantilla` en cada cambio del formulario. Van en el mismo
+  fragmento porque el estado del botón ES la conclusión del aviso: separarlos
+  permitiría que la pantalla dijera «falta algo» con el botón habilitado, que es
+  exactamente la incoherencia que hay que evitar.
+
+  La decisión la toma el servidor (`servicios_plantilla.comprobar_duplicado`), la
+  misma función que valida al guardar. Así el botón nunca ofrece algo que el
+  backend vaya a rechazar.
+{% endcomment %}
+{% if aviso %}
+  <div class="alert alert-warning d-flex align-items-start p-2 mb-0" role="alert">
+    <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+    <div class="small">{{ aviso }}</div>
+  </div>
+{% endif %}
+
+<button type="submit" form="form_plantilla" class="btn btn-sm btn-primary"
+        id="btn_guardar_plantilla" {% if aviso %}disabled{% endif %}>
+  <i class="fas fa-save me-1"></i>Guardar selección
+</button>

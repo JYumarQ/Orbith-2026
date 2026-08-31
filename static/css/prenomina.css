@@ -1,0 +1,623 @@
+/* ==========================================================================
+   Pre-Nómina
+
+   La rejilla reproduce la organización del Excel de RRHH (cabecera de dos
+   niveles y cinco zonas de color) adaptada a pantalla.
+
+   SOBRE EL COLOR — la decisión de diseño principal
+   ------------------------------------------------
+   Los colores del Excel son planos y saturados (FFFF00, 92D050, 0070C0,
+   7030A0, FF0000). Rellenar con ellos 34 columnas × cientos de filas produce
+   una pantalla ilegible y cansada: el color deja de informar y solo grita.
+
+   Aquí el color se usa donde IDENTIFICA y se retira donde estorba:
+
+     · una barra de acento sobre la cabecera de cada grupo,
+     · el rótulo del grupo en ese mismo color,
+     · una línea vertical que marca dónde empieza cada zona,
+     · y en las celdas, un tinte tan leve que solo se percibe como agrupación.
+
+   Así se conserva la asociación color→zona que RRHH lleva años usando, pero el
+   peso visual pasa a los DATOS, que es lo que hay que leer. Cada zona declara
+   tres tonos: `fuerte` (texto y acento), `linea` (separador) y `tinte` (fondo).
+   ========================================================================== */
+
+:root {
+    --pn-trabajador-fuerte: #b45309;
+    --pn-trabajador-linea:  #f59e0b;
+    --pn-trabajador-tinte:  #fffcf5;
+
+    --pn-ausencia-fuerte: #15803d;
+    --pn-ausencia-linea:  #22c55e;
+    --pn-ausencia-tinte:  #f6fcf8;
+
+    --pn-trabajadas-fuerte: #0369a1;
+    --pn-trabajadas-linea:  #0ea5e9;
+    --pn-trabajadas-tinte:  #f0f8ff;
+
+    --pn-horas-fuerte: #7e22ce;
+    --pn-horas-linea:  #a855f7;
+    --pn-horas-tinte:  #fcf9ff;
+
+    --pn-importe-fuerte: #b91c1c;
+    --pn-importe-linea:  #ef4444;
+    --pn-importe-tinte:  #fff7f7;
+
+    --pn-borde:  #eef2f7;
+    --pn-texto:  #334155;
+    --pn-tenue:  #94a3b8;
+    --pn-fondo-cabecera: #f8fafc;
+}
+
+/* --------------------------------------------------------------------------
+   1. Cabecera de la pantalla
+   -------------------------------------------------------------------------- */
+
+.pn-encabezado {
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+    border: 1px solid var(--pn-borde);
+    border-radius: .75rem;
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.pn-titulo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    letter-spacing: -.02em;
+    margin: 0;
+}
+
+.pn-subtitulo {
+    font-size: .8rem;
+    color: var(--pn-tenue);
+    margin: .15rem 0 0;
+}
+
+/* Fichas de dato del encabezado: período, horas del mes, trabajadores.
+   Sustituyen a la línea de texto corrido, que obligaba a leer para encontrar
+   un número. */
+.pn-fichas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-top: .9rem;
+}
+
+.pn-ficha {
+    flex: 1 1 auto;
+    min-width: 8.5rem;
+    background: #fff;
+    border: 1px solid var(--pn-borde);
+    border-radius: .6rem;
+    padding: .55rem .8rem;
+}
+
+.pn-ficha__etiqueta {
+    display: block;
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--pn-tenue);
+}
+
+.pn-ficha__valor {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+}
+
+.pn-ficha__valor small {
+    font-size: .78rem;
+    font-weight: 500;
+    color: var(--pn-tenue);
+}
+
+/* --------------------------------------------------------------------------
+   2. Contenedor de la rejilla
+   -------------------------------------------------------------------------- */
+
+.pn-rejilla-contenedor {
+    overflow: auto;
+    max-height: calc(100vh - 22rem);
+    border: 1px solid var(--pn-borde);
+    border-radius: .75rem;
+    background: #fff;
+}
+
+.pn-rejilla {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .78rem;
+    white-space: nowrap;
+    margin: 0;
+    color: var(--pn-texto);
+}
+
+.pn-rejilla th,
+.pn-rejilla td {
+    padding: .45rem .6rem;
+    border-bottom: 1px solid var(--pn-borde);
+}
+
+/* --------------------------------------------------------------------------
+   3. Cabecera de la tabla
+   -------------------------------------------------------------------------- */
+
+.pn-rejilla thead th {
+    position: sticky;
+    z-index: 3;
+    background-color: var(--pn-fondo-cabecera);
+    font-weight: 700;
+    text-align: center;
+    vertical-align: middle;
+}
+.pn-rejilla thead tr:first-child th { top: 0; }
+.pn-rejilla thead tr:last-child th  { top: 2.1rem; }
+
+/* Rótulo de grupo: barra de acento arriba y texto en el color de la zona.
+   Es lo que sustituye al bloque saturado. */
+.pn-grupo {
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding-top: .55rem !important;
+    padding-bottom: .55rem !important;
+    border-top: 3px solid transparent;
+}
+
+/* Encabezado de columna en vertical: con 30 conceptos, en horizontal la tabla
+   se iría a varios miles de píxeles. Texto oscuro sobre fondo claro, que se lee
+   mucho mejor que blanco sobre color saturado. */
+.pn-vertical {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    height: 8.5rem;
+    font-weight: 600;
+    font-size: .69rem;
+    letter-spacing: .015em;
+    padding: .5rem .25rem !important;
+    color: #475569;
+}
+
+/* Línea vertical que marca dónde empieza cada zona. Es lo que mantiene las
+   zonas legibles sin necesidad de rellenar cada celda de color. */
+.pn-zona-inicio { border-left: 2px solid var(--pn-borde); }
+
+.pn-grupo--trabajador { color: var(--pn-trabajador-fuerte); border-top-color: var(--pn-trabajador-linea); }
+.pn-grupo--ausencia   { color: var(--pn-ausencia-fuerte);   border-top-color: var(--pn-ausencia-linea); }
+.pn-grupo--trabajadas { color: var(--pn-trabajadas-fuerte); border-top-color: var(--pn-trabajadas-linea); }
+.pn-grupo--horas      { color: var(--pn-horas-fuerte);      border-top-color: var(--pn-horas-linea); }
+.pn-grupo--importe    { color: var(--pn-importe-fuerte);    border-top-color: var(--pn-importe-linea); }
+
+.pn-col--trabajador.pn-zona-inicio { border-left-color: var(--pn-trabajador-linea); }
+.pn-col--ausencia.pn-zona-inicio   { border-left-color: var(--pn-ausencia-linea); }
+.pn-col--trabajadas.pn-zona-inicio { border-left-color: var(--pn-trabajadas-linea); }
+.pn-col--horas.pn-zona-inicio      { border-left-color: var(--pn-horas-linea); }
+.pn-col--importe.pn-zona-inicio    { border-left-color: var(--pn-importe-linea); }
+
+/* Tinte de celda: casi blanco. Solo tiene que insinuar la agrupación. */
+.pn-col--trabajador { background-color: var(--pn-trabajador-tinte); }
+.pn-col--ausencia   { background-color: var(--pn-ausencia-tinte); }
+.pn-col--trabajadas { background-color: var(--pn-trabajadas-tinte); }
+.pn-col--horas      { background-color: var(--pn-horas-tinte); }
+.pn-col--importe    { background-color: var(--pn-importe-tinte); }
+
+/* Candado de columna calculada: discreto, en el color de su zona. */
+.pn-calculada { opacity: .55; font-size: .6rem; }
+
+/* --------------------------------------------------------------------------
+   4. Columnas fijas
+   --------------------------------------------------------------------------
+   El ancho de cada una se FIJA a la vez que su desplazamiento `left`, y los dos
+   valores tienen que cuadrar: `left` es la suma de los anchos anteriores. Si se
+   dejan los anchos al contenido, el navegador los reparte como quiera y aparece
+   un hueco entre columnas (si suman menos que los `left`) o las columnas fijas
+   tapan las primeras de la zona siguiente (si suman más). Ambos fallos se vieron
+   en pantalla antes de fijar los anchos.
+
+   Los anchos los decide el DATO que va debajo, no el título: el encabezado se
+   adapta envolviendo en dos líneas.
+
+     col 1  86px  ->  left 0
+     col 2 210px  ->  left  86
+     col 3  56px  ->  left 296
+     col 4 104px  ->  left 352
+                       total 456
+   -------------------------------------------------------------------------- */
+
+.pn-col-fija {
+    position: sticky;
+    z-index: 2;
+    background-color: #fff;
+}
+.pn-rejilla thead .pn-col-fija { z-index: 4; background-color: var(--pn-fondo-cabecera); }
+.pn-rejilla tfoot .pn-col-fija { z-index: 3; }
+
+.pn-col-fija-1 { left: 0;     min-width: 86px;  max-width: 86px;  width: 86px; }
+.pn-col-fija-2 { left: 86px;  min-width: 210px; max-width: 210px; width: 210px; }
+.pn-col-fija-3 { left: 296px; min-width: 56px;  max-width: 56px;  width: 56px; }
+.pn-col-fija-4 { left: 352px; min-width: 104px; max-width: 104px; width: 104px; }
+
+/* El encabezado envuelve; el dato de la fila no (un salario partido en dos
+   líneas es ilegible). La fila de cabecera ya es alta por las etiquetas
+   verticales, así que la segunda línea no cuesta nada. */
+.pn-rejilla thead .pn-col-fija {
+    white-space: normal;
+    line-height: 1.2;
+    font-size: .72rem;
+}
+
+.pn-col-fija-2 { overflow: hidden; text-overflow: ellipsis; }
+
+/* Sombra que marca dónde acaba la zona fija al desplazarse. */
+.pn-col-fija-4::after {
+    content: '';
+    position: absolute;
+    top: 0; right: -8px; bottom: 0; width: 8px;
+    background: linear-gradient(to right, rgba(15, 23, 42, .07), transparent);
+    pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   5. Filas y datos
+   -------------------------------------------------------------------------- */
+
+.pn-fila { cursor: pointer; transition: background-color .12s ease; }
+
+/* El hover tiñe la fila ENTERA, incluidas las celdas fijas, que tienen fondo
+   propio para poder taparse entre sí al desplazarse. */
+.pn-fila:hover td,
+.pn-fila:hover .pn-col-fija { background-color: #eff6ff; }
+
+.pn-fila:hover .pn-col-fija-1 { box-shadow: inset 3px 0 0 var(--pn-trabajadas-linea); }
+
+.pn-expediente {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .72rem;
+    color: var(--pn-tenue);
+}
+
+.pn-nombre { font-weight: 600; color: #1e293b; }
+
+/* Categoría ocupacional: son tres letras (TEC, ADM…), se leen mejor como
+   etiqueta que como texto suelto. */
+.pn-categoria {
+    display: inline-block;
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--pn-trabajador-fuerte);
+    background: #fef3c7;
+    border-radius: .3rem;
+    padding: .1rem .35rem;
+}
+
+.pn-numero {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* La mayoría de celdas son 0.00. Atenuarlas es lo que hace que los valores que
+   SÍ importan salten a la vista en una tabla de 34 columnas. */
+.pn-cero { color: #d7dfe8; font-weight: 400; }
+.pn-valor { font-weight: 600; color: #1e293b; }
+
+/* Las tres columnas calculadas se marcan en el color de su zona: son resultado,
+   no entrada. */
+.pn-total    { font-weight: 700; color: var(--pn-ausencia-fuerte); }
+.pn-trabajadas { font-weight: 700; color: var(--pn-trabajadas-fuerte); }
+.pn-importe  { color: var(--pn-importe-fuerte); }
+
+/* Encabezado de Sub Unidad: solo aparece cuando el reporte es de una Unidad
+   Principal (`views._agrupar_filas`). Es puro rótulo, sin acordeón: lo único
+   colapsable es el nivel de Departamento. */
+.pn-subunidad-header {
+    background-color: #eef2ff;
+    color: #4338ca;
+    font-weight: 700;
+    font-size: .8rem;
+    padding: .5rem .75rem;
+    border-top: 1px solid #c7d2fe;
+    border-bottom: 1px solid #c7d2fe;
+}
+
+/* Encabezado de Departamento: fila siempre visible que despliega/colapsa el
+   `<tbody>` de sus trabajadores (ver `data-bs-toggle="collapse"` en
+   `rejilla.html`), mismo mecanismo que el acordeón de Parámetros
+   Generales/Nomencladores. */
+.pn-fila-departamento td { padding: 0; background-color: #f8fafc; }
+.pn-depto-toggle {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: .4rem .75rem;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+.pn-depto-toggle:hover { color: #696cff; }
+.pn-depto-chevron { transition: transform .2s ease; }
+.pn-depto-toggle[aria-expanded="true"] .pn-depto-chevron { transform: rotate(180deg); }
+.pn-depto-contador {
+    margin-left: .35rem;
+    font-size: .68rem;
+    font-weight: 700;
+    color: #94a3b8;
+}
+
+/* Columna «Jornada»: las horas del mes de cada trabajador, que desde la fase 2
+   salen de su calendario y no de un número único del reporte. Se pinta con el
+   color de la zona del trabajador porque es un dato suyo, no un concepto. */
+.pn-col--jornada { min-width: 74px; }
+.pn-jornada {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--pn-trabajador-fuerte);
+    background: #fef3c7;
+    border-radius: .3rem;
+    padding: .1rem .35rem;
+}
+
+/* --------------------------------------------------------------------------
+   Calendario: celdas de horas editables en línea
+   -------------------------------------------------------------------------- */
+
+/* El punteado inferior es la única señal de que la celda se puede editar. Se
+   eligió esa marca y no un borde completo para que la tabla no parezca un
+   formulario: en un período cerrado estas celdas se pintan sin la clase, y la
+   diferencia visual entre «editable» y «histórico» tiene que leerse de un
+   vistazo, sin buscar el cursor. */
+.pn-celda-editable {
+    cursor: cell;
+    border-bottom: 1px dashed #c7cdd8 !important;
+    transition: background-color .12s ease;
+}
+.pn-celda-editable:hover {
+    background-color: #eff6ff;
+    border-bottom-color: var(--pn-trabajadas-linea, #696cff) !important;
+}
+.pn-celda-editable input {
+    min-width: 90px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   6. Fila de totales
+   -------------------------------------------------------------------------- */
+
+.pn-rejilla tfoot td {
+    position: sticky;
+    bottom: 0;
+    background-color: #f8fafc;
+    font-weight: 700;
+    border-top: 2px solid #e2e8f0;
+    border-bottom: none;
+    z-index: 2;
+}
+
+.pn-rotulo-totales {
+    font-size: .66rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--pn-tenue);
+}
+
+/* --------------------------------------------------------------------------
+   7. Leyenda y estado vacío
+   -------------------------------------------------------------------------- */
+
+.pn-leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: .7rem .25rem .2rem;
+    font-size: .72rem;
+    color: var(--pn-tenue);
+}
+
+.pn-leyenda span { display: inline-flex; align-items: center; gap: .4rem; }
+
+.pn-leyenda i {
+    width: .7rem;
+    height: .7rem;
+    border-radius: .2rem;
+    display: inline-block;
+}
+.pn-leyenda .pn-muestra--trabajador { background: var(--pn-trabajador-linea); }
+.pn-leyenda .pn-muestra--ausencia   { background: var(--pn-ausencia-linea); }
+.pn-leyenda .pn-muestra--trabajadas { background: var(--pn-trabajadas-linea); }
+.pn-leyenda .pn-muestra--horas      { background: var(--pn-horas-linea); }
+.pn-leyenda .pn-muestra--importe    { background: var(--pn-importe-linea); }
+
+.pn-vacio {
+    text-align: center;
+    padding: 3.5rem 1.5rem;
+}
+
+.pn-vacio__icono {
+    width: 3.5rem;
+    height: 3.5rem;
+    border-radius: 1rem;
+    background: #eef2ff;
+    color: #6366f1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: .9rem;
+}
+
+.pn-vacio__titulo { font-weight: 700; color: #1e293b; margin-bottom: .3rem; }
+.pn-vacio__texto  { color: var(--pn-tenue); font-size: .85rem; max-width: 30rem; margin: 0 auto 1.1rem; }
+
+/* --------------------------------------------------------------------------
+   8. Modal de captura
+   -------------------------------------------------------------------------- */
+
+.pn-seccion {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    margin-bottom: .7rem;
+}
+.pn-seccion--ausencia { color: var(--pn-ausencia-fuerte); }
+.pn-seccion--horas    { color: var(--pn-horas-fuerte); }
+
+.pn-campo label {
+    font-size: .72rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: .2rem;
+}
+
+.pn-resumen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: var(--pn-trabajadas-tinte);
+    border: 1px solid #dbeafe;
+    border-radius: .6rem;
+    padding: .6rem .9rem;
+}
+
+.pn-resumen--excedido {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: var(--pn-importe-fuerte);
+}
+
+.pn-resumen__valor {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   9. Listado de reportes
+
+   Es la pantalla de entrada del módulo. Antes era una tabla de Bootstrap sin
+   más: correcta y anodina. El objetivo aquí no es decorar, es que de un vistazo
+   se distinga qué reporte está abierto, cuál se cerró y cuál ya es archivo.
+   ========================================================================== */
+
+.pn-barra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+    padding: .85rem 1rem;
+    border-bottom: 1px solid var(--pn-borde);
+}
+
+.pn-barra__buscador { flex: 1 1 18rem; min-width: 14rem; }
+
+.pn-barra .input-group-text {
+    background: transparent;
+    border-right: 0;
+    color: var(--pn-tenue);
+}
+.pn-barra .form-control { border-left: 0; }
+.pn-barra .form-control:focus,
+.pn-barra .form-select:focus {
+    border-color: #c7d2fe;
+    box-shadow: 0 0 0 .18rem rgba(99, 102, 241, .12);
+}
+
+.pn-recuento {
+    font-size: .72rem;
+    color: var(--pn-tenue);
+    white-space: nowrap;
+}
+
+/* --- Tabla del listado --- */
+
+.pn-tabla { margin: 0; }
+
+.pn-tabla thead th {
+    background: var(--pn-fondo-cabecera);
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--pn-tenue);
+    border-bottom: 1px solid var(--pn-borde);
+    padding: .65rem 1rem;
+    white-space: nowrap;
+}
+
+.pn-tabla tbody td {
+    padding: .8rem 1rem;
+    border-bottom: 1px solid #f4f7fa;
+    vertical-align: middle;
+}
+
+.pn-tabla tbody tr:last-child td { border-bottom: 0; }
+.pn-tabla tbody tr { transition: background-color .12s ease; }
+.pn-tabla tbody tr:hover { background-color: #f8fafc; }
+
+/* El estado se lee dos veces: como barra de color al inicio de la fila (se
+   percibe sin leer) y como texto en su columna. */
+.pn-estado-barra {
+    display: inline-block;
+    width: 3px;
+    height: 2.1rem;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: .7rem;
+}
+.pn-estado-barra--warning   { background: #f59e0b; }
+.pn-estado-barra--success   { background: #22c55e; }
+.pn-estado-barra--secondary { background: #cbd5e1; }
+
+.pn-unidad {
+    font-weight: 600;
+    color: #1e293b;
+    text-decoration: none;
+}
+.pn-unidad:hover { color: #4f46e5; }
+
+.pn-periodo {
+    font-weight: 600;
+    color: var(--pn-texto);
+}
+.pn-periodo small {
+    display: block;
+    font-weight: 500;
+    color: var(--pn-tenue);
+    font-size: .7rem;
+}
+
+.pn-dato-tabla {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.pn-firma { font-size: .78rem; color: var(--pn-texto); }
+.pn-firma small { display: block; color: var(--pn-tenue); font-size: .7rem; }
+
+.pn-archivado {
+    font-size: .72rem;
+    color: var(--pn-tenue);
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+}

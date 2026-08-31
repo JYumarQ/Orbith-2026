@@ -1,0 +1,35 @@
+{% comment %}
+  Pagos asociados por horas. Grupo PÚRPURA del reporte.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(112, 48, 160, 0.6);">
+  {% include "pages/prenomina/partials/_encabezado_tarjeta.html" with icono="fa-hourglass-half" color="icon-purple" titulo="Pagos por Horas" subtitulo="CONCEPTOS EN HORAS" tipo="pagos-horas" %}
+
+  <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th style="width: 55px;">Código</th>
+          <th>Descripción</th>
+          <th class="text-center" style="width: 70px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pago in pagos_horas %}
+          <tr>
+            <td class="font-monospace fw-bold text-slate-500">{{ pago.codigo }}</td>
+            <td>{{ pago.descripcion }}</td>
+            <td class="text-center">
+              {% include "pages/prenomina/partials/_acciones_fila.html" with tipo="pagos-horas" objeto=pago nombre=pago.etiqueta %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-slate-400 py-4">
+              Sin conceptos por horas. Añádalos con el botón +.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

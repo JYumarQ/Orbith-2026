@@ -1,0 +1,169 @@
+{% comment %}
+  Cuerpo de la tabla de reportes. Lo devuelve `buscar_reportes` en cada
+  búsqueda, filtro o paginación, y también se incluye en la carga inicial para
+  no duplicar el marcado.
+
+  El estado se percibe dos veces: como barra de color al inicio de la fila —que
+  se lee sin leer— y como etiqueta en su columna. En un listado donde lo único
+  que importa es «cuál está abierto», eso ahorra recorrer la tabla.
+
+  Los botones se pintan a partir de propiedades del modelo (`editable`,
+  `reabrible`), pero eso es solo la interfaz: quien decide de verdad es
+  `servicios.py`, que vuelve a comprobar rol, unidad y estado con la fila
+  bloqueada.
+{% endcomment %}
+{% comment %}
+  Barra del período: une esta pantalla con Pre-Nómina → Calendario.
+
+  Solo aparece con un año y un mes concretos elegidos, porque «Cerrar mes» no
+  significa nada sobre «todos los años». Vive dentro de este parcial —y no en la
+  barra de filtros— para que se repinte junto a la tabla cada vez que cambian los
+  filtros: su contenido depende del período seleccionado.
+
+  El estado que muestra es el del Calendario de Pago del usuario, que es la única
+  fuente de verdad del cierre (ver `servicios.sincronizar_calendario`).
+{% endcomment %}
+{% if hay_periodo %}
+  <div class="pn-barra border-bottom justify-content-between flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      {% if periodo_calendario.cerrado %}
+        <span class="badge bg-label-secondary rounded-pill px-3">
+          <i class="fas fa-lock me-1"></i>Mes cerrado
+        </span>
+        <small class="text-muted">
+          {% if periodo_calendario.fecha_cierre %}
+            Cerrado el {{ periodo_calendario.fecha_cierre|date:"d/m/Y H:i" }}
+            {% if periodo_calendario.cerrado_por_nombre %}por {{ periodo_calendario.cerrado_por_nombre }}{% endif %} ·
+          {% endif %}
+          Las horas de este mes quedaron fijadas en el Calendario.
+        </small>
+      {% elif borradores_del_periodo %}
+        <span class="badge bg-label-success rounded-pill px-3">Mes abierto</span>
+        <small class="text-muted">
+          {{ borradores_del_periodo }} reporte{{ borradores_del_periodo|pluralize:"s" }}
+          en Borrador — al cerrarlos todos se cierra también el Calendario de este mes.
+        </small>
+      {% else %}
+        <span class="badge bg-label-info rounded-pill px-3">Sin borradores</span>
+        <small class="text-muted">No hay reportes de este período pendientes de cerrar.</small>
+      {% endif %}
+    </div>
+
+    {% if puede_crear and borradores_del_periodo %}
+      <button type="button" class="btn btn-sm btn-outline-success"
+              hx-post="{% url 'prenomina:cerrar_mes' %}"
+              hx-vals='{"anno": "{{ anno_actual }}", "mes": "{{ mes_actual }}"}'
+              hx-swap="none"
+              data-titulo="¿Cerrar el mes completo?"
+              data-confirmar="Se cerrarán los {{ borradores_del_periodo }} reporte{{ borradores_del_periodo|pluralize:'s' }} en Borrador de este período y, con ellos, el Calendario de Pago del mes. Podrá reabrirlos después si son los últimos de su unidad.">
+        <i class="fas fa-lock me-1"></i>Cerrar mes
+      </button>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="table-responsive">
+  <table class="table pn-tabla">
+      <thead>
+        <tr>
+          <th>Período</th>
+          <th>Unidad Organizativa</th>
+          <th class="text-end">Trabajadores</th>
+          <th class="text-center">Estado</th>
+          <th>Cerrado por</th>
+          <th class="text-end" style="width: 12rem;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for reporte in pagina %}
+          <tr class="pn-fila-reporte" data-href="{% url 'prenomina:detalle_reporte' reporte.pk %}">
+            <td>
+              <span class="pn-periodo">
+                {{ reporte.periodo.etiqueta }}
+                <small>{{ reporte.fecha_desde|date:"d/m" }} — {{ reporte.fecha_hasta|date:"d/m" }}</small>
+              </span>
+            </td>
+            <td>
+              <span class="pn-estado-barra pn-estado-barra--{{ reporte.color_badge }}"></span>
+              <a href="{% url 'prenomina:detalle_reporte' reporte.pk %}" class="pn-unidad">
+                {{ reporte.unidad_descripcion }}
+              </a>
+            </td>
+            <td class="text-end pn-dato-tabla">{{ reporte.total_trabajadores }}</td>
+            <td class="text-center">
+              <span class="badge bg-label-{{ reporte.color_badge }}">
+                {{ reporte.get_estado_display }}
+              </span>
+            </td>
+            <td>
+              {% if reporte.cerrado_por_nombre %}
+                <span class="pn-firma">
+                  {{ reporte.cerrado_por_nombre }}
+                  <small>{{ reporte.fecha_cierre|date:"d/m/Y H:i" }}</small>
+                </span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{% url 'prenomina:detalle_reporte' reporte.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="Abrir el reporte">
+                <i class="fas fa-table-cells"></i>
+              </a>
+              {% if reporte.editable %}
+                <button type="button" class="btn btn-sm btn-outline-success"
+                        hx-post="{% url 'prenomina:cerrar_reporte' reporte.pk %}"
+                        hx-swap="none"
+                        data-titulo="¿Cerrar el reporte?"
+                        data-confirmar="Tras cerrarlo dejará de admitir cambios. Podrá reabrirlo mientras sea el último reporte de esta unidad.">
+                  <i class="fas fa-lock me-1"></i>Cerrar
+                </button>
+              {% elif reporte.reabrible %}
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        hx-post="{% url 'prenomina:reabrir_reporte' reporte.pk %}"
+                        hx-swap="none"
+                        data-titulo="¿Reabrir el reporte?"
+                        data-confirmar="Volverá a Borrador y admitirá cambios.">
+                  <i class="fas fa-lock-open me-1"></i>Reabrir
+                </button>
+              {% else %}
+                <span class="pn-archivado"
+                      title="Ya existe un reporte posterior de esta unidad">
+                  <i class="fas fa-box-archive"></i>Archivado
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6">
+              {% include 'pages/prenomina/partials/_vacio_reportes.html' %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pagina.has_other_pages or pagina.paginator.count %}
+    <div class="pn-barra border-bottom-0 border-top justify-content-between">
+      <span class="pn-recuento">
+        {{ pagina.paginator.count }}
+        reporte{{ pagina.paginator.count|pluralize:"s" }}
+        {% if hay_filtros %}con los filtros aplicados{% endif %}
+      </span>
+
+      {% if pagina.has_other_pages %}
+        <ul class="pagination pagination-sm mb-0">
+          {% for numero in pagina.paginator.page_range %}
+            <li class="page-item {% if numero == pagina.number %}active{% endif %}">
+              <a class="page-link" href="#"
+                 hx-get="{% url 'prenomina:buscar_reportes' %}?page={{ numero }}"
+                 hx-target="#resultados_reportes"
+                 hx-include="#search, #filtro_estado, #filtro_anno">{{ numero }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}

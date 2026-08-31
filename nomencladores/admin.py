@@ -10,7 +10,7 @@ from auditoria.admin_mixins import AuditoriaAdminMixin
 from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
-    NProvincia, NMunicipio, NHorario, NJornada, NEspecialidad,
+    NProvincia, NMunicipio, NEspecialidad,
     NTipoUnidadOrganizativa, NTipoContrato, NMotivoContrato, # <--- Añadidos aquí
     NTipoFamilia, NFamiliaCargo, NNocturnidad, NCondicionLaboralAnormal,
     NCausaAltaBaja, NNivelPreparacion,
@@ -165,15 +165,6 @@ class NMotivoContratoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
     list_select_related = ('tipo_contrato',)
 # admin.site.register(NCargo) <--- OJO: Ya está registrado arriba con @admin.register
 
-
-@admin.register(NHorario)
-class NHorarioAdmin(_NomencladorAdminBase):
-    pass
-
-
-@admin.register(NJornada)
-class NJornadaAdmin(_NomencladorAdminBase):
-    pass
 
 @admin.register(NEspecialidad)
 class NEspecialidadAdmin(AuditoriaAdminMixin, admin.ModelAdmin):

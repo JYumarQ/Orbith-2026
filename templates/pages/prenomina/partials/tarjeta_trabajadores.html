@@ -1,0 +1,137 @@
+{% comment %}
+  Tarjeta 3 — Asignación de calendarios a trabajadores.
+
+  El select de Unidad Organizativa ya viene acotado al alcance del usuario
+  (`filtros.unidades_gestionables`): todas para el Administrador, las asignadas
+  para el Moderador. Sin unidad elegida no se lista a nadie, porque una empresa
+  entera son cientos de filas sobre las que no hay ninguna decisión útil que
+  tomar a la vez.
+
+  La selección es múltiple por checkbox y la asignación se hace en masa. La
+  asignación es permanente: se conserva hasta que se cambie, y cada reporte
+  congela al crearse las horas que le tocaban a cada trabajador.
+{% endcomment %}
+<div class="card shadow-none border" id="card-trabajadores">
+  <div class="card-header border-bottom d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 py-3 bg-transparent">
+    <div class="d-flex align-items-center gap-3">
+      <div class="avatar avatar-md bg-label-primary rounded d-flex align-items-center justify-content-center">
+        <i class="fas fa-users fs-5"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold text-heading">Asignación de Trabajadores</h5>
+        <small class="text-muted">Qué calendario le corresponde a cada trabajador</small>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap flex-md-nowrap align-items-center gap-3 ms-lg-auto">
+      <button type="button" class="btn btn-outline-danger shadow-sm text-nowrap"
+              id="btn-desasignar" disabled
+              data-url="{% url 'prenomina:quitar_asignacion' %}">
+        <i class="fas fa-link-slash me-1"></i>Quitar
+      </button>
+      <button type="button" class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2"
+              id="btn-asignar" disabled
+              data-url="{% url 'prenomina:asignar_calendario' %}">
+        <i class="fas fa-calendar-check"></i>
+        <span>Asignar calendario</span>
+        <span class="badge bg-white text-primary rounded-pill d-none" id="contador-trabajadores">0</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card-body border-bottom py-3">
+    <div class="d-flex flex-wrap align-items-end gap-3">
+      <div style="min-width: 280px;">
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_unidad_trabajadores">
+          Unidad Organizativa
+        </label>
+        {% comment %}
+          Mismo Select2 que Unid. Org. en `contrato/add_contrato.html`: búsqueda
+          escribiendo y un solo valor. Lo inicializa `calendario.js::initSelect2`,
+          que lo rehace tras cada intercambio de HTMX —este bloque se repinta
+          entero al cambiar de unidad— y trae el puente que hace que Select2
+          dispare el `hx-get`.
+        {% endcomment %}
+        <select id="filtro_unidad_trabajadores" name="unidad" class="form-select form-select-sm select2"
+                data-placeholder="Seleccione una unidad..."
+                hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
+                hx-target="#zona_trabajadores" hx-swap="innerHTML">
+          <option value=""></option>
+          {% for unidad in unidades %}
+            <option value="{{ unidad.pk }}" {% if unidad_actual == unidad.pk|stringformat:"s" %}selected{% endif %}>
+              {{ unidad.descripcion }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if trabajadores %}
+        <small class="text-muted pb-1">
+          {{ trabajadores|length }} trabajador{{ trabajadores|length|pluralize:"es" }} activo{{ trabajadores|length|pluralize:"s" }}
+        </small>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if trabajadores %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="tabla-trabajadores">
+        <thead class="bg-lighter">
+          <tr>
+            <th style="width: 44px;" class="text-center">
+              <input type="checkbox" class="form-check-input" id="check-todos"
+                     data-todos=".check-trabajador"
+                     title="Seleccionar todos los trabajadores de la lista">
+            </th>
+            <th style="width: 110px;" class="text-uppercase">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Expediente</span>
+            </th>
+            <th class="text-uppercase">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Nombres y Apellidos</span>
+            </th>
+            <th class="text-uppercase d-none d-lg-table-cell">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Departamento</span>
+            </th>
+            <th style="width: 22%;" class="text-uppercase">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Calendario</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="trabajadores-tbody" class="table-border-bottom-0">
+          {% for contrato in trabajadores %}
+            <tr class="fila-trabajador-calendario">
+              <td class="text-center">
+                <input type="checkbox" class="form-check-input check-trabajador"
+                       name="trabajadores" value="{{ contrato.pk }}">
+              </td>
+              <td class="font-monospace text-muted">{{ contrato.no_expediente }}</td>
+              <td class="fw-semibold text-heading">
+                {{ contrato.aspirante.nombre }} {{ contrato.aspirante.papellido }} {{ contrato.aspirante.sapellido }}
+              </td>
+              <td class="text-muted d-none d-lg-table-cell">
+                {{ contrato.cargo.departamento.descripcion|default:"—" }}
+              </td>
+              <td>
+                {% if contrato.asignacion_calendario %}
+                  <span class="badge bg-label-primary rounded-pill px-3">
+                    {{ contrato.asignacion_calendario.calendario.etiqueta }}
+                  </span>
+                {% else %}
+                  <span class="badge bg-label-warning rounded-pill px-3">Sin asignar</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card-body text-center text-muted py-5">
+      <i class="fas fa-users fs-3 d-block mb-2 opacity-50"></i>
+      {% if unidad_actual %}
+        Esta unidad no tiene trabajadores activos.
+      {% else %}
+        Seleccione una Unidad Organizativa para ver sus trabajadores.
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

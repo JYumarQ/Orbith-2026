@@ -17,46 +17,104 @@
                     </div>
                     <div>
                         <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Tiempo de Trabajo</h4>
-                        <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de Horarios, Jornadas y Causas de Alta/Baja</p>
+                        <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de Nocturnidad, Condiciones Laborales y Conceptos de Pre-Nómina</p>
                     </div>
                 </div>
             </div>
 
             <div class="row g-4 m-0">
-              
-                <div class="col-lg-4 ps-0">
-                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(59, 130, 246, 0.4);">
+
+                <!-- Nocturnidad -->
+                <div class="col-lg-6 ps-0">
+                    <div class="section-card h-100 d-flex flex-column m-0">
                         <div class="card-header-flex">
                             <div class="d-flex align-items-center gap-2">
-                                <div class="icon-blue"><i class="fas fa-clock"></i></div>
-                                <div>
-                                    <h6 class="m-0 fw-bold text-slate-800">Horarios</h6>
-                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">TURNOS Y HORAS</small>
-                                </div>
+                                <div class="icon-main bg-dark text-white"><i class="fas fa-moon"></i></div>
+                                <h6 class="m-0 fw-bold text-slate-800">Nocturnidad</h6>
                             </div>
-                            <button class="btn-add-modern add-row-btn" data-table="horarios-table" title="Añadir">
-                                <i class="fas fa-plus"></i>
+                            <button class="btn-add-modern" onclick="agregarFilaNocturnidad()" title="Añadir">
+                                <i class="fas fa-plus"></i> Añadir
                             </button>
                         </div>
                         <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
-                            <table class="table-modern" id="horarios-table">
+                            <table class="table-modern" id="tabla-nocturnidad">
                                 <thead>
                                     <tr>
-                                        <th>Nombre</th>
-                                        <th class="text-center">Desde</th>
-                                        <th class="text-center">Hasta</th>
-                                        <th class="text-center" style="width: 70px;">Acción</th>
+                                        <th>Código</th>
+                                        <th class="text-center">Hora Inicio</th>
+                                        <th class="text-center">Hora Fin</th>
+                                        <th class="text-center">Horas</th>
+                                        <th class="text-center" style="width: 90px;">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for h in horarios %}
-                                    <tr data-id="{{ h.id }}">
-                                        <td class="nombre-cell">{{ h.descripcion }}</td>
-                                        <td class="text-center desde-cell font-monospace text-slate-500">{{ h.hora_inicio|time:"H:i" }}</td>
-                                        <td class="text-center hasta-cell font-monospace text-slate-500">{{ h.hora_fin|time:"H:i" }}</td>
+                                    {% for n in nocturnidades %}
+                                    <tr data-id="{{ n.pk }}">
+                                        <td class="codigo-cell fw-bold">{{ n.codigo }}</td>
+                                        <td class="inicio-cell text-center">{{ n.hora_inicio|time:"g:i A" }}</td>
+                                        <td class="fin-cell text-center">{{ n.hora_fin|time:"g:i A" }}</td>
+                                        <td class="horas-cell text-center text-primary fw-bold">{{ n.horas }}</td>
                                         <td class="text-center">
                                             <div class="d-flex justify-content-center gap-1">
-                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
+                                                <button class="btn-action-modern btn-edit-nocturnidad text-secondary" title="Editar">
+                                                    <i class="fas fa-pencil-alt"></i>
+                                                </button>
+                                                <button class="btn-action-modern delete-btn text-danger" onclick="eliminarNocturnidad({{ n.pk }})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr id="empty-nocturnidad"><td colspan="5" class="text-center text-muted py-3">No hay nocturnidades registradas</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Condiciones Laborales -->
+                <div class="col-lg-6 pe-0">
+                    <div class="section-card h-100 d-flex flex-column m-0">
+                        <div class="card-header-flex">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
+                                <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
+                            </div>
+                            <button class="btn-add-modern" onclick="agregarFilaCondicion()" title="Añadir">
+                                <i class="fas fa-plus"></i> Añadir
+                            </button>
+                        </div>
+                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+                            <table class="table-modern" id="condiciones-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre</th>
+                                        <th class="text-center">Noct.</th>
+                                        <th class="text-end">Tarifa Hora</th>
+                                        <th class="text-center" style="width: 90px;">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for c in condiciones %}
+                                    <tr data-id="{{ c.id }}">
+                                        <td class="nombre-cell">{{ c.nombre }}</td>
+                                        <td class="nocturnidad-cell text-center">
+                                            <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="{{ c.nocturnidad_id|default:'' }}" disabled>
+                                                <option value="">-</option>
+                                                {% for n in nocturnidades %}
+                                                    <option value="{{ n.pk }}" 
+                                                            {% if c.nocturnidad_id == n.pk %}selected{% endif %}
+                                                            data-codigo="{{ n.codigo }}"
+                                                            data-ocupado-por="{% if n.condicion and n.condicion.id != c.id %}{{ n.condicion.nombre }}{% endif %}">
+                                                        {{ n.codigo }}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        </td>
+                                        <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
+                                        <td class="text-center">
+                                            <div class="d-flex justify-content-center gap-1">
+                                                <button class="btn-action-modern btn-edit-condicion" title="Editar"><i class="fas fa-pencil-alt"></i></button>
                                                 <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
                                             </div>
                                         </td>
@@ -68,114 +126,10 @@
                     </div>
                 </div>
 
-                <div class="col-lg-4 px-lg-2 px-0">
-                    <div class="section-card h-100 d-flex flex-column" style="border-bottom: 4px solid rgba(245, 158, 11, 0.4);">
-                        <div class="card-header-flex">
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="icon-amber"><i class="fas fa-calendar-alt"></i></div>
-                                <div>
-                                    <h6 class="m-0 fw-bold text-slate-800">Jornadas</h6>
-                                    <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">CARGA HORARIA</small>
-                                </div>
-                            </div>
-                            <button class="btn-add-modern add-row-btn" data-table="jornadas-table" title="Añadir">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                        </div>
-                        <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
-                            <table class="table-modern" id="jornadas-table">
-                                <thead>
-                                    <tr>
-                                        <th>Nombre</th>
-                                        <th>Horas</th>
-                                        <th class="text-center" style="width: 70px;">Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for j in jornadas %}
-                                    <tr data-id="{{ j.id }}">
-                                        <td class="tipo-cell fw-bold">{{ j.tipo }}</td>
-                                        <td class="horas-cell">{{ j.horario|default:"—" }}</td>
-                                        <td class="text-center">
-                                            <div class="d-flex justify-content-center gap-1">
-                                                <button class="btn-action-modern edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                                <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                
+                {% include "pages/config/nomencladores/_5_prenomina_cards.html" %}
 
             </div>
         </div>
       </div>
     </div>
 </div>
-
-<script>
-  async function guardarHorario(row) {
-    const descripcion = row.querySelector('.input-descripcion').value.trim();
-    const desde = row.querySelector('.input-desde').value.trim();
-    const hasta = row.querySelector('.input-hasta').value.trim();
-    if (!descripcion || !desde || !hasta) return alert('Complete todos los campos');
-    try {
-      const res = await fetch("/nomencladores/api/horarios/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ descripcion, hora_inicio: desde, hora_fin: hasta })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="nombre-cell">${data.descripcion}</td>
-          <td class="text-center desde-cell">${data.hora_inicio}</td>
-          <td class="text-center hasta-cell">${data.hora_fin}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  }
-
-  async function guardarJornada(row) {
-    const tipo = row.querySelector('.input-tipo').value.trim();
-    const horas = row.querySelector('.input-horas').value.trim();
-    if (!tipo) return alert('Campo obligatorio');
-    try {
-      const res = await fetch("/nomencladores/api/jornadas/", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ tipo, horario: horas || null })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      row.outerHTML = `
-        <tr data-id="${data.id}">
-          <td class="tipo-cell">${data.tipo}</td>
-          <td class="horas-cell">${data.horario || '—'}</td>
-          <td class="text-center">
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-sm edit-btn" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-              <button class="btn btn-sm btn-eliminar delete-btn" title="Eliminar"><i class="fas fa-trash"></i></button>
-            </div>
-          </td>
-        </tr>`;
-    } catch (err) {
-      alert('Error: ' + err.message);
-    }
-  }
-
-  
-</script>

@@ -1,0 +1,76 @@
+{% comment %}
+  Cambiar la plantilla de un reporte en Borrador.
+
+  Sustituye al antiguo «Conceptos del reporte». La diferencia importante es que
+  aquí ya no se marcan conceptos sueltos: se elige una plantilla completa. Si
+  hace falta una variante, se duplica la plantilla en Mis Plantillas. Así no
+  quedan dos formas de configurar los conceptos de un reporte.
+
+  El aviso de pérdida de valores no es decorativo: `configurar_conceptos()` borra
+  los valores de los conceptos que dejen de estar, y eso es trabajo ya tecleado.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:cambiar_plantilla' reporte.pk %}"
+          hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">Plantilla del reporte</h5>
+          <small class="text-muted">
+            {{ reporte.unidad_descripcion }} — {{ reporte.periodo.etiqueta }}
+          </small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if error %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-circle-exclamation me-2 mt-1"></i>
+            <div class="small">{{ error }}</div>
+          </div>
+        {% endif %}
+
+        <label class="form-label small fw-bold text-muted" for="id_plantilla_reporte">
+          Plantilla *
+        </label>
+        <select id="id_plantilla_reporte" name="plantilla" class="form-select" required>
+          <option value="">— Seleccione —</option>
+          {% for p in plantillas %}
+            <option value="{{ p.pk }}" {% if reporte.plantilla_id == p.pk %}selected{% endif %}>
+              {{ p.descripcion }} ({{ p.total_conceptos }} conceptos)
+            </option>
+          {% empty %}
+            <option value="" disabled>No tiene ninguna plantilla</option>
+          {% endfor %}
+        </select>
+
+        <div class="alert alert-warning d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+          <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+          <div class="small">
+            Al aplicar otra plantilla se vuelven a congelar los conceptos del
+            reporte. <strong>Los valores ya introducidos en conceptos que dejen de
+            estar se pierden.</strong> Los demás se conservan.
+          </div>
+        </div>
+
+        <p class="text-muted small mt-3 mb-0">
+          ¿Necesita una variante? Duplique la plantilla en
+          <strong>Mis Plantillas</strong> y ajústela allí: así queda registrada y
+          puede reutilizarla en otros reportes.
+        </p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-sm btn-primary" {% if not plantillas %}disabled{% endif %}>
+          <i class="fas fa-save me-1"></i>Aplicar plantilla
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

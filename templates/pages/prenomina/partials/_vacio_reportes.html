@@ -1,0 +1,40 @@
+{% comment %}
+  Estado vacío del listado.
+
+  Distingue dos situaciones que no son la misma: no hay NADA todavía (y hay que
+  explicar qué es esto y por dónde empezar), o hay reportes pero el filtro los
+  esconde (y lo útil es decir cómo volver a verlos). Una sola frase gris servía
+  igual de mal para las dos.
+{% endcomment %}
+<div class="pn-vacio">
+  {% if hay_filtros %}
+    <div class="pn-vacio__icono"><i class="fas fa-filter-circle-xmark"></i></div>
+    <div class="pn-vacio__titulo">Ningún reporte coincide con el filtro</div>
+    <p class="pn-vacio__texto">
+      Pruebe con otro estado o año, o limpie la búsqueda para ver todos los
+      reportes a los que tiene acceso.
+    </p>
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            onclick="document.getElementById('search').value='';
+                     document.getElementById('filtro_estado').value='';
+                     document.getElementById('filtro_anno').value='';
+                     htmx.trigger('#search', 'recargarTabla');">
+      <i class="fas fa-rotate-left me-1"></i>Limpiar filtros
+    </button>
+  {% else %}
+    <div class="pn-vacio__icono"><i class="fas fa-money-check-dollar"></i></div>
+    <div class="pn-vacio__titulo">Todavía no hay ningún reporte de pago</div>
+    <p class="pn-vacio__texto">
+      Un reporte recoge la Pre-Nómina de una Unidad Organizativa en un mes: sus
+      trabajadores, las horas de ausencia y los pagos asociados. Al crearlo se
+      cargan solos todos los trabajadores activos de la unidad.
+    </p>
+    {% if puede_crear %}
+      <button type="button" class="btn btn-primary"
+              hx-get="{% url 'prenomina:nuevo_reporte' %}"
+              hx-target="#modal_generic" hx-swap="innerHTML">
+        <i class="fas fa-plus me-1"></i>Crear el primer reporte
+      </button>
+    {% endif %}
+  {% endif %}
+</div>

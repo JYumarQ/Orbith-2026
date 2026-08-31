@@ -1,0 +1,76 @@
+{% comment %}
+  Alta de un Calendario de Pago.
+
+  Las reglas de fecha (no duplicar año+mes, no retroceder respecto al último
+  período) las impone `servicios_calendario.crear_periodo()`; aquí solo se
+  preselecciona el mes siguiente al último como comodidad.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:nuevo_periodo' %}"
+          hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">Crear Período</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if error %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+            <div>{{ error }}</div>
+          </div>
+        {% endif %}
+
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label small fw-bold text-muted" for="id_periodo_anno">Año *</label>
+            <select id="id_periodo_anno" name="anno" class="form-select" required>
+              {% for anno in annos_disponibles %}
+                <option value="{{ anno }}"
+                        {% if valores and valores.anno == anno|stringformat:"s" %}selected
+                        {% elif not valores and sugerido and anno == sugerido.anno %}selected{% endif %}>
+                  {{ anno }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small fw-bold text-muted" for="id_periodo_mes">Mes *</label>
+            <select id="id_periodo_mes" name="mes" class="form-select" required>
+              {% for numero, nombre in meses %}
+                <option value="{{ numero }}"
+                        {% if valores and valores.mes == numero|stringformat:"s" %}selected
+                        {% elif not valores and sugerido and numero == sugerido.mes %}selected{% endif %}>
+                  {{ nombre }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="alert {% if ultimo %}alert-info{% else %}alert-success{% endif %} d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+          <i class="fas fa-circle-info me-2 mt-1"></i>
+          <div class="small">
+            {% if ultimo %}
+              El último período registrado es <strong>{{ ultimo.etiqueta }}</strong>.
+              Solo se admiten fechas posteriores que aún no existan.
+            {% else %}
+              Es su primer Calendario de Pago: puede crearlo para cualquier año y
+              mes. A partir de ahí, los siguientes deberán ser posteriores a este.
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="fas fa-plus me-1"></i>Crear Período
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

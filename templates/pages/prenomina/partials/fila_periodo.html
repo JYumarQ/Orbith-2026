@@ -1,0 +1,40 @@
+{% comment %}
+  Una línea del Calendario de Pago.
+
+  Vive en su propio parcial porque la devuelve `guardar_horas` para
+  intercambiarla entera con `hx-swap="outerHTML"`: se repinta la fila —y no solo
+  la celda— porque «Horas Mes» es calculada y tiene que reflejar el nuevo total.
+
+  Las celdas de quincena llevan `pn-celda-editable` y sus datos en `data-*`; el
+  doble clic que las convierte en input lo maneja `static/js/calendario.js`. En
+  un período cerrado esa clase no se pinta, así que el doble clic no encuentra
+  nada que abrir: el bloqueo es de marcado, no de JavaScript desactivado.
+{% endcomment %}
+<tr id="fila-detalle-{{ detalle.pk }}" class="fila-detalle" style="cursor: pointer;"
+    data-id="{{ detalle.pk }}"
+    data-quitar="{% url 'prenomina:quitar_detalle' detalle.pk %}"
+    data-descripcion="{{ detalle.descripcion_historica }}">
+
+  <td>
+    <div class="fw-bold text-heading font-monospace">{{ detalle.codigo_historico|stringformat:"02d" }}</div>
+    <small class="text-muted">{{ detalle.descripcion_historica }}</small>
+  </td>
+
+  {% if periodo.cerrado %}
+    <td class="text-end fw-semibold text-heading">{{ detalle.horas_q1|floatformat:2 }}</td>
+    <td class="text-end fw-semibold text-heading">{{ detalle.horas_q2|floatformat:2 }}</td>
+  {% else %}
+    <td class="text-end fw-semibold text-heading pn-celda-editable"
+        data-campo="horas_q1"
+        data-valor="{{ detalle.horas_q1|stringformat:'.2f' }}"
+        data-url="{% url 'prenomina:guardar_horas' detalle.pk %}"
+        title="Doble clic para editar">{{ detalle.horas_q1|floatformat:2 }}</td>
+    <td class="text-end fw-semibold text-heading pn-celda-editable"
+        data-campo="horas_q2"
+        data-valor="{{ detalle.horas_q2|stringformat:'.2f' }}"
+        data-url="{% url 'prenomina:guardar_horas' detalle.pk %}"
+        title="Doble clic para editar">{{ detalle.horas_q2|floatformat:2 }}</td>
+  {% endif %}
+
+  <td class="text-end fw-bold text-primary">{{ detalle.horas_mes|floatformat:2 }}</td>
+</tr>

@@ -1,0 +1,81 @@
+{% comment %}
+  Asignación masiva de un calendario a los trabajadores marcados en la tarjeta 3.
+
+  Los trabajadores viajan en campos ocultos, no en la URL: son decenas de
+  identificadores y una cadena de consulta tan larga es frágil. La vista vuelve
+  a filtrarlos contra el alcance del usuario antes de escribir nada.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:asignar_calendario' %}"
+          hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+      {% csrf_token %}
+      {% for pk in seleccionados %}
+        <input type="hidden" name="trabajadores" value="{{ pk }}">
+      {% endfor %}
+
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">Asignar calendario</h5>
+          <small class="text-muted">
+            {{ seleccionados|length }} trabajador{{ seleccionados|length|pluralize:"es" }} seleccionado{{ seleccionados|length|pluralize:"s" }}
+          </small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if error %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+            <div>{{ error }}</div>
+          </div>
+        {% endif %}
+
+        {% if calendarios_activos %}
+          <label class="form-label small fw-bold text-muted" for="id_calendario_asignar">
+            Calendario a asignar *
+          </label>
+          {% comment %}
+            Mismo Select2 que Cargo y Departamento en `contrato/add_contrato.html`
+            (ver `calendario.js::initSelect2`): permite escribir para filtrar, que
+            es lo que se necesita cuando el catálogo de jornadas crece.
+          {% endcomment %}
+          <select id="id_calendario_asignar" name="calendario" class="form-select select2"
+                  data-placeholder="Busque o elija una jornada..." required>
+            <option value=""></option>
+            {% for calendario in calendarios_activos %}
+              <option value="{{ calendario.pk }}">{{ calendario.etiqueta }}</option>
+            {% endfor %}
+          </select>
+
+          <div class="alert alert-info d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+            <i class="fas fa-circle-info me-2 mt-1"></i>
+            <div class="small">
+              La asignación es <strong>permanente</strong>: se mantiene hasta que
+              vuelva a cambiarla. Los reportes ya creados no se modifican, porque
+              congelan sus horas en el momento de crearse.
+            </div>
+          </div>
+        {% elif not error %}
+          <div class="alert alert-warning d-flex align-items-start p-2 mb-0" role="alert">
+            <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+            <div class="small">
+              No tiene calendarios activos. Cree uno en la tarjeta «Calendario»
+              antes de asignarlo a los trabajadores.
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        {% if calendarios_activos %}
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-calendar-check me-1"></i>Asignar
+          </button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>

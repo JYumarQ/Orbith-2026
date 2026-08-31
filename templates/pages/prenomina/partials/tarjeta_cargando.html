@@ -1,0 +1,19 @@
+{% comment %}
+  Esqueleto que ocupa el hueco de una tarjeta mientras htmx trae su contenido.
+  Sin él, el acordeón «salta» al abrirse porque las cuatro columnas nacen vacías
+  y crecen de golpe.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column placeholder-glow">
+  <div class="card-header-flex">
+    <div class="d-flex align-items-center gap-2">
+      <div class="icon-indigo"><i class="fas fa-ellipsis-h"></i></div>
+      <div>
+        <h6 class="m-0 fw-bold text-slate-800">{{ titulo }}</h6>
+        <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">CARGANDO…</small>
+      </div>
+    </div>
+  </div>
+  <span class="placeholder col-12 mb-2" style="height: 1.5rem;"></span>
+  <span class="placeholder col-9 mb-2" style="height: 1.5rem;"></span>
+  <span class="placeholder col-11" style="height: 1.5rem;"></span>
+</div>

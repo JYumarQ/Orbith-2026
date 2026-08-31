@@ -1,0 +1,191 @@
+{% comment %}
+  Tarjeta 2 — Calendario de Pago: las horas por quincena de un año+mes.
+
+  Los selects de Año y Mes no crean nada: solo eligen qué período se muestra.
+  Crear uno pasa por «Crear Período», que aplica las reglas de fecha.
+
+  Un período **cerrado** se pinta en modo consulta: sin inputs, con las horas
+  como texto y las acciones apagadas. El cierre no se hace aquí — lo dispara
+  «Cerrar» en Gestión de Reportes de Pagos, que llama a
+  `servicios_calendario.cerrar_periodo()`.
+{% endcomment %}
+<div class="card shadow-none border" id="card-periodo">
+  <div class="card-header border-bottom d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 py-3 bg-transparent">
+    <div class="d-flex align-items-center gap-3">
+      <div class="avatar avatar-md {% if periodo.cerrado %}bg-label-secondary{% else %}bg-label-primary{% endif %} rounded d-flex align-items-center justify-content-center">
+        <i class="fas {% if periodo.cerrado %}fa-lock{% else %}fa-clock{% endif %} fs-5"></i>
+      </div>
+      <div>
+        <h5 class="mb-0 fw-bold text-heading">Calendario de Pago</h5>
+        <small class="text-muted">
+          {% if periodo %}
+            {{ periodo.etiqueta }} — {% if periodo.cerrado %}solo consulta{% else %}horas laborales por quincena{% endif %}
+          {% else %}
+            Horas laborales por quincena
+          {% endif %}
+        </small>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap flex-md-nowrap align-items-center gap-3 ms-lg-auto">
+      {% comment %}
+        Solo tiene sentido con un período abierto: sin él no hay líneas que
+        quitar. Mismo marcado que la barra de la lista de contratos — sin
+        `bg-white`, que dejaba el icono invisible al pasar el ratón.
+      {% endcomment %}
+      {% if periodo and not periodo.cerrado %}
+        <div id="periodo-toolbar" class="d-flex gap-2 toolbar-disabled">
+          <button type="button" class="btn btn-sm btn-outline-danger"
+                  id="btn-quitar-detalle"
+                  title="Quitar del período el calendario seleccionado">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      {% endif %}
+
+      {% if periodo and not periodo.cerrado %}
+        <button class="btn btn-outline-danger shadow-sm text-nowrap"
+                hx-post="{% url 'prenomina:eliminar_periodo' periodo.pk %}"
+                hx-swap="none"
+                data-titulo="¿Eliminar el período?"
+                data-confirmar="Se borrará el Calendario de Pago de {{ periodo.etiqueta }} y todas sus líneas de horas.">
+          <i class="fas fa-calendar-xmark me-1"></i>Eliminar Período
+        </button>
+      {% endif %}
+
+      {% comment %}
+        `hx-include` manda el año y el mes que hay elegidos en la tarjeta, para
+        que el modal se abra ya en esa fecha en lugar de en una distinta.
+      {% endcomment %}
+      <button class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2"
+              hx-get="{% url 'prenomina:nuevo_periodo' %}"
+              hx-include="#filtro_anno, #filtro_mes"
+              hx-target="#modal_generic" hx-swap="innerHTML">
+        <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Crear Período</span>
+      </button>
+    </div>
+  </div>
+
+  {# --- Barra de selección de período --- #}
+  <div class="card-body border-bottom py-3">
+    <div class="d-flex flex-wrap align-items-end gap-3">
+      <div>
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_anno">Año</label>
+        <select id="filtro_anno" name="anno" class="form-select form-select-sm" style="width: 120px;"
+                hx-get="{% url 'prenomina:tarjeta_periodo' %}"
+                hx-target="#zona_periodo" hx-swap="innerHTML"
+                hx-include="#filtro_mes">
+          {% for anno in annos_disponibles %}
+            <option value="{{ anno }}" {% if anno == anno_actual %}selected{% endif %}>{{ anno }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_mes">Mes</label>
+        <select id="filtro_mes" name="mes" class="form-select form-select-sm" style="width: 170px;"
+                hx-get="{% url 'prenomina:tarjeta_periodo' %}"
+                hx-target="#zona_periodo" hx-swap="innerHTML"
+                hx-include="#filtro_anno">
+          {% for numero, nombre in meses %}
+            <option value="{{ numero }}" {% if numero == mes_actual %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if periodo and not periodo.cerrado %}
+        <button class="btn btn-sm btn-outline-primary"
+                hx-get="{% url 'prenomina:seleccionar_calendarios' periodo.pk %}"
+                hx-target="#modal_generic" hx-swap="innerHTML">
+          <i class="fas fa-list-check me-1"></i>Seleccionar Calendario
+        </button>
+      {% elif periodo %}
+        <button class="btn btn-sm btn-outline-secondary" disabled
+                title="No disponible en períodos cerrados">
+          <i class="fas fa-list-check me-1"></i>Seleccionar Calendario
+        </button>
+      {% endif %}
+
+      <div class="ms-auto d-flex align-items-center gap-2">
+        {% if periodo.cerrado %}
+          <span class="badge bg-label-secondary rounded-pill px-3">
+            <i class="fas fa-lock me-1"></i>Cerrado
+          </span>
+        {% elif periodo %}
+          <span class="badge bg-label-success rounded-pill px-3">Activo</span>
+          <small class="text-muted d-none d-lg-inline">Período abierto — se puede editar y eliminar</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if periodo.cerrado %}
+    <div class="alert alert-warning d-flex align-items-center gap-2 m-3 mb-0 py-2" role="alert">
+      <i class="fas fa-clock-rotate-left"></i>
+      <div class="small">
+        Mes cerrado{% if periodo.fecha_cierre %} el <strong>{{ periodo.fecha_cierre|date:"d/m/Y H:i" }}</strong>{% endif %}
+        {% if periodo.cerrado_por_nombre %} por <strong>{{ periodo.cerrado_por_nombre }}</strong>{% endif %}
+        desde Gestión de Reportes de Pagos. Los datos quedan fijados como histórico.
+      </div>
+    </div>
+  {% endif %}
+
+  {% if periodo %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="tabla-periodo">
+        <thead class="bg-lighter">
+          <tr>
+            <th class="text-uppercase">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Código</span>
+            </th>
+            <th style="width: 18%;" class="text-uppercase text-end">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Horas 1ra QNA</span>
+            </th>
+            <th style="width: 18%;" class="text-uppercase text-end">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Horas 2da QNA</span>
+            </th>
+            <th style="width: 18%;" class="text-uppercase text-end">
+              <span class="text-muted fw-semibold" style="font-size: .75rem;">Horas Mes</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="periodo-tbody" class="table-border-bottom-0">
+          {% for detalle in detalles %}
+            {% include 'pages/prenomina/partials/fila_periodo.html' %}
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-5">
+                <i class="fas fa-clock fs-3 d-block mb-2 opacity-50"></i>
+                Este período todavía no tiene calendarios.<br>
+                <small>
+                  {% if periodo.cerrado %}
+                    El período se cerró sin líneas de horas.
+                  {% else %}
+                    Use «Seleccionar Calendario» para añadir las jornadas de este mes.
+                  {% endif %}
+                </small>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer bg-transparent border-top py-2 d-flex align-items-center gap-2">
+      <i class="fas fa-circle-info text-muted"></i>
+      <small class="text-muted">
+        {% if periodo.cerrado %}
+          {{ detalles|length }} calendario{{ detalles|length|pluralize:"s" }} · período histórico, no editable.
+        {% else %}
+          «Horas Mes» se calcula sola (1ra QNA + 2da QNA) y no es editable.
+          Doble clic sobre una celda de quincena para modificarla.
+        {% endif %}
+      </small>
+    </div>
+  {% else %}
+    <div class="card-body text-center text-muted py-5">
+      <i class="fas fa-calendar-plus fs-3 d-block mb-2 opacity-50"></i>
+      No existe un Calendario de Pago para el período seleccionado.<br>
+      <small>Use «Crear Período» para abrirlo.</small>
+    </div>
+  {% endif %}
+</div>

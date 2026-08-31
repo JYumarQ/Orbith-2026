@@ -2113,7 +2113,7 @@ def exportar_contratos_excel(request):
         "Fecha Alta", "Duración (Dias)", "C. Formal", "Funcionario", "Designado",
         "Chofer Prof.", "Jubilado Recontratado", "Misión", "País Misión", "Reg. Militar",
         "Grupo Escala", "Rol", "Tridente", "Instructor", "CNCI",
-        "Carnet de Ident.", "Edad", "Sexo", "Raza", "Nivel Educacional", "Especialidad", "Título de Oro",
+        "Carnet de Ident.", "Serie CI", "Edad", "Sexo", "Raza", "Nivel Educacional", "Especialidad", "Título de Oro",
         "Grado Científico", "Provincia", "Municipio", "Dirección", "Fijo", "Movil",
         "Talla Pantalón/Falda", "Talla Camisa/Blusa", "Talla Zapatos" # <--- NUEVAS COLUMNAS
     ]
@@ -2166,7 +2166,7 @@ def exportar_contratos_excel(request):
             getattr(c.cargo.ncargo.grupo_escala, 'nivel', '') if c.cargo and c.cargo.ncargo and getattr(c.cargo.ncargo, 'grupo_escala', None) else "",
             getattr(c.rol, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
             c.instructor or 0, c.cnci or 0,
-            asp.doc_identidad, asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
+            asp.doc_identidad, asp.serie_ci or "", asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
             asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
             asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
             # El orden debe seguir la cabecera: Dirección, Fijo, Móvil.

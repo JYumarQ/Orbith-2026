@@ -1,0 +1,81 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% comment %}
+  Rejilla del reporte de pago.
+
+  Reproduce la organización visual del Excel de RRHH: cabecera de dos niveles y
+  las cinco zonas de color, con las columnas de identidad fijas y la cabecera
+  pegada, que es la adaptación web de lo que en Excel hacen los paneles
+  inmovilizados.
+
+  Al pulsar en cualquier punto de una fila se abre el modal de captura; al
+  guardar se reemplaza solo ese `<tr>`.
+{% endcomment %}
+
+{% block title %}{{ reporte.unidad_descripcion }} — {{ reporte.periodo.etiqueta }} | ORBITH{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  {% include 'pages/prenomina/partials/cabecera_reporte.html' %}
+
+  <div class="card">
+    <div class="card-body p-3">
+
+      {% if not configurado %}
+        <div class="pn-vacio">
+          <div class="pn-vacio__icono"><i class="fas fa-sliders"></i></div>
+          <div class="pn-vacio__titulo">Elija los conceptos de este mes</div>
+          <p class="pn-vacio__texto">
+            No todos los conceptos aparecen en todos los reportes. Marque las
+            claves de ausencia y los pagos asociados que RRHH vaya a utilizar en
+            {{ reporte.periodo.etiqueta }}; la selección queda congelada en el
+            reporte.
+          </p>
+          {% if puede_editar %}
+            <button type="button" class="btn btn-primary"
+                    hx-get="{% url 'prenomina:cambiar_plantilla' reporte.pk %}"
+                    hx-target="#modal_generic" hx-swap="innerHTML">
+              <i class="fas fa-table-list me-1"></i>Aplicar una plantilla
+            </button>
+          {% endif %}
+        </div>
+      {% else %}
+      {% include "pages/prenomina/partials/rejilla.html" %}
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modal_generic" role="dialog" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_generic');
+  window.orbith.cablearConfirmacionHtmx();
+
+  /* Cambios que afectan a la ESTRUCTURA de la tabla (columnas, trabajadores):
+     se recarga la pantalla, porque cambia la cabecera. */
+  document.body.addEventListener('recargarReporte', function () {
+    window.location.reload();
+  });
+
+  /* Guardar una fila NO recarga: htmx trae solo ese <tr> y lo intercambia. */
+  document.body.addEventListener('filaActualizada', function (evento) {
+    var pk = (evento.detail && evento.detail.value !== undefined)
+      ? evento.detail.value : evento.detail;
+    if (!pk) { return; }
+    htmx.ajax('GET',
+      "{% url 'prenomina:fila_trabajador' reporte.pk 0 %}".replace(/0\/$/, pk + '/'),
+      { target: '#fila-' + pk, swap: 'outerHTML' });
+  });
+</script>
+{% endblock %}

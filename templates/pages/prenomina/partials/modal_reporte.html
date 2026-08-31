@@ -1,0 +1,73 @@
+{% comment %}
+  Alta de un reporte de pago.
+
+  Mismo protocolo que el resto del proyecto: si la validación falla, la vista
+  devuelve este fragmento con los errores dentro; si va bien, devuelve 204 y los
+  `HX-Trigger` cierran el modal y recargan la tabla.
+
+  Los errores de `servicios.crear_reporte()` (duplicidad, borrador abierto,
+  unidad principal) llegan como errores de formulario, así que se pintan arriba
+  con el mismo aspecto que cualquier otro.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:nuevo_reporte' %}"
+          hx-target="#modal_generic"
+          hx-swap="innerHTML"
+          autocomplete="off">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">Nuevo reporte de pago</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+            <div>
+              {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="row g-3">
+          {% for campo in form %}
+            <div class="{% if campo.name == 'unidad' or campo.name == 'hecho_por' %}col-12{% else %}col-md-6{% endif %}">
+              <label class="form-label small fw-bold text-muted" for="{{ campo.id_for_label }}">
+                {{ campo.label }}
+              </label>
+              {{ campo }}
+              {% if campo.help_text %}
+                <div class="form-text" style="font-size: .72rem;">{{ campo.help_text }}</div>
+              {% endif %}
+              {% if campo.errors %}
+                <div class="text-danger small mt-1 fw-bold">{{ campo.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="alert alert-info d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+          <i class="fas fa-circle-info me-2 mt-1"></i>
+          <div class="small">
+            Al crear el reporte se cargarán automáticamente todos los trabajadores
+            activos de la unidad, con su salario, categoría y antigüedad
+            <strong>congelados</strong> en ese momento. Podrá quitar o volver a
+            añadir trabajadores mientras el reporte siga en Borrador.
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="fas fa-plus me-1"></i>Crear reporte
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

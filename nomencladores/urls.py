@@ -71,14 +71,8 @@ urlpatterns = [
     path('api/provincia/<int:prov_id>/municipios_tabla/', login_required(views.municipios_provincia_tabla), name='municipios_provincia_tabla'),
 
     # ---------- Tiempo de trabajo ----------
-    path('api/horarios/', admin_required(views.horario_create), name='horario_create'),
-    path('api/horarios/<int:pk>/', admin_required(views.horario_update), name='horario_update'),
-    path('api/horarios/<int:pk>/delete/', admin_required(views.horario_delete), name='horario_delete'),
-
-    path('api/jornadas/', admin_required(views.jornada_create), name='jornada_create'),
-    path('api/jornadas/<int:pk>/', admin_required(views.jornada_update), name='jornada_update'),
-    path('api/jornadas/<int:pk>/delete/', admin_required(views.jornada_delete), name='jornada_delete'),
-
+    # Las rutas de horarios y jornadas se eliminaron con sus modelos: no tenían
+    # interfaz que las llamara. El tiempo de trabajo vive en Pre-Nómina → Calendario.
     path('api/causas/', admin_required(views.causa_create), name='causa_create'),
     path('api/causas/<int:pk>/', admin_required(views.causa_update), name='causa_update'),
     path('api/causas/<int:pk>/delete/', admin_required(views.causa_delete), name='causa_delete'),

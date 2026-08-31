@@ -18,117 +18,12 @@
                         </div>
                         <div>
                             <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
-                            <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de condiciones, contratos y especialidades</p>
+                            <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de causas, contratos, especialidades y niveles de preparación</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- FILA 1: NOCTURNIDAD (50%) Y CONDICIONES LABORALES (50%) -->
-                <div class="row g-4 mb-4">
-                    <!-- Nocturnidad -->
-                    <div class="col-lg-6">
-                        <div class="section-card h-100 d-flex flex-column m-0">
-                            <div class="card-header-flex">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="icon-main bg-dark text-white"><i class="fas fa-moon"></i></div>
-                                    <h6 class="m-0 fw-bold text-slate-800">Nocturnidad</h6>
-                                </div>
-                                <button class="btn-add-modern" onclick="agregarFilaNocturnidad()" title="Añadir">
-                                    <i class="fas fa-plus"></i> Añadir
-                                </button>
-                            </div>
-                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
-                                <table class="table-modern" id="tabla-nocturnidad">
-                                    <thead>
-                                        <tr>
-                                            <th>Código</th>
-                                            <th class="text-center">Hora Inicio</th>
-                                            <th class="text-center">Hora Fin</th>
-                                            <th class="text-center">Horas</th>
-                                            <th class="text-center" style="width: 90px;">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for n in nocturnidades %}
-                                        <tr data-id="{{ n.pk }}">
-                                            <td class="codigo-cell fw-bold">{{ n.codigo }}</td>
-                                            <td class="inicio-cell text-center">{{ n.hora_inicio|time:"g:i A" }}</td>
-                                            <td class="fin-cell text-center">{{ n.hora_fin|time:"g:i A" }}</td>
-                                            <td class="horas-cell text-center text-primary fw-bold">{{ n.horas }}</td>
-                                            <td class="text-center">
-                                                <div class="d-flex justify-content-center gap-1">
-                                                    <button class="btn-action-modern btn-edit-nocturnidad text-secondary" title="Editar">
-                                                        <i class="fas fa-pencil-alt"></i>
-                                                    </button>
-                                                    <button class="btn-action-modern delete-btn text-danger" onclick="eliminarNocturnidad({{ n.pk }})" title="Eliminar"><i class="fas fa-trash"></i></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% empty %}
-                                        <tr id="empty-nocturnidad"><td colspan="5" class="text-center text-muted py-3">No hay nocturnidades registradas</td></tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Condiciones Laborales -->
-                    <div class="col-lg-6">
-                        <div class="section-card h-100 d-flex flex-column m-0">
-                            <div class="card-header-flex">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="icon-rose"><i class="fas fa-stethoscope"></i></div>
-                                    <h6 class="m-0 fw-bold text-slate-800">Condiciones Laborales</h6>
-                                </div>
-                                <button class="btn-add-modern" onclick="agregarFilaCondicion()" title="Añadir">
-                                    <i class="fas fa-plus"></i> Añadir
-                                </button>
-                            </div>
-                            <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
-                                <table class="table-modern" id="condiciones-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Nombre</th>
-                                            <th class="text-center">Noct.</th>
-                                            <th class="text-end">Tarifa Hora</th>
-                                            <th class="text-center" style="width: 90px;">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for c in condiciones %}
-                                        <tr data-id="{{ c.id }}">
-                                            <td class="nombre-cell">{{ c.nombre }}</td>
-                                            <td class="nocturnidad-cell text-center">
-                                                <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="{{ c.nocturnidad_id|default:'' }}" disabled>
-                                                    <option value="">-</option>
-                                                    {% for n in nocturnidades %}
-                                                        <option value="{{ n.pk }}" 
-                                                                {% if c.nocturnidad_id == n.pk %}selected{% endif %}
-                                                                data-codigo="{{ n.codigo }}"
-                                                                data-ocupado-por="{% if n.condicion and n.condicion.id != c.id %}{{ n.condicion.nombre }}{% endif %}">
-                                                            {{ n.codigo }}
-                                                        </option>
-                                                    {% endfor %}
-                                                </select>
-                                            </td>
-                                            <td class="text-end font-monospace">{{ c.tarifa_hora }} CUP</td>
-                                            <td class="text-center">
-                                                <div class="d-flex justify-content-center gap-1">
-                                                    <button class="btn-action-modern btn-edit-condicion" title="Editar"><i class="fas fa-pencil-alt"></i></button>
-                                                    <button class="btn-action-modern delete-btn" title="Eliminar" style="color: #f43f5e;"><i class="fas fa-trash"></i></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- FILA 2: CAUSAS ALTA/BAJA (100% ANCHO) -->
+                <!-- FILA 1: CAUSAS ALTA/BAJA (100% ANCHO) -->
                 <div class="row g-4 mb-4">
                     <div class="col-12">
                         <div class="section-card h-100 d-flex flex-column m-0">
@@ -173,7 +68,7 @@
                     </div>
                 </div>
 
-                <!-- FILA 3: ESPECIALIDADES (50%) Y NIVELES DE PREPARACIÓN (50%) -->
+                <!-- FILA 2: ESPECIALIDADES (50%) Y NIVELES DE PREPARACIÓN (50%) -->
                 <div class="row g-4 mb-4">
                     <div class="col-lg-6">
                         <div class="section-card h-100 d-flex flex-column m-0">
@@ -258,7 +153,7 @@
                     </div>
                 </div>
 
-                <!-- FILA 4: TIPOS Y MOTIVOS DE CONTRATO (50/50) -->
+                <!-- FILA 3: TIPOS Y MOTIVOS DE CONTRATO (50/50) -->
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="section-card h-100 d-flex flex-column m-0">
@@ -357,6 +252,13 @@
 <script>
     // ========================================================
     // MOTOR EXCLUSIVO PARA CONDICIONES LABORALES (4 COLUMNAS)
+    //
+    // OJO: el HTML de las tarjetas «Nocturnidad» y «Condiciones Laborales» ya
+    // NO está en este fichero: se movió al acordeón «Tiempo de Trabajo»
+    // (_3_tiempo.html). El JS se queda aquí porque ambos parciales se
+    // renderizan en la MISMA página (nomencladores_base.html los incluye a los
+    // dos), así que estos selectores siguen encontrando #tabla-nocturnidad y
+    // #condiciones-table sin cambios.
     // ========================================================
 
     // Clonador dinámico del selector de Nocturnidad

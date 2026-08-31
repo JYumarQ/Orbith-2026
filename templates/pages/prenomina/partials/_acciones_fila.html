@@ -1,0 +1,26 @@
+{% comment %}
+  Botones de editar y eliminar de una fila de nomenclador.
+
+  Sin las clases `edit-btn` / `delete-btn`, que pertenecen al JS delegado de
+  `nomencladores_base.html`.
+
+  `data-pn-confirmar` lo intercepta el `htmx:confirm` de
+  `_5_prenomina_cards.html` para mostrar el SweetAlert2 del proyecto.
+
+  Parámetros: tipo, objeto, nombre.
+{% endcomment %}
+<div class="d-flex justify-content-center gap-1">
+  <button type="button" class="btn-action-modern" title="Editar"
+          hx-get="{% url 'prenomina:editar_nomenclador' tipo objeto.pk %}"
+          hx-target="#modal_prenomina"
+          hx-swap="innerHTML">
+    <i class="fas fa-pencil-alt"></i>
+  </button>
+  <button type="button" class="btn-action-modern" title="Eliminar"
+          style="color: #f43f5e;"
+          hx-post="{% url 'prenomina:eliminar_nomenclador' tipo objeto.pk %}"
+          hx-swap="none"
+          data-pn-confirmar="Se eliminará «{{ nombre }}». Esta acción no se puede deshacer.">
+    <i class="fas fa-trash"></i>
+  </button>
+</div>

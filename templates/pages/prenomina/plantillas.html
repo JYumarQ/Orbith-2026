@@ -1,0 +1,60 @@
+{% extends 'base/base.html' %}
+{% load static %}
+
+{% comment %}
+  Pre-Nómina → Mis Plantillas.
+
+  Aquí se define QUÉ conceptos llevará un reporte; el reporte concreto —unidad,
+  período y trabajadores— se hace después desde Gestión de Reportes de Pagos.
+
+  El listado va en su propio parcial (`lista_plantillas.html`) porque se repinta
+  por HTMX tras cada alta, edición, duplicado o borrado.
+{% endcomment %}
+
+{% block title %}Mis Plantillas | ORBITH{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/nomencladores.css' %}">
+<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+
+  <div class="pn-encabezado">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="pn-titulo">Plantillas para Reporte de Pago</h1>
+        <p class="pn-subtitulo">
+          Aquí crea las plantillas que podrá emplear indistintamente para cada una
+          de sus Unidades Organizativas. Por ejemplo, puede tener una plantilla con
+          determinados conceptos y otra sin ellos, según lo que necesite cada unidad.
+        </p>
+      </div>
+      <button class="btn btn-primary shadow-sm text-nowrap d-flex align-items-center gap-2"
+              hx-get="{% url 'prenomina:nueva_plantilla' %}"
+              hx-target="#modal_generic" hx-swap="innerHTML">
+        <i class="fas fa-plus"></i>Nueva Plantilla
+      </button>
+    </div>
+  </div>
+
+  <div id="zona_plantillas"
+       hx-get="{% url 'prenomina:lista_plantillas' %}"
+       hx-trigger="recargarPlantillas from:body"
+       hx-swap="innerHTML">
+    {% include 'pages/prenomina/partials/lista_plantillas.html' %}
+  </div>
+
+</div>
+
+<div class="modal fade" id="modal_generic" role="dialog" aria-hidden="true"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'js/prenomina.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_generic');
+  window.orbith.cablearConfirmacionHtmx();
+</script>
+{% endblock %}

@@ -3,7 +3,7 @@ from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
-from .models import NCargo, NProvincia, NMunicipio, NHorario, NJornada, NCausaAltaBaja, NCondicionLaboralAnormal
+from .models import NCargo, NProvincia, NMunicipio, NCausaAltaBaja, NCondicionLaboralAnormal
 from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm, NGrupoEscalaForm, NTipoUnidadOrganizativaForm
 from django.urls import reverse_lazy
 from django.contrib import messages, admin
@@ -667,132 +667,6 @@ def municipio_delete(request, pk):
         return JsonResponse({'success': True})
     except NMunicipio.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
-
-# ---------- CRUD NHorario ----------
-@csrf_exempt
-@require_POST
-def horario_create(request):
-    import json
-    from datetime import datetime
-    from django.http import JsonResponse
-    from nomencladores.models import NHorario
-
-    data = json.loads(request.body)
-    desc = data.get('descripcion', '').strip()
-    ini  = data.get('hora_inicio', '').strip()
-    fin  = data.get('hora_fin', '').strip()
-
-    if not desc or not ini or not fin:
-        return JsonResponse({'error': 'Complete todos los campos'}, status=400)
-
-    try:
-        ini_time = datetime.strptime(ini, '%H:%M').time()
-        fin_time = datetime.strptime(fin, '%H:%M').time()
-    except ValueError:
-        return JsonResponse({'error': 'Formato de hora inválido, use HH:MM'}, status=400)
-
-    obj = NHorario.objects.create(descripcion=desc.title(),
-                                  hora_inicio=ini_time,
-                                  hora_fin=fin_time)
-    return JsonResponse({'id': obj.id,
-                         'descripcion': obj.descripcion,
-                         'hora_inicio': obj.hora_inicio.strftime('%H:%M'),
-                         'hora_fin': obj.hora_fin.strftime('%H:%M')})
-
-
-@csrf_exempt
-@require_http_methods(["PUT"])
-def horario_update(request, pk):
-    import json
-    from datetime import datetime
-    from django.http import JsonResponse
-    from django.shortcuts import get_object_or_404
-    from nomencladores.models import NHorario
-
-    obj = get_object_or_404(NHorario, pk=pk)
-    data = json.loads(request.body)
-    desc = data.get('descripcion', '').strip()
-    ini  = data.get('hora_inicio', '').strip()
-    fin  = data.get('hora_fin', '').strip()
-
-    if not desc or not ini or not fin:
-        return JsonResponse({'error': 'Complete todos los campos'}, status=400)
-
-    try:
-        ini_time = datetime.strptime(ini, '%H:%M').time()
-        fin_time = datetime.strptime(fin, '%H:%M').time()
-    except ValueError:
-        return JsonResponse({'error': 'Formato de hora inválido, use HH:MM'}, status=400)
-
-    obj.descripcion = desc.title()
-    obj.hora_inicio = ini_time
-    obj.hora_fin = fin_time
-    obj.save()
-
-    return JsonResponse({
-        'id': obj.id,
-        'descripcion': obj.descripcion,
-        # PROTECCIÓN: Si existe la hora, la formatea. Si no, devuelve null (None)
-        'hora_inicio': obj.hora_inicio.strftime('%H:%M') if obj.hora_inicio else None,
-        'hora_fin': obj.hora_fin.strftime('%H:%M') if obj.hora_fin else None
-    })
-
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def horario_delete(request, pk):
-    try:
-        horario = NHorario.objects.get(pk=pk)
-        horario.delete()
-        return JsonResponse({'success': True})
-    except NHorario.DoesNotExist:
-        return JsonResponse({'error': 'Horario no encontrado'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar: el horario está siendo usado en jornadas'}, status=409)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
-# ---------- CRUD NJornada ----------
-@csrf_exempt
-@require_POST
-def jornada_create(request):
-    data = json.loads(request.body)
-    tipo    = data.get('tipo', '').strip()
-    horario = data.get('horario', '').strip() or None
-    if not tipo:
-        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NJornada.objects.create(tipo=tipo.title(), horario_id=horario if horario else None)
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo,
-                         'horario': obj.horario.descripcion if obj.horario else None})
-
-@csrf_exempt
-@require_http_methods(["PUT"])
-def jornada_update(request, pk):
-    obj = NJornada.objects.get(pk=pk)
-    data = json.loads(request.body)
-    tipo    = data.get('tipo', '').strip()
-    horario = data.get('horario', '').strip() or None
-    if not tipo:
-        return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj.tipo = tipo.title()
-    obj.horario_id = horario if horario else None
-    obj.save()
-    return JsonResponse({'id': obj.id, 'tipo': obj.tipo,
-                         'horario': obj.horario.descripcion if obj.horario else None})
-
-
-@csrf_exempt
-@require_http_methods(["DELETE"])
-def jornada_delete(request, pk):
-    try:
-        jornada = NJornada.objects.get(pk=pk)
-        jornada.delete()
-        return JsonResponse({'success': True})
-    except NJornada.DoesNotExist:
-        return JsonResponse({'error': 'Jornada no encontrada'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar: la jornada está siendo usada en altas de personal'}, status=409)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
 
 # ---------- CRUD NCausaAltaBaja ----------
 @csrf_exempt

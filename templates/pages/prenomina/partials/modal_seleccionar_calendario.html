@@ -1,0 +1,113 @@
+{% comment %}
+  Selección múltiple de calendarios para un período.
+
+  Los inactivos aparecen atenuados y con el checkbox deshabilitado: siguen
+  visibles para que se entienda por qué no están disponibles, pero no pueden
+  entrar en un período nuevo. Los que ya están en el período se muestran ya
+  marcados y bloqueados, para que quede claro que no hace falta volver a
+  elegirlos (el servicio los ignoraría de todos modos).
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+  <div class="modal-content">
+    <form hx-post="{% url 'prenomina:seleccionar_calendarios' periodo.pk %}"
+          hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">Seleccionar Calendario</h5>
+          <small class="text-muted">{{ periodo.etiqueta }} — elija las jornadas a incluir en el período</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body p-0">
+        {% if error %}
+          <div class="alert alert-danger d-flex align-items-start p-2 m-3 mb-0" role="alert">
+            <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+            <div>{{ error }}</div>
+          </div>
+        {% endif %}
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-lighter">
+              <tr>
+                <th style="width: 44px;" class="text-center">
+                  {% comment %}
+                    `data-todos` es el contrato con `calendario.js`: marca y
+                    desmarca los checkboxes que casen con ese selector, ignorando
+                    los deshabilitados (inactivos y los ya incluidos). Se
+                    sincroniza solo, así que desmarcar uno lo desmarca también.
+                  {% endcomment %}
+                  <input type="checkbox" class="form-check-input"
+                         id="check-todos-calendarios"
+                         data-todos=".check-calendario"
+                         title="Seleccionar todos los calendarios activos">
+                </th>
+                <th style="width: 110px;" class="text-uppercase">
+                  <span class="text-muted fw-semibold" style="font-size: .75rem;">Código</span>
+                </th>
+                <th class="text-uppercase">
+                  <span class="text-muted fw-semibold" style="font-size: .75rem;">Descripción</span>
+                </th>
+                <th style="width: 130px;" class="text-uppercase text-center">
+                  <span class="text-muted fw-semibold" style="font-size: .75rem;">Estado</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody class="table-border-bottom-0">
+              {% for calendario in calendarios %}
+                <tr class="{% if not calendario.activo %}opacity-50{% endif %}">
+                  <td class="text-center">
+                    {% if calendario.pk in ya_incluidos %}
+                      <input class="form-check-input" type="checkbox" checked disabled
+                             title="Ya está en este período">
+                    {% elif calendario.activo %}
+                      <input class="form-check-input check-calendario" type="checkbox"
+                             name="calendarios" value="{{ calendario.pk }}">
+                    {% else %}
+                      <input class="form-check-input" type="checkbox" disabled
+                             title="Los calendarios inactivos no pueden seleccionarse">
+                    {% endif %}
+                  </td>
+                  <td class="fw-bold text-heading font-monospace">{{ calendario.codigo|stringformat:"02d" }}</td>
+                  <td class="fw-semibold text-heading">
+                    {{ calendario.descripcion }}
+                    {% if calendario.pk in ya_incluidos %}
+                      <small class="text-muted ms-1">(ya incluido)</small>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    {% if calendario.activo %}
+                      <span class="badge bg-label-success rounded-pill px-3">Activo</span>
+                    {% else %}
+                      <span class="badge bg-label-secondary rounded-pill px-3">Inactivo</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-5">
+                    Todavía no ha creado ningún calendario.<br>
+                    <small>Créelos primero en la tarjeta «Calendario».</small>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 px-3 py-2 bg-lighter">
+          <i class="fas fa-circle-info text-muted"></i>
+          <small class="text-muted">Los calendarios inactivos no pueden seleccionarse.</small>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sm btn-primary">Confirmar selección</button>
+      </div>
+    </form>
+  </div>
+</div>
