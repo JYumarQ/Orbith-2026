@@ -12,7 +12,6 @@
     <link rel="stylesheet" href="{% static 'css/demo.css' %}">
 
     <link rel="stylesheet" href="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}">
-    <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2-bootstrap-5-theme.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/select2-sneat-fix.css' %}"> 
@@ -137,7 +136,10 @@
         <div class="layout-page">
             {% include 'base/navbar.html' %}
             {% include 'base/scripts.html' %}
+
             
+            {% block libs_graficos %}{% endblock %}
+
             {% block content %}{% endblock %}
 
             {% include 'base/footer.html' %}

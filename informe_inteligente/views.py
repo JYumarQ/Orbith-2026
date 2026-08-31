@@ -26,6 +26,7 @@ from configuracion.models import Configuracion
 from .metadata import (
     REGISTRO_MODELOS,
     PLANTILLAS_RAPIDAS,
+    DESGLOSES_ESPECIALES_POR_MODELO,
     agrupar_campos_por_categoria,
     mapa_valor_a_etiqueta,
 )
@@ -89,6 +90,7 @@ def campos_del_modelo(request, modelo_raiz):
         "modelo_raiz": modelo_raiz,
         "categorias": agrupar_campos_por_categoria(definicion),
         "total_campos": len(definicion["campos"]),
+        "desgloses_especiales": DESGLOSES_ESPECIALES_POR_MODELO.get(modelo_raiz, []),
     }
     return render(request, "pages/informe_inteligente/partials/panel_campos.html", context)
 
@@ -121,7 +123,9 @@ def _preparar_datos_informe(request):
     )
     desgloses = []
     for key_desglose in keys_desglose:
-        filas_desglose, etiqueta = calcular_desglose(queryset, definicion_modelo, key_desglose, total_registros)
+        filas_desglose, etiqueta = calcular_desglose(
+            queryset, definicion_modelo, key_desglose, total_registros, modelo_raiz
+        )
         desgloses.append({"clave": key_desglose, "etiqueta": etiqueta, "filas": filas_desglose})
 
     campos_elegidos = [
@@ -162,6 +166,13 @@ def _construir_filas(definicion_modelo, keys_campos, objetos):
         for key in keys_campos
         if definicion_modelo["campos"][key]["tipo"] == "opcion"
     }
+    # Los campos booleanos se muestran como "Sí"/"No" (más amigable que
+    # True/False) en las 4 salidas del informe: tabla, PDF, Word y Excel.
+    traducciones.update({
+        key: {True: "Sí", False: "No"}
+        for key in keys_campos
+        if definicion_modelo["campos"][key]["tipo"] == "booleano"
+    })
 
     filas = []
     for objeto in objetos:

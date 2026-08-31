@@ -17,6 +17,7 @@ from .metadata import (
     LOOKUP_POR_OPERADOR,
     OPERADORES_MULTIVALOR,
     INDICADORES_POR_MODELO,
+    DESGLOSES_ESPECIALES_POR_MODELO,
     mapa_valor_a_etiqueta,
     valores_db_de_etiqueta,
 )
@@ -484,14 +485,61 @@ def _formatear_valor(valor, formato, sufijo=""):
     return texto + sufijo
 
 
-def calcular_desglose(queryset, definicion_modelo, key_campo, total):
+def _buscar_desglose_especial(modelo_raiz, key_campo):
+    """Busca `key_campo` entre los desgloses especiales (por suma) del
+    modelo raíz. Devuelve su especificación o None si no es uno de ellos."""
+    for spec in DESGLOSES_ESPECIALES_POR_MODELO.get(modelo_raiz, []):
+        if spec["key"] == key_campo:
+            return spec
+    return None
+
+
+def _calcular_desglose_por_suma(queryset, spec):
+    """
+    Suma un campo numérico agrupado por otro campo (ej. plazas aprobadas por
+    Unidad Organizativa), en vez de contar registros. El porcentaje de cada
+    fila se calcula sobre el total de la SUMA, no sobre la cantidad de
+    registros del queryset.
+    """
+    ruta_agrupacion = spec["ruta_agrupacion"]
+    ruta_suma = spec["ruta_suma"]
+
+    grupos = (
+        queryset
+        .values(ruta_agrupacion)
+        .annotate(cantidad=Sum(ruta_suma))
+        .order_by("-cantidad", ruta_agrupacion)
+    )
+
+    total = queryset.aggregate(total=Sum(ruta_suma))["total"] or 0
+
+    filas = [
+        {
+            "valor": grupo[ruta_agrupacion] or "Sin especificar",
+            "cantidad": grupo["cantidad"] or 0,
+            "porcentaje": round((grupo["cantidad"] or 0) * 100 / total, 1) if total else 0,
+        }
+        for grupo in grupos
+    ]
+
+    return filas, spec["label"]
+
+
+def calcular_desglose(queryset, definicion_modelo, key_campo, total, modelo_raiz=None):
     """
     Cuenta cuántos registros hay en cada valor de un campo: el "cuántos hay de
     cada tipo" que acompaña a los indicadores.
 
     Se resuelve con values(...).annotate(Count(...)), es decir, un GROUP BY real
     en PostgreSQL: Django recibe una fila por grupo, no los registros completos.
+
+    Si `key_campo` es uno de los desgloses especiales del modelo raíz (ver
+    DESGLOSES_ESPECIALES_POR_MODELO), se suma un campo en vez de contar.
     """
+    especial = _buscar_desglose_especial(modelo_raiz, key_campo)
+    if especial:
+        return _calcular_desglose_por_suma(queryset, especial)
+
     campo = _obtener_campo(definicion_modelo, key_campo)
     if not campo.get("agrupable"):
         raise ConfiguracionInformeInvalida(

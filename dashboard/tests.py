@@ -377,16 +377,81 @@ class RecordatoriosContratoTests(TestCase):
         cls.admin = CustomUser.objects.create_user(
             username='admin_recordatorios', password='x', es_admin=True)
 
-    def test_recordatorios_incluye_solo_contratos_determinados_dentro_del_horizonte(self):
-        """La tarjeta ya no repinta su propia lista (ver `dashboard/views.py`): solo
-        expone el conteo total, con el mismo criterio de siempre — el detalle vive en
-        Notificaciones → Recordatorios, a un clic de "Ver más"."""
+    def _recordatorio(self, *, unidad, titulo='Contrato por vencer', dias=30,
+                      clave=''):
+        """Un recordatorio ya materializado, que es como existen hoy.
+
+        Los recordatorios dejaron de calcularse al vuelo desde las fechas del
+        contrato: los materializa `notificaciones/recordatorios.py` como filas de
+        `Notificacion`, y tanto el Dashboard como la pestaña de Notificaciones
+        leen de ahí. Por eso el fixture crea la notificación en vez de esperar
+        que la vista la deduzca de los `CAlta`.
+        """
+        from datetime import timedelta
+
+        from django.contrib.contenttypes.models import ContentType
+        from django.utils import timezone
+
+        from notificaciones.models import Notificacion
+
+        return Notificacion.objects.create(
+            titulo=titulo, mensaje='...',
+            tipo=Notificacion.Tipo.RECORDATORIO,
+            origen=Notificacion.Origen.SISTEMA,
+            codigo_regla='REC-CONTRATO',
+            estado=Notificacion.Estado.ACTIVA,
+            fecha_objetivo=timezone.localdate() + timedelta(days=dias),
+            content_type=ContentType.objects.get_for_model(unidad),
+            object_id=str(unidad.pk),
+            unidad=unidad,
+            # `Notificacion` es unica por (objeto, destinatario, regla,
+            # clave_extra): sin variar la clave no se pueden crear dos
+            # recordatorios de la misma regla para el mismo usuario.
+            clave_extra=clave,
+            destinatario=self.admin)
+
+    def test_la_tarjeta_expone_el_conteo_de_recordatorios_visibles(self):
+        """El Dashboard ya no decide QUÉ es un recordatorio, solo los cuenta.
+
+        El criterio (horizonte, exclusión de indeterminados) vive ahora en
+        `notificaciones/recordatorios.py` y lo cubren sus propias pruebas; aquí
+        solo se protege que el Dashboard siga exponiendo `recordatorios_total` y
+        su lista, que es lo que la plantilla pinta.
+        """
+        self._recordatorio(unidad=self.unidad)
+
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('dashboard'))
 
-        # Solo `asp_por_vencer` cuenta: `asp_lejano` está fuera del horizonte de 60
-        # días y `asp_indeterminado` se excluye siempre, sea cual sea su fecha.
-        self.assertEqual(respuesta.context['recordatorios_contrato_total'], 1)
+        self.assertEqual(respuesta.context['recordatorios_total'], 1)
+        self.assertEqual(len(respuesta.context['recordatorios']), 1)
+
+    def test_la_tarjeta_solo_muestra_diez_aunque_haya_mas(self):
+        """`recordatorios_total` cuenta todos; la lista se corta en diez."""
+        for indice in range(12):
+            self._recordatorio(unidad=self.unidad, titulo=f'Recordatorio {indice}',
+                               clave=str(indice))
+
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(respuesta.context['recordatorios_total'], 12)
+        self.assertEqual(len(respuesta.context['recordatorios']), 10)
+
+    def test_los_recordatorios_se_acotan_por_la_unidad_del_dashboard(self):
+        """Mismo alcance por UO que la tarjeta de Advertencias."""
+        otra = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=self.tipo_unidad, grupo_nomina=2,
+            orden_informe=2)
+        self._recordatorio(unidad=self.unidad, titulo='De mi unidad', clave='a')
+        self._recordatorio(unidad=otra, titulo='De la otra unidad', clave='b')
+
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('dashboard'), {'uo': self.unidad.pk})
+
+        self.assertEqual(respuesta.context['recordatorios_total'], 1)
+        self.assertEqual(respuesta.context['recordatorios'][0].titulo,
+                         'De mi unidad')
 
 
 class AdvertenciasTests(TestCase):

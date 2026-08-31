@@ -1207,7 +1207,13 @@ class ContratoDesviado(BaseDepartamento):
         cls.contrato = CAlta.objects.create(
             aspirante=cls.aspirante, no_expediente='00500',
             tipo=cls.tipo_contrato, cargo=cls.cargo, tridente=cls.tridente,
-            fecha_alta=date(2026, 1, 15), tipo_salario='DIN',
+            fecha_alta=date(2026, 1, 15),
+            # `CAltaForm` la exige (contratos/forms.py), asi que tiene que estar
+            # tanto aqui como en `_datos_contrato`: si el POST la mandara y el
+            # contrato no la tuviera, los atajos de "solo cambia campos libres"
+            # la verian como un cambio mas y pedirian aprobacion.
+            fecha_alta_entidad=date(2020, 3, 1),
+            tipo_salario='DIN',
             # `rol` lo deriva del cargo la vista al guardar; se parte de otro valor a
             # propósito para comprobar que el ejecutor lo corrige igual que ella.
             rol=cls.otro_rol)
@@ -1217,6 +1223,9 @@ class ContratoDesviado(BaseDepartamento):
             'no_expediente': '00500',
             'tipo': self.tipo_contrato.pk,
             'fecha_alta': '2026-01-15',
+            # Obligatoria en `CAltaForm`. Debe coincidir con la de la fixture y
+            # no ser posterior a `fecha_alta` (lo valida `CAltaForm.clean`).
+            'fecha_alta_entidad': '2020-03-01',
             'unidad': self.unidad.pk,
             'departamento': self.departamento.pk,
             'cargo': self.cargo.pk,

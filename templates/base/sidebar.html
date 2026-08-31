@@ -16,8 +16,34 @@
 
     <div class="menu-inner-shadow"></div>
 
+    {% comment %} ==================== CÓMO SE DECIDE EL ÍTEM ACTIVO ====================
+       Regla única para toda la barra, para no repetir el fallo que tenía
+       «Administración»: NUNCA se compara con `request.resolver_match.url_name` ni
+       con `'algo' in request.path`.
+
+       - `url_name` DESCARTA el namespace: `prenomina:lista_reportes` y
+         `soporte:lista_reportes` valen los dos `"lista_reportes"`, así que estando en
+         Pre-Nómina se encendía también «Administración». Se usa `view_name`, que sí
+         lo incluye (`"soporte:lista_reportes"`).
+       - `'x' in request.path` acierta aunque la palabra aparezca en medio de otra
+         ruta. Para módulos con namespace se usa `request.resolver_match.namespace`,
+         que cubre todas sus páginas sin depender del texto de la URL.
+       - Solo `cierres` y `solicitudes` no tienen `app_name` en su `urls.py` y sí
+         tienen subpáginas que deben mantener el ítem encendido; ahí se compara el
+         PREFIJO de la ruta con `slice` (no una subcadena suelta).
+
+       Marcado de los ítems con sub-menú (Administración, Gestor de Plantilla,
+       Pre-Nómina), decisión explícita del usuario:
+       - `active` (fondo morado sólido) SOLO si la página abierta es la del propio
+         ítem padre. «Administración» no navega a ningún sitio, así que nunca la lleva.
+       - `orb-padre-activo` (solo texto e icono morados, sin fondo) si la página
+         abierta es la de un sub-ítem: mantiene visible a qué grupo perteneces sin
+         pintar dos bloques morados pegados.
+       - `abierto` siempre que se esté en cualquier página del grupo, para que el
+         acordeón aparezca desplegado.
+    {% endcomment %}
     <ul class="menu-inner py-1">
-      <li class="menu-item {%if request.resolver_match.url_name == 'dashboard' %} active {% endif %}">
+      <li class="menu-item {% if request.resolver_match.view_name == 'dashboard' %} active {% endif %}">
         <a href="{% url 'dashboard' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-home-circle"></i>
           <div data-i18n="Analytics">Dashboard</div>
@@ -26,7 +52,7 @@
 
       {% comment %} Visible para cualquier usuario autenticado: las notificaciones son
          personales (destinatario=usuario actual), no una función administrativa. {% endcomment %}
-      <li class="menu-item {% if request.resolver_match.url_name == 'lista_notificaciones' %} active {% endif %}">
+      <li class="menu-item {% if request.resolver_match.view_name == 'lista_notificaciones' %} active {% endif %}">
         <a href="{% url 'lista_notificaciones' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-bell"></i>
           <div data-i18n="Basic">Notificaciones</div>
@@ -42,7 +68,7 @@
          El Observador no la ve: el control de acceso real está en las vistas, esto
          solo evita mostrar un enlace que le devolvería 403. {% endcomment %}
       {% if user.es_admin or user.es_moderador %}
-      <li class="menu-item {% if 'subsanacion' in request.path %} active {% endif %}">
+      <li class="menu-item {% if request.resolver_match.namespace == 'subsanacion' %} active {% endif %}">
         <a href="{% url 'subsanacion:index' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-check-shield"></i>
           <div data-i18n="Basic">Subsanación</div>
@@ -62,14 +88,14 @@
             <span class="menu-header-text">Configuración</span>
           </li>
 
-          <li class="menu-item {% if request.resolver_match.url_name == 'parametros' %} active {% endif %} ">
+          <li class="menu-item {% if request.resolver_match.view_name == 'parametros' %} active {% endif %} ">
             <a href="{% url 'parametros' %}" class="menu-link">
               <i class="menu-icon tf-icons bx bx-cog"></i>
               <div data-i18n="Basic">Parámetros Generales</div>
             </a>
           </li>
 
-          <li class="menu-item {% if request.resolver_match.url_name == 'familias_cargo' %} active {% endif %} ">
+          <li class="menu-item {% if request.resolver_match.view_name == 'familias_cargo' %} active {% endif %} ">
             <a href="{% url 'familias_cargo' %}" class="menu-link">
               <i class="menu-icon tf-icons bx bx-group"></i>
               <div data-i18n="Basic">Familias de Cargos</div>
@@ -87,8 +113,16 @@
          antes «Usuarios» viviera en «Configuración», visible también para ellos: al
          moverlo aquí, un moderador deja de verlo). {% endcomment %}
       {% if user.es_admin %}
-          {# Si el usuario está en una de estas páginas, el acordeón se pinta ya abierto. #}
-          <li class="menu-item orb-acordeon-item {% if request.resolver_match.url_name == 'list_usuarios' or request.resolver_match.url_name == 'lista_reportes' or 'auditoria' in request.path %}active abierto{% endif %}"
+          {% comment %} «Administración» no tiene página propia (su enlace es
+             `javascript:void(0)`), así que NUNCA lleva `active`: solo
+             `orb-padre-activo` —texto e icono morados, sin fondo— más `abierto`.
+
+             Ojo con «Reportes de Problemas»: se compara con el `view_name` completo
+             `soporte:lista_reportes`. Antes se comparaba `url_name == 'lista_reportes'`,
+             que también es el nombre de la portada de Pre-Nómina
+             (`prenomina/urls.py`), y por eso estando en Pre-Nómina se encendía este
+             acordeón. {% endcomment %}
+          <li class="menu-item orb-acordeon-item {% if request.resolver_match.view_name == 'list_usuarios' or request.resolver_match.view_name == 'soporte:lista_reportes' or request.resolver_match.namespace == 'auditoria' %}orb-padre-activo abierto{% endif %}"
               id="menuItemAdministracion">
             <a href="javascript:void(0);" class="menu-link orb-acordeon-toggle" id="menuLinkAdministracion"
                aria-expanded="false" title="Clic para desplegar">
@@ -96,21 +130,23 @@
               <div data-i18n="Basic">Administración</div>
               <i class="bx bx-chevron-down orb-acordeon-chevron"></i>
             </a>
-            {# `data-titulo` se pinta como rótulo solo con la barra colapsada (ver CSS). #}
+             {% comment %}`data-titulo` se pinta como rótulo solo con la barra colapsada (ver CSS). {% endcomment %}
             <ul class="orb-acordeon" data-titulo="Administración">
               <li>
                 <a href="{% url 'list_usuarios' %}"
-                   class="orb-acordeon-sublink {% if request.resolver_match.url_name == 'list_usuarios' %}activo{% endif %}">
+                   class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'list_usuarios' %}activo{% endif %}">
                   <i class="bx bx-user"></i><span>Usuarios</span>
                 </a>
 
                 <a href="{% url 'soporte:lista_reportes' %}"
-                   class="orb-acordeon-sublink {% if request.resolver_match.url_name == 'lista_reportes' %}activo{% endif %}">
+                   class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'soporte:lista_reportes' %}activo{% endif %}">
                   <i class="bx bx-bug"></i><span>Reportes de Problemas</span>
                 </a>
 
+                {% comment %} `namespace` y no `view_name`: así el sub-ítem sigue encendido en el
+                   detalle de un evento, no solo en el índice. {% endcomment %}
                 <a href="{% url 'auditoria:index' %}"
-                   class="orb-acordeon-sublink {% if 'auditoria' in request.path %}activo{% endif %}">
+                   class="orb-acordeon-sublink {% if request.resolver_match.namespace == 'auditoria' %}activo{% endif %}">
                   <i class="bx bx-history"></i><span>Auditoría</span>
                 </a>
               </li>
@@ -126,7 +162,12 @@
          lo era. Va primero dentro de «Plantilla», que es a la que pertenece de
          verdad. {% endcomment %}
       {% if user.es_admin or user.es_moderador or user.es_observador or user.is_staff %}
-          <li class="menu-item gestor-plantilla-item {% if 'gestor' in request.path %} active {% endif %}" id="menuItemGestorPlantilla">
+          {% comment %} A diferencia de «Administración», este ítem SÍ tiene página
+             propia, así que lleva `active` cuando estás en ella y `orb-padre-activo`
+             cuando estás en uno de sus sub-ítems (Anexo 14, Cierres Mensuales).
+             `cierres` no declara `app_name`, por eso se compara el prefijo de la ruta
+             con `slice` en vez de `namespace`: '/cierres/' son 9 caracteres. {% endcomment %}
+          <li class="menu-item gestor-plantilla-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.view_name == 'informes_anexo:anexo14' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
             <a href="{% url 'gestor_plantilla' %}" class="menu-link" id="menuLinkGestorPlantilla" title="Clic: abrir · Doble clic: más opciones">
               <i class="menu-icon tf-icons bx bx-sitemap"></i>
               <div data-i18n="Basic">Gestor de Plantilla</div>
@@ -144,7 +185,7 @@
               {% endif %}
               {% if user.es_admin or user.es_observador %}
               <li class="gestor-plantilla-subitem">
-                <a href="{% url 'informes_anexo:anexo14' %}" class="gestor-plantilla-sublink">
+                <a href="{% url 'informes_anexo:anexo14' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14' %}activo{% endif %}">
                   <i class="bx bx-spreadsheet me-1"></i>Anexo 14
                 </a>
               </li>
@@ -165,7 +206,7 @@
               {% endcomment %}
               {% if user.es_admin or user.es_moderador %}
               <li class="gestor-plantilla-subitem">
-                <a href="{% url 'list_cierres' %}" class="gestor-plantilla-sublink">
+                <a href="{% url 'list_cierres' %}" class="gestor-plantilla-sublink {% if request.path|slice:':9' == '/cierres/' %}activo{% endif %}">
                   <i class="bx bx-calendar-check me-1"></i>Cierres Mensuales
                 </a>
               </li>
@@ -173,26 +214,26 @@
             </ul>
           </li>
       {% endif %}
-      <li class="menu-item {% if request.resolver_match.url_name == 'list_aspir' %} active {% endif %} ">
+      <li class="menu-item {% if request.resolver_match.view_name == 'list_aspir' %} active {% endif %} ">
         <a href="{% url 'list_aspir' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-user-plus"></i>
           <div data-i18n="Basic">Aspirante</div>
         </a>
       </li>
-      <li class="menu-item {% if request.resolver_match.url_name == 'list_contrato' %} active {% endif %} ">
+      <li class="menu-item {% if request.resolver_match.view_name == 'list_contrato' %} active {% endif %} ">
         <a href="{% url 'list_contrato' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-file"></i>
           <div data-i18n="Basic">Contrato</div>
         </a>
       </li>
 
-      <li class="menu-item {% if request.resolver_match.url_name == 'list_movimientos' %} active {% endif %} ">
+      <li class="menu-item {% if request.resolver_match.view_name == 'list_movimientos' %} active {% endif %} ">
         <a href="{% url 'list_movimientos' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-sync"></i> <div data-i18n="Basic">Mov. Nómina</div>
         </a>
       </li>
 
-      <li class="menu-item {% if request.resolver_match.url_name == 'list_baja' %} active {% endif %} ">
+      <li class="menu-item {% if request.resolver_match.view_name == 'list_baja' %} active {% endif %} ">
         <a href="{% url 'list_baja' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-user-minus"></i>
           <div data-i18n="Basic">Bajas</div>
@@ -202,7 +243,7 @@
       <li class="menu-header small text-uppercase">
         <span class="menu-header-text">Informes</span>
       </li>
-      <li class="menu-item {% if request.resolver_match.url_name == 'informe_economia' %} active {% endif %} ">
+      <li class="menu-item {% if request.resolver_match.view_name == 'informe_economia' %} active {% endif %} ">
         <a href="{% url 'informe_economia' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-bar-chart-alt-2"></i>
           <div data-i18n="Basic">Informes RRHH</div>
@@ -210,12 +251,74 @@
       </li>
 
       <!-- AGREGAR AQUÍ EL INFORME INTELIGENTE -->
-<li class="menu-item {% if 'informe-inteligente' in request.path or request.resolver_match.view_name == 'informe_inteligente:index' %} active {% endif %}">
+<li class="menu-item {% if request.resolver_match.namespace == 'informe_inteligente' %} active {% endif %}">
   <a href="{% url 'informe_inteligente:index' %}" class="menu-link">
     <i class="menu-icon tf-icons bx bx-analyse"></i>
     <div data-i18n="Basic">Informe Inteligente</div>
   </a>
 </li>
+
+      {% comment %} Rep. Pagos: «Rep. Pagos» es solo un separador visual de sección, como
+         «Plantilla» o «Informes».
+
+         Pre-Nómina usa el mismo acordeón genérico `.orb-acordeon` que «Administración»
+         (un solo clic despliega/repliega, ver JS y CSS de más abajo en este fichero).
+
+         El enlace de cabecera navega en la MISMA pestaña, como el resto del menú.
+         Antes llevaba `target="_blank"` para no perder la pantalla de origen al
+         abrir una rejilla de 30+ columnas, pero en el uso diario acababa dejando
+         pestañas sueltas por todas partes; se retiró a petición del usuario.
+
+         Solo Administrador y Moderador: el Observador no tiene acceso a este
+         módulo (decisión explícita, ver `prenomina/permisos.py::tiene_acceso`).
+         Ocultarlo aquí no es la única protección —las vistas también lo niegan—
+         pero evita mostrarle un enlace que le devolvería 403.
+      {% endcomment %}
+      {% if user.es_admin or user.es_moderador %}
+      <li class="menu-header small text-uppercase">
+        <span class="menu-header-text">Reporte Pagos</span>
+      </li>
+      {% comment %}
+        `active` (fondo morado) solo cuando la página abierta es la del propio
+        enlace, no cuando lo es la de un sub-ítem: si no, se pintan dos bloques
+        morados pegados —el padre y el hijo— y deja de leerse dónde se está. En ese
+        caso va `orb-padre-activo`, que solo colorea el texto y el icono.
+        `abierto` sí se pone siempre que se esté en cualquier página del módulo,
+        para que el acordeón aparezca desplegado.
+      {% endcomment %}
+      <li class="menu-item orb-acordeon-item {% if request.resolver_match.view_name == 'prenomina:lista_reportes' %}active{% elif request.resolver_match.namespace == 'prenomina' %}orb-padre-activo{% endif %} {% if request.resolver_match.namespace == 'prenomina' %}abierto{% endif %}"
+          id="menuItemPrenomina">
+        <a href="{% url 'prenomina:lista_reportes' %}" class="menu-link">
+          <i class="menu-icon tf-icons bx bx-money"></i>
+          <div data-i18n="Basic">Pre-Nómina</div>
+        </a>
+        <a href="javascript:void(0);" class="orb-acordeon-toggle orb-acordeon-toggle-btn" id="menuTogglePrenomina"
+           aria-expanded="false" title="Clic para desplegar">
+          <i class="bx bx-chevron-down orb-acordeon-chevron"></i>
+        </a>
+        <ul class="orb-acordeon" data-titulo="Pre-Nómina">
+          <li>
+             {% comment %}Las demás rutas de `prenomina/urls.py` (calendario/nuevo, tarjeta-*,
+               plantillas/<pk>/editar…) son fragmentos HTMX que no cambian la URL del
+               navegador, así que basta con el `view_name` de cada página real. {% endcomment %}
+            <a href="{% url 'prenomina:calendario' %}"
+               class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'prenomina:calendario' %}activo{% endif %}">
+              <i class="bx bx-calendar"></i><span>Calendario</span>
+            </a>
+
+            <a href="{% url 'prenomina:asignacion_trabajadores' %}"
+               class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'prenomina:asignacion_trabajadores' %}activo{% endif %}">
+              <i class="bx bx-user-check"></i><span>Asignar Calendario</span>
+            </a>
+
+            <a href="{% url 'prenomina:plantillas' %}"
+               class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'prenomina:plantillas' %}activo{% endif %}">
+              <i class="bx bx-folder"></i><span>Mis Plantillas</span>
+            </a>
+          </li>
+        </ul>
+      </li>
+      {% endif %}
 
       {% comment %} Solicitudes: el Moderador propone operaciones sensibles y el Administrador
          decide. El Observador no participa en ese flujo, así que no ve el módulo (las
@@ -225,7 +328,10 @@
       <li class="menu-header small text-uppercase">
         <span class="menu-header-text">Solicitudes</span>
       </li>
-      <li class="menu-item {% if 'solicitudes' in request.path %} active {% endif %} ">
+       {% comment %}`solicitudes` no declara `app_name`, y el ítem debe seguir encendido en el
+         detalle/edición de una solicitud: se compara el prefijo de la ruta
+         ('/solicitudes/' son 13 caracteres), no una subcadena suelta. {% endcomment %}
+      <li class="menu-item {% if request.path|slice:':13' == '/solicitudes/' %} active {% endif %} ">
         <a href="{% url 'list_solicitudes' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-clipboard"></i>
           <div data-i18n="Basic">Solicitudes</div>
@@ -372,7 +478,7 @@
             <li><hr class="dropdown-divider m-0"></li>
 
             <li>
-              {# Reutiliza el confirmador universal de base.html (form.swal-confirm) #}
+              {% comment %} Reutiliza el confirmador universal de base.html (form.swal-confirm) {% endcomment %}
               <form method="POST" action="{% url 'logout' %}" id="logout-form"
                     class="swal-confirm"
                     data-confirm-title="¿Desea cerrar sesión?"
@@ -429,6 +535,58 @@
     .menu-inner-bottom #notificacionesDropdown { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
   }
 
+  /* ============ Ítem "Pre-Nómina": enlace propio + toggle independiente ============
+     A diferencia de «Administración» (donde el único `<a>` no navega a ningún sitio y
+     por eso puede ser también el disparador del acordeón), aquí el enlace SÍ navega
+     —abre la rejilla en pestaña nueva— así que el chevron no puede vivir dentro de
+     ese mismo `<a>`: un clic en cualquier punto del enlace abriría la pestaña. Va como
+     `<a>` hermano, con su propia clase `.orb-acordeon-toggle-btn`, y comparte el
+     mecanismo genérico `.orb-acordeon-toggle` (mismo JS que «Administración») porque
+     ambos son ítems `.orb-acordeon-item`. */
+  #menuItemPrenomina.menu-item { position: relative; }
+  #menuItemPrenomina .menu-link { padding-right: 2.5rem; }
+  #menuItemPrenomina .orb-acordeon-toggle-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 2.5rem;
+    height: 2.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a1acb8;
+    cursor: pointer;
+  }
+  #menuItemPrenomina .orb-acordeon-toggle-btn:hover { color: #696cff; }
+  #menuItemPrenomina .orb-acordeon-toggle-btn .orb-acordeon-chevron { margin-left: 0; }
+  /* Barra colapsada: solo cabe el icono del enlace principal, el botón de despliegue
+     propio no tiene sitio (igual que el chevron de Administración, ver más abajo). */
+  html.menu-colapsado #menuItemPrenomina .orb-acordeon-toggle-btn { display: none; }
+
+  /* ============ Padre de un sub-menú con un hijo activo ============
+     Estado intermedio entre "nada" y `.active`, para los tres ítems que tienen
+     sub-menú (Administración, Gestor de Plantilla, Pre-Nómina).
+
+     El problema que resuelve: el tema pinta `.menu-item.active > .menu-link` con
+     fondo morado sólido, y el sub-enlace activo lleva el suyo propio
+     (`.orb-acordeon-sublink.activo`). Al marcar padre e hijo a la vez quedaban dos
+     bloques morados pegados —el hijo va justo debajo del padre— y se leían como una
+     sola mancha en lugar de como "estás aquí".
+
+     Aquí el padre solo cambia de color (texto e icono), sin fondo: la jerarquía
+     sigue visible pero el único bloque con fondo es el del hijo, que es la página
+     en la que realmente estás. Se marca con `!important` porque el selector del
+     tema para `.menu-link` es más específico que este. */
+  .menu-inner .menu-item.orb-padre-activo > .menu-link,
+  .menu-inner .menu-item.orb-padre-activo > .menu-link .menu-icon {
+    color: #696cff !important;
+    background: transparent !important;
+  }
+  .menu-inner .menu-item.orb-padre-activo > .menu-link { font-weight: 600; }
+  /* El chevron propio de Pre-Nómina vive fuera del `.menu-link` (ver más arriba),
+     así que se colorea aparte para que no quede gris junto a un rótulo morado. */
+  .menu-inner .menu-item.orb-padre-activo > .orb-acordeon-toggle-btn { color: #696cff; }
+
   /* ============ Acordeón genérico "orb-acordeon" ============
      Se usa hoy en «Administración». Es independiente a propósito del acordeón del
      Gestor de Plantilla (clases `gestor-plantilla-*`), que se queda intacto: ese ya
@@ -466,12 +624,23 @@
     display: flex;
     align-items: center;
     gap: .5rem;
-    padding: .4375rem 1rem .4375rem 2.7rem;
+    padding: .4375rem .75rem .4375rem 2.7rem;
     font-size: .8125rem;
     color: #566a7f;
     font-weight: 600;
     text-decoration: none;
+    /* Una sola línea siempre: con el rótulo y el badge «Próximamente» juntos, el
+       salto de línea hacía que unas filas midieran 54px y otras 34px, y la lista
+       perdía el ritmo vertical. Si el nombre no cabe, se recorta con puntos
+       suspensivos — que es preferible a una fila del doble de alto. */
+    white-space: nowrap;
+    min-width: 0;
   }
+  .orb-acordeon-sublink > span:not(.badge) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .orb-acordeon-sublink > i { flex: 0 0 auto; }
   .orb-acordeon-sublink:hover { color: #696cff; background: rgba(105, 108, 255, .06); }
   .orb-acordeon-sublink.activo { color: #696cff; background: rgba(105, 108, 255, .1); }
   .orb-acordeon-sublink.deshabilitado {
@@ -481,7 +650,15 @@
     font-weight: 400;
   }
   .orb-acordeon-sublink.deshabilitado:hover { background: none; color: #8895aa; }
-  .orb-acordeon-sublink .badge { margin-left: auto; }
+  /* El badge se encoge para que quepa junto al rótulo en el ancho de la barra. */
+  .orb-acordeon-sublink .badge {
+    margin-left: auto;
+    flex: 0 0 auto;
+    font-size: .6rem;
+    font-weight: 600;
+    padding: .15rem .35rem;
+    letter-spacing: 0;
+  }
 
   /* Con la barra lateral colapsada el chevron sobra (no hay sitio para él): el
      desplegable pasa a ser un panel flotante, ver el bloque «MODO COLAPSADO» al
@@ -524,6 +701,13 @@
   a.gestor-plantilla-sublink:hover {
     color: #696cff;
     background: rgba(105, 108, 255, .06);
+  }
+  /* Mismo resaltado que `.orb-acordeon-sublink.activo`: hasta ahora este acordeón no
+     marcaba en cuál de sus páginas estabas, así que abrir «Anexo 14» o «Cierres
+     Mensuales» dejaba toda la barra sin ninguna señal. */
+  a.gestor-plantilla-sublink.activo {
+    color: #696cff;
+    background: rgba(105, 108, 255, .1);
   }
 
   /* ==================== MODO COLAPSADO: SUBMENÚS FLOTANTES ====================
@@ -802,6 +986,72 @@ window.orbithMenu = (function () {
       const abierto = item.classList.toggle('abierto');
       boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
     });
+  });
+})();
+
+/* ============ Memoria del desplazamiento de la barra ============
+   Orbith navega con recarga completa: la barra no es un elemento persistente, se
+   vuelve a construir en cada página y `.menu-inner` nace siempre con scrollTop 0.
+   El efecto era que al pulsar un sub-ítem de la parte baja del menú (Pre-Nómina,
+   Cierres) la barra saltaba arriba y el ítem recién pulsado quedaba fuera de vista.
+
+   Se guarda la posición en `sessionStorage` —no `localStorage`— para que muera al
+   cerrar el navegador, igual que la sesión de Orbith
+   (`SESSION_EXPIRE_AT_BROWSER_CLOSE` en settings.py), y para que dos pestañas
+   abiertas a la vez no se pisen la posición entre ellas.
+
+   Se guarda mientras se hace scroll (no solo al salir): `pagehide` no siempre llega
+   a dispararse —al cerrar la pestaña de golpe, o si el navegador descarta la
+   página— y perder la posición justo en ese momento es lo que se quiere evitar. */
+(function () {
+  const CLAVE = 'orbith:scrollMenu';
+  const menu = document.querySelector('.menu-inner');
+  if (!menu) return;
+
+  /* La sombra superior la controla `main.js` con el evento `ps-scroll-y`, que solo
+     emite PerfectScrollbar cuando el scroll lo provoca el usuario. Al restaurar por
+     código hay que sincronizarla a mano o queda una barra desplazada sin sombra. */
+  function sincronizarSombra() {
+    const sombra = document.querySelector('.menu-inner-shadow');
+    if (sombra) sombra.style.display = menu.scrollTop > 0 ? 'block' : 'none';
+  }
+
+  function restaurar() {
+    const guardado = parseInt(sessionStorage.getItem(CLAVE), 10);
+    if (!(guardado > 0)) return;
+    /* Se acota al máximo real: el menú no mide lo mismo en todas las páginas (los
+       ítems dependen del rol y los acordeones abiertos cambian su alto), así que un
+       valor mayor que el scroll disponible dejaría la barra pegada abajo sin motivo. */
+    const maximo = menu.scrollHeight - menu.clientHeight;
+    menu.scrollTop = Math.min(guardado, Math.max(maximo, 0));
+    sincronizarSombra();
+  }
+
+  /* Dos pasadas a propósito. La primera es síncrona: este script va justo debajo del
+     `<ul>`, así que corre antes del primer pintado y no se ve ningún salto. La
+     segunda cubre el caso de que algo posterior lo reinicie —PerfectScrollbar se
+     inicializa en `main.js`, que se carga después, en `base/scripts.html`— y solo
+     actúa si la barra sigue arriba del todo, para no pisar un scroll que el usuario
+     ya haya hecho por su cuenta. */
+  restaurar();
+  window.addEventListener('load', function () {
+    if (menu.scrollTop === 0) restaurar();
+  });
+
+  /* `requestAnimationFrame` para no escribir en sessionStorage en cada uno de los
+     muchos eventos que dispara una sola rueda de ratón. */
+  let pendiente = false;
+  menu.addEventListener('scroll', function () {
+    if (pendiente) return;
+    pendiente = true;
+    window.requestAnimationFrame(function () {
+      pendiente = false;
+      sessionStorage.setItem(CLAVE, String(Math.round(menu.scrollTop)));
+    });
+  }, { passive: true });
+
+  window.addEventListener('pagehide', function () {
+    sessionStorage.setItem(CLAVE, String(Math.round(menu.scrollTop)));
   });
 })();
 </script>

@@ -4,7 +4,7 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from .models import Configuracion
 from .forms import ConfiguracionForm
-from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, NHorario, NJornada, \
+from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, \
     NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo, NNivelPreparacion, NTipoContrato, NMotivoContrato, NTipoUnidadOrganizativa, NTipoFamilia, NNocturnidad
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -58,8 +58,10 @@ class ParametrosGeneralesView(FormView):
         context['grupos_completos'] = grupos_todos
         context['provincias'] = NProvincia.objects.all()
         context['municipios'] = NMunicipio.objects.all()
-        context['horarios'] = NHorario.objects.all()
-        context['jornadas'] = NJornada.objects.all()
+        # `horarios` y `jornadas` ya no se envían: las tarjetas de Horarios y
+        # Jornadas se retiraron del acordeón «Tiempo de Trabajo». Los modelos
+        # NHorario/NJornada y su API se eliminaron después por completo — el
+        # tiempo de trabajo se gestiona en Pre-Nómina → Calendario.
         context['causas'] = NCausaAltaBaja.objects.all()
         context['condiciones'] = NCondicionLaboralAnormal.objects.all()
         context['especialidades'] = NEspecialidad.objects.all()

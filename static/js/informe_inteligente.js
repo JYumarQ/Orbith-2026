@@ -130,8 +130,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return Array.from(document.querySelectorAll('.campo-checkbox'));
     }
 
+    // Las columnas del informe (tabla y documentos exportables) se ordenan
+    // de izquierda a derecha según el orden en que el usuario marcó cada
+    // checkbox, no según el orden en que aparecen en el panel. Cada
+    // checkbox marcado guarda en qué "turno" se marcó; si se desmarca y se
+    // vuelve a marcar, pasa a ocupar el último lugar.
+    let turnoSeleccionCampos = 0;
+
+    function marcarOrdenSeleccion(cb) {
+        cb.dataset.ordenSeleccion = String(++turnoSeleccionCampos);
+    }
+
     function camposSeleccionados() {
-        return checkboxesCampos().filter(cb => cb.checked);
+        return checkboxesCampos()
+            .filter(cb => cb.checked)
+            .sort((a, b) => Number(a.dataset.ordenSeleccion || 0) - Number(b.dataset.ordenSeleccion || 0));
     }
 
     function actualizarContadorCampos() {
@@ -200,6 +213,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 select.appendChild(opcion);
             });
 
+        // Desgloses especiales (suman un campo agrupado, ej. "Plazas Aprob.
+        // por Unid. Org.") — no son columnas, así que no tienen checkbox.
+        (leerJsonEmbebido('datosDesglosesEspeciales') || []).forEach(spec => {
+            const opcion = document.createElement('option');
+            opcion.value = spec.key;
+            opcion.textContent = spec.label;
+            select.appendChild(opcion);
+        });
+
         const disponibles = Array.from(select.options).map(o => o.value);
         const aRestaurar = valoresPrevios.filter(v => disponibles.includes(v));
 
@@ -230,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('change', function (e) {
         if (e.target.classList.contains('campo-checkbox')) {
+            if (e.target.checked) marcarOrdenSeleccion(e.target);
             actualizarContadorCampos();
             refrescarSelectOrden();
         }
@@ -272,6 +295,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const fila = cb.closest('.ii-fld-check');
             if (fila && fila.style.display === 'none') return;
             cb.checked = Boolean(marcar);
+            if (cb.checked) marcarOrdenSeleccion(cb);
         });
         actualizarContadorCampos();
         refrescarSelectOrden();
@@ -732,8 +756,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const campos = configuracion.campos || [];
-        checkboxesCampos().forEach(function (cb) {
-            cb.checked = campos.includes(cb.value);
+        const todos = checkboxesCampos();
+        turnoSeleccionCampos = 0;
+        todos.forEach(function (cb) {
+            cb.checked = false;
+            delete cb.dataset.ordenSeleccion;
+        });
+        // Se marcan en el mismo orden en que vienen en `campos`, así la
+        // tabla/documentos exportables respetan el orden guardado.
+        campos.forEach(function (valor) {
+            const cb = todos.find(function (c) { return c.value === valor; });
+            if (!cb) return;  // el campo se eliminó del registro desde que se guardó
+            cb.checked = true;
+            marcarOrdenSeleccion(cb);
         });
 
         elem('listaFiltros').innerHTML = '';

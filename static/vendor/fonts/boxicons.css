@@ -2,8 +2,12 @@
   font-family: "boxicons";
   font-weight: normal;
   font-style: normal;
-  src: url("../fonts/boxicons.eot");
-  src: url("../fonts/boxicons.eot") format("embedded-opentype"), url("../fonts/boxicons.woff2") format("woff2"), url("../fonts/boxicons.woff") format("woff"), url("../fonts/boxicons.ttf") format("truetype"), url("../fonts/boxicons.svg?#boxicons") format("svg");
+  /* Estas rutas apuntaban a ../fonts/boxicons.* (sin subcarpeta), donde no hay
+     nada: los cinco ficheros viven en ../fonts/boxicons/. Eran cinco 404 en
+     cada carga de página. Los iconos se veían igual porque más abajo hay un
+     @font-face idéntico con las rutas correctas, que es el que ganaba. */
+  src: url("../fonts/boxicons/boxicons.eot");
+  src: url("../fonts/boxicons/boxicons.eot") format("embedded-opentype"), url("../fonts/boxicons/boxicons.woff2") format("woff2"), url("../fonts/boxicons/boxicons.woff") format("woff"), url("../fonts/boxicons/boxicons.ttf") format("truetype"), url("../fonts/boxicons/boxicons.svg?#boxicons") format("svg");
 }
 .bx {
   font-family: "boxicons" !important;

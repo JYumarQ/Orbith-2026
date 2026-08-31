@@ -103,18 +103,6 @@ def _opciones_motivos_contrato():
     return list(NMotivoContrato.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
 
 
-def _opciones_jornadas():
-    from nomencladores.models import NJornada
-    return list(NJornada.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
-
-
-def _opciones_condiciones_laborales_anormales():
-    # Usado por CLA y por Nocturnidad 1/2: los tres FKs de CAlta apuntan al
-    # mismo modelo NCondicionLaboralAnormal (ver contratos/models.py).
-    from nomencladores.models import NCondicionLaboralAnormal
-    return list(NCondicionLaboralAnormal.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
-
-
 def _opciones_roles():
     from nomencladores.models import NRol
     return list(NRol.objects.order_by("tipo").values_list("tipo", "tipo").distinct())
@@ -144,7 +132,12 @@ def _opciones_provincias():
 # CATEGORÍAS PARA AGRUPAR LOS CAMPOS EN LA INTERFAZ
 # ---------------------------------------------------------------------------
 # Solo afectan a cómo se presentan los checkboxes al usuario, no a la consulta.
-# El orden de este diccionario es el orden en que aparecen las columnas.
+# El orden de este diccionario (y el de cada diccionario _campos_*() dentro de
+# cada categoría) es el orden en que aparecen los checkboxes en el panel, y
+# por lo tanto el orden por defecto de las columnas. Pero si el usuario marca
+# los checkboxes en otro orden, las columnas del informe (tabla y documentos
+# exportables) respetan ESE orden de selección, no este — ver
+# camposSeleccionados() en informe_inteligente.js.
 
 CATEGORIAS_CAMPOS = {
     "trabajador": {"label": "Datos del Trabajador", "icono": "bi-person-badge-fill", "color": "violeta"},
@@ -184,6 +177,14 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": True,
         },
+        "serie_ci": {
+            "label": "Serie del Carnet",
+            "ruta_orm": "aspirante__serie_ci",
+            "tipo": "texto",
+            "categoria": "trabajador",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": True,
+        },
         "sexo": {
             "label": "Sexo",
             "ruta_orm": "aspirante__sexo",
@@ -200,15 +201,6 @@ def _campos_calta():
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
-        },
-        "estado": {
-            "label": "Estado del Aspirante",
-            "ruta_orm": "aspirante__estado",
-            "tipo": "opcion",
-            "categoria": "trabajador",
-            "filtrable": True, "ordenable": True, "agrupable": True,
-            "sensible": False,
-            "choices": [("ASPIRANTE", "Aspirante"), ("ACTIVO", "Activo"), ("BAJA", "Baja")],
         },
         "fecha_nacimiento": {
             "label": "Fecha de Nacimiento",
@@ -294,7 +286,7 @@ def _campos_calta():
             ],
         },
         "profesional": {
-            "label": "Profesional",
+            "label": "Chofer Profesional",
             "ruta_orm": "profesional",
             "tipo": "booleano",
             "categoria": "trabajador",
@@ -431,6 +423,14 @@ def _campos_calta():
         },
 
         # ---------------- DATOS DEL CONTRATO ----------------
+        "no_expediente": {
+            "label": "No. Expediente",
+            "ruta_orm": "no_expediente",
+            "tipo": "texto",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
         "tipo_contrato": {
             "label": "Tipo de Contrato",
             "ruta_orm": "tipo__descripcion",
@@ -464,14 +464,6 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
         },
-        "no_expediente": {
-            "label": "No. Expediente",
-            "ruta_orm": "no_expediente",
-            "tipo": "texto",
-            "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": False,
-            "sensible": False,
-        },
         "motivo": {
             "label": "Motivo de Contrato",
             "ruta_orm": "motivo__descripcion",
@@ -489,15 +481,6 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
         },
-        "jornada": {
-            "label": "Jornada",
-            "ruta_orm": "jornada__descripcion",
-            "tipo": "opcion",
-            "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": True,
-            "sensible": False,
-            "choices_dinamicas": _opciones_jornadas,
-        },
         "mision": {
             "label": "Misión",
             "ruta_orm": "mision",
@@ -507,47 +490,36 @@ def _campos_calta():
             "sensible": False,
         },
         "pais": {
-            "label": "País",
+            "label": "País de Misión",
             "ruta_orm": "pais",
             "tipo": "texto",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
         },
-        "en_proceso_movimiento": {
-            "label": "En Proceso de Movimiento",
-            "ruta_orm": "en_proceso_movimiento",
-            "tipo": "booleano",
+        "funcionario_res": {
+            "label": "No. Res. Funcionario",
+            "ruta_orm": "funcionario_res",
+            "tipo": "texto",
             "categoria": "contrato",
-            "filtrable": True, "ordenable": False, "agrupable": True,
+            "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
         },
-        "cla": {
-            "label": "Condición Laboral Anormal (CLA)",
-            "ruta_orm": "cla__nombre",
-            "tipo": "opcion",
+        "designado_res": {
+            "label": "No. Res. Designado",
+            "ruta_orm": "designado_res",
+            "tipo": "texto",
             "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": True,
+            "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
-            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
         },
-        "nocturnidad_1": {
-            "label": "Nocturnidad 1",
-            "ruta_orm": "nocturnidad_1__nombre",
-            "tipo": "opcion",
+        "c_formal_res": {
+            "label": "No. Res. Calif. Formal",
+            "ruta_orm": "c_formal_res",
+            "tipo": "texto",
             "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": True,
+            "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
-            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
-        },
-        "nocturnidad_2": {
-            "label": "Nocturnidad 2",
-            "ruta_orm": "nocturnidad_2__nombre",
-            "tipo": "opcion",
-            "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": True,
-            "sensible": False,
-            "choices_dinamicas": _opciones_condiciones_laborales_anormales,
         },
         "fecha_vence_lic": {
             "label": "Vencimiento de Licencia",
@@ -650,15 +622,15 @@ def _campos_cbaja():
     CBaja comparte con CAlta los mismos FKs 'aspirante' y 'cargo' (ambos
     heredan de ContratoBase), así que reutiliza casi todo el catálogo de
     CAlta. Se excluyen los campos que solo existen en CAlta (rol de pago,
-    jornada, nocturnidad, salario, vencimientos, maestrías...) y se agregan
-    los propios del proceso de baja.
+    salario, vencimientos, maestrías...) y se agregan los propios del
+    proceso de baja.
     """
     base = _campos_calta()
     solo_calta = {
         "duracion", "tipo_salario", "rol", "tridente", "maestria", "doctorado",
-        "cnci", "instructor", "jornada", "cla", "nocturnidad_1", "nocturnidad_2",
+        "cnci", "instructor",
         "fecha_vence_lic", "fecha_vence_recal", "fecha_vence_seg",
-        "jubilado_recontratado", "en_proceso_movimiento", "salario",
+        "jubilado_recontratado", "salario",
     }
     campos = {key: valor for key, valor in base.items() if key not in solo_calta}
 
@@ -881,6 +853,14 @@ def _campos_aspirante():
         "carne_identidad": {
             "label": "Carné de Identidad",
             "ruta_orm": "doc_identidad",
+            "tipo": "texto",
+            "categoria": "trabajador",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": True,
+        },
+        "serie_ci": {
+            "label": "Serie del Carnet",
+            "ruta_orm": "serie_ci",
             "tipo": "texto",
             "categoria": "trabajador",
             "filtrable": True, "ordenable": True, "agrupable": False,
@@ -1209,6 +1189,23 @@ def _campos_tmovimiento():
             "sensible": False,
         },
     }
+
+
+DESGLOSES_ESPECIALES_POR_MODELO = {
+    # Desgloses del panel de resumen que NO cuentan registros sino que suman
+    # un campo numérico agrupado (ej. plazas aprobadas por Unidad
+    # Organizativa). No corresponden a ningún campo del catálogo de columnas:
+    # solo aparecen como opción extra en el select "Desglosar Resumen Por".
+    # Ver motor.py::calcular_desglose_por_suma y views.py::_preparar_datos_informe.
+    "CargoPlantilla": [
+        {
+            "key": "plazas_por_unidad_organizativa",
+            "label": "Plazas Aprob. por Unid. Org.",
+            "ruta_agrupacion": "departamento__unidad_organizativa__descripcion",
+            "ruta_suma": "cant_aprobada",
+        },
+    ],
+}
 
 
 REGISTRO_MODELOS = {

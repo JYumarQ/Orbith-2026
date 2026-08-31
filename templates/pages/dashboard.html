@@ -2,8 +2,16 @@
 
 {% block title %}Dashboard RRHH{% endblock %}
 
-{% block content %}
 {% load static %}
+
+{% block libs_graficos %}
+  {% comment %} El Dashboard dibuja sus gráficos con ApexCharts; ya no se carga en todas
+     las páginas. Ver el bloque `libs_graficos` en base/base.html. {% endcomment %}
+  <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
+  <script src="{% static 'js/apexcharts.min.js' %}"></script>
+{% endblock %}
+
+{% block content %}
 <div class="content-wrapper">
   <div class="container-xxl flex-grow-1 container-p-y">
     

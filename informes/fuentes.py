@@ -28,6 +28,7 @@ Tres cosas que conviene entender antes de tocar esto:
 from dataclasses import dataclass, field
 from datetime import date
 
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from cierres import servicios as servicios_cierres
@@ -240,9 +241,25 @@ def _unidades_vivas():
 
 def fuente_actual(unidades_ids=None):
     """Los datos vivos, con el mismo `select_related` que ya usaban las vistas."""
+    # `count_cubiertas` es la anotación que reconoce la property
+    # `CargoPlantilla.cant_cubierta_real`, que si no lanza un COUNT (con dos joins)
+    # POR CADA CARGO dentro del bucle de abajo.
+    # Con la plantilla real de la empresa eso eran cientos de consultas por informe:
+    # es lo que hacía que «Informes RRHH» tardara segundos en producción y nada en
+    # local, donde la plantilla de prueba es diminuta. Anotado aquí, el mismo cálculo
+    # se resuelve en la ÚNICA consulta que ya se hacía.
+    #
+    # Los filtros son exactamente los de la property (contrato de aspirante ACTIVO
+    # cuyo tipo ocupa plaza oficial). No hace falta `distinct=True`: todo lo que se
+    # cruza son claves foráneas 1:1, así que ninguna fila se duplica.
     cargos_qs = (CargoPlantilla.objects
                  .select_related('departamento', 'ncargo', 'ncargo__grupo_escala')
-                 .prefetch_related('ncargo__familias'))
+                 .prefetch_related('ncargo__familias')
+                 .annotate(count_cubiertas=Count(
+                     'calta',
+                     filter=Q(calta__aspirante__estado='ACTIVO',
+                              calta__tipo__ocupa_plaza=True),
+                 )))
     contratos_qs = (CAlta.objects
                     .select_related('aspirante', 'cargo', 'cargo__departamento',
                                     'cargo__ncargo', 'cargo__ncargo__grupo_escala',
@@ -267,10 +284,15 @@ def fuente_actual(unidades_ids=None):
             cat_ocupacional=ncargo.cat_ocupacional if ncargo else '',
             puesto_clave=bool(ncargo.puesto_clave) if ncargo else False,
             grupo_escala_nivel=grupo.nivel if grupo else '',
-            familias_ids=tuple(ncargo.familias.values_list('id', flat=True)) if ncargo else (),
+            # `.all()` y no `.values_list()`: values_list NO usa la caché que deja
+            # `prefetch_related('ncargo__familias')` y volvía a consultar la base de
+            # datos una vez por cargo, desperdiciando el prefetch que ya se pedía
+            # tres líneas más arriba.
+            familias_ids=tuple(f.id for f in ncargo.familias.all()) if ncargo else (),
             cant_aprobada=cargo.cant_aprobada or 0,
-            # La property, no la columna `cant_cubierta`: es la que usan hoy los
-            # informes y la única que está siempre al día.
+            # La property, no la columna `cant_cubierta` (que puede estar
+            # desfasada). Gracias al `annotate(count_cubiertas=...)` de arriba, la
+            # property la lee de ahí y no lanza ninguna consulta.
             cant_cubierta=cargo.cant_cubierta_real,
             funcionario=bool(cargo.funcionario),
             designado=bool(cargo.designado),

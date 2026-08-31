@@ -95,7 +95,7 @@ def marcar_todas_leidas(request):
     return JsonResponse({'ok': True, 'actualizadas': actualizadas})
 
 
-def _con_enlace(notificacion, next_url=None, origen_label=None):
+def _con_enlace(notificacion, next_url=None, origen_label=None, usuario=None):
     """Anota `.enlace` (o `None`) reutilizando `subsanacion.enlaces.construir_enlace`,
     una utilidad hoja que solo resuelve una URL a partir de `content_type`/
     `object_id` — no toca `Hallazgo`, `EjecucionAnalisis` ni ninguna otra tabla de
@@ -115,7 +115,7 @@ def _con_enlace(notificacion, next_url=None, origen_label=None):
                    if notificacion.codigo_regla in ('REC-CONTRATO', 'REC-ANTIGUEDAD') else None)
     notificacion.enlace = construir_enlace(
         etiqueta, notificacion.object_id, forzar_url=forzar_url,
-        next_url=next_url, origen_label=origen_label
+        next_url=next_url, origen_label=origen_label, usuario=usuario
     ) if etiqueta else None
     return notificacion
 
@@ -142,7 +142,8 @@ def _paginar_con_enlaces(request, queryset, origen_label):
     queryset de partida, no cómo se pagina/enlaza."""
     pagina = Paginator(queryset, NOTIFICACIONES_POR_PAGINA).get_page(request.GET.get('pagina'))
     for notificacion in pagina:
-        _con_enlace(notificacion, next_url=request.get_full_path(), origen_label=origen_label)
+        _con_enlace(notificacion, next_url=request.get_full_path(), origen_label=origen_label,
+                    usuario=request.user)
     return pagina
 
 
