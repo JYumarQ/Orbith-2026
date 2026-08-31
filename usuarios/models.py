@@ -9,6 +9,17 @@ from django.db.models import Q, CheckConstraint
 
 UMBRAL_CONECTADO = timedelta(minutes=5)
 
+# --- Protección contra fuerza bruta en el inicio de sesión ---
+# Tras MAX_INTENTOS_FALLIDOS fallos dentro de VENTANA_BLOQUEO, la cuenta no admite
+# más intentos hasta que la ventana se vacía. Los valores viven aquí (y no en
+# settings) porque son una regla del módulo de usuarios, no configuración del
+# despliegue.
+MAX_INTENTOS_FALLIDOS = 10
+VENTANA_BLOQUEO = timedelta(minutes=5)
+# Cuánto se conservan los intentos ya caducados, solo como rastro para el
+# Administrador. Se purgan solos (ver `limpiar_tras_acceso_correcto`).
+RETENCION_INTENTOS = timedelta(days=30)
+
 # Create your models here.
 class CustomUser(AbstractUser):
 
@@ -169,3 +180,108 @@ class PreferenciasUsuario(models.Model):
 
     def __str__(self):
         return f"Preferencias de {self.usuario.username}"
+
+class IntentoAcceso(models.Model):
+    """Un intento de inicio de sesión FALLIDO. Solo se guardan los fallos.
+
+    Existe para frenar la fuerza bruta: antes, `/accounts/login/` admitía
+    intentos ilimitados y un script podía probar miles de contraseñas contra una
+    cuenta de Recursos Humanos sin que nada lo detuviera ni dejara rastro.
+
+    **El bloqueo se cuenta por nombre de usuario, no por IP.** La IP se guarda
+    únicamente como dato para el Administrador, porque la cabecera de la que se
+    obtiene se puede falsificar (ver `usuarios.utils.obtener_ip`) y porque, tras
+    un proxy, todas las peticiones compartirían la misma IP: bloquear por IP
+    dejaría fuera a toda la empresa de golpe.
+
+    La consecuencia conocida de contar por usuario es que alguien puede dejar
+    bloqueada la cuenta de otro fallando diez veces a propósito. Con una ventana
+    de 5 minutos la molestia es pequeña y el Administrador puede desbloquear al
+    instante (ver `desbloquear`); a cambio, ningún usuario legítimo queda fuera
+    por culpa del tráfico de un compañero.
+    """
+
+    # Se normaliza a minúsculas al escribir para que "Pedro" y "pedro" cuenten
+    # como la misma cuenta: si no, bastaría alternar mayúsculas para no llegar
+    # nunca al límite.
+    username = models.CharField(max_length=150, verbose_name="Usuario intentado")
+    ip = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP de origen")
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name="Fecha del intento")
+
+    class Meta:
+        verbose_name = "Intento de acceso fallido"
+        verbose_name_plural = "Intentos de acceso fallidos"
+        ordering = ['-fecha']
+        indexes = [
+            # El índice compuesto cubre la única consulta que se hace: los
+            # intentos de UN usuario dentro de una ventana de tiempo.
+            models.Index(fields=['username', 'fecha']),
+            models.Index(fields=['fecha']),
+        ]
+
+    def __str__(self):
+        return f'Intento fallido de «{self.username}» el {self.fecha:%d/%m/%Y %H:%M}'
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def normalizar(username):
+        return (username or '').strip().lower()[:150]
+
+    @classmethod
+    def bloqueado_hasta(cls, username):
+        """Instante en que se levanta el bloqueo, o None si la cuenta no lo está.
+
+        Es una ventana deslizante: se miran los `MAX_INTENTOS_FALLIDOS` fallos
+        más recientes y, si todos caben dentro de `VENTANA_BLOQUEO`, la cuenta
+        sigue bloqueada hasta que el más antiguo de ellos salga de la ventana.
+        Así el bloqueo se disuelve solo, sin ninguna tarea programada.
+        """
+        nombre = cls.normalizar(username)
+        if not nombre:
+            return None
+
+        desde = timezone.now() - VENTANA_BLOQUEO
+        fechas = list(
+            cls.objects.filter(username=nombre, fecha__gte=desde)
+            .order_by('-fecha')
+            .values_list('fecha', flat=True)[:MAX_INTENTOS_FALLIDOS]
+        )
+        if len(fechas) < MAX_INTENTOS_FALLIDOS:
+            return None
+        # `fechas[-1]` es el más ANTIGUO de los que se han traído.
+        return fechas[-1] + VENTANA_BLOQUEO
+
+    @classmethod
+    def registrar_fallo(cls, username, ip=None):
+        """Anota un fallo. Devuelve el objeto creado, o None si no se anotó nada.
+
+        No se anota nada si la cuenta YA está bloqueada: si cada intento durante
+        el bloqueo alargara la ventana, un usuario legítimo que reintenta a los
+        dos minutos se auto-castigaría cinco minutos más, y el bloqueo no
+        terminaría nunca mientras alguien siguiera probando.
+        """
+        nombre = cls.normalizar(username)
+        if not nombre:
+            return None
+        if cls.bloqueado_hasta(nombre):
+            return None
+        return cls.objects.create(username=nombre, ip=ip)
+
+    @classmethod
+    def limpiar_tras_acceso_correcto(cls, username):
+        """Borra los fallos de esa cuenta: ya demostró conocer su contraseña.
+
+        Aprovecha para purgar los intentos de cualquier cuenta más viejos que
+        `RETENCION_INTENTOS`. Se hace aquí porque los inicios de sesión correctos
+        son poco frecuentes (unas decenas al día) y así la tabla se mantiene sola,
+        sin depender de que alguien ejecute una tarea programada.
+        """
+        nombre = cls.normalizar(username)
+        if nombre:
+            cls.objects.filter(username=nombre).delete()
+        cls.objects.filter(fecha__lt=timezone.now() - RETENCION_INTENTOS).delete()
+
+    @classmethod
+    def desbloquear(cls, username):
+        """Levanta el bloqueo de una cuenta a mano (acción de Administrador)."""
+        return cls.objects.filter(username=cls.normalizar(username)).delete()

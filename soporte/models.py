@@ -27,6 +27,22 @@ class ReporteProblema(models.Model):
         related_name='reportes_problema',
         verbose_name="Reportado por"
     )
+    # Nombre que el usuario DECLARA tener cuando reporta desde el login, donde
+    # todavía no está autenticado. Es texto sin verificar (puede escribir
+    # cualquier cosa) y por eso NO se guarda como relación al usuario: sirve para
+    # que el Administrador sepa a quién llamar, nada más.
+    usuario_declarado = models.CharField(
+        max_length=150, blank=True, default='',
+        verbose_name="Usuario declarado (sin autenticar)"
+    )
+
+    # Solo como rastro para el Administrador. La cabecera de la que se obtiene se
+    # puede falsificar (ver `usuarios.utils.obtener_ip`), así que no se usa para
+    # decidir permisos.
+    ip_origen = models.GenericIPAddressField(
+        null=True, blank=True, verbose_name="IP de origen"
+    )
+
     mensaje = models.TextField(verbose_name="Descripción del problema")
     error_consola = models.TextField(
         blank=True,
@@ -53,8 +69,22 @@ class ReporteProblema(models.Model):
         ordering = ['-fecha_creado']
 
     def __str__(self):
-        autor = self.usuario.username if self.usuario else "Usuario eliminado"
-        return f"Reporte de {autor} ({self.get_estado_display()})"
+        return f"Reporte de {self.autor_legible} ({self.get_estado_display()})"
+
+    @property
+    def autor_legible(self):
+        """Quién lo envió, distinguiendo los tres casos posibles.
+
+        Hace falta porque `usuario` es null en DOS situaciones muy distintas: la
+        cuenta se borró después (SET_NULL), o el reporte llegó desde el login sin
+        estar autenticado. Mostrar "Usuario eliminado" en el segundo caso sería
+        sencillamente falso.
+        """
+        if self.usuario:
+            return self.usuario.username
+        if self.usuario_declarado:
+            return f"{self.usuario_declarado} (sin autenticar)"
+        return "Usuario eliminado"
 
 
 class ImagenReporteProblema(models.Model):

@@ -1,9 +1,52 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
-from .models import CustomUser, PreferenciasUsuario
+from django.utils import timezone
+import math
+
+from .models import CustomUser, IntentoAcceso, PreferenciasUsuario
 from django.contrib.auth.forms import AuthenticationForm
 from contratos.models import CAlta
 from core.validators import validar_imagen
+
+
+def validar_moderador_unico(formulario, cleaned):
+    """Una Unidad Organizativa solo puede tener UN moderador.
+
+    Regla global del negocio: un moderador puede llevar varias unidades, pero
+    cada unidad tiene un único moderador responsable (más todos los
+    administradores, que deciden sobre cualquiera de ellas por su rol y no por
+    esta relación).
+
+    Vive en una función suelta, y no en `CustomUser.clean()`, porque la relación
+    `unidades` es ManyToMany: hasta que el usuario no está guardado no hay filas
+    que consultar, así que el único punto donde se puede comprobar antes de
+    escribir es el formulario, con los datos aún en `cleaned_data`.
+    """
+    if not cleaned.get('es_moderador'):
+        return cleaned
+
+    unidades = cleaned.get('unidades')
+    if not unidades:
+        return cleaned
+
+    ocupadas = (CustomUser.objects
+                .filter(es_moderador=True, unidades__in=unidades)
+                .exclude(pk=formulario.instance.pk)
+                .values_list('unidades__descripcion', 'username')
+                .distinct())
+    # `unidades__in` cruza con TODAS las unidades del otro moderador, no solo con
+    # las del choque: hay que quedarse con las que se están intentando asignar.
+    nombres = {u.descripcion for u in unidades}
+    choques = sorted({f'{d} (ya la lleva {u})'
+                      for d, u in ocupadas if d in nombres})
+    if choques:
+        formulario.add_error(
+            'unidades',
+            'Cada Unidad Organizativa solo puede tener un moderador. '
+            'Ya tienen uno asignado: ' + '; '.join(choques) + '.')
+    return cleaned
+
+
 class CustomUserCreationForm(UserCreationForm):
 
     contrato = forms.ModelChoiceField(
@@ -50,11 +93,7 @@ class CustomUserCreationForm(UserCreationForm):
 
     def clean(self):
         cleaned = super().clean()
-    
-    #    if cleaned.get('es_admin') and cleaned.get('es_moderador'):
-     #       self.add_error('es_moderador', 'No puede ser Administrador y Moderador a la vez.')
-        
-        return cleaned
+        return validar_moderador_unico(self, cleaned)
 
 class CustomUserChangeForm(UserChangeForm):
 
@@ -99,9 +138,7 @@ class CustomUserChangeForm(UserChangeForm):
 
     def clean(self):
         cleaned = super().clean()
-    #    if cleaned.get('es_admin') and cleaned.get('es_moderador'):
-     #       self.add_error('es_moderador', 'No puede ser Administrador y Moderador a la vez.')
-        return cleaned
+        return validar_moderador_unico(self, cleaned)
 
 from django import forms
 from django.contrib.auth import get_user_model
@@ -191,12 +228,70 @@ class PreferenciasUsuarioForm(forms.ModelForm):
 
 
 class CustomAuthenticationForm(AuthenticationForm):
+    """Formulario del login de Orbith.
+
+    Añade sobre el de Django tres cosas, en este orden:
+
+    1. **Bloqueo por intentos fallidos**, ANTES de comprobar la contraseña. Si la
+       cuenta está bloqueada no se llama siquiera a `authenticate()`, así que un
+       ataque por fuerza bruta deja de consumir tiempo de servidor y de sumar
+       fallos nuevos.
+    2. Que el usuario tenga un rol asignado.
+    3. Que, si Orbith está en mantenimiento, solo entren los Administradores.
+
+    El bloqueo real lo aplica `usuarios.backends.BackendConBloqueo`, que cubre
+    también `/admin/login/`. Aquí se repite la comprobación con un único fin:
+    poder EXPLICAR al usuario por qué no entra, en lugar de dejarle con un
+    "usuario o contraseña incorrectos" que no le dice nada.
+    """
+
     error_messages = {
         'invalid_login': 'Usuario o contraseña incorrectos. Recuerde que ambos campos distinguen mayúsculas y minúsculas.',
         'inactive': 'Esta cuenta está desactivada.',
     }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Los atributos se ponen aquí, y no a mano en la plantilla, para que el
+        # formulario siga siendo la única fuente de verdad: la plantilla ya
+        # dibuja `{{ form.username }}` y `{{ form.password }}`.
+        self.fields['username'].widget.attrs.update({
+            'class': 'floating-input',
+            'placeholder': 'Usuario de red',
+            'autofocus': True,
+            # Sin esto, el teclado del móvil pone mayúscula inicial y el login
+            # falla por el mismo motivo que advierte el mensaje de error.
+            'autocapitalize': 'none',
+            'autocorrect': 'off',
+            'spellcheck': 'false',
+            # Deja que el gestor de contraseñas del navegador rellene y guarde.
+            'autocomplete': 'username',
+        })
+        self.fields['password'].widget.attrs.update({
+            'class': 'floating-input',
+            'placeholder': 'Contraseña',
+            'autocomplete': 'current-password',
+            # Lo usa el botón de "ver contraseña" de la plantilla.
+            'id': 'id_password',
+        })
+
     def clean(self):
+        username = self.cleaned_data.get('username')
+
+        if username:
+            bloqueado_hasta = IntentoAcceso.bloqueado_hasta(username)
+            if bloqueado_hasta:
+                restante = bloqueado_hasta - timezone.now()
+                minutos = max(1, math.ceil(restante.total_seconds() / 60))
+                raise ValidationError(
+                    f"Demasiados intentos fallidos. Por seguridad, esta cuenta "
+                    f"no admite más intentos durante {minutos} minuto"
+                    f"{'s' if minutos != 1 else ''}. Si no recuerda su "
+                    f"contraseña, avise al Administrador.",
+                    code='cuenta_bloqueada',
+                )
+
         cleaned_data = super().clean()
         user = self.get_user()
 

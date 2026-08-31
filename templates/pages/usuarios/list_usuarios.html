@@ -56,9 +56,13 @@
               onclick="abrir_modal_cambiar_password(this.dataset.url)" title="Cambiar Contraseña">
             <i class="fas fa-key"></i>
           </button>
-          <a class="btn btn-sm btn-outline-danger btn-eliminar" id="btn-eliminar-usuario" href="#" title="Eliminar Usuario">
+          
+          <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar"
+                  id="btn-eliminar-usuario"
+                  onclick="abrir_modal_eliminar_usuario(this.dataset.url)"
+                  title="Eliminar Usuario">
             <i class="fas fa-trash"></i>
-          </a>
+          </button>
           {% if request.user.es_admin %}
           <button type="button" class="btn btn-sm btn-outline-dark accion-no-disponible" id="btn-expulsar-sesion"
               onclick="expulsarSesion(this)" title="Expulsar Sesión" data-puede-expulsar="false">
@@ -142,6 +146,7 @@
 <div class="modal fade" id="editar_usuario" role="dialog"></div>
 <div class="modal fade" id="crear_usuario" role="dialog"></div>
 <div class="modal fade" id="cambiar_password" tabindex="-1" role="dialog" aria-hidden="true"></div>
+<div class="modal fade" id="eliminar_usuario" tabindex="-1" role="dialog" aria-hidden="true"></div>
 
 
 {% block extra_scripts %}
@@ -227,6 +232,16 @@ function showToast(message, type = 'success') {
     });
   }
 
+  /* Mismo patrón que el de contraseña. El modal decide qué enseñar: si el
+     usuario tiene unidades, plantillas o calendarios a su cargo, explica qué lo
+     impide en vez de ofrecer el botón de borrar. */
+  function abrir_modal_eliminar_usuario(url) {
+    if (!url) return;
+    $('#eliminar_usuario').load(url, function() {
+      $(this).modal('show');
+    });
+  }
+
   // ---------------------------------------------------
   // 2.1) Selección de fila y activación de la barra de acciones
   // ---------------------------------------------------
@@ -242,7 +257,7 @@ function showToast(message, type = 'success') {
 
     document.getElementById('btn-edit-usuario').setAttribute('data-url', fila.dataset.urlEditar);
     document.getElementById('btn-password-usuario').setAttribute('data-url', fila.dataset.urlPassword);
-    document.getElementById('btn-eliminar-usuario').setAttribute('href', fila.dataset.urlEliminar);
+    document.getElementById('btn-eliminar-usuario').setAttribute('data-url', fila.dataset.urlEliminar);
 
     // "Expulsar sesión": solo si la fila está conectada, no es un Administrador
     // y no es la propia fila del Administrador que está mirando la tabla. El

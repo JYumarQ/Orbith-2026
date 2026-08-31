@@ -470,7 +470,66 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
       const url = "{% url 'cambiar_password' pk=user.id %}";
       const $modal = $('#modalCambiarPasswordPropia');
       $modal.load(url, function () {
+        prepararFormularioPasswordPropia($modal);
         $modal.modal('show');
+      });
+    });
+  }
+
+  /* El formulario que sirve la vista es el mismo que usa el Administrador desde
+     el listado de usuarios, y allí se envía como un POST normal: al terminar,
+     el navegador navega a la página de destino.
+
+     Aquí NO queremos navegar a ninguna parte: el usuario está en «Mi Perfil»,
+     que es un modal sobre la página en la que estaba trabajando, y tiene que
+     seguir ahí al confirmar el cambio. Por eso lo enviamos por AJAX (la vista
+     ya responde JSON cuando detecta la cabecera X-Requested-With) y nos
+     limitamos a cerrar el modal y avisar con un toast.
+
+     Se le quita la clase `swal-confirm` para que el confirmador universal de
+     base.html no haga `form.submit()` (envío nativo) por su cuenta: la
+     confirmación la pedimos aquí antes de lanzar el fetch. */
+  function prepararFormularioPasswordPropia($modal) {
+    const form = $modal.find('#formCambiarPassword')[0];
+    if (!form) return;
+
+    const textoConfirmacion = form.dataset.confirmText || '¿Deseas continuar?';
+    form.classList.remove('swal-confirm');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      Swal.fire({
+        title: '¿Estás seguro?',
+        text: textoConfirmacion,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Confirmar',
+        cancelButtonText: 'Cancelar',
+        customClass: {
+          confirmButton: 'btn btn-primary px-4 me-2',
+          cancelButton: 'btn btn-secondary px-4'
+        },
+        buttonsStyling: false
+      }).then(resultado => {
+        if (!resultado.isConfirmed) return;
+
+        fetch(form.action, {
+          method: 'POST',
+          body: new FormData(form),
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json().then(d => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          if (!ok || !d.form_is_valid) {
+            avisar('error', 'No se pudo cambiar',
+                   d.message || 'Revisa que la contraseña cumpla los requisitos.');
+            return;
+          }
+          $modal.modal('hide');
+          avisar('success', 'Listo', d.message || 'Contraseña cambiada exitosamente.');
+        })
+        .catch(() => avisar('error', 'Error', 'No se pudo contactar con el servidor.'));
       });
     });
   }

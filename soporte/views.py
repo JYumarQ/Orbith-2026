@@ -1,6 +1,11 @@
 import logging
 
-from django.contrib.auth.decorators import login_required
+from datetime import timedelta
+
+from django.contrib.auth.decorators import login_not_required, login_required
+from django.utils import timezone
+
+from usuarios.utils import obtener_ip
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.http import JsonResponse
@@ -12,11 +17,17 @@ from usuarios.decorators import admin_required
 
 logger = logging.getLogger(__name__)
 
-from .forms import ReporteProblemaForm
+from .forms import AyudaAccesoForm, ReporteProblemaForm
 from .models import ImagenReporteProblema, ReporteProblema
 
 MAXIMO_IMAGENES = 4
 TAMANO_MAXIMO_MB_IMAGEN = 2
+
+# Límite de reportes de ayuda desde el login por IP y hora. Es la única entrada
+# de datos de Orbith abierta a quien no ha iniciado sesión, así que necesita un
+# freno: sin él, cualquiera en la red llenaría la bandeja del Administrador —y la
+# tabla— con un bucle de tres líneas.
+MAXIMO_AYUDAS_POR_IP_HORA = 3
 
 
 @login_required
@@ -139,4 +150,59 @@ def eliminar_reporte(request, pk):
     return JsonResponse({
         'exito': True,
         'mensaje': 'Reporte eliminado.',
+    })
+
+
+@login_not_required
+@require_POST
+def crear_reporte_acceso(request):
+    """Reporte enviado desde el login por quien NO consigue entrar.
+
+    Es la ÚNICA vista de Orbith que acepta datos de alguien sin autenticar, así
+    que va deliberadamente recortada frente a `crear_reporte`:
+
+    * solo dos campos de texto, **sin imágenes**: no se admite que un anónimo
+      escriba ficheros en el disco del servidor;
+    * límite de `MAXIMO_AYUDAS_POR_IP_HORA` por IP y hora, para que nadie pueda
+      inundar la bandeja del Administrador;
+    * `usuario` queda a null y el nombre tecleado se guarda en
+      `usuario_declarado`, porque no está verificado y no debe confundirse con
+      una identidad real.
+
+    Cae en la misma bandeja que el resto de reportes, marcada en `url_origen`
+    para que el Administrador vea de un vistazo que viene del login.
+
+    `@login_not_required` es imprescindible: `LoginRequiredMiddleware` (activo en
+    settings) exige sesión en todas las vistas salvo las marcadas así.
+    """
+    ip = obtener_ip(request)
+
+    if ip:
+        desde = timezone.now() - timedelta(hours=1)
+        enviados = ReporteProblema.objects.filter(
+            ip_origen=ip, usuario__isnull=True, fecha_creado__gte=desde).count()
+        if enviados >= MAXIMO_AYUDAS_POR_IP_HORA:
+            return JsonResponse({
+                'exito': False,
+                'mensaje': "Ya se enviaron varios reportes desde este equipo. "
+                           "Espere un rato o contacte directamente al Administrador.",
+            }, status=429)
+
+    form = AyudaAccesoForm(request.POST)
+    if not form.is_valid():
+        errores = [str(e) for lista in form.errors.values() for e in lista]
+        return JsonResponse({
+            'exito': False,
+            'mensaje': " ".join(errores) or "Revise el formulario.",
+        }, status=400)
+
+    reporte = form.save(commit=False)
+    reporte.usuario = None
+    reporte.ip_origen = ip
+    reporte.url_origen = 'Login — problema de acceso'
+    reporte.save()
+
+    return JsonResponse({
+        'exito': True,
+        'mensaje': 'Reporte enviado. El Administrador lo revisará y se pondrá en contacto.',
     })

@@ -1,0 +1,169 @@
+{% comment %}
+  Confirmación de borrado de un usuario.
+
+  Antes no existía: el botón de la papelera borraba con un GET directo. Ahora el
+  borrado viaja por POST —con su token CSRF— y pasa por aquí.
+
+  Tres caras, en orden de prioridad:
+
+  1. **Bloqueo por rol** (`bloqueo_rol`): un Administrador solo puede eliminarse
+     a sí mismo, y no si es el último activo. Se explica el porqué y ahí acaba:
+     no se detallan rodeos.
+  2. **Bloqueo por datos** (`impedimentos`): tiene unidades, plantillas o
+     calendarios a su cargo. Se dice qué y dónde se quita, y se ofrecen las dos
+     alternativas reales — reutilizar la cuenta o inhabilitarla.
+  3. **Sin impedimentos**: confirmación normal.
+
+  Ocultar el botón no es la protección: `CustomUserDeleteView.post()` vuelve a
+  comprobar el rol y los datos antes de borrar nada.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered {% if impedimentos %}modal-lg{% endif %}" role="document">
+  <div class="modal-content">
+
+    <div class="modal-header">
+      <div class="d-flex align-items-center gap-3">
+        <div class="avatar avatar-md {% if bloqueo_rol or impedimentos %}bg-label-warning{% else %}bg-label-danger{% endif %} rounded d-flex align-items-center justify-content-center">
+          <i class="fas {% if bloqueo_rol or impedimentos %}fa-lock{% else %}fa-trash{% endif %} fs-5"></i>
+        </div>
+        <div>
+          <h5 class="modal-title mb-0">
+            {% if bloqueo_rol or impedimentos %}
+              No se puede eliminar este usuario
+            {% elif es_propia_cuenta %}
+              Eliminar su propia cuenta
+            {% else %}
+              Eliminar usuario
+            {% endif %}
+          </h5>
+          <small class="text-muted">{{ objetivo.username }}</small>
+        </div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+
+    <div class="modal-body">
+      {% if bloqueo_rol %}
+        {# Solo el motivo. Sin caminos alternativos: es una regla, no un trámite. #}
+        <div class="alert alert-warning d-flex align-items-start p-3 mb-0" role="alert">
+          <i class="fas fa-user-shield me-2 mt-1"></i>
+          <div class="small">{{ bloqueo_rol }}</div>
+        </div>
+
+      {% elif impedimentos %}
+        <p class="small mb-3">
+          <strong>{{ objetivo.username }}</strong> tiene datos a su cargo de los
+          que dependen otras partes de Orbith:
+        </p>
+
+        <ul class="list-group list-group-flush mb-3">
+          {% for i in impedimentos %}
+            <li class="list-group-item px-0">
+              <div class="fw-bold text-heading small">{{ i.que }}</div>
+              <div class="small text-muted">{{ i.detalle }}</div>
+              <div class="small text-muted fst-italic">{{ i.donde }}</div>
+            </li>
+          {% endfor %}
+        </ul>
+
+        <div class="alert alert-info d-flex align-items-start p-3 mb-0" role="alert">
+          <i class="fas fa-lightbulb me-2 mt-1"></i>
+          <div class="small w-100">
+            <strong>¿La persona ya no trabaja en la entidad?</strong>
+            No hace falta eliminar la cuenta. Tiene dos salidas que conservan sus
+            Unidades Organizativas, plantillas y calendarios tal como están:
+            <p class="mb-1 mt-2"><strong>Reutilizarla</strong> para quien la sustituya:</p>
+            <ol class="mb-2 ps-3">
+              <li>cambiar el <strong>nombre de usuario</strong>;</li>
+              <li>asignarle una <strong>contraseña nueva</strong>;</li>
+              <li>reasignar el <strong>contrato</strong> al nuevo ocupante.</li>
+            </ol>
+            {% if puede_inhabilitar %}
+              <p class="mb-2">
+                <strong>Inhabilitarla</strong>, si nadie va a ocupar su lugar: le
+                quita el acceso y conserva su rastro en Auditoría.
+              </p>
+            {% endif %}
+
+            <div class="d-flex flex-wrap gap-2 mt-2">
+              <a href="{% url 'updt_usuario' objetivo.pk %}"
+                 class="btn btn-sm btn-primary">
+                <i class="fas fa-user-pen me-1"></i>Editar usuario
+              </a>
+              <a href="{% url 'cambiar_password' objetivo.pk %}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-key me-1"></i>Cambiar contraseña
+              </a>
+              {% if puede_inhabilitar %}
+                <form method="post" action="{% url 'inhabilitar_usuario' objetivo.pk %}"
+                      class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-warning">
+                    <i class="fas fa-user-slash me-1"></i>Inhabilitar cuenta
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+      {% else %}
+        {% if es_propia_cuenta %}
+          <div class="alert alert-danger d-flex align-items-start p-3 mb-3" role="alert">
+            <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+            <div class="small">
+              Está a punto de eliminar <strong>su propia cuenta</strong>. Al
+              confirmar se cerrará su sesión y volverá a la pantalla de acceso.
+              No podrá volver a entrar con este usuario.
+            </div>
+          </div>
+        {% endif %}
+
+        <p class="small mb-0">
+          Se eliminará la cuenta de <strong>{{ objetivo.username }}</strong>
+          {% if objetivo.email %} ({{ objetivo.email }}){% endif %}.
+          <strong>Esta acción no se puede deshacer.</strong>
+        </p>
+        <p class="small text-muted mt-2 mb-0">
+          Los reportes de pago que haya cerrado no se ven afectados: conservan
+          congelado el nombre de quien los cerró.
+        </p>
+
+        {% if puede_inhabilitar %}
+          <div class="alert alert-info d-flex align-items-start p-2 mt-3 mb-0" role="alert">
+            <i class="fas fa-lightbulb me-2 mt-1"></i>
+            <div class="small">
+              Si solo quiere retirarle el acceso, puede
+              <strong>inhabilitar la cuenta</strong> en lugar de eliminarla y así
+              conservar su rastro en Auditoría.
+            </div>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">
+        {% if bloqueo_rol or impedimentos %}Entendido{% else %}Cancelar{% endif %}
+      </button>
+
+      {% if not bloqueo_rol and not impedimentos %}
+        {% if puede_inhabilitar %}
+          <form method="post" action="{% url 'inhabilitar_usuario' objetivo.pk %}"
+                class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-warning">
+              <i class="fas fa-user-slash me-1"></i>Inhabilitar
+            </button>
+          </form>
+        {% endif %}
+        <form method="post" action="{% url 'del_usuario' objetivo.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-danger">
+            <i class="fas fa-trash me-1"></i>Eliminar
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+  </div>
+</div>

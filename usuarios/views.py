@@ -31,7 +31,8 @@ def _con_progreso(queryset):
     return queryset.annotate(progreso_completadas_count=Count('tareas_guia', distinct=True))
 from django.urls import reverse_lazy
 from django.db.models import Q
-from django.contrib.auth import get_user_model, update_session_auth_hash
+from django.contrib.auth import get_user_model, logout, update_session_auth_hash
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth.views import LoginView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -176,7 +177,32 @@ class CambiarPasswordView(LoginRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['user'] = self.get_user()
+        # Página desde la que se abrió el modal, para volver a ella al guardar.
+        # El modal se carga por AJAX desde la propia pantalla, así que el
+        # Referer de ESA petición GET es justo la página en la que está el
+        # usuario («Mi Perfil», el listado de usuarios...). Se guarda en un
+        # campo oculto porque el POST posterior es un envío normal de
+        # formulario y ahí ya no tenemos ese dato de forma fiable.
+        context['url_de_regreso'] = self._url_segura(
+            self.request.GET.get('next') or self.request.META.get('HTTP_REFERER')
+        )
         return context
+
+    def _url_segura(self, url):
+        """Devuelve `url` solo si apunta a este mismo sitio; si no, cadena vacía.
+
+        Sin esta comprobación, cualquiera podría fabricar un enlace con
+        `?next=https://sitio-malicioso/` y usar el cambio de contraseña como
+        trampolín de redirección (open redirect).
+        """
+        if not url:
+            return ''
+        es_segura = url_has_allowed_host_and_scheme(
+            url=url,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        )
+        return url if es_segura else ''
 
     def get_user(self):
         """
@@ -198,11 +224,20 @@ class CambiarPasswordView(LoginRequiredMixin, FormView):
         Si el formulario es válido, guardamos la nueva contraseña del usuario.
         """
         user = self.get_user()  # Obtén el usuario al que le cambiarás la contraseña
-        print(f"[DEBUG] Cambiando contraseña al usuario: {user.username} (ID: {user.id})")
+        es_propia_cuenta = user.pk == self.request.user.pk
+
         user.set_password(form.cleaned_data['new_password1'])  # Establecer nueva contraseña
         user.save()  # Guardar el usuario con la nueva contraseña
-        update_session_auth_hash(self.request, user)  # Mantener la sesión activa
-        
+
+        # `update_session_auth_hash` SOLO cuando uno cambia su propia contraseña.
+        # Cambiar la contraseña invalida la sesión de ese usuario, y esta llamada
+        # es la que evita que se le eche fuera. Si un Administrador cambia la
+        # contraseña de OTRO usuario y se llama igualmente, se escribe en la
+        # sesión del Administrador el hash del otro usuario y quien acaba
+        # desconectado es el propio Administrador.
+        if es_propia_cuenta:
+            update_session_auth_hash(self.request, user)
+
         messages.success(self.request, 'Contraseña cambiada exitosamente.')
 
         # Si la petición es AJAX, devolvemos una respuesta JSON
@@ -212,26 +247,255 @@ class CambiarPasswordView(LoginRequiredMixin, FormView):
                 'message': 'Contraseña cambiada exitosamente.'
             })
 
-        # Si no es AJAX, redirigimos al listado de usuarios
-        return redirect('list_usuarios')
+        return redirect(self.get_success_url())
+
+    def get_success_url(self):
+        """A dónde volver después de guardar la contraseña.
+
+        1. A la página desde la que se abrió el modal (campo oculto `next`), que
+           es lo que el usuario espera: si cambió su contraseña desde «Mi
+           Perfil», se queda en «Mi Perfil».
+        2. Si no hay `next` utilizable, se decide por rol: el Administrador va al
+           listado de usuarios (viene de ahí cuando cambia la contraseña de otro)
+           y cualquier otro usuario va al inicio.
+
+        Antes se redirigía SIEMPRE a `list_usuarios`, así que un Moderador que
+        cambiaba su propia contraseña acababa en una pantalla exclusiva de
+        Administradores.
+        """
+        destino = self._url_segura(self.request.POST.get('next'))
+        if destino:
+            return destino
+        if getattr(self.request.user, 'es_admin', False):
+            return reverse_lazy('list_usuarios')
+        return reverse_lazy('dashboard')
 
     def form_invalid(self, form):
         """
         Si el formulario no es válido, devolvemos los errores y el formulario.
+
+        Antes se llamaba a `self.render_to_string(...)`, que no existe en las
+        vistas de Django (la función es `django.template.loader.render_to_string`),
+        así que esta rama reventaba con AttributeError en vez de mostrar el error
+        de validación. Ahora se devuelven los mensajes ya montados: el modal de
+        «Mi Perfil» solo necesita el texto para el aviso.
         """
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            errores = [str(e) for lista in form.errors.values() for e in lista]
             return JsonResponse({
                 'form_is_valid': False,
-                'html_form': self.render_to_string(self.template_name, {'form': form})
+                'message': " ".join(errores) or "No se pudo cambiar la contraseña.",
+                'html_form': render_to_string(
+                    self.template_name,
+                    self.get_context_data(form=form),
+                    request=self.request,
+                ),
             }, status=400)
 
         return self.render_to_response(self.get_context_data(form=form))
 
-class CustomUserDeleteView(LoginRequiredMixin, DeleteView):
+def dependencias_del_usuario(usuario):
+    """Lo que impide borrar a un usuario, listo para explicárselo.
+
+    Devuelve una lista de `{'que', 'detalle', 'donde'}`, vacía si se puede
+    borrar. Se comprueban tres cosas, y las tres por el mismo motivo: son datos
+    **personales suyos** de los que dependen otras partes del sistema.
+
+    * **Unidades Organizativas**: cada unidad tiene un solo moderador. Borrarlo
+      dejaría a sus unidades sin responsable en silencio.
+    * **Plantillas de reporte**: si alguna se usó en un reporte de pago, la
+      clave foránea es `PROTECT` y el borrado reventaría con un error 500 en
+      lugar de una explicación. Se comprueba antes para poder dar el motivo.
+    * **Calendarios y períodos de pago**: sus asignaciones de jornada a
+      trabajadores se irían con él, y los reportes futuros de esas unidades no
+      podrían calcular las horas del mes.
+
+    Los reportes que el usuario haya cerrado NO bloquean: el nombre de quien
+    cerró está congelado en el propio reporte (`cerrado_por_nombre`), así que el
+    histórico sobrevive intacto aunque la cuenta desaparezca.
+    """
+    from prenomina.models import Calendario, CalendarioPago, PlantillaReporte
+
+    impedimentos = []
+
+    unidades = list(usuario.unidades.all()[:6])
+    total_unidades = usuario.unidades.count()
+    if total_unidades:
+        nombres = ', '.join(u.descripcion for u in unidades)
+        if total_unidades > len(unidades):
+            nombres += f' y {total_unidades - len(unidades)} más'
+        impedimentos.append({
+            'que': f'{total_unidades} Unidad'
+                   f'{"es" if total_unidades != 1 else ""} Organizativa'
+                   f'{"s" if total_unidades != 1 else ""} asignada'
+                   f'{"s" if total_unidades != 1 else ""}',
+            'detalle': nombres,
+            'donde': 'Quítelas desde «Editar usuario».',
+        })
+
+    plantillas = list(PlantillaReporte.objects.filter(usuario=usuario)[:6])
+    total_plantillas = PlantillaReporte.objects.filter(usuario=usuario).count()
+    if total_plantillas:
+        nombres = ', '.join(p.descripcion for p in plantillas)
+        if total_plantillas > len(plantillas):
+            nombres += f' y {total_plantillas - len(plantillas)} más'
+        impedimentos.append({
+            'que': f'{total_plantillas} plantilla'
+                   f'{"s" if total_plantillas != 1 else ""} de reporte',
+            'detalle': nombres,
+            'donde': 'Se gestionan en Pre-Nómina → Mis Plantillas. Las que ya se '
+                     'hayan usado en un reporte no se pueden eliminar.',
+        })
+
+    total_calendarios = Calendario.objects.filter(usuario=usuario).count()
+    total_periodos = CalendarioPago.objects.filter(usuario=usuario).count()
+    if total_calendarios or total_periodos:
+        partes = []
+        if total_calendarios:
+            partes.append(f'{total_calendarios} jornada'
+                          f'{"s" if total_calendarios != 1 else ""}')
+        if total_periodos:
+            partes.append(f'{total_periodos} Calendario'
+                          f'{"s" if total_periodos != 1 else ""} de Pago')
+        impedimentos.append({
+            'que': 'Calendarios propios',
+            'detalle': ' y '.join(partes),
+            'donde': 'Se gestionan en Pre-Nómina → Calendario.',
+        })
+
+    return impedimentos
+
+
+def bloqueo_por_rol(objetivo, actor):
+    """Motivo por el que el rol impide borrar, o `None` si no lo impide.
+
+    Dos reglas, y las dos existen para que nadie pueda dejar a otro fuera ni
+    dejar a Orbith sin quien lo administre:
+
+    * **Un administrador solo puede eliminar su propia cuenta.** Entre iguales,
+      nadie decide por otro: si un administrador debe irse, lo hace él mismo.
+    * **No se borra al último administrador activo.** Sin ninguno, nadie podría
+      volver a entrar a administrar y la única salida sería crear un superusuario
+      por consola.
+
+    El mensaje del primer caso dice lo que NO se puede hacer y por qué, sin
+    explicar rodeos: quien tenga que darle una vuelta, la encontrará.
+    """
+    if objetivo.es_admin and objetivo.pk != actor.pk:
+        return ('Un usuario Administrador solo puede eliminar su propia cuenta. '
+                'No es posible eliminar la cuenta de otro Administrador.')
+
+    if objetivo.es_admin:
+        quedan = (CustomUser.objects
+                  .filter(es_admin=True, is_active=True)
+                  .exclude(pk=objetivo.pk).count())
+        if not quedan:
+            return ('Es el único Administrador activo de Orbith. Si elimina su '
+                    'cuenta nadie podría volver a administrar el sistema. '
+                    'Nombre antes a otro Administrador.')
+
+    return None
+
+
+@admin_required
+@require_POST
+def inhabilitar_usuario(request, pk):
+    """Desactiva una cuenta en lugar de borrarla.
+
+    Es la alternativa que se ofrece cuando el borrado está bloqueado: conserva
+    las unidades, plantillas y calendarios del usuario —y su rastro en
+    Auditoría— pero le quita el acceso, que casi siempre es lo que se buscaba.
+
+    No se admite sobre un Administrador: dejar fuera a un igual sin su
+    consentimiento es justo lo que impide `bloqueo_por_rol`, y permitirlo aquí
+    sería la misma puerta por otro lado.
+    """
+    usuario = get_object_or_404(CustomUser, pk=pk)
+
+    if usuario.es_admin:
+        messages.error(request,
+                       'No se puede inhabilitar la cuenta de un Administrador.')
+        return redirect('list_usuarios')
+
+    if not usuario.is_active:
+        messages.info(request, f'La cuenta de «{usuario.username}» ya estaba inhabilitada.')
+        return redirect('list_usuarios')
+
+    usuario.is_active = False
+    usuario.save(update_fields=['is_active'])
+    messages.success(
+        request,
+        f'Cuenta de «{usuario.username}» inhabilitada. Sus Unidades '
+        f'Organizativas, plantillas y calendarios se conservan.')
+    return redirect('list_usuarios')
+
+
+class CustomUserDeleteView(LoginRequiredMixin, View):
+    """Confirmación y borrado de un usuario.
+
+    Antes esto era un `DeleteView` cuyo `get()` borraba directamente. Eran tres
+    problemas a la vez, y el primero era de seguridad:
+
+    * **un GET destruía datos**: Django no protege los GET con CSRF, así que
+      bastaba un enlace o una imagen apuntando a esa URL para borrar una cuenta
+      con la sesión de un administrador abierta;
+    * no había ninguna confirmación, de modo que un clic en la papelera bastaba;
+    * no se comprobaba nada de lo que colgaba del usuario.
+
+    Ahora `GET` solo pinta el modal y el borrado viaja por `POST`, que sí lleva
+    token CSRF, como el resto de acciones destructivas del proyecto.
+    """
+
+    def _contexto(self, request, usuario):
+        return {
+            'objetivo': usuario,
+            'bloqueo_rol': bloqueo_por_rol(usuario, request.user),
+            'impedimentos': dependencias_del_usuario(usuario),
+            'es_propia_cuenta': usuario.pk == request.user.pk,
+            # Inhabilitar solo tiene sentido sobre una cuenta que no sea de
+            # Administrador y que siga activa.
+            'puede_inhabilitar': not usuario.es_admin and usuario.is_active,
+        }
+
     def get(self, request, *args, **kwargs):
         usuario = get_object_or_404(CustomUser, pk=kwargs['pk'])
+        return render(request, 'pages/usuarios/partials/confirmar_eliminar.html',
+                      self._contexto(request, usuario))
+
+    def post(self, request, *args, **kwargs):
+        usuario = get_object_or_404(CustomUser, pk=kwargs['pk'])
+
+        # Las comprobaciones se repiten aquí y no se dejan solo en la plantilla:
+        # ocultar el botón no es la protección, y este POST puede llegar de
+        # cualquier sitio. El rol va primero porque es la regla más fuerte.
+        motivo = bloqueo_por_rol(usuario, request.user)
+        if motivo:
+            messages.error(request, motivo)
+            return redirect('list_usuarios')
+
+        impedimentos = dependencias_del_usuario(usuario)
+        if impedimentos:
+            messages.error(
+                request,
+                f'No se puede eliminar a «{usuario.username}»: '
+                + '; '.join(f'{i["que"]} ({i["detalle"]})' for i in impedimentos)
+                + '.')
+            return redirect('list_usuarios')
+
+        nombre = usuario.username
+        es_propia_cuenta = usuario.pk == request.user.pk
         usuario.delete()
-        messages.success(request, f'Usuario "{usuario.username}" eliminado correctamente.')
+
+        # Quien borra su propia cuenta se queda sin cuenta: se cierra la sesión
+        # explícitamente y se le manda al login. Sin esto quedaría navegando con
+        # una sesión que apunta a un usuario que ya no existe.
+        if es_propia_cuenta:
+            logout(request)
+            messages.success(
+                request, f'Su cuenta «{nombre}» fue eliminada. Sesión cerrada.')
+            return redirect('login')
+
+        messages.success(request, f'Usuario "{nombre}" eliminado correctamente.')
         return redirect('list_usuarios')
 
 
@@ -299,6 +563,11 @@ def expulsar_sesion(request, pk):
 class CustomLoginView(LoginView):
     form_class = CustomAuthenticationForm
     template_name = 'registration/login.html'
+
+    # Quien ya tiene sesión abierta y vuelve a /accounts/login/ va directo al
+    # dashboard en lugar de ver otra vez el formulario. Antes se le mostraba el
+    # login, y volver a autenticarse le creaba una sesión nueva sin necesidad.
+    redirect_authenticated_user = True
 
 
 # =========================================================================

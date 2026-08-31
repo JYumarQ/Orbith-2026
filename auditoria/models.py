@@ -46,6 +46,11 @@ class AccionAuditoria(models.TextChoices):
     RECHAZAR = 'REC', 'Rechazo'
     CANCELAR = 'CAN', 'Cancelación'
     DEVOLVER_A_ESPERA = 'DEV', 'Devuelta a espera'
+    # Accesos al sistema. No afectan a ningún registro (`content_type` y
+    # `object_id` quedan a null): el hecho auditado es la entrada o salida en sí.
+    ACCESO = 'ACC', 'Inicio de sesión'
+    ACCESO_FALLIDO = 'ACF', 'Intento de acceso fallido'
+    SALIDA = 'SAL', 'Cierre de sesión'
 
 
 class EventoAuditoria(models.Model):

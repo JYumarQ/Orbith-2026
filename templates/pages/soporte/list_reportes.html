@@ -101,6 +101,12 @@
                   {% if reporte.usuario.nombre_completo %}
                     <small class="text-muted d-block">{{ reporte.usuario.nombre_completo }}</small>
                   {% endif %}
+                {% elif reporte.usuario_declarado %}
+                  {# Llegó desde el login, sin sesión: el nombre lo escribió quien reportó y NO está verificado. #}
+                  <span class="fw-semibold">{{ reporte.usuario_declarado }}</span>
+                  <small class="text-warning d-block">
+                    <i class="bx bx-error-circle me-1"></i>Sin autenticar — nombre no verificado
+                  </small>
                 {% else %}
                   <span class="text-muted fst-italic">Usuario eliminado</span>
                 {% endif %}

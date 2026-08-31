@@ -3,7 +3,7 @@
 <head>
     {% load static %}
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>Autenticarse | ORBITH</title>
     <link rel="icon" type="image/png" href="{% static 'img/favicon/favicon.png' %}" />
@@ -94,7 +94,11 @@
             border: 1px solid #d1d9e0;
             border-radius: 10px;
             color: #384551;
-            font-size: 15px;
+            /* 16px y no 15: Safari en iOS hace zoom automático al enfocar un
+               campo con letra menor de 16px. Antes no se notaba porque el
+               <meta viewport> bloqueaba el zoom, pero bloquearlo impedía también
+               ampliar la página a quien lo necesita. */
+            font-size: 16px;
             transition: all 0.3s ease;
         }
         .floating-input:focus { outline: none; background: #ffffff; border-color: var(--current-accent); }
@@ -108,8 +112,58 @@
         .btn-submit { width: 100%; padding: 1.2rem; background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); border: none; border-radius: 1rem; color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: transform 0.1s; }
         .btn-submit:active { transform: scale(0.98); }
 
-        /* Errores Django */
-        .django-error { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.4); color: #b91c1c; padding: 1rem; border-radius: 1rem; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; }
+        /* El input de la contraseña deja hueco a la derecha para el botón del ojo */
+        .floating-input.con-boton { padding-right: 3.25rem; }
+
+        /* Botón "ver contraseña" */
+        .btn-ver-clave {
+            position: absolute; right: 0.6rem; top: 50%; transform: translateY(-50%);
+            display: flex; align-items: center; justify-content: center;
+            width: 2.4rem; height: 2.4rem; padding: 0;
+            background: none; border: none; border-radius: 8px;
+            color: rgba(0,0,0,0.35); cursor: pointer;
+            transition: color 0.2s, background-color 0.2s;
+        }
+        .btn-ver-clave:hover { color: #4f46e5; background: rgba(79, 70, 229, 0.08); }
+        .btn-ver-clave:focus-visible { outline: 2px solid #4f46e5; outline-offset: 2px; }
+
+        /* Avisos. Antes TODO mensaje se pintaba de rojo, incluidos los de éxito:
+           quien eliminaba su propia cuenta veía "Sesión cerrada" como si fuera un
+           error. Ahora el color lo decide el tipo de mensaje de Django. */
+        .aviso { padding: 1rem; border-radius: 1rem; font-size: 0.9rem; margin-bottom: 1.5rem; text-align: center; }
+        .aviso-error   { background: rgba(239, 68, 68, 0.1);  border: 1px solid rgba(239, 68, 68, 0.4);  color: #b91c1c; }
+        .aviso-exito   { background: rgba(22, 163, 74, 0.1);  border: 1px solid rgba(22, 163, 74, 0.4);  color: #15803d; }
+        .aviso-info    { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.4); color: #1d4ed8; }
+
+        /* Modal de «¿Problemas para acceder?» */
+        .modal-fondo {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.75);
+            display: none; align-items: center; justify-content: center;
+            padding: 20px; z-index: 50;
+        }
+        .modal-fondo.abierto { display: flex; }
+        .modal-caja {
+            background: #f8fafc; color: #384551; border-radius: 1.25rem;
+            padding: 2rem; width: 100%; max-width: 460px;
+            max-height: 90vh; overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+        .modal-caja h3 { margin: 0 0 0.5rem 0; font-size: 1.25rem; color: #0f172a; }
+        .modal-caja .modal-texto { margin: 0 0 1.25rem 0; font-size: 0.9rem; color: #475569; line-height: 1.5; }
+        .modal-caja label { display: block; font-size: 0.8rem; font-weight: 700; color: #475569; margin-bottom: 0.4rem; }
+        .modal-caja .input-group { margin-bottom: 1rem; }
+        .modal-caja .floating-input { padding-left: 1rem; }
+        .modal-acciones { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
+        .btn-secundario {
+            flex: 1; padding: 0.9rem; background: #e2e8f0; border: none;
+            border-radius: 0.75rem; color: #475569; font-weight: 700; cursor: pointer;
+        }
+        .btn-primario {
+            flex: 1; padding: 0.9rem; border: none; border-radius: 0.75rem;
+            background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+            color: #fff; font-weight: 700; cursor: pointer;
+        }
+        .btn-primario[disabled] { opacity: 0.6; cursor: progress; }
 
         /* Responsive para móviles */
         @media (max-width: 768px) {
@@ -146,17 +200,23 @@
 
             <form id="formAuthentication" method="POST">
                 {% csrf_token %}
-                
-                
+
+                {% comment %} Campo oculto con el destino al que volver. Antes no existía y solo
+                   funcionaba de rebote, porque un <form> sin `action` reenvía la
+                   query string: cualquier cambio de `action` habría roto en silencio
+                   el "volver a donde ibas" tras iniciar sesión. {% endcomment %}
+                <input type="hidden" name="next" value="{{ next }}">
 
                 {% if messages %}
-                {% for message in messages %}
-                <div class="django-error">{{ message }}</div>
-                {% endfor %}
+                    {% for message in messages %}
+                        <div class="aviso {% if message.tags == 'success' %}aviso-exito{% elif message.tags == 'error' %}aviso-error{% else %}aviso-info{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
                 {% endif %}
 
                 {% if form.errors %}
-                <div class="django-error">
+                <div class="aviso aviso-error">
                     {% if form.non_field_errors %}
                         {{ form.non_field_errors.0 }}
                     {% else %}
@@ -165,22 +225,35 @@
                 </div>
                 {% endif %}
 
+                {% comment %} Se dibujan los campos del formulario de Django en lugar de <input>
+                   escritos a mano. Así el usuario NO tiene que reescribir su nombre
+                   tras un fallo, y los atributos (autocomplete, autocapitalize...)
+                   viven en un único sitio: usuarios.forms.CustomAuthenticationForm. {% endcomment %}
                 <div class="input-group">
                     <span class="input-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     </span>
-                    <input type="text" name="username" class="floating-input" placeholder="Usuario de red" required autofocus>
+                    {{ form.username }}
                 </div>
 
                 <div class="input-group">
                     <span class="input-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     </span>
-                    <input type="password" name="password" class="floating-input" placeholder="Contraseña" required>
+                    {{ form.password }}
+
+                    {% comment %} type="button" es obligatorio: dentro de un <form>, un <button>
+                       sin type actúa como submit y enviaría el login al pulsar el ojo. {% endcomment %}
+                    <button type="button" id="btnVerClave" class="btn-ver-clave"
+                            aria-label="Mostrar contraseña" aria-pressed="false"
+                            aria-controls="id_password" title="Mostrar contraseña">
+                        <svg id="iconoOjo" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="iconoOjoTachado" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+                    </button>
                 </div>
 
                 <div class="form-options">
-                    <a href="#">¿Problemas para acceder?</a>
+                    <a href="#" id="enlaceAyudaAcceso">¿Problemas para acceder?</a>
                 </div>
 
                 <button type="submit" class="btn-submit">
@@ -191,8 +264,158 @@
         </div>
     </div>
 
+    <!-- =========================================================
+         MODAL «¿Problemas para acceder?»
+         Envía una incidencia a la bandeja del Administrador SIN necesidad de
+         iniciar sesión. Va deliberadamente limitado (solo texto, sin adjuntos y
+         con tope por equipo y hora): ver soporte.views.crear_reporte_acceso.
+         ========================================================= -->
+    <div class="modal-fondo" id="modalAyuda" role="dialog" aria-modal="true"
+         aria-labelledby="tituloAyuda">
+        <div class="modal-caja">
+            <h3 id="tituloAyuda">¿Problemas para acceder?</h3>
+            <p class="modal-texto">
+                Cuéntenos qué ocurre y el Administrador se pondrá en contacto con usted.
+                Si olvidó su contraseña, el Administrador puede restablecerla.
+                <strong>Nunca escriba aquí su contraseña.</strong>
+            </p>
+
+            <div id="avisoAyuda" class="aviso" style="display: none;"></div>
+
+            <form id="formAyuda">
+                {% csrf_token %}
+                <div class="input-group">
+                    <label for="ayudaUsuario">Su usuario de red</label>
+                    <input type="text" id="ayudaUsuario" name="usuario_declarado"
+                           class="floating-input" maxlength="150" required
+                           autocapitalize="none" autocomplete="username"
+                           placeholder="Ej.: jperez">
+                </div>
+                <div class="input-group">
+                    <label for="ayudaMensaje">¿Qué ocurre?</label>
+                    <textarea id="ayudaMensaje" name="mensaje" class="floating-input"
+                              rows="4" required
+                              placeholder="Explique qué ocurre al intentar entrar (mensaje que ve, desde cuándo...)."></textarea>
+                </div>
+
+                <div class="modal-acciones">
+                    <button type="button" class="btn-secundario" id="btnCerrarAyuda">Cancelar</button>
+                    <button type="submit" class="btn-primario" id="btnEnviarAyuda">Enviar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
-        
+    (function () {
+        'use strict';
+
+        // ---------- Mostrar / ocultar la contraseña ----------
+        // Solo cambia el atributo `type` del input: la contraseña NO se copia a
+        // ningún sitio ni se guarda en ninguna variable.
+        const campoClave      = document.getElementById('id_password');
+        const btnVerClave     = document.getElementById('btnVerClave');
+        const iconoOjo        = document.getElementById('iconoOjo');
+        const iconoOjoTachado = document.getElementById('iconoOjoTachado');
+
+        if (campoClave && btnVerClave) {
+            campoClave.classList.add('con-boton');
+
+            btnVerClave.addEventListener('click', function () {
+                const visible = campoClave.type === 'text';
+
+                campoClave.type = visible ? 'password' : 'text';
+
+                iconoOjo.style.display        = visible ? '' : 'none';
+                iconoOjoTachado.style.display = visible ? 'none' : '';
+
+                const etiqueta = visible ? 'Mostrar contraseña' : 'Ocultar contraseña';
+                btnVerClave.setAttribute('aria-label', etiqueta);
+                btnVerClave.setAttribute('title', etiqueta);
+                btnVerClave.setAttribute('aria-pressed', visible ? 'false' : 'true');
+
+                // Devolver el foco al campo y dejar el cursor al final: sin esto,
+                // el usuario tendría que volver a pinchar para seguir escribiendo.
+                campoClave.focus();
+                const fin = campoClave.value.length;
+                try { campoClave.setSelectionRange(fin, fin); } catch (e) { /* no aplica */ }
+            });
+        }
+
+        // ---------- Modal de ayuda ----------
+        const enlaceAyuda = document.getElementById('enlaceAyudaAcceso');
+        const modal       = document.getElementById('modalAyuda');
+        const formAyuda   = document.getElementById('formAyuda');
+        const aviso       = document.getElementById('avisoAyuda');
+        const btnEnviar   = document.getElementById('btnEnviarAyuda');
+        const btnCerrar   = document.getElementById('btnCerrarAyuda');
+        const URL_AYUDA   = "{% url 'soporte:crear_reporte_acceso' %}";
+
+        function mostrarAviso(texto, clase) {
+            aviso.textContent = texto;
+            aviso.className = 'aviso ' + clase;
+            aviso.style.display = '';
+        }
+
+        function abrirModal() {
+            aviso.style.display = 'none';
+            modal.classList.add('abierto');
+            document.getElementById('ayudaUsuario').focus();
+        }
+
+        function cerrarModal() {
+            modal.classList.remove('abierto');
+        }
+
+        if (enlaceAyuda) {
+            enlaceAyuda.addEventListener('click', function (e) {
+                e.preventDefault();
+                abrirModal();
+            });
+        }
+        if (btnCerrar) btnCerrar.addEventListener('click', cerrarModal);
+
+        // Cerrar pulsando fuera de la caja o con Escape.
+        if (modal) {
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) cerrarModal();
+            });
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('abierto')) cerrarModal();
+        });
+
+        if (formAyuda) {
+            formAyuda.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                btnEnviar.disabled = true;
+                btnEnviar.textContent = 'Enviando...';
+
+                try {
+                    const respuesta = await fetch(URL_AYUDA, {
+                        method: 'POST',
+                        body: new FormData(formAyuda),
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    const datos = await respuesta.json();
+
+                    if (datos.exito) {
+                        mostrarAviso(datos.mensaje, 'aviso-exito');
+                        formAyuda.reset();
+                    } else {
+                        mostrarAviso(datos.mensaje || 'No se pudo enviar el reporte.', 'aviso-error');
+                    }
+                } catch (error) {
+                    mostrarAviso(
+                        'No se pudo contactar con el servidor. Inténtelo de nuevo.',
+                        'aviso-error');
+                } finally {
+                    btnEnviar.disabled = false;
+                    btnEnviar.textContent = 'Enviar';
+                }
+            });
+        }
+    })();
     </script>
 </body>
 </html>
