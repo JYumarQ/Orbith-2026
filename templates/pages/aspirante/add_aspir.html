@@ -1,4 +1,5 @@
-<div class="modal-dialog modal-dialog-scrollable-movil" role="document">
+{% load static %}
+<div class="modal-dialog modal-lg modal-dialog-scrollable-movil" role="document">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title" id="aspirModalLabel">Nuevo Aspirante</h5>
@@ -10,7 +11,10 @@
                 action="{% url 'add_aspir' %}" id="formAgregarAspirante">
                 {% csrf_token %}
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    {% comment %} Fila 1: todo lo que sale del carnet de identidad.
+                       Sexo se queda aquí porque se autocompleta desde el propio CI, y
+                       Edad es un campo derivado de solo lectura (ver más abajo). {% endcomment %}
+                    <div class="col-md-3">
                         {{ form.doc_identidad.label_tag }}  
                         {{ form.doc_identidad }}
                         <small id="error_ci_len" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
@@ -22,6 +26,29 @@
                     </div>
 
                     <div class="col-md-3">
+                        {{ form.serie_ci.label_tag }}  
+                        {{ form.serie_ci }}
+                        <small id="error_serie_len" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            Debe tener 9 caracteres.
+                        </small>
+                        <small id="error_serie_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            La serie ya está registrada.
+                        </small>
+                    </div>
+
+                    {% comment %} La edad NO se guarda: se recalcula sola cada día a partir
+                       de la fecha de nacimiento que Orbith deduce del carnet. Por eso el
+                       input va sin atributo `name` (no viaja en el POST) y en solo
+                       lectura: está aquí para confirmar de un vistazo que el carnet se
+                       tecleó bien. El valor lo devuelve el servidor. {% endcomment %}
+                    <div class="col-md-2">
+                        <label for="edad_calculada">Edad:</label>
+                        <input type="text" id="edad_calculada" class="form-control"
+                               value="—" readonly tabindex="-1"
+                               title="Calculada a partir del carnet de identidad. No se guarda: se actualiza sola.">
+                    </div>
+
+                    <div class="col-md-4">
                         {{ form.sexo.label_tag }}  
                         {{ form.sexo }}
                         <small id="warning_sexo" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
@@ -29,15 +56,15 @@
                         </small>
                     </div>
 
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         {{ form.nombre.label_tag }}  
                         {{ form.nombre }}
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         {{ form.papellido.label_tag }}  
                         {{ form.papellido }}
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         {{ form.sapellido.label_tag }}  
                         {{ form.sapellido }}
                     </div>
@@ -120,383 +147,16 @@
     </div>
 </div>
 
+{% comment %} Toda la validación en vivo (carnet, serie, edad, móvil, nivel educativo
+   y semáforo de campos) vive en un único archivo compartido con la pantalla de
+   edición. Antes cada plantilla tenía su propia copia casi idéntica, y las
+   diferencias que se fueron colando entre ambas eran bugs. {% endcomment %}
+<script src="{% static 'js/aspirante_formulario.js' %}"></script>
 <script>
-    (function() {
-        var formulario = document.getElementById('formAgregarAspirante');
-        
-        // Selectores originales
-        var nivel = formulario.querySelector('#id_nivel_educ');
-        var espec = formulario.querySelector('#id_especialidad');
-        var grado = formulario.querySelector('#id_grado_cientifico');
-
-        // Nuevos selectores para validación (Django usa id_ + nombre_campo)
-        var ciInput = formulario.querySelector('#id_doc_identidad');
-        var movilInput = formulario.querySelector('#id_movil_personal'); // Ajustado a movil_personal
-
-        var sexInput = formulario.querySelector('#id_sexo');
-        var warningSexo = formulario.querySelector('#warning_sexo');
-
-        var timer = null;
-
-        // ---------------- INICIO DE NUEVA LÓGICA DE VALIDACIÓN ----------------
-        
-        // 1. Configuración de campos
-        const configCampos = {
-            'id_doc_identidad': { tipo: 'ci', mensaje: 'Inserte solo dígitos numéricos', esCI: true },
-            'id_sexo':          { tipo: 'select' },
-            'id_nombre':        { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_papellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_sapellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_movil_personal':         { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
-            'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
-            'id_provincia':     { tipo: 'select' }, // Solo para colores
-            'id_municipio':     { tipo: 'select' },  // Solo para colores
-            'id_raza':          { tipo: 'select' }
-        };
-
-        // 2. Expresiones Regulares (Lo que se BORRA si se intenta escribir)
-        const patrones = {
-            numeros:  /[^0-9]/g,
-            telefono: /[^0-9\(\)\s\+\-]/g,
-            texto:    /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜçÇ\-\s]/g
-        };
-
-        // Nueva función para validar lógica de fechas en el CI
-        function validarLogicaCI(input) {
-            let val = input.value;
-            if (val.length < 4) return; // Aún no hay mes para validar
-
-            // Validar MES (Dígitos 3 y 4)
-            const mes = parseInt(val.substring(2, 4));
-            if (val.length >= 4 && (mes < 1 || mes > 12)) {
-                input.value = val.substring(0, 2); // Borrar el mes inválido
-                mostrarErrorFlotante(input, "Mes inválido (01-12)");
-                return;
-            }
-
-            // Validar DÍA (Dígitos 5 y 6)
-            if (val.length >= 6) {
-                const dia = parseInt(val.substring(4, 6));
-                let maxDias = 31;
-                // Abril, Junio, Sept, Nov tienen 30 días
-                if ([4, 6, 9, 11].includes(mes)) maxDias = 30;
-                // Febrero aceptamos hasta 29
-                if (mes === 2) maxDias = 29;
-
-                if (dia < 1 || dia > maxDias) {
-                    input.value = val.substring(0, 4); // Borrar el día inválido
-                    mostrarErrorFlotante(input, "Día inválido para este mes");
-                    return;
-                }
-            }
-        }
-
-        // Ayudante para mostrar la burbuja temporalmente
-        function mostrarErrorFlotante(input, msg) {
-            input.setCustomValidity(msg);
-            input.reportValidity();
-        }
-
-        // 3. Función del Semáforo (Amarillo / Rojo / Verde)
-        function actualizarEstilo(input, cfg) {
-            // Limpiar estados previos
-            input.classList.remove('border-warning', 'is-invalid', 'is-valid', 'border-success');
-            const valor = input.value.trim();
-
-            // CASO 1: Vacío (Obligatorio) -> Amarillo
-            if (!valor) {
-                // Solo si es obligatorio (asumimos que CI, Nombres y Ubicación lo son)
-                if(cfg.tipo !== 'telefono') { 
-                    input.classList.add('border-warning');
-                }
-                return;
-            }
-
-            // CASO 2: Error específico de CI (Rojo si no son 11 dígitos)
-            if (cfg.esCI && valor.length !== 11) {
-                input.classList.add('is-invalid');
-                return;
-            }
-
-            // CASO 3: Todo bien -> Verde
-            input.classList.add('is-valid');
-        }
-
-        // 4. Aplicar lógica a cada campo
-        for (const [id, cfg] of Object.entries(configCampos)) {
-            const input = formulario.querySelector('[id="' + id + '"]');
-            if (!input) continue;
-
-            // A) Evento de escritura (Bloqueo y Burbuja)
-            if (cfg.tipo !== 'select') {
-                input.addEventListener('input', function() {
-                    // 1. Limpiamos cualquier error previo al empezar a escribir (Soluciona conflicto de mensajes)
-                    this.setCustomValidity(""); 
-
-                    const valorAntes = this.value;
-                    const tipoPatron = (cfg.tipo === 'ci') ? 'numeros' : cfg.tipo;
-                    
-                    // 2. DEFINIMOS LA VARIABLE QUE FALTABA (Soluciona ReferenceError)
-                    const patron = patrones[tipoPatron]; 
-
-                    // 3. Bloqueo de caracteres prohibidos
-                    if (patron.test(valorAntes)) {
-                        this.value = valorAntes.replace(patron, '');
-                        mostrarErrorFlotante(this, cfg.mensaje);
-                    } 
-                    
-                    // 4. Validación lógica extra para CI
-                    if (cfg.tipo === 'ci') {
-                        validarLogicaCI(this);
-                    }
-
-                    actualizarEstilo(this, cfg);
-                });
-
-                input.addEventListener('blur', function() {
-                    this.setCustomValidity(""); 
-                });
-
-                // B) Evento al salir (Mayúsculas)
-                if (cfg.capitalizar) {
-                    input.addEventListener('blur', function() {
-                        if (this.value) {
-                            // Capitalizar primera letra de CADA palabra
-                            this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, match => match.toUpperCase());
-                        }
-                        actualizarEstilo(this, cfg);
-                    });
-                }
-            } else {
-                // C) Evento para selects
-                input.addEventListener('change', function() { 
-                    actualizarEstilo(this, cfg);
-                    
-                    // TRUCO: Si cambiamos Provincia, forzamos validación visual del Municipio
-                    if (id === 'id_provincia') {
-                        // Esperamos un momento a que HTMX habilite el campo
-                        setTimeout(() => {
-                             const muni = formulario.querySelector('#id_municipio');
-                             if(muni) actualizarEstilo(muni, configCampos['id_municipio']);
-                        }, 200); 
-                    }
-                });
-                // Soporte Select2
-                $(input).on('select2:select', function() { 
-                    this.dispatchEvent(new Event('change'));
-                });
-            }
-
-            // FALTABA ESTO: Inicializar el estado visual (amarillo) al cargar
-            actualizarEstilo(input, cfg); 
-
-        } // <--- ¡AQUÍ ESTABA LA LLAVE FALTANTE!
-
-        // Observador especial para Municipio (cambia con HTMX)
-        const observerMuni = new MutationObserver(function() {
-            const muni = document.getElementById('id_municipio');
-            if (muni) {
-                actualizarEstilo(muni, configCampos['id_municipio']);
-                muni.addEventListener('change', function() { actualizarEstilo(this, configCampos['id_municipio']); });
-            }
-        });
-        const muniParent = document.getElementById('id_municipio')?.parentNode;
-        if(muniParent) observerMuni.observe(muniParent, { childList: true });
-
-        // ---------------- FIN DE NUEVA LÓGICA ----------------
-
-        // --- LÓGICA ORIGINAL DE CAMPOS ---
-        function actualizarCampos() {
-            if(!nivel) return;
-            var valorNivel = nivel.value;
-
-            // Habilitar Grado solo en NS
-            if (valorNivel === 'NS') {
-                grado.removeAttribute('disabled');
-            } else {
-                grado.setAttribute('disabled', 'disabled');
-                grado.value = ''; // <--- ESTA ES LA LÍNEA MÁGICA QUE LO VACÍA
-                
-                // Si usas Select2 en este campo en el futuro, esto asegura que también se limpie visualmente:
-                if ($(grado).hasClass('select2-hidden-accessible')) {
-                    $(grado).trigger('change.select2');
-                }
-            }
-        }
-
-        if(nivel) nivel.addEventListener('change', actualizarCampos);
-        actualizarCampos(); // Ejecutar al inicio
-
-
-
-        // 1. Validación Carnet Identidad (AUTOCOMPLETADO INTELIGENTE)
-        if (ciInput) {
-            ciInput.addEventListener('input', function() {
-                var val = this.value;
-                var errLen = formulario.querySelector('#error_ci_len');
-                var errExist = formulario.querySelector('#error_ci_exist');
-
-                // Limpiar estados previos
-                if (errLen) errLen.classList.add('d-none');
-                if (errExist) errExist.classList.add('d-none');
-                ciInput.classList.remove('is-invalid', 'is-valid');
-
-                // Validación 1: Longitud (Local)
-                if (val.length !== 11) {
-                    if (errLen) errLen.classList.remove('d-none');
-                    ciInput.classList.add('is-invalid');
-                    if (warningSexo) warningSexo.classList.add('d-none'); // Ocultar warning sexo
-                    return; 
-                }
-
-                // --- MAGIA: AUTOCOMPLETAR SEXO ---
-                if (sexInput) {
-                    var digito10 = parseInt(val.charAt(9));
-                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
-                    
-                    sexInput.value = sexoCalculado;
-                    
-                    // Forzar actualización visual a VERDE
-                    sexInput.classList.remove('border-warning', 'is-invalid');
-                    sexInput.classList.add('is-valid');
-                    
-                    if (warningSexo) warningSexo.classList.add('d-none');
-                    
-                    if (window.jQuery && $(sexInput).hasClass('select2-hidden-accessible')) {
-                        $(sexInput).trigger('change.select2');
-                    }
-                }
-                // ---------------------------------
-
-                // Validación 2: Existencia (Servidor)
-                clearTimeout(timer);
-                timer = setTimeout(function() {
-                    // Ajustamos URL temporalmente con barra al inicio por seguridad
-                    var fetchUrl = window.location.pathname.includes('updt_aspir') 
-                                   ? "/bolsa/validar_datos/?doc_identidad=" 
-                                   : "{% url 'validar_datos_aspirante' %}?doc_identidad=";
-                                   
-                    fetch(fetchUrl + val)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.ci_existe) {
-                            if (errExist) {
-                                errExist.classList.remove('d-none');
-                                if(data.ci_error_msg) errExist.innerText = data.ci_error_msg;
-                            }
-                            ciInput.classList.add('is-invalid');
-                        } else {
-                            ciInput.classList.add('is-valid');
-                        }
-                    })
-                    .catch(err => console.error('Error validando CI:', err));
-                }, 300);
-            });
-        }
-        // 2. Validación Móvil
-        if (movilInput) {
-            movilInput.addEventListener('input', function() {
-                var val = this.value;
-                var errExist = formulario.querySelector('#error_movil_exist');
-
-                errExist.classList.add('d-none');
-                movilInput.classList.remove('is-invalid', 'is-valid');
-
-                if (val.length < 6) return; // Ignorar si es muy corto
-
-                clearTimeout(timer);
-                timer = setTimeout(function() {
-                    fetch("{% url 'validar_datos_aspirante' %}?movil=" + val)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.movil_existe) {
-                            errExist.classList.remove('d-none');
-                            movilInput.classList.add('is-invalid');
-                        } else {
-                            movilInput.classList.add('is-valid');
-                        }
-                    })
-                    .catch(err => console.error('Error validando Móvil:', err));
-                }, 300);
-            });
-        }
-
-        // --- VALIDACIÓN SUAVE DE SEXO ---
-        if (sexInput && ciInput) {
-            sexInput.addEventListener('change', function() {
-                var valCI = ciInput.value;
-                if (valCI.length === 11) {
-                    var digito10 = parseInt(valCI.charAt(9));
-                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
-                    
-                    // Si el usuario pone un sexo que no cuadra con el CI, advertimos.
-                    if (this.value && this.value !== sexoCalculado) {
-                        if (warningSexo) warningSexo.classList.remove('d-none');
-                    } else {
-                        if (warningSexo) warningSexo.classList.add('d-none');
-                    }
-                }
-            });
-        }
-
-        // 3. INTERCEPTAR ENVÍO (Solo Validación)
-        formulario.addEventListener('submit', function(e) {
-            var elCiExist = formulario.querySelector('#error_ci_exist');
-            var elMovil = formulario.querySelector('#error_movil_exist');
-            var tieneErrorCiExist = elCiExist && !elCiExist.classList.contains('d-none');
-            var tieneErrorMovil = elMovil && !elMovil.classList.contains('d-none');
-            var longitudIncorrecta = ciInput && ciInput.value.length !== 11;
-            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
-            var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
-
-            if (tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios || hayRojos) {
-                e.preventDefault(); // Evita el envío normal
-                e.stopImmediatePropagation(); // CRÍTICO: Evita que salte tu cartel global de swal-confirm de éxito
-                
-                Swal.fire({
-                    title: 'Atención',
-                    text: 'Revise los campos resaltados en rojo o amarillo.',
-                    icon: 'warning',
-                    confirmButtonText: 'OK',
-                    customClass: { confirmButton: 'btn btn-primary' },
-                    buttonsStyling: false
-                });
-            }
-            // Si la pantalla está perfecta, NO HAGO NADA AQUÍ.
-            // Dejo que el evento fluya naturalmente para que tu script global (.swal-confirm) haga la pregunta y envíe.
-        });
-        actualizarCampos(); // Ejecutar al inicio
-
-        // -------------------------------------------------------------
-        // --- VALIDACIÓN: TÍTULO DE ORO SÓLO PARA NIVEL SUPERIOR ('NS')
-        // -------------------------------------------------------------
-        var nivelEduc = formulario.querySelector('#id_nivel_educ');
-        var tituloOro = formulario.querySelector('#id_titulo_oro');
-
-        function validarTituloOro() {
-            if (!nivelEduc || !tituloOro) return;
-            
-            // Comprobamos si el valor seleccionado es 'NS' (Nivel Superior)
-            if (nivelEduc.value === 'NS') {
-                tituloOro.removeAttribute('disabled');
-            } else {
-                // Si es cualquier otro, lo bloqueamos y le quitamos el check por seguridad
-                tituloOro.setAttribute('disabled', 'disabled');
-                tituloOro.checked = false; 
-            }
-        }
-
-        if (nivelEduc) {
-            // Escuchar cambios nativos
-            nivelEduc.addEventListener('change', validarTituloOro);
-            // Escuchar cambios si el select utiliza jQuery/Select2
-            $(nivelEduc).on('change', validarTituloOro);
-            
-            // Ejecutar al abrir el formulario para evaluar el estado inicial
-            validarTituloOro(); 
-        }
-        // -------------------------------------------------------------
-
-        if (window.htmx) htmx.process(formulario);
-    })();
+    OrbithFormularioAspirante.iniciar({
+        formulario: '#formAgregarAspirante',
+        urlValidacion: "{% url 'validar_datos_aspirante' %}"
+        // Sin `aspiranteId`: en el alta todavía no existe el registro, así que
+        // cualquier coincidencia de carnet, serie o móvil es un duplicado real.
+    });
 </script>

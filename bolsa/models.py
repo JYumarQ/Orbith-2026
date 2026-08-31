@@ -3,7 +3,7 @@ import logging
 from django.db import models
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from nomencladores.models import NEspecialidad, NMunicipio, NProvincia
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from datetime import date, timedelta
 from auditoria.models import Base
 from django.core.exceptions import ValidationError
@@ -17,10 +17,31 @@ logger = logging.getLogger(__name__)
 # `None`: no es un caso de error, simplemente no aplica.
 EDAD_MINIMA_JUBILACION = {'F': 58, 'M': 63}
 EDAD_MAXIMA_VENTANA_JUBILACION = {'F': 60, 'M': 65}
+
+# Formato de la serie del carnet de identidad: exactamente 9 caracteres alfanuméricos
+# en mayúsculas. Vive aquí (y no en el formulario) para que la regla de Subsanación
+# ASP-009 y el propio modelo compartan un único criterio.
+PATRON_SERIE_CI = r'^[A-Z0-9]{9}$'
+SERIE_CI_VALIDATOR = RegexValidator(
+    regex=PATRON_SERIE_CI,
+    message='La serie del carnet debe tener exactamente 9 caracteres alfanuméricos (A-Z, 0-9).')
+
+
 # CONTACTO
 class Contacto(Base):
 
     doc_identidad = models.CharField(max_length=11, unique=True, verbose_name="Carnet de Identidad")
+    # Serie impresa en el carnet de identidad. Opcional (muchos registros antiguos no
+    # la tienen y el dato puede llegar después del alta), pero única cuando se rellena:
+    # identifica un único ejemplar del documento. Por eso el formulario normaliza el
+    # vacío a NULL — PostgreSQL permite múltiples NULL en una columna UNIQUE, pero no
+    # múltiples cadenas vacías. Que falte no bloquea el guardado: lo reporta
+    # Subsanación (ASP-008), igual que la dirección o el nivel educativo.
+    serie_ci = models.CharField(
+        max_length=9, unique=True, null=True, blank=True,
+        validators=[SERIE_CI_VALIDATOR],
+        verbose_name="Serie del Carnet",
+        help_text="9 caracteres alfanuméricos en mayúsculas, tal como aparecen en el carnet.")
     nombre = models.CharField(max_length=20, blank=False, null=False)
     papellido = models.CharField(max_length=30, null=False, blank=False)
     sapellido = models.CharField(max_length=30, null=False, blank=False)
@@ -125,8 +146,22 @@ class Aspirante(Contacto):
         except ValueError:
             return None
 
+    @staticmethod
+    def _normalizar_serie_ci(serie):
+        """Deja la serie en mayúsculas y sin espacios, o `None` si viene vacía.
+
+        El `None` no es cosmético: `serie_ci` es UNIQUE, y PostgreSQL permite tantos
+        NULL como haga falta pero solo una cadena vacía. Si dos aspirantes sin serie
+        se guardaran con `''`, el segundo reventaría con IntegrityError. Vive en el
+        modelo (y no en el formulario) para que valga también desde el admin, un
+        script o una importación.
+        """
+        serie = (serie or '').strip().upper()
+        return serie or None
+
     def save(self, *args, **kwargs):
         self.fecha_nacimiento = self._calcular_fecha_nacimiento(self.doc_identidad)
+        self.serie_ci = self._normalizar_serie_ci(self.serie_ci)
         self.full_clean()  # asegura que se ejecute clean()
         super().save(*args, **kwargs)
 

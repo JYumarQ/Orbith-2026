@@ -24,6 +24,16 @@
         opacity: 1;
         pointer-events: auto;
     }
+
+    /* Solo lectura (Observador): la botonera se ve, pero NUNCA se activa.
+       Gana a .toolbar-active porque el Observador no puede crear, modificar ni
+       eliminar nada — ver `puede_editar` en usuarios/mixins.py. */
+    .toolbar-solo-lectura,
+    .toolbar-solo-lectura.toolbar-active {
+        opacity: 0.4;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
     
     .cursor-pointer { cursor: pointer; }
 
@@ -77,13 +87,21 @@
         
         <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             
-            <div id="aspirante-toolbar" class="d-flex gap-2 toolbar-disabled">
+            {% comment %} Observador: las tres acciones son de escritura, así que la botonera
+               entera queda inactiva de forma permanente. El backend ya lo impide
+               (`write_required` en bolsa/urls.py -> bolsa/views.py); esto es para
+               que el usuario lo VEA en vez de descubrirlo con un error. {% endcomment %}
+            <div id="aspirante-toolbar"
+                 class="d-flex gap-2 toolbar-disabled{% if not puede_editar %} toolbar-solo-lectura{% endif %}"
+                 {% if not puede_editar %}title="Su usuario es de solo consulta"{% endif %}>
                 <button type="button" class="btn btn-sm btn-outline-primary" id="btn-editar" 
-                    onclick="abrir_modal_edicion(this.dataset.url)" title="Editar">
+                    onclick="abrir_modal_edicion(this.dataset.url)" title="Editar"
+                    {% if not puede_editar %}disabled{% endif %}>
                     <i class="fas fa-user-edit"></i>
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-success" id="btn-contrato" 
-                    onclick="abrir_modal_contrato(this.dataset.url)" title="Contrato">
+                    onclick="abrir_modal_contrato(this.dataset.url)" title="Contrato"
+                    {% if not puede_editar %}disabled{% endif %}>
                     <i class="fas fa-file-signature"></i>
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-danger" id="btn-eliminar" 
@@ -91,7 +109,8 @@
                     hx-confirm="¿Está seguro de eliminar este aspirante?" 
                     hx-swap="none"
                     hx-on:htmx:after-request="if(event.detail.successful) htmx.trigger('#search', 'searchFilters')"
-                    title="Eliminar">
+                    title="Eliminar"
+                    {% if not puede_editar %}disabled{% endif %}>
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -195,7 +214,9 @@
                     </div>
                 </div>
             </div>
-                {% if not es_baja_view and request.user.es_admin or request.user.es_moderador %}
+                {% comment %} Los paréntesis implícitos de Django hacían `(not es_baja_view and es_admin) or es_moderador`,
+                   así que un Moderador veía «Nuevo» también en la pantalla de Bajas. {% endcomment %}
+                {% if not es_baja_view and puede_editar %}
                 <button type="button" class="btn btn-primary"
                         data-url="{% url 'add_aspir' %}"
                         onclick="abrir_modal_creacion(this.dataset.url)">
@@ -436,10 +457,13 @@
         const urlContrato = fila.getAttribute('data-url-contrato');
         const urlEliminar = fila.getAttribute('data-url-eliminar');
 
-        // 3. Activar Botonera
+        // 3. Activar Botonera (salvo en solo lectura: ahí no se activa nunca)
         const toolbar = document.getElementById('aspirante-toolbar');
-        toolbar.classList.remove('toolbar-disabled');
-        toolbar.classList.add('toolbar-active');
+        const soloLectura = toolbar.classList.contains('toolbar-solo-lectura');
+        if (!soloLectura) {
+            toolbar.classList.remove('toolbar-disabled');
+            toolbar.classList.add('toolbar-active');
+        }
 
         // 4. Actualizar botones
         document.getElementById('btn-editar').setAttribute('data-url', urlEditar);
@@ -502,7 +526,9 @@
 
             // 3. Verificar si hay un aspirante seleccionado
             const toolbar = document.getElementById('aspirante-toolbar');
-            const estaActivo = toolbar && !toolbar.classList.contains('toolbar-disabled');
+            const estaActivo = toolbar
+                && !toolbar.classList.contains('toolbar-disabled')
+                && !toolbar.classList.contains('toolbar-solo-lectura');
 
             if (estaActivo) {
                 e.preventDefault(); 

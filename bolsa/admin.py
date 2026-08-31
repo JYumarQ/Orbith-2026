@@ -8,8 +8,8 @@ from .models import Aspirante
 @admin.register(Aspirante)
 class AspiranteAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
     modulo_auditoria = 'bolsa'
-    list_display = ('doc_identidad', 'nombre', 'papellido', 'sapellido', 'estado', 'unidad_organizativa')
-    search_fields = ('doc_identidad', 'nombre', 'papellido', 'sapellido')
+    list_display = ('doc_identidad', 'serie_ci', 'nombre', 'papellido', 'sapellido', 'estado', 'unidad_organizativa')
+    search_fields = ('doc_identidad', 'serie_ci', 'nombre', 'papellido', 'sapellido')
     list_filter = ('estado', 'sexo', 'unidad_organizativa')
     list_select_related = ('unidad_organizativa', 'municipio', 'provincia', 'especialidad')
     autocomplete_fields = ['municipio', 'provincia', 'unidad_organizativa', 'especialidad']

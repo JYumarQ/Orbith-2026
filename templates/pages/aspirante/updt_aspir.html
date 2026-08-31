@@ -1,5 +1,6 @@
+{% load static %}
  <!-- Modal -->
-<div class="modal-dialog" role="document">
+<div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title" id="aspirModalLabel">Editar Datos Personales</h5>
@@ -16,26 +17,64 @@
                 <input type="hidden" name="next" value="{{ next }}">
                 <input type="hidden" name="origen" value="{{ origen }}">
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    {% comment %} Fila 1: todo lo que sale del carnet de identidad.
+                       Sexo se queda aquí porque se autocompleta desde el propio CI, y
+                       Edad es un campo derivado de solo lectura (ver más abajo). {% endcomment %}
+                    <div class="col-md-3">
                         {{ form.doc_identidad.label_tag }}  
                         {{ form.doc_identidad }}
+                        {% comment %} Estos dos avisos no existían en esta pantalla, así que
+                           al editar no se comprobaba nunca si el carnet quedaba duplicado:
+                           el JavaScript los buscaba y, al no encontrarlos, no mostraba nada.
+                           El servidor excluye al propio trabajador vía `aspirante_id`. {% endcomment %}
+                        <small id="error_ci_len" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            Debe tener 11 dígitos.
+                        </small>
+                        <small id="error_ci_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            El CI ya está asociado a un trabajador de la Empresa.
+                        </small>
                     </div>
                     <div class="col-md-3">
+                        {{ form.serie_ci.label_tag }}  
+                        {{ form.serie_ci }}
+                        <small id="error_serie_len" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            Debe tener 9 caracteres.
+                        </small>
+                        <small id="error_serie_exist" class="text-danger fw-bold d-none" style="font-size: 0.8rem;">
+                            La serie ya está registrada.
+                        </small>
+                    </div>
+
+                    {% comment %} La edad NO se guarda: se recalcula sola cada día a partir
+                       de la fecha de nacimiento que Orbith deduce del carnet. El input va
+                       sin atributo `name` (no viaja en el POST) y en solo lectura. Al abrir
+                       el modal se pinta con `object.get_edad` (la misma property que usan
+                       el dashboard y los informes); si se edita el carnet, la recalcula el
+                       servidor por el mismo fetch que valida el duplicado. {% endcomment %}
+                    <div class="col-md-2">
+                        <label for="edad_calculada">Edad:</label>
+                        <input type="text" id="edad_calculada" class="form-control"
+                               value="{% if object.get_edad is not None %}{{ object.get_edad }} años{% else %}—{% endif %}"
+                               readonly tabindex="-1"
+                               title="Calculada a partir del carnet de identidad. No se guarda: se actualiza sola.">
+                    </div>
+
+                    <div class="col-md-4">
                         {{ form.sexo.label_tag }}  
                         {{ form.sexo }}
                         <small id="warning_sexo" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
                             <i class="fas fa-exclamation-triangle"></i> No coincide CI.
                         </small>
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         {{ form.nombre.label_tag }}  
                         {{ form.nombre }}
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         {{ form.papellido.label_tag }}  
                         {{ form.papellido }}
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         {{ form.sapellido.label_tag }}  
                         {{ form.sapellido }}
                     </div>
@@ -119,293 +158,15 @@
     </div>
 </div>
 
+{% comment %} Mismo archivo compartido que usa el alta: ver `add_aspir.html`. {% endcomment %}
+<script src="{% static 'js/aspirante_formulario.js' %}"></script>
 <script>
-    (function() {
-        var formulario = document.getElementById('aspiranteForm');
-        if (!formulario) return;
-
-        // Selectores
-        var nivel = formulario.querySelector('#id_nivel_educ');
-        var espec = formulario.querySelector('#id_especialidad');
-        var grado = formulario.querySelector('#id_grado_cientifico');
-        var ciInput = formulario.querySelector('#id_doc_identidad');
-        var movilInput = formulario.querySelector('#id_movil_personal');
-        
-        // Selectores de Sexo
-        var sexInput = formulario.querySelector('#id_sexo');
-        var warningSexo = formulario.querySelector('#warning_sexo');
-
-        const initialMovil = movilInput ? movilInput.value.trim() : "";
-        var timer = null;
-
-        // Configuración de campos
-        const configCampos = {
-            'id_doc_identidad': { tipo: 'ci', mensaje: 'Inserte solo dígitos numéricos', esCI: true },
-            'id_sexo':          { tipo: 'select' },
-            'id_nombre':        { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_papellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_sapellido':     { tipo: 'texto',   mensaje: 'Inserte solo letras', capitalizar: true },
-            'id_movil_personal':{ tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
-            'id_fijo_personal': { tipo: 'telefono',mensaje: 'Solo números, espacios y paréntesis' },
-            'id_provincia':     { tipo: 'select' }, 
-            'id_municipio':     { tipo: 'select' },  
-            'id_raza':          { tipo: 'select' }
-        };
-
-        const patrones = {
-            numeros:  /[^0-9]/g,
-            telefono: /[^0-9\(\)\s\+\-]/g,
-            texto:    /[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜçÇ\-\s]/g
-        };
-
-        function validarLogicaCI(input) {
-            let val = input.value;
-            if (val.length < 4) return; 
-
-            const mes = parseInt(val.substring(2, 4));
-            if (val.length >= 4 && (mes < 1 || mes > 12)) {
-                input.value = val.substring(0, 2); 
-                mostrarErrorFlotante(input, "Mes inválido (01-12)");
-                return;
-            }
-            if (val.length >= 6) {
-                const dia = parseInt(val.substring(4, 6));
-                let maxDias = 31;
-                if ([4, 6, 9, 11].includes(mes)) maxDias = 30;
-                if (mes === 2) maxDias = 29;
-
-                if (dia < 1 || dia > maxDias) {
-                    input.value = val.substring(0, 4); 
-                    mostrarErrorFlotante(input, "Día inválido para este mes");
-                    return;
-                }
-            }
-        }
-
-        function mostrarErrorFlotante(input, msg) {
-            input.setCustomValidity(msg);
-            input.reportValidity();
-        }
-
-        function actualizarEstilo(input, cfg) {
-            input.classList.remove('border-warning', 'is-invalid', 'is-valid', 'border-success');
-            const valor = input.value.trim();
-
-            if (!valor) {
-                if(cfg.tipo !== 'telefono') input.classList.add('border-warning');
-                return;
-            }
-            if (cfg.esCI && valor.length !== 11) {
-                input.classList.add('is-invalid');
-                return;
-            }
-            input.classList.add('is-valid');
-        }
-
-        // Aplicar lógica a los campos
-        for (const [id, cfg] of Object.entries(configCampos)) {
-            const input = formulario.querySelector('[id="' + id + '"]');
-            if (!input) continue;
-
-            if (cfg.tipo !== 'select') {
-                input.addEventListener('input', function() {
-                    this.setCustomValidity(""); 
-                    const valorAntes = this.value;
-                    const tipoPatron = (cfg.tipo === 'ci') ? 'numeros' : cfg.tipo;
-                    const patron = patrones[tipoPatron]; 
-
-                    if (patron.test(valorAntes)) {
-                        this.value = valorAntes.replace(patron, '');
-                        mostrarErrorFlotante(this, cfg.mensaje);
-                    } 
-                    
-                    if (cfg.tipo === 'ci') validarLogicaCI(this);
-                    actualizarEstilo(this, cfg);
-                });
-
-                input.addEventListener('blur', function() { this.setCustomValidity(""); });
-
-                if (cfg.capitalizar) {
-                    input.addEventListener('blur', function() {
-                        if (this.value) {
-                            this.value = this.value.toLowerCase().replace(/(?:^|\s|['"([{])+\S/g, match => match.toUpperCase());
-                        }
-                        actualizarEstilo(this, cfg);
-                    });
-                }
-            } else {
-                input.addEventListener('change', function() { 
-                    actualizarEstilo(this, cfg);
-                    if (id === 'id_provincia') {
-                        setTimeout(() => {
-                             const muni = formulario.querySelector('#id_municipio');
-                             if(muni) actualizarEstilo(muni, configCampos['id_municipio']);
-                        }, 200); 
-                    }
-                });
-                if (window.jQuery) {
-                    jQuery(input).on('select2:select', function() { this.dispatchEvent(new Event('change')); });
-                }
-            }
-            actualizarEstilo(input, cfg); 
-        }
-
-        // --- MAGIA: AUTOCOMPLETADO INTELIGENTE DEL CI ---
-        if (ciInput) {
-            ciInput.addEventListener('input', function() {
-                var val = this.value;
-
-                // Validación de Longitud para activar Magia
-                if (val.length !== 11) {
-                    if (warningSexo) warningSexo.classList.add('d-none');
-                    return; 
-                }
-
-                if (sexInput) {
-                    var digito10 = parseInt(val.charAt(9));
-                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
-                    
-                    sexInput.value = sexoCalculado;
-                    sexInput.classList.remove('border-warning', 'is-invalid');
-                    sexInput.classList.add('is-valid');
-                    
-                    if (warningSexo) warningSexo.classList.add('d-none');
-                    
-                    if (window.jQuery && jQuery(sexInput).hasClass('select2-hidden-accessible')) {
-                        jQuery(sexInput).trigger('change.select2');
-                    }
-                }
-            });
-        }
-
-        // --- VALIDACIÓN SUAVE DE SEXO (SI EL USUARIO LO CAMBIA) ---
-        if (sexInput && ciInput) {
-            sexInput.addEventListener('change', function() {
-                var valCI = ciInput.value;
-                if (valCI.length === 11) {
-                    var digito10 = parseInt(valCI.charAt(9));
-                    var sexoCalculado = (digito10 % 2 === 0) ? 'M' : 'F';
-                    
-                    if (this.value && this.value !== sexoCalculado) {
-                        if (warningSexo) warningSexo.classList.remove('d-none');
-                    } else {
-                        if (warningSexo) warningSexo.classList.add('d-none');
-                    }
-                }
-            });
-        }
-
-        // Validación de Móvil
-        if (movilInput) {
-            movilInput.addEventListener('input', function() {
-                var val = this.value.trim();
-                var errExist = formulario.querySelector('#error_movil_exist');
-
-                if (val === initialMovil) {
-                    if (errExist) errExist.classList.add('d-none');
-                    this.classList.remove('is-invalid');
-                    this.classList.add('is-valid');
-                    return;
-                }
-
-                if (val.length < 6) return;
-
-                clearTimeout(timer);
-                timer = setTimeout(function() {
-                    // Nota: Asegúrate de tener la URL correcta en fetch. Aquí asumo la ruta absoluta validando ID.
-                    fetch("/bolsa/validar_datos/?movil=" + val)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.movil_existe) {
-                            if (errExist) errExist.classList.remove('d-none');
-                            movilInput.classList.add('is-invalid');
-                            movilInput.classList.remove('is-valid');
-                        } else {
-                            if (errExist) errExist.classList.add('d-none');
-                            movilInput.classList.remove('is-invalid');
-                            movilInput.classList.add('is-valid');
-                        }
-                    })
-                    .catch(err => console.error('Error validando Móvil:', err));
-                }, 300);
-            });
-        }
-
-        // Lógica de Selectores Anidados
-        function actualizarCampos() {
-            if(!nivel) return;
-            var valorNivel = nivel.value;
-            if (valorNivel === 'NS') {
-                grado.removeAttribute('disabled');
-            } else {
-                grado.setAttribute('disabled', 'disabled');
-                grado.value = ''; 
-                if (window.jQuery && jQuery(grado).hasClass('select2-hidden-accessible')) {
-                    jQuery(grado).trigger('change.select2');
-                }
-            }
-        }
-        if(nivel) nivel.addEventListener('change', actualizarCampos);
-        actualizarCampos();
-
-        // -------------------------------------------------------------
-        // ENVÍO TRADICIONAL + VALIDACIÓN ESTRICTA
-        // -------------------------------------------------------------
-        formulario.addEventListener('submit', function(e) {
-            var elCiExist = formulario.querySelector('#error_ci_exist');
-            var elMovil = formulario.querySelector('#error_movil_exist');
-            var tieneErrorCiExist = elCiExist && !elCiExist.classList.contains('d-none');
-            var tieneErrorMovil = elMovil && !elMovil.classList.contains('d-none');
-            var longitudIncorrecta = ciInput && ciInput.value.length !== 11;
-            var hayVacios = formulario.querySelectorAll('.border-warning').length > 0;
-            var hayRojos = formulario.querySelectorAll('.is-invalid').length > 0;
-
-            if (tieneErrorCiExist || tieneErrorMovil || longitudIncorrecta || hayVacios || hayRojos) {
-                e.preventDefault(); 
-                e.stopImmediatePropagation(); 
-
-                Swal.fire({
-                    title: 'Atención',
-                    text: 'Revise los campos resaltados en rojo o amarillo.',
-                    icon: 'warning',
-                    confirmButtonText: 'OK',
-                    customClass: { confirmButton: 'btn btn-primary' },
-                    buttonsStyling: false
-                });
-                return;
-            }
-        });
-
-        // -------------------------------------------------------------
-        // --- VALIDACIÓN: TÍTULO DE ORO SÓLO PARA NIVEL SUPERIOR ('NS')
-        // -------------------------------------------------------------
-        var nivelEduc = formulario.querySelector('#id_nivel_educ');
-        var tituloOro = formulario.querySelector('#id_titulo_oro');
-
-        function validarTituloOro() {
-            if (!nivelEduc || !tituloOro) return;
-            
-            // Comprobamos si el valor seleccionado es 'NS' (Nivel Superior)
-            if (nivelEduc.value === 'NS') {
-                tituloOro.removeAttribute('disabled');
-            } else {
-                // Si es cualquier otro, lo bloqueamos y le quitamos el check por seguridad
-                tituloOro.setAttribute('disabled', 'disabled');
-                tituloOro.checked = false; 
-            }
-        }
-
-        if (nivelEduc) {
-            // Escuchar cambios nativos
-            nivelEduc.addEventListener('change', validarTituloOro);
-            // Escuchar cambios si el select utiliza jQuery/Select2
-            jQuery(nivelEduc).on('change', validarTituloOro);
-            
-            // Ejecutar al abrir el formulario para evaluar el estado inicial
-            validarTituloOro(); 
-        }
-        // -------------------------------------------------------------
-        
-        if (sexInput) sexInput.dispatchEvent(new Event('change'));
-    })();
+    OrbithFormularioAspirante.iniciar({
+        formulario: '#aspiranteForm',
+        urlValidacion: "{% url 'validar_datos_aspirante' %}",
+        // Al editar hay que excluir al propio trabajador de la búsqueda de
+        // duplicados: si no, su propio carnet, serie y móvil se detectarían como
+        // repetidos y no dejaría guardar.
+        aspiranteId: {{ object.pk }}
+    });
 </script>

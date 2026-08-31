@@ -1,8 +1,9 @@
+import re
 from typing import cast
 from django import forms
 from django.forms import ModelChoiceField
 from django.urls import reverse, reverse_lazy
-from .models import Aspirante
+from .models import PATRON_SERIE_CI, Aspirante
 from nomencladores.models import NEspecialidad, NMunicipio
 
 class AspiranteForm(forms.ModelForm):
@@ -34,7 +35,7 @@ class AspiranteForm(forms.ModelForm):
     class Meta:
         model = Aspirante
         fields = (
-            'doc_identidad', 'sexo', 'nombre', 'papellido', 'sapellido',
+            'doc_identidad', 'serie_ci', 'sexo', 'nombre', 'papellido', 'sapellido',
             'movil_personal', 'fijo_personal', 'direccion',
             'provincia', 'municipio', 'codigo_postal',
             'raza', 'grado_cientifico', 'tpantalon', 'tcamisa', 'tzapatos',
@@ -59,6 +60,7 @@ class AspiranteForm(forms.ModelForm):
         
         labels = {
             'doc_identidad': 'Doc. de Identidad',
+            'serie_ci': 'Serie CI',
             'sexo': 'Sexo',
             'nombre': 'Nombre',
             'papellido': 'Primer Apellido',
@@ -80,6 +82,12 @@ class AspiranteForm(forms.ModelForm):
 
         widgets = {
             'doc_identidad': forms.TextInput(attrs={'class':'form-control'}),
+            'serie_ci': forms.TextInput(attrs={
+                'class': 'form-control',
+                'maxlength': '9',
+                'autocapitalize': 'characters',
+                'placeholder': '9 caracteres',
+            }),
             'sexo': forms.Select(attrs={'class':'form-select'}),
             'nombre': forms.TextInput(attrs={'class':'form-control'}),
             'papellido': forms.TextInput(attrs={'class':'form-control'}),
@@ -170,3 +178,24 @@ class AspiranteForm(forms.ModelForm):
         else:
             mun_field.queryset = NMunicipio.objects.none()
             mun_field.widget.attrs['disabled'] = 'disabled'
+
+    def clean_serie_ci(self):
+        """Normaliza la serie y comprueba el formato antes de llegar al modelo.
+
+        Reutiliza `Aspirante._normalizar_serie_ci` (mayúsculas, sin espacios, vacío ->
+        `None`) para no tener dos criterios de normalización, y valida contra
+        `PATRON_SERIE_CI`, el mismo patrón que usa la regla ASP-009 de Subsanación.
+
+        La serie es OPCIONAL a propósito: dejarla vacía guarda sin error y Subsanación
+        lo reporta después como hallazgo de criticidad baja (ASP-008). Lo que sí se
+        rechaza aquí es una serie a medio escribir: si el usuario empezó a teclearla,
+        tiene que completarla.
+        """
+        serie = Aspirante._normalizar_serie_ci(self.cleaned_data.get('serie_ci'))
+        if serie is None:
+            return None
+        if not re.match(PATRON_SERIE_CI, serie):
+            raise forms.ValidationError(
+                'La serie del carnet debe tener exactamente 9 caracteres '
+                'alfanuméricos (A-Z, 0-9), sin espacios ni guiones.')
+        return serie

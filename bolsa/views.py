@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, HttpResponseNotAllowed, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import render, get_object_or_404, redirect
@@ -232,18 +234,53 @@ def search_bajas(request):
     })
 
 # 5. MODIFICAR: Validación con mensajes específicos
+def _edad_desde_carnet(ci):
+    """Fecha de nacimiento y edad que codifica un carnet, o `(None, None)`.
+
+    Delega en `Aspirante._calcular_fecha_nacimiento` (el mismo método que usa el
+    modelo al guardar y la regla ASP-001 de Subsanación) en vez de repetir aquí la
+    regla del 7º dígito. Así el formulario muestra exactamente la edad que Orbith
+    va a guardar, y no una segunda interpretación del carnet hecha en JavaScript.
+
+    La edad se calcula igual que `Aspirante.get_edad`, pero sobre una fecha suelta:
+    aquí todavía no existe ninguna instancia porque el aspirante se está creando.
+    """
+    fecha_nacimiento = Aspirante._calcular_fecha_nacimiento(ci)
+    if fecha_nacimiento is None:
+        return None, None
+
+    hoy = date.today()
+    edad = hoy.year - fecha_nacimiento.year - (
+        (hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day)
+    )
+    return fecha_nacimiento, edad
+
+
 def validar_datos_aspirante(request):
     ci = request.GET.get('doc_identidad', None)
     movil = request.GET.get('movil', None)
+    serie = request.GET.get('serie', None)
     aspirante_id = request.GET.get('aspirante_id', None)
     
     data = {
         'ci_existe': False,
         'ci_error_msg': '', # Nuevo campo para mensaje específico
-        'movil_existe': False
+        'movil_existe': False,
+        # La edad NO es un campo de la base de datos: cambia sola con el paso de los
+        # días. Se deriva aquí del carnet y el formulario solo la pinta, de solo
+        # lectura, para que el usuario confirme que tecleó bien el carnet.
+        'edad': None,
+        'fecha_nacimiento': '',
+        'serie_existe': False,
+        'serie_error_msg': '',
     }
 
     if ci:
+        fecha_nacimiento, edad = _edad_desde_carnet(ci)
+        if edad is not None:
+            data['edad'] = edad
+            data['fecha_nacimiento'] = fecha_nacimiento.strftime('%d/%m/%Y')
+
         qs = Aspirante.objects.filter(doc_identidad=ci)
         if aspirante_id:
             qs = qs.exclude(pk=aspirante_id)
@@ -266,6 +303,21 @@ def validar_datos_aspirante(request):
             qs = qs.exclude(pk=aspirante_id)
         if qs.exists():
             data['movil_existe'] = True
+
+    if serie:
+        # Se normaliza con el mismo método del modelo para que «ab12cd34e» y
+        # «AB12CD34E» no se consideren series distintas al buscar el duplicado.
+        serie_normalizada = Aspirante._normalizar_serie_ci(serie)
+        if serie_normalizada:
+            qs = Aspirante.objects.filter(serie_ci=serie_normalizada)
+            if aspirante_id:
+                qs = qs.exclude(pk=aspirante_id)
+            persona = qs.first()
+            if persona:
+                data['serie_existe'] = True
+                data['serie_error_msg'] = (
+                    f'La serie ya está registrada a nombre de {persona} '
+                    f'(CI {persona.doc_identidad}).')
 
     return JsonResponse(data)
 
