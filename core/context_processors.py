@@ -1,4 +1,6 @@
 """Context processors globales de Orbith."""
+from usuarios.mixins import puede_editar as _puede_editar
+
 from .changelog import ORBITH_INFO, ORBITH_VERSION, obtener_changelog
 
 
@@ -13,6 +15,13 @@ def orbith(request):
     en base de datos. La fila se crea cuando el usuario guarda una preferencia.
     """
     contexto = {
+        # `puede_editar`: Administrador y Moderador sí, Observador no. Es la MISMA
+        # función que usan `RequiereEdicionMixin`/`requiere_edicion` en el backend
+        # (usuarios/mixins.py), así que lo que se ve en pantalla y lo que el
+        # servidor permite no pueden quedar desalineados. Se expone aquí y no en
+        # cada vista porque lo consumen los listados de Aspirantes, Bajas y
+        # Contratos para pintar los botones de acción inactivos al Observador.
+        'puede_editar': _puede_editar(getattr(request, 'user', None)),
         'orbith_version': ORBITH_VERSION,
         'orbith_info': ORBITH_INFO,
         'orbith_changelog': obtener_changelog(),

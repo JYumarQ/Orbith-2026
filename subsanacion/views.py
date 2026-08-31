@@ -298,7 +298,8 @@ def detalle_hallazgo(request, pk):
             # fragmento, no la página real que ve el usuario (con sus filtros). HTMX
             # manda `HX-Current-URL` con la URL de la página en el navegador en el
             # momento de la petición — es la que hay que usar para volver ahí.
-            next_url=request.headers.get('HX-Current-URL'), origen_label='Subsanación'),
+            next_url=request.headers.get('HX-Current-URL'), origen_label='Subsanación',
+            usuario=request.user),
         'revisiones': hallazgo.revisiones.select_related('usuario')[:20],
         'estados_disponibles': Hallazgo.ESTADOS,
         'color': COLOR_POR_CRITICIDAD.get(hallazgo.criticidad, 'gris'),

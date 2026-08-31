@@ -1319,3 +1319,46 @@ class ContratoSinFechaAltaEntidadTests(TestCase):
             codigo_regla='CTR-016', object_id=str(self.contrato_sin.pk))
         self.assertIsNone(creado.unidad_organizativa_id)
         self.assertEqual(creado.criticidad, CRITICIDAD_ALTA)
+
+
+class EnlaceSoloAdminTests(TestCase):
+    """Los enlaces marcados `solo_admin` no se ofrecen a quien no es Administrador.
+
+    `updt_usuario` está protegida con `admin_required` (usuarios/urls.py): sin
+    esta comprobación, un Moderador con un hallazgo sobre una cuenta veía el
+    botón «Abrir usuario» y recibía un 403 al pulsarlo.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from usuarios.models import CustomUser
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_enlaces', password='x', es_admin=True)
+        cls.moderador = CustomUser.objects.create_user(
+            username='mod_enlaces', password='x', es_moderador=True)
+        cls.observador = CustomUser.objects.create_user(
+            username='obs_enlaces', password='x', es_observador=True)
+
+    def _enlace(self, usuario):
+        from subsanacion.enlaces import construir_enlace
+        return construir_enlace('usuarios.CustomUser', self.moderador.pk, usuario=usuario)
+
+    def test_el_admin_si_recibe_el_enlace(self):
+        enlace = self._enlace(self.admin)
+        self.assertIsNotNone(enlace)
+        self.assertIn(str(self.moderador.pk), enlace['href'])
+
+    def test_moderador_y_observador_no_reciben_el_enlace(self):
+        for usuario in (self.moderador, self.observador):
+            with self.subTest(usuario=usuario.username):
+                self.assertIsNone(self._enlace(usuario))
+
+    def test_sin_usuario_tampoco_se_ofrece_el_enlace(self):
+        """Por defecto se niega: un llamador que olvide pasar `usuario` no debe
+        acabar enseñando una puerta que da 403."""
+        self.assertIsNone(self._enlace(None))
+
+    def test_los_demas_modelos_no_se_ven_afectados(self):
+        from subsanacion.enlaces import construir_enlace
+        enlace = construir_enlace('configuracion.Configuracion', None, usuario=self.moderador)
+        self.assertIsNotNone(enlace)

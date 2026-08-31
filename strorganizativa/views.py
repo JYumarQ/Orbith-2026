@@ -57,10 +57,25 @@ def search_cargos_view(request):
     query   = request.GET.get('filter_cargos', '')
     dpto_id = request.GET.get('dpto_id', None)
 
+    # La plantilla de este listado pinta, por cada fila, el nomenclador de cargo,
+    # su departamento, la unidad organizativa de ese departamento y las plazas
+    # cubiertas. Sin `select_related` eso eran tres consultas por fila, y la
+    # property `cant_cubierta_real` añadía una cuarta (un COUNT con dos joins).
+    # Con la plantilla completa de la empresa el listado se iba a miles de
+    # consultas; ahora son dos, pase el número de cargos que pase.
+    base = (CargoPlantilla.objects
+            .select_related('ncargo', 'departamento',
+                            'departamento__unidad_organizativa')
+            .annotate(count_cubiertas=Count(
+                'calta',
+                filter=Q(calta__aspirante__estado='ACTIVO',
+                         calta__tipo__ocupa_plaza=True),
+            )))
+
     if request.user.is_superuser:
-        results = CargoPlantilla.objects.all()
+        results = base
     else:
-        results = CargoPlantilla.objects.filter(
+        results = base.filter(
             departamento__unidad_organizativa__in=request.user.unidades.all()
         )
 

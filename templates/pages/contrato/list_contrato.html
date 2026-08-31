@@ -18,6 +18,14 @@
         pointer-events: none;
         transition: opacity 0.3s ease;
     }
+    /* Un botón deshabilitado sigue apagado aunque la botonera esté activa.
+       `pointer-events: none` es lo que impide además que se dispare su onclick. */
+    #contrato-toolbar .btn:disabled {
+        opacity: 0.4;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+
     .toolbar-active {
         opacity: 1;
         pointer-events: auto;
@@ -68,17 +76,21 @@
             
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                 
+                
                 <div id="contrato-toolbar" class="d-flex gap-2 toolbar-disabled">
                     <button type="button" class="btn btn-sm btn-outline-primary" id="btn-edit-contrato" 
-                        onclick="abrir_modal_edicion(this.dataset.url)" title="Editar Contrato">
+                        onclick="abrir_modal_edicion(this.dataset.url)"
+                        {% if puede_editar %}title="Editar Contrato"{% else %}disabled title="Editar Contrato (su usuario es de solo consulta)"{% endif %}>
                         <i class="fas fa-file-signature"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-info" id="btn-edit-personal" 
-                        onclick="abrir_modal_aspir(this.dataset.url)" title="Editar Datos Personales">
+                        onclick="abrir_modal_aspir(this.dataset.url)"
+                        {% if puede_editar %}title="Editar Datos Personales"{% else %}disabled title="Editar Datos Personales (su usuario es de solo consulta)"{% endif %}>
                         <i class="fas fa-user-edit"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-warning" id="btn-movimiento" 
-                        onclick="confirmarSolicitudMovimiento()" title="Enviar a Mov. Nomina">
+                        onclick="confirmarSolicitudMovimiento()"
+                        {% if puede_editar %}title="Enviar a Mov. Nomina"{% else %}disabled title="Enviar a Mov. Nomina (su usuario es de solo consulta)"{% endif %}>
                         <i class="fas fa-sync-alt"></i>
                     </button>
                     <a class="btn btn-sm btn-outline-secondary" id="btn-pdf" href="#" title="Exportar Contrato">
@@ -86,7 +98,7 @@
                     </a>
                     <button type="button" class="btn btn-sm btn-outline-danger" id="btn-baja" 
                         onclick="abrirModalBaja()"
-                        title="Dar de Baja">
+                        {% if puede_editar %}title="Dar de Baja"{% else %}disabled title="Dar de Baja (su usuario es de solo consulta)"{% endif %}>
                         <i class="fas fa-user-minus"></i>
                     </button>
                 </div>
@@ -219,9 +231,11 @@
                         </div>
                     </div>
 
+                    {% if puede_editar %}
                     <a href="{% url 'list_aspir' %}" id="btn-nuevo-contrato" class="btn btn-primary">
                         <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nuevo</span>
                     </a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -555,17 +569,19 @@
         btnMov.setAttribute('data-url-solicitar', fila.dataset.urlSolicitar);
 
         // --- MAGIA DEL ICONO Y COLOR ---
+        // El título solo se reescribe si el botón está habilitado: en solo lectura
+        // lleva el texto que explica POR QUÉ está apagado y no hay que pisarlo.
         const estaEnProceso = fila.getAttribute('data-en-proceso') === 'true';
         if (estaEnProceso) {
             btnMov.innerHTML = '<i class="fas fa-times-circle"></i>';
             btnMov.classList.remove('btn-outline-warning');
             btnMov.classList.add('btn-outline-danger');
-            btnMov.title = 'Cancelar Movimiento';
+            if (!btnMov.disabled) btnMov.title = 'Cancelar Movimiento';
         } else {
             btnMov.innerHTML = '<i class="fas fa-sync-alt"></i>';
             btnMov.classList.remove('btn-outline-danger');
             btnMov.classList.add('btn-outline-warning');
-            btnMov.title = 'Enviar a Mov. Nomina';
+            if (!btnMov.disabled) btnMov.title = 'Enviar a Mov. Nomina';
         }
         document.getElementById('btn-pdf').setAttribute('href', fila.dataset.urlExportar);
 
@@ -590,7 +606,7 @@
             btnMov.innerHTML = '<i class="fas fa-sync-alt"></i>';
             btnMov.classList.remove('btn-outline-danger');
             btnMov.classList.add('btn-outline-warning');
-            btnMov.title = 'Enviar a Mov. Nomina';
+            if (!btnMov.disabled) btnMov.title = 'Enviar a Mov. Nomina';
         }
     }
 
@@ -812,11 +828,14 @@ document.addEventListener('keydown', function(e) {
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
             const toolbar = document.getElementById('contrato-toolbar');
-            const estaActivo = toolbar && !toolbar.classList.contains('toolbar-disabled');
+            const btnBaja = document.getElementById('btn-baja');
+            const estaActivo = toolbar
+                && !toolbar.classList.contains('toolbar-disabled')
+                && btnBaja && !btnBaja.disabled;
 
             if (estaActivo) {
                 e.preventDefault();
-                document.getElementById('btn-baja').click();
+                btnBaja.click();
             }
         }
     });

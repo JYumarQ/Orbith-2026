@@ -164,7 +164,21 @@ class CargoPlantilla(Base):
         """
         Cuenta la cantidad de personas REALMENTE activas en este cargo
         QUE OCUPAN UNA PLAZA OFICIAL (Ej: Indeterminados).
+
+        Al usarla dentro de un bucle (un listado, un informe) lanza un COUNT con
+        dos joins POR CADA CARGO. En pantallas con la plantilla completa eso son
+        cientos de consultas. Por eso reconoce la anotación `count_cubiertas`,
+        exactamente igual que `plazas_fijas` reconoce `count_ind`: quien recorra
+        muchos cargos debe anotarla en el queryset y el cálculo se resuelve en la
+        consulta que ya se estaba haciendo.
+
+            CargoPlantilla.objects.annotate(count_cubiertas=Count(
+                'calta', filter=Q(calta__aspirante__estado='ACTIVO',
+                                  calta__tipo__ocupa_plaza=True)))
         """
+        if hasattr(self, 'count_cubiertas'):
+            return self.count_cubiertas
+
         from contratos.models import CAlta
         return CAlta.objects.filter(
             cargo=self, 

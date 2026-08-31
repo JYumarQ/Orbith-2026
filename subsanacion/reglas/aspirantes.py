@@ -232,7 +232,7 @@ class SexoIncompatibleConCarnet(ReglaAspirantes):
     """Sexo registrado que no coincide con el que codifica el carnet de identidad.
 
     El criterio replica EXACTAMENTE la lógica que ya usa el formulario de aspirantes
-    (`add_aspir.html` / `updt_aspir.html`, bloque «AUTOCOMPLETAR SEXO»): el décimo
+    (`static/js/aspirante_formulario.js`, función `autocompletarSexo`): el décimo
     dígito del carnet (posición 9, contando desde 0) es par para Masculino e impar
     para Femenino. El formulario lo autocompleta y avisa con un mensaje NO bloqueante
     si el usuario lo cambia a mano, precisamente porque puede haber una razón legítima
@@ -400,3 +400,124 @@ class NivelEducativoSinCompletar(ReglaAspirantes):
         if nivel_educ is not None and nivel_educ != '':
             return None
         return [self._hallazgo(str(aspirante.pk), 'Sin nivel educativo')]
+
+
+class SerieCarnetSinCompletar(ReglaAspirantes):
+    """Serie del carnet nunca registrada.
+
+    Mismo patrón que ASP-006 (dirección) y ASP-007 (nivel educativo): un dato que el
+    formulario NO exige —porque puede llegar después del alta y porque hay miles de
+    trabajadores antiguos registrados sin él— pero que Recursos Humanos necesita
+    tener completo. Por eso se reclama desde Subsanación y no como campo obligatorio:
+    marcarlo obligatorio impediría guardar cualquier edición de esos registros
+    antiguos hasta conseguir el dato.
+    """
+
+    codigo = 'ASP-008'
+    nombre = 'Serie del carnet sin completar'
+    criticidad = CRITICIDAD_BAJA
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que el trabajador tenga registrada la serie que aparece impresa en '
+        'su carnet de identidad.')
+    causa_probable = (
+        'El trabajador se registró antes de que Orbith pidiera la serie, o no se tuvo '
+        'el carnet delante al darlo de alta.')
+    impacto = (
+        'La serie aparece en el carnet de identidad y Recursos Humanos la reporta '
+        'mensualmente. Sin ella hay que ir buscando el dato trabajador por trabajador '
+        'justo cuando toca entregar el reporte.')
+    solucion = (
+        'Abra el trabajador y copie la serie tal como aparece en su carnet de '
+        'identidad: 9 caracteres, letras y números.')
+
+    def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle='El trabajador no tiene registrada la serie de su carnet de identidad.',
+            datos={'serie_ci': 'Vacía'},
+            unidad_organizativa_id=unidad_organizativa_id,
+            campo_formulario='serie_ci',
+        )
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(Q(serie_ci__isnull=True) | Q(serie_ci=''))
+                 .values(*self.COLUMNAS_BASE)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            yield self._hallazgo(
+                str(fila['id']), self.titulo_de(fila, 'sin serie del carnet'),
+                fila.get('unidad_organizativa_id'))
+
+    def evaluar_instancia(self, aspirante):
+        if not _campo_de_texto_vacio(aspirante.serie_ci):
+            return None
+        return [self._hallazgo(str(aspirante.pk), 'Sin serie del carnet')]
+
+
+class SerieCarnetConFormatoInvalido(ReglaAspirantes):
+    """Serie presente pero que no cumple el formato.
+
+    El formulario ya rechaza una serie mal escrita, así que esta regla no puede
+    dispararse por una edición normal: solo caza filas escritas saltándose el
+    formulario (importaciones, scripts, `update()` masivos). Ese es exactamente su
+    valor, y por eso la criticidad es MEDIA y no BAJA: una serie inválida suele
+    indicar que esa fila tiene más campos sin validar.
+
+    El patrón NO se escribe aquí: se importa `PATRON_SERIE_CI` del modelo, el mismo
+    que usan el validador del campo y `AspiranteForm.clean_serie_ci`.
+    """
+
+    codigo = 'ASP-009'
+    nombre = 'Serie del carnet con formato inválido'
+    criticidad = CRITICIDAD_MEDIA
+
+    descripcion = (
+        'Comprueba que la serie registrada tenga exactamente 9 caracteres '
+        'alfanuméricos en mayúsculas.')
+    causa_probable = (
+        'La serie se escribió con espacios, guiones o minúsculas, quedó incompleta, o '
+        'la fila se importó desde otra fuente sin pasar por el formulario de Orbith.')
+    impacto = (
+        'Una serie mal transcrita no sirve para el reporte mensual de Recursos '
+        'Humanos: no identifica el carnet del trabajador. Además, al no coincidir con '
+        'el formato, tampoco se detectan series duplicadas entre trabajadores.')
+    solucion = (
+        'Abra el trabajador y vuelva a escribir la serie tal como aparece en su '
+        'carnet: 9 caracteres, solo letras y números, sin espacios ni guiones.')
+
+    def ejecutar(self, contexto):
+        # Import diferido, como el resto de los módulos de reglas: ninguno importa
+        # modelos en tiempo de import, para no depender del orden de carga de apps.
+        from bolsa.models import PATRON_SERIE_CI
+
+        # El patrón se aplica en PostgreSQL: a Python solo llegan las filas que ya
+        # fallan. Se excluyen las vacías porque de esas ya informa ASP-008; si no,
+        # cada trabajador sin serie generaría dos hallazgos por lo mismo.
+        filas = (self.base_queryset()
+                 .exclude(serie_ci__isnull=True)
+                 .exclude(serie_ci='')
+                 .exclude(serie_ci__regex=PATRON_SERIE_CI)
+                 .values(*self.COLUMNAS_BASE, 'serie_ci')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            serie = fila['serie_ci']
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'serie «{serie}» con formato inválido'),
+                detalle=(
+                    f'La serie «{serie}» no cumple el formato de 9 caracteres '
+                    f'alfanuméricos en mayúsculas.'),
+                datos={
+                    'serie_registrada': serie,
+                    'longitud': len(serie),
+                    'formato_esperado': '9 caracteres A-Z y 0-9, sin espacios ni guiones',
+                },
+                unidad_organizativa_id=fila.get('unidad_organizativa_id'),
+                campo_formulario='serie_ci',
+            )

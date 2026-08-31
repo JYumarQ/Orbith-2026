@@ -3,6 +3,13 @@
 
 {% block title %}Subsanación · Orbith{% endblock %}
 
+{% block libs_graficos %}
+  {% comment %} El panel de estadísticas (cargado por HTMX) dibuja un gráfico con ApexCharts;
+     ya no se carga en todas las páginas. Ver `libs_graficos` en base/base.html. {% endcomment %}
+  <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
+  <script src="{% static 'js/apexcharts.min.js' %}"></script>
+{% endblock %}
+
 {% block extra_head %}
 {# Bootstrap Icons no viene en base.html: cada módulo que use `bi bi-*` lo carga. #}
 <link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}" />
