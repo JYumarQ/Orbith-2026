@@ -36,6 +36,67 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.0.0",
+        "fecha": "2026-08-31",
+        "titulo": "Pre-Nómina, seguridad del acceso y saneamiento de estáticos",
+        "cambios": [
+            ("nuevo", "Pre-Nómina: módulo completo de Reportes de Pago, con "
+                    "conceptos por horas, conceptos por importe y claves de "
+                    "ausencia, más importación y exportación de datos."),
+            ("nuevo", "Pre-Nómina → Calendario: definición de jornadas, "
+                    "calendarios de pago y asignación de calendario a cada "
+                    "trabajador."),
+            ("nuevo", "Pre-Nómina → Mis Plantillas: plantillas de reporte "
+                    "reutilizables por usuario."),
+            ("nuevo", "Nomencladores propios de Pre-Nómina: Pago Asociado por "
+                    "Horas, Pago Asociado por Importe, Escala de Años de "
+                    "Servicio y Claves de Ausencia."),
+            ("nuevo", "Pantalla de acceso: botón para mostrar u ocultar la "
+                    "contraseña mientras se escribe."),
+            ("nuevo", "Pantalla de acceso: el enlace «¿Problemas para acceder?» "
+                    "abre un formulario que envía la incidencia a la bandeja "
+                    "del Administrador sin necesidad de iniciar sesión."),
+            ("seguridad", "Bloqueo por intentos fallidos: 10 fallos en 5 minutos "
+                        "bloquean la cuenta. Protege también el panel de "
+                        "administración de Django, y el Administrador puede "
+                        "desbloquear una cuenta al instante."),
+            ("seguridad", "Auditoría de accesos: los inicios de sesión, los "
+                        "intentos fallidos y los cierres de sesión quedan "
+                        "registrados. Nunca se guarda la contraseña."),
+            ("seguridad", "Caducidad de sesión: se cierra a los 60 minutos de "
+                        "inactividad, con un techo de 12 horas, y la sesión "
+                        "termina al cerrar el navegador. Antes duraba dos "
+                        "semanas."),
+            ("seguridad", "Retiradas las páginas de cambio y reseteo de "
+                        "contraseña que Django publica de serie: estaban "
+                        "accesibles sin iniciar sesión y sin plantilla, así que "
+                        "devolvían un error 500."),
+            ("seguridad", "El sistema arranca en modo seguro si falta el fichero "
+                        "de configuración del entorno, en lugar de mostrar "
+                        "trazas con detalles internos."),
+            ("seguridad", "La cookie de sesión pasa a ser inaccesible desde "
+                        "JavaScript y no viaja en peticiones de otros sitios."),
+            ("corregido", "Estáticos: la carpeta generada por «collectstatic» "
+                        "estaba versionada y desactualizada, de modo que en "
+                        "producción faltaban recursos que carga toda la "
+                        "aplicación. Ahora se genera en cada despliegue."),
+            ("corregido", "Pantalla de acceso: el usuario ya no se borra al "
+                        "fallar el intento, los avisos de éxito dejan de "
+                        "mostrarse en rojo como si fueran errores y el teclado "
+                        "del móvil ya no fuerza la mayúscula inicial."),
+            ("corregido", "Quien ya tiene la sesión abierta y vuelve a la "
+                        "pantalla de acceso va directo al inicio, en lugar de "
+                        "ver otra vez el formulario."),
+            ("mejorado", "Los gestores de contraseñas del navegador ya "
+                        "reconocen los campos de la pantalla de acceso."),
+            ("eliminado", "Nomencladores «Horario» y «Jornada»: sus tablas "
+                        "estaban vacías, ninguna pantalla los usaba y ningún "
+                        "contrato tenía jornada asignada. El tiempo de trabajo "
+                        "se gestiona ahora desde Pre-Nómina → Calendario."),
+        ],
+    },
+
+    {
         "version": "2.5.0",
         "fecha": "2026-08-18",
         "titulo": "Guía de progreso, permisos granulares y auditoría en admin",
