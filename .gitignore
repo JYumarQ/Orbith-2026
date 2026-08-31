@@ -7,6 +7,13 @@ orbith_db.sqlite3
 media/
 static_root/
 
+# Salida de `manage.py collectstatic`: se genera en cada despliegue, no se versiona.
+# Estaba en git y se quedo desactualizada (le faltaban 12 ficheros de static/,
+# entre ellos js/progreso_guia.js y css/mobile-ux.css, que carga toda la app),
+# asi que en produccion esos recursos daban 404. Ahora el despliegue TIENE que
+# ejecutar:  python manage.py collectstatic --noinput
+staticfiles/
+
 # Credenciales: nunca deben viajar en el repositorio.
 # `core/.env` guarda SECRET_KEY y los datos de la base de datos.
 .env
@@ -15,3 +22,6 @@ core/.env
 
 # Copias de trabajo que crea automaticamente el agente de Claude Code.
 .claude/worktrees/
+
+# Binario de Cloudflare Tunnel: se descarga, no se versiona.
+cloudflared.exe
