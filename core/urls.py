@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.auth import views as auth_views
 from dashboard import views as dashboard_views
 from django.urls import path, include
 from usuarios.views import CustomLoginView
@@ -32,14 +33,31 @@ urlpatterns = [
     path('nomencladores/', include('nomencladores.urls')),
     path('notificaciones/', include('notificaciones.urls')),
     path('progreso/', include('progreso.urls')),
+    path('prenomina/', include('prenomina.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),
     path('soporte/', include('soporte.urls')),
     path('subsanacion/', include('subsanacion.urls')),
     
+    # ---------------------------------------------------------
     # SISTEMA DE AUTENTICACIÓN
+    #
+    # Antes había aquí `include('django.contrib.auth.urls')`, que publica de
+    # golpe SIETE rutas prefabricadas de Django. De ellas, Orbith solo usa
+    # `login` y `logout`; las cinco de cambio y reseteo de contraseña quedaban
+    # publicadas SIN su plantilla, así que devolvían TemplateDoesNotExist (error
+    # 500). Y las de reseteo Django las marca accesibles sin iniciar sesión, de
+    # modo que cualquiera en la red podía provocar ese error sin tener cuenta.
+    #
+    # No se crean esas plantillas porque el reseteo de Django funciona enviando
+    # un correo, y Orbith es un sistema offline (EMAIL_BACKEND es el de consola,
+    # sin EMAIL_HOST en ninguna parte): sería una función que aparenta funcionar
+    # y no funciona. En Orbith el cambio de contraseña ya existe y es otro:
+    # `usuarios.views.CambiarPasswordView`, desde «Mi Perfil» o, para un tercero,
+    # desde el listado de usuarios.
+    # ---------------------------------------------------------
     path('accounts/login/', CustomLoginView.as_view(), name='login'),
-    path('accounts/', include('django.contrib.auth.urls'))
+    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
 
 ]
 

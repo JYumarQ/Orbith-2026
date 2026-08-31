@@ -5,8 +5,13 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Definimos el esquema (NombreVariable=(Tipo, ValorPorDefecto)) al instanciar
+# El valor por defecto de DEBUG es False A PROPÓSITO: si `core/.env` se pierde o
+# se despliega sin él, el sistema debe arrancar en modo seguro. Con `True` como
+# defecto, producción mostraría trazas completas (rutas de ficheros, versiones,
+# fragmentos de configuración) ante cualquier error. El entorno local define
+# DEBUG=True en su propio .env, así que el desarrollo no cambia.
 env = environ.Env(
-    DEBUG=(bool, True)
+    DEBUG=(bool, False)
 )
 env.read_env(BASE_DIR / "core" / ".env", encoding="utf-8")
 
@@ -35,7 +40,7 @@ INSTALLED_APPS = [
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
     'solicitudes', 'informes',  'informe_inteligente', 'informes_anexo',
-    'soporte', 'subsanacion', 'cierres', 'progreso',
+    'soporte', 'subsanacion', 'cierres', 'progreso', 'prenomina',
 ]
 
 MIDDLEWARE = [
@@ -135,7 +140,32 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# OJO: `STATICFILES_STORAGE` (el ajuste antiguo) fue ELIMINADO en Django 5.1 y
+# este proyecto va por Django 5.2, así que estaba ahí sin efecto ninguno: el
+# almacenamiento real era el `StaticFilesStorage` de serie. Consecuencias en
+# producción, que es donde se notaba la lentitud al pulsar en la barra lateral:
+#
+#   * Sin precompresión: WhiteNoise servía los ficheros en crudo. Solo
+#     `vendor/css/core.css` son 959 KB que comprimidos bajan a ~110 KB.
+#   * Sin nombres con hash: WhiteNoise no puede marcar los ficheros como
+#     "inmutables", así que el navegador revalidaba los ~30 estáticos de cada
+#     página EN CADA NAVEGACIÓN. Con hash pasan a `Cache-Control: immutable`
+#     durante un año y, de la segunda página en adelante, no se descarga nada.
+#
+# El almacenamiento con manifiesto exige que todo `{% static %}` apunte a un
+# fichero que exista: si falta uno, `collectstatic` falla en el despliegue en
+# lugar de dejar un 404 silencioso en producción. `core.storages` es ese
+# almacenamiento de WhiteNoise con una única excepción documentada: los mapas de
+# código (`*.map`), que varias librerías de terceros mencionan sin incluirlos.
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "core.storages.AlmacenEstaticosOrbith",
+    },
+}
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -154,6 +184,24 @@ if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
+
+    # Tunel temporal (cloudflared) para que alguien fuera de la red revise el
+    # portatil sin publicarlo permanentemente. Cloudflare termina el HTTPS en
+    # su borde y reenvia a este runserver por HTTP simple, asi que:
+    #
+    # 1. Django recibe un Origin "https://..." en una peticion que el ve como
+    #    insegura -> sin CSRF_TRUSTED_ORIGINS la verificacion de CSRF falla
+    #    con "Origin checking failed", que es exactamente el error que
+    #    aparecio al usar el tunel.
+    # 2. SECURE_PROXY_SSL_HEADER hace que Django confie en el encabezado
+    #    X-Forwarded-Proto que cloudflared SI envia, y trate la peticion como
+    #    HTTPS de verdad (request.is_secure() == True).
+    #
+    # El comodin cubre cualquier subdominio de trycloudflare.com: un "quick
+    # tunnel" genera uno aleatorio distinto cada vez que se arranca. No afecta
+    # a produccion: esta rama solo se activa con DEBUG=True.
+    CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com']
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 else:
     # Producción
     ALLOWED_HOSTS = ['orbith.eleccmg.une.cu', 'localhost']  # sin "https://"
@@ -188,6 +236,36 @@ else:
         }
     }
 
+
+# =========================================================================
+# AUTENTICACIÓN Y SESIÓN
+# =========================================================================
+
+# `ModelBackend` con bloqueo por intentos fallidos. Se declara como backend (y no
+# solo dentro del formulario del login) para que el bloqueo cubra TODAS las
+# puertas, incluida la del panel de administración de Django.
+AUTHENTICATION_BACKENDS = [
+    'usuarios.backends.BackendConBloqueo',
+]
+
+# Techo absoluto de la sesión. La caducidad que se nota en el día a día es la de
+# INACTIVIDAD (60 minutos), que aplica `usuarios.middleware.ControlAccesoMiddleware`;
+# esto es solo el límite máximo que ninguna sesión puede superar aunque se use sin
+# parar. Antes se quedaba en el valor por defecto de Django: DOS SEMANAS.
+SESSION_COOKIE_AGE = 12 * 60 * 60  # 12 horas
+
+# La cookie muere al cerrar el navegador. En PCs compartidas es la diferencia
+# entre que el siguiente que se siente entre en Recursos Humanos o no.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# NO se activa SESSION_SAVE_EVERY_REQUEST: haría que el sondeo automático del
+# contador de notificaciones (cada 5 minutos, ver templates/base/navbar.html)
+# renovara la sesión para siempre mientras hubiera una pestaña abierta, anulando
+# por completo la caducidad por inactividad.
+
+SESSION_COOKIE_HTTPONLY = True   # JavaScript no puede leer la cookie de sesión
+SESSION_COOKIE_SAMESITE = 'Lax'  # no viaja en peticiones desde otros sitios
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 # Asegúrate de haberlo añadido al final de settings.py
 LOGIN_URL = 'login'  # Redirige a login si no autenticado
