@@ -146,6 +146,12 @@ class NFamiliaCargo(Base):
 # tienen además claridades distintas, así que se distinguen impresos en blanco y
 # negro.
 #
+# Y NINGUNO PUEDE SER CASI NEGRO. Las tarjetas de gráficos del Registro Diario y
+# el resumen de Contratos Determinados tienen fondo oscuro: un tono muy oscuro
+# desaparece contra ellas. El azul acero de Cuadros es el más oscuro de los
+# cinco —sigue leyéndose como «lo alto de la jerarquía»— pero se ve en los dos
+# fondos.
+#
 # Cuadro Directivo y Cuadro Ejecutivo comparten color: la aplicación los agrupa
 # como «Cuadros» en todas partes.
 COLORES_CAT_OCUPACIONAL = {
@@ -153,8 +159,8 @@ COLORES_CAT_OCUPACIONAL = {
     'TEC': '#14b8a6',   # Técnicos — turquesa
     'ADM': '#6366f1',   # Administrativos — índigo
     'SER': '#a855f7',   # Servicios — púrpura
-    'CDI': '#0f172a',   # Cuadro Directivo — pizarra
-    'CEJ': '#0f172a',   # Cuadro Ejecutivo — pizarra (mismo que Directivo)
+    'CDI': '#0369a1',   # Cuadro Directivo — azul acero
+    'CEJ': '#0369a1',   # Cuadro Ejecutivo — azul acero (mismo que Directivo)
 }
 
 #: Color de lo que no tiene categoría, o la tiene sin reconocer.

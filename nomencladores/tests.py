@@ -165,6 +165,36 @@ class ColoresDeCategoriaOcupacional(TestCase):
                 self.assertLessEqual(rojo, azul + 40,
                                      '%s (%s) tira a cálido' % (codigo, color))
 
+    def test_ningun_color_desaparece_sobre_las_tarjetas_oscuras(self):
+        """Varias pantallas tienen tarjetas de fondo oscuro —los gráficos del
+        Registro Diario, el resumen de Contratos Determinados—, y un color casi
+        negro se pierde contra ellas. Pasó de verdad: la primera versión de esta
+        paleta puso Cuadros en pizarra `#0f172a` y su barra era invisible.
+
+        Se exige un contraste mínimo de 2:1 contra ese fondo, que es lo que
+        separa «se ve» de «hay que adivinarlo».
+        """
+        from nomencladores.models import COLORES_CAT_OCUPACIONAL
+
+        def luminancia(hexadecimal):
+            canales = []
+            for i in (1, 3, 5):
+                valor = int(hexadecimal[i:i + 2], 16) / 255
+                canales.append(valor / 12.92 if valor <= 0.03928
+                               else ((valor + 0.055) / 1.055) ** 2.4)
+            rojo, verde, azul = canales
+            return 0.2126 * rojo + 0.7152 * verde + 0.0722 * azul
+
+        #: El más claro de los dos fondos oscuros que usa la aplicación.
+        fondo = luminancia('#1e293b')
+
+        for codigo, color in COLORES_CAT_OCUPACIONAL.items():
+            contraste = (luminancia(color) + 0.05) / (fondo + 0.05)
+            with self.subTest(categoria=codigo):
+                self.assertGreaterEqual(
+                    contraste, 2.0,
+                    '%s (%s) se pierde sobre las tarjetas oscuras' % (codigo, color))
+
     def test_el_css_repite_exactamente_los_mismos_colores(self):
         import io
         import os

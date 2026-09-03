@@ -363,7 +363,8 @@
    de los dos sitios.
 
    La paleta es FRIA a proposito: en los informes el naranja significa «falta» y
-   el rojo «critico», asi que ninguna categoria los usa.
+   el rojo «critico», asi que ninguna categoria los usa. Y ninguna es casi
+   negra: hay tarjetas de fondo oscuro donde un tono asi desapareceria.
    -------------------------------------------------------------------------- */
 
 :root {
@@ -371,7 +372,7 @@
     --cat-tec: #14b8a6;   /* Tecnicos */
     --cat-adm: #6366f1;   /* Administrativos */
     --cat-ser: #a855f7;   /* Servicios */
-    --cat-cua: #0f172a;   /* Cuadros (Directivo y Ejecutivo) */
+    --cat-cua: #0369a1;   /* Cuadros (Directivo y Ejecutivo) — azul acero */
     --cat-sin: #94a3b8;   /* Sin categoria reconocida */
 }
 

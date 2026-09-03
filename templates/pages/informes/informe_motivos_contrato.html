@@ -43,42 +43,38 @@
         <div class="row g-4 mb-4 align-items-stretch">
             
             <div class="col-xl-5 col-lg-12">
-                {% comment %} Fondo claro, no oscuro: la barra de la categoria Cuadros va en
-                   pizarra —el color comun de esa categoria en toda la aplicacion— y se
-                   perdia contra el fondo. De paso la tarjeta queda como el resto de los
-                   informes, que ya siguen la paleta clara. {% endcomment %}
-                <div class="card bg-white border-0 shadow-sm h-100 rounded-4">
+                <div class="card bg-dark text-white border-0 shadow-lg h-100 rounded-4" style="background: linear-gradient(135deg, #2b2c40 0%, #1e1e2d 100%);">
                     <div class="card-body p-4 d-flex flex-column justify-content-between">
                         
-                        <div class="d-flex justify-content-between align-items-center border-bottom border-slate-200 pb-3 mb-3">
+                        <div class="d-flex justify-content-between align-items-center border-bottom border-light pb-3 mb-3">
                             <div>
                                 <h5 class="text-primary fw-black text-uppercase mb-1">Resumen del Informe</h5>
-                                <p class="mb-0 text-slate-700 fs-5">Total Plantilla: <span class="fw-black fs-4">{{ total_contratos }}</span></p>
+                                <p class="mb-0 text-white fs-5">Total Plantilla: <span class="fw-black fs-4">{{ total_contratos }}</span></p>
                             </div>
                         </div>
 
                         <div class="row g-3 mt-1">
                             <div class="col-4">
-                                <h6 class="text-slate-500 text-uppercase fw-black mb-3 border-bottom border-slate-200 pb-2">Por Sexo</h6>
+                                <h6 class="text-white text-uppercase fw-black mb-3 border-bottom border-light pb-2">Por Sexo</h6>
                                 <div class="mb-3">
-                                    <span class="text-slate-700 fw-bold fs-6 d-block mb-1">Masculino</span>
-                                    <span class="text-info fw-black fs-4">{{ total_hombres }} <span class="fs-6 text-slate-500">({{ porc_hombres }}%)</span></span>
+                                    <span class="text-white fw-bold fs-6 d-block mb-1">Masculino</span>
+                                    <span class="text-info fw-black fs-4">{{ total_hombres }} <span class="fs-6 text-white">({{ porc_hombres }}%)</span></span>
                                 </div>
                                 <div>
-                                    <span class="text-slate-700 fw-bold fs-6 d-block mb-1">Femenino</span>
-                                    <span class="text-danger fw-black fs-4">{{ total_mujeres }} <span class="fs-6 text-slate-500">({{ porc_mujeres }}%)</span></span>
+                                    <span class="text-white fw-bold fs-6 d-block mb-1">Femenino</span>
+                                    <span class="text-danger fw-black fs-4">{{ total_mujeres }} <span class="fs-6 text-white">({{ porc_mujeres }}%)</span></span>
                                 </div>
                             </div>
 
-                            <div class="col-8 border-start border-slate-200 ps-4">
-                                <h6 class="text-slate-500 text-uppercase fw-black mb-3 border-bottom border-slate-200 pb-2">Categoría Ocupacional</h6>
+                            <div class="col-8 border-start border-light ps-4">
+                                <h6 class="text-white text-uppercase fw-black mb-3 border-bottom border-light pb-2">Categoría Ocupacional</h6>
                                 {% for cat in categorias_ordenadas %}
                                 <div class="mb-2">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="text-slate-700 fw-bold fs-6">{{ cat.nombre }}</span>
-                                        <span class="text-slate-800 fw-black fs-5">{{ cat.count }} <span class="fs-6 text-slate-400 ms-1">({{ cat.porc }}%)</span></span>
+                                        <span class="text-white fw-bold fs-6">{{ cat.nombre }}</span>
+                                        <span class="text-white fw-black fs-5">{{ cat.count }} <span class="fs-6 text-white-50 ms-1">({{ cat.porc }}%)</span></span>
                                     </div>
-                                    <div class="progress rounded-pill" style="height: 6px; background-color: #e2e8f0;">
+                                    <div class="progress rounded-pill bg-secondary" style="height: 6px;">
                                         <div class="progress-bar" role="progressbar" style="width: {{ cat.porc }}%; background-color: {{ cat.color }};"></div>
                                     </div>
                                 </div>
