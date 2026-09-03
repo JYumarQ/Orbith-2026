@@ -31,21 +31,28 @@
                     </div>
                 {% endif %}
                 
+                {# Unidad y Departamento se pintan desde `unidad_visual`/`dpto_visual`,
+                   que la vista rellena tanto en GET como al recargar por error de
+                   validación. Antes había además un respaldo a `form.initial.unidad`,
+                   redundante (la vista rellena ambos con la misma condición) y frágil:
+                   Django resuelve SIEMPRE el argumento de un filtro, así que al abrir
+                   el formulario sin `?departamento=` reventaba con
+                   «VariableDoesNotExist: unidad» y la página entera daba error 500. #}
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="visual_unidad">Unidad Organizativa</label>
                         <input type="text" id="visual_unidad" class="form-control" 
                             style="background-color: #e9ecef; color: #566a7f;" 
-                            value="{{ unidad_visual.descripcion|default:form.initial.unidad.descripcion }}" readonly>
-                        <input type="hidden" name="unidad" value="{{ unidad_visual.pk|default:form.initial.unidad.pk }}">
+                            value="{{ unidad_visual.descripcion|default:'' }}" readonly>
+                        <input type="hidden" name="unidad" value="{{ unidad_visual.pk|default:'' }}">
                     </div>
 
                     <div class="col-md-6">
                         <label class="form-label" for="visual_dpto">Departamento</label>
                         <input type="text" id="visual_dpto" class="form-control" 
                             style="background-color: #e9ecef; color: #566a7f;" 
-                            value="{{ dpto_visual.descripcion|default:form.initial.departamento.descripcion }}" readonly>
-                        <input type="hidden" name="departamento" value="{{ dpto_visual.id|default:form.initial.departamento.id }}">
+                            value="{{ dpto_visual.descripcion|default:'' }}" readonly>
+                        <input type="hidden" name="departamento" value="{{ dpto_visual.id|default:'' }}">
                     </div>
 
                     <div class="col-12">
@@ -331,6 +338,19 @@
         // --- 7. ARRANQUE INICIAL ---
         actualizarDatosCargo(); // Necesario para edición
         actualizarEstadoActivo(); // Fuerza el color del switch desde el segundo 0
+
+        // --- 8. VALIDACIÓN VISUAL (amarillo = vacío, verde = con dato) ---
+        // Mismo criterio que el formulario de contrato, en `validacion_visual.js`.
+        // `rol`, `nivel_preparacion` y `orden_informe` se pintan pero no bloquean el
+        // guardado: son opcionales en el modelo, aunque Subsanación los reclame
+        // después (EST-006 y EST-007).
+        if (window.OrbithValidacionVisual) {
+            window.OrbithValidacionVisual.activar({
+                form: '#cargoForm',
+                obligatorios: ['ncargo', 'cant_aprobada'],
+                recomendados: ['rol', 'nivel_preparacion', 'orden_informe']
+            });
+        }
 
         
         

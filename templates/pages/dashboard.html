@@ -3,12 +3,13 @@
 {% block title %}Dashboard RRHH{% endblock %}
 
 {% load static %}
+{% load estaticos %}
 
 {% block libs_graficos %}
   {% comment %} El Dashboard dibuja sus gráficos con ApexCharts; ya no se carga en todas
      las páginas. Ver el bloque `libs_graficos` en base/base.html. {% endcomment %}
   <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
-  <script src="{% static 'js/apexcharts.min.js' %}"></script>
+  <script src="{% estatico 'js/apexcharts.min.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -52,27 +53,12 @@
                         <div class="row gy-3 gx-4">
                             <div class="col-12 col-lg-8">
                                 <label class="filtro-label"><i class="bx bx-sitemap"></i> Unidad Organizativa</label>
-                                <div class="chip-multiselect">
-                                    <select class="chip-multiselect-native" name="uo" multiple hidden>
-                                        {% for uo in filtro_uo_opciones %}
-                                        <option value="{{ uo.pk }}" {% if uo.pk in filtro_uo_seleccionadas %}selected{% endif %}>{{ uo.descripcion }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <div class="chip-multiselect-box" tabindex="0">
-                                        <div class="chip-multiselect-chips"></div>
-                                        <span class="chip-multiselect-badge">0</span>
-                                        <i class="bx bx-chevron-down chip-multiselect-arrow"></i>
-                                    </div>
-                                    <div class="chip-multiselect-panel">
-                                        <input type="text" class="chip-multiselect-search" placeholder="Buscar unidad...">
-                                        <div class="chip-multiselect-options"></div>
-                                    </div>
-                                </div>
-                                <small class="text-muted"><i class="bx bx-info-circle"></i> Haz clic para desplegar y buscar múltiples unidades. Selecciona una UO para incluir automáticamente todos sus Departamentos.</small>
+                                {% comment %} El control ya no vive aquí: es el partial compartido que
+                                   usan también Informes RRHH e Informe Inteligente. Trae además las
+                                   subunidades indentadas bajo su principal. {% endcomment %}
+                                {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidades_dashboard' campo='uo' unidades=filtro_uo_opciones seleccionadas=filtro_uo_seleccionadas_txt marcador='Todas las unidades' %}
+                                <small class="text-muted"><i class="bx bx-info-circle"></i> Elija una o varias unidades. Al elegir una Unidad Principal se incluyen también sus subunidades.</small>
                             </div>
-                        </div>
-                        <div class="mt-3">
-                            <button type="submit" class="btn btn-primary btn-sm px-4">Aplicar filtros</button>
                         </div>
                     </form>
                 </div>
@@ -492,162 +478,21 @@
 .filtros-reset:hover { text-decoration: underline; }
 .filtro-label { display: flex; align-items: center; gap: 0.35rem; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.03em; text-transform: uppercase; color: #334155; margin-bottom: 0.5rem; }
 
-.chip-multiselect { position: relative; }
-.chip-multiselect-box {
-    display: flex; align-items: center; gap: 0.5rem; min-height: 44px;
-    border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
-    padding: 0.4rem 0.6rem; cursor: pointer; transition: border-color .15s ease;
-}
-.chip-multiselect-box:hover, .chip-multiselect.open .chip-multiselect-box { border-color: #6366f1; }
-.chip-multiselect-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; flex: 1 1 auto; }
-.chip-multiselect-chips:empty::before { content: 'Seleccionar...'; color: #94a3b8; font-size: 0.85rem; }
-.chip-multiselect-chip {
-    display: inline-flex; align-items: center; gap: 0.3rem; background: #dbeafe; color: #1e40af;
-    border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 600; white-space: nowrap;
-}
-.chip-multiselect-chip button {
-    border: none; background: transparent; color: #1e40af; font-size: 0.9rem; line-height: 1;
-    cursor: pointer; padding: 0; opacity: 0.7;
-}
-.chip-multiselect-chip button:hover { opacity: 1; }
-.chip-multiselect-badge {
-    background: #1e293b; color: #fff; border-radius: 999px; min-width: 22px; height: 22px;
-    display: none; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
-}
-.chip-multiselect-badge.show { display: inline-flex; }
-.chip-multiselect-arrow { color: #94a3b8; transition: transform .15s ease; flex-shrink: 0; }
-.chip-multiselect.open .chip-multiselect-arrow { transform: rotate(180deg); }
-
-.chip-multiselect-panel {
-    display: none; position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0;
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
-    padding: 0.6rem; max-height: 260px; flex-direction: column;
-}
-.chip-multiselect.open .chip-multiselect-panel { display: flex; }
-.chip-multiselect-search {
-    border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem 0.6rem; font-size: 0.85rem;
-    margin-bottom: 0.4rem; flex-shrink: 0;
-}
-.chip-multiselect-options { overflow-y: auto; }
-.chip-multiselect-option {
-    padding: 0.4rem 0.6rem; border-radius: 8px; font-size: 0.85rem; cursor: pointer;
-    display: flex; align-items: center; gap: 0.5rem; color: #334155;
-}
-.chip-multiselect-option:hover { background: #f1f5f9; }
-.chip-multiselect-option.selected { background: #eef2ff; color: #3730a3; font-weight: 600; }
-.chip-multiselect-option.hidden { display: none; }
-.chip-multiselect-option .bx-check { visibility: hidden; color: #6366f1; }
-.chip-multiselect-option.selected .bx-check { visibility: visible; }
-.chip-multiselect-empty { padding: 0.5rem; text-align: center; color: #94a3b8; font-size: 0.8rem; }
+/* El CSS del selector de unidades se movió a `static/css/orbith-controles.css`
+   al hacerlo compartido: lo usan también Informes RRHH e Informe Inteligente. */
 </style>
 
 <script>
-(function() {
-    // Multi-select de UO/Departamento: chips + buscador sobre un <select multiple>
-    // oculto. El <select> nativo sigue siendo la fuente de verdad que viaja en el
-    // GET al enviar el formulario — este componente solo construye una UI encima,
-    // sin cambiar en nada el envío por querystring ya acordado.
-    function initChipMultiselect(root) {
-        const nativeSelect = root.querySelector('.chip-multiselect-native');
-        const box = root.querySelector('.chip-multiselect-box');
-        const chipsEl = root.querySelector('.chip-multiselect-chips');
-        const badgeEl = root.querySelector('.chip-multiselect-badge');
-        const panel = root.querySelector('.chip-multiselect-panel');
-        const searchEl = root.querySelector('.chip-multiselect-search');
-        const optionsEl = root.querySelector('.chip-multiselect-options');
-        if (!nativeSelect) return;
-
-        const opciones = Array.from(nativeSelect.options).map(o => ({
-            value: o.value, label: o.text, el: o
-        }));
-
-        optionsEl.innerHTML = '';
-        opciones.forEach(op => {
-            const item = document.createElement('div');
-            item.className = 'chip-multiselect-option';
-            item.dataset.value = op.value;
-            item.innerHTML = '<i class="bx bx-check"></i><span></span>';
-            item.querySelector('span').textContent = op.label;
-            item.addEventListener('click', function (e) {
-                e.stopPropagation();
-                op.el.selected = !op.el.selected;
-                render();
-            });
-            optionsEl.appendChild(item);
-            op.itemEl = item;
-        });
-
-        const vacio = document.createElement('div');
-        vacio.className = 'chip-multiselect-empty';
-        vacio.textContent = 'Sin resultados.';
-        vacio.style.display = 'none';
-        optionsEl.appendChild(vacio);
-
-        function render() {
-            chipsEl.innerHTML = '';
-            let seleccionadas = 0;
-            opciones.forEach(op => {
-                const sel = op.el.selected;
-                op.itemEl.classList.toggle('selected', sel);
-                if (sel) {
-                    seleccionadas++;
-                    const chip = document.createElement('span');
-                    chip.className = 'chip-multiselect-chip';
-                    const label = document.createElement('span');
-                    label.textContent = op.label;
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.innerHTML = '&times;';
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        op.el.selected = false;
-                        render();
-                    });
-                    chip.appendChild(label);
-                    chip.appendChild(btn);
-                    chipsEl.appendChild(chip);
-                }
-            });
-            badgeEl.textContent = seleccionadas;
-            badgeEl.classList.toggle('show', seleccionadas > 0);
-        }
-
-        box.addEventListener('click', function (e) {
-            e.stopPropagation();
-            document.querySelectorAll('.chip-multiselect.open').forEach(el => {
-                if (el !== root) el.classList.remove('open');
-            });
-            root.classList.toggle('open');
-            if (root.classList.contains('open')) {
-                searchEl.value = '';
-                filtrar('');
-                searchEl.focus();
-            }
-        });
-
-        function filtrar(texto) {
-            const t = texto.trim().toLowerCase();
-            let visibles = 0;
-            opciones.forEach(op => {
-                const coincide = op.label.toLowerCase().includes(t);
-                op.itemEl.classList.toggle('hidden', !coincide);
-                if (coincide) visibles++;
-            });
-            vacio.style.display = visibles === 0 ? 'block' : 'none';
-        }
-
-        searchEl.addEventListener('click', e => e.stopPropagation());
-        searchEl.addEventListener('input', function () { filtrar(this.value); });
-        panel.addEventListener('click', e => e.stopPropagation());
-
-        render();
-    }
-
-    document.querySelectorAll('.chip-multiselect').forEach(initChipMultiselect);
-    document.addEventListener('click', function () {
-        document.querySelectorAll('.chip-multiselect.open').forEach(el => el.classList.remove('open'));
+/* La lógica del selector de unidades se movió a `static/js/selector_unidades.js`,
+   que se carga globalmente desde `base/scripts.html`. Aquí solo queda el cableado:
+   al cerrar el panel con la selección cambiada, se envía el formulario. */
+document.addEventListener('DOMContentLoaded', function () {
+    var caja = document.getElementById('filtro_unidades_dashboard');
+    if (!caja) return;
+    caja.addEventListener('orbith:unidades', function () {
+        caja.closest('form').submit();
     });
-})();
+});
 </script>
 
 <script>

@@ -1,0 +1,46 @@
+{% comment %}
+  Las filas de una Unidad Organizativa dentro del PDF de Puestos Clave.
+
+  Se incluye a sí misma para las subunidades, igual que su gemela de pantalla
+  (`pages/informes/partials/puestos_clave_unidad.html`). Aquí solo cambian los
+  estilos, porque `xhtml2pdf` no entiende ni flexbox ni las utilidades de
+  Bootstrap: todo va en `class` con CSS clásico.
+
+  PARÁMETROS
+  ----------
+    unidad   Nodo de `InformePuestosClaveView._agrupar_por_unidad`.
+    nivel    0 unidad de primer nivel, 1 subunidad. Decide el tamaño de letra
+             y la sangría, que es lo que hace legible la jerarquía en papel.
+
+  Sin nombre no se pinta cabecera: es el modo antiguo del informe, con todos los
+  cargos sumados (ver `AGRUPACION_PUESTOS_CLAVE` en `informes/views.py`).
+{% endcomment %}
+{% if unidad.nombre %}
+<tr class="{% if nivel == 0 %}row-unidad{% else %}row-subunidad{% endif %}">
+    <td align="left" class="{% if nivel == 0 %}td-unidad{% else %}td-subunidad{% endif %}">{{ unidad.nombre|upper }}</td>
+    <td>{{ unidad.subtotales.aprob }}</td>
+    <td>{{ unidad.subtotales.cub }}</td>
+    <td>{{ unidad.subtotales.vac }}</td>
+    <td>{{ unidad.subtotales.porc }}%</td>
+    <td>{{ unidad.subtotales.det }}</td>
+    <td>{{ unidad.subtotales.muj }}</td>
+    <td>{{ unidad.subtotales.adiest }}</td>
+</tr>
+{% endif %}
+
+{% for p in unidad.puestos %}
+<tr class="row-cargo">
+    <td class="td-cargo-title" style="padding-left: {% if nivel == 0 %}18{% else %}30{% endif %}px;">{{ p.nombre }}</td>
+    <td class="bold">{{ p.aprob }}</td>
+    <td class="bold" style="color: #059669;">{{ p.cub }}</td>
+    <td class="bold" style="color: #ea580c;">{{ p.vac }}</td>
+    <td class="bold">{{ p.porc }}%</td>
+    <td class="bold">{{ p.det }}</td>
+    <td class="bold" style="color: #1e3a8a;">{{ p.muj }}</td>
+    <td class="bold">{{ p.adiest }}</td>
+</tr>
+{% endfor %}
+
+{% for subunidad in unidad.subunidades %}
+    {% include 'pages/reportes/partials/puestos_clave_unidad_pdf.html' with unidad=subunidad nivel=1 %}
+{% endfor %}

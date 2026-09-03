@@ -37,10 +37,21 @@ class ConfiguracionForm(forms.ModelForm):
         widgets = {
             'nombre_empresa': forms.TextInput(attrs={'class': 'form-control'}),
             'org_superior': forms.TextInput(attrs={'class': 'form-control'}),
+            # El guion va ESCAPADO. Sin escapar, `[0-9-]*` es un patrón inválido:
+            # los navegadores compilan el atributo `pattern` con la bandera `v`, y
+            # ahí un guion suelto al final de una clase de caracteres es un error de
+            # sintaxis. El efecto era que el campo lanzaba una excepción al
+            # validarse («Failed to read the 'valid' property from ValidityState»),
+            # así que el REUP no se validaba en el navegador en absoluto.
+            #
+            # El validador del modelo (`configuracion/models.py`) usa el mismo
+            # patrón SIN escapar y es correcto: la sintaxis de expresiones regulares
+            # de Python sí admite el guion final como literal. Son dos motores
+            # distintos, no una incoherencia.
             'reup': forms.TextInput(attrs={
                 'class': 'form-control',
                 'maxlength': '15',
-                'pattern': '[0-9-]*',
+                'pattern': r'[0-9\-]*',
                 'title': 'Solo números y guiones (-).',
             }),
             'rama': forms.TextInput(attrs={'class': 'form-control'}),

@@ -1,7 +1,8 @@
 {% load static %}
+{% load estaticos %}
 
 <script src="{% static 'vendor/libs/jquery/jquery-3.7.1.min.js' %}"></script>
-<script src="{% static 'js/sweetalert2.js' %}"></script>
+<script src="{% estatico 'js/sweetalert2.js' %}"></script>
 <script>
   /* Toast único del proyecto: fondo blanco, borde y sombra, esquina superior
      derecha. Reemplaza las variantes sueltas (modal centrado, toast plano de
@@ -47,19 +48,59 @@
 </script>
 
 <script src="{% static 'vendor/js/helpers.js' %}"></script>
-<script src="{% static 'js/popper.min.js' %}"></script> 
-<script src="{% static 'js/bootstrap.bundle.js' %}"></script>
+<script src="{% estatico 'js/popper.min.js' %}"></script> 
+<script src="{% estatico 'js/bootstrap.bundle.js' %}"></script>
 <script src="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.js' %}"></script>
 
-<script src="{% static 'js/config.js' %}"></script>
+<script src="{% estatico 'js/config.js' %}"></script>
 
 <script src="{% static 'vendor/js/select2.min.js' %}"></script>
+{% comment %} Activa Select2 (con buscador) sobre TODOS los <select> de la aplicación,
+   incluidos los que llegan después por HTMX o dentro de un modal. {% endcomment %}
+<script src="{% estatico 'js/select_unificado.js' %}"></script>
+{% comment %} Criterio único de validación visual (amarillo = vacío, verde = con dato)
+   de los formularios. Lo activa cada plantilla con su lista de campos. {% endcomment %}
+<script src="{% estatico 'js/validacion_visual.js' %}"></script>
+{% comment %} Selector de período (año + mes) en rejilla de meses. Es global porque
+   varias de las pantallas que lo usan lo reciben por HTMX o dentro de un modal, y
+   un <script> incrustado ahí no se ejecutaría de forma fiable. {% endcomment %}
+<script src="{% estatico 'js/selector_periodo.js' %}"></script>
+{% comment %} Selector de Unidades Organizativas (fichas + buscador). Lo comparten el
+   Dashboard, Informes RRHH e Informe Inteligente; antes vivía suelto dentro de
+   `dashboard.html` y las otras dos pantallas no podían usarlo. {% endcomment %}
+<script src="{% estatico 'js/selector_unidades.js' %}"></script>
 <script src="{% static 'vendor/js/menu.js' %}"></script>
 
-<script src="{% static 'js/main.js' %}"></script>
+<script src="{% estatico 'js/main.js' %}"></script>
 <script src="{% static 'vendor/js/buttons.js' %}"></script>
 
 <script>
+  /* AYUDA CONTEXTUAL
+     Los popovers de Bootstrap no se activan solos: hay que instanciarlos. Se
+     hace aqui, para toda la aplicacion, y no en la pantalla que los estrene:
+     asi cualquier plantilla puede poner un icono de ayuda con
+     `data-bs-toggle="popover"` y funciona sin JavaScript propio.
+
+     Se repite tras cada intercambio de HTMX y al abrir un modal, porque ahi
+     llegan iconos nuevos que el barrido inicial no vio. */
+  (function () {
+    function activarAyuda(raiz) {
+      if (typeof bootstrap === 'undefined') return;
+      (raiz || document).querySelectorAll('[data-bs-toggle="popover"]').forEach(function (el) {
+        if (!bootstrap.Popover.getInstance(el)) new bootstrap.Popover(el);
+      });
+    }
+    window.orbithActivarAyuda = activarAyuda;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function () { activarAyuda(); });
+    } else {
+      activarAyuda();
+    }
+    document.addEventListener('htmx:afterSettle', function (e) { activarAyuda(e.target); });
+    document.addEventListener('shown.bs.modal', function (e) { activarAyuda(e.target); });
+  })();
+
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -114,5 +155,11 @@
     });
   }, true);
 </script>
+
+{% comment %} Botón «ver contraseña» con protección contra el autocompletado del
+   navegador. Va aquí, y no en la plantilla del formulario, porque ese
+   formulario se carga por AJAX dentro de un modal: cargarlo de forma global
+   evita depender de que jQuery ejecute un <script src> incrustado. {% endcomment %}
+<script src="{% estatico 'js/ver_password.js' %}"></script>
 
 {% block extra_scripts %}{% endblock %}

@@ -303,6 +303,19 @@
         actualizarDatosCargo(); // Necesario para edición
         actualizarEstadoActivo(); // Fuerza el color del switch desde el segundo 0
 
+        // --- 8. VALIDACIÓN VISUAL (amarillo = vacío, verde = con dato) ---
+        // Mismo criterio que el formulario de contrato, en `validacion_visual.js`.
+        // `rol`, `nivel_preparacion` y `orden_informe` se pintan pero no bloquean el
+        // guardado: son opcionales en el modelo, aunque Subsanación los reclame
+        // después (EST-006 y EST-007).
+        if (window.OrbithValidacionVisual) {
+            window.OrbithValidacionVisual.activar({
+                form: '#cargoForm',
+                obligatorios: ['ncargo', 'cant_aprobada'],
+                recomendados: ['rol', 'nivel_preparacion', 'orden_informe']
+            });
+        }
+
         
 
         

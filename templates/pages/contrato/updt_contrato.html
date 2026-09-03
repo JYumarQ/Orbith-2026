@@ -27,7 +27,27 @@
         <div class="modal-body">
             {% include 'base/partials/aviso_origen_edicion.html' %}
             {% include 'base/partials/panel_advertencias_registro.html' %}
-            <form action="{% url 'updt_contrato' object.pk %}" method="POST" id="contratoForm">
+            <form action="{% url 'updt_contrato' object.pk %}" method="POST" id="contratoForm"
+              {% comment %} `data-validacion-visual` activa el ayudante común
+               (`static/js/validacion_visual.js`), que se encarga del amarillo y del
+               verde y —esto es lo que faltaba— repinta TODOS los campos en cada
+               cambio, no solo el que se tocó. Sin eso, al deseleccionar la Unidad
+               Organizativa la cascada vaciaba Departamento y Cargo pero los dos se
+               quedaban en verde, porque el repintado de este formulario solo
+               atendía al campo que disparaba el evento.
+
+               Las reglas PROPIAS de contrato siguen aquí abajo y no se tocan: el
+               expediente duplicado, el año mínimo de las fechas y la F. Alta Entidad
+               posterior a la contratación marcan el campo con `is-invalid`, que el
+               ayudante respeta y cuenta para bloquear el botón Guardar.
+
+               `data-obligatorios` repite la lista de `reglas.obligatorios` de este
+               mismo archivo: se pasa explícita, y no se deduce del atributo
+               `required`, porque en este formulario media docena de campos nacen
+               deshabilitados y se habilitan según otra elección. {% endcomment %}
+              data-validacion-visual
+              data-obligatorios="no_expediente,tipo,tipo_salario,motivo,fecha_alta,fecha_alta_entidad,duracion,unidad,departamento,cargo,tridente,c_formal_res,fecha_vence_lic,fecha_vence_recal,fecha_vence_seg,pais,reg_militar"
+              >
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
                 <input type="hidden" name="origen" value="{{ origen }}">
@@ -199,7 +219,11 @@
                         <div class="tab-pane fade" id="navs-justified-salario" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    {{ form.tipo_salario.label }}  
+                                    {% comment %} Con `<label class="form-label">`, igual que sus compañeros de fila.
+                                       Antes la etiqueta se pintaba como texto suelto, sin
+                                       ninguna clase, así que salía en minúscula y más grande
+                                       que las de al lado y descuadraba la fila entera. {% endcomment %}
+                                    <label class="form-label" for="id_tipo_salario">{{ form.tipo_salario.label }}</label>  
                                     {{ form.tipo_salario }}
                                 </div>
                                 <div class="col-md-6">
@@ -216,7 +240,7 @@
                                     <input type="text" name="rol" id="id_rol" value="{{ form.instance.cargo.rol.tipo|default:'' }}" class="form-control bg-light" readonly placeholder="---">
                                 </div>
                                 <div class="col-md-4">
-                                    {{ form.tridente.label }}  
+                                    <label class="form-label" for="id_tridente">{{ form.tridente.label }}</label>  
                                     {{ form.tridente }}
                                 </div>
 
@@ -246,20 +270,44 @@
                                     style="display: none;">
                                 </div>
 
+                                {% comment %}
+                                  Los cuatro importes del contrato. Ninguno se escribe ya a
+                                  mano: salen de las tarjetas de Configuración → Parámetros
+                                  Generales → Laborales y Profesionales.
+
+                                  Maestría y Doctorado son de SOLO LECTURA y se rellenan según
+                                  el grado científico del trabajador. La caja que se ve es un
+                                  input suelto, sin `name`, porque tiene que poder mostrar el
+                                  texto «Nomenc. Vacío» y el campo real del formulario es un
+                                  número; ese campo viaja oculto y `CAltaForm.clean()` lo
+                                  reescribe en el servidor con el importe del nomenclador.
+
+                                  Instructor y CNCI son desplegables del nomenclador —los
+                                  selects unificados de la aplicación, vía `select_unificado.js`—
+                                  y su importe se copia también en `clean()`.
+                                {% endcomment %}
                                 <div class="col-md-3 mb-3">
-                                    {{ form.maestria.label }}  
+                                    <label class="form-label" for="txt_maestria">{{ form.maestria.label }}</label>
+                                    <input type="text" class="form-control bg-light" readonly
+                                           id="txt_maestria" value="{{ form.texto_maestria }}"
+                                           title="Se rellena solo según el grado científico del trabajador">
                                     {{ form.maestria }}
                                 </div>
                                 <div class="col-md-3 mb-3">
-                                    {{ form.doctorado.label }}  
+                                    <label class="form-label" for="txt_doctorado">{{ form.doctorado.label }}</label>
+                                    <input type="text" class="form-control bg-light" readonly
+                                           id="txt_doctorado" value="{{ form.texto_doctorado }}"
+                                           title="Se rellena solo según el grado científico del trabajador">
                                     {{ form.doctorado }}
                                 </div>
                                 <div class="col-md-3 mb-3">
-                                    {{ form.instructor.label }}  
+                                    <label class="form-label" for="id_instructor_nomenclador">{{ form.instructor_nomenclador.label }}</label>
+                                    {{ form.instructor_nomenclador }}
                                     {{ form.instructor }}
                                 </div>
                                 <div class="col-md-3 mb-3">
-                                    {{ form.cnci.label }}  
+                                    <label class="form-label" for="id_cnci_nomenclador">{{ form.cnci_nomenclador.label }}</label>
+                                    {{ form.cnci_nomenclador }}
                                     {{ form.cnci }}
                                 </div>
 
@@ -320,17 +368,17 @@
         }
 
         // 1.b F. ALTA ENTIDAD: en edición, F. de Contratación no es editable
-        // (ver arriba), así que el tope 'max' y el autocompletado se fijan una
-        // sola vez al cargar. Si el contrato ya tiene un valor guardado
-        // (aunque sea distinto a fecha_alta, p. ej. corregido antes), NUNCA
-        // se sobrescribe — solo se autorrellena cuando llega vacío.
+        // (ver arriba), así que el tope 'max' se fija una sola vez al cargar.
+        //
+        // Ya NO se autorrellena cuando llega vacía. Ese autorrelleno era justo lo que
+        // ocultaba el problema: los contratos históricos que Subsanación marca sin
+        // F. Alta Entidad (regla CTR-016) se pintaban de verde solos al abrirlos, y el
+        // usuario guardaba una fecha copiada que nadie había verificado. Ahora se queda
+        // vacía y en amarillo, con el botón Guardar bloqueado, hasta que se escriba la
+        // fecha real de entrada del trabajador en la entidad.
         var $altaEntidad = $('#id_fecha_alta_entidad');
         if ($altaEntidad.length && $f_contrato.length) {
-            var fechaContratacion = $f_contrato.val() || '';
-            $altaEntidad.attr('max', fechaContratacion);
-            if (!$altaEntidad.val()) {
-                $altaEntidad.val(fechaContratacion);
-            }
+            $altaEntidad.attr('max', $f_contrato.val() || '');
         }
 
         // 2. SWITCHES Y DEPENDENCIAS
@@ -565,6 +613,7 @@
         }
         initSelect2Cascada('#id_unidad');
         initSelect2Cascada('#id_departamento');
+        initSelect2Cascada('#id_motivo');
 
         function validarCargoCruado() {
             const valCargo = $cargoSelect.val();
@@ -667,6 +716,24 @@
             }
         });
 
+        // Fechas del contrato con año mínimo. Espejo de `CAMPOS_FECHA_CONTRATO` y
+        // `ANO_MINIMO_FECHAS` en `contratos/forms.py`: si cambia allí, cambia aquí.
+        const ANO_MINIMO = 1900;
+        const CAMPOS_FECHA = ['fecha_alta_entidad', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg'];
+
+        function fechaFueraDeRango(name, valor) {
+            if (!valor) return false;
+            var anio = parseInt(valor.split('-')[0], 10);
+            if (isNaN(anio) || anio < ANO_MINIMO) return true;
+            // F. Alta Entidad nunca posterior a F. de Contratación (misma regla que
+            // `CAltaForm.clean`), para avisar antes de enviar y no después.
+            if (name === 'fecha_alta_entidad') {
+                var contratacion = $('#id_fecha_alta').val();
+                if (contratacion && valor > contratacion) return true;
+            }
+            return false;
+        }
+
         // 6. VALIDACIÓN VISUAL UNIVERSAL
         const reglas = {
             numericos: ['duracion', 'no_expediente'], 
@@ -726,7 +793,19 @@
                     esValido = this.value.trim() !== '';
                     if (['duracion', 'no_expediente'].includes(name)) { let num = parseInt(this.value); esValido = (!isNaN(num) && num > 0); }
                     let $target = $el.hasClass('select2-hidden-accessible') ? $el.next('.select2-container').find('.select2-selection') : $el;
-                    esValido ? $target.removeClass('border-warning').addClass('border-success') : $target.removeClass('border-success').addClass('border-warning');
+                    // Las fechas tienen TRES estados, no dos: vacía (amarillo), escrita
+                    // pero imposible (rojo, y el botón Guardar bloqueado por
+                    // `evaluarBoton`, que cuenta los `.is-invalid`) y correcta (verde).
+                    // El rojo es el que evita que un año a medio teclear —«0002»— llegue
+                    // al servidor, que lo rechaza igual (`CAltaForm._validar_ano_minimo`).
+                    if (CAMPOS_FECHA.includes(name)) {
+                        $target.removeClass('border-warning border-success border-danger is-invalid');
+                        if (!esValido) { $target.addClass('border-warning'); }
+                        else if (fechaFueraDeRango(name, this.value)) { $target.addClass('border-danger is-invalid'); }
+                        else { $target.addClass('border-success'); }
+                    } else {
+                        esValido ? $target.removeClass('border-warning').addClass('border-success') : $target.removeClass('border-success').addClass('border-warning');
+                    }
                 }
                 evaluarBoton();
             }
@@ -794,8 +873,11 @@
             $('#id_fecha_alta_entidad').removeAttr('disabled').trigger('change.val');
             reglas.obligatorios.forEach(name => { $form.find(`[name="${name}"]`).trigger('change.val'); });
             
-            // LA CURA DEL ESTILO: Quitamos las clases de Select2 para que se rendericen nativos
-            $('#id_cla, #id_nocturnidad_1, #id_nocturnidad_2').removeClass('select2-basic select-nocturnidad');
+            // CLA y las dos nocturnidades se dejaban aquí como selects nativos a
+            // propósito («para que se rendericen nativos y hermosos»). Ya no hace
+            // falta: `select_unificado.js` les da el mismo aspecto que al resto y,
+            // además, buscador — que en estos tres viene bien porque el nomenclador
+            // de Condiciones Laborales Anormales es largo.
             
             // Sincronizar UI sin mostrar alertas
             sincronizarEstadosEspeciales(false); 

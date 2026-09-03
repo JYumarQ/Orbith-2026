@@ -1,4 +1,5 @@
 {% load static %}
+{% load estaticos %}
  <!-- Modal -->
 <div class="modal-dialog modal-lg" role="document">
     <div class="modal-content">
@@ -8,10 +9,21 @@
         <div class="modal-body">
             {% include 'base/partials/aviso_origen_edicion.html' %}
             {% include 'base/partials/panel_advertencias_registro.html' %}
+{% comment %} Este formulario NO lleva `data-validacion-visual`: su pintado
+   vive en `static/js/aspirante_formulario.js`, con reglas propias que el
+   ayudante genérico no sabe (formato del carnet cubano, serie del CI,
+   teléfonos, coherencia sexo/CI). Los dos a la vez se pisarían, porque cada
+   uno quita las clases de color del otro antes de poner las suyas. El
+   criterio de colores es el mismo; solo cambia quién lo aplica. {% endcomment %}
             <form method="POST"
                 class="swal-confirm"
                 action="{% url 'updt_aspir' object.pk %}"
                 id="aspiranteForm"
+                {% comment %} Mismo criterio que el alta: el color lo pone el ayudante
+                   común y `aspirante_formulario.js` conserva solo su rojo. Ver la nota
+                   larga en `add_aspir.html`. {% endcomment %}
+                data-validacion-visual
+                data-recomendados="serie_ci,movil_personal,fijo_personal,direccion,codigo_postal,especialidad,grado_cientifico,tpantalon,tcamisa,tzapatos"
                 data-confirm-text="¿Estás seguro de guardar los cambios del aspirante?">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
@@ -124,6 +136,9 @@
                                 <i class="fas fa-medal me-1"></i> {{ form.titulo_oro.label }}
                             </label>
                         </div>
+                        <small id="aviso_titulo_oro" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
+                            <i class="fas fa-exclamation-triangle"></i> Solo disponible para Nivel Superior.
+                        </small>
                     </div>
                     
                     <div class="col-md-6">
@@ -158,8 +173,20 @@
     </div>
 </div>
 
+{% comment %} Mismo select buscable con tema Bootstrap-5 que ya usa el
+   formulario de Contrato para Unidad Organizativa, Departamento y Cargo. {% endcomment %}
+<script src="{% estatico 'js/select2_htmx.js' %}"></script>
+<script>
+    ['#id_sexo', '#id_provincia', '#id_municipio', '#id_raza', '#id_nivel_educ', '#id_especialidad', '#id_grado_cientifico']
+        .forEach(function (selector) { OrbithSelect2.iniciar(selector); });
+    // Municipio y Especialidad ya no se reemplazan enteros: HTMX solo cambia sus
+    // <option>, así que el <select> (y su Select2) siguen en su sitio y el campo
+    // no parpadea al elegir Provincia o Nivel Educacional.
+    OrbithSelect2.refrescarTrasSwapDeOpciones(['#id_municipio', '#id_especialidad']);
+</script>
+
 {% comment %} Mismo archivo compartido que usa el alta: ver `add_aspir.html`. {% endcomment %}
-<script src="{% static 'js/aspirante_formulario.js' %}"></script>
+<script src="{% estatico 'js/aspirante_formulario.js' %}"></script>
 <script>
     OrbithFormularioAspirante.iniciar({
         formulario: '#aspiranteForm',

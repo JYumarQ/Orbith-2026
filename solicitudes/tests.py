@@ -1178,9 +1178,26 @@ class ContratoDesviado(BaseDepartamento):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        from decimal import Decimal
+
         from nomencladores.models import (
-            NGrupoEscala, NMotivoContrato, NMunicipio, NProvincia, NRol, NTipoContrato,
-            NTridente)
+            NGrupoEscala, NMotivoContrato, NMunicipio, NPagoAdicional, NProvincia,
+            NRol, NTipoContrato, NTridente)
+
+        # El importe sensible con el que se prueba el flujo de propuesta.
+        #
+        # Antes se usaba `maestria`, pero ese campo dejó de ser editable: se
+        # rellena solo desde el nomenclador según el grado científico del
+        # trabajador, así que un POST que lo cambie ya no produce ningún cambio.
+        # `instructor_nomenclador` es su equivalente en el diseño nuevo — afecta
+        # a la nómina, lo elige el usuario en un desplegable, y sigue estando
+        # fuera de `campos_libres`, que es lo que estas pruebas ejercitan.
+        cls.instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Principal',
+            importe=Decimal('150.00'))
+        cls.otro_instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Auxiliar',
+            importe=Decimal('75.00'))
 
         cls.grupo = NGrupoEscala.objects.create(nivel='VII')
         cls.rol = NRol.objects.create(tipo='Técnico')
@@ -1199,7 +1216,7 @@ class ContratoDesviado(BaseDepartamento):
         cls.provincia = NProvincia.objects.create(nombre='Artemisa', siglas='ART')
         cls.municipio = NMunicipio.objects.create(
             nombre='Bauta', provincia=cls.provincia, siglas='BAU')
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Carlos', papellido='Soto', sapellido='Lima',
             doc_identidad='90010154321', estado='ACTIVO', sexo='M', raza='BL',
             unidad_organizativa=cls.unidad,
@@ -1232,14 +1249,13 @@ class ContratoDesviado(BaseDepartamento):
             'tridente': self.tridente.pk,
             'tipo_salario': 'DIN',
             'reg_militar': 'NIN',
-            'maestria': 0,
-            'doctorado': 0,
-            # `cnci`/`instructor` tienen valor por defecto ('0.00') a nivel de modelo, no
-            # None: si se omiten, el ModelForm los limpia a None y cualquier comparación
-            # contra el estado real (p. ej. `_solo_cambia_campos_libres`) los vería como
-            # «cambiados» aunque nadie los haya tocado.
-            'cnci': 0,
-            'instructor': 0,
+            # Los cuatro importes (`maestria`, `doctorado`, `cnci`, `instructor`)
+            # ya NO se mandan: viajan ocultos y `CAltaForm.clean()` los reescribe
+            # en el servidor desde el nomenclador, así que lo que llegue en el
+            # POST se ignora. Lo que el usuario sí elige son los desplegables
+            # `instructor_nomenclador` y `cnci_nomenclador`.
+            'instructor_nomenclador': '',
+            'cnci_nomenclador': '',
         }
         datos.update(cambios)
         return datos
@@ -1248,14 +1264,15 @@ class ContratoDesviado(BaseDepartamento):
         self.client.force_login(self.moderador)
 
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(maestria=2), HTTP_HX_REQUEST='true')
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk), HTTP_HX_REQUEST='true')
 
         self.contrato.refresh_from_db()
-        self.assertEqual(self.contrato.maestria, 0)
+        self.assertIsNone(self.contrato.instructor_nomenclador_id)
 
         solicitud = Solicitud.objects.get()
         self.assertEqual(solicitud.operacion, 'contrato_upd')
-        self.assertEqual(solicitud.datos_propuestos['maestria'], 2)
+        self.assertEqual(solicitud.datos_propuestos['instructor_nomenclador'],
+                         self.instructor.pk)
         # La unidad se resuelve por la cadena cargo -> departamento -> unidad.
         self.assertEqual(solicitud.unidad, self.unidad)
         self.assertIn('Carlos', solicitud.descriptor)
@@ -1287,35 +1304,105 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(self.contrato.motivo, self.motivo)
         self.assertEqual(Solicitud.objects.count(), 0)
 
+    def test_el_moderador_guarda_directo_si_solo_cambia_fecha_alta_entidad(self):
+        """`fecha_alta_entidad` está en `campos_libres` desde 2026-09: Subsanación se la
+        reclama al Moderador contrato por contrato (CTR-016/CTR-017) y no tiene sentido
+        que cada corrección genere una solicitud que el Administrador solo puede aceptar
+        a ciegas."""
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(fecha_alta_entidad='2019-07-04'),
+                         HTTP_HX_REQUEST='true')
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.fecha_alta_entidad, date(2019, 7, 4))
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_la_fecha_alta_entidad_propuesta_sobrevive_a_la_propuesta_y_a_la_aprobacion(self):
+        """`fecha_alta_entidad` es `campos_condicionales`: su widget nace deshabilitado
+        en `CAltaForm.Meta.widgets` y el propio formulario se lo habilita al cargar. Sin
+        declararla, el formulario de propuesta la descartaba y al Administrador le
+        llegaba el valor VIEJO del contrato por muy bien que el Moderador la enviara.
+
+        Se combina con `instructor_nomenclador` (sensible) para que NO entre por el atajo de
+        `campos_libres` y recorra el flujo completo, que es donde se perdía."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(fecha_alta_entidad='2019-07-04',
+                                              instructor_nomenclador=self.instructor.pk),
+                         HTTP_HX_REQUEST='true')
+
+        solicitud = Solicitud.objects.get()
+        # La propuesta la capturó bien: no se quedó en el valor anterior (2020-03-01).
+        self.assertEqual(solicitud.datos_propuestos['fecha_alta_entidad'], '2019-07-04')
+
+        servicios.iniciar_revision(solicitud, self.admin)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
+                         self._datos_contrato(fecha_alta_entidad='2019-07-04',
+                                              instructor_nomenclador=self.instructor.pk))
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.fecha_alta_entidad, date(2019, 7, 4))
+        self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
+        # El importe se copia del nomenclador, no viene del POST.
+        self.assertEqual(self.contrato.instructor, self.instructor.importe)
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
+
+    def test_el_administrador_puede_corregir_la_fecha_al_aprobar(self):
+        """Al estar en `campos_condicionales`, la pantalla de revisión la pinta editable
+        (`formulario_de_aprobacion`), así que lo que deje el Administrador manda."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(fecha_alta_entidad='2019-07-04',
+                                              instructor_nomenclador=self.instructor.pk),
+                         HTTP_HX_REQUEST='true')
+
+        solicitud = Solicitud.objects.get()
+        servicios.iniciar_revision(solicitud, self.admin)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
+                         self._datos_contrato(fecha_alta_entidad='2018-02-02',
+                                              instructor_nomenclador=self.instructor.pk))
+
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.fecha_alta_entidad, date(2018, 2, 2))
+
     def test_el_moderador_sigue_necesitando_aprobacion_si_ademas_cambia_algo_sensible(self):
-        """Si el envío toca `reg_militar` (libre) Y `maestria` (sensible) a la vez, todo
+        """Si el envío toca `reg_militar` (libre) Y `instructor_nomenclador`
+        (sensible) a la vez, todo
         el envío —incluido `reg_militar`— vuelve a pasar por el flujo normal."""
         self.client.force_login(self.moderador)
 
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(reg_militar='IMP', maestria=2),
+                         self._datos_contrato(reg_militar='IMP',
+                                              instructor_nomenclador=self.instructor.pk),
                          HTTP_HX_REQUEST='true')
 
         self.contrato.refresh_from_db()
         # Ninguno de los dos se aplicó: al no ser subconjunto de `campos_libres`, todo
         # el envío pasa por el flujo normal de aprobación.
         self.assertIsNone(self.contrato.reg_militar)
-        self.assertEqual(self.contrato.maestria, 0)
+        self.assertIsNone(self.contrato.instructor_nomenclador_id)
 
         solicitud = Solicitud.objects.get()
         self.assertEqual(solicitud.datos_propuestos['reg_militar'], 'IMP')
-        self.assertEqual(solicitud.datos_propuestos['maestria'], 2)
+        self.assertEqual(solicitud.datos_propuestos['instructor_nomenclador'],
+                         self.instructor.pk)
 
     def test_el_motivo_propuesto_sobrevive_a_la_propuesta_y_a_la_aprobacion(self):
         """`motivo` es `campos_condicionales`: su widget nace deshabilitado igual que
         `fecha_alta` (ver `contratos/forms.py::CAltaForm.Meta.widgets`), pero a
         diferencia de ese sí debe aplicarse el valor que el Moderador eligió, no el que
-        ya tenía el contrato. Se combina con `maestria` (sensible) para que NO entre por
+        ya tenía el contrato. Se combina con `instructor_nomenclador` (sensible) para que NO entre por
         el atajo de `campos_libres` y pase por el flujo normal de propuesta/aprobación,
         que es donde antes se perdía en silencio."""
         self.client.force_login(self.moderador)
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(motivo=self.motivo.pk, maestria=2),
+                         self._datos_contrato(motivo=self.motivo.pk,
+                                              instructor_nomenclador=self.instructor.pk),
                          HTTP_HX_REQUEST='true')
 
         solicitud = Solicitud.objects.get()
@@ -1325,11 +1412,14 @@ class ContratoDesviado(BaseDepartamento):
         servicios.iniciar_revision(solicitud, self.admin)
         self.client.force_login(self.admin)
         self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
-                         self._datos_contrato(motivo=self.motivo.pk, maestria=2))
+                         self._datos_contrato(motivo=self.motivo.pk,
+                                              instructor_nomenclador=self.instructor.pk))
 
         self.contrato.refresh_from_db()
         self.assertEqual(self.contrato.motivo, self.motivo)
-        self.assertEqual(self.contrato.maestria, 2)
+        self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
+        # El importe se copia del nomenclador, no viene del POST.
+        self.assertEqual(self.contrato.instructor, self.instructor.importe)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
@@ -1339,18 +1429,18 @@ class ContratoDesviado(BaseDepartamento):
         de por dónde se guardó."""
         self.client.force_login(self.moderador)
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(maestria=2), HTTP_HX_REQUEST='true')
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk), HTTP_HX_REQUEST='true')
 
         solicitud = Solicitud.objects.get()
         servicios.iniciar_revision(solicitud, self.admin)
 
         self.client.force_login(self.admin)
         self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
-                         self._datos_contrato(maestria=5))
+                         self._datos_contrato(instructor_nomenclador=self.otro_instructor.pk))
 
         self.contrato.refresh_from_db()
-        # Manda el valor del Administrador, no el que pidió el Moderador.
-        self.assertEqual(self.contrato.maestria, 5)
+        # Manda la elección del Administrador, no la que pidió el Moderador.
+        self.assertEqual(self.contrato.instructor_nomenclador_id, self.otro_instructor.pk)
         self.assertEqual(self.contrato.rol, self.rol)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
@@ -1359,10 +1449,10 @@ class ContratoDesviado(BaseDepartamento):
         self.client.force_login(self.admin)
 
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(maestria=3), HTTP_HX_REQUEST='true')
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk), HTTP_HX_REQUEST='true')
 
         self.contrato.refresh_from_db()
-        self.assertEqual(self.contrato.maestria, 3)
+        self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
         self.assertEqual(Solicitud.objects.count(), 0)
 
     def test_al_aprobar_no_se_pierde_fecha_alta_aunque_el_post_no_la_incluya(self):
@@ -1374,12 +1464,12 @@ class ContratoDesviado(BaseDepartamento):
         de APROBACIÓN. Antes del arreglo, esto dejaba `fecha_alta` en `None`."""
         self.client.force_login(self.moderador)
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(maestria=2), HTTP_HX_REQUEST='true')
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk), HTTP_HX_REQUEST='true')
 
         solicitud = Solicitud.objects.get()
         servicios.iniciar_revision(solicitud, self.admin)
 
-        datos_aprobacion = self._datos_contrato(maestria=5)
+        datos_aprobacion = self._datos_contrato(instructor_nomenclador=self.otro_instructor.pk)
         del datos_aprobacion['fecha_alta']
 
         self.client.force_login(self.admin)
@@ -1388,8 +1478,8 @@ class ContratoDesviado(BaseDepartamento):
         self.contrato.refresh_from_db()
         # No se tocó: sigue con el valor real, no None.
         self.assertEqual(self.contrato.fecha_alta, date(2026, 1, 15))
-        # Lo que sí cambió (maestria) se aplicó con normalidad.
-        self.assertEqual(self.contrato.maestria, 5)
+        # Lo que sí cambió (el instructor) se aplicó con normalidad.
+        self.assertEqual(self.contrato.instructor_nomenclador_id, self.otro_instructor.pk)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
@@ -1401,7 +1491,7 @@ class ContratoDesviado(BaseDepartamento):
         otro_cargo = CargoPlantilla.objects.create(
             ncargo=self.ncargo, departamento=otro_departamento, rol=self.rol,
             cant_aprobada=2, orden_informe=1)
-        otro_aspirante = Aspirante.objects.create(
+        otro_aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Luis', papellido='Diaz', sapellido='Rey',
             doc_identidad='90020198765', estado='ACTIVO', sexo='M', raza='BL',
             unidad_organizativa=otra_unidad,
@@ -1452,7 +1542,7 @@ class BorradoDeTrabajador(BaseDepartamento):
             nombre='Playa', provincia=cls.provincia, siglas='PLA')
 
     def _crear_aspirante(self, doc='85010112345', estado='BAJA', unidad=None):
-        return Aspirante.objects.create(
+        return Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad=doc, estado=estado, sexo='F', raza='BL',
             unidad_organizativa=unidad or self.unidad,

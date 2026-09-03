@@ -9,10 +9,14 @@
  *
  * El estado (qué tarea, en qué paso) vive en sessionStorage: sobrevive a la
  * navegación normal dentro de la pestaña, pero desaparece solo al cerrar la
- * pestaña o completar/cerrar la guía. Cada carga de página vuelve a
- * consultar el servidor (`/progreso/tarea/<codigo>/`) para saber si la tarea
- * ya se completó de verdad, y si es así cierra el widget solo — no hace
- * falta que el usuario le diga "ya terminé".
+ * pestaña o al terminar/cerrar la guía manualmente. Cada carga de página
+ * vuelve a consultar el servidor (`/progreso/tarea/<codigo>/`) por si los
+ * pasos cambiaron, pero el acompañamiento se muestra siempre igual, haya
+ * completado el usuario la tarea antes o no: quien pulsa "Ir a X" quiere
+ * repasar el procedimiento, así que la guía no se cierra sola con un aviso
+ * de "ya lo hiciste" — eso frustraba a quien volvía a consultarla a
+ * propósito. Se cierra solo cuando el usuario pulsa "Cerrar" o llega al
+ * último paso y pulsa "Entendido".
  *
  * Es arrastrable: no existe una posición fija que no estorbe en algún
  * formulario o modal de Orbith, así que el usuario lo mueve donde le
@@ -199,13 +203,6 @@
         return respuesta.ok ? respuesta.json() : Promise.reject();
       })
       .then(function (datos) {
-        if (datos.completada) {
-          cerrarGuia();
-          if (typeof window.mostrarToast === 'function') {
-            window.mostrarToast('✅ ¡Completaste "' + datos.titulo + '"!', 'success');
-          }
-          return;
-        }
         if (!datos.pasos || !datos.pasos.length) {
           cerrarGuia();
           return;

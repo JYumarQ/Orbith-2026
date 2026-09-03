@@ -46,7 +46,14 @@ class CustomUserAdmin(AuditoriaAdminMixin, UserAdmin):
 
     # Evita que toquen is_staff/is_superuser manualmente (el modelo ya los define)
     readonly_fields = ('is_staff', 'is_superuser', 'fecha_creado', 'fecha_actualizado', 'last_login')
-    filter_horizontal = ('groups', 'user_permissions', 'unidades')
+    # `unidades` NO va aquí a propósito. Este Admin usa los mismos formularios
+    # que la pantalla de Usuarios (`form`/`add_form`, arriba), y esos declaran
+    # `unidades` como campo propio para imponer que las subunidades se asignen
+    # solo a través de su Unidad Principal. Un campo declarado en el formulario
+    # tiene prioridad sobre el que genera el ModelAdmin, así que poner
+    # `filter_horizontal` aquí no haría nada salvo sugerir que hay dos widgets
+    # en juego. La regla se aplica igual desde el Admin.
+    filter_horizontal = ('groups', 'user_permissions')
     # CAlta ya tiene search_fields propio (contratos.admin.CAltaAdmin): evita un
     # <select> con todos los contratos del sistema en el formulario de usuario.
     autocomplete_fields = ['contrato']

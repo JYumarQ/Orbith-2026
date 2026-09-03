@@ -1,5 +1,6 @@
 {% extends 'base/base.html' %}
 {% load static %}
+{% load estaticos %}
 
 {% comment %}
   Gestión de Reportes de Pagos: la pantalla de entrada del módulo.
@@ -15,7 +16,7 @@
 {% block title %}Reportes de Pago | ORBITH{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+<link rel="stylesheet" href="{% estatico 'css/prenomina.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -63,34 +64,24 @@
         </select>
       </div>
 
-      <select id="filtro_anno" name="anno" class="form-select form-select-sm w-auto"
-              hx-get="{% url 'prenomina:buscar_reportes' %}"
-              hx-target="#resultados_reportes"
-              hx-include="#filtros_reportes">
-        <option value="">Todos los años</option>
-        {% for valor in annos_disponibles %}
-          <option value="{{ valor }}" {% if anno_actual == valor|stringformat:"s" %}selected{% endif %}>
-            {{ valor }}
-          </option>
-        {% endfor %}
-      </select>
-
       {% comment %}
-        El mes solo acota junto al año (ver `filtros.filtrar_reportes`): se deja
-        siempre visible para no hacer aparecer y desaparecer controles, pero
-        elegir un mes sin año no filtra nada.
+        Los <select> de Año y Mes son ahora el selector de período común, el mismo
+        de Calendario e Informes RRHH.
+
+        Se conservan los `id` `filtro_anno` y `filtro_mes` porque
+        `partials/tabla_reportes.html` los nombra en su `hx-include` de paginación
+        y `_vacio_reportes.html` limpia el año a través de `filtro_anno`.
+
+        El mes solo acota junto al año (ver `filtros.filtrar_reportes`), así que el
+        panel ofrece «Todo el año» además de los meses sueltos: es la forma de no
+        perder el filtro por año completo que daba el par de desplegables.
       {% endcomment %}
-      <select id="filtro_mes" name="mes" class="form-select form-select-sm w-auto"
-              hx-get="{% url 'prenomina:buscar_reportes' %}"
-              hx-target="#resultados_reportes"
-              hx-include="#filtros_reportes">
-        <option value="">Todos los meses</option>
-        {% for numero, nombre in meses %}
-          <option value="{{ numero }}" {% if mes_actual == numero|stringformat:"s" %}selected{% endif %}>
-            {{ nombre }}
-          </option>
-        {% endfor %}
-      </select>
+      <div hx-get="{% url 'prenomina:buscar_reportes' %}"
+           hx-target="#resultados_reportes"
+           hx-include="#filtros_reportes"
+           hx-trigger="orbith:periodo">
+        {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_reportes' alineacion='start' id_anno='filtro_anno' id_mes='filtro_mes' modo='todos' annos=annos_disponibles con_datos=periodos_existentes anno=anno_actual mes=mes_actual etiqueta_vacia='Todos los períodos' texto_sin_dato='sin reportes' texto_anno_completo='Todo el año en curso' texto_limpiar='Todos los períodos' ayuda='Los meses resaltados tienen algún reporte.' icono='fas fa-calendar-days' %}
+      </div>
 
       <select id="filtro_estado" name="estado" class="form-select form-select-sm w-auto"
               hx-get="{% url 'prenomina:buscar_reportes' %}"
@@ -116,7 +107,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/prenomina.js' %}"></script>
+<script src="{% estatico 'js/prenomina.js' %}"></script>
 <script>
   window.orbith.cablearModalHtmx('modal_generic');
   window.orbith.cablearConfirmacionHtmx();

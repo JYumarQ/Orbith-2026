@@ -69,9 +69,11 @@ def tarea_guiada(request, codigo):
 
     Lo consume el widget flotante definido en `static/js/progreso_guia.js`,
     que solo se activa cuando el usuario pulsa "Ir a X" desde el panel de la
-    Guía (nunca de forma automática al navegar). `completada` le permite al
-    widget cerrarse solo apenas la acción real se complete, sin depender de
-    sincronizar el timing del toast de `messages`.
+    Guía (nunca de forma automática al navegar). El widget guía paso a paso
+    siempre igual, esté `completada` en `True` o `False`: quien vuelve a
+    pulsar "Ir a X" sobre una tarea ya hecha antes está pidiendo un repaso
+    supervisado, no un aviso de que ya la completó. Se devuelve `completada`
+    igualmente por si el panel u otra pantalla lo necesita en el futuro.
 
     `@never_cache` es crítico en particular para este endpoint: se consulta
     en cada carga de página del "modo guiado" para decidir si mostrar el

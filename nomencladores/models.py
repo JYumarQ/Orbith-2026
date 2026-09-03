@@ -385,3 +385,96 @@ class NTipoUnidadOrganizativa(Base):
 
     def __str__(self):
         return self.descripcion
+
+# ---------------------------------------------------------------------------
+# IMPORTES DEL CONTRATO
+# ---------------------------------------------------------------------------
+#
+# Los cuatro importes de `contratos.CAlta` —maestría, doctorado, instructor y
+# CNCI— se escribían a mano en cada contrato, uno por uno. Eso los dejaba sin
+# ninguna fuente común: dos trabajadores con el mismo grado científico podían
+# acabar con importes distintos sin que nada avisara, y actualizar la cuantía
+# obligaba a abrir todos los contratos.
+#
+# Aquí viven ahora esas cuantías. El contrato SIGUE guardando el número: no es
+# una redundancia, es lo que protege el pasado. Si mañana cambia el importe del
+# nomenclador, los contratos y las nóminas ya emitidas conservan el suyo, y la
+# regla CTR-019 de Subsanación es la que reclama las diferencias para que sea
+# una persona quien decida actualizarlas.
+
+
+class NImporteGradoCientifico(Base):
+    """El importe único de Maestría y el de Doctorado.
+
+    Un registro por grado, y solo puede haber uno de cada: la clave es la misma
+    (`MC`/`DC`) que usa `bolsa.Aspirante.grado_cientifico`, así que el
+    formulario de contrato resuelve el importe con una búsqueda directa, sin
+    tablas de equivalencia que se puedan desincronizar.
+
+    Un aspirante es máster, doctor o ninguna de las dos cosas —nunca las dos a
+    la vez— porque `grado_cientifico` es un único campo con opciones, no dos
+    casillas independientes. Esa regla ya la garantiza el modelo del aspirante y
+    no hace falta repetirla aquí.
+    """
+
+    GRADOS = [
+        ('MC', 'Maestría'),
+        ('DC', 'Doctorado'),
+    ]
+
+    grado = models.CharField(
+        max_length=2, choices=GRADOS, unique=True,
+        verbose_name='Grado científico')
+    importe = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name='Importe')
+
+    class Meta:
+        verbose_name = 'Importe por grado científico'
+        verbose_name_plural = 'Importes por grado científico'
+        ordering = ['grado']
+
+    def __str__(self):
+        return f'{self.get_grado_display()}: {self.importe}'
+
+
+class NPagoAdicional(Base):
+    """Los pagos de Instructor y de CNCI: varios registros de cada uno.
+
+    Van en una sola tabla con un campo que los distingue, y no en dos modelos,
+    por el mismo motivo que `NImporteGradoCientifico` sirve a Maestría y a
+    Doctorado: son la misma forma de dato (una descripción y un importe) con el
+    mismo mantenimiento, y dos tablas significarían duplicar el CRUD entero para
+    no ganar nada. En pantalla siguen siendo dos tarjetas separadas.
+    """
+
+    INSTRUCTOR = 'INS'
+    CNCI = 'CNC'
+    TIPOS = [
+        (INSTRUCTOR, 'Instructor'),
+        (CNCI, 'CNCI'),
+    ]
+
+    tipo = models.CharField(max_length=3, choices=TIPOS, verbose_name='Tipo de pago')
+    descripcion = models.CharField(max_length=100, verbose_name='Descripción')
+    importe = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name='Importe')
+
+    class Meta:
+        verbose_name = 'Pago adicional'
+        verbose_name_plural = 'Pagos adicionales'
+        ordering = ['tipo', 'descripcion']
+        constraints = [
+            # Dos entradas con la misma descripción dentro del mismo tipo serían
+            # indistinguibles en el desplegable del contrato.
+            models.UniqueConstraint(
+                fields=['tipo', 'descripcion'],
+                name='unique_pago_adicional_por_tipo',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.descripcion} ({self.importe})'

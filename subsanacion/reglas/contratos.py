@@ -1,5 +1,8 @@
 """Reglas de integridad de los contratos de alta."""
 
+from datetime import date
+from decimal import Decimal
+
 from django.apps import apps
 from django.db.models import Count, F, Q
 
@@ -1057,3 +1060,266 @@ class ContratoSinFechaAltaEntidad(ReglaContratos):
                 unidad_organizativa_id=self.unidad_de(fila),
                 campo_formulario='fecha_alta_entidad',
             )
+
+
+class ContratoFechaAltaEntidadImposible(ReglaContratos):
+    """CTR-017: la F. Alta Entidad existe, pero con un año que no puede ser real.
+
+    Regla aparte de CTR-016 y no un filtro más dentro de ella: el problema es distinto
+    (allí falta el dato, aquí está mal escrito), la causa y la solución que se le explican
+    al usuario también, y los hallazgos se identifican por `codigo_regla`. Mezclarlas
+    haría que un contrato pasara de «sin fecha» a «con fecha imposible» sin que el panel
+    reflejara ningún cambio.
+    """
+
+    codigo = 'CTR-017'
+    nombre = 'Contrato con F. Alta Entidad imposible'
+    criticidad = CRITICIDAD_ALTA
+
+    #: Mismo corte que `contratos.forms.ANO_MINIMO_FECHAS`. Se repite en vez de
+    #: importarse para que el motor de Subsanación no dependa del módulo de formularios.
+    ANO_MINIMO = 1900
+
+    descripcion = (
+        'Busca contratos cuya fecha de alta en la entidad tiene un año anterior a 1900.')
+    causa_probable = (
+        'Un campo de fecha del navegador guarda lo que tenga escrito en cuanto se sale '
+        'de él, aunque el año esté a medio teclear: al escribir "2022" y pasar al '
+        'siguiente campo demasiado pronto quedaba registrado el año 0002. Hasta que se '
+        'añadió la validación de año mínimo, ni el formulario ni la base de datos lo '
+        'rechazaban.')
+    impacto = (
+        'La F. Alta Entidad es la base para calcular los años de servicio '
+        'ininterrumpido del trabajador en la Unión Eléctrica. Con un año imposible ese '
+        'cálculo da un resultado absurdo, y además la fecha aparece mal en cualquier '
+        'informe o documento que la muestre.')
+    solucion = (
+        'Abra el contrato y escriba de nuevo la fecha en que el trabajador fue dado de '
+        'alta por primera vez en la entidad, comprobando que el año tenga cuatro '
+        'cifras. El formulario ya no admite años anteriores a 1900.')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(fecha_alta_entidad__isnull=False,
+                         fecha_alta_entidad__lt=date(self.ANO_MINIMO, 1, 1))
+                 .values(*self.COLUMNAS_BASE, 'fecha_alta_entidad')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            # Formateo a mano y no con `strftime('%d/%m/%Y')`: para un año de una sola
+            # cifra —justo el caso que esta regla persigue— el relleno con ceros de
+            # `%Y` depende de la plataforma, y en Windows sale «2» en vez de «0002».
+            fecha = fila.get('fecha_alta_entidad')
+            texto_fecha = f'{fecha.day:02d}/{fecha.month:02d}/{fecha.year:04d}'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, 'con F. Alta Entidad imposible'),
+                detalle=(
+                    f'La fecha de alta en la entidad registrada es {texto_fecha}, '
+                    f'con un año anterior a {self.ANO_MINIMO}.'),
+                datos={
+                    'expediente': fila.get('no_expediente') or '—',
+                    'fecha_registrada': texto_fecha,
+                },
+                unidad_organizativa_id=self.unidad_de(fila),
+                campo_formulario='fecha_alta_entidad',
+            )
+
+
+def _vencimiento_de(fecha_alta, duracion):
+    """Fecha en la que se acaba un contrato determinado, o `None` si no se sabe.
+
+    La duración se guarda en MESES (`CAlta.duracion`). Se suma con aritmética de
+    meses a mano y no con `timedelta`, que solo entiende de días: 6 meses no son
+    180 días fijos, y con la aproximación un contrato podía darse por vencido
+    varios días antes o después de tiempo.
+    """
+    if not fecha_alta or not duracion:
+        return None
+
+    total = fecha_alta.month - 1 + int(duracion)
+    anno = fecha_alta.year + total // 12
+    mes = total % 12 + 1
+
+    # El día 31 no existe en todos los meses: se recorta al último día real, que
+    # es lo mismo que hace cualquier calendario al sumar meses.
+    dia = fecha_alta.day
+    while dia > 28:
+        try:
+            return date(anno, mes, dia)
+        except ValueError:
+            dia -= 1
+    return date(anno, mes, dia)
+
+
+class ContratoDeterminadoVencido(ReglaContratos):
+    """El contrato determinado ya expiró y el trabajador sigue activo.
+
+    Es el hallazgo más caro de los que faltaban: un trabajador sin contrato
+    vigente sigue cobrando en nómina, y jurídicamente la relación laboral está
+    sin amparo. El informe «Contratos Determinados» ya calcula los vencimientos
+    para pintarlos de colores, pero nadie los RECLAMA: hay que acordarse de
+    abrir ese informe.
+    """
+
+    codigo = 'CTR-018'
+    nombre = 'Contrato determinado vencido con el trabajador todavía activo'
+    criticidad = CRITICIDAD_CRITICA
+
+    descripcion = (
+        'Busca los contratos de duración determinada cuya fecha de vencimiento ya '
+        'pasó y cuyo trabajador sigue en estado Activo.')
+    causa_probable = (
+        'El contrato se firmó por un número de meses y nadie lo renovó ni tramitó '
+        'la baja al llegar la fecha. Nada en el sistema avisaba del vencimiento.')
+    impacto = (
+        'El trabajador sigue cobrando en la nómina sin un contrato vigente que lo '
+        'ampare, y ocupa una plaza de la plantilla que consta como cubierta.')
+    solucion = (
+        'Renueve el contrato con una fecha y una duración nuevas, o tramite la baja '
+        'del trabajador si ya no presta servicios.')
+
+    def ejecutar(self, contexto):
+        hoy = date.today()
+        columnas = self.COLUMNAS_BASE + (
+            'fecha_alta', 'duracion', 'tipo__descripcion')
+
+        filas = (self.base_queryset()
+                 .filter(aspirante__estado='ACTIVO',
+                         duracion__isnull=False, duracion__gt=0,
+                         fecha_alta__isnull=False)
+                 .values(*columnas)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            vence = _vencimiento_de(fila.get('fecha_alta'), fila.get('duracion'))
+            if vence is None or vence >= hoy:
+                continue
+
+            dias = (hoy - vence).days
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'contrato vencido el {vence:%d/%m/%Y}'),
+                detalle=(
+                    f'El contrato es de {fila["duracion"]} meses desde el '
+                    f'{fila["fecha_alta"]:%d/%m/%Y}, así que venció el '
+                    f'{vence:%d/%m/%Y}, y el trabajador sigue activo.'),
+                # `dias` NO entra en `datos`: cambia cada día que pasa y movería la
+                # huella del hallazgo, devolviendo a Pendiente uno ya silenciado.
+                datos={
+                    'tipo_de_contrato': fila.get('tipo__descripcion') or '—',
+                    'fecha_de_contratacion': f'{fila["fecha_alta"]:%d/%m/%Y}',
+                    'duracion_en_meses': fila['duracion'],
+                    'venció_el': f'{vence:%d/%m/%Y}',
+                },
+                unidad_organizativa_id=self.unidad_de(fila),
+                campo_formulario='duracion',
+            )
+
+
+#: Los cuatro importes del contrato y de dónde sale el valor con el que se comparan.
+#: Maestría y doctorado salen del grado científico del trabajador; instructor y CNCI,
+#: de la entrada del nomenclador que se eligió en el desplegable.
+_IMPORTES_VIGILADOS = (
+    ('maestria', 'Maestría'),
+    ('doctorado', 'Doctorado'),
+    ('instructor', 'Instructor'),
+    ('cnci', 'CNCI'),
+)
+
+
+class ImporteDistintoDelNomenclador(ReglaContratos):
+    """El importe guardado en el contrato ya no coincide con el del nomenclador.
+
+    Que el contrato guarde su propio número NO es una redundancia: es lo que
+    impide que una nómina ya emitida cambie porque alguien retoque una cuantía
+    meses después. El precio de esa garantía es justo este hallazgo — alguien
+    tiene que mirar las diferencias y decidir cuáles actualizar.
+
+    Por eso la criticidad es Media y no Alta: una diferencia puede ser
+    perfectamente correcta (el contrato es anterior a la subida) o puede ser un
+    olvido. Lo decide una persona, no la regla.
+    """
+
+    codigo = 'CTR-019'
+    nombre = 'Importe del contrato distinto al del nomenclador'
+    criticidad = CRITICIDAD_MEDIA
+
+    descripcion = (
+        'Compara los cuatro importes del contrato —maestría, doctorado, instructor '
+        'y CNCI— con las cuantías definidas en Configuración → Parámetros '
+        'Generales → Laborales y Profesionales.')
+    causa_probable = (
+        'El importe del nomenclador se modificó después de guardar el contrato. Los '
+        'contratos no se reescriben solos a propósito, para que una nómina ya '
+        'emitida no cambie de cifra sin que nadie lo decida.')
+    impacto = (
+        'El trabajador cobra una cuantía distinta de la vigente. Puede ser correcto '
+        'si el contrato es anterior al cambio, pero mientras no se revise no hay '
+        'forma de saber cuáles son olvidos.')
+    solucion = (
+        'Abra el contrato y guárdelo: los importes se reescriben con los del '
+        'nomenclador. Si la diferencia es intencionada, silencie el hallazgo.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps as _apps
+
+        NImporteGradoCientifico = _apps.get_model(
+            'nomencladores', 'NImporteGradoCientifico')
+
+        # Dos consultas en total, no una por contrato: el nomenclador es diminuto y
+        # se lee entero de una vez a un diccionario en memoria.
+        importe_por_grado = dict(
+            NImporteGradoCientifico.objects.values_list('grado', 'importe'))
+
+        columnas = self.COLUMNAS_BASE + (
+            'maestria', 'doctorado', 'instructor', 'cnci',
+            'aspirante__grado_cientifico',
+            'instructor_nomenclador__descripcion', 'instructor_nomenclador__importe',
+            'cnci_nomenclador__descripcion', 'cnci_nomenclador__importe',
+        )
+
+        filas = (self.base_queryset()
+                 .values(*columnas)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            grado = fila.get('aspirante__grado_cientifico')
+            esperados = {
+                # Sin grado científico, lo que corresponde es cero.
+                'maestria': importe_por_grado.get('MC') if grado == 'MC' else Decimal('0.00'),
+                'doctorado': importe_por_grado.get('DC') if grado == 'DC' else Decimal('0.00'),
+                'instructor': fila.get('instructor_nomenclador__importe'),
+                'cnci': fila.get('cnci_nomenclador__importe'),
+            }
+
+            for campo, etiqueta in _IMPORTES_VIGILADOS:
+                esperado = esperados[campo]
+                if esperado is None:
+                    # Nomenclador sin definir (lo reclama CFG-003) o sin entrada
+                    # elegida en el desplegable: no hay con qué comparar.
+                    continue
+
+                guardado = fila.get(campo) or Decimal('0.00')
+                if Decimal(guardado) == Decimal(esperado):
+                    continue
+
+                yield HallazgoDetectado(
+                    object_id=str(fila['id']),
+                    # Un contrato puede diferir en más de un importe a la vez y cada
+                    # uno se corrige por separado, así que el campo forma parte de la
+                    # clave del hallazgo.
+                    clave_extra=campo,
+                    titulo=self.titulo_de(
+                        fila, f'{etiqueta} no coincide con el nomenclador'),
+                    detalle=(
+                        f'El contrato tiene {guardado} en {etiqueta}, pero el '
+                        f'nomenclador dice {esperado}.'),
+                    datos={
+                        'importe': etiqueta,
+                        'guardado_en_el_contrato': str(guardado),
+                        'segun_el_nomenclador': str(esperado),
+                    },
+                    unidad_organizativa_id=self.unidad_de(fila),
+                    campo_formulario=campo,
+                )

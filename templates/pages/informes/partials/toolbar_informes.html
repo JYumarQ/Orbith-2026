@@ -87,27 +87,15 @@
                que no se puede pedir un mes del que no hay fotografía. El select ya dice
                qué se está viendo, así que sustituye al texto fijo que había antes.
             {% endcomment %}
+            {% comment %} Los dos <select> («Información actual / Sincronizar con cierre»
+               y la lista de meses) se fusionaron en el selector de período común, el
+               mismo que estrenó Informe Inteligente. Son dos controles para UNA sola
+               decisión, y la lista de meses crecía doce opciones al año; la rejilla
+               ocupa lo mismo con un año que con veinte y enseña de un vistazo qué
+               meses tienen cierre. «Volver a datos actuales» sustituye a la opción
+               «Información actual» del primer desplegable. {% endcomment %}
             <div class="d-flex align-items-center justify-content-center justify-content-xl-start flex-wrap gap-2 mt-2">
-                <div class="bg-label-secondary rounded p-1 d-flex">
-                    <i class="bx bx-calendar-event" style="color: #FF6600 !important;"></i>
-                </div>
-                <select id="selector-fuente" class="form-select form-select-sm" style="width: auto;"
-                        title="Fuente de datos del informe">
-                    <option value="actual" {% if not es_historico %}selected{% endif %}>Información actual</option>
-                    <option value="cierre" {% if es_historico %}selected{% endif %}
-                            {% if not periodos_disponibles %}disabled{% endif %}>
-                        Sincronizar con cierre de mes
-                    </option>
-                </select>
-
-                <select id="selector-periodo" class="form-select form-select-sm" style="width: auto;"
-                        {% if not es_historico %}hidden{% endif %}>
-                    {% for p in periodos_disponibles %}
-                        <option value="{{ p.clave }}" {% if p.clave == fuente_periodo %}selected{% endif %}>
-                            {{ p.etiqueta }}
-                        </option>
-                    {% endfor %}
-                </select>
+                {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_informes' modo='solo-con-datos' annos=periodos_annos con_datos=periodos_claves anno=periodo_anno mes=periodo_mes etiqueta_vacia='Información actual' plantilla_etiqueta='Cierre de {mes} {anno}' texto_sin_dato='sin cierre declarado' texto_limpiar='Volver a la información actual' ayuda='Los meses en gris no tienen cierre declarado.' icono='bx bx-calendar-event' %}
 
                 {% if es_historico %}
                     <span class="badge bg-label-info">
@@ -119,8 +107,15 @@
 
         <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
 
+            {% comment %} Un <select> normal y corriente: `select_unificado.js` lo
+               convierte con el mismo Select2 —tema, alto, buscador— que los de Unidad
+               Organizativa, Departamento y Cargo del formulario de contrato.
+
+               Antes iba envuelto en un `input-group` con borde e icono propios y se
+               inicializaba aparte SIN buscador, asi que era el unico control de la
+               aplicacion con otro aspecto y otro comportamiento. {% endcomment %}
             <div style="min-width: 260px; width: 100%; max-width: 350px;">
-                <select id="selector-informes" class="form-select w-100">
+                <select id="selector-informes" class="form-select" title="Elegir informe">
                     <option value="{% url 'informe_economia' %}">Consolidado F. Trabajo</option>
                     <option value="{% url 'informe_trabajadores_ueb' %}">Trabajadores x UEB</option>
                     <option value="{% url 'informe_puestos_clave' %}">Resumen Puestos Clave</option>
@@ -173,17 +168,21 @@ $(document).ready(function() {
     var $select = $('#selector-informes');
     var currentPath = window.location.pathname;
 
-    // Autoselección correcta
-    $select.find('option').each(function() {
-        if ($(this).val() === currentPath) $(this).prop('selected', true);
-    });
+    /* Autoseleccion: se marca el informe que se esta viendo.
 
-    // Inicializar Select2
-    $select.select2({
-        width: '100%',
-        theme: 'bootstrap-5',
-        minimumResultsForSearch: -1
-    });
+       El aviso `change.select2` es imprescindible desde que el control lo monta
+       el inicializador global: ese corre ANTES que este bloque, asi que cambiar
+       la opcion seleccionada a estas alturas no se refleja solo, y la caja
+       seguia enseñando el primer informe de la lista estando en otro. Se usa el
+       evento con espacio de nombres, que solo escucha Select2, para no disparar
+       el manejador de navegacion de mas abajo. */
+    $select.val(currentPath);
+    if (!$select.val()) {
+        // La URL no coincide con ninguna opcion (una ruta con parametros que
+        // Django escriba distinto): se deja el primero, como antes.
+        $select.prop('selectedIndex', 0);
+    }
+    $select.trigger('change.select2');
 
     // Al cambiar de informe se conserva la fuente elegida: si se está mirando el
     // cierre de agosto, pasar al siguiente informe debe seguir mostrando agosto.
@@ -199,31 +198,25 @@ $(document).ready(function() {
         window.location.href = urlDestino + (cadena ? '?' + cadena : '');
     });
 
-    // --- Fuente de datos ---
-    function aplicarFuente() {
-        var modo = $('#selector-fuente').val();
-        var periodo = $('#selector-periodo').val();
-        var params = new URLSearchParams(window.location.search);
-
-        if (modo === 'cierre' && periodo) {
-            params.set('fuente', 'cierre');
-            params.set('periodo', periodo);
-        } else {
-            params.delete('fuente');
-            params.delete('periodo');
-        }
-        window.location.search = params.toString();
-    }
-
-    $('#selector-fuente').on('change', function () {
-        var esCierre = $(this).val() === 'cierre';
-        $('#selector-periodo').prop('hidden', !esCierre);
-        // Sin cierres disponibles no hay nada que pedir; se queda en modo actual.
-        if (esCierre && !$('#selector-periodo option').length) return;
-        aplicarFuente();
-    });
-
-    $('#selector-periodo').on('change', aplicarFuente);
+    /* --- Fuente de datos ---
+       El selector de período no navega por su cuenta: escribe año y mes en sus
+       campos ocultos y avisa con `orbith:periodo`. Aquí se traduce a los
+       parámetros `fuente` y `periodo` que entiende `informes.fuentes`, y se
+       conserva el resto de la URL para no perder el filtro por unidad. */
+    document.getElementById('caja_periodo_informes')
+        .addEventListener('orbith:periodo', function (evento) {
+            var elegido = evento.detail.clave;
+            var params = new URLSearchParams(window.location.search);
+            if (elegido) {
+                params.set('fuente', 'cierre');
+                params.set('periodo', elegido);
+            } else {
+                params.delete('fuente');
+                params.delete('periodo');
+            }
+            var cadena = params.toString();
+            window.location.href = window.location.pathname + (cadena ? '?' + cadena : '');
+        });
 });
 
 // Enlace de las funciones globales

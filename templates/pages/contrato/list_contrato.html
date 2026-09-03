@@ -53,8 +53,34 @@
         border-left: 3px solid #ffab00 !important;
     }
 
-    /* Garantizar que los selects inyectados por HTMX no rompan el diseño */
-    .dropdown-menu select {
+    /* El panel de filtros es una sola columna: se desplaza en vertical y nunca
+       en horizontal. La barra horizontal salia porque el contenido -las fichas
+       del selector- es mas ancho que los 280px que el panel tenia de minimo. */
+    /* La otra mitad del desbordamiento la provocaba el <select> original que
+       Select2 esconde: la regla de abajo le forzaba el 100% del panel aunque
+       estuviera en una columna a media anchura. Select2 ya lo deja reducido a
+       un punto, asi que se le deja en paz. */
+    .orb-panel-filtros {
+        min-width: 320px;
+        max-width: 320px;
+        max-height: 500px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    /* Las fichas se parten en varias lineas en vez de ensanchar el panel. */
+    .orb-panel-filtros .chip-multiselect,
+    .orb-panel-filtros .chip-multiselect-box,
+    .orb-panel-filtros .chip-multiselect-chip { max-width: 100%; }
+    .orb-panel-filtros .chip-multiselect-chip > span:first-child {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* Garantizar que los selects inyectados por HTMX no rompan el diseño.
+       Se excluye el <select> oculto del selector de fichas: ese lleva el
+       atributo `hidden` a propósito —lo que se ve es la caja de fichas— y este
+       `display: block !important` lo sacaba a la vista como una lista nativa
+       encima de su propio control. */
+    .dropdown-menu select:not(.chip-multiselect-native):not(.select2-hidden-accessible) {
         display: block !important;
         width: 100% !important;
         padding: 0.25rem 0.5rem !important;
@@ -116,7 +142,7 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_per_page, #hidden_sort, #hidden_order">
+                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_per_page, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -130,15 +156,50 @@
                     </button>
 
                     <div class="btn-group">
-                        <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                        {% comment %} `data-bs-auto-close="outside"`: por defecto un desplegable de
+                           Bootstrap se cierra con CUALQUIER clic, también con los de dentro,
+                           así que elegir una provincia cerraba el panel de filtros entero y
+                           había que volver a abrirlo para el siguiente filtro. Con `outside`
+                           solo lo cierra un clic fuera.
+
+                           La otra mitad está en `select_unificado.js`: el panel de resultados
+                           de Select2 se cuelga de <body>, así que para Bootstrap está FUERA y
+                           cerraría igual. Allí se corta la propagación de ese clic. {% endcomment %}
+                        <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Filtros">
                             <i class="fas fa-filter"></i>
                         </button>
-                        <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
+                        <div class="dropdown-menu dropdown-menu-end p-3 orb-panel-filtros">
+                            {% comment %} ESTRUCTURA: unidad, departamento y cargo.
+                               Van los primeros porque acotar por estructura es la pregunta
+                               más frecuente del listado.
+
+                               Usan el selector de fichas compartido, el mismo del Dashboard,
+                               Informes RRHH e Informe Inteligente: admiten varias, muestran
+                               las subunidades indentadas bajo su principal, y elegir una
+                               principal trae también a sus hijas (lo expande el servidor, en
+                               `contratos/filtros.py`).
+                            {% endcomment %}
                             <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
-                                <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
+                                <span><i class="fas fa-sitemap me-1"></i> Estructura</span>
                                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
                                     <i class="fas fa-undo-alt me-1"></i> Reset
                                 </button>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Unidad Organizativa</label>
+                                {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidad_contratos' campo='unidad' id_select='filter_unidad' unidades=unidades_filtro seleccionadas=filtro_unidad marcador='Todas' clase_extra='chip-multiselect--sm' %}
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Departamento</label>
+                                {% include 'base/partials/selector_unidades.html' with id_caja='filtro_departamento_contratos' campo='departamento' id_select='filter_departamento' unidades=departamentos_filtro seleccionadas=filtro_departamento marcador='Todos' titulo='departamento' clase_extra='chip-multiselect--sm' %}
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted">Cargo</label>
+                                {% include 'base/partials/selector_unidades.html' with id_caja='filtro_cargo_contratos' campo='cargo' id_select='filter_cargo' unidades=cargos_filtro seleccionadas=filtro_cargo marcador='Todos' titulo='cargo' clase_extra='chip-multiselect--sm' %}
+                            </div>
+
+                            <div class="dropdown-header-custom">
+                                <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
                             </div>
                             <div class="mb-2">
                                 <label class="small text-muted" for="filter_provincia_select">Provincia</label> <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
@@ -668,10 +729,18 @@
         const obligatorios = ['fecha_baja', 'fecha_efectiva', 'causa_baja'];
 
         function pintarBorde(input, esValido) {
-            let $el = $(input);
+            /* El color va donde SE VE. «Causa de Baja» es un <select> y Select2
+               lo mantiene oculto detrás de su propia caja, asi que pintar el
+               <select> no se notaba: el unico campo obligatorio del formulario
+               que nunca se ponia amarillo. `OrbithValidacionVisual.objetivo()`
+               devuelve la caja de Select2 cuando la hay, y el propio campo en
+               los demas casos: mismo criterio que el resto de la aplicacion. */
+            let $el = window.OrbithValidacionVisual
+                ? window.OrbithValidacionVisual.objetivo(input)
+                : $(input);
             if (esValido) {
                 $el.removeClass('border-warning').addClass('border-success');
-                $el.parent().find('.error-cronologico').remove();
+                $(input).parent().find('.error-cronologico').remove();
             } else {
                 $el.removeClass('border-success').addClass('border-warning');
             }
@@ -863,7 +932,23 @@ document.addEventListener('keydown', function(e) {
         });
     }
 
+    /* Los tres filtros de estructura son selectores de fichas: no avisan en cada
+       clic, sino al CERRAR el panel, para poder marcar varias sin que la tabla
+       se recargue entre una y otra. Ahí se relanza la búsqueda; los valores
+       viajan solos porque sus <select> están en el `hx-include`. */
+    ['filtro_unidad_contratos', 'filtro_departamento_contratos', 'filtro_cargo_contratos']
+        .forEach(function (id) {
+            const caja = document.getElementById(id);
+            if (caja) caja.addEventListener('orbith:unidades', function () { triggerSearch(); });
+        });
+
     function resetFiltros() {
+        // Los selectores de fichas se limpian aparte: son <select multiple> sin
+        // opción vacía, así que el recorrido de abajo no los tocaría.
+        if (window.OrbithSelectorUnidades) {
+            document.querySelectorAll('.dropdown-menu .chip-multiselect')
+                .forEach(window.OrbithSelectorUnidades.limpiar);
+        }
         // Limpiar todos los campos de filtro
         const selects = document.querySelectorAll('.dropdown-menu select');
         selects.forEach(sel => {

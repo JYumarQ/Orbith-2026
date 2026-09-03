@@ -108,7 +108,8 @@
     {% else %}
       {# ---------- Paso 1: el formulario ---------- #}
       <form hx-post="{% if calendario %}{% url 'prenomina:editar_calendario' calendario.pk %}{% else %}{% url 'prenomina:nuevo_calendario' %}{% endif %}"
-            hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
+            hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off"
+            data-validacion-visual>
         {% csrf_token %}
 
         <div class="modal-header">

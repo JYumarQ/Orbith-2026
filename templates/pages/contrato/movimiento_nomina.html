@@ -35,6 +35,11 @@
                 {% endif %}
                 <fieldset {% if is_readonly %}disabled="disabled"{% endif %}>
 
+                {% comment %} Sin `data-validacion-visual` a propósito: este
+                   formulario trae su propio `pintarBorde`/`evaluarBoton` más abajo,
+                   con reglas de fecha y de salario que el ayudante genérico no
+                   conoce. Convivir con él haría que cada uno borrase el color del
+                   otro. {% endcomment %}
                 <form method="POST"
                     class=""
                     action="{% if not is_readonly %}{% if is_wizard %}{% url 'finalizar_contrato_wizard' aspirante.doc_identidad %}{% else %}{% url 'movimiento_contrato' object.pk %}{% endif %}{% endif %}"

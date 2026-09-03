@@ -1,5 +1,6 @@
 {% load static %}
-<link rel="stylesheet" href="{% static 'css/nomencladores.css' %}">
+{% load estaticos %}
+<link rel="stylesheet" href="{% estatico 'css/nomencladores.css' %}">
 
 <div class="tab-pane fade {% if active_tab == 'nomencladores' %}show active{% endif %}"
      id="navs-justified-nomencladores" role="tabpanel">

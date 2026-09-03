@@ -1,14 +1,37 @@
 {% load static %}
+{% load estaticos %}
 <div class="modal-dialog modal-lg modal-dialog-scrollable-movil" role="document">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title" id="aspirModalLabel">Nuevo Aspirante</h5>
         </div>
         <div class="modal-body">
+{% comment %} Este formulario NO lleva `data-validacion-visual`: su pintado
+   vive en `static/js/aspirante_formulario.js`, con reglas propias que el
+   ayudante genérico no sabe (formato del carnet cubano, serie del CI,
+   teléfonos, coherencia sexo/CI). Los dos a la vez se pisarían, porque cada
+   uno quita las clases de color del otro antes de poner las suyas. El
+   criterio de colores es el mismo; solo cambia quién lo aplica. {% endcomment %}
             <form method="POST"
                 class="swal-confirm"
                 data-confirm-text="¿Estás seguro de guardar el nuevo aspirante?"
-                action="{% url 'add_aspir' %}" id="formAgregarAspirante">
+                action="{% url 'add_aspir' %}" id="formAgregarAspirante"
+                {% comment %} El color lo pone ahora el ayudante común
+                   (`static/js/validacion_visual.js`): amarillo lo que falta, verde lo
+                   correcto, y repintando TODOS los campos en cada cambio. Eso es lo que
+                   arregla el sexo deducido del carnet, que antes se quedaba amarillo
+                   pese a tener valor porque nadie volvía a pintarlo.
+
+                   `aspirante_formulario.js` conserva sus reglas propias —carnet de once
+                   dígitos, serie de nueve, duplicados contra el servidor— marcando el
+                   campo con `is-invalid`. El ayudante lo respeta y no pinta encima.
+
+                   `data-recomendados`: se pintan para que se vean, pero no impiden
+                   guardar. Son los que Subsanación reclama después (ASP-005, ASP-006,
+                   ASP-008, EXT-001, EXT-002). {% endcomment %}
+                data-validacion-visual
+                data-recomendados="serie_ci,movil_personal,fijo_personal,direccion,codigo_postal,especialidad,grado_cientifico,tpantalon,tcamisa,tzapatos"
+                >
                 {% csrf_token %}
                 <div class="row g-3">
                     {% comment %} Fila 1: todo lo que sale del carnet de identidad.
@@ -113,6 +136,9 @@
                                 <i class="fas fa-medal me-1"></i> {{ form.titulo_oro.label }}
                             </label>
                         </div>
+                        <small id="aviso_titulo_oro" class="text-warning fw-bold d-none" style="font-size: 0.8rem;">
+                            <i class="fas fa-exclamation-triangle"></i> Solo disponible para Nivel Superior.
+                        </small>
                     </div>
                     <div class="col-md-6">
                         {{ form.grado_cientifico.label_tag }}  
@@ -147,11 +173,23 @@
     </div>
 </div>
 
+{% comment %} Mismo select buscable con tema Bootstrap-5 que ya usa el
+   formulario de Contrato para Unidad Organizativa, Departamento y Cargo. {% endcomment %}
+<script src="{% estatico 'js/select2_htmx.js' %}"></script>
+<script>
+    ['#id_sexo', '#id_provincia', '#id_municipio', '#id_raza', '#id_nivel_educ', '#id_especialidad', '#id_grado_cientifico']
+        .forEach(function (selector) { OrbithSelect2.iniciar(selector); });
+    // Municipio y Especialidad ya no se reemplazan enteros: HTMX solo cambia sus
+    // <option>, así que el <select> (y su Select2) siguen en su sitio y el campo
+    // no parpadea al elegir Provincia o Nivel Educacional.
+    OrbithSelect2.refrescarTrasSwapDeOpciones(['#id_municipio', '#id_especialidad']);
+</script>
+
 {% comment %} Toda la validación en vivo (carnet, serie, edad, móvil, nivel educativo
    y semáforo de campos) vive en un único archivo compartido con la pantalla de
    edición. Antes cada plantilla tenía su propia copia casi idéntica, y las
    diferencias que se fueron colando entre ambas eran bugs. {% endcomment %}
-<script src="{% static 'js/aspirante_formulario.js' %}"></script>
+<script src="{% estatico 'js/aspirante_formulario.js' %}"></script>
 <script>
     OrbithFormularioAspirante.iniciar({
         formulario: '#formAgregarAspirante',

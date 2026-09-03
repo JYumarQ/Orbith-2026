@@ -8,7 +8,9 @@ cualquier guardado que no pase por el formulario (admin de Django, scripts).
 """
 
 from datetime import date
+from decimal import Decimal
 
+from django import forms
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -17,7 +19,8 @@ from bolsa.models import Aspirante
 from contratos.filtros import aplicar_filtros
 from contratos.forms import CAltaForm, MovimientoForm
 from contratos.models import CAlta, CBaja, TMovimiento
-from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
+from nomencladores.models import (NCargo, NGrupoEscala, NImporteGradoCientifico,
+                                  NMunicipio, NPagoAdicional, NProvincia,
                                    NTipoContrato, NTipoUnidadOrganizativa, NTridente)
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
 from usuarios.models import CustomUser
@@ -64,7 +67,7 @@ class EscudoTridenteTests(TestCase):
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
 
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112345', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -167,7 +170,7 @@ class AplicarFiltrosTests(TestCase):
             descripcion='Contrato Indeterminado', ocupa_plaza=True, requiere_motivo=False)
 
         def _crear_aspirante(seq, grado_cientifico=None):
-            return Aspirante.objects.create(
+            return Aspirante.objects.create(nivel_educ='SA', 
                 nombre=f'Trab{seq}', papellido='Prueba', sapellido='Test',
                 doc_identidad=f'{seq:011d}', estado='ACTIVO', sexo='F', raza='BL',
                 grado_cientifico=grado_cientifico,
@@ -243,14 +246,14 @@ class ContratoListViewCargaInicialTests(TestCase):
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
 
-        asp_negra = Aspirante.objects.create(
+        asp_negra = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Perez', sapellido='Gomez',
             doc_identidad='00000000001', estado='ACTIVO', sexo='F', raza='NE',
             provincia=provincia, municipio=municipio)
         cls.contrato_negra = CAlta.objects.create(
             aspirante=asp_negra, no_expediente='00001', tipo=tipo_contrato, cargo=cargo)
 
-        asp_blanca = Aspirante.objects.create(
+        asp_blanca = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Beto', papellido='Lopez', sapellido='Diaz',
             doc_identidad='00000000002', estado='ACTIVO', sexo='M', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -309,11 +312,11 @@ class ExportarMovimientoDesdeHistoricoTests(TestCase):
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
 
-        cls.trabajador_a = Aspirante.objects.create(
+        cls.trabajador_a = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Perez', sapellido='Gomez',
             doc_identidad='00000000011', estado='ACTIVO', sexo='F', raza='NE',
             provincia=provincia, municipio=municipio)
-        cls.trabajador_b = Aspirante.objects.create(
+        cls.trabajador_b = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Beto', papellido='Lopez', sapellido='Diaz',
             doc_identidad='00000000012', estado='ACTIVO', sexo='M', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -426,7 +429,7 @@ class CascadaAlVaciarHistoricoTests(TestCase):
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
 
     def _crear_aspirante(self, doc, estado='ACTIVO'):
-        return Aspirante.objects.create(
+        return Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad=doc, estado=estado, sexo='F', raza='BL',
             provincia=self.provincia, municipio=self.municipio)
@@ -513,7 +516,7 @@ class RecontratacionTrasVaciarHistoricoTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112390', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -569,7 +572,7 @@ class AvisoOrigenEdicionTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112380', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -606,7 +609,7 @@ class AuditoriaAdminTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112350', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -688,7 +691,7 @@ class ReglaBajaSinMovimientosNiCargoTests(TestCase):
 
     def test_detecta_baja_sin_cargo_ni_movimientos(self):
         provincia, municipio = _crear_provincia_municipio()
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112360', estado='BAJA', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -703,7 +706,7 @@ class ReglaBajaSinMovimientosNiCargoTests(TestCase):
         """Una baja sin cargo completado a mano, pero con histórico intacto, no es
         el mismo problema — no debe confundirse con la pérdida de histórico."""
         provincia, municipio = _crear_provincia_municipio()
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab2', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112361', estado='BAJA', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -733,7 +736,7 @@ class BorradoAgrupadoAdminTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112370', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -783,7 +786,7 @@ class BorradoAgrupadoAdminTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112371', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -815,7 +818,7 @@ class FechaAltaEntidadTests(TestCase):
         provincia, municipio = _crear_provincia_municipio()
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=False, requiere_motivo=False)
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Fae',
             doc_identidad='90010112399', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -901,6 +904,51 @@ class FechaAltaEntidadTests(TestCase):
         self.assertNotIn('fecha_alta', form.fields)
         self.assertNotIn('fecha_alta_entidad', form.fields)
 
+    def test_caso_g_ano_anterior_a_1900_es_invalido(self):
+        """El año a medio teclear («0002» al escribir 2022) es el origen de las
+        fechas imposibles que llegaban a producción: el servidor lo rechaza."""
+        form = CAltaForm(data=self._datos_minimos(date.today(), date(2, 5, 10)))
+        self.assertFalse(form.is_valid())
+        self.assertIn('fecha_alta_entidad', form.errors)
+        self.assertIn('1900', str(form.errors['fecha_alta_entidad']))
+
+    def test_caso_g_ano_1900_es_valido(self):
+        """El corte es inclusivo: 1900 se acepta, 1899 no."""
+        form = CAltaForm(data=self._datos_minimos(date.today(), date(1900, 1, 1)))
+        form.is_valid()
+        self.assertNotIn('fecha_alta_entidad', form.errors)
+
+        form = CAltaForm(data=self._datos_minimos(date.today(), date(1899, 12, 31)))
+        self.assertFalse(form.is_valid())
+        self.assertIn('fecha_alta_entidad', form.errors)
+
+    def test_caso_g_la_validacion_alcanza_a_las_demas_fechas_del_contrato(self):
+        """No solo F. Alta Entidad: cualquier fecha propia del contrato."""
+        datos = self._datos_minimos(date.today(), date.today())
+        datos['profesional'] = 'on'
+        datos['fecha_vence_lic'] = date(2, 5, 10).isoformat()
+        form = CAltaForm(data=datos)
+        self.assertFalse(form.is_valid())
+        self.assertIn('fecha_vence_lic', form.errors)
+
+    def test_caso_h_una_fecha_imposible_ya_guardada_no_bloquea_la_edicion(self):
+        """Un contrato histórico con la fecha ya mal registrada tiene que poder
+        editarse: si se reenvía el MISMO valor no se rechaza (lo reporta CTR-017
+        en Subsanación). En cuanto se cambia por otro valor imposible, sí."""
+        contrato = CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente='00098', tipo=self.tipo_contrato,
+            fecha_alta=date.today(), fecha_alta_entidad=date(2, 5, 10))
+
+        form = CAltaForm(instance=contrato,
+                         data=self._datos_minimos(date.today(), date(2, 5, 10)))
+        form.is_valid()
+        self.assertNotIn('fecha_alta_entidad', form.errors)
+
+        form = CAltaForm(instance=contrato,
+                         data=self._datos_minimos(date.today(), date(3, 5, 10)))
+        self.assertFalse(form.is_valid())
+        self.assertIn('fecha_alta_entidad', form.errors)
+
 
 class BotonesSoloLecturaContratosTests(TestCase):
     """El Observador solo conserva las acciones que NO modifican nada.
@@ -958,3 +1006,331 @@ class BotonesSoloLecturaContratosTests(TestCase):
             with self.subTest(boton=boton):
                 self.assertNotIn('disabled', self._etiqueta(html, boton))
         self.assertIn('id="btn-nuevo-contrato"', html)
+
+
+class ImportesDelContratoTests(TestCase):
+    """Los cuatro importes dejaron de escribirse a mano.
+
+    Maestria y doctorado salen del grado cientifico del trabajador y del
+    nomenclador; instructor y CNCI, de la entrada elegida en su desplegable. El
+    numero se sigue guardando en el contrato para que una nomina ya emitida no
+    cambie porque alguien retoque el nomenclador meses despues.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Indeterminado', ocupa_plaza=True)
+
+        def aspirante(doc, grado):
+            return Aspirante.objects.create(
+                nivel_educ='SA', nombre='Trab', papellido='Prueba', sapellido='Test',
+                doc_identidad=doc, estado='ACTIVO', sexo='F', raza='BL',
+                grado_cientifico=grado, provincia=provincia, municipio=municipio)
+
+        cls.sin_grado = aspirante('90010112345', None)
+        cls.master = aspirante('90010112346', 'MC')
+        cls.doctor = aspirante('90010112347', 'DC')
+
+        cls.instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Principal',
+            importe=Decimal('150.00'))
+        cls.cnci = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.CNCI, descripcion='CNCI Nivel I',
+            importe=Decimal('220.00'))
+
+    # ---- Maestria y doctorado: de solo lectura y autorrellenados ----
+
+    def test_sin_grado_cientifico_no_aplica_ninguno(self):
+        f = CAltaForm(aspirante=self.sin_grado)
+        self.assertEqual(f.texto_maestria, 'No aplica')
+        self.assertEqual(f.texto_doctorado, 'No aplica')
+        self.assertEqual(f.importes_del_grado['maestria'], Decimal('0.00'))
+
+    def test_el_master_recibe_el_importe_del_nomenclador(self):
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+
+        f = CAltaForm(aspirante=self.master)
+
+        self.assertEqual(f.texto_maestria, '500.00')
+        self.assertEqual(f.importes_del_grado['maestria'], Decimal('500.00'))
+        # Nunca los dos a la vez: lo garantiza el modelo del aspirante, donde el
+        # grado cientifico es UN campo con opciones y no dos casillas.
+        self.assertEqual(f.texto_doctorado, 'No aplica')
+        self.assertEqual(f.importes_del_grado['doctorado'], Decimal('0.00'))
+
+    def test_el_doctor_recibe_el_importe_del_nomenclador(self):
+        NImporteGradoCientifico.objects.create(grado='DC', importe=Decimal('900.50'))
+
+        f = CAltaForm(aspirante=self.doctor)
+
+        self.assertEqual(f.texto_doctorado, '900.50')
+        self.assertEqual(f.importes_del_grado['doctorado'], Decimal('900.50'))
+        self.assertEqual(f.texto_maestria, 'No aplica')
+
+    def test_con_el_nomenclador_vacio_avisa_y_guarda_cero(self):
+        """El caso decidido: se avisa en el campo, se guarda 0, y la regla CFG-003
+        de Subsanacion es la que reclama el nomenclador al Administrador."""
+        f = CAltaForm(aspirante=self.master)
+
+        self.assertEqual(f.texto_maestria, 'Nomenc. Vac\u00edo')
+        self.assertEqual(f.importes_del_grado['maestria'], Decimal('0.00'))
+
+    def test_los_cuatro_importes_viajan_ocultos(self):
+        """Se rellenan solos, asi que no se escriben: lo que se ve es una caja de
+        solo lectura (maestria y doctorado) o un desplegable (instructor y CNCI)."""
+        f = CAltaForm(aspirante=self.sin_grado)
+        for campo in ('maestria', 'doctorado', 'instructor', 'cnci'):
+            self.assertIsInstance(f.fields[campo].widget, forms.HiddenInput, campo)
+
+    # ---- Instructor y CNCI: desplegables del nomenclador ----
+
+    def test_cada_desplegable_solo_ofrece_su_tipo(self):
+        f = CAltaForm(aspirante=self.sin_grado)
+        self.assertEqual(list(f.fields['instructor_nomenclador'].queryset),
+                         [self.instructor])
+        self.assertEqual(list(f.fields['cnci_nomenclador'].queryset), [self.cnci])
+
+    # ---- El servidor es el que manda ----
+
+    def test_el_servidor_ignora_los_importes_que_lleguen_en_el_post(self):
+        """Los campos van ocultos, asi que lo que llega en el POST no es de fiar.
+        Y aunque lo fuera, el importe correcto es el del nomenclador."""
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+
+        f = CAltaForm({
+            'maestria': '99999', 'doctorado': '88888',
+            'instructor': '7777', 'cnci': '6666',
+            'instructor_nomenclador': self.instructor.pk,
+            'cnci_nomenclador': self.cnci.pk,
+        }, aspirante=self.master)
+        f.is_valid()   # el resto del formulario queda incompleto a proposito
+
+        self.assertEqual(f.cleaned_data['maestria'], Decimal('500.00'))
+        self.assertEqual(f.cleaned_data['doctorado'], Decimal('0.00'))
+        self.assertEqual(f.cleaned_data['instructor'], Decimal('150.00'))
+        self.assertEqual(f.cleaned_data['cnci'], Decimal('220.00'))
+
+    def test_sin_elegir_nada_los_pagos_quedan_en_cero(self):
+        f = CAltaForm({'instructor_nomenclador': '', 'cnci_nomenclador': ''},
+                      aspirante=self.sin_grado)
+        f.is_valid()
+
+        self.assertEqual(f.cleaned_data['instructor'], Decimal('0.00'))
+        self.assertEqual(f.cleaned_data['cnci'], Decimal('0.00'))
+
+    def test_al_editar_el_aspirante_sale_del_propio_contrato(self):
+        """En edicion no hace falta pasarlo: sale de la instancia."""
+        NImporteGradoCientifico.objects.create(grado='DC', importe=Decimal('900.00'))
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        departamento = Departamento.objects.create(
+            descripcion='Direccion', unidad_organizativa=unidad, orden_informe=1)
+        grupo = NGrupoEscala.objects.create(nivel='IV')
+        ncargo = NCargo.objects.create(
+            descripcion='Especialista', cat_ocupacional='TEC',
+            grupo_escala=grupo, salario_basico=4000)
+        cargo = CargoPlantilla.objects.create(
+            ncargo=ncargo, departamento=departamento, cant_aprobada=5, orden_informe=1)
+        contrato = CAlta.objects.create(
+            aspirante=self.doctor, no_expediente='00777', tipo=self.tipo_contrato,
+            cargo=cargo, fecha_alta=date.today())
+
+        f = CAltaForm(instance=contrato)
+
+        self.assertEqual(f.texto_doctorado, '900.00')
+
+    def test_admite_decimales_y_cifras_de_tres_digitos(self):
+        """Antes maestria y doctorado eran enteros (los centavos se perdian) e
+        instructor era Decimal(4, 2), con tope en 99,99."""
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('1234.56'))
+        instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Jefe',
+            importe=Decimal('345.67'))
+
+        f = CAltaForm({'instructor_nomenclador': instructor.pk}, aspirante=self.master)
+        f.is_valid()
+
+        self.assertEqual(f.cleaned_data['maestria'], Decimal('1234.56'))
+        self.assertEqual(f.cleaned_data['instructor'], Decimal('345.67'))
+
+
+class FiltrosEstructuraContratosTests(TestCase):
+    """Los tres filtros del listado de contratos por estructura: Unidad
+    Organizativa, Departamento y Cargo.
+
+    Lo que de verdad hay que proteger aquí es la EXPANSIÓN de la unidad: una
+    Unidad Principal no tiene cargos propios —todo cuelga de sus subunidades—,
+    así que filtrar por una principal sin expandir devolvería el listado vacío,
+    que es justo el fallo que se veía en el Dashboard y en los informes antes de
+    unificar el criterio en `strorganizativa/jerarquia.py`.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_principal = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Dirección', es_principal=True, es_subunidad=False)
+        tipo_sub = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Subunidad', es_subunidad=True, tipo_padre=tipo_principal)
+        tipo_ueb = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+
+        cls.principal = UnidadOrganizativa.objects.create(
+            descripcion='Oficina Central', tipo=tipo_principal,
+            grupo_nomina=1, orden_informe=1)
+        cls.taller = UnidadOrganizativa.objects.create(
+            descripcion='Taller', tipo=tipo_sub, padre=cls.principal,
+            grupo_nomina=1, orden_informe=2)
+        cls.almacen = UnidadOrganizativa.objects.create(
+            descripcion='Almacén', tipo=tipo_sub, padre=cls.principal,
+            grupo_nomina=1, orden_informe=3)
+        # Fuera de la rama de la principal: sirve para comprobar que expandir no
+        # se lleva por delante a media empresa.
+        cls.suelta = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=tipo_ueb, grupo_nomina=2, orden_informe=4)
+
+        cls.dep_taller = Departamento.objects.create(
+            descripcion='Mantenimiento', unidad_organizativa=cls.taller, orden_informe=1)
+        cls.dep_almacen = Departamento.objects.create(
+            descripcion='Insumos', unidad_organizativa=cls.almacen, orden_informe=1)
+        cls.dep_suelta = Departamento.objects.create(
+            descripcion='Ventas', unidad_organizativa=cls.suelta, orden_informe=1)
+
+        grupo = NGrupoEscala.objects.create(nivel='IV')
+        cls.ncargo_especialista = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=grupo, salario_basico=4000)
+        cls.ncargo_operario = NCargo.objects.create(
+            descripcion='Operario', cat_ocupacional='OPE',
+            grupo_escala=grupo, salario_basico=2000)
+
+        # El MISMO nomenclador de cargo en dos departamentos distintos: es lo que
+        # obliga a que el filtro vaya por `ncargo` y no por la fila de plantilla.
+        cls.plantilla_esp_taller = CargoPlantilla.objects.create(
+            ncargo=cls.ncargo_especialista, departamento=cls.dep_taller,
+            cant_aprobada=3, orden_informe=1)
+        cls.plantilla_esp_suelta = CargoPlantilla.objects.create(
+            ncargo=cls.ncargo_especialista, departamento=cls.dep_suelta,
+            cant_aprobada=3, orden_informe=1)
+        cls.plantilla_operario = CargoPlantilla.objects.create(
+            ncargo=cls.ncargo_operario, departamento=cls.dep_almacen,
+            cant_aprobada=2, orden_informe=1)
+
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+
+        def _contrato(seq, plantilla):
+            aspirante = Aspirante.objects.create(
+                nivel_educ='SA', nombre='Trab%d' % seq, papellido='Prueba',
+                sapellido='Test', doc_identidad='%011d' % seq, estado='ACTIVO',
+                sexo='F', raza='BL', provincia=provincia, municipio=municipio)
+            return CAlta.objects.create(
+                aspirante=aspirante, no_expediente='%05d' % seq,
+                tipo=cls.tipo_contrato, cargo=plantilla)
+
+        cls.contrato_taller = _contrato(1, cls.plantilla_esp_taller)
+        cls.contrato_almacen = _contrato(2, cls.plantilla_operario)
+        cls.contrato_suelta = _contrato(3, cls.plantilla_esp_suelta)
+
+    def _filtrar(self, params):
+        request = RequestFactory().get('/contrato/', params)
+        return set(aplicar_filtros(request, CAlta.objects.all()).values_list('pk', flat=True))
+
+    def test_unidad_principal_arrastra_sus_subunidades(self):
+        """Elegir la principal trae lo de sus hijas, que es donde están los
+        cargos; sin la expansión el resultado sería vacío."""
+        resultado = self._filtrar({'unidad': [self.principal.pk]})
+        self.assertEqual(
+            resultado, {self.contrato_taller.pk, self.contrato_almacen.pk})
+
+    def test_subunidad_sola_no_arrastra_a_sus_hermanas(self):
+        resultado = self._filtrar({'unidad': [self.taller.pk]})
+        self.assertEqual(resultado, {self.contrato_taller.pk})
+
+    def test_varias_unidades_suman(self):
+        resultado = self._filtrar({'unidad': [self.taller.pk, self.suelta.pk]})
+        self.assertEqual(
+            resultado, {self.contrato_taller.pk, self.contrato_suelta.pk})
+
+    def test_unidad_vacia_se_ignora(self):
+        """El selector envía el parámetro aunque no haya nada marcado; eso no
+        puede vaciar el listado."""
+        resultado = self._filtrar({'unidad': ['']})
+        self.assertEqual(len(resultado), 3)
+
+    def test_departamento_filtra_solo_el_suyo(self):
+        resultado = self._filtrar({'departamento': [self.dep_almacen.pk]})
+        self.assertEqual(resultado, {self.contrato_almacen.pk})
+
+    def test_cargo_filtra_por_nomenclador_en_todos_los_departamentos(self):
+        resultado = self._filtrar({'cargo': [self.ncargo_especialista.pk]})
+        self.assertEqual(
+            resultado, {self.contrato_taller.pk, self.contrato_suelta.pk})
+
+    def test_los_tres_filtros_se_combinan(self):
+        resultado = self._filtrar({
+            'unidad': [self.principal.pk],
+            'cargo': [self.ncargo_especialista.pk],
+        })
+        self.assertEqual(resultado, {self.contrato_taller.pk})
+
+    def test_valores_no_numericos_no_revientan(self):
+        """La querystring la escribe cualquiera; un valor basura debe ignorarse,
+        no lanzar `ValueError`."""
+        resultado = self._filtrar({'departamento': ['x'], 'cargo': ['y'], 'unidad': ['z']})
+        self.assertEqual(len(resultado), 3)
+
+
+class ContextoFiltrosEstructuraTests(TestCase):
+    """El contexto que alimenta a los tres selectores del listado."""
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_principal = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Dirección', es_principal=True, es_subunidad=False)
+        tipo_sub = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Subunidad', es_subunidad=True, tipo_padre=tipo_principal)
+
+        cls.principal = UnidadOrganizativa.objects.create(
+            descripcion='Oficina Central', tipo=tipo_principal,
+            grupo_nomina=1, orden_informe=1)
+        cls.taller = UnidadOrganizativa.objects.create(
+            descripcion='Taller', tipo=tipo_sub, padre=cls.principal,
+            grupo_nomina=1, orden_informe=2)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Mantenimiento', unidad_organizativa=cls.taller, orden_informe=1)
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_filtros', password='clave-de-prueba-123', es_admin=True)
+
+    def test_unidades_llegan_ordenadas_con_su_nivel(self):
+        """Padre primero y subunidad detrás, con `nivel` para indentarla."""
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('list_contrato'))
+        unidades = respuesta.context['unidades_filtro']
+        self.assertEqual([u.pk for u in unidades], [self.principal.pk, self.taller.pk])
+        self.assertEqual([u.nivel for u in unidades], [0, 1])
+
+    def test_departamento_lleva_su_unidad_como_padre(self):
+        """Es lo que permite buscar los departamentos por el nombre de su unidad
+        dentro del selector."""
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('list_contrato'))
+        departamentos = respuesta.context['departamentos_filtro']
+        self.assertEqual([d.padre for d in departamentos], [self.taller])
+
+    def test_moderador_solo_ve_sus_unidades_en_el_desplegable(self):
+        """Ofrecer una unidad fuera de su alcance sería un filtro que siempre
+        devuelve vacío."""
+        moderador = CustomUser.objects.create_user(
+            username='mod_filtros', password='clave-de-prueba-123', es_moderador=True)
+        moderador.unidades.set([self.taller])
+
+        self.client.force_login(moderador)
+        respuesta = self.client.get(reverse('list_contrato'))
+        self.assertEqual(
+            [u.pk for u in respuesta.context['unidades_filtro']], [self.taller.pk])

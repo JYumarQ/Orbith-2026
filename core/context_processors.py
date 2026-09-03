@@ -89,6 +89,15 @@ def _contar_advertencias_pendientes(usuario):
 
     from notificaciones.models import Notificacion
 
+    # El Observador ya no ve «Notificaciones» en la barra lateral (el panel es de
+    # Administrador y Moderador, ver `notificaciones/views.py::lista_notificaciones`),
+    # así que este contador no se pinta en ninguna parte para él. Se corta antes de
+    # consultar: es una consulta por CADA petición autenticada, y la más cara de este
+    # context processor. Sus avisos personales le siguen llegando por la campana del
+    # pie, que tiene su propio contador (`notificaciones_json`).
+    if not (usuario.es_admin or usuario.es_moderador):
+        return 0
+
     base = Notificacion.objects.filter(
         tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA, leido=False)
 

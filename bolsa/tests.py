@@ -26,7 +26,7 @@ class AuditoriaAdminTests(TestCase):
     def test_eliminar_un_aspirante_en_el_admin_queda_auditado(self):
         from auditoria.models import EventoAuditoria
 
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
             provincia=self.provincia, municipio=self.municipio)
@@ -45,7 +45,7 @@ class AuditoriaAdminTests(TestCase):
         from auditoria.models import EventoAuditoria
         from bolsa.admin import AspiranteAdmin
 
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112346', estado='ACTIVO', sexo='F', raza='BL',
             provincia=self.provincia, municipio=self.municipio)
@@ -146,7 +146,7 @@ class SerieCarnetTests(TestCase):
         cls.municipio = NMunicipio.objects.create(nombre='Cárdenas', provincia=cls.provincia)
 
     def _crear(self, doc_identidad, serie_ci=None):
-        return Aspirante.objects.create(
+        return Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad=doc_identidad, estado='ACTIVO', sexo='F', raza='BL',
             serie_ci=serie_ci, provincia=self.provincia, municipio=self.municipio)
@@ -197,7 +197,7 @@ class ValidarDatosAspiranteTests(TestCase):
         cls.municipio = NMunicipio.objects.create(nombre='Santa Clara', provincia=cls.provincia)
         cls.usuario = CustomUser.objects.create_user(
             username='rrhh_serie', password='x', es_admin=True)
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Luis', papellido='Díaz', sapellido='Mora',
             doc_identidad='85010112400', estado='ACTIVO', sexo='M', raza='BL',
             serie_ci='AB12CD34E',

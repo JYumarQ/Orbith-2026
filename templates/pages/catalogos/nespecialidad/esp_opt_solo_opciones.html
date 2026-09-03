@@ -1,0 +1,15 @@
+{% comment %}
+Solo las <option> del campo Especialidad del formulario de Aspirante.
+
+Mismo motivo que `nomencladores/partials/municipios_solo_opciones.html`: con
+`hx-swap="outerHTML"` el <select> se reemplazaba entero y el Select2 montado
+encima quedaba huérfano, así que por una fracción de segundo se veían dos
+controles apilados. Devolviendo solo las opciones el <select> no se toca.
+
+`esp_opt.html` (el <select> completo) se conserva para los filtros de las
+listas de Aspirantes y Contratos, que no llevan Select2.
+{% endcomment %}
+<option value="">Seleccione una especialidad...</option>
+{% for e in list_esp %}
+  <option value="{{ e.id }}">{{ e.nombre }}</option>
+{% endfor %}

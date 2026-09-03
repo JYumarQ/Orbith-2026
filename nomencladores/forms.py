@@ -3,7 +3,9 @@ from dataclasses import fields
 from pyexpat import model
 from django import forms
 from django.forms import widgets
-from .models import NCargo, NGrupoEscala, NRol, NTridente, NTipoUnidadOrganizativa, NTipoFamilia, NFamiliaCargo
+from .models import (NCargo, NGrupoEscala, NRol, NTridente, NTipoUnidadOrganizativa,
+                     NTipoFamilia, NFamiliaCargo, NImporteGradoCientifico,
+                     NPagoAdicional)
 from django.db.models import Count
 from django.urls import reverse_lazy
 
@@ -139,3 +141,49 @@ class NFamiliaCargoForm(forms.ModelForm):
     class Meta:
         model = NFamiliaCargo
         fields = ['nombre', 'descripcion', 'tipo_familia']
+
+# ---------------------------------------------------------------------------
+# IMPORTES DEL CONTRATO
+# ---------------------------------------------------------------------------
+
+class NImporteGradoCientificoForm(forms.ModelForm):
+    """El importe de Maestría o el de Doctorado.
+
+    `grado` no se ofrece: lo fija la tarjeta desde la que se abre el modal. Es
+    lo que hace que sean DOS tarjetas de un solo valor cada una en vez de un
+    listado donde el usuario tendría que elegir el grado a mano —y donde podría
+    crear un segundo registro del mismo grado.
+    """
+
+    class Meta:
+        model = NImporteGradoCientifico
+        fields = ('importe',)
+        labels = {'importe': 'Importe'}
+        widgets = {
+            'importe': forms.NumberInput(attrs={
+                'class': 'form-control', 'step': '0.01', 'min': '0',
+                'placeholder': '0.00'}),
+        }
+
+
+class NPagoAdicionalForm(forms.ModelForm):
+    """Una entrada de Instructor o de CNCI.
+
+    Igual que arriba, `tipo` viene de la tarjeta y no del formulario: la tarjeta
+    de Instructor solo crea instructores.
+    """
+
+    class Meta:
+        model = NPagoAdicional
+        fields = ('descripcion', 'importe')
+        labels = {'descripcion': 'Descripción', 'importe': 'Importe'}
+        widgets = {
+            'descripcion': forms.TextInput(attrs={
+                'class': 'form-control', 'placeholder': 'Ej.: Instructor Principal'}),
+            'importe': forms.NumberInput(attrs={
+                'class': 'form-control', 'step': '0.01', 'min': '0',
+                'placeholder': '0.00'}),
+        }
+
+    def clean_descripcion(self):
+        return (self.cleaned_data.get('descripcion') or '').strip()

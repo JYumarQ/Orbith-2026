@@ -195,7 +195,7 @@ class HistoricoAltasBajasTests(TestCase):
         cls.hace_2_meses = _meses_atras(2)
 
         def _crear_aspirante(seq, estado):
-            return Aspirante.objects.create(
+            return Aspirante.objects.create(nivel_educ='SA', 
                 nombre=f'Trab{seq}', papellido='Prueba', sapellido='Test',
                 doc_identidad=_ci_para_edad(30, seq), estado=estado, sexo='F', raza='BL',
                 provincia=cls.provincia, municipio=cls.municipio)
@@ -351,7 +351,7 @@ class RecordatoriosContratoTests(TestCase):
         hoy = date.today()
 
         def _crear_aspirante(seq):
-            return Aspirante.objects.create(
+            return Aspirante.objects.create(nivel_educ='SA', 
                 nombre=f'Trab{seq}', papellido='Prueba', sapellido='Test',
                 doc_identidad=_ci_para_edad(30, seq), estado='ACTIVO', sexo='F', raza='BL',
                 provincia=cls.provincia, municipio=cls.municipio)
@@ -544,7 +544,7 @@ class CumpleanosSemanaTests(TestCase):
             century_digit = 0 if fecha_nacimiento.year < 2000 else 6
             ci = (f"{fecha_nacimiento.year % 100:02d}{fecha_nacimiento.month:02d}"
                   f"{fecha_nacimiento.day:02d}{century_digit}{seq:04d}")
-            asp = Aspirante.objects.create(
+            asp = Aspirante.objects.create(nivel_educ='SA', 
                 nombre=f'Cumple{seq}', papellido='Prueba', sapellido='Test',
                 doc_identidad=ci, estado='ACTIVO', sexo='F', raza='BL',
                 provincia=cls.provincia, municipio=cls.municipio)

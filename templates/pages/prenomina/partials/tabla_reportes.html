@@ -160,7 +160,10 @@
               <a class="page-link" href="#"
                  hx-get="{% url 'prenomina:buscar_reportes' %}?page={{ numero }}"
                  hx-target="#resultados_reportes"
-                 hx-include="#search, #filtro_estado, #filtro_anno">{{ numero }}</a>
+                 {% comment %} `#filtro_mes` faltaba: al pasar de página estando
+                    filtrado por un mes, ese filtro se perdía y la página 2 salía
+                    con reportes de todo el año. {% endcomment %}
+                 hx-include="#search, #filtro_estado, #filtro_anno, #filtro_mes">{{ numero }}</a>
             </li>
           {% endfor %}
         </ul>

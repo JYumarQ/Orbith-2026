@@ -3,6 +3,7 @@ from typing import cast
 from django import forms
 from django.forms import ModelChoiceField
 from django.urls import reverse, reverse_lazy
+from django.utils.text import format_lazy
 from .models import PATRON_SERIE_CI, Aspirante
 from nomencladores.models import NEspecialidad, NMunicipio
 
@@ -10,13 +11,37 @@ class AspiranteForm(forms.ModelForm):
     # Nivel educacional dispara la carga de especialidades por HTMX
     nivel_educ = forms.ChoiceField(
         label='Nivel Educacional',
-        choices=Aspirante._meta.get_field('nivel_educ').choices,
+        # Opción vacía delante: sin ella el navegador deja preseleccionada la
+        # primera de la lista ('Sin Acreditar'), así que un alta hecha de prisa
+        # guardaba ese nivel sin que nadie lo hubiera elegido. Ahora el campo
+        # empieza en blanco y hay que decidirlo a conciencia.
+        choices=[('', 'Seleccione un nivel...')] + list(
+            Aspirante._meta.get_field('nivel_educ').choices
+        ),
+        # Obligatorio solo en el formulario: en el modelo sigue siendo
+        # `blank=True, null=True` porque hay aspirantes antiguos sin el dato y
+        # cambiarlo exigiría migrar y rellenar todos esos registros.
+        required=True,
+        error_messages={'required': 'Seleccione el nivel educacional.'},
         widget=forms.Select(attrs={
             'class': 'form-select',
-            'hx-get': reverse_lazy('cargar_esp'),     # seguro en import-time
+            'required': 'required',
+            # `solo_opciones=1` + innerHTML: HTMX cambia solo las <option> y el
+            # <select> —con su Select2 encima— sobrevive, así que el campo ya no
+            # parpadea al cambiar el Nivel Educacional.
+            # `format_lazy` (y no una concatenación normal) para que la URL se
+            # siga resolviendo tarde: en tiempo de import las rutas aún no están
+            # cargadas.
+            'hx-get': format_lazy('{}?solo_opciones=1', reverse_lazy('cargar_esp')),
             'hx-target': '#id_especialidad',
-            'hx-trigger': 'change, select2:select',
-            'hx-swap': 'outerHTML'
+            # Solo 'change'. Antes también escuchaba 'select2:select', pero ese
+            # evento lo dispara jQuery y NO es un evento nativo del DOM, así que
+            # el listener de HTMX nunca llegaba a verlo: era un disparador
+            # muerto. Quien avisa de verdad es el puente de
+            # `static/js/select2_htmx.js`, que al confirmar la selección reemite
+            # un 'change' nativo sobre el <select>.
+            'hx-trigger': 'change',
+            'hx-swap': 'innerHTML'
         })
     )
 
@@ -42,22 +67,6 @@ class AspiranteForm(forms.ModelForm):
             'nivel_educ', 'especialidad', 'titulo_oro',
         )
 
-        def clean(self):
-            cleaned_data = super().clean()
-            nivel = cleaned_data.get("nivel_educ")
-            titulo_oro = cleaned_data.get("titulo_oro")
-
-            # REGLA DE AUDITORÍA: El Título de Oro es exclusivo para Nivel Superior ('NS')
-            if titulo_oro and nivel != 'NS':
-                self.add_error(
-                    'titulo_oro', 
-                    "Inconsistencia de datos: El Título de Oro solo puede asignarse a graduados de Nivel Superior."
-                )
-                # Forzamos sanitización silenciosa por seguridad
-                cleaned_data['titulo_oro'] = False 
-
-            return cleaned_data
-        
         labels = {
             'doc_identidad': 'Doc. de Identidad',
             'serie_ci': 'Serie CI',
@@ -101,7 +110,11 @@ class AspiranteForm(forms.ModelForm):
                 'class': 'form-select',
                 'hx-trigger': 'change',
                 'hx-target': '#id_municipio',
-                'hx-swap': 'outerHTML',
+                # innerHTML (no outerHTML): así HTMX cambia solo las <option> y el
+                # <select> —con su Select2 montado encima— sobrevive al cambio de
+                # Provincia. Con outerHTML el <select> se reemplazaba entero y
+                # durante un instante se veían dos controles apilados.
+                'hx-swap': 'innerHTML',
             }),
 
             # Municipio empieza deshabilitado y se habilita tras el swap de HTMX
@@ -131,7 +144,11 @@ class AspiranteForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # ✅ HTMX en Provincia
-        self.fields['provincia'].widget.attrs['hx-get'] = reverse('cargar_municipios')
+        # `solo_opciones=1`: la vista devuelve únicamente las <option>, que es lo
+        # que espera el `hx-swap="innerHTML"` del widget.
+        self.fields['provincia'].widget.attrs['hx-get'] = (
+            reverse('cargar_municipios') + '?solo_opciones=1'
+        )
 
         self.fields['raza'].empty_label = "Seleccione una raza..."
         self.fields['raza'].required = True

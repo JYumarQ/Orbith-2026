@@ -1,5 +1,6 @@
 {% extends 'base/base.html' %}
 {% load static %}
+{% load estaticos %}
 
 {% block title %}Notificaciones | Orbith{% endblock %}
 
@@ -60,7 +61,7 @@
 
 </div>
 
-<script src="{% static 'js/notificaciones.js' %}"></script>
+<script src="{% estatico 'js/notificaciones.js' %}"></script>
 <script>
 (function () {
   function obtenerCookie(nombre) {

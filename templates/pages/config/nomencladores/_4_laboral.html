@@ -1,3 +1,5 @@
+{% load static %}
+{% load estaticos %}
 <div class="accordion-item border-0 bg-transparent mb-2">
     <h2 class="accordion-header" id="headingLaboral">
       <button class="accordion-button collapsed rounded-3 shadow-sm border" type="button" data-bs-toggle="collapse"
@@ -18,14 +20,39 @@
                         </div>
                         <div>
                             <h4 class="m-0 fw-bold text-slate-800" style="letter-spacing: -0.5px;">Laborales y Profesionales</h4>
-                            <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Configuración de causas, contratos, especialidades y niveles de preparación</p>
+                            <p class="m-0 text-slate-500" style="font-size: 0.85rem; font-weight: 500;">Causas, contratos, especialidades, niveles de preparación e importes del contrato</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- FILA 1: CAUSAS ALTA/BAJA (100% ANCHO) -->
+                {% comment %} FILA 1: los dos importes de valor único y las Causas.
+
+                   Causas ocupaba `col-12`, todo el ancho, para una tabla de dos
+                   columnas: sobraba la mitad. Se pasa a media fila y el hueco lo
+                   ocupan Maestría y Doctorado.
+
+                   Las cuatro tarjetas nuevas se traen su contenido por HTMX con
+                   `hx-trigger="revealed"`: mientras el acordeón siga colapsado no
+                   lanzan ninguna consulta. Y no usan ninguna de las clases del JS
+                   delegado de `nomencladores_base.html` (`add-row-btn`, `edit-btn`,
+                   `delete-btn`...), que despacha por el `id` de la tabla contra una
+                   lista cerrada: así no se toca nada de lo que ya funciona.
+                {% endcomment %}
                 <div class="row g-4 mb-4">
-                    <div class="col-12">
+                    <div class="col-lg-3"
+                         hx-get="{% url 'importe_tarjeta' 'maestria' %}"
+                         hx-trigger="revealed, importeMaestriaActualizado from:body"
+                         hx-swap="innerHTML">
+                        {% include "pages/config/nomencladores/partials/_tarjeta_cargando.html" %}
+                    </div>
+                    <div class="col-lg-3"
+                         hx-get="{% url 'importe_tarjeta' 'doctorado' %}"
+                         hx-trigger="revealed, importeDoctoradoActualizado from:body"
+                         hx-swap="innerHTML">
+                        {% include "pages/config/nomencladores/partials/_tarjeta_cargando.html" %}
+                    </div>
+
+                    <div class="col-lg-6">
                         <div class="section-card h-100 d-flex flex-column m-0">
                             <div class="card-header-flex">
                                 <div class="d-flex align-items-center gap-2">
@@ -68,7 +95,25 @@
                     </div>
                 </div>
 
-                <!-- FILA 2: ESPECIALIDADES (50%) Y NIVELES DE PREPARACIÓN (50%) -->
+                {% comment %} FILA 2: los dos importes de varios registros. Son los
+                   que alimentan los desplegables «Instructor» y «CNCI» de los
+                   formularios de contrato. {% endcomment %}
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-6"
+                         hx-get="{% url 'importe_tarjeta' 'instructor' %}"
+                         hx-trigger="revealed, pagosInstructorActualizado from:body"
+                         hx-swap="innerHTML">
+                        {% include "pages/config/nomencladores/partials/_tarjeta_cargando.html" %}
+                    </div>
+                    <div class="col-lg-6"
+                         hx-get="{% url 'importe_tarjeta' 'cnci' %}"
+                         hx-trigger="revealed, pagosCnciActualizado from:body"
+                         hx-swap="innerHTML">
+                        {% include "pages/config/nomencladores/partials/_tarjeta_cargando.html" %}
+                    </div>
+                </div>
+
+                <!-- FILA 3: ESPECIALIDADES (50%) Y NIVELES DE PREPARACIÓN (50%) -->
                 <div class="row g-4 mb-4">
                     <div class="col-lg-6">
                         <div class="section-card h-100 d-flex flex-column m-0">
@@ -153,7 +198,7 @@
                     </div>
                 </div>
 
-                <!-- FILA 3: TIPOS Y MOTIVOS DE CONTRATO (50/50) -->
+                <!-- FILA 4: TIPOS Y MOTIVOS DE CONTRATO (50/50) -->
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="section-card h-100 d-flex flex-column m-0">
@@ -291,7 +336,7 @@
             <tr class="fila-edicion">
                 <td><input type="text" class="form-control form-control-sm input-nombre" placeholder="Ej: Etapa 3"></td>
                 <td class="text-center">
-                    <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;">${getOpcionesNocturnidad()}</select>
+                    <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;" data-sin-select2>${getOpcionesNocturnidad()}</select>
                 </td>
                 <td><input type="number" step="0.01" class="form-control form-control-sm input-tarifa text-end" placeholder="0.00"></td>
                 <td class="text-center">
@@ -319,7 +364,7 @@
         row.addClass('fila-edicion').html(`
             <td><input type="text" class="form-control form-control-sm input-nombre" value="${nombre}"></td>
             <td class="text-center">
-                <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;">
+                <select class="form-select form-select-sm select-nocturnidad input-nocturnidad mx-auto" style="width: 80px;" data-sin-select2>
                     ${getOpcionesNocturnidad(noctVal)}
                 </select>
             </td>
@@ -401,7 +446,7 @@
             row.removeClass('fila-edicion').attr('data-id', data.id).html(`
                 <td class="nombre-cell">${data.nombre}</td>
                 <td class="nocturnidad-cell text-center">
-                    <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="${noct_id || ''}" disabled>
+                    <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="${noct_id || ''}" disabled data-sin-select2>
                         ${getOpcionesNocturnidad(noct_id)}
                     </select>
                 </td>
@@ -645,7 +690,7 @@
                     <div class="d-flex gap-1 align-items-center justify-content-center">
                         <input type="number" class="form-control form-control-sm input-inicio-hora text-center" min="1" max="12" placeholder="11" style="width: 55px;">:
                         <input type="number" class="form-control form-control-sm input-inicio-min text-center" min="0" max="59" placeholder="00" value="00" style="width: 55px;">
-                        <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;">
+                        <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;" data-sin-select2>
                             <option value="PM">PM</option>
                             <option value="AM">AM</option>
                         </select>
@@ -655,7 +700,7 @@
                     <div class="d-flex gap-1 align-items-center justify-content-center">
                         <input type="number" class="form-control form-control-sm input-fin-hora text-center" min="1" max="12" placeholder="7" style="width: 55px;">:
                         <input type="number" class="form-control form-control-sm input-fin-min text-center" min="0" max="59" placeholder="00" value="00" style="width: 55px;">
-                        <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;">
+                        <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;" data-sin-select2>
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
                         </select>
@@ -806,7 +851,7 @@
                 <div class="d-flex gap-1 align-items-center justify-content-center">
                     <input type="number" class="form-control form-control-sm input-inicio-hora text-center" min="1" max="12" value="${tInicio.h}" style="width: 55px;">:
                     <input type="number" class="form-control form-control-sm input-inicio-min text-center" min="0" max="59" value="${tInicio.m}" style="width: 55px;">
-                    <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;">
+                    <select class="form-select form-select-sm input-inicio-ampm" style="width: 70px;" data-sin-select2>
                         <option value="AM" ${tInicio.ampm==='AM'?'selected':''}>AM</option>
                         <option value="PM" ${tInicio.ampm==='PM'?'selected':''}>PM</option>
                     </select>
@@ -816,7 +861,7 @@
                 <div class="d-flex gap-1 align-items-center justify-content-center">
                     <input type="number" class="form-control form-control-sm input-fin-hora text-center" min="1" max="12" value="${tFin.h}" style="width: 55px;">:
                     <input type="number" class="form-control form-control-sm input-fin-min text-center" min="0" max="59" value="${tFin.m}" style="width: 55px;">
-                    <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;">
+                    <select class="form-select form-select-sm input-fin-ampm" style="width: 70px;" data-sin-select2>
                         <option value="AM" ${tFin.ampm==='AM'?'selected':''}>AM</option>
                         <option value="PM" ${tFin.ampm==='PM'?'selected':''}>PM</option>
                     </select>
@@ -837,4 +882,27 @@
         const row = $(this).closest('tr');
         row.html(row.data('original-html')).removeClass('fila-edicion');
     });
+</script>
+{% comment %}
+  Modal propio de las cuatro tarjetas de importes (Maestría, Doctorado,
+  Instructor y CNCI).
+
+  Es propio y no compartido porque esta pantalla no declara ningún
+  `#modal_generic`; el resto del acordeón edita en línea, sin modales.
+
+  `cablearModalHtmx` vive en `static/js/prenomina.js` pero no es de Pre-Nómina:
+  es la utilidad general de `window.orbith` que crea la instancia de Bootstrap
+  DESPUÉS de cada intercambio de htmx, que es lo único que evita el «Illegal
+  invocation» con un contenedor que nace vacío. Se carga aquí explícitamente en
+  vez de confiar en que otra tarjeta de esta misma pantalla ya lo haya traído.
+
+  La confirmación de borrado NO necesita cableado: los botones usan
+  `data-swal-confirm` + `hx-trigger="confirmed"`, que atiende el listener global
+  de `base/scripts.html`.
+{% endcomment %}
+<div class="modal fade" id="modal_importes" tabindex="-1" role="dialog" aria-hidden="true"></div>
+
+<script src="{% estatico 'js/prenomina.js' %}"></script>
+<script>
+  window.orbith.cablearModalHtmx('modal_importes');
 </script>

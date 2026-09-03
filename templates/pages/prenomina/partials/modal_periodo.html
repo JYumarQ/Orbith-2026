@@ -24,30 +24,23 @@
           </div>
         {% endif %}
 
-        <div class="row g-3">
-          <div class="col-6">
-            <label class="form-label small fw-bold text-muted" for="id_periodo_anno">Año *</label>
-            <select id="id_periodo_anno" name="anno" class="form-select" required>
-              {% for anno in annos_disponibles %}
-                <option value="{{ anno }}"
-                        {% if valores and valores.anno == anno|stringformat:"s" %}selected
-                        {% elif not valores and sugerido and anno == sugerido.anno %}selected{% endif %}>
-                  {{ anno }}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-6">
-            <label class="form-label small fw-bold text-muted" for="id_periodo_mes">Mes *</label>
-            <select id="id_periodo_mes" name="mes" class="form-select" required>
-              {% for numero, nombre in meses %}
-                <option value="{{ numero }}"
-                        {% if valores and valores.mes == numero|stringformat:"s" %}selected
-                        {% elif not valores and sugerido and numero == sugerido.mes %}selected{% endif %}>
-                  {{ nombre }}
-                </option>
-              {% endfor %}
-            </select>
+        {% comment %}
+          El mismo selector de período que el resto de la aplicación, en modo
+          `solo-sin-datos`: crear un período que YA existe es un error, así que los
+          meses que ya lo tienen salen apagados en vez de ofrecerse para que el
+          servidor los rechace después.
+
+          `minimo` hace visible la otra regla de `crear_periodo()`: un período
+          nuevo debe ser posterior al último registrado, así que ese mes y todos
+          los anteriores quedan apagados.
+
+          Los campos ocultos del componente se llaman `anno` y `mes`, igual que los
+          <select> que sustituyen, así que el POST del formulario no cambia.
+        {% endcomment %}
+        <div>
+          <label class="form-label small fw-bold text-muted">Período *</label>
+          <div>
+            {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_nuevo' alineacion='start' id_anno='id_periodo_anno' id_mes='id_periodo_mes' modo='solo-sin-datos' minimo=minimo_periodo annos=annos_disponibles con_datos=periodos_existentes anno=anno_inicial mes=mes_inicial etiqueta_vacia='Elija el período' texto_sin_dato='disponible' ayuda='Los meses apagados ya existen o no son posteriores al último período.' icono='fas fa-calendar-plus' %}
           </div>
         </div>
 

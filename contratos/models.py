@@ -147,10 +147,38 @@ class CAlta(ContratoBase):
         blank=True,
         null= True
         )
-    maestria = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
-    doctorado = models.PositiveIntegerField(default=0, validators=[MinValueValidator(0)], null=True, blank=True)
-    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=6, decimal_places=2, null=True, blank=True)
-    instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(0)], max_digits=4, decimal_places=2, null=True, blank=True)
+    # Los cuatro importes que se suman al salario. Todos `Decimal(10, 2)`:
+    #
+    #  * `maestria` y `doctorado` eran enteros, así que un importe con centavos
+    #    se guardaba truncado sin avisar.
+    #  * `instructor` era `Decimal(4, 2)`, es decir con tope en 99,99. Cualquier
+    #    cuantía de tres cifras era imposible de registrar.
+    #
+    # El importe se sigue guardando AQUÍ aunque ahora exista un nomenclador
+    # (`nomencladores.NImporteGradoCientifico` y `NPagoAdicional`). Es
+    # deliberado: el contrato y la nómina que salió de él no deben cambiar
+    # porque alguien actualice una cuantía meses después. La regla CTR-019 de
+    # Subsanación es la que reclama las diferencias con el nomenclador para que
+    # sea una persona quien decida si toca actualizarlas.
+    maestria = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
+    doctorado = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
+    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
+    instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # Qué entrada del nomenclador se eligió. El importe de arriba es el que
+    # cuenta para el cálculo; esto guarda la DESCRIPCIÓN, que sin la referencia
+    # se perdería: al reabrir el contrato no habría forma de saber cuál de las
+    # opciones se había elegido, solo su cuantía.
+    instructor_nomenclador = models.ForeignKey(
+        'nomencladores.NPagoAdicional',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='contratos_instructor',
+        verbose_name='Instructor (nomenclador)')
+    cnci_nomenclador = models.ForeignKey(
+        'nomencladores.NPagoAdicional',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='contratos_cnci',
+        verbose_name='CNCI (nomenclador)')
     
     
     # El campo `jornada` (FK a NJornada) se eliminó: ningún contrato lo tenía

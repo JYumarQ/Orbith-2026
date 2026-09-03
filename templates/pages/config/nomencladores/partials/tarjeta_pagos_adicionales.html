@@ -1,0 +1,74 @@
+{% comment %}
+  Tarjeta de un importe de VARIOS registros: Instructor o CNCI.
+
+  Cada entrada es una descripción y su importe, y son las que alimentan el
+  desplegable correspondiente de los formularios de contrato.
+
+  Se puede eliminar sin miedo a romper un contrato: las dos claves de `CAlta`
+  (`instructor_nomenclador`, `cnci_nomenclador`) son `SET_NULL`, así que un
+  contrato que apuntara a la entrada borrada pierde la referencia pero conserva
+  su importe, que es lo que cuenta para el salario y para la nómina ya emitida.
+
+  La sirve `nomencladores.views_importes.tarjeta`.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column m-0">
+  <div class="card-header-flex">
+    <div class="d-flex align-items-center gap-2">
+      <div class="{{ ficha.color }}"><i class="{{ ficha.icono }}"></i></div>
+      <div>
+        <h6 class="m-0 fw-bold text-slate-800">{{ ficha.titulo }}</h6>
+        <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">
+          DESCRIPCIÓN E IMPORTE
+        </small>
+      </div>
+    </div>
+    <button class="btn-add-modern"
+            hx-get="{% url 'importe_nuevo' slug %}"
+            hx-target="#modal_importes" hx-swap="innerHTML"
+            title="Añadir">
+      <i class="fas fa-plus"></i> Añadir
+    </button>
+  </div>
+
+  <div class="table-container-modern flex-grow-1 overflow-auto" style="max-height: 350px;">
+    <table class="table-modern">
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th class="text-end" style="width: 110px;">Importe</th>
+          <th class="text-center" style="width: 90px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pago in pagos %}
+          <tr>
+            <td>{{ pago.descripcion }}</td>
+            <td class="text-end font-monospace text-slate-600">{{ pago.importe|floatformat:2 }}</td>
+            <td class="text-center">
+              <div class="d-flex justify-content-center gap-1">
+                <button class="btn-action-modern" title="Editar"
+                        hx-get="{% url 'importe_editar' slug pago.pk %}"
+                        hx-target="#modal_importes" hx-swap="innerHTML">
+                  <i class="fas fa-pencil-alt"></i>
+                </button>
+                <button class="btn-action-modern" title="Eliminar" style="color: #f43f5e;"
+                        hx-post="{% url 'importe_eliminar' slug pago.pk %}"
+                        hx-trigger="confirmed"
+                        data-swal-confirm="Se eliminará «{{ pago.descripcion }}» del nomenclador. Los contratos que lo usaran conservan su importe.">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-slate-400 py-4">
+              Sin entradas todavía. Añádalas con el botón «Añadir»; son las que
+              aparecerán en el desplegable del contrato.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

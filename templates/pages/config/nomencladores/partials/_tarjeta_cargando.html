@@ -1,0 +1,13 @@
+{% comment %}
+  Marcador de posición mientras HTMX trae el contenido de una tarjeta.
+
+  Sin esto, entre que se abre el acordeón y llega la respuesta la fila se vería
+  vacía y descuadrada: la tarjeta ocupa aquí el mismo alto que ocupará después.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column align-items-center justify-content-center m-0"
+     style="min-height: 160px;">
+  <div class="spinner-border spinner-border-sm text-muted mb-2" role="status">
+    <span class="visually-hidden">Cargando…</span>
+  </div>
+  <small class="text-slate-400">Cargando…</small>
+</div>

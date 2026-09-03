@@ -391,3 +391,76 @@ class ReglasDeContrasenaTests(TestCase):
             'password2': self.CLAVE_VALIDA, 'es_observador': True,
         })
         self.assertTrue(valida.is_valid(), valida.errors.as_data())
+
+
+class BotonVerContrasenaTests(TestCase):
+    """El botón «ver contraseña» y su protección contra el autocompletado.
+
+    La lógica vive en `static/js/ver_password.js` y se comprobó en un navegador
+    real: escrita a mano se revela; rellenada por el navegador NO, ni siquiera
+    tecleando encima de ella. Lo que se puede verificar desde aquí es que el
+    marcado que esa lógica necesita llega a las dos pantallas, que es justo lo
+    que se rompería en un rediseño sin que nadie se diera cuenta.
+    """
+
+    def setUp(self):
+        crear_configuracion()
+        self.moderador = CustomUser.objects.create_user(
+            username='mod_test', password='ClaveSegura123', es_moderador=True,
+        )
+        self.admin = CustomUser.objects.create_user(
+            username='admin_test', password='ClaveSegura123', es_admin=True,
+        )
+
+    def test_el_login_carga_el_modulo_compartido(self):
+        html = self.client.get(reverse('login')).content.decode()
+
+        self.assertIn('ver_password.js', html)
+
+    def test_el_boton_del_login_esta_enlazado_al_campo(self):
+        """Sin `data-ver-password` el script no encuentra el par campo/botón y
+        el botón se queda inerte."""
+        html = self.client.get(reverse('login')).content.decode()
+
+        self.assertIn('data-ver-password="id_password"', html)
+        self.assertIn('data-icono="ver"', html)
+        self.assertIn('data-icono="ocultar"', html)
+
+    def test_el_cambio_de_contrasena_tiene_boton_en_los_dos_campos(self):
+        self.client.login(username='mod_test', password='ClaveSegura123')
+
+        html = self.client.get(
+            reverse('cambiar_password', args=[self.moderador.pk])).content.decode()
+
+        self.assertIn('data-ver-password="id_new_password1"', html)
+        self.assertIn('data-ver-password="id_new_password2"', html)
+
+    def test_las_paginas_autenticadas_cargan_el_modulo(self):
+        """El formulario de cambio de contraseña llega por AJAX, así que el
+        script tiene que venir ya cargado por la plantilla base."""
+        self.client.login(username='mod_test', password='ClaveSegura123')
+
+        html = self.client.get(reverse('dashboard')).content.decode()
+
+        self.assertIn('ver_password.js', html)
+
+    def test_el_alta_de_usuario_tiene_boton_en_los_dos_campos(self):
+        """«Nuevo Usuario» (solo Administrador) es el único formulario de alta
+        de contraseña que pedía este botón: el de edición no tiene campos de
+        contraseña, así que no aplica ahí. El modal llega por AJAX desde
+        `add_usuario`, no viene pintado dentro de `list_usuarios`."""
+        self.client.login(username='admin_test', password='ClaveSegura123')
+
+        html = self.client.get(reverse('add_usuario')).content.decode()
+
+        self.assertIn('data-ver-password="id_password1"', html)
+        self.assertIn('data-ver-password="id_password2"', html)
+
+    def test_el_alta_de_usuario_reutiliza_el_modulo_compartido_y_no_uno_nuevo(self):
+        """El objetivo era reutilizar `ver_password.js`, no reimplementar la
+        proteccion contra el autocompletado en un tercer sitio."""
+        self.client.login(username='admin_test', password='ClaveSegura123')
+
+        html = self.client.get(reverse('add_usuario')).content.decode()
+
+        self.assertIn('OrbithVerPassword.activarEn', html)

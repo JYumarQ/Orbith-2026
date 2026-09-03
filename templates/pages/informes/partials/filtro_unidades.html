@@ -1,0 +1,43 @@
+{% comment %}
+  Filtro por Unidad Organizativa de los informes de RRHH.
+
+  Es el MISMO control de fichas que el Dashboard y que Informe Inteligente: el
+  partial compartido `base/partials/selector_unidades.html`. Antes esta pantalla
+  usaba un Select2 múltiple, parecido pero no igual, y el mismo filtro se veía y
+  se manejaba distinto según dónde estuvieras.
+
+  Sin nada marcado se ve todo el alcance del usuario —la empresa entera para el
+  Administrador y el Observador, sus unidades para el Moderador—, así que el
+  informe nunca aparece en blanco al entrar.
+
+  Qué unidades se ofrecen y, sobre todo, qué puede ver de verdad cada usuario, lo
+  decide el servidor (`informes.fuentes.resolver_fuente` cruza lo pedido con
+  `unidades_visibles`). Esta plantilla no es una barrera de seguridad.
+{% endcomment %}
+{% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidades_informes' campo='ueb' unidades=unidades seleccionadas=ueb_actual marcador='Todas las unidades' clase_extra='chip-multiselect--ancho' %}
+
+<script>
+(function () {
+    /* Recarga con las unidades elegidas CONSERVANDO el resto de la URL: la fuente
+       de datos (actual o cierre de mes) y los filtros propios de cada informe
+       —`tipo_familia` en Puestos Clave y en Registro Diario— no deben perderse al
+       cambiar de unidad.
+
+       Se aplica al CERRAR el panel, no en cada clic: con selección múltiple,
+       recargar al marcar la primera unidad impediría elegir la segunda. */
+    document.addEventListener('DOMContentLoaded', function () {
+        var caja = document.getElementById('filtro_unidades_informes');
+        if (!caja) return;
+
+        caja.addEventListener('orbith:unidades', function (evento) {
+            var params = new URLSearchParams(window.location.search);
+            params.delete('ueb');
+            (evento.detail.valores || []).forEach(function (valor) {
+                params.append('ueb', valor);
+            });
+            var cadena = params.toString();
+            window.location.href = window.location.pathname + (cadena ? '?' + cadena : '');
+        });
+    });
+})();
+</script>

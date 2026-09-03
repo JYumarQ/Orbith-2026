@@ -50,6 +50,16 @@ class CierreUnidad(Base):
     anno = models.PositiveSmallIntegerField(verbose_name='Año')
     mes = models.PositiveSmallIntegerField(verbose_name='Mes')
 
+    # Denormalización de (anno, mes) como 'AAAA-MM'. Es exactamente
+    # `Periodo.clave`, guardado en columna para que Informe Inteligente pueda
+    # ofrecer el período como UN solo desplegable con únicamente los meses que
+    # de verdad tienen cierre. Con `anno` y `mes` por separado el usuario podría
+    # combinar un año y un mes que nunca se cerraron juntos y recibir un informe
+    # vacío sin entender por qué. Se rellena en `save()` para que no pueda
+    # quedar desincronizada de los dos campos de los que deriva.
+    periodo_clave = models.CharField(max_length=7, blank=True, db_index=True,
+                                     verbose_name='Período')
+
     declarado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -94,6 +104,12 @@ class CierreUnidad(Base):
             models.Index(fields=['anno', 'mes'], name='cierre_periodo_idx'),
         ]
 
+    def save(self, *args, **kwargs):
+        # `periodo_clave` es dato derivado: se recalcula siempre, nunca se
+        # confía en lo que traiga la instancia.
+        self.periodo_clave = self.periodo.clave
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.unidad_descripcion} — {self.periodo.etiqueta}'
 
@@ -134,6 +150,12 @@ class CierreCargo(models.Model):
     salario_basico = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     # `NCargo.familias` es M2M; se aplana para no crear otra tabla solo por esto.
     familias_ids = models.JSONField(default=list, blank=True)
+
+    # Congelados para que el informe histórico pueda ofrecer las mismas
+    # columnas que el informe en tiempo real (ver `informe_inteligente`).
+    rol_tipo = models.CharField(max_length=50, blank=True)
+    nivel_preparacion_nombre = models.CharField(max_length=150, blank=True)
+    activo = models.BooleanField(default=True)
 
     # --- Cifras de plantilla ---
     cant_aprobada = models.IntegerField(default=0)
@@ -187,6 +209,44 @@ class CierreContrato(models.Model):
     # campo, la fotografía no podría reproducir ambos comportamientos.
     aspirante_estado = models.CharField(max_length=20, blank=True)
 
+    # --- Formación congelada ---
+    # Estos SÍ evolucionan legítimamente con el tiempo (alguien termina una
+    # maestría), así que un informe del cierre de 2024 debe mostrar la formación
+    # que esa persona tenía en 2024, no la de hoy. Por eso se congelan, a
+    # diferencia de los datos de contacto (ver `aspirante_vivo` más abajo).
+    # Mismos anchos que los campos de `Aspirante` de los que se copian: si allí
+    # se añade un código más largo, aquí no se trunca en silencio.
+    nivel_educ = models.CharField(max_length=50, blank=True)
+    especialidad_nombre = models.CharField(max_length=150, blank=True)
+    grado_cientifico = models.CharField(max_length=50, blank=True)
+    titulo_oro = models.BooleanField(default=False)
+    # La FECHA se congela, no la edad: guardar "34 años" obligaría a decidir de
+    # antemano si el informe habla de la edad de entonces o la de hoy. Con la
+    # fecha se pueden calcular ambas.
+    fecha_nacimiento = models.DateField(null=True, blank=True)
+
+    # Única relación viva de toda la fotografía, y deliberada.
+    #
+    # El módulo evita las FK a datos vivos porque un cargo renombrado no debe
+    # mover el informe de agosto (ver la cabecera de este archivo). Pero los
+    # datos de contacto y ubicación de una persona (dirección, teléfonos,
+    # tallas, provincia, municipio, raza, serie del carné) no son historia: no
+    # cambian con el tiempo, y cuando cambian es porque estaban mal cargados.
+    # Congelarlos perpetuaría el error en cada cierre ya tomado; leerlos en vivo
+    # hace que corregirlos hoy arregle también los informes de años anteriores.
+    #
+    # `SET_NULL` y no CASCADE: si se borra a la persona, el cierre debe
+    # sobrevivir — es un documento histórico. Esos campos quedarán vacíos, que
+    # es la degradación correcta. `aspirante_id_original` se conserva aparte
+    # como rastro, y sigue sin usarse para JOINs.
+    aspirante_vivo = models.ForeignKey(
+        'bolsa.Aspirante',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='+',
+        verbose_name='Trabajador (datos actuales)',
+    )
+
     # --- Cargo congelado (repetido a propósito) ---
     ncargo_id_original = models.IntegerField(null=True, blank=True)
     ncargo_descripcion = models.CharField(max_length=150, blank=True)
@@ -209,6 +269,40 @@ class CierreContrato(models.Model):
     fecha_alta = models.DateField(null=True, blank=True)
     duracion = models.IntegerField(null=True, blank=True)
     salario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # --- Resto del contrato, congelado ---
+    # Todo esto existe para que el informe histórico pueda ofrecer las MISMAS
+    # columnas que el informe en tiempo real. Sin ello, elegir un mes pasado
+    # dejaba sin respuesta a la mitad de los campos que el usuario puede marcar.
+    # Lo que no se puede recuperar hacia atrás son los cierres ya declarados
+    # antes de añadir estas columnas: ahí saldrán vacías.
+    reg_militar = models.CharField(max_length=3, blank=True)
+    profesional = models.BooleanField(default=False)
+    jubilado_recontratado = models.BooleanField(default=False)
+    fecha_alta_entidad = models.DateField(null=True, blank=True)
+    funcionario_res = models.CharField(max_length=50, blank=True)
+    designado_res = models.CharField(max_length=50, blank=True)
+    c_formal_res = models.CharField(max_length=50, blank=True)
+    fecha_vence_lic = models.DateField(null=True, blank=True)
+    fecha_vence_recal = models.DateField(null=True, blank=True)
+    fecha_vence_seg = models.DateField(null=True, blank=True)
+    rol_tipo = models.CharField(max_length=50, blank=True)
+    tridente_tipo = models.CharField(max_length=50, blank=True)
+    tipo_salario = models.CharField(max_length=3, blank=True)
+    # `Decimal(10, 2)` y no `Integer`: estos cuatro campos copian los del
+    # contrato (`captura.py`), y allí `cnci` e `instructor` SIEMPRE fueron
+    # decimales. Al guardarlos en una columna entera, Django truncaba —un CNCI
+    # de 12,50 quedaba congelado como 12— sin lanzar ningún error, así que la
+    # fotografía de cierre no coincidía con el contrato del que salió.
+    #
+    # La migración amplía la columna, pero NO recupera los centavos de los
+    # cierres ya declarados: ese dato se perdió al guardarlos y el contrato vivo
+    # ya puede haber cambiado, así que rellenarlo desde él metería en la
+    # fotografía de un mes un importe de otro. Los cierres nuevos sí salen bien.
+    maestria = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    doctorado = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cnci = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    instructor = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         verbose_name = 'Contrato del cierre'

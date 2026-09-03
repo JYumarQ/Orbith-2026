@@ -1,5 +1,6 @@
 {% extends 'base/base.html' %}
 {% load static %}
+{% load estaticos %}
 
 {% comment %}
   Rejilla del reporte de pago.
@@ -16,7 +17,7 @@
 {% block title %}{{ reporte.unidad_descripcion }} — {{ reporte.periodo.etiqueta }} | ORBITH{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{% static 'css/prenomina.css' %}">
+<link rel="stylesheet" href="{% estatico 'css/prenomina.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -57,7 +58,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{% static 'js/prenomina.js' %}"></script>
+<script src="{% estatico 'js/prenomina.js' %}"></script>
 <script>
   window.orbith.cablearModalHtmx('modal_generic');
   window.orbith.cablearConfirmacionHtmx();

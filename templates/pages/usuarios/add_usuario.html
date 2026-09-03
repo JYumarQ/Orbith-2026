@@ -9,6 +9,8 @@
       <form method="POST"
             action="{% url 'add_usuario' %}"
             id="userForm"
+            data-validacion-visual
+            data-recomendados="email,contrato"
             data-confirm-text="¿Estás seguro de guardar el nuevo Usuario?">
         {% csrf_token %}
 
@@ -74,7 +76,20 @@
 
         <div class="mb-3">
           <label for="{{ form.password1.id_for_label }}" class="form-label">Contraseña</label>
-          {{ form.password1 }}
+          <div class="input-group">
+            {{ form.password1 }}
+            {% comment %} type="button" es obligatorio: dentro de un <form>, un <button>
+               sin type actua como submit. La logica del boton vive en
+               static/js/ver_password.js: solo revela lo que el usuario haya
+               ESCRITO, nunca un valor rellenado por el navegador. {% endcomment %}
+            <button type="button" class="btn btn-outline-secondary"
+                    data-ver-password="{{ form.password1.id_for_label }}"
+                    aria-pressed="false" aria-label="Mostrar contraseña"
+                    title="Mostrar contraseña">
+              <i data-icono="ver" class="bx bx-show"></i>
+              <i data-icono="ocultar" class="bx bx-hide" style="display: none;"></i>
+            </button>
+          </div>
           {% if form.password1.errors %}
             <div class="text-danger small">{{ form.password1.errors }}</div>
           {% endif %}
@@ -82,7 +97,18 @@
 
         <div class="mb-3">
           <label for="{{ form.password2.id_for_label }}" class="form-label">Confirmar contraseña</label>
-          {{ form.password2 }}
+          <div class="input-group">
+            {{ form.password2 }}
+            {% comment %} type="button" es obligatorio: dentro de un <form>, un <button>
+               sin type actua como submit. {% endcomment %}
+            <button type="button" class="btn btn-outline-secondary"
+                    data-ver-password="{{ form.password2.id_for_label }}"
+                    aria-pressed="false" aria-label="Mostrar contraseña"
+                    title="Mostrar contraseña">
+              <i data-icono="ver" class="bx bx-show"></i>
+              <i data-icono="ocultar" class="bx bx-hide" style="display: none;"></i>
+            </button>
+          </div>
           {% if form.password2.errors %}
             <div class="text-danger small">{{ form.password2.errors }}</div>
           {% endif %}
@@ -99,6 +125,14 @@
 
 <script>
   (function() {
+    // ======================================================
+    // BOTON «VER CONTRASEÑA»
+    // La logica vive en static/js/ver_password.js, cargado globalmente desde
+    // scripts.html. Se invoca aqui porque este modal llega por AJAX y no pasa
+    // por DOMContentLoaded, igual que en cambiar_password_form.html.
+    // ======================================================
+    if (window.OrbithVerPassword) window.OrbithVerPassword.activarEn(document);
+
     // ======================================================
     // FUNCIÓN GLOBAL PARA HABILITAR/DESHABILITAR UNIDADES
     // ======================================================

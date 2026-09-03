@@ -36,7 +36,8 @@ def _cargos_de(unidad):
     """
     return (CargoPlantilla.objects
             .filter(departamento__unidad_organizativa=unidad)
-            .select_related('departamento', 'ncargo', 'ncargo__grupo_escala')
+            .select_related('departamento', 'ncargo', 'ncargo__grupo_escala',
+                            'rol', 'nivel_preparacion')
             .prefetch_related('ncargo__familias')
             .order_by('departamento__orden_informe', 'orden_informe', 'id'))
 
@@ -44,9 +45,10 @@ def _cargos_de(unidad):
 def _contratos_de(unidad):
     return (CAlta.objects
             .filter(cargo__departamento__unidad_organizativa=unidad)
-            .select_related('aspirante', 'cargo', 'cargo__departamento',
+            .select_related('aspirante', 'aspirante__especialidad',
+                            'cargo', 'cargo__departamento',
                             'cargo__ncargo', 'cargo__ncargo__grupo_escala',
-                            'tipo', 'motivo')
+                            'tipo', 'motivo', 'rol', 'tridente')
             .order_by('id'))
 
 
@@ -74,6 +76,10 @@ def _fila_de_cargo(cierre, cargo):
         funcionario=bool(cargo.funcionario),
         designado=bool(cargo.designado),
         orden_informe=cargo.orden_informe,
+        rol_tipo=cargo.rol.tipo if cargo.rol else '',
+        nivel_preparacion_nombre=(
+            cargo.nivel_preparacion.nombre if cargo.nivel_preparacion else ''),
+        activo=bool(cargo.activo),
     )
 
 
@@ -94,6 +100,18 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         doc_identidad=aspirante.doc_identidad if aspirante else '',
         sexo=aspirante.sexo if aspirante else '',
         aspirante_estado=aspirante.estado if aspirante else '',
+
+        # Formación: se congela porque evoluciona (ver el modelo).
+        nivel_educ=(aspirante.nivel_educ or '') if aspirante else '',
+        especialidad_nombre=(
+            aspirante.especialidad.nombre if aspirante and aspirante.especialidad else ''),
+        grado_cientifico=(aspirante.grado_cientifico or '') if aspirante else '',
+        titulo_oro=bool(aspirante.titulo_oro) if aspirante else False,
+        fecha_nacimiento=aspirante.fecha_nacimiento if aspirante else None,
+
+        # Enlace vivo, solo para los datos que no son historia (contacto,
+        # ubicación, tallas). Ver el comentario de `aspirante_vivo` en models.py.
+        aspirante_vivo=aspirante,
         ncargo_id_original=cargo.ncargo_id if cargo else None,
         ncargo_descripcion=ncargo.descripcion if ncargo else '',
         cat_ocupacional=ncargo.cat_ocupacional if ncargo else '',
@@ -112,6 +130,26 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         fecha_alta=contrato.fecha_alta,
         duracion=contrato.duracion,
         salario=contrato.salario_actual,
+
+        # Resto del contrato, para que el informe histórico ofrezca las mismas
+        # columnas que el informe en tiempo real.
+        reg_militar=contrato.reg_militar or '',
+        profesional=bool(contrato.profesional),
+        jubilado_recontratado=bool(contrato.jubilado_recontratado),
+        fecha_alta_entidad=contrato.fecha_alta_entidad,
+        funcionario_res=contrato.funcionario_res or '',
+        designado_res=contrato.designado_res or '',
+        c_formal_res=contrato.c_formal_res or '',
+        fecha_vence_lic=contrato.fecha_vence_lic,
+        fecha_vence_recal=contrato.fecha_vence_recal,
+        fecha_vence_seg=contrato.fecha_vence_seg,
+        rol_tipo=contrato.rol.tipo if contrato.rol else '',
+        tridente_tipo=contrato.tridente.tipo if contrato.tridente else '',
+        tipo_salario=contrato.tipo_salario or '',
+        maestria=contrato.maestria,
+        doctorado=contrato.doctorado,
+        cnci=contrato.cnci,
+        instructor=contrato.instructor,
     )
 
 

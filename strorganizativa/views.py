@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
+from django.views.generic import CreateView, UpdateView, DeleteView
 from .models import CargoPlantilla, Departamento, UnidadOrganizativa
 from .forms import CargoPlantillaForm, DepartamentoForm, UnidadOrganizativaForm
 from nomencladores.models import NCargo, NCausaAltaBaja, NTipoUnidadOrganizativa
@@ -12,6 +12,12 @@ from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
+# Cierra al Observador TODA vista que escriba. Va como primera base de cada clase
+# para que su `dispatch` corte antes que el de cualquier otro mixin, y responde
+# JSON cuando la petición es HTMX/AJAX: el Gestor de Plantilla habla por JSON y
+# un 403 en texto plano se vería como una pantalla rota, no como un aviso.
+from usuarios.mixins import RequiereEdicionMixin
+from .permisos import cargos_visibles, departamentos_visibles, unidades_visibles
 # Convierten el guardado en una solicitud cuando quien envía el formulario es un
 # Moderador; devuelven None (y la vista sigue como siempre) para un Administrador.
 # Ver `solicitudes/integracion.py`.
@@ -21,77 +27,6 @@ from solicitudes.models import AccionSolicitud
 import json
 
 # ------------------  CARGO PLANTILLA  ------------------
-
-class CargoPlantillaListView(ListView):
-    model = CargoPlantilla
-    template_name = "pages/cargo/list_cargo.html"
-
-    def get_queryset(self):
-        if self.request.user.is_superuser:
-            qs = CargoPlantilla.objects.all()
-        else:
-            qs = CargoPlantilla.objects.filter(
-                departamento__unidad_organizativa__in=self.request.user.unidades.all()
-            )
-
-        dpto_id = self.kwargs.get('dpto_id')
-        if dpto_id:
-            qs = qs.filter(departamento__id=dpto_id)
-        return qs
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = CargoPlantillaForm()
-        dpto_id = self.kwargs.get('dpto_id')
-        if dpto_id:
-            context['dpto'] = get_object_or_404(
-                Departamento,
-                id=dpto_id,
-                **({} if self.request.user.is_superuser else
-                   {'unidad_organizativa__in': self.request.user.unidades.all()})
-            )
-        return context
-
-
-def search_cargos_view(request):
-    query   = request.GET.get('filter_cargos', '')
-    dpto_id = request.GET.get('dpto_id', None)
-
-    # La plantilla de este listado pinta, por cada fila, el nomenclador de cargo,
-    # su departamento, la unidad organizativa de ese departamento y las plazas
-    # cubiertas. Sin `select_related` eso eran tres consultas por fila, y la
-    # property `cant_cubierta_real` añadía una cuarta (un COUNT con dos joins).
-    # Con la plantilla completa de la empresa el listado se iba a miles de
-    # consultas; ahora son dos, pase el número de cargos que pase.
-    base = (CargoPlantilla.objects
-            .select_related('ncargo', 'departamento',
-                            'departamento__unidad_organizativa')
-            .annotate(count_cubiertas=Count(
-                'calta',
-                filter=Q(calta__aspirante__estado='ACTIVO',
-                         calta__tipo__ocupa_plaza=True),
-            )))
-
-    if request.user.is_superuser:
-        results = base
-    else:
-        results = base.filter(
-            departamento__unidad_organizativa__in=request.user.unidades.all()
-        )
-
-    if dpto_id:
-        results = results.filter(departamento__id=dpto_id)
-
-    if query:
-        results = results.filter(
-            Q(ncargo__descripcion__icontains=query) |
-            Q(departamento__descripcion__icontains=query) |
-            Q(departamento__unidad_organizativa__descripcion__icontains=query)
-        )
-
-    return render(request,
-                  'pages/cargo/partials/filter_cargos_list.html',
-                  {'object_list': results})
 
 
 def cargar_cargos(request):
@@ -124,7 +59,7 @@ def get_cat_ocup_from_ncargo(request):
         return JsonResponse({'error': 'Cargo no encontrado'}, status=400)
 
 
-class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
+class CargoPlantillaCreateView(RequiereEdicionMixin, SuccessMessageMixin, CreateView):
     model = CargoPlantilla
     form_class = CargoPlantillaForm
     template_name = "pages/cargo/add_cargo.html"
@@ -201,7 +136,7 @@ class CargoPlantillaCreateView(SuccessMessageMixin, CreateView):
         transaction.set_rollback(True)
         return super().form_invalid(form)
 
-class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class CargoPlantillaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CargoPlantilla
     form_class = CargoPlantillaForm
     template_name = 'pages/cargo/updt_cargo.html'
@@ -276,7 +211,7 @@ class CargoPlantillaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin
         return super().form_invalid(form)
 
 
-class CargoPlantillaDeleteView(DeleteView):
+class CargoPlantillaDeleteView(RequiereEdicionMixin, DeleteView):
     """Eliminar cargo. Para un Moderador genera una solicitud de eliminación:
     el registro no se toca hasta que un Administrador la apruebe."""
     model = CargoPlantilla
@@ -318,36 +253,6 @@ class CargoPlantillaDeleteView(DeleteView):
 
 # ------------------  DEPARTAMENTOS  ------------------
 
-class DepartamentoListView(ListView):
-    model = Departamento
-    template_name = "pages/dpto/list_dpto.html"
-
-    def get_queryset(self):
-        if self.request.user.is_superuser:
-            qs = Departamento.objects.all()
-        else:
-            qs = Departamento.objects.filter(
-                unidad_organizativa__in=self.request.user.unidades.all()
-            )
-
-        unidad_id = self.kwargs.get('unidad_id')
-        if unidad_id:
-            qs = qs.filter(unidad_organizativa__grupo_nomina=unidad_id)
-        return qs.order_by('orden_informe', 'id')
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = DepartamentoForm()
-        unidad_id = self.kwargs.get('unidad_id')
-        if unidad_id:
-            context['unidad'] = get_object_or_404(
-                UnidadOrganizativa,
-                grupo_nomina=unidad_id,
-                **({} if self.request.user.is_superuser else
-                   {'grupo_nomina__in': self.request.user.unidades.values_list('grupo_nomina', flat=True)})
-            )
-        return context
-
 
 def cargar_dptos(request):
     id_unidad = request.GET.get('unidad')
@@ -367,7 +272,7 @@ def cargar_dptos(request):
                   {'dptos': dptos})
 
 
-class DepartamentoCreateView(SuccessMessageMixin, CreateView):
+class DepartamentoCreateView(RequiereEdicionMixin, SuccessMessageMixin, CreateView):
     """Crear departamento. Para un Moderador se convierte en solicitud de aprobación."""
     model = Departamento
     form_class = DepartamentoForm
@@ -447,8 +352,7 @@ class DepartamentoCreateView(SuccessMessageMixin, CreateView):
         return super().form_valid(form)
     
     
-
-class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class DepartamentoUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     """Editar departamento. Para un Moderador se convierte en solicitud de aprobación."""
     model = Departamento
     form_class = DepartamentoForm
@@ -497,8 +401,7 @@ class DepartamentoUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, 
         return super().form_valid(form)
     
     
-
-class DepartamentoDeleteView(DeleteView):
+class DepartamentoDeleteView(RequiereEdicionMixin, DeleteView):
     """Eliminar departamento. Para un Moderador genera una solicitud de eliminación:
     el registro no se toca hasta que un Administrador la apruebe."""
     model = Departamento
@@ -517,62 +420,7 @@ class DepartamentoDeleteView(DeleteView):
             return JsonResponse({'status': 'error', 'message': str(e)})
 
 
-def search_dpto_view(request):
-    query = request.GET.get('filter_dpto', '')
-    unidad_id = request.GET.get('unidad_id', None)
-
-    if request.user.is_superuser:
-        results = Departamento.objects.all()
-    else:
-        results = Departamento.objects.filter(
-            unidad_organizativa__in=request.user.unidades.all()
-        )
-
-    if unidad_id:
-        results = results.filter(unidad_organizativa__grupo_nomina=unidad_id)
-
-    if query:
-        results = results.filter(
-            Q(descripcion__icontains=query) |
-            Q(unidad_organizativa__descripcion__icontains=query)
-        )
-    results = results.order_by('orden_informe', 'id')
-
-    return render(request,
-                  'pages/dpto/partials/filter_dptos_list.html',
-                  {'object_list': results})
-
-
 # ------------------  UNIDAD ORGANIZATIVA  ------------------
-
-class UnidadOrganizativaListView(ListView):
-    model = UnidadOrganizativa
-    template_name = "pages/uniorg/list_uniorg.html"
-
-    def get_queryset(self):
-        if self.request.user.is_superuser:
-            return UnidadOrganizativa.objects.all()
-        return self.request.user.unidades.all()
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = UnidadOrganizativaForm()
-        return context
-
-
-def search_unidades_views(request):
-    query = request.GET.get('filter_unidad', '')
-    if request.user.is_superuser:
-        qs = UnidadOrganizativa.objects.all()
-    else:
-        qs = request.user.unidades.all()
-
-    if query:
-        qs = qs.filter(descripcion__icontains=query)
-
-    return render(request,
-                  'pages/uniorg/partials/filter_unidades_list.html',
-                  {'object_list': qs})
 
 
 class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
@@ -625,7 +473,7 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
         transaction.set_rollback(True)
         return super().form_invalid(form)
 
-class UnidadOrganizativaUpdateView(SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class UnidadOrganizativaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = UnidadOrganizativa
     form_class = UnidadOrganizativaForm
     template_name = 'pages/uniorg/updt_uniorg.html'
@@ -714,10 +562,12 @@ def gestor_plantilla_view(request):
     hay_unidad_principal = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exists()
 
     # 2. Base de datos con optimización de conteo
-    if request.user.is_superuser:
-        unidades = UnidadOrganizativa.objects.annotate(total_dptos=Count('departamentos'))
-    else:
-        unidades = request.user.unidades.annotate(total_dptos=Count('departamentos'))
+    # El alcance por rol se decide en un único sitio (`strorganizativa/permisos.py`):
+    # Administrador y Observador ven toda la empresa; el Moderador, solo sus
+    # Unidades Organizativas. Antes aquí se comparaba `is_superuser`, y como el
+    # Observador no lo es, el Gestor le salía vacío pese a ser un rol de consulta
+    # global igual que en el Dashboard y en el listado de Contratos.
+    unidades = unidades_visibles(request.user).annotate(total_dptos=Count('departamentos'))
 
     # `lista_unidades_div.html` recorre `u.tipo.*` y `u.direcciones_hijas.all/.count`
     # por cada fila: sin precargarlos Django lanzaba una consulta suelta por unidad
@@ -735,8 +585,25 @@ def gestor_plantilla_view(request):
 
     # 3. Control de visibilidad para el Gestor de Plantilla
     if hay_unidad_principal:
-        # Si hay una unidad raíz, las subunidades solo se ven dentro del desplegable
-        unidades = unidades.filter(padre__isnull=True)
+        # Si hay una unidad raíz, las subunidades solo se ven dentro del
+        # desplegable de su padre... salvo que ese padre NO sea visible para
+        # quien mira. Sin esa salvedad, una unidad que el usuario tiene derecho
+        # a ver desaparecía del listado sin decir nada: la pantalla salía vacía
+        # y no había manera de saber por qué. Un fallo así no deja rastro en
+        # ningún log, solo se nota usando la aplicación.
+        #
+        # Con las reglas de asignación actuales ese dato ya no se puede crear
+        # desde la aplicación —una subunidad solo se asigna a través de su
+        # Unidad Principal, ver el bloque de `usuarios/forms.py`—, pero sí
+        # puede entrar por un `loaddata` al restaurar un backup antiguo, que es
+        # justo cuando menos ayuda una pantalla muda.
+        #
+        # Para el Administrador y el Observador la condición añadida no se
+        # cumple nunca —lo ven todo, así que el padre siempre está entre lo
+        # visible— y el listado sale exactamente igual que antes.
+        ids_visibles = unidades_visibles(request.user).values_list('pk', flat=True)
+        unidades = unidades.filter(
+            Q(padre__isnull=True) | ~Q(padre_id__in=ids_visibles))
 
     # 4. Búsqueda y Ordenamiento
     q = request.GET.get('q')
@@ -772,7 +639,13 @@ def gestor_plantilla_view(request):
 # 2. COLUMNA 2 (DEPARTAMENTOS)
 @login_required
 def htmx_load_departamentos(request, unidad_id):
-    unidad = get_object_or_404(UnidadOrganizativa, pk=unidad_id)
+    # El id llega por la URL, así que se busca DENTRO del alcance del usuario y no
+    # en toda la tabla: antes un Moderador podía leer la plantilla de cualquier
+    # unidad ajena cambiando el número a mano. Un id fuera de alcance responde 404
+    # —igual que uno inexistente—, de modo que la respuesta tampoco revela si esa
+    # unidad existe. htmx no intercambia nada ante un 404, así que la columna se
+    # queda como estaba en vez de pintar una página de error dentro del panel.
+    unidad = get_object_or_404(unidades_visibles(request.user), pk=unidad_id)
     dptos = Departamento.objects.filter(unidad_organizativa=unidad)
 
     q = request.GET.get('q')
@@ -819,7 +692,9 @@ def htmx_load_departamentos(request, unidad_id):
 # 3. COLUMNA 3 (CARGOS)
 @login_required
 def htmx_load_cargos(request, dpto_id):
-    dpto = get_object_or_404(Departamento, pk=dpto_id)
+    # Mismo criterio que `htmx_load_departamentos`: el departamento tiene que
+    # colgar de una unidad visible para quien pregunta.
+    dpto = get_object_or_404(departamentos_visibles(request.user), pk=dpto_id)
     cargos = CargoPlantilla.objects.filter(departamento=dpto)
 
     q = request.GET.get('q')
@@ -862,7 +737,9 @@ def htmx_load_cargos(request, dpto_id):
 # 4. COLUMNA 4 (CONTRATOS)
 @login_required
 def htmx_load_contratos(request, cargo_id):
-    cargo = get_object_or_404(CargoPlantilla, pk=cargo_id)
+    # Es la columna más sensible de las tres: lista personas con nombre y
+    # apellidos. Mismo acotado por alcance que las dos anteriores.
+    cargo = get_object_or_404(cargos_visibles(request.user), pk=cargo_id)
     contratos = CAlta.objects.filter(cargo=cargo).select_related('aspirante')
 
     q = request.GET.get('q')

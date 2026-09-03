@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from strorganizativa.models import UnidadOrganizativa
 from subsanacion.enlaces import construir_enlace
-from usuarios.decorators import admin_required, write_required
+from usuarios.decorators import admin_required, gestion_required, write_required
 
 from .escaneo import escanear_para_usuario
 from .forms import RecordatorioManualForm
@@ -226,7 +226,12 @@ def _contexto_tab_recordatorios(request):
     return contexto
 
 
-@login_required
+# `gestion_required` y no `login_required`: el panel de Notificaciones queda
+# fuera del alcance del Observador (decisión explícita del usuario), tanto en la
+# barra lateral como escribiendo la URL. Lo que SÍ conserva es la campana del pie
+# de `sidebar.html`, que le sigue entregando sus avisos personales: esa usa
+# `notificaciones_json` / `ultimas_notificaciones`, que quedan con `login_required`.
+@gestion_required
 def lista_notificaciones(request):
     """Bandeja de notificaciones, en pestañas (`?tab=notificaciones|advertencias`).
 
@@ -257,7 +262,9 @@ def lista_notificaciones(request):
     return render(request, 'pages/notificaciones/lista.html', contexto)
 
 
-@login_required
+# Fragmento interno de `lista_notificaciones`: se cierra al Observador por el
+# mismo motivo que la página que lo contiene, y no porque llegue a pedirlo.
+@gestion_required
 def panel_advertencias(request):
     """Fragmento HTMX: solo la tabla+paginación de Advertencias, actualizada por el
     formulario de filtros de `tab_advertencias.html` (`hx-target="#resultados-advertencias"`,
@@ -283,7 +290,7 @@ def panel_advertencias(request):
     return respuesta
 
 
-@login_required
+@gestion_required
 def panel_recordatorios(request):
     """Fragmento HTMX: solo la tabla+paginación de Recordatorios, actualizada por el
     buscador+chips de prioridad de `tab_recordatorios.html`

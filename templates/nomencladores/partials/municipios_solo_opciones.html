@@ -1,0 +1,14 @@
+{% comment %}
+Solo las <option> del campo Municipio del formulario de Aspirante.
+
+Se separa de `municipios_options.html` (que devuelve el <select> completo) porque
+ese formulario cambió a `hx-swap="innerHTML"`: si HTMX reemplaza el <select>
+entero, el Select2 montado encima queda huérfano y durante una fracción de
+segundo se ven DOS controles apilados. Sustituyendo solo las opciones, el
+<select> —y su Select2— nunca desaparece y el cambio de Provincia ya no
+parpadea.
+{% endcomment %}
+<option value="">Selec. municipio</option>
+{% for m in municipios %}
+  <option value="{{ m.id }}">{{ m.nombre }}</option>
+{% endfor %}

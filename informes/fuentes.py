@@ -219,6 +219,74 @@ def expandir_unidades(ueb_id, unidades=None):
     return ids
 
 
+def expandir_varias_unidades(ueb_ids, unidades=None):
+    """La cascada de varias unidades a la vez, sin repetidos.
+
+    El filtro de los informes pasó de un desplegable de una sola unidad a un
+    selector múltiple, así que hay que unir la cascada de cada una. Se conserva
+    `expandir_unidades()` para un solo id porque Pre-Nómina la usa tal cual
+    (`prenomina/captura.py`).
+
+    Devuelve `[]` si no se pidió ninguna unidad.
+    """
+    ids = []
+    for ueb_id in ueb_ids or []:
+        for pk in expandir_unidades(ueb_id, unidades):
+            if pk not in ids:
+                ids.append(pk)
+    return ids
+
+
+def unidades_visibles(usuario):
+    """Unidades que este usuario puede ver en los informes, o `None` si todas.
+
+    Mismo reparto de roles que Informe Inteligente
+    (`informe_inteligente.motor._aplicar_alcance_por_rol`): Administrador y
+    Observador ven la empresa entera; el Moderador, solo lo suyo. Se replica aquí
+    porque hasta ahora los informes de RRHH **no acotaban nada**: un Moderador de
+    una sola UEB abría el consolidado y veía la plantilla de toda la empresa.
+
+    Con UNA diferencia deliberada: aquí las unidades asignadas se expanden a sus
+    subunidades. Informe Inteligente no lo hace, y por eso un Moderador que tenga
+    asignada una unidad PRINCIPAL —una Dirección, que no tiene cargos propios—
+    no vería ni una fila: todo cuelga de sus hijas. Además, en este módulo elegir
+    una unidad principal en el filtro SIEMPRE ha arrastrado a sus subunidades
+    (`expandir_unidades`), así que no expandir aquí el alcance dejaría al
+    Moderador viendo menos con su unidad asignada que eligiéndola a mano.
+
+    `None` significa «sin restricción» y NO es lo mismo que `[]`. Una lista
+    vacía es un Moderador sin ninguna unidad asignada, que no debe ver ni una
+    fila —la regla VIS-007 de Subsanación ya reclama esa situación—; devolver
+    `[]` como «sin filtro» le enseñaría justo lo contrario, la empresa entera.
+    """
+    if usuario.is_superuser or usuario.es_admin or usuario.es_observador:
+        return None
+    if usuario.es_moderador:
+        return expandir_varias_unidades(
+            usuario.unidades.values_list('pk', flat=True))
+    # Usuario sin rol reconocido: por seguridad, no ve nada.
+    return []
+
+
+def _acotar_al_alcance(elegidas, permitidas):
+    """Cruza lo que el usuario PIDIÓ con lo que tiene PERMITIDO ver.
+
+    Que el alcance se aplique aquí, en el servidor, y no limitando el desplegable
+    de la plantilla, es lo que impide que un Moderador amplíe su visibilidad
+    escribiendo a mano `?ueb=` de otra unidad en la barra de direcciones.
+
+    Devuelve `None` cuando no hay nada que acotar, que es lo que las fuentes
+    entienden como «toda la empresa».
+    """
+    if permitidas is None:
+        # Administrador u Observador: manda su elección, o todo si no eligió.
+        return elegidas or None
+    if not elegidas:
+        # Sin elección explícita, el filtro es su alcance completo.
+        return permitidas
+    return [pk for pk in elegidas if pk in permitidas]
+
+
 def _unidades_vivas():
     filas = {}
     for unidad in UnidadOrganizativa.objects.select_related('tipo'):
@@ -264,7 +332,12 @@ def fuente_actual(unidades_ids=None):
                     .select_related('aspirante', 'cargo', 'cargo__departamento',
                                     'cargo__ncargo', 'cargo__ncargo__grupo_escala',
                                     'tipo', 'motivo'))
-    if unidades_ids:
+    # `is not None` y no la comprobación de verdad a secas: desde que el alcance
+    # por rol acota los informes, una lista VACÍA es un caso real y significativo
+    # —un Moderador sin unidades asignadas— que no debe ver ninguna fila. Con
+    # `if unidades_ids:` esa lista caía en «sin filtro» y le enseñaba la empresa
+    # entera. `__in=[]` no devuelve nada, que es justo lo correcto.
+    if unidades_ids is not None:
         cargos_qs = cargos_qs.filter(
             departamento__unidad_organizativa_id__in=unidades_ids)
         contratos_qs = contratos_qs.filter(
@@ -357,7 +430,9 @@ def fuente_de_cierre(periodo, unidades_ids=None):
     cierres = (CierreUnidad.objects
                .filter(anno=periodo.anno, mes=periodo.mes)
                .order_by('unidad_orden_informe'))
-    if unidades_ids:
+    # `is not None`: ver la nota de `fuente_actual()`. Una lista vacía es un
+    # alcance vacío de verdad, no la ausencia de filtro.
+    if unidades_ids is not None:
         cierres = cierres.filter(unidad_id__in=unidades_ids)
     cierres = list(cierres)
 
@@ -454,20 +529,32 @@ def fuente_de_cierre(periodo, unidades_ids=None):
 # Punto de entrada de las vistas
 # --------------------------------------------------------------------------
 
-def resolver_fuente(request, usar_filtro_ueb=True):
-    """Lee `fuente` y `periodo` de la URL y devuelve `(fuente, contexto)`.
+def resolver_fuente(request):
+    """Lee `fuente`, `periodo` y `ueb` de la URL y devuelve `(fuente, contexto)`.
 
     Ante cualquier valor inválido cae en modo actual: un informe que se abre con
     los datos de hoy es un mal menor frente a una pantalla de error.
 
-    `usar_filtro_ueb=False` para los informes que son **globales por definición**
-    (Trabajadores x UEB compara todas las unidades entre sí; Misiones recorre la
-    empresa entera). Ninguno de los dos ofrece selector de unidad, y aplicarles
-    el parámetro los dejaría vacíos.
+    El parámetro `ueb` es ahora **múltiple** (`?ueb=3&ueb=7`), porque el filtro
+    de unidad pasó a ser un selector de varias. Desapareció el antiguo
+    `usar_filtro_ueb=False`, que apagaba el filtro en Trabajadores x UEB y en
+    Misiones: con selección múltiple esos dos informes siguen teniendo sentido
+    acotados —«compara estas tres unidades», «quién de mi UEB está en misión»— y
+    sin nada elegido se comportan exactamente igual que antes.
+
+    Sobre todo, el filtro ya no es solo del usuario: se cruza con su alcance por
+    rol (`unidades_visibles`), así que un Moderador no puede ver otras unidades
+    ni escribiendo el `?ueb=` a mano.
     """
     modo = request.GET.get('fuente') or FUENTE_ACTUAL
     clave = request.GET.get('periodo') or ''
-    ueb_id = (request.GET.get('ueb') or '') if usar_filtro_ueb else ''
+    # Solo ids: la querystring la escribe cualquiera —y hasta la propia
+    # aplicacion la escribia mal, con `?ueb=[]`, en los botones de exportar de
+    # Puestos Clave— y un valor que no sea un numero reventaba la pagina entera
+    # con un ValueError. Se ignora y se muestra el alcance completo.
+    seleccionadas = [valor for valor in request.GET.getlist('ueb')
+                     if valor and str(valor).isdigit()]
+    permitidas = unidades_visibles(request.user)
 
     periodo = desde_clave(clave) if modo == FUENTE_CIERRE else None
     disponibles = servicios_cierres.periodos_disponibles()
@@ -476,14 +563,16 @@ def resolver_fuente(request, usar_filtro_ueb=True):
         periodo = None
 
     if periodo is None:
-        unidades_ids = expandir_unidades(ueb_id)
+        elegidas = expandir_varias_unidades(seleccionadas)
+        unidades_ids = _acotar_al_alcance(elegidas, permitidas)
         fuente = fuente_actual(unidades_ids)
         modo = FUENTE_ACTUAL
     else:
         # La cascada se calcula sobre la jerarquía congelada, así que hace falta
         # cargar antes las unidades de ese cierre.
         unidades_del_cierre = fuente_de_cierre(periodo).unidades
-        unidades_ids = expandir_unidades(ueb_id, unidades_del_cierre)
+        elegidas = expandir_varias_unidades(seleccionadas, unidades_del_cierre)
+        unidades_ids = _acotar_al_alcance(elegidas, permitidas)
         fuente = fuente_de_cierre(periodo, unidades_ids)
 
     contexto = {
@@ -494,6 +583,22 @@ def resolver_fuente(request, usar_filtro_ueb=True):
         'es_historico': fuente.es_historica,
         'periodos_disponibles': disponibles,
         'unidades_sin_cierre': fuente.unidades_sin_cierre,
+        # Las que el usuario tiene marcadas, en texto, para que la plantilla del
+        # filtro pueda comprobarlas con `{% if u.pk|stringformat:"s" in ueb_actual %}`.
+        'ueb_actual': seleccionadas,
+        # Las unidades que el informe REALMENTE abarca, ya cruzadas con el
+        # alcance del rol; `None` significa la empresa entera. Lo necesita quien
+        # agrupe por unidad: una cabecera de unidad principal solo puede sumar
+        # sus subunidades si todas ellas entran en el informe.
+        'unidades_alcance': unidades_ids,
+        # Lo que necesita la rejilla de meses del selector de período: qué meses
+        # tienen cierre, entre qué años se mueven las flechas, y cuál está puesto.
+        # Se calcula aquí y no en la plantilla porque `Periodo` es un objeto y las
+        # plantillas de Django no pueden desmontarlo en año y mes.
+        'periodos_claves': [p.clave for p in disponibles],
+        'periodos_annos': sorted({p.anno for p in disponibles}),
+        'periodo_anno': periodo.anno if periodo else '',
+        'periodo_mes': periodo.mes if periodo else '',
     }
     return fuente, contexto
 

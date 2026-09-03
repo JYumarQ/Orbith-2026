@@ -449,10 +449,16 @@ OPERACIONES = {
         'unidad': _unidad_de_contrato,
         'descriptor': _descriptor_contrato,
         'ejecutor': _ejecutar_contrato,
-        # Decisión de negocio (2026-08): estos dos no tienen impacto en nómina ni en la
+        # Decisión de negocio (2026-08): estos no tienen impacto en nómina ni en la
         # estructura organizativa, así que un cambio que toque solo uno de ellos (o
-        # ambos) se guarda directo, sin pasar por el Administrador.
-        'campos_libres': ('motivo', 'reg_militar'),
+        # varios entre ellos) se guarda directo, sin pasar por el Administrador.
+        #
+        # `fecha_alta_entidad` se añadió en 2026-09: es un dato que el Moderador conoce
+        # de primera mano —la entrada del trabajador en su unidad— y que Subsanación le
+        # reclama contrato por contrato (CTR-016/CTR-017). Obligarle a pedir aprobación
+        # para cada corrección convertía un saneamiento masivo en una cola de solicitudes
+        # sin ningún criterio que el Administrador pudiera aportar.
+        'campos_libres': ('motivo', 'reg_militar', 'fecha_alta_entidad'),
         # Todos estos nacen deshabilitados en `CAltaForm.Meta.widgets` y un JavaScript
         # propio los habilita según otra elección del formulario: `motivo` si el tipo de
         # contrato lo exige, `duracion` si el tipo no es indeterminado, `c_formal_res`/
@@ -463,9 +469,18 @@ OPERACIONES = {
         # sí llegó a escribir (el mismo bug ya detectado y corregido para `motivo`, pero
         # que seguía abierto para el resto: un Moderador que marcaba «Funcionario» y
         # escribía el número de resolución veía la propuesta llegar con ese campo vacío).
+        #
+        # `fecha_alta_entidad` entra aquí por lo mismo, y no por un JavaScript de
+        # cascada: su widget nace deshabilitado en `Meta.widgets` y el propio formulario
+        # de contrato se lo habilita al cargar. Sin declararla, todo lo que el Moderador
+        # escribiera en ella se descartaba en silencio y al Administrador le llegaba el
+        # valor viejo del contrato (o vacío) por muy bien que la hubiera enviado; y en la
+        # pantalla de revisión salía gris, así que el Administrador tampoco podía
+        # corregirla.
         'campos_condicionales': (
             'motivo', 'duracion', 'c_formal_res', 'funcionario_res', 'designado_res',
             'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais',
+            'fecha_alta_entidad',
         ),
         # Ver el bloque «Campos calculados desde el Cargo» más arriba: `rol` y
         # `grupo_escala` los deriva el Cargo (por su NCargo); `funcionario`/`designado`

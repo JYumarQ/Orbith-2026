@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import render, get_object_or_404
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.template.loader import get_template
 from django.views.decorators.http import require_POST
 
@@ -27,11 +27,18 @@ from .metadata import (
     REGISTRO_MODELOS,
     PLANTILLAS_RAPIDAS,
     DESGLOSES_ESPECIALES_POR_MODELO,
+    FUENTES_HISTORICAS,
     agrupar_campos_por_categoria,
+    campos_sin_historico,
     mapa_valor_a_etiqueta,
+    _opciones_periodos_cerrados,
 )
 from .motor import (
     construir_queryset,
+    resolver_definicion,
+    calcular_evolucion,
+    indicadores_graficables,
+    annos_con_cierre,
     calcular_indicadores,
     calcular_desglose,
     obtener_rutas_select_related,
@@ -48,6 +55,70 @@ MESES_ABREVIADOS = {
 }
 
 
+from strorganizativa.jerarquia import ordenar_con_jerarquia
+from strorganizativa.models import UnidadOrganizativa
+
+
+def _contexto_index(request):
+    """Contexto común de la pantalla principal.
+
+    Extraído para que `ver_informe_compartido` renderice exactamente el mismo
+    módulo (con sus favoritos, plantillas y paneles) y solo añada encima el
+    informe que le compartieron, en vez de mantener una segunda pantalla casi
+    idéntica que se iría desincronizando.
+    """
+    from usuarios.models import CustomUser
+
+    return {
+        "modelos_disponibles": {
+            key: definicion["label"] for key, definicion in REGISTRO_MODELOS.items()
+        },
+        "modelo_raiz_inicial": MODELO_RAIZ_POR_DEFECTO,
+        "ultimo_informe": UltimoInformeEjecutado.objects.filter(usuario=request.user).first(),
+        "favoritos": InformeFavorito.objects.filter(
+            usuario=request.user).select_related("informe"),
+        # Las plantillas viajan al template como objeto Python: el filtro
+        # json_script del template se encarga de serializarlas de forma segura,
+        # porque quien las aplica es el JavaScript (marcar checkboxes, crear filtros).
+        "plantillas": PLANTILLAS_RAPIDAS,
+        "plantillas_del_modelo": PLANTILLAS_RAPIDAS.get(MODELO_RAIZ_POR_DEFECTO, []),
+        # Destinatarios posibles al compartir. Cualquier usuario activo puede
+        # recibir un informe: no hay riesgo de datos porque el alcance por rol se
+        # aplica al ejecutarlo, según quién lo abre.
+        "usuarios_para_compartir": CustomUser.objects.filter(
+            is_active=True).exclude(pk=request.user.pk).order_by("username"),
+
+        # --- Selector de período (parte superior de la pantalla) ---
+        # Solo se ofrecen meses con un cierre realmente declarado: pedir uno
+        # que nadie cerró devolvería un informe vacío sin explicación.
+        "periodos_cerrados": _opciones_periodos_cerrados(),
+        # Qué fuentes admiten consultar un mes pasado, y qué campos deja de
+        # poder ofrecer cada una al hacerlo. El JavaScript lo usa para apagar
+        # el selector o los checkboxes en vez de dejar que el usuario pida algo
+        # que la fotografía no guardó.
+        "soporte_historico": {
+            clave: sorted(campos_sin_historico(clave)) for clave in FUENTES_HISTORICAS
+        },
+        # Medidas que el panel de evolución puede dibujar, por fuente.
+        "medidas_evolucion": {
+            clave: indicadores_graficables(clave) for clave in FUENTES_HISTORICAS
+        },
+
+        # --- Selector de Unidad Organizativa (fila superior) ---
+        # La unidad dejó de ser un filtro más de la lista y pasó a ser un
+        # control fijo, junto a la fuente de datos y al desglose. El motivo es
+        # que casi ningún informe se mira de la empresa entera: acotar por
+        # unidad es la primera decisión que se toma, no una condición más.
+        #
+        # Ordenadas padre → hijas y con `nivel`, para que el desplegable pueda
+        # indentar las subunidades. El alcance por rol NO se aplica aquí: lo
+        # hace `motor._aplicar_alcance_por_rol` al ejecutar el informe, que es
+        # donde no se puede esquivar.
+        "unidades_organizativas": ordenar_con_jerarquia(
+            UnidadOrganizativa.objects.select_related("padre")),
+    }
+
+
 @login_required
 def index(request):
     """
@@ -55,23 +126,7 @@ def index(request):
     (o precargados con el último informe ejecutado, si existe) más la
     lista de favoritos del usuario en la barra lateral.
     """
-    ultimo = UltimoInformeEjecutado.objects.filter(usuario=request.user).first()
-    favoritos = InformeFavorito.objects.filter(usuario=request.user).select_related("informe")
-
-    context = {
-        "modelos_disponibles": {
-            key: definicion["label"] for key, definicion in REGISTRO_MODELOS.items()
-        },
-        "modelo_raiz_inicial": MODELO_RAIZ_POR_DEFECTO,
-        "ultimo_informe": ultimo,
-        "favoritos": favoritos,
-        # Las plantillas viajan al template como objeto Python: el filtro
-        # json_script del template se encarga de serializarlas de forma segura,
-        # porque quien las aplica es el JavaScript (marcar checkboxes, crear filtros).
-        "plantillas": PLANTILLAS_RAPIDAS,
-        "plantillas_del_modelo": PLANTILLAS_RAPIDAS.get(MODELO_RAIZ_POR_DEFECTO, []),
-    }
-    return render(request, "pages/informe_inteligente/index.html", context)
+    return render(request, "pages/informe_inteligente/index.html", _contexto_index(request))
 
 
 @login_required
@@ -106,9 +161,21 @@ def _preparar_datos_informe(request):
     """
     modelo_raiz = request.POST.get("modelo_raiz", MODELO_RAIZ_POR_DEFECTO)
     configuracion = _leer_configuracion(request.POST.get("configuracion"))
-    definicion_modelo = _obtener_definicion(modelo_raiz)
+    _obtener_definicion(modelo_raiz)  # valida que el modelo exista
 
-    queryset = construir_queryset(modelo_raiz, configuracion, request.user)
+    # Período del cierre elegido en el selector superior. Vacío = datos vivos,
+    # que es como se comporta el módulo por defecto.
+    periodo = (request.POST.get("periodo") or "").strip() or None
+    if periodo and periodo not in dict(_opciones_periodos_cerrados()):
+        raise ConfiguracionInformeInvalida(
+            "El período seleccionado no tiene un cierre declarado.")
+
+    # Con período, el informe se construye sobre la fotografía de ese mes: la
+    # definición que manda a partir de aquí es la de la gemela histórica, no la
+    # de la fuente viva (sus campos tienen otras rutas ORM).
+    definicion_modelo, _ = resolver_definicion(modelo_raiz, periodo)
+
+    queryset = construir_queryset(modelo_raiz, configuracion, request.user, periodo)
     keys_campos = configuracion["campos"]
 
     rutas_precarga = obtener_rutas_select_related(definicion_modelo, keys_campos)
@@ -139,6 +206,7 @@ def _preparar_datos_informe(request):
 
     return {
         "modelo_raiz": modelo_raiz,
+        "periodo": periodo,
         "configuracion": configuracion,
         "definicion_modelo": definicion_modelo,
         "queryset": queryset,
@@ -541,6 +609,192 @@ def cargar_favorito(request, informe_id):
         "modelo_raiz": informe.modelo_raiz,
         "configuracion": informe.configuracion,
     })
+
+
+@login_required
+@require_POST
+def editar_favorito(request, informe_id):
+    """Renombra un informe guardado y, si se pide, reemplaza su configuración.
+
+    Este endpoint es el que faltaba: `guardar_favorito` siempre hace `create()`,
+    así que hasta ahora «editar» un favorito significaba guardarlo de nuevo y
+    quedarse con dos copias del mismo informe.
+
+    Renombrar y reemplazar la configuración son dos acciones separadas a
+    propósito. Lo que hay en pantalla no tiene por qué ser este informe (se
+    puede abrir el lápiz de un favorito teniendo cargado otro), así que
+    arrastrar la configuración actual sin preguntar sobrescribiría el informe
+    con algo que el usuario no pidió.
+    """
+    informe = get_object_or_404(InformePersonalizado, pk=informe_id, usuario=request.user)
+
+    nombre = request.POST.get("nombre", "").strip()
+    descripcion = request.POST.get("descripcion", "").strip()
+
+    if not nombre:
+        return JsonResponse({"error": "El informe necesita un nombre."}, status=400)
+    if len(nombre) > 150:
+        return JsonResponse({"error": "El nombre no puede superar los 150 caracteres."}, status=400)
+    if len(descripcion) > 300:
+        return JsonResponse({"error": "La descripción no puede superar los 300 caracteres."}, status=400)
+
+    informe.nombre = nombre
+    informe.descripcion = descripcion or None
+
+    if request.POST.get("reemplazar_configuracion") == "true":
+        modelo_raiz = request.POST.get("modelo_raiz", MODELO_RAIZ_POR_DEFECTO)
+        if modelo_raiz not in REGISTRO_MODELOS:
+            return JsonResponse({"error": "El tipo de informe no es válido."}, status=400)
+        try:
+            configuracion = _leer_configuracion(request.POST.get("configuracion"))
+        except ConfiguracionInformeInvalida as e:
+            return JsonResponse({"error": str(e)}, status=400)
+
+        # `modelo_raiz` y `configuracion` se actualizan siempre juntos: los
+        # campos y filtros guardados solo tienen sentido dentro de su propio
+        # modelo, y dejar uno viejo con la otra nueva rompería el informe.
+        informe.modelo_raiz = modelo_raiz
+        informe.configuracion = configuracion
+
+    informe.save()
+    return JsonResponse({"ok": True, "informe_id": informe.id, "nombre": informe.nombre})
+
+
+@login_required
+@require_POST
+def datos_evolucion(request):
+    """Serie del gráfico de evolución mensual: un valor por cada mes cerrado.
+
+    Va aparte de la vista previa porque es una lectura distinta: el informe
+    mira un momento concreto y esto recorre todos los cierres. Solo se pide
+    cuando el usuario despliega el panel, así que no encarece el informe normal.
+    """
+    modelo_raiz = request.POST.get("modelo_raiz", MODELO_RAIZ_POR_DEFECTO)
+    _obtener_definicion(modelo_raiz)
+
+    annos = annos_con_cierre()
+    try:
+        anno = int(request.POST.get("anno") or (annos[-1] if annos else 0))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "El año indicado no es válido."}, status=400)
+
+    if anno not in annos:
+        return JsonResponse({"error": "Ese año no tiene ningún cierre declarado."},
+                            status=400)
+
+    try:
+        configuracion = _leer_configuracion(request.POST.get("configuracion"))
+        puntos, etiqueta, formato = calcular_evolucion(
+            modelo_raiz, configuracion, request.user,
+            request.POST.get("indicador", "_total"), anno)
+    except ConfiguracionInformeInvalida as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+    return JsonResponse({
+        "ok": True,
+        "anno": anno,
+        "annos_disponibles": annos,
+        "etiqueta": etiqueta,
+        "formato": formato,
+        "puntos": puntos,
+    })
+
+
+@login_required
+@require_POST
+def compartir_favorito(request, informe_id):
+    """Envía un informe guardado a otros usuarios como notificación.
+
+    No se crea una copia en los favoritos del receptor: eso le llenaría la lista
+    de cosas que no pidió. Lo que recibe es un aviso con un botón «Ver informe»;
+    si le interesa, lo guarda él mismo con «Guardar como favorito», que ya crea
+    su propia copia independiente.
+
+    La `Notificacion` es a la vez el aviso Y el permiso: `ver_informe_compartido`
+    comprueba que exista una dirigida a quien intenta abrirlo, así que no hace
+    falta un modelo aparte de «informes compartidos».
+
+    Compartir no expone datos: el alcance por rol se aplica al EJECUTAR el
+    informe (`motor._aplicar_alcance_por_rol`), según quién lo ejecuta y no
+    según quién lo creó. Un Moderador que reciba un informe de otra unidad
+    seguirá viendo solo los registros de las suyas.
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from notificaciones.models import Notificacion
+    from usuarios.models import CustomUser
+
+    informe = get_object_or_404(InformePersonalizado, pk=informe_id, usuario=request.user)
+
+    ids_crudos = request.POST.getlist("destinatarios")
+    ids = {int(i) for i in ids_crudos if str(i).isdigit()}
+    ids.discard(request.user.pk)  # compartir consigo mismo no tiene sentido
+
+    if not ids:
+        return JsonResponse({"error": "Seleccione al menos un usuario."}, status=400)
+
+    destinatarios = list(CustomUser.objects.filter(pk__in=ids, is_active=True))
+    if not destinatarios:
+        return JsonResponse({"error": "Los usuarios seleccionados ya no están activos."}, status=400)
+
+    quien = request.user.get_full_name() or request.user.username
+    tipo_ct = ContentType.objects.get_for_model(InformePersonalizado)
+    etiqueta_modelo = REGISTRO_MODELOS.get(informe.modelo_raiz, {}).get("label", informe.modelo_raiz)
+
+    mensaje = (
+        f'{quien} le compartió el informe «{informe.nombre}» '
+        f'({etiqueta_modelo}). Ábralo con «Ver informe»; si le resulta útil, '
+        f'puede guardarlo en sus propios favoritos.'
+    )
+    if informe.descripcion:
+        mensaje = f'{mensaje}\n\n{informe.descripcion}'
+
+    # `codigo_regla` vacío (es un EVENTO, no un hallazgo): la restricción de
+    # unicidad de Notificacion no aplica, así que compartir dos veces el mismo
+    # informe genera dos avisos — y está bien, son dos hechos distintos.
+    Notificacion.objects.bulk_create([
+        Notificacion(
+            titulo=f'Informe compartido: {informe.nombre}'[:150],
+            mensaje=mensaje,
+            tipo=Notificacion.Tipo.EVENTO,
+            content_type=tipo_ct,
+            object_id=str(informe.pk),
+            destinatario=usuario,
+        )
+        for usuario in destinatarios
+    ])
+
+    return JsonResponse({"ok": True, "enviados": len(destinatarios)})
+
+
+@login_required
+def ver_informe_compartido(request, informe_id):
+    """Abre el módulo con un informe que otro usuario compartió.
+
+    El permiso es la propia notificación: solo puede abrirlo quien tenga una
+    dirigida a él apuntando a este informe. Sin ella responde 404, igual que si
+    intentara abrir un favorito ajeno.
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from notificaciones.models import Notificacion
+
+    informe = get_object_or_404(InformePersonalizado, pk=informe_id)
+
+    le_fue_compartido = Notificacion.objects.filter(
+        content_type=ContentType.objects.get_for_model(InformePersonalizado),
+        object_id=str(informe.pk),
+        destinatario=request.user,
+    ).exists()
+
+    # El dueño siempre puede abrir el suyo, aunque nadie se lo haya compartido.
+    if not le_fue_compartido and informe.usuario_id != request.user.pk:
+        raise Http404("Este informe no está compartido con usted.")
+
+    contexto = _contexto_index(request)
+    contexto["informe_compartido"] = informe
+    contexto["compartido_por"] = (
+        informe.usuario.get_full_name() or informe.usuario.username
+    ) if informe.usuario else "Orbith"
+    return render(request, "pages/informe_inteligente/index.html", contexto)
 
 
 @login_required

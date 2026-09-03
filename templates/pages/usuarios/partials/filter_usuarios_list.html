@@ -40,6 +40,9 @@
                 <small>{{ u.contrato.cargo.departamento.unidad_organizativa.descripcion }}</small>
             </td>
             <td class="text-center">
+                {{ u.rol_descripcion }}
+            </td>
+            <td class="text-center">
                 {% if u.is_active %}
                     <span class="badge bg-label-success">Activo</span>
                 {% else %}
@@ -59,5 +62,5 @@
         </tr>
     {% endfor %}
 {% else %}
-    <tr><td colspan="7">No hay registros disponibles.</td></tr>
+    <tr><td colspan="8">No hay registros disponibles.</td></tr>
 {% endif %}

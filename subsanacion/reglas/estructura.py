@@ -281,3 +281,57 @@ class CargoSinOrdenDePrioridad(ReglaOrdenDePrioridad):
                        'departamento': departamento},
                 unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
             )
+
+
+class CargoSinNivelDePreparacion(ReglaBase):
+    """El cargo no tiene asignado su nivel de preparación.
+
+    El campo es opcional en la base de datos (`null=True, blank=True`) y el
+    formulario no lo exige, así que la única forma de saber cuántos cargos lo tienen
+    sin rellenar es preguntárselo a la plantilla entera — que es justo lo que hace
+    esta regla.
+    """
+
+    codigo = 'EST-007'
+    nombre = 'Cargo sin nivel de preparación'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_BAJA
+    modelo = 'strorganizativa.CargoPlantilla'
+
+    descripcion = (
+        'Busca los cargos de la plantilla que no tienen asignado su nivel de '
+        'preparación.')
+    causa_probable = (
+        'El campo no es obligatorio ni en la base de datos ni en el formulario del '
+        'cargo, así que puede quedarse vacío al crear el cargo y nada avisa después.')
+    impacto = (
+        'El nivel de preparación es el requisito de formación que exige el cargo. Sin '
+        'él, el Anexo 14 y los informes de plantilla salen con la columna en blanco, y '
+        'no se puede comparar lo que el cargo exige con la preparación real del '
+        'trabajador que lo ocupa.')
+    solucion = (
+        'Abra el cargo y seleccione su nivel de preparación en el desplegable '
+        '«Nivel de Preparación».')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(nivel_preparacion__isnull=True)
+                 .values('id', 'ncargo__descripcion', 'departamento__descripcion',
+                         'departamento__unidad_organizativa_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            cargo = fila.get('ncargo__descripcion') or 'Cargo sin descripción'
+            departamento = fila.get('departamento__descripcion') or '—'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{cargo} · {departamento} · sin nivel de preparación',
+                detalle=(
+                    'Este cargo no tiene asignado el nivel de preparación que exige '
+                    'para desempeñarlo.'),
+                datos={'cargo': cargo, 'departamento': departamento,
+                       'nivel_de_preparacion': 'Vacío'},
+                unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
+                # Lleva el panel de advertencias directo al desplegable del formulario.
+                campo_formulario='nivel_preparacion',
+            )

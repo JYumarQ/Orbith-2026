@@ -378,7 +378,7 @@ class IndiceExcluyeExtrasTests(TestCase):
 
         provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
         municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Prueba', sapellido='Test',
             doc_identidad='90010112345', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -1281,7 +1281,7 @@ class ContratoSinFechaAltaEntidadTests(TestCase):
         tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=False, requiere_motivo=False)
 
-        cls.aspirante_sin = Aspirante.objects.create(
+        cls.aspirante_sin = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Sin', papellido='Alta', sapellido='Entidad',
             doc_identidad='90010112301', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -1289,7 +1289,7 @@ class ContratoSinFechaAltaEntidadTests(TestCase):
             aspirante=cls.aspirante_sin, no_expediente='90001', tipo=tipo_contrato,
             fecha_alta=date.today())
 
-        cls.aspirante_con = Aspirante.objects.create(
+        cls.aspirante_con = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Con', papellido='Alta', sapellido='Entidad',
             doc_identidad='90010112302', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)
@@ -1319,6 +1319,180 @@ class ContratoSinFechaAltaEntidadTests(TestCase):
             codigo_regla='CTR-016', object_id=str(self.contrato_sin.pk))
         self.assertIsNone(creado.unidad_organizativa_id)
         self.assertEqual(creado.criticidad, CRITICIDAD_ALTA)
+
+
+class ContratoFechaAltaEntidadImposibleTests(TestCase):
+    """CTR-017: detecta la F. Alta Entidad con un año anterior a 1900.
+
+    Los tres casos que definen la regla: año imposible (se reporta), año correcto
+    (no) y sin fecha (no: ese es el terreno de CTR-016, y contarlo dos veces
+    duplicaría el mismo contrato en el panel)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import NMunicipio, NProvincia, NTipoContrato
+
+        provincia = NProvincia.objects.create(nombre='Mayabeque', siglas='MAY')
+        municipio = NMunicipio.objects.create(
+            nombre='Güines', provincia=provincia, siglas='GUI')
+        tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=False, requiere_motivo=False)
+
+        def _aspirante(nombre, doc):
+            return Aspirante.objects.create(nivel_educ='SA',
+                nombre=nombre, papellido='Fecha', sapellido='Imposible',
+                doc_identidad=doc, estado='ACTIVO', sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio)
+
+        # El año 0002 es exactamente lo que deja un `<input type="date">` cuando el
+        # usuario escribe «2022» y sale del campo antes de terminar el año.
+        cls.contrato_imposible = CAlta.objects.create(
+            aspirante=_aspirante('Mala', '90010112401'), no_expediente='90101',
+            tipo=tipo_contrato, fecha_alta=date.today(),
+            fecha_alta_entidad=date(2, 5, 10))
+        cls.contrato_correcto = CAlta.objects.create(
+            aspirante=_aspirante('Buena', '90010112402'), no_expediente='90102',
+            tipo=tipo_contrato, fecha_alta=date.today(),
+            fecha_alta_entidad=date(2020, 5, 10))
+        cls.contrato_sin_fecha = CAlta.objects.create(
+            aspirante=_aspirante('Vacia', '90010112403'), no_expediente='90103',
+            tipo=tipo_contrato, fecha_alta=date.today())
+
+    def test_detecta_solo_el_contrato_con_ano_imposible(self):
+        from .reglas.contratos import ContratoFechaAltaEntidadImposible
+
+        regla = ContratoFechaAltaEntidadImposible()
+        object_ids = {h.object_id for h in regla.ejecutar(None)}
+
+        self.assertIn(str(self.contrato_imposible.pk), object_ids)
+        self.assertNotIn(str(self.contrato_correcto.pk), object_ids)
+        self.assertNotIn(str(self.contrato_sin_fecha.pk), object_ids)
+
+    def test_el_hallazgo_muestra_la_fecha_registrada_y_apunta_al_campo(self):
+        from .reglas.contratos import ContratoFechaAltaEntidadImposible
+
+        regla = ContratoFechaAltaEntidadImposible()
+        hallazgo = next(h for h in regla.ejecutar(None)
+                        if h.object_id == str(self.contrato_imposible.pk))
+
+        self.assertEqual(hallazgo.campo_formulario, 'fecha_alta_entidad')
+        self.assertEqual(hallazgo.datos['fecha_registrada'], '10/05/0002')
+        self.assertIn('10/05/0002', hallazgo.detalle)
+
+    def test_los_contratos_sin_fecha_siguen_siendo_de_ctr_016(self):
+        """Las dos reglas se reparten el terreno sin solaparse."""
+        from .reglas.contratos import (
+            ContratoFechaAltaEntidadImposible, ContratoSinFechaAltaEntidad)
+
+        sin_fecha = {h.object_id for h in ContratoSinFechaAltaEntidad().ejecutar(None)}
+        imposibles = {h.object_id
+                      for h in ContratoFechaAltaEntidadImposible().ejecutar(None)}
+
+        self.assertIn(str(self.contrato_sin_fecha.pk), sin_fecha)
+        self.assertNotIn(str(self.contrato_imposible.pk), sin_fecha)
+        self.assertFalse(sin_fecha & imposibles)
+
+
+class TrabajadorContratadoSinEspecialidadTests(TestCase):
+    """ASP-010: la especialidad solo se reclama a quien YA está contratado.
+
+    Los cuatro casos que definen la regla: contratado con nivel que lleva
+    especialidad y sin ella (se reporta), el mismo caso pero con especialidad (no),
+    sin contrato (no, sigue siendo un candidato de la bolsa) y con un nivel que no
+    lleva especialidad (no).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import (
+            NEspecialidad, NMunicipio, NProvincia, NTipoContrato)
+
+        provincia = NProvincia.objects.create(nombre='Granma', siglas='GRM')
+        municipio = NMunicipio.objects.create(
+            nombre='Bayamo', provincia=provincia, siglas='BAY')
+        tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Indeterminado', ocupa_plaza=False, requiere_motivo=False)
+        especialidad = NEspecialidad.objects.create(
+            nombre='Ing. Industrial', educ_superior=True)
+
+        def crear(sufijo, nivel, especialidad_obj=None):
+            return Aspirante.objects.create(
+                nombre='Test', papellido='Especialidad', sapellido=sufijo,
+                doc_identidad=f'900101123{sufijo}', estado='ACTIVO', sexo='F',
+                raza='BL', provincia=provincia, municipio=municipio,
+                nivel_educ=nivel, especialidad=especialidad_obj)
+
+        def contratar(aspirante, expediente):
+            return CAlta.objects.create(
+                aspirante=aspirante, no_expediente=expediente, tipo=tipo_contrato,
+                fecha_alta=date.today())
+
+        cls.contratado_sin = crear('11', 'NS')
+        contratar(cls.contratado_sin, '91001')
+
+        cls.contratado_tm_sin = crear('12', 'TM')
+        contratar(cls.contratado_tm_sin, '91002')
+
+        cls.contratado_con = crear('13', 'NS', especialidad)
+        contratar(cls.contratado_con, '91003')
+
+        # Sin contrato: sigue siendo un candidato de la bolsa, no se le reclama.
+        cls.en_bolsa_sin = crear('14', 'NS')
+
+        # Nivel que no lleva especialidad.
+        cls.contratado_otro_nivel = crear('15', 'PR')
+        contratar(cls.contratado_otro_nivel, '91005')
+
+    def _detectados(self):
+        from .reglas.aspirantes import TrabajadorContratadoSinEspecialidad
+        return {h.object_id for h in TrabajadorContratadoSinEspecialidad().ejecutar(None)}
+
+    def test_reporta_a_los_contratados_de_nivel_ns_y_tm_sin_especialidad(self):
+        detectados = self._detectados()
+        self.assertIn(str(self.contratado_sin.pk), detectados)
+        self.assertIn(str(self.contratado_tm_sin.pk), detectados)
+
+    def test_no_reporta_a_quien_si_tiene_especialidad(self):
+        self.assertNotIn(str(self.contratado_con.pk), self._detectados())
+
+    def test_no_reporta_a_quien_no_tiene_contrato(self):
+        self.assertNotIn(str(self.en_bolsa_sin.pk), self._detectados())
+
+    def test_no_reporta_niveles_que_no_llevan_especialidad(self):
+        self.assertNotIn(str(self.contratado_otro_nivel.pk), self._detectados())
+
+    def test_un_trabajador_con_dos_contratos_genera_un_solo_hallazgo(self):
+        """El `Exists` evita que el join multiplique el hallazgo."""
+        from datetime import date
+
+        from contratos.models import CAlta
+        from .reglas.aspirantes import TrabajadorContratadoSinEspecialidad
+
+        CAlta.objects.create(
+            aspirante=self.contratado_sin, no_expediente='91009',
+            tipo=CAlta.objects.first().tipo, fecha_alta=date.today())
+
+        hallazgos = [h for h in TrabajadorContratadoSinEspecialidad().ejecutar(None)
+                     if h.object_id == str(self.contratado_sin.pk)]
+        self.assertEqual(len(hallazgos), 1)
+
+    def test_el_hallazgo_apunta_al_campo_especialidad(self):
+        from .reglas.aspirantes import TrabajadorContratadoSinEspecialidad
+
+        hallazgo = next(h for h in TrabajadorContratadoSinEspecialidad().ejecutar(None)
+                        if h.object_id == str(self.contratado_sin.pk))
+        from .constantes import CRITICIDAD_MEDIA
+
+        self.assertEqual(hallazgo.campo_formulario, 'especialidad')
+        self.assertEqual(TrabajadorContratadoSinEspecialidad.criticidad, CRITICIDAD_MEDIA)
 
 
 class EnlaceSoloAdminTests(TestCase):
@@ -1362,3 +1536,488 @@ class EnlaceSoloAdminTests(TestCase):
         from subsanacion.enlaces import construir_enlace
         enlace = construir_enlace('configuracion.Configuracion', None, usuario=self.moderador)
         self.assertIsNotNone(enlace)
+
+
+class CargoSinNivelDePreparacionTests(TestCase):
+    """EST-007: el nivel de preparación del cargo es opcional, pero debe estar puesto.
+
+    Tres casos definen la regla: cargo sin nivel (se reporta), cargo con nivel (no se
+    reporta) y el hallazgo apunta al campo del formulario para que el panel de
+    advertencias pueda llevar al usuario directamente al desplegable.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from nomencladores.models import (
+            NCargo, NGrupoEscala, NNivelPreparacion, NTipoUnidadOrganizativa)
+        from strorganizativa.models import (
+            CargoPlantilla, Departamento, UnidadOrganizativa)
+
+        grupo = NGrupoEscala.objects.create(nivel='XV')
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Empresa', es_principal=True)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            codigo_interno=9001, descripcion='Unidad de prueba', tipo=tipo_unidad,
+            grupo_nomina=1)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Recursos Humanos', unidad_organizativa=cls.unidad)
+        cls.nivel = NNivelPreparacion.objects.create(nombre='Nivel Superior')
+
+        def crear_cargo(descripcion, nivel_preparacion=None):
+            ncargo = NCargo.objects.create(
+                descripcion=descripcion, cat_ocupacional='TEC',
+                grupo_escala=grupo, salario_basico=Decimal('4000.00'))
+            return CargoPlantilla.objects.create(
+                ncargo=ncargo, departamento=cls.departamento,
+                nivel_preparacion=nivel_preparacion, cant_aprobada=1)
+
+        cls.sin_nivel = crear_cargo('Especialista B')
+        cls.con_nivel = crear_cargo('Especialista A', cls.nivel)
+
+    def _detectados(self):
+        from .reglas.estructura import CargoSinNivelDePreparacion
+        return {h.object_id for h in CargoSinNivelDePreparacion().ejecutar(None)}
+
+    def test_reporta_el_cargo_sin_nivel_de_preparacion(self):
+        self.assertIn(str(self.sin_nivel.pk), self._detectados())
+
+    def test_no_reporta_el_cargo_que_si_lo_tiene(self):
+        self.assertNotIn(str(self.con_nivel.pk), self._detectados())
+
+    def test_el_hallazgo_apunta_al_campo_y_a_su_unidad(self):
+        from .constantes import CRITICIDAD_BAJA, MODULO_ESTRUCTURA
+        from .reglas.estructura import CargoSinNivelDePreparacion
+
+        hallazgo = next(h for h in CargoSinNivelDePreparacion().ejecutar(None)
+                        if h.object_id == str(self.sin_nivel.pk))
+
+        self.assertEqual(hallazgo.campo_formulario, 'nivel_preparacion')
+        # El alcance por unidad depende de este dato: sin él, el hallazgo no se
+        # filtraría bien para un usuario limitado a su unidad.
+        self.assertEqual(hallazgo.unidad_organizativa_id, self.unidad.pk)
+        self.assertEqual(CargoSinNivelDePreparacion.criticidad, CRITICIDAD_BAJA)
+        self.assertEqual(CargoSinNivelDePreparacion.modulo, MODULO_ESTRUCTURA)
+
+
+# ==========================================================================
+# REGLAS NUEVAS
+# ==========================================================================
+
+from datetime import date, timedelta   # noqa: E402
+
+from bolsa.models import Aspirante   # noqa: E402
+from cierres.models import (CierreUnidad, EstadoCierreUnidad,   # noqa: E402
+                            EstadoUnidad)
+from contratos.models import CAlta   # noqa: E402
+from nomencladores.models import (NCargo, NGrupoEscala,   # noqa: E402
+                                  NImporteGradoCientifico, NMunicipio,
+                                  NPagoAdicional, NProvincia, NTipoContrato,
+                                  NTipoUnidadOrganizativa)
+from prenomina.models import NPagoImporte, TipoValorImporte   # noqa: E402
+from strorganizativa.models import (CargoPlantilla,   # noqa: E402
+                                    Departamento, UnidadOrganizativa)
+from usuarios.models import CustomUser   # noqa: E402
+
+
+class _EscenarioContratos:
+    """Plantilla mínima para las reglas que miran contratos.
+
+    Reproduce la cadena real trabajador -> unidad de Orbith:
+    `CAlta.cargo -> CargoPlantilla.departamento -> Departamento.unidad_organizativa`.
+    Se construye una vez por clase de prueba desde `setUpTestData`.
+    """
+
+    def __init__(self):
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=tipo_unidad, grupo_nomina=1,
+            orden_informe=1)
+        departamento = Departamento.objects.create(
+            descripcion='Contabilidad', unidad_organizativa=unidad, orden_informe=1)
+        grupo = NGrupoEscala.objects.create(nivel='IV')
+        ncargo = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=grupo, salario_basico=4000)
+
+        self.unidad = unidad
+        self.cargo = CargoPlantilla.objects.create(
+            ncargo=ncargo, departamento=departamento, cant_aprobada=50,
+            orden_informe=1)
+        self.provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        self.municipio = NMunicipio.objects.create(
+            nombre='Playa', provincia=self.provincia, siglas='PLA')
+        self.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=False,
+            requiere_motivo=False)
+
+    def aspirante(self, doc, estado='ACTIVO', grado_cientifico=None):
+        return Aspirante.objects.create(
+            nivel_educ='SA', nombre='Trab', papellido='Prueba', sapellido='Test',
+            doc_identidad=doc, estado=estado, sexo='F', raza='BL',
+            grado_cientifico=grado_cientifico,
+            provincia=self.provincia, municipio=self.municipio)
+
+
+class ContratoDeterminadoVencidoTests(TestCase):
+    """CTR-018: el contrato expiró y el trabajador sigue cobrando.
+
+    La duración se guarda en MESES, así que el vencimiento se calcula con
+    aritmética de meses y no sumando días: 6 meses no son 180 días fijos.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.base = _EscenarioContratos()
+
+    def _contrato(self, doc, fecha_alta, duracion, estado='ACTIVO', expediente='0001'):
+        return CAlta.objects.create(
+            aspirante=self.base.aspirante(doc, estado=estado),
+            no_expediente=expediente, tipo=self.base.tipo_contrato,
+            cargo=self.base.cargo, fecha_alta=fecha_alta, duracion=duracion)
+
+    def hallazgos(self):
+        from .reglas.contratos import ContratoDeterminadoVencido
+        return {h.object_id for h in ContratoDeterminadoVencido().ejecutar(None)}
+
+    def test_detecta_el_contrato_ya_vencido(self):
+        contrato = self._contrato('90010100001', date.today() - timedelta(days=400), 6)
+        self.assertIn(str(contrato.pk), self.hallazgos())
+
+    def test_no_reclama_un_contrato_todavia_vigente(self):
+        contrato = self._contrato('90010100002', date.today() - timedelta(days=10), 12)
+        self.assertNotIn(str(contrato.pk), self.hallazgos())
+
+    def test_no_reclama_a_quien_ya_esta_de_baja(self):
+        """Un trabajador de baja no cobra: reclamar su contrato sería ruido.
+
+        La baja se pone DESPUÉS de crear el contrato, y no en el propio alta,
+        porque `CAlta.save()` pone al trabajador en ACTIVO — crear un contrato es
+        precisamente lo que le da el alta. Ponerlo antes no serviría de nada.
+        """
+        contrato = self._contrato('90010100003', date.today() - timedelta(days=400), 6)
+        Aspirante.objects.filter(pk=contrato.aspirante_id).update(estado='BAJA')
+
+        self.assertNotIn(str(contrato.pk), self.hallazgos())
+
+    def test_ignora_los_contratos_sin_duracion(self):
+        """Sin duración el contrato es indeterminado: no vence."""
+        contrato = self._contrato('90010100004', date.today() - timedelta(days=400), None)
+        self.assertNotIn(str(contrato.pk), self.hallazgos())
+
+    def test_el_vencimiento_se_calcula_en_meses_no_en_dias(self):
+        from .reglas.contratos import _vencimiento_de
+        self.assertEqual(_vencimiento_de(date(2026, 1, 15), 6), date(2026, 7, 15))
+        self.assertEqual(_vencimiento_de(date(2026, 8, 10), 12), date(2027, 8, 10))
+        # El 31 de enero + 1 mes no existe: se recorta al último día real.
+        self.assertEqual(_vencimiento_de(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertIsNone(_vencimiento_de(None, 6))
+        self.assertIsNone(_vencimiento_de(date(2026, 1, 1), None))
+
+
+class ImporteDistintoDelNomencladorTests(TestCase):
+    """CTR-019: la contrapartida de que el contrato guarde su propio importe."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.base = _EscenarioContratos()
+        cls.instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Principal',
+            importe=Decimal('150.00'))
+
+    def _contrato(self, doc, expediente, grado=None, **importes):
+        return CAlta.objects.create(
+            aspirante=self.base.aspirante(doc, grado_cientifico=grado),
+            no_expediente=expediente, tipo=self.base.tipo_contrato,
+            cargo=self.base.cargo, fecha_alta=date.today(), **importes)
+
+    def hallazgos(self):
+        from .reglas.contratos import ImporteDistintoDelNomenclador
+        return {(h.object_id, h.clave_extra)
+                for h in ImporteDistintoDelNomenclador().ejecutar(None)}
+
+    def test_detecta_la_maestria_desfasada(self):
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+        contrato = self._contrato('90010200001', '0201', grado='MC',
+                                  maestria=Decimal('300.00'))
+
+        self.assertIn((str(contrato.pk), 'maestria'), self.hallazgos())
+
+    def test_no_reclama_cuando_coincide(self):
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+        contrato = self._contrato('90010200002', '0202', grado='MC',
+                                  maestria=Decimal('500.00'))
+
+        self.assertNotIn((str(contrato.pk), 'maestria'), self.hallazgos())
+
+    def test_reclama_el_importe_de_quien_no_tiene_el_grado(self):
+        """Sin grado científico lo que corresponde es cero."""
+        contrato = self._contrato('90010200003', '0203', grado=None,
+                                  doctorado=Decimal('900.00'))
+
+        self.assertIn((str(contrato.pk), 'doctorado'), self.hallazgos())
+
+    def test_con_el_nomenclador_sin_definir_no_hay_con_que_comparar(self):
+        """Ese caso lo reclama CFG-003: cada problema, una sola ficha."""
+        contrato = self._contrato('90010200004', '0204', grado='MC',
+                                  maestria=Decimal('300.00'))
+
+        self.assertNotIn((str(contrato.pk), 'maestria'), self.hallazgos())
+
+    def test_detecta_el_instructor_desfasado(self):
+        contrato = self._contrato('90010200005', '0205', instructor=Decimal('75.00'))
+        contrato.instructor_nomenclador = self.instructor   # el nomenclador dice 150
+        contrato.save()
+
+        self.assertIn((str(contrato.pk), 'instructor'), self.hallazgos())
+
+    def test_sin_entrada_elegida_no_se_compara_el_instructor(self):
+        contrato = self._contrato('90010200006', '0206', instructor=Decimal('75.00'))
+        self.assertNotIn((str(contrato.pk), 'instructor'), self.hallazgos())
+
+    def test_un_contrato_puede_fallar_en_varios_importes_a_la_vez(self):
+        """Por eso el campo forma parte de la clave: cada uno se corrige aparte."""
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+        contrato = self._contrato('90010200007', '0207', grado='MC',
+                                  maestria=Decimal('1.00'), doctorado=Decimal('2.00'))
+
+        encontrados = {campo for pk, campo in self.hallazgos()
+                       if pk == str(contrato.pk)}
+        self.assertEqual(encontrados, {'maestria', 'doctorado'})
+
+
+class NomencladorDeGradoCientificoVacioTests(TestCase):
+    """CFG-003: apunta a quien puede arreglarlo, el Administrador."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.base = _EscenarioContratos()
+
+    def hallazgos(self):
+        from .reglas.configuracion import NomencladorDeGradoCientificoVacio
+        return {h.clave_extra
+                for h in NomencladorDeGradoCientificoVacio().ejecutar(None)}
+
+    def test_reclama_el_grado_que_tiene_trabajadores_y_no_tiene_importe(self):
+        self.base.aspirante('90010300001', grado_cientifico='MC')
+        self.assertIn('MC', self.hallazgos())
+
+    def test_no_reclama_si_el_importe_ya_esta_definido(self):
+        self.base.aspirante('90010300002', grado_cientifico='MC')
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+
+        self.assertNotIn('MC', self.hallazgos())
+
+    def test_no_reclama_un_grado_que_no_tiene_a_nadie(self):
+        """Un nomenclador vacío sin ningún doctor en la empresa no es un problema."""
+        self.base.aspirante('90010300003', grado_cientifico='MC')
+        self.assertNotIn('DC', self.hallazgos())
+
+    def test_no_cuenta_a_los_trabajadores_de_baja(self):
+        self.base.aspirante('90010300004', grado_cientifico='DC', estado='BAJA')
+        self.assertNotIn('DC', self.hallazgos())
+
+    def test_es_un_hallazgo_global_sin_fila_a_la_que_apuntar(self):
+        """El problema es la AUSENCIA del registro, igual que en CFG-001."""
+        from .reglas.configuracion import NomencladorDeGradoCientificoVacio
+        self.base.aspirante('90010300005', grado_cientifico='MC')
+
+        hallazgo = next(iter(NomencladorDeGradoCientificoVacio().ejecutar(None)))
+        self.assertEqual(hallazgo.object_id, '')
+
+
+class FormulaDePagoQueYaNoValidaTests(TestCase):
+    """PNM-002: una fórmula rota se registra como CERO en silencio."""
+
+    def hallazgos(self):
+        from .reglas.prenomina import FormulaDePagoQueYaNoValida
+        return {h.object_id for h in FormulaDePagoQueYaNoValida().ejecutar(None)}
+
+    def test_detecta_una_formula_invalida_guardada_a_la_fuerza(self):
+        """Se salta `clean()` con `update()` a propósito: así es como llegan las
+        fórmulas rotas, guardadas cuando eran válidas y desfasadas después."""
+        pago = NPagoImporte.objects.create(
+            codigo=901, descripcion='Prueba', tipo_valor=TipoValorImporte.FORMULA,
+            formula='{{horas}} * 2')
+        NPagoImporte.objects.filter(pk=pago.pk).update(
+            formula='{{variable_que_no_existe}} * 2')
+
+        self.assertIn(str(pago.pk), self.hallazgos())
+
+    def test_no_reclama_una_formula_correcta(self):
+        pago = NPagoImporte.objects.create(
+            codigo=902, descripcion='Correcta', tipo_valor=TipoValorImporte.FORMULA,
+            formula='{{horas}} * {{tarifa_horaria}}')
+
+        self.assertNotIn(str(pago.pk), self.hallazgos())
+
+    def test_ignora_los_conceptos_que_no_usan_formula(self):
+        pago = NPagoImporte.objects.create(
+            codigo=903, descripcion='Importe fijo',
+            tipo_valor=TipoValorImporte.IMPORTE, importe_fijo=Decimal('100.00'))
+
+        self.assertNotIn(str(pago.pk), self.hallazgos())
+
+
+class UnidadSinDeclararElCierreTests(TestCase):
+    """CIE-001: sin cierre, la unidad queda fuera de los informes de ese mes."""
+
+    def _unidad(self, descripcion, es_principal=False, orden=1):
+        tipo = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Tipo ' + descripcion, es_principal=es_principal,
+            es_subunidad=False)
+        return UnidadOrganizativa.objects.create(
+            descripcion=descripcion, tipo=tipo, grupo_nomina=1, orden_informe=orden)
+
+    def _desactualizar(self, unidad, con_primer_cierre=True):
+        primero = None
+        if con_primer_cierre:
+            primero = CierreUnidad.objects.create(
+                unidad=unidad, anno=2026, mes=6, periodo_clave='2026-06',
+                fecha_declaracion=timezone.now(),
+                unidad_descripcion=unidad.descripcion)
+        return EstadoCierreUnidad.objects.create(
+            unidad=unidad, estado=EstadoUnidad.DESACTUALIZADA,
+            primer_cierre=primero, periodo_pendiente_anno=2026,
+            periodo_pendiente_mes=7, meses_pendientes=2)
+
+    def hallazgos(self):
+        from .reglas.cierres import UnidadSinDeclararElCierre
+        return {h.object_id for h in UnidadSinDeclararElCierre().ejecutar(None)}
+
+    def test_detecta_la_unidad_desactualizada(self):
+        unidad = self._unidad('UEB Norte')
+        self._desactualizar(unidad)
+
+        self.assertIn(str(unidad.pk), self.hallazgos())
+
+    def test_no_reclama_a_una_direccion_principal(self):
+        """Su estado se deriva de sus hijas: no puede declarar por sí misma."""
+        unidad = self._unidad('Direccion Tecnica', es_principal=True, orden=2)
+        self._desactualizar(unidad)
+
+        self.assertNotIn(str(unidad.pk), self.hallazgos())
+
+    def test_no_reclama_a_una_unidad_que_nunca_declaro(self):
+        """Sin primera declaración no hay obligación todavía."""
+        unidad = self._unidad('UEB Nueva', orden=3)
+        self._desactualizar(unidad, con_primer_cierre=False)
+
+        self.assertNotIn(str(unidad.pk), self.hallazgos())
+
+    def test_no_reclama_a_una_unidad_al_dia(self):
+        unidad = self._unidad('UEB Sur', orden=4)
+        EstadoCierreUnidad.objects.create(
+            unidad=unidad, estado=EstadoUnidad.ACTUALIZADA)
+
+        self.assertNotIn(str(unidad.pk), self.hallazgos())
+
+
+class RepartoDeUnidadesTests(TestCase):
+    """VIS-008 y VIS-009: el reparto de unidades entre moderadores.
+
+    El fallo que vigilan es SILENCIOSO y su síntoma no apunta a la causa: un
+    moderador al que le falta una subunidad simplemente «no ve a su gente» en
+    media aplicación, y tampoco puede declarar su cierre. Nadie relaciona eso con
+    un reparto incompleto, y por eso hace falta que alguien lo reclame.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_principal = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Dirección', es_principal=True)
+        tipo_sub = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Subunidad', es_subunidad=True)
+        tipo_ueb = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+
+        cls.principal = UnidadOrganizativa.objects.create(
+            descripcion='Dirección Técnica', tipo=tipo_principal, grupo_nomina=1,
+            orden_informe=1)
+        cls.taller = UnidadOrganizativa.objects.create(
+            descripcion='Taller', tipo=tipo_sub, padre=cls.principal,
+            grupo_nomina=1, orden_informe=2)
+        cls.almacen = UnidadOrganizativa.objects.create(
+            descripcion='Almacén', tipo=tipo_sub, padre=cls.principal,
+            grupo_nomina=1, orden_informe=3)
+        cls.suelta = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=tipo_ueb, grupo_nomina=2, orden_informe=4)
+
+    def moderador(self, username, *unidades):
+        """Se asigna con `set()`, saltándose el formulario: es la vía por la que
+        estos datos incoherentes aparecen en la realidad."""
+        usuario = CustomUser.objects.create_user(
+            username=username, password='Orbith.Segura.2026', es_moderador=True)
+        usuario.unidades.set(unidades)
+        return usuario
+
+    def faltan_subunidades(self):
+        from .reglas.alcance import ModeradorSinLasSubunidadesDeSuPrincipal
+        return {h.object_id
+                for h in ModeradorSinLasSubunidadesDeSuPrincipal().ejecutar(None)}
+
+    def sueltas(self):
+        from .reglas.alcance import ModeradorConSubunidadSuelta
+        return {h.object_id for h in ModeradorConSubunidadSuelta().ejecutar(None)}
+
+    # ---- VIS-008: lleva el padre y le faltan hijas ----
+
+    def test_detecta_al_moderador_al_que_le_faltan_subunidades(self):
+        usuario = self.moderador('mod_incompleto', self.principal, self.taller)
+        self.assertIn(str(usuario.pk), self.faltan_subunidades())
+
+    def test_no_reclama_a_quien_las_tiene_todas(self):
+        usuario = self.moderador(
+            'mod_completo', self.principal, self.taller, self.almacen)
+        self.assertNotIn(str(usuario.pk), self.faltan_subunidades())
+
+    def test_no_reclama_a_quien_solo_lleva_una_unidad_sin_hijas(self):
+        usuario = self.moderador('mod_suelto', self.suelta)
+        self.assertNotIn(str(usuario.pk), self.faltan_subunidades())
+
+    def test_el_hallazgo_nombra_las_subunidades_que_faltan(self):
+        """Sin decir cuáles, el Administrador tendría que compararlas a mano."""
+        from .reglas.alcance import ModeradorSinLasSubunidadesDeSuPrincipal
+
+        self.moderador('mod_incompleto2', self.principal, self.taller)
+
+        hallazgo = next(iter(
+            ModeradorSinLasSubunidadesDeSuPrincipal().ejecutar(None)))
+        self.assertIn('Almacén', hallazgo.datos['subunidades_sin_asignar'])
+
+    # ---- VIS-009: lleva una hija sin el padre ----
+
+    def test_detecta_la_subunidad_suelta(self):
+        usuario = self.moderador('mod_huerfano', self.taller)
+        self.assertIn(str(usuario.pk), self.sueltas())
+
+    def test_no_reclama_si_tambien_lleva_al_padre(self):
+        usuario = self.moderador(
+            'mod_con_padre', self.principal, self.taller, self.almacen)
+        self.assertNotIn(str(usuario.pk), self.sueltas())
+
+    def test_una_unidad_independiente_no_es_una_subunidad_suelta(self):
+        usuario = self.moderador('mod_independiente', self.suelta)
+        self.assertNotIn(str(usuario.pk), self.sueltas())
+
+    # ---- Las dos reglas se complementan, no se solapan ----
+
+    def test_las_dos_reglas_miran_problemas_distintos(self):
+        """Un mismo reparto no debe salir en las dos: son fallos opuestos."""
+        incompleto = self.moderador('mod_a', self.principal, self.taller)
+        huerfano = self.moderador('mod_b', self.almacen)
+
+        self.assertEqual(self.faltan_subunidades(), {str(incompleto.pk)})
+        self.assertEqual(self.sueltas(), {str(huerfano.pk)})
+
+    def test_el_comando_deja_a_VIS_008_sin_nada_que_reclamar(self):
+        """La regla detecta y el comando repara: tienen que estar de acuerdo."""
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        usuario = self.moderador('mod_a_reparar', self.principal)
+        self.assertIn(str(usuario.pk), self.faltan_subunidades())
+
+        call_command('sincronizar_unidades', stdout=StringIO())
+
+        self.assertEqual(self.faltan_subunidades(), set())

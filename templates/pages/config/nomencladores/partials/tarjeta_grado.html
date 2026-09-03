@@ -1,0 +1,55 @@
+{% comment %}
+  Tarjeta de un importe de VALOR ÚNICO: Maestría o Doctorado.
+
+  No hay listado ni botón de añadir: es una sola cifra y el único gesto posible
+  es cambiarla. Tampoco hay papelera — poner el importe a cero es la forma de
+  anularlo, y así el nomenclador nunca queda «sin definir» por accidente.
+
+  Cuando todavía no se ha guardado nada, la tarjeta lo dice con todas las letras
+  en vez de enseñar un 0.00 que se confundiría con un importe real de cero: eso
+  es justo lo que el contrato mostrará como «Nomenc. Vacío», y lo que reclama la
+  regla CFG-003 de Subsanación si hay trabajadores con ese grado científico.
+
+  La sirve `nomencladores.views_importes.tarjeta`.
+{% endcomment %}
+<div class="section-card h-100 d-flex flex-column m-0">
+  {% comment %} El botón va en el CUERPO y no en la cabecera, al revés que las
+     tarjetas de listado: en `col-lg-3` la cabecera no da para el título y un
+     botón en la misma línea, y el botón se salía de la tarjeta. Además aquí
+     hay un solo gesto posible, así que gana leerse debajo de la cifra que
+     modifica. {% endcomment %}
+  <div class="card-header-flex">
+    <div class="d-flex align-items-center gap-2">
+      <div class="{{ ficha.color }}"><i class="{{ ficha.icono }}"></i></div>
+      <div>
+        <h6 class="m-0 fw-bold text-slate-800">{{ ficha.titulo }}</h6>
+        <small class="text-slate-400 fw-bold" style="font-size: 0.6rem; letter-spacing: 1px;">
+          {{ ficha.subtitulo }}
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex-grow-1 d-flex flex-column justify-content-center text-center px-3 py-3">
+    {% if registro %}
+      <div class="fw-bold text-slate-800" style="font-size: 1.9rem; line-height: 1;">
+        {{ registro.importe|floatformat:2 }}
+      </div>
+      <small class="text-slate-400 mt-1" style="font-size: 0.68rem;">{{ ficha.ayuda }}</small>
+    {% else %}
+      <i class="fas fa-triangle-exclamation mb-1" style="font-size: 1.3rem; color: #ffab00;"></i>
+      <div class="fw-bold text-slate-500">Nomenclador vacío</div>
+      <small class="text-slate-400" style="font-size: 0.68rem;">
+        Mientras no se defina, el contrato de quien tenga este grado mostrará
+        «Nomenc. Vacío» y guardará 0.
+      </small>
+    {% endif %}
+
+    <button class="btn-add-modern mt-3 mx-auto"
+            hx-get="{% url 'importe_nuevo' slug %}"
+            hx-target="#modal_importes" hx-swap="innerHTML"
+            title="{% if registro %}Cambiar el importe{% else %}Definir el importe{% endif %}">
+      <i class="fas fa-pencil-alt"></i> {% if registro %}Cambiar{% else %}Definir{% endif %}
+    </button>
+  </div>
+</div>

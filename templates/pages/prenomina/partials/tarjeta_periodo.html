@@ -69,27 +69,30 @@
   {# --- Barra de selección de período --- #}
   <div class="card-body border-bottom py-3">
     <div class="d-flex flex-wrap align-items-end gap-3">
+      {% comment %}
+        Los dos <select> de Año y Mes son ahora el selector de período común
+        (`base/partials/selector_periodo.html`), el mismo control de Informes RRHH
+        y de Informe Inteligente. Motivo: la lista de meses crece doce opciones al
+        año, y con la rejilla el control ocupa lo mismo con un año que con veinte.
+
+        Modo `todos`, no `solo-con-datos`: aquí mirar un mes SIN período es
+        legítimo —la tarjeta responde que no hay período y ofrece crearlo—, así que
+        los meses vacíos siguen siendo pulsables; los que ya existen se resaltan.
+
+        Los `id` se conservan (`filtro_anno`, `filtro_mes`) porque los
+        `hx-include` de esta pantalla y de `calendario.html` apuntan a ellos, y los
+        campos ocultos del componente valen igual para htmx.
+      {% endcomment %}
       <div>
-        <label class="form-label small fw-bold text-muted mb-1" for="filtro_anno">Año</label>
-        <select id="filtro_anno" name="anno" class="form-select form-select-sm" style="width: 120px;"
-                hx-get="{% url 'prenomina:tarjeta_periodo' %}"
-                hx-target="#zona_periodo" hx-swap="innerHTML"
-                hx-include="#filtro_mes">
-          {% for anno in annos_disponibles %}
-            <option value="{{ anno }}" {% if anno == anno_actual %}selected{% endif %}>{{ anno }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="form-label small fw-bold text-muted mb-1" for="filtro_mes">Mes</label>
-        <select id="filtro_mes" name="mes" class="form-select form-select-sm" style="width: 170px;"
-                hx-get="{% url 'prenomina:tarjeta_periodo' %}"
-                hx-target="#zona_periodo" hx-swap="innerHTML"
-                hx-include="#filtro_anno">
-          {% for numero, nombre in meses %}
-            <option value="{{ numero }}" {% if numero == mes_actual %}selected{% endif %}>{{ nombre }}</option>
-          {% endfor %}
-        </select>
+        <label class="form-label small fw-bold text-muted mb-1">Período</label>
+        {% comment %} El `hx-*` va en este contenedor y no en el propio componente
+           para poder escribir la ruta con `{% url %}`. Funciona igual porque el
+           evento `orbith:periodo` burbujea hasta aquí. {% endcomment %}
+        <div hx-get="{% url 'prenomina:tarjeta_periodo' %}"
+             hx-target="#zona_periodo" hx-swap="innerHTML"
+             hx-trigger="orbith:periodo">
+          {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_calendario' alineacion='start' id_anno='filtro_anno' id_mes='filtro_mes' modo='todos' annos=annos_disponibles con_datos=periodos_existentes anno=anno_actual mes=mes_actual etiqueta_vacia='Elija un período' texto_sin_dato='todavía sin Calendario de Pago' ayuda='Los meses resaltados ya tienen Calendario de Pago.' icono='fas fa-calendar-days' %}
+        </div>
       </div>
 
       {% if periodo and not periodo.cerrado %}

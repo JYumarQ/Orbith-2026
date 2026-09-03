@@ -1,4 +1,5 @@
 {% load static %}
+{% load estaticos %}
 {% comment %} Pestaña «Notificaciones»: solo eventos informativos, sin panel de
    filtros — el volumen esperado es bajo y no lo pidió el usuario. {% endcomment %}
 {% include 'pages/notificaciones/partials/toolbar_notificacion.html' %}
@@ -7,7 +8,7 @@
   {% include 'pages/notificaciones/partials/_tabla.html' %}
 </div>
 
-<script src="{% static 'js/notificaciones.js' %}"></script>
+<script src="{% estatico 'js/notificaciones.js' %}"></script>
 <script>
   OrbithNotificaciones.activarBarraDeAcciones('#resultados-notificaciones', '#toolbar-notificacion');
 </script>

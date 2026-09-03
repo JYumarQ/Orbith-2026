@@ -2,7 +2,6 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from .models import NCargo, NProvincia, NMunicipio, NCausaAltaBaja, NCondicionLaboralAnormal
 from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm, NGrupoEscalaForm, NTipoUnidadOrganizativaForm
 from django.urls import reverse_lazy
@@ -141,15 +140,25 @@ def cargar_municipios(request):
             'is_filter': True,
             'elem_id': 'filter_municipio_select' 
         })
+    elif request.GET.get('solo_opciones'):
+        # MODO FORMULARIO (Aspirante): solo las <option>.
+        # El formulario hace `hx-swap="innerHTML"` sobre el propio <select> para
+        # no destruir el Select2 que lleva montado encima; devolver el <select>
+        # completo provocaba el parpadeo de dos controles apilados.
+        return render(request, 'nomencladores/partials/municipios_solo_opciones.html', {
+            'municipios': qs,
+        })
+
     else:
-        # MODO FORMULARIO (Sin cambios)
+        # MODO FORMULARIO clásico: <select> completo.
+        # Lo sigue consumiendo `exportar_contrato.html`, que lee las <option> del
+        # HTML devuelto con jQuery.
         return render(request, 'nomencladores/partials/municipios_options.html', {
             'municipios': qs, 
             'is_filter': False,
             'elem_id': 'id_municipio' 
         })
     
-
 
 # Agregar estas funciones en views.py
 
@@ -168,7 +177,6 @@ def eliminar_salarios_grupo(request, grupo_id):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
     return JsonResponse({'error': 'Método no permitido'}, status=405)
-
 
 
 @login_required
@@ -240,37 +248,6 @@ def editar_salarios_grupo(request, grupo_id):
     })
 
 
-# NCARGO
-class NCargoListView(ListView):
-    model = NCargo
-    template_name = "pages/catalogos/ncargo/list_ncargo.html"
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['form'] = NCargoForm()
-        context['cargos_sin_familia'] = NCargo.objects.filter(familia__isnull=True, activo=True)
-        context['familias'] = NFamiliaCargo.objects.prefetch_related('cargos').all().order_by('-id')
-        return context
-    
-class NCargoCreateView(CreateView):
-    model = NCargo
-    form_class = NCargoForm
-    template_name = "pages/catalogos/ncargo/add_ncargo.html"
-    success_url = reverse_lazy('list_ncargo')
-
-class NCargoUpdateView(UpdateView):
-    model = NCargo
-    form_class = NCargoForm
-    template_name = 'pages/catalogos/ncargo/updt_ncargo.html'
-    success_url = reverse_lazy('list_ncargo')
-
-class NCargoDeleteView(DeleteView):
-    def get(self, request, *args, **kwargs):
-        cargo = get_object_or_404(NCargo, id=kwargs['pk'])
-        cargo.delete()
-        return redirect('list_ncargo')
-    
-
 class NMunicipioInline(admin.TabularInline):
     model = NMunicipio
     extra = 1
@@ -288,7 +265,6 @@ class NMunicipioInline(admin.TabularInline):
  #   list_display = ('id', 'nombre', 'provincia')
   #  list_filter = ('provincia',)
    # search_fields = ('nombre',)
-
 
 
 #SALARIOS
@@ -371,7 +347,6 @@ def cargar_esp(request):
     is_filter = request.GET.get('for_filter') == '1'
 
     
-
     if nivel == 'NS':
         # Nivel Superior
         list_esp = NEspecialidad.objects.filter(educ_superior=True)
@@ -382,6 +357,13 @@ def cargar_esp(request):
         # Cualquier otro nivel devuelve vacío
         list_esp = NEspecialidad.objects.none()
     
+    if request.GET.get('solo_opciones'):
+        # MODO FORMULARIO (Aspirante): solo las <option>, para que HTMX pueda
+        # hacer `hx-swap="innerHTML"` y no destruya el Select2 del <select>.
+        return render(request, 'pages/catalogos/nespecialidad/esp_opt_solo_opciones.html', {
+            'list_esp': list_esp,
+        })
+
     return render(request, 'pages/catalogos/nespecialidad/esp_opt.html', {
         'list_esp': list_esp,
         'is_filter': is_filter
@@ -1055,25 +1037,48 @@ def api_cargo_move(request):
         return JsonResponse({'success': True})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
-    
+
+
+@csrf_exempt
+@require_POST
 @login_required
-def api_get_contexto_familias(request):
-    """Devuelve el fragmento HTML de familias y cargos pendientes según el Tipo seleccionado"""
-    tipo_id = request.GET.get('tipo_id')
-    if not tipo_id:
-        return HttpResponse('<div class="text-center p-5">Seleccione un Tipo de Familia</div>')
-    
-    tipo = get_object_or_404(NTipoFamilia, pk=tipo_id)
-    familias = NFamiliaCargo.objects.filter(tipo_familia=tipo).prefetch_related('cargos').order_by('-id')
-    
-    # Cargos que NO están en ninguna familia DE ESTE TIPO
-    cargos_pendientes = NCargo.objects.exclude(familias__tipo_famil=tipo).order_by('descripcion')
-    
-    return render(request, 'pages/config/partials/familias_content.html', {
-        'familias': familias,
-        'cargos_sin_familia': cargos_pendientes,
-    })
-    
+def api_cargo_move_bulk(request):
+    """Mueve varios cargos a la vez a una misma familia (o los desasigna), respetando el Tipo de Familia"""
+    try:
+        data = json.loads(request.body)
+        cargo_ids = data.get('cargo_ids') or []
+        familia_id = data.get('familia_id')  # Puede ser None (para desasignar)
+        tipo_id = data.get('tipo_familia_id')
+
+        if not cargo_ids:
+            return JsonResponse({'error': 'No se seleccionó ningún cargo'}, status=400)
+
+        tipo = get_object_or_404(NTipoFamilia, pk=tipo_id)
+        nueva_familia = get_object_or_404(NFamiliaCargo, pk=familia_id) if familia_id else None
+
+        with transaction.atomic():
+            for cargo in NCargo.objects.filter(pk__in=cargo_ids):
+                familias_del_tipo = cargo.familias.filter(tipo_familia=tipo)
+                cargo.familias.remove(*familias_del_tipo)
+                if nueva_familia:
+                    cargo.familias.add(nueva_familia)
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+# `api_get_contexto_familias` se eliminó: era código muerto que además no podía
+# funcionar. Fallaba dos veces —consultaba `familias__tipo_famil`, un campo que no
+# existe (el real es `tipo_familia`), y renderizaba
+# `pages/config/partials/familias_content.html`, una plantilla que nunca se creó—,
+# así que cualquier llamada habría devuelto un error 500.
+#
+# No rompía nada porque ninguna pantalla la llamaba: al cambiar el Tipo de Familia,
+# `recargarContextoFamilias()` de `familias.html` recarga la página entera con
+# `?tab=familias&tipo_id=...`, y es la vista de Configuración quien arma el
+# contexto. Se quita también su ruta en `urls.py`.
+
 
 # ---------- CRUD NNivelPreparacion ----------
 @csrf_exempt
@@ -1111,7 +1116,6 @@ def nivel_preparacion_delete(request, pk):
     except RestrictedError:
         return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)
     
-
 
 # ---------- CRUD Tipo de Contrato ----------
 @csrf_exempt

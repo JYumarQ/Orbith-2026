@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.db.models import Count, Q
+from django.forms.models import ModelChoiceIterator
 from django.utils import timezone
 import math
 
@@ -7,6 +9,211 @@ from .models import CustomUser, IntentoAcceso, PreferenciasUsuario
 from django.contrib.auth.forms import AuthenticationForm
 from contratos.models import CAlta
 from core.validators import validar_imagen
+from strorganizativa.models import UnidadOrganizativa
+
+
+# =========================================================================
+# ASIGNACION DE UNIDADES ORGANIZATIVAS A UN USUARIO
+#
+# Una subunidad NO se asigna por separado: se asigna su Unidad Principal, y las
+# subunidades entran con ella. Así lo pidió el usuario, y además evita el caso
+# absurdo que existía antes —un moderador con una subunidad suelta cuyo padre
+# llevaba otra persona—.
+#
+# La restricción vive SOLO en esta pantalla. El Gestor de Plantilla y el resto
+# de la aplicación siguen mostrando las subunidades con toda normalidad; lo que
+# cambia es cómo se REPARTEN, no cómo se ven.
+#
+# Por qué se guardan también las hijas en la tabla, en vez de deducirlas al leer:
+# `CustomUser.unidades` lo consultan quince sitios de diez módulos (cierres,
+# contratos, dashboard, pre-nómina, solicitudes, notificaciones...). Guardando
+# las hijas, todos siguen funcionando sin tocarlos. Y hay un motivo de negocio
+# que lo decide: `cierres.permisos.puede_declarar` niega declarar una Unidad
+# Principal —no tiene departamentos propios, su estado se deriva de sus hijas— y
+# solo acepta unidades que el moderador tenga asignadas. Si las hijas no
+# estuvieran en la tabla, el moderador no podría declarar NI el padre (regla
+# estructural) NI las hijas (no asignadas): el cierre quedaría bloqueado.
+#
+# El precio de guardarlas es que hay que mantenerlas al día; de eso se encarga
+# `strorganizativa/signals.py` cuando nace o se muda una subunidad.
+# =========================================================================
+
+ETIQUETA_PRINCIPALES = 'UNIDADES PRINCIPALES'
+ETIQUETA_INDEPENDIENTES = 'UNIDADES INDEPENDIENTES'
+
+
+def unidades_asignables():
+    """Unidades que se pueden ELEGIR: las que no cuelgan de otra.
+
+    Son las principales y las independientes. Las subunidades se excluyen a
+    propósito: no se eligen, se heredan del padre.
+
+    `annotate` precalcula cuántas subunidades arrastra cada principal, para que
+    la etiqueta pueda decirlo sin lanzar una consulta por fila.
+    """
+    return (UnidadOrganizativa.objects
+            .filter(padre__isnull=True)
+            .select_related('tipo')
+            .annotate(num_subunidades=Count('direcciones_hijas'))
+            .order_by('descripcion'))
+
+
+class _IteradorUnidadesAgrupadas(ModelChoiceIterator):
+    """Separa el desplegable en dos grupos, para que se vea qué es cada cosa.
+
+    Sin esto, principales e independientes salían mezcladas y con el mismo
+    aspecto, y nada indicaba que elegir una principal arrastra a sus hijas.
+    """
+
+    def __iter__(self):
+        principales, independientes = [], []
+        for objeto in self.queryset:
+            opcion = self.choice(objeto)
+            if objeto.tipo_id and objeto.tipo.es_principal:
+                principales.append(opcion)
+            else:
+                independientes.append(opcion)
+        if principales:
+            yield (ETIQUETA_PRINCIPALES, principales)
+        if independientes:
+            yield (ETIQUETA_INDEPENDIENTES, independientes)
+
+
+def moderadores_por_unidad(excluir_pk=None):
+    """Qué moderador lleva cada unidad: `{pk_unidad: username}`.
+
+    `excluir_pk` deja fuera al usuario que se está editando: sus propias
+    unidades no son un choque consigo mismo.
+    """
+    consulta = CustomUser.objects.filter(es_moderador=True, unidades__isnull=False)
+    if excluir_pk:
+        consulta = consulta.exclude(pk=excluir_pk)
+    return dict(consulta.values_list('unidades__pk', 'username'))
+
+
+class SelectUnidadesConDueno(forms.SelectMultiple):
+    """Desplegable que APAGA las unidades que ya tiene otro moderador.
+
+    Una unidad organizativa solo puede tener un moderador. Esa regla ya la
+    imponía `validar_moderador_unico()`, pero solo al GUARDAR: el usuario elegía
+    la unidad, rellenaba el resto y descubría el choque al enviar.
+
+    Aquí se ve antes. Y se APAGAN en vez de ocultarlas a propósito: una lista a
+    la que le faltan unidades sin decir por qué obliga al Administrador a ir
+    usuario por usuario para averiguar quién la lleva. Apagada, la respuesta
+    está escrita en la propia opción.
+
+    La validación del servidor se mantiene: esto es la comodidad, no la barrera.
+    """
+
+    #: `{pk_unidad: username}` de las unidades que lleva OTRO moderador.
+    ocupadas = None
+    #: Unidades que el usuario editado YA tiene. Nunca se apagan, aunque
+    #: figuren como ocupadas: apagar una opción marcada haría que el navegador
+    #: no la enviara y el guardado se la llevaría por delante en silencio.
+    ya_asignadas = None
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        opcion = super().create_option(
+            name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        if not self.ocupadas:
+            return opcion
+
+        try:
+            pk = int(getattr(value, 'value', value))
+        except (TypeError, ValueError):
+            return opcion   # la opción vacía
+
+        dueno = self.ocupadas.get(pk)
+        if dueno and pk not in (self.ya_asignadas or ()):
+            opcion['attrs']['disabled'] = True
+            opcion['label'] = f'{label}  ·  la lleva {dueno}'
+        return opcion
+
+
+class CampoUnidadesAsignables(forms.ModelMultipleChoiceField):
+    """El selector de unidades de la pantalla de Usuarios.
+
+    Se declara como campo explícito del formulario (y no se deja generar a
+    Django) para que el Admin de Django herede exactamente las mismas reglas:
+    los campos declarados tienen prioridad sobre los que genera el ModelAdmin.
+    """
+
+    iterator = _IteradorUnidadesAgrupadas
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('queryset', unidades_asignables())
+        kwargs.setdefault('required', False)
+        kwargs.setdefault('label', 'Unidades')
+        kwargs.setdefault('widget', SelectUnidadesConDueno(attrs={
+            'class': 'form-select select2',
+            'data-placeholder': 'Buscar unidades...'}))
+        super().__init__(*args, **kwargs)
+
+    def marcar_ocupadas(self, usuario):
+        """Prepara el widget para apagar lo que ya lleva otro moderador.
+
+        Lo llaman los dos formularios de usuario desde su `__init__`; el campo
+        por sí solo no puede saber a quién se está editando.
+        """
+        if not isinstance(self.widget, SelectUnidadesConDueno):
+            return   # el Admin de Django puede haberlo sustituido
+        pk = getattr(usuario, 'pk', None)
+        self.widget.ocupadas = moderadores_por_unidad(excluir_pk=pk)
+        self.widget.ya_asignadas = (
+            set(usuario.unidades.values_list('pk', flat=True)) if pk else set())
+
+    def label_from_instance(self, objeto):
+        cuantas = getattr(objeto, 'num_subunidades', 0) or 0
+        if cuantas:
+            nombre = 'subunidad' if cuantas == 1 else 'subunidades'
+            return '%s  (incluye %d %s)' % (objeto.descripcion, cuantas, nombre)
+        return objeto.descripcion
+
+
+def expandir_a_subunidades(cleaned):
+    """Añade al conjunto elegido las subunidades de cada padre seleccionado.
+
+    Se ejecuta ANTES de `validar_moderador_unico`, y ese orden no es un detalle:
+    esa validación comprueba que ninguna unidad tenga ya otro moderador, y si
+    expandiéramos después, un choque en una HIJA pasaría desapercibido y se
+    guardaría una unidad con dos moderadores.
+
+    Devuelve un queryset (no una lista) porque tanto `validar_moderador_unico`
+    como el guardado del ManyToMany esperan poder seguir consultándolo.
+    """
+    seleccionadas = cleaned.get('unidades')
+    if not seleccionadas:
+        return cleaned
+    elegidas = [u.pk for u in seleccionadas]
+    cleaned['unidades'] = UnidadOrganizativa.objects.filter(
+        Q(pk__in=elegidas) | Q(padre_id__in=elegidas))
+    return cleaned
+
+
+def validar_invariante_subunidades(formulario, cleaned):
+    """Regla: una subunidad asignada SIEMPRE va acompañada de su padre.
+
+    Segunda línea de defensa, y conviene decirlo con claridad: la primera es el
+    queryset de `CampoUnidadesAsignables`, que ya rechaza cualquier subunidad
+    enviada a mano en el POST con el mensaje estándar de Django. Esta
+    comprobación existe para que la regla quede escrita y verificada, y para que
+    unos datos incoherentes que llegaran por otra vía (una importación, el shell)
+    se detecten al primer guardado en vez de propagarse en silencio.
+    """
+    unidades = cleaned.get('unidades')
+    if not unidades:
+        return cleaned
+    presentes = {u.pk for u in unidades}
+    huerfanas = sorted(u.descripcion for u in unidades
+                       if u.padre_id and u.padre_id not in presentes)
+    if huerfanas:
+        formulario.add_error(
+            'unidades',
+            'Una subunidad no se asigna por separado: debe asignarse su Unidad '
+            'Principal, y las subunidades entran con ella. Sin su unidad '
+            'principal: ' + '; '.join(huerfanas) + '.')
+    return cleaned
 
 
 def validar_moderador_unico(formulario, cleaned):
@@ -49,6 +256,9 @@ def validar_moderador_unico(formulario, cleaned):
 
 class CustomUserCreationForm(UserCreationForm):
 
+    # Declarado, no generado: ver `CampoUnidadesAsignables`.
+    unidades = CampoUnidadesAsignables()
+
     contrato = forms.ModelChoiceField(
         queryset=CAlta.objects.all().order_by('aspirante__nombre', 'aspirante__papellido'),
         widget=forms.Select(attrs={'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'}),
@@ -87,15 +297,28 @@ class CustomUserCreationForm(UserCreationForm):
             if 'password' in field_name:
                 field.widget.attrs['type'] = 'password'
 
+        # Apaga las unidades que ya lleva otro moderador (ver
+        # `SelectUnidadesConDueno`). En el alta no hay instancia guardada, así
+        # que se apagan todas las ocupadas: el usuario aún no lleva ninguna.
+        self.fields['unidades'].marcar_ocupadas(self.instance)
+
         self.fields['contrato'].label_from_instance = lambda obj: (
             f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
         )
 
     def clean(self):
         cleaned = super().clean()
+        # El orden importa: primero se añaden las hijas, y solo después se
+        # comprueba que ninguna unidad tenga ya otro moderador. Al revés, un
+        # choque en una subunidad no se detectaría.
+        cleaned = expandir_a_subunidades(cleaned)
+        cleaned = validar_invariante_subunidades(self, cleaned)
         return validar_moderador_unico(self, cleaned)
 
 class CustomUserChangeForm(UserChangeForm):
+
+    # Declarado, no generado: ver `CampoUnidadesAsignables`.
+    unidades = CampoUnidadesAsignables()
 
     contrato = forms.ModelChoiceField(
         queryset=CAlta.objects.all().order_by('aspirante__nombre', 'aspirante__papellido'),
@@ -131,6 +354,8 @@ class CustomUserChangeForm(UserChangeForm):
         self.fields['is_active'].widget.attrs.update({'class': 'form-check-input'})
         self.fields['contrato'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar contrato...'})
         self.fields['unidades'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'})
+        # Apaga las unidades que ya lleva otro moderador (ver `SelectUnidadesConDueno`).
+        self.fields['unidades'].marcar_ocupadas(self.instance)
         self.fields['contrato'].label_from_instance = lambda obj: (
             f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
         )
@@ -138,6 +363,10 @@ class CustomUserChangeForm(UserChangeForm):
 
     def clean(self):
         cleaned = super().clean()
+        # Mismo orden que en el formulario de alta: expandir, comprobar el
+        # invariante y solo entonces mirar si alguna unidad ya tiene moderador.
+        cleaned = expandir_a_subunidades(cleaned)
+        cleaned = validar_invariante_subunidades(self, cleaned)
         return validar_moderador_unico(self, cleaned)
 
 from django import forms

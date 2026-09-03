@@ -22,6 +22,63 @@
     .table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
 </style>
 
+<style>
+    /* PILDORA DESGLOSADO / CONSOLIDADO
+       Calcada del control «Sector» de Parametros Generales para que el proyecto
+       tenga un solo lenguaje visual: el <select> real queda oculto —es el que
+       viaja en el GET— y lo que se ve son dos etiquetas con un fondo blanco que
+       se desliza de una a otra. */
+    .agrupacion-toggle {
+        position: relative;
+        display: flex;
+        background-color: #f1f5f9;
+        border-radius: 1rem;
+        height: 38px;
+        min-width: 230px;
+        padding: 4px;
+        margin: 0;
+        cursor: pointer;
+        user-select: none;
+    }
+    .agrupacion-toggle input[type="radio"] { display: none; }
+    .agrupacion-option {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #94a3b8;
+        z-index: 2;
+        transition: color .3s ease;
+        cursor: pointer;
+        margin: 0;
+    }
+    .agrupacion-slider {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: calc(50% - 4px);
+        height: calc(100% - 8px);
+        background-color: #fff;
+        border-radius: .75rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+        transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+        z-index: 1;
+    }
+    /* El estado lo manda el propio radio marcado, no una clase de JavaScript:
+       asi la pildora refleja siempre lo que se va a enviar. */
+    .agrupacion-toggle input[value="consolidado"]:checked ~ .agrupacion-slider {
+        transform: translateX(100%);
+    }
+    .agrupacion-toggle input[value="consolidado"]:checked ~ .opt-consolidado,
+    .agrupacion-toggle input[value="desglosado"]:checked ~ .opt-desglosado {
+        color: #6366f1;
+    }
+</style>
+
 <div class="container-xxl flex-grow-1 container-p-y" style="background-color: #F4F7FB;">
     
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Resumen Puestos Clave" %}
@@ -33,15 +90,7 @@
             </div>
             
             <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
-                <div class="input-group shadow-sm" style="width: auto; border: 1px solid #696cff; border-radius: 6px; overflow: hidden;">
-                    <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
-                    <select name="ueb" class="form-select border-0 shadow-none bg-white text-primary fw-bold" onchange="this.form.submit()">
-                        <option value="">Consolidado Provincial</option>
-                        {% for u in unidades %}
-                            <option value="{{ u.pk }}" {% if ueb_actual == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.descripcion }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                {% include 'pages/informes/partials/filtro_unidades.html' %}
                 <div class="input-group shadow-sm me-auto" style="width: auto; border: 1px solid #fd7e14; border-radius: 6px; overflow: hidden;">
                     <span class="input-group-text bg-white border-0 text-warning"><i class="bx bx-filter-alt"></i></span>
                     <select name="tipo_familia" class="form-select border-0 shadow-none bg-white text-warning fw-bold" onchange="this.form.submit()">
@@ -50,6 +99,40 @@
                             <option value="{{ t.pk }}" {% if tipo_actual|add:0 == t.pk %}selected{% endif %}>Tipo: {{ t.nombre }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                {% comment %} DESGLOSADO / CONSOLIDADO
+                   Mismo control de pildora que el «Sector» de Parametros Generales: un
+                   <select> oculto detras de dos etiquetas y un fondo que se desliza. Se
+                   usa un <select> y no un checkbox porque los dos modos tienen nombre
+                   propio y se envian tal cual en la URL, que es lo que heredan el Word y
+                   el PDF al exportar. {% endcomment %}
+                <div class="d-flex align-items-center gap-1">
+                    <div class="agrupacion-toggle" title="Cómo se organiza el informe">
+                        {% comment %} Dos radios y no un <select>: los modos son
+                           exactamente dos, y con radios un solo clic cambia de modo, como
+                           en el «Sector» de Parámetros Generales. Con un <select> el clic
+                           abría una lista y hacían falta dos. {% endcomment %}
+                        <input type="radio" name="agrupar" id="agrupar_desglosado"
+                               value="desglosado" onchange="this.form.submit()"
+                               {% if agrupacion == 'desglosado' %}checked{% endif %}>
+                        <input type="radio" name="agrupar" id="agrupar_consolidado"
+                               value="consolidado" onchange="this.form.submit()"
+                               {% if agrupacion != 'desglosado' %}checked{% endif %}>
+                        <div class="agrupacion-slider"></div>
+                        <label for="agrupar_desglosado" class="agrupacion-option opt-desglosado">Desglosado</label>
+                        <label for="agrupar_consolidado" class="agrupacion-option opt-consolidado">Consolidado</label>
+                    </div>
+                    <button type="button" class="btn btn-link p-0 text-slate-400"
+                            style="line-height: 1;"
+                            data-bs-toggle="popover"
+                            data-bs-trigger="focus"
+                            data-bs-placement="bottom"
+                            data-bs-title="Desglosado o Consolidado"
+                            data-bs-content="Desglosado reparte los cargos por Unidad Organizativa: cada unidad encabeza con sus totales y debajo van sus puestos clave; una unidad principal encabeza toda su rama con sus subunidades dentro. Sirve para ver a quién le faltan plazas. Consolidado suma cada cargo de todas las unidades del informe y lo lista una sola vez. Sirve para saber cuántas plazas hay en total de un cargo. Las cifras generales de arriba son las mismas en los dos modos."
+                            aria-label="Ayuda: Desglosado o Consolidado">
+                        <i class="bx bx-help-circle fs-5"></i>
+                    </button>
                 </div>
             </form>
         </div>
@@ -121,8 +204,14 @@
                     </tr>
                 </thead>
                 <tbody class="border-top-0">
+                    {% comment %} El informe se reparte por familia y, dentro de cada
+                       una, por Unidad Organizativa: cada unidad encabeza con sus
+                       totales y debajo van sus cargos, como el modelo oficial. La
+                       unidad se pinta con un partial que se incluye a si mismo, de
+                       modo que una direccion principal arrastra a sus subunidades sin
+                       duplicar el maquetado. {% endcomment %}
                     {% for familia in datos_familias %}
-                        <tr style="background-color: rgba(248, 250, 252, 0.9);">
+                        <tr style="background-color: rgba(49, 46, 129, 0.06);">
                             <td class="px-4 py-2">
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="rounded-pill" style="width: 5px; height: 18px; background-color: #4f46e5;"></div>
@@ -137,29 +226,8 @@
                             <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.muj }}</td>
                             <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.adiest }}</td>
                         </tr>
-                        {% for p in familia.puestos %}
-                            <tr>
-                                <td class="px-4 py-1 ps-5">
-                                    <div class="d-flex flex-column">
-                                        <span class="fw-bold text-slate-700" style="font-size: 13px;">{{ p.nombre }}</span>
-                                        
-                                    </div>
-                                </td>
-                                <td class="px-2 py-1 text-center font-monospace text-slate-500" style="font-size: 18px;">{{ p.aprob }}</td>
-                                <td class="px-2 py-1 text-center"><span class="badge bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem;">{{ p.cub }}</span></td>
-                                <td class="px-2 py-1 text-center"><span class="badge {% if p.vac > 0 %}bg-orange-50 text-orange-500 border-orange-100{% else %}bg-transparent text-slate-400{% endif %} rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem; border: 1px solid transparent;">{{ p.vac }}</span></td>
-                                <td class="px-2 py-1 text-center" style="border-right: 1px solid rgba(238, 242, 255, 0.5);">
-                                    <div class="d-flex flex-column align-items-center justify-content-center gap-1">
-                                        <div class="progress rounded-pill shadow-none" style="width: 48px; height: 3px; background-color: #f1f5f9;">
-                                            <div class="progress-bar {% if p.porc >= 80 %}bg-success{% elif p.porc >= 50 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ p.porc }}%"></div>
-                                        </div>
-                                        <span class="fw-black text-slate-400" style="font-size: 10px;">{{ p.porc }}%</span>
-                                    </div>
-                                </td>
-                                <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.det }}</td>
-                                <td class="px-2 py-1 text-center"><span class="fw-bold {% if p.muj > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}" style="font-size: 18px;">{{ p.muj }}</span></td>
-                                <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.adiest }}</td>
-                            </tr>
+                        {% for unidad in familia.unidades %}
+                            {% include 'pages/informes/partials/puestos_clave_unidad.html' with unidad=unidad nivel=0 %}
                         {% endfor %}
                     {% empty %}
                         <tr><td colspan="8" class="text-center py-4 text-slate-400 fw-bold">No hay datos registrados para esta selección.</td></tr>
@@ -194,13 +262,27 @@
 </div>
 
 <script>
+    /* La exportacion reutiliza LA MISMA querystring de la pantalla.
+       Las dos vistas de exportar heredan de la vista del informe y vuelven a
+       leer `request.GET`, asi que pasandole la URL tal cual salen exactamente
+       los mismos datos que se estan viendo: las unidades marcadas, la familia
+       de cargos y tambien el cierre mensual, que antes se perdia.
+
+       Antes se rehacia a mano con `?ueb={{ ueb_actual }}`, y desde que el filtro
+       admite VARIAS unidades ese valor es una lista: la URL salia literalmente
+       `?ueb=[]` y el servidor respondia 500. De ahi que no funcionara. */
+    function urlDeExportacion(base) {
+        var consulta = window.location.search;
+        return base + consulta;
+    }
+
     function ejecutarWord() {
         window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_puestos_clave_word' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
+        window.location.href = urlDeExportacion("{% url 'exportar_puestos_clave_word' %}");
     }
     function ejecutarPDF() {
         window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_puestos_clave_pdf' %}?ueb={{ ueb_actual }}&tipo_familia={{ tipo_actual }}";
+        window.location.href = urlDeExportacion("{% url 'exportar_puestos_clave_pdf' %}");
     }
 </script>
 {% endblock %}

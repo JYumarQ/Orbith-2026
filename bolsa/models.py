@@ -95,7 +95,18 @@ class Aspirante(Contacto):
         ('TM','Medio Superior (TM)'),
         ('MS','Medio Superior (DG)'),
         ('NS','Nivel Superior'),
-    ], blank=True, null= True)
+    ],
+        # Obligatorio: `blank=False` hace que ni el formulario ni `full_clean()`
+        # acepten dejarlo sin elegir, y `null=False` cierra la puerta a que un
+        # script o una importación vuelvan a dejarlo vacío en la base de datos.
+        #
+        # Los trabajadores YA registrados sin nivel no se tocan ni bloquean nada:
+        # la migración pasa sus `NULL` a cadena vacía para poder poner la columna
+        # NOT NULL, y la regla ASP-007 de Subsanación (ahora Crítica) los reclama
+        # uno a uno. El `default=''` existe solo por eso; no es un valor válido
+        # para un alta nueva.
+        blank=False, null=False, default='',
+        verbose_name='Nivel Educacional')
 
     titulo_oro = models.BooleanField(default=False, verbose_name="Título de Oro")
 
@@ -118,8 +129,11 @@ class Aspirante(Contacto):
 
     def clean(self):
         super().clean()
-        # Usamos los objetos directos para evitar falsos positivos de Pylance con los campos _id
-        if self.municipio and self.provincia:
+        # Se comprueban los `_id`, NO los objetos: acceder a `self.municipio` cuando
+        # el campo está sin asignar lanza `RelatedObjectDoesNotExist`, y eso hacía
+        # reventar con un error 500 cualquier envío del formulario al que le faltara
+        # el municipio, en vez de mostrar el error de validación normal.
+        if self.municipio_id and self.provincia_id:
             if self.municipio.provincia != self.provincia:
                 raise ValidationError({'municipio': 'El municipio no pertenece a la provincia seleccionada.'})
 
@@ -162,7 +176,18 @@ class Aspirante(Contacto):
     def save(self, *args, **kwargs):
         self.fecha_nacimiento = self._calcular_fecha_nacimiento(self.doc_identidad)
         self.serie_ci = self._normalizar_serie_ci(self.serie_ci)
-        self.full_clean()  # asegura que se ejecute clean()
+        # `nivel_educ` es obligatorio, pero no se le puede exigir a los trabajadores
+        # que YA estaban registrados sin él: procesos internos como contratar
+        # (`Contrato.actualizar_aspirante`) o dar de baja hacen `aspirante.save()`
+        # solo para cambiar el estado, y una validación aquí abortaría la
+        # contratación de un trabajador heredado por un dato que ese proceso ni
+        # toca ni conoce. Quien sí lo exige es el formulario (`AspiranteForm`, con
+        # el campo en rojo/amarillo), que es donde una persona puede completarlo, y
+        # la regla ASP-007 de Subsanación, que los reclama uno a uno.
+        #
+        # El alta SÍ queda bloqueada: sin `pk` no hay nada heredado que respetar.
+        sin_validar = {'nivel_educ'} if (self.pk and not self.nivel_educ) else None
+        self.full_clean(exclude=sin_validar)  # asegura que se ejecute clean()
         super().save(*args, **kwargs)
 
         try:

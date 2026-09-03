@@ -1,0 +1,59 @@
+{% comment %}
+  Selector de Unidades Organizativas, compartido por las tres pantallas que
+  filtran por unidad: Dashboard, Informes RRHH e Informe Inteligente.
+
+  Es el control de fichas que estrenó el Dashboard —caja con las unidades
+  elegidas, contador, y un panel con buscador— extraído aquí para que las tres
+  usen el mismo. La lógica vive en `static/js/selector_unidades.js`; ahí está
+  explicado qué se le añadió al sacarlo (jerarquía, búsqueda por rama y el aviso
+  al cerrar).
+
+  El `<select multiple>` oculto sigue siendo la fuente de verdad y es lo que
+  viaja en el GET, así que el servidor recibe exactamente lo mismo que antes.
+
+  PARÁMETROS
+  ----------
+    id_caja       Identificador del contenedor. Es sobre él donde se escucha
+                  `orbith:unidades`, así que cada pantalla necesita el suyo.
+    campo         `name` del <select> oculto (`uo` en el Dashboard, `ueb` en
+                  Informes RRHH).
+    id_select     Id del <select> oculto, para las pantallas que lo nombran.
+    unidades      Lista de unidades, cada una con `nivel` (0 raíz, 1 subunidad)
+                  y ordenadas jerárquicamente: cada padre seguido de sus hijas.
+                  Lo prepara `informes.views._combo_unidades`.
+    seleccionadas Ids ya marcados, en TEXTO, para poder compararlos con `in`.
+    marcador      Texto de la caja vacía. Por defecto «Todas las unidades».
+    clase_extra   Clases sueltas para el contenedor. Hoy solo se usa
+                  `chip-multiselect--sm`, la variante compacta para las
+                  pantallas donde el control acompaña a `form-select-sm`.
+    titulo        Qué se está eligiendo, en singular y minúscula («unidad»,
+                  «departamento», «cargo»). Solo afecta al texto del buscador y
+                  a la etiqueta que lee un lector de pantalla; por defecto,
+                  «unidad». El control sirve para cualquier lista de nombres con
+                  padre opcional, no solo para unidades organizativas.
+{% endcomment %}
+<div class="chip-multiselect {{ clase_extra }}" id="{{ id_caja }}" data-marcador="{{ marcador|default:'Todas las unidades' }}">
+    <select class="chip-multiselect-native" name="{{ campo|default:'ueb' }}"
+            {% if id_select %}id="{{ id_select }}"{% endif %} multiple hidden>
+        {% for u in unidades %}
+            <option value="{{ u.pk }}"
+                    data-nivel="{{ u.nivel|default:0 }}"
+                    data-padre="{{ u.padre.descripcion|default:'' }}"
+                    {% if u.pk|stringformat:"s" in seleccionadas %}selected{% endif %}>{{ u.descripcion }}</option>
+        {% endfor %}
+    </select>
+
+    {% comment %} `tabindex` para poder llegar con el teclado; el JavaScript
+       atiende Enter, Espacio y Escape. {% endcomment %}
+    <div class="chip-multiselect-box" tabindex="0" role="button"
+         aria-haspopup="listbox" aria-label="Elegir {{ titulo|default:'unidad' }}">
+        <div class="chip-multiselect-chips" data-vacio="{{ marcador|default:'Todas las unidades' }}"></div>
+        <span class="chip-multiselect-badge">0</span>
+        <i class="bx bx-chevron-down chip-multiselect-arrow"></i>
+    </div>
+
+    <div class="chip-multiselect-panel">
+        <input type="text" class="chip-multiselect-search" placeholder="Buscar {{ titulo|default:'unidad' }}...">
+        <div class="chip-multiselect-options"></div>
+    </div>
+</div>

@@ -23,7 +23,8 @@ que rellenaría un Administrador creando el registro directamente — y si maña
         <form hx-post="{% url 'add_solicitud' %}"
               hx-target="#modal_solicitud"
               hx-swap="innerHTML"
-              id="solicitudForm">
+              id="solicitudForm"
+              data-validacion-visual>
             {% csrf_token %}
 
             <div class="modal-body">

@@ -1,4 +1,5 @@
 {% load static %}
+{% load estaticos %}
 {% comment %} Pestaña «Recordatorios»: dos subpestañas, NUNCA mezcladas (decisión ya
    tomada) — Sistema (automáticos, `?sub=sistema`) y Administración (manuales,
    `?sub=administracion`). Cada subpestaña es una navegación real (`?tab=recordatorios&
@@ -110,7 +111,7 @@
   </div>
 {% endif %}
 
-<script src="{% static 'js/notificaciones.js' %}"></script>
+<script src="{% estatico 'js/notificaciones.js' %}"></script>
 <script>
 (function () {
   function obtenerCookie(nombre) {

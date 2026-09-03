@@ -181,10 +181,14 @@ permite al Administrador ajustar la propuesta antes de aprobar.
         // Campos obligatorios de Contrato — mismo criterio que `reglas.obligatorios`
         // en `updt_contrato.html`. `fecha_alta` queda fuera a propósito: no se toca
         // desde esta pantalla.
+        // `fecha_alta_entidad` sí entra: desde que está en `campos_condicionales`
+        // (ver `solicitudes/operaciones.py`) el Administrador puede editarla aquí, y
+        // `CAltaForm` la exige, así que aprobar con ella vacía fallaría al guardar.
         var CAMPOS_OBLIGATORIOS = [
             'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'duracion', 'unidad',
             'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic',
-            'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar'
+            'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar',
+            'fecha_alta_entidad'
         ];
 
         function actualizarPorTipo() {

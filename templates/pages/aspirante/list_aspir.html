@@ -265,6 +265,11 @@
   <div class="modal fade" id="crear_aspir" role="dialog"></div>
   <div class="modal fade" id="crear_contrato" role="dialog"></div>
 
+{% endblock %}
+
+{# `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
+   bloque dos veces en la página (una en su hueco de la plantilla base y otra
+   arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
 {% block extra_scripts %}
   <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
   <script type="text/javascript">
@@ -562,4 +567,3 @@
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
 
 {% endblock extra_scripts %}
-{% endblock %}

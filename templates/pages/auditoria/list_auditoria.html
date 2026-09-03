@@ -133,6 +133,11 @@
 
 <div class="modal fade" id="modal_evento" tabindex="-1" aria-hidden="true"></div>
 
+{% endblock %}
+
+{# `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
+   bloque dos veces en la página (una en su hueco de la plantilla base y otra
+   arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
 {% block extra_scripts %}
 <script>
     var $ = jQuery.noConflict();
@@ -160,5 +165,4 @@
             });
     }
 </script>
-{% endblock %}
 {% endblock %}

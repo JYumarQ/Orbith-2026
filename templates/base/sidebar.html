@@ -50,8 +50,15 @@
         </a>
       </li>
 
-      {% comment %} Visible para cualquier usuario autenticado: las notificaciones son
-         personales (destinatario=usuario actual), no una función administrativa. {% endcomment %}
+      {% comment %} El PANEL de Notificaciones es de Administrador y Moderador. El
+         Observador no lo ve aquí ni entrando por la URL (`gestion_required` en
+         `notificaciones/views.py`), decisión explícita del usuario.
+
+         Lo que SÍ conserva es la campana del pie de esta misma barra (más abajo,
+         en `#acciones-usuario`): sus avisos personales le siguen llegando por
+         `notificaciones_json`. Lo que se le retira es la bandeja completa, con
+         sus pestañas de Advertencias y Recordatorios de toda la empresa. {% endcomment %}
+      {% if user.es_admin or user.es_moderador %}
       <li class="menu-item {% if request.resolver_match.view_name == 'lista_notificaciones' %} active {% endif %}">
         <a href="{% url 'lista_notificaciones' %}" class="menu-link">
           <i class="menu-icon tf-icons bx bx-bell"></i>
@@ -61,6 +68,7 @@
           {% endif %}
         </a>
       </li>
+      {% endif %}
 
       {% comment %} Subsanación: Administrador (ve y actúa sobre toda la empresa) y
          Moderador (solo sus propias Unidades Organizativas, acotado en el backend por
@@ -167,10 +175,21 @@
              cuando estás en uno de sus sub-ítems (Anexo 14, Cierres Mensuales).
              `cierres` no declara `app_name`, por eso se compara el prefijo de la ruta
              con `slice` en vez de `namespace`: '/cierres/' son 9 caracteres. {% endcomment %}
-          <li class="menu-item gestor-plantilla-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.view_name == 'informes_anexo:anexo14' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
+          <li class="menu-item gestor-plantilla-item orb-acordeon-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.view_name == 'informes_anexo:anexo14' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
             <a href="{% url 'gestor_plantilla' %}" class="menu-link" id="menuLinkGestorPlantilla" title="Clic: abrir · Doble clic: más opciones">
               <i class="menu-icon tf-icons bx bx-sitemap"></i>
               <div data-i18n="Basic">Gestor de Plantilla</div>
+            </a>
+            {% comment %} El mismo chevron que Pre-Nómina, y por el mismo motivo: hasta
+               ahora este submenú solo se abría con doble clic sobre el enlace, un gesto
+               que no se ve en ninguna parte. El `<li>` lleva también
+               `orb-acordeon-item`, que es la clase por la que el JavaScript genérico
+               engancha cualquier `.orb-acordeon-toggle`, así que no hace falta ni una
+               línea de script nueva. El doble clic se mantiene para quien ya lo usara.
+            {% endcomment %}
+            <a href="javascript:void(0);" class="orb-acordeon-toggle orb-acordeon-toggle-btn" id="menuToggleGestorPlantilla"
+               aria-expanded="false" title="Clic para desplegar">
+              <i class="bx bx-chevron-down orb-acordeon-chevron"></i>
             </a>
             <button type="button" class="gestor-plantilla-expandir-movil d-xl-none" id="btnExpandirGestorPlantilla" aria-controls="acordeonGestorPlantilla" aria-expanded="false">
               <span>Ver opciones</span><i class="bx bx-chevron-down"></i>
@@ -384,9 +403,15 @@
               <button class="btn btn-link btn-sm p-0" id="marcar-todas-leidas" type="button">
                 Marcar todas como leídas
               </button>
+              {% comment %} «Ver más» lleva al panel completo, que el Observador no
+                 alcanza (`gestion_required`). Sin esta condición sería un enlace que
+                 le devuelve 403: la campana sigue siendo suya, pero su única salida
+                 no. Él se queda con la lista corta del desplegable. {% endcomment %}
+              {% if user.es_admin or user.es_moderador %}
               <a class="btn btn-link btn-sm p-0" href="{% url 'lista_notificaciones' %}">
                 Ver más
               </a>
+              {% endif %}
             </li>
           </ul>
         </li>
@@ -562,6 +587,32 @@
   /* Barra colapsada: solo cabe el icono del enlace principal, el botón de despliegue
      propio no tiene sitio (igual que el chevron de Administración, ver más abajo). */
   html.menu-colapsado #menuItemPrenomina .orb-acordeon-toggle-btn { display: none; }
+
+  /* Gestor de Plantilla: mismo chevron y mismas medidas que Pre-Nómina. Su enlace
+     también navega, así que el disparador tiene que vivir fuera del `<a>`. */
+  #menuItemGestorPlantilla.menu-item { position: relative; }
+  #menuItemGestorPlantilla .menu-link { padding-right: 2.5rem; }
+  #menuItemGestorPlantilla .orb-acordeon-toggle-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 2.5rem;
+    height: 2.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a1acb8;
+    cursor: pointer;
+  }
+  #menuItemGestorPlantilla .orb-acordeon-toggle-btn:hover { color: #696cff; }
+  #menuItemGestorPlantilla .orb-acordeon-toggle-btn .orb-acordeon-chevron { margin-left: 0; }
+  html.menu-colapsado #menuItemGestorPlantilla .orb-acordeon-toggle-btn { display: none; }
+  /* El chevron gira al desplegarse, igual que el de los demás acordeones. La regla
+     genérica apunta a `> .orb-acordeon-toggle`, y aquí el botón es hermano del
+     enlace, así que se repite con el selector propio. */
+  #menuItemGestorPlantilla.abierto > .orb-acordeon-toggle-btn .orb-acordeon-chevron {
+    transform: rotate(180deg);
+  }
 
   /* ============ Padre de un sub-menú con un hijo activo ============
      Estado intermedio entre "nada" y `.active`, para los tres ítems que tienen

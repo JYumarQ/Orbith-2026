@@ -101,6 +101,11 @@ def filtrar_reportes(request):
         'annos_disponibles': list(
             reportes_visibles(request.user)
             .values_list('anno', flat=True).order_by('-anno').distinct()),
+        # Los meses que tienen algún reporte, para que la rejilla del selector de
+        # período los resalte y no haga buscar a ciegas.
+        'periodos_existentes': [
+            f'{a}-{m:02d}' for a, m in reportes_visibles(request.user)
+            .values_list('anno', 'mes').order_by('-anno', '-mes').distinct()],
         'hay_filtros': bool(q or estado or anno or mes),
     }
     contexto.update(estado_del_periodo(request.user, anno, mes))

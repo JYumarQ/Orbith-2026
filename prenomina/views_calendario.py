@@ -88,6 +88,30 @@ def _annos_disponibles(usuario):
     return sorted(annos, reverse=True)
 
 
+def _periodos_existentes(usuario):
+    """Claves «AAAA-MM» de los Calendarios de Pago que ya tiene el usuario.
+
+    Es lo que necesita la rejilla de meses del selector de período para resaltar
+    los meses que existen y apagar los que no proceden. Devuelve claves de texto
+    —y no objetos— porque es exactamente lo que compara el JavaScript.
+    """
+    return [f'{anno}-{mes:02d}' for anno, mes in
+            CalendarioPago.objects.filter(usuario=usuario)
+            .order_by('-anno', '-mes').values_list('anno', 'mes')]
+
+
+def _clave_del_ultimo(usuario):
+    """Clave «AAAA-MM» del último Calendario de Pago, o cadena vacía si no hay.
+
+    El modal de alta la usa como mínimo de la rejilla, para que la regla «solo se
+    admiten fechas posteriores al último período» —que impone
+    `servicios_calendario.crear_periodo()`— se vea en pantalla en vez de descubrirse
+    al recibir el error.
+    """
+    ultimo = sc.ultimo_periodo(usuario)
+    return f'{ultimo.anno}-{ultimo.mes:02d}' if ultimo else ''
+
+
 def _periodo_seleccionado(request):
     """El período que muestra la tarjeta 2, según los selects de Año y Mes.
 
@@ -130,6 +154,7 @@ def _contexto_periodo(request):
         'detalles': detalles,
         'annos_disponibles': _annos_disponibles(request.user),
         'meses': list(enumerate(MESES, start=1)),
+        'periodos_existentes': _periodos_existentes(request.user),
     }
 
 
@@ -324,6 +349,12 @@ def nuevo_periodo(request):
                 'error': str(error),
                 'annos_disponibles': _annos_disponibles(request.user),
                 'meses': list(enumerate(MESES, start=1)),
+                'periodos_existentes': _periodos_existentes(request.user),
+                'minimo_periodo': _clave_del_ultimo(request.user),
+                # Tras un error, la rejilla vuelve a marcar lo que el usuario
+                # había elegido: reabrirla en blanco le haría empezar de cero.
+                'anno_inicial': request.POST.get('anno', ''),
+                'mes_inicial': request.POST.get('mes', ''),
                 'ultimo': sc.ultimo_periodo(request.user),
                 'valores': request.POST,
             })
@@ -346,6 +377,10 @@ def nuevo_periodo(request):
     return render(request, PARCIAL_MODAL_PERIODO, {
         'annos_disponibles': _annos_disponibles(request.user),
         'meses': list(enumerate(MESES, start=1)),
+        'periodos_existentes': _periodos_existentes(request.user),
+        'minimo_periodo': _clave_del_ultimo(request.user),
+        'anno_inicial': sugerido.anno if sugerido else '',
+        'mes_inicial': sugerido.mes if sugerido else '',
         'ultimo': ultimo,
         'sugerido': sugerido,
     })

@@ -1,10 +1,14 @@
 {% extends 'base/base.html' %}
 {% load static %}
+{% load estaticos %}
 
 {% block title %}Informe Inteligente{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
+{% comment %} ApexCharts, para el gráfico de evolución mensual. Se carga por
+   pantalla (no en base.html), igual que ya hacen el Dashboard y Subsanación. {% endcomment %}
+<script src="{% estatico 'js/apexcharts.min.js' %}"></script>
 <style>
     :root {
         --ii-navy:      #0f172a;
@@ -113,6 +117,12 @@
         margin-bottom: 1.25rem;
         overflow: hidden;
     }
+    /* `overflow: hidden` recorta las esquinas del panel... y tambien recortaba
+       el desplegable del selector de Unidad Organizativa, que es absoluto y cae
+       fuera de la tarjeta: el panel se abria y no se veia nada. Se levanta solo
+       en la tarjeta que lo contiene, que no tiene cabecera de color y por tanto
+       no necesita el recorte. */
+    .ii-panel--desbordable { overflow: visible; }
     .ii-panel-head {
         padding: .8rem 1.1rem;
         cursor: pointer;
@@ -408,6 +418,25 @@
     /* ---------- Barra lateral ---------- */
     .ii-offcanvas-head { background: linear-gradient(135deg, #0f172a 0%, #312e81 100%); }
     .ii-fav-item:hover { background: var(--ii-indigo-bg); }
+
+    /* ---------- Ayuda contextual ---------- */
+    /* El icono es discreto hasta que se pasa por encima: acompaña, no compite
+       con el título del panel. */
+    .ii-ayuda { opacity: .55; transition: opacity .15s ease, color .15s ease; }
+    .ii-ayuda:hover, .ii-ayuda:focus { opacity: 1; color: var(--ii-indigo) !important; }
+
+    .ii-popover { max-width: 340px; }
+    .ii-popover .popover-header {
+        background: var(--ii-indigo-bg);
+        color: var(--ii-navy);
+        font-size: .82rem;
+        font-weight: 700;
+    }
+    .ii-popover .popover-body {
+        font-size: .8rem;
+        line-height: 1.5;
+        color: var(--ii-navy-700);
+    }
 </style>
 {% endblock %}
 
@@ -423,16 +452,90 @@
                 <p>Configure los datos del personal que necesita y obtenga resumen y detalle al instante.</p>
             </div>
         </div>
-        <button type="button" class="btn ii-btn-favoritos btn-sm mt-3 mt-md-0 d-flex align-items-center gap-2 flex-shrink-0"
-                data-bs-toggle="offcanvas" data-bs-target="#panelFavoritos">
-            <i class="bi bi-folder-symlink-fill"></i>
-            <span>Mis favoritos e historial</span>
-            <span class="badge rounded-pill bg-warning text-dark">{{ favoritos|length }}</span>
-        </button>
+        <div class="d-flex align-items-center gap-2 mt-3 mt-md-0 flex-shrink-0 flex-wrap">
+
+            {% comment %} Selector de fecha del informe. NO es un filtro más: cambia
+               la FUENTE de todo el informe, de los datos vivos a la fotografía que el
+               módulo de Cierres congeló ese mes. Por eso vive arriba y no en el panel
+               de filtros.
+
+               Es una rejilla de meses y no un desplegable porque la lista crece 12
+               opciones cada año: a los dos años un `<select>` plano ya sería
+               inmanejable. Así ocupa lo mismo con 1 año que con 20, y de un vistazo
+               se ve qué meses tienen cierre y cuáles no. {% endcomment %}
+            {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Fecha del informe" contenido="Decide si el informe muestra los datos de ahora mismo o cómo estaban en un mes ya cerrado. Al elegir un mes, todo el informe pasa a leerse de la fotografía que se congeló en ese cierre: verás la plantilla tal como era entonces, aunque después haya habido altas, bajas o cambios de cargo. Solo aparecen los meses que tienen un cierre declarado. Si el botón está apagado es porque todavía no hay ninguno, o porque de ese tipo de datos no se guarda fotografía mensual." %}
+
+            <div class="dropdown" id="cajaPeriodo">
+                <input type="hidden" id="periodoSeleccionado" value="">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
+                        type="button" id="btnPeriodo" data-bs-toggle="dropdown"
+                        data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bi bi-calendar-check-fill" style="color: var(--ii-indigo);"></i>
+                    <span id="etiquetaPeriodo">Datos actuales</span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3 shadow" style="min-width: 280px;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <button type="button" class="btn btn-sm btn-light px-2" id="periodoAnnoAnterior"
+                                title="Año anterior">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <strong id="periodoAnnoActual" style="font-size: .95rem;"></strong>
+                        <button type="button" class="btn btn-sm btn-light px-2" id="periodoAnnoSiguiente"
+                                title="Año siguiente">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+
+                    <div id="rejillaMeses"
+                         style="display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem;"></div>
+
+                    <div class="form-text mt-2 mb-0" style="font-size: 10.5px;">
+                        Los meses en gris no tienen cierre declarado.
+                    </div>
+
+                    <hr class="my-2">
+                    <button type="button" class="btn btn-sm btn-link w-100 text-decoration-none p-0"
+                            id="btnVolverTiempoReal">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Volver a datos actuales
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" class="btn ii-btn-favoritos btn-sm d-flex align-items-center gap-2"
+                    data-bs-toggle="offcanvas" data-bs-target="#panelFavoritos">
+                <i class="bi bi-folder-symlink-fill"></i>
+                <span>Mis favoritos e historial</span>
+                <span class="badge rounded-pill bg-warning text-dark">{{ favoritos|length }}</span>
+            </button>
+        </div>
     </div>
 
+    {% comment %} Aviso contextual del selector: explica por qué está apagado, o qué
+       significa estar mirando un mes cerrado. Lo rellena el JavaScript. {% endcomment %}
+    <div class="alert py-2 px-3 small d-none" id="avisoPeriodo" role="alert"></div>
+
+    {% if informe_compartido %}
+    {% comment %} Se llega aquí desde el botón «Ver informe» de una notificación
+       (ver informe_inteligente.views.ver_informe_compartido). El informe NO se
+       guarda en los favoritos de quien lo abre: se le carga en pantalla y decide. {% endcomment %}
+    <div class="alert alert-primary d-flex align-items-start gap-2 mb-3" role="alert">
+        <i class="bi bi-send-check fs-5"></i>
+        <div>
+            <strong>{{ compartido_por }}</strong> le compartió el informe
+            <strong>«{{ informe_compartido.nombre }}»</strong>.
+            {% if informe_compartido.descripcion %}
+                <div class="small mt-1">{{ informe_compartido.descripcion }}</div>
+            {% endif %}
+            <div class="small mt-1">
+                Se cargó en pantalla. Si le resulta útil, púlse «Guardar como favorito»
+                para tener su propia copia.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- ===== PLANTILLAS RÁPIDAS ===== -->
-    <div class="ii-panel">
+    <div class="ii-panel ii-panel--desbordable">
         <div class="p-3">
             <label class="form-label text-uppercase fw-bold mb-2" style="font-size: .74rem; letter-spacing: .05em; color: var(--ii-muted);">
                 <i class="bi bi-lightning-charge-fill text-warning me-1"></i>Plantillas rápidas preconfiguradas
@@ -447,10 +550,15 @@
                 {% endfor %}
             </div>
 
+            {% comment %} Tres controles en la misma fila: sobre QUÉ se informa, de QUÉ
+               UNIDAD y cómo se desglosa. La unidad estaba antes en la lista de filtros
+               de abajo; se sube aquí porque acotar por unidad es la primera decisión
+               que se toma en casi cualquier informe, no una condición más. {% endcomment %}
             <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
                         <i class="bi bi-database-fill me-1" style="color: var(--ii-indigo);"></i>¿Sobre qué desea informar?
+                        {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="¿Sobre qué desea informar?" contenido="Elige el conjunto de datos del informe. Cada opción trae sus propios campos y filtros: Contratos son los trabajadores con contrato vigente; Bajas, quienes ya salieron; Estructura y Plantilla, los cargos aprobados ocupe o no alguien; Aspirantes, la bolsa de empleo; y Movimientos de Nómina, los cambios de cargo, salario o unidad. Un informe es siempre sobre una sola de ellas: al cambiarla se vacían los campos y filtros elegidos." %}
                     </label>
                     <select class="form-select form-select-sm" id="selectModeloRaiz">
                         {% for key, label in modelos_disponibles.items %}
@@ -458,9 +566,17 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
+                        <i class="bi bi-building me-1" style="color: var(--ii-indigo);"></i>Unidad Organizativa
+                        {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Unidad Organizativa" contenido="Acota el informe a una o varias unidades. Al elegir una Unidad Principal se incluyen también sus subunidades, porque una principal no tiene cargos propios: todo cuelga de sus hijas. También puedes elegir una subunidad concreta para verla sola. Sin nada elegido se informa de todo lo que tu rol te permite ver." %}
+                    </label>
+                    {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidades_ii' campo='unidad_organizativa' id_select='selectUnidadesII' unidades=unidades_organizativas seleccionadas=unidades_seleccionadas marcador='Todas las unidades' clase_extra='chip-multiselect--sm' %}
+                </div>
+                <div class="col-md-4">
                     <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
                         <i class="bi bi-diagram-3-fill me-1" style="color: var(--ii-violeta);"></i>Desglosar el resumen por
+                        {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Desglosar el resumen por" contenido="Agrupa los resultados y muestra, en barras encima de la tabla, cuántos registros hay en cada grupo. Por ejemplo, desglosando por Sexo verás de un vistazo cuántas mujeres y cuántos hombres hay. Puedes elegir varios campos a la vez: cada uno pinta su propia tarjeta. Si no eliges ninguno se usa un desglose por defecto según el tipo de datos. Ojo: esto agrupa el resumen, no cambia las columnas de la tabla." %}
                     </label>
                     <select class="form-select form-select-sm" id="selectDesglosarPor" multiple></select>
                 </div>
@@ -485,6 +601,7 @@
             <span class="ii-panel-title">
                 <span class="ii-icono-chip ii-color-azul"><i class="bi bi-funnel-fill"></i></span>
                 2. Filtros de búsqueda y condiciones
+                {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Filtros de búsqueda" contenido="Acota qué registros entran en el informe. Cada filtro es un campo, un operador y un valor; los operadores cambian según el tipo de dato (las fechas admiten rangos, meses o semanas; los textos admiten «contiene»). IMPORTANTE: todos los filtros se combinan con Y, es decir, solo entran los registros que cumplen TODAS las condiciones. Para un «o» dentro de un mismo campo usa el operador «Es alguno de», que acepta varios valores. También puedes filtrar por un campo sin mostrarlo como columna." %}
             </span>
             <span class="d-flex align-items-center gap-2">
                 <span class="badge ii-badge-contador" id="contadorFiltros">Sin filtros</span>
@@ -513,6 +630,7 @@
             <span class="ii-panel-title">
                 <span class="ii-icono-chip ii-color-esmeralda"><i class="bi bi-sort-alpha-down"></i></span>
                 3. Ordenar el detalle (opcional)
+                {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Ordenar el detalle" contenido="Elige por qué columna se ordenan las filas de la tabla y en qué sentido. Solo aparecen aquí los campos que ya marcaste en el paso 1 y que admiten orden. Si no eliges nada, el informe sale en un orden estable pero sin criterio concreto. La tabla de resultados no se puede reordenar pulsando en sus cabeceras: el orden se decide aquí, antes de generar." %}
             </span>
             <span class="d-flex align-items-center gap-2">
                 <span class="badge ii-badge-contador" id="resumenOrden">Sin ordenar</span>
@@ -564,6 +682,64 @@
     <!-- ===== RESULTADOS (resumen + detalle) ===== -->
     <div id="resultadosContainer"></div>
 
+    {% comment %} Evolución mensual. Va aparte del resumen porque responde a otra
+       pregunta: el resumen describe UN momento (ahora o un cierre concreto) y esto
+       recorre todos los cierres declarados. Plegado por defecto y solo se consulta al
+       abrirlo, para no encarecer el informe de quien no lo necesita.
+
+       Solo aparece en las fuentes que tienen fotografía mensual; en las demás no hay
+       nada que recorrer. {% endcomment %}
+    <div class="ii-panel mt-3 d-none" id="panelEvolucion">
+        <div class="p-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+             role="button" data-bs-toggle="collapse" data-bs-target="#cuerpoEvolucion"
+             aria-expanded="false" aria-controls="cuerpoEvolucion">
+            <span class="fw-bold" style="font-size: .95rem;">
+                <i class="bi bi-graph-up-arrow me-2" style="color: var(--ii-indigo);"></i>
+                Evolución mensual
+                {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Evolución mensual" contenido="Muestra cómo ha cambiado un dato a lo largo de los doce meses de un año, usando las fotografías de los cierres mensuales. Elige qué medir y navega entre años con las flechas. Respeta los filtros que tengas puestos arriba: si estás mirando solo una categoría, la línea es la de esa categoría. Los meses sin cierre declarado aparecen como hueco y no como cero, porque cero significaría que no había nadie y lo cierto es que nadie declaró ese mes." %}
+            </span>
+            <i class="bi bi-chevron-down"></i>
+        </div>
+
+        <div class="collapse" id="cuerpoEvolucion">
+            <div class="px-3 pb-3">
+                <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+                    <label for="selectMedidaEvolucion" class="form-label small fw-semibold mb-0">
+                        Medir
+                    </label>
+                    {% comment %} El ancho lo fija este contenedor y no el <select>:
+                       Select2 se monta con width 100% y necesita un padre con ancho
+                       propio, o al estar el panel plegado calcula cero. {% endcomment %}
+                    <div style="width: 260px;">
+                        <select id="selectMedidaEvolucion" class="form-select form-select-sm"></select>
+                    </div>
+
+                    {% comment %} Navegación por año: el gráfico muestra siempre los doce
+                       meses de UN año, para poder comparar de un vistazo cómo fue ese
+                       ejercicio completo. {% endcomment %}
+                    <div class="d-flex align-items-center gap-1 ms-auto">
+                        <button type="button" class="btn btn-sm btn-light px-2" id="evolucionAnnoAnterior"
+                                title="Año anterior">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <strong id="evolucionAnnoActual" style="min-width: 3.2rem; text-align: center;"></strong>
+                        <button type="button" class="btn btn-sm btn-light px-2" id="evolucionAnnoSiguiente"
+                                title="Año siguiente">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-text mb-2" style="font-size: 11px;">
+                    Se aplican los filtros que tenga puestos arriba. Los meses sin cierre
+                    declarado aparecen como hueco, no como cero.
+                </div>
+
+                <div id="graficoEvolucion" style="min-height: 300px;"></div>
+                <div class="text-center text-muted small d-none" id="mensajeEvolucion"></div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- ===== BARRA LATERAL: FAVORITOS E HISTORIAL ===== -->
@@ -582,8 +758,13 @@
             </h6>
             <div class="list-group list-group-flush border rounded-3" id="listaFavoritos">
                 {% for fav in favoritos %}
+                    {% comment %} `data-nombre`/`data-descripcion` evitan una consulta extra
+                       al servidor solo para abrir el modal de edición: el lápiz los lee de
+                       aquí. Django los escapa al renderizar el atributo. {% endcomment %}
                     <div class="list-group-item p-2 ii-fav-item d-flex justify-content-between align-items-start gap-2"
-                         data-informe-id="{{ fav.informe.id }}">
+                         data-informe-id="{{ fav.informe.id }}"
+                         data-nombre="{{ fav.informe.nombre }}"
+                         data-descripcion="{{ fav.informe.descripcion|default:'' }}">
                         <div class="flex-grow-1 btn-cargar-favorito" style="cursor: pointer;">
                             <div class="d-flex justify-content-between align-items-center gap-2">
                                 <strong class="small text-dark">{{ fav.informe.nombre }}</strong>
@@ -595,10 +776,20 @@
                                 <p class="mb-0 text-muted" style="font-size: 11px;">{{ fav.informe.descripcion }}</p>
                             {% endif %}
                         </div>
-                        <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-eliminar-favorito"
-                                title="Eliminar este informe">
-                            <i class="bi bi-trash3"></i>
-                        </button>
+                        <div class="d-flex flex-shrink-0 gap-1">
+                            <button type="button" class="btn btn-sm btn-link text-primary p-0 btn-compartir-favorito"
+                                    title="Compartir este informe con otros usuarios">
+                                <i class="bi bi-send"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link text-secondary p-0 btn-editar-favorito"
+                                    title="Editar este informe">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-link text-danger p-0 btn-eliminar-favorito"
+                                    title="Eliminar este informe">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
                     </div>
                 {% empty %}
                     <div class="list-group-item p-3 text-center text-muted small">
@@ -640,8 +831,13 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
+                {% comment %} Un solo modal para los dos modos (guardar nuevo / editar
+                   existente): los campos son los mismos y duplicarlo obligaría a mantener
+                   dos copias del mismo formulario. El JS cambia título, botón y la caja de
+                   reemplazo según el modo. {% endcomment %}
                 <h5 class="modal-title fs-6 fw-bold">
-                    <i class="bi bi-star-fill text-warning me-2"></i>Guardar informe en favoritos
+                    <i class="bi bi-star-fill text-warning me-2"></i>
+                    <span id="tituloModalFavorito">Guardar informe en favoritos</span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
@@ -660,6 +856,22 @@
                     <textarea class="form-control" id="inputDescripcionFavorito" rows="2" maxlength="300"
                               placeholder="Notas sobre para qué sirve este informe..."></textarea>
                 </div>
+
+                {% comment %} Solo en modo edición. Va desmarcado a propósito: lo que hay en
+                   pantalla puede ser otro informe distinto del que se está renombrando, así
+                   que reemplazar la configuración tiene que ser una decisión explícita. {% endcomment %}
+                <div class="mt-3 d-none" id="cajaReemplazarConfig">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="switchReemplazarConfig">
+                        <label class="form-check-label small fw-semibold" for="switchReemplazarConfig">
+                            Actualizar también con la configuración que tengo en pantalla
+                        </label>
+                    </div>
+                    <div class="form-text ms-4" style="font-size: 11px;">
+                        Si lo deja desmarcado, solo se cambian el nombre y la descripción;
+                        los campos y filtros guardados se conservan tal como estaban.
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -668,21 +880,71 @@
         </div>
     </div>
 </div>
+
+<!-- ===== MODAL: COMPARTIR INFORME ===== -->
+<div class="modal fade" id="modalCompartirInforme" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fs-6 fw-bold">
+                    <i class="bi bi-send text-primary me-2"></i>Compartir informe
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-3">
+                    Se enviará <strong id="nombreInformeCompartir"></strong> como notificación.
+                    Quien lo reciba podrá abrirlo y decidir si lo guarda en sus favoritos;
+                    no se le añade nada sin su permiso.
+                </p>
+                <label for="selectDestinatarios" class="form-label fw-semibold small">
+                    Enviar a <span class="text-danger">*</span>
+                </label>
+                <select id="selectDestinatarios" class="form-select" multiple>
+                    {% for u in usuarios_para_compartir %}
+                        <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+                    {% endfor %}
+                </select>
+                {% comment %} Cada quien ejecuta el informe con SU propio alcance de datos
+                   (motor._aplicar_alcance_por_rol), así que compartir nunca enseña
+                   registros de unidades que no le corresponden al receptor. {% endcomment %}
+                <div class="form-text" style="font-size: 11px;">
+                    Cada usuario verá únicamente los datos de las Unidades Organizativas
+                    que le correspondan, aunque el informe venga de otra.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnConfirmarCompartir">Enviar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 {{ plantillas|json_script:"datosPlantillas" }}
+{{ soporte_historico|json_script:"datosSoporteHistorico" }}
+{{ periodos_cerrados|json_script:"datosPeriodosCerrados" }}
+{{ medidas_evolucion|json_script:"datosMedidasEvolucion" }}
+{% if informe_compartido %}
+    {{ informe_compartido.configuracion|json_script:"datosInformeCompartido" }}
+    <span id="modeloInformeCompartido" data-modelo="{{ informe_compartido.modelo_raiz }}"></span>
+{% endif %}
 <script>
     window.II_URLS = {
         campos: "{% url 'informe_inteligente:campos_del_modelo' 'MODELO' %}",
         vistaPrevia: "{% url 'informe_inteligente:generar_vista_previa' %}",
         guardarFavorito: "{% url 'informe_inteligente:guardar_favorito' %}",
         cargarFavorito: "{% url 'informe_inteligente:cargar_favorito' 0 %}",
+        editarFavorito: "{% url 'informe_inteligente:editar_favorito' 0 %}",
+        compartirFavorito: "{% url 'informe_inteligente:compartir_favorito' 0 %}",
+        evolucion: "{% url 'informe_inteligente:datos_evolucion' %}",
         eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}",
         exportarPDF: "{% url 'informe_inteligente:exportar_pdf' %}",
         exportarWord: "{% url 'informe_inteligente:exportar_word' %}",
         exportarExcel: "{% url 'informe_inteligente:exportar_excel' %}"
     };
 </script>
-<script src="{% static 'js/informe_inteligente.js' %}"></script>
+<script src="{% estatico 'js/informe_inteligente.js' %}"></script>
 {% endblock %}

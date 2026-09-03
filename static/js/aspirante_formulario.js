@@ -37,6 +37,7 @@ OrbithFormularioAspirante.CAMPOS = {
   id_provincia: { tipo: 'select' },
   id_municipio: { tipo: 'select' },
   id_raza: { tipo: 'select' },
+  id_nivel_educ: { tipo: 'select' },
 };
 
 /* Caracteres que se BORRAN según se escriben. */
@@ -124,25 +125,61 @@ OrbithFormularioAspirante.iniciar = function (opciones) {
     input.reportValidity();
   }
 
+  /* Los campos `tipo: 'select'` de este archivo pueden llevar Select2 montado
+   * encima (ver static/js/select2_htmx.js). Select2 oculta el <select> real
+   * (`display:none`) y pinta su propia UI en un `.select2-container` justo al
+   * lado: pintar el semáforo solo en el <select> oculto lo deja invisible.
+   * Se refleja la misma clase también ahí, igual que ya hace Contrato. */
+  function sincronizarClaseSelect2(input) {
+    if (!window.jQuery) return;
+    var $seleccion = jQuery(input).next('.select2-container').find('.select2-selection');
+    if (!$seleccion.length) return;
+    $seleccion.removeClass('border-warning is-invalid is-valid border-success');
+    ['border-warning', 'is-invalid', 'is-valid', 'border-success'].forEach(function (clase) {
+      if (input.classList.contains(clase)) $seleccion.addClass(clase);
+    });
+  }
+
+  /* Solo el ROJO. El amarillo y el verde los pone `validacion_visual.js`.
+   *
+   * Antes esta función pintaba los tres colores, y lo hacía SOLO sobre el campo
+   * que había disparado el evento. Eso dejaba fuera todo lo que se rellena
+   * solo: el sexo deducido del carnet seguía amarillo aunque ya tuviera valor,
+   * porque nadie volvía a pintarlo. El ayudante común repinta el formulario
+   * entero en cada cambio, así que ese caso desaparece de raíz.
+   *
+   * Lo que sí se queda aquí es el rojo, porque son reglas que el ayudante no
+   * puede deducir del HTML: que el carnet tenga once dígitos y que la serie
+   * tenga nueve. El ayudante respeta `is-invalid` y no pinta encima, y
+   * `evaluarBoton()` lo cuenta para bloquear el botón Guardar.
+   */
   function actualizarEstilo(input, cfg) {
-    input.classList.remove('border-warning', 'is-invalid', 'is-valid', 'border-success');
+    input.classList.remove('is-invalid', 'is-valid', 'border-success', 'border-warning');
     var valor = input.value.trim();
 
-    // Vacío: amarillo solo si el campo hace falta para guardar.
-    if (!valor) {
-      if (cfg.tipo !== 'telefono' && !cfg.opcional) input.classList.add('border-warning');
-      return;
-    }
-    if (cfg.esCI && valor.length !== 11) {
+    if (valor && cfg.esCI && valor.length !== 11) {
       input.classList.add('is-invalid');
-      return;
-    }
-    // Campo de longitud exacta (la serie: 9). Vacío vale, a medio escribir no.
-    if (cfg.longitudExacta && valor.length !== cfg.longitudExacta) {
+    } else if (valor && cfg.longitudExacta && valor.length !== cfg.longitudExacta) {
+      // Campo de longitud exacta (la serie: 9). Vacío vale, a medio escribir no.
       input.classList.add('is-invalid');
-      return;
     }
-    input.classList.add('is-valid');
+    sincronizarClaseSelect2(input);
+  }
+
+  /* Avisa al ayudante común de que un campo cambió SIN que el usuario lo tocara.
+   *
+   * Hace falta en los dos sitios donde este archivo escribe un valor por su
+   * cuenta: el sexo deducido del carnet y los municipios que se recargan al
+   * cambiar de provincia. Asignar `input.value` desde JavaScript no dispara
+   * ningún evento, así que sin esto el campo se queda con el color anterior —
+   * que es justo lo que hacía que el sexo autorrellenado siguiera amarillo.
+   *
+   * NO se lanza desde `actualizarEstilo()`: a esa la llama el propio manejador
+   * de `change`, y emitir un `change` ahí dentro sería una recursión infinita.
+   */
+  function avisarCambioDeValor(input) {
+    if (!input) return;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   /* El carnet codifica una fecha: se corrige mientras se escribe, para que el usuario
@@ -214,35 +251,29 @@ OrbithFormularioAspirante.iniciar = function (opciones) {
     } else {
       input.addEventListener('change', function () {
         actualizarEstilo(this, cfg);
-        // Provincia recarga Municipio por HTMX: se repinta cuando llegue el swap.
-        if (id === 'id_provincia') {
-          setTimeout(function () {
-            var muni = formulario.querySelector('#id_municipio');
-            if (muni) actualizarEstilo(muni, CAMPOS.id_municipio);
-          }, 200);
-        }
+        // Provincia recarga las opciones de Municipio por HTMX: el repintado se
+        // hace al recibir 'opciones:actualizadas' (más abajo), no con un
+        // temporizador a ciegas.
       });
-      if (window.jQuery) {
-        jQuery(input).on('select2:select', function () {
-          this.dispatchEvent(new Event('change'));
-        });
-      }
+      // El puente Select2 -> evento nativo 'change' (para que HTMX se entere de
+      // la selección) lo monta `OrbithSelect2.iniciar()` en
+      // static/js/select2_htmx.js, cargado antes que este archivo en
+      // add_aspir.html / updt_aspir.html — no hace falta duplicarlo aquí.
     }
 
     actualizarEstilo(input, cfg);
   });
 
-  // Municipio lo sustituye HTMX entero, así que hay que repintarlo tras cada swap.
-  var muniParent = (formulario.querySelector('#id_municipio') || {}).parentNode;
-  if (muniParent) {
-    new MutationObserver(function () {
-      var muni = formulario.querySelector('#id_municipio');
-      if (!muni) return;
-      actualizarEstilo(muni, CAMPOS.id_municipio);
-      muni.addEventListener('change', function () {
-        actualizarEstilo(this, CAMPOS.id_municipio);
-      });
-    }).observe(muniParent, { childList: true });
+  /* Municipio: HTMX ya solo cambia sus <option> (`hx-swap="innerHTML"`), así que
+   * el <select> y su listener de 'change' siguen vivos; lo único que hace falta
+   * es repintar el semáforo cuando llega la nueva lista. `select2_htmx.js`
+   * avisa de ello con el evento 'opciones:actualizadas'. */
+  var muni = formulario.querySelector('#id_municipio');
+  if (muni) {
+    muni.addEventListener('opciones:actualizadas', function () {
+      actualizarEstilo(this, CAMPOS.id_municipio);
+      avisarCambioDeValor(this);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -278,13 +309,19 @@ OrbithFormularioAspirante.iniciar = function (opciones) {
     // 10º dígito: par = masculino, impar = femenino.
     var sexoCalculado = parseInt(valCI.charAt(9), 10) % 2 === 0 ? 'M' : 'F';
     sexInput.value = sexoCalculado;
-    sexInput.classList.remove('border-warning', 'is-invalid');
-    sexInput.classList.add('is-valid');
+    sexInput.classList.remove('is-invalid');
     if (warningSexo) warningSexo.classList.add('d-none');
 
     if (window.jQuery && jQuery(sexInput).hasClass('select2-hidden-accessible')) {
+      // Que Select2 relea el valor y repinte su propia caja.
       jQuery(sexInput).trigger('change.select2');
     }
+
+    // Y que el ayudante común lo repinte de verde. Sin este aviso el campo se
+    // quedaba AMARILLO pese a tener valor, que es exactamente el fallo que se
+    // veía: rellenándolo a mano sí funcionaba, porque entonces sí había un
+    // `change` del usuario.
+    avisarCambioDeValor(sexInput);
   }
 
   if (ciInput) {
@@ -398,6 +435,7 @@ OrbithFormularioAspirante.iniciar = function (opciones) {
   var nivelEduc = formulario.querySelector('#id_nivel_educ');
   var grado = formulario.querySelector('#id_grado_cientifico');
   var tituloOro = formulario.querySelector('#id_titulo_oro');
+  var avisoTituloOro = formulario.querySelector('#aviso_titulo_oro');
 
   function aplicarReglasDeNivel() {
     if (!nivelEduc) return;
@@ -417,13 +455,25 @@ OrbithFormularioAspirante.iniciar = function (opciones) {
       }
     }
 
-    // El Título de Oro solo existe para graduados de Nivel Superior.
+    // El Título de Oro solo existe para graduados de Nivel Superior. Un campo
+    // deshabilitado no viaja en el POST, así que esto ya basta para que el
+    // servidor nunca reciba `titulo_oro=True` con otro nivel educativo.
     if (tituloOro) {
       if (esNivelSuperior) {
         tituloOro.removeAttribute('disabled');
-      } else {
+        if (avisoTituloOro) avisoTituloOro.classList.add('d-none');
+      } else if (!tituloOro.disabled) {
+        // Este `if` hace el bloque idempotente: `nivelEduc` tiene un listener
+        // nativo Y uno de jQuery para 'change', así que un solo evento real
+        // ejecuta esta función dos veces seguidas. Sin la guarda, la segunda
+        // pasada volvía a leer `checked` (ya puesto en `false` por la
+        // primera) y ocultaba el aviso que la primera acababa de mostrar.
+        var teniaMarcado = tituloOro.checked;
         tituloOro.setAttribute('disabled', 'disabled');
         tituloOro.checked = false;
+        // El aviso solo aparece si el cambio de nivel le acaba de quitar la
+        // marca al usuario: si nunca la puso, no hace falta explicarle nada.
+        if (avisoTituloOro) avisoTituloOro.classList.toggle('d-none', !teniaMarcado);
       }
     }
   }

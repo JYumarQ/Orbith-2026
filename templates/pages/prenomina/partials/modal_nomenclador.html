@@ -12,7 +12,8 @@
     <form hx-post="{{ request.get_full_path }}"
           hx-target="#modal_prenomina"
           hx-swap="innerHTML"
-          autocomplete="off">
+          autocomplete="off"
+          data-validacion-visual>
       {% csrf_token %}
 
       <div class="modal-header">

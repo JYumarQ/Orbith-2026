@@ -1,0 +1,103 @@
+{% comment %}
+  Selector de período (año + mes) reutilizable.
+
+  Es el control que estrenó Informe Inteligente —rejilla de doce meses con
+  flechas de año dentro de un desplegable— extraído aquí para que Informes RRHH y
+  Pre-Nómina dejen de tener cada uno su pareja de <select> «Año» y «Mes».
+
+  La lógica vive en `static/js/selector_periodo.js`, cargado globalmente desde
+  `base/scripts.html`; ahí está explicado por qué no es un <select> y qué hace
+  cada modo. Esta plantilla solo pone el marcado y los `data-`.
+
+  PARÁMETROS
+  ----------
+    id_caja           Identificador del contenedor. Obligatorio: es el que
+                      escucha `orbith:periodo` y sobre el que se pone `hx-trigger`.
+    id_anno, id_mes   Ids de los dos <input type="hidden">. Se pueden fijar para
+                      conservar los `hx-include="#filtro_anno, #filtro_mes"` que
+                      ya existían en Pre-Nómina.
+    campo_anno,
+    campo_mes         `name` de los hidden (por defecto `anno` y `mes`), para que
+                      viajen solos si el selector está dentro de un <form>.
+    anno, mes         Valores actuales. Vacíos = sin elegir.
+    annos             Años entre los que se mueven las flechas.
+    con_datos         Lista de claves «AAAA-MM» que SÍ tienen dato. Se resaltan.
+    modo              `solo-con-datos` | `solo-sin-datos` | `todos`.
+    minimo            «AAAA-MM»: apaga ese mes y todos los anteriores.
+    etiqueta_vacia    Qué pone el botón cuando no hay nada elegido.
+    texto_limpiar     Si se pasa, aparece el enlace que vuelve a «sin elegir».
+    icono             Icono del botón (clases de Boxicons o Font Awesome).
+    ayuda             Texto al pie del panel.
+{% endcomment %}
+<div class="dropdown d-inline-block"
+     id="{{ id_caja }}"
+     data-selector-periodo
+     data-modo="{{ modo|default:'todos' }}"
+     data-minimo="{{ minimo|default:'' }}"
+     data-annos="[{% for a in annos %}{{ a }}{% if not forloop.last %},{% endif %}{% endfor %}]"
+     data-con-datos="[{% for c in con_datos %}&quot;{{ c }}&quot;{% if not forloop.last %},{% endif %}{% endfor %}]"
+     data-etiqueta-vacia="{{ etiqueta_vacia|default:'Sin elegir' }}"
+     data-texto-sin-dato="{{ texto_sin_dato|default:'sin datos' }}"
+     {% if plantilla_etiqueta %}data-plantilla-etiqueta="{{ plantilla_etiqueta }}"{% endif %}
+     {{ atributos_htmx|safe }}>
+
+    <input type="hidden" data-papel="anno"
+           name="{{ campo_anno|default:'anno' }}"
+           id="{{ id_anno|default:'' }}" value="{{ anno|default:'' }}">
+    <input type="hidden" data-papel="mes"
+           name="{{ campo_mes|default:'mes' }}"
+           id="{{ id_mes|default:'' }}" value="{{ mes|default:'' }}">
+
+    <button class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-2"
+            type="button" data-papel="boton" data-bs-toggle="dropdown"
+            data-bs-auto-close="outside" aria-expanded="false">
+        <i class="{{ icono|default:'bx bx-calendar-event' }}" style="color: #696cff;"></i>
+        <span data-papel="etiqueta">{{ etiqueta_vacia|default:'Sin elegir' }}</span>
+    </button>
+
+    {% comment %} `alineacion` decide de qué lado cuelga el panel. Por defecto `end`
+       (alineado a la derecha del botón), que es lo correcto cuando el control vive en
+       la esquina derecha de una cabecera. Con el botón pegado al borde izquierdo de
+       una tarjeta hay que pasar `start`, o el panel se sale hacia la izquierda y la
+       tarjeta lo recorta: se pierde la primera columna de meses. {% endcomment %}
+    <div class="dropdown-menu dropdown-menu-{{ alineacion|default:'end' }} p-3 shadow" style="min-width: 280px;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <button type="button" class="btn btn-sm btn-light px-2"
+                    data-papel="anno-anterior" title="Año anterior">
+                <i class="bx bx-chevron-left"></i>
+            </button>
+            <strong data-papel="anno-visible" style="font-size: .95rem;"></strong>
+            <button type="button" class="btn btn-sm btn-light px-2"
+                    data-papel="anno-siguiente" title="Año siguiente">
+                <i class="bx bx-chevron-right"></i>
+            </button>
+        </div>
+
+        {# La rejilla la pinta el JavaScript: cuatro columnas por tres filas. #}
+        <div data-papel="rejilla"
+             style="display: grid; grid-template-columns: repeat(4, 1fr); gap: .3rem;"></div>
+
+        {% if ayuda %}
+            <div class="form-text mt-2 mb-0" style="font-size: 10.5px;">{{ ayuda }}</div>
+        {% endif %}
+
+        {% if texto_anno_completo or texto_limpiar %}<hr class="my-2">{% endif %}
+
+        {% if texto_anno_completo %}
+            {% comment %} Los <select> permitían elegir un año con «Todos los meses».
+               Una rejilla de meses no puede expresar eso por sí sola, así que la
+               capacidad se conserva con este botón. {% endcomment %}
+            <button type="button" class="btn btn-sm btn-link w-100 text-decoration-none p-0 mb-1"
+                    data-papel="anno-completo">
+                <i class="bx bx-calendar me-1"></i>{{ texto_anno_completo }}
+            </button>
+        {% endif %}
+
+        {% if texto_limpiar %}
+            <button type="button" class="btn btn-sm btn-link w-100 text-decoration-none p-0"
+                    data-papel="limpiar">
+                <i class="bx bx-revision me-1"></i>{{ texto_limpiar }}
+            </button>
+        {% endif %}
+    </div>
+</div>

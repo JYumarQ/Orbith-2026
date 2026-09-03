@@ -1,5 +1,6 @@
 {% extends 'base/base.html' %}
 {% load static %}
+{% load estaticos %}
 
 {% block title %}Subsanación · Orbith{% endblock %}
 
@@ -7,7 +8,7 @@
   {% comment %} El panel de estadísticas (cargado por HTMX) dibuja un gráfico con ApexCharts;
      ya no se carga en todas las páginas. Ver `libs_graficos` en base/base.html. {% endcomment %}
   <link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}">
-  <script src="{% static 'js/apexcharts.min.js' %}"></script>
+  <script src="{% estatico 'js/apexcharts.min.js' %}"></script>
 {% endblock %}
 
 {% block extra_head %}

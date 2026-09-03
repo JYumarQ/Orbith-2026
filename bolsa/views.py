@@ -336,21 +336,6 @@ class AspiranteCreateView(CreateView):
         kwargs['user'] = self.request.user   # pasar user al form (para limitar UO si es moderador)
         return kwargs
 
-    # NOTA (no relacionada con la Guía de Orbith): este método y el de abajo
-    # tienen el mismo nombre `form_valid` dentro de la MISMA clase
-    # (`AspiranteCreateView`) — el comentario "En AspiranteUpdateView" es
-    # engañoso, nunca se declaró esa clase aparte. Python se queda con la
-    # ÚLTIMA definición, así que este primer `form_valid` nunca se ejecuta;
-    # es código muerto ya presente antes de este cambio. Se deja así (no es
-    # el alcance de esta tarea) y la instrumentación de la Guía se coloca en
-    # el método que sí corre de verdad, más abajo.
-    def form_valid(self, form):
-        # Eliminamos la validación de unidad_organizativa porque los Aspirantes no pertenecen a ninguna UO
-        self.object = form.save(commit=False)
-        nombre = self.object.nombre
-        messages.success(self.request, f'Aspirante "{nombre}" ha sido creado correctamente.')
-        return super().form_valid(form)
-
     def form_valid(self, form):
         # 1. Pausamos el guardado para hacer las validaciones
         aspirante = form.save(commit=False)

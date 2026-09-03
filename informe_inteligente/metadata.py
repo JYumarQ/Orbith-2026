@@ -78,6 +78,53 @@ def _opciones_unidades_organizativas():
     return list(UnidadOrganizativa.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
 
 
+def _expansion_jerarquica_unidades(etiquetas):
+    """Una Unidad Principal representa también a sus subunidades AL FILTRAR.
+
+    EL PROBLEMA QUE RESUELVE
+    ------------------------
+    Este filtro compara la descripción de la unidad con un `=` exacto, así que
+    filtrar por «Oficina Central» no devolvía NADA de sus subunidades — y una
+    Dirección Principal no tiene cargos propios: todo cuelga de sus hijas. El
+    resultado era un informe vacío para la unidad más grande de la empresa.
+
+    Recibe la LISTA de unidades elegidas y devuelve sus descripciones más las de
+    sus subunidades directas. Recibe la lista entera, y no una etiqueta cada vez,
+    para resolverlo con UNA sola consulta: con «Es alguno de» y cinco unidades
+    marcadas, una consulta por etiqueta serían cinco viajes a la base de datos
+    para construir un único filtro.
+
+    Una unidad sin hijas se expande a sí misma, así que elegir una subunidad
+    concreta la sigue mostrando SOLA: se puede ver el total del padre o el
+    detalle de una hija, que es la razón de tener jerarquía.
+
+    SOLO AFECTA AL FILTRO. No se usa `grupos_valores` —el mecanismo que ya
+    existía para agrupar valores— precisamente porque ese SÍ afecta a la
+    presentación: colapsaría la etiqueta, y un trabajador de Camagüey aparecería
+    en la tabla y en el desglose como «Oficina Central». Aquí cada unidad se
+    sigue mostrando con su propio nombre.
+
+    Limitación heredada: la comparación es por texto, así que dos unidades
+    distintas con la misma descripción se confundirían. Ya era así antes de esta
+    expansión —el filtro siempre ha comparado descripciones— y `descripcion` no
+    es un campo único en el modelo.
+    """
+    from strorganizativa.models import UnidadOrganizativa
+
+    if isinstance(etiquetas, str):
+        etiquetas = [etiquetas]
+
+    descripciones = set(etiquetas)
+    descripciones.update(
+        UnidadOrganizativa.objects
+        .filter(padre__descripcion__in=etiquetas)
+        .values_list("descripcion", flat=True)
+    )
+    # Ordenado y sin repetidos, para que dos informes iguales generen exactamente
+    # la misma consulta.
+    return sorted(descripciones)
+
+
 def _opciones_cargos():
     from nomencladores.models import NCargo
     return list(NCargo.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
@@ -140,6 +187,7 @@ def _opciones_provincias():
 # camposSeleccionados() en informe_inteligente.js.
 
 CATEGORIAS_CAMPOS = {
+    "periodo":    {"label": "Período del Cierre",   "icono": "bi-calendar-check-fill", "color": "azul"},
     "trabajador": {"label": "Datos del Trabajador", "icono": "bi-person-badge-fill", "color": "violeta"},
     "cargo":      {"label": "Datos del Cargo",      "icono": "bi-briefcase-fill",    "color": "indigo"},
     "contrato":   {"label": "Datos del Contrato",   "icono": "bi-file-earmark-text-fill", "color": "esmeralda"},
@@ -357,6 +405,10 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
             "choices_dinamicas": _opciones_unidades_organizativas,
+            # Elegir una Unidad Principal suma también sus subunidades. Solo al
+            # FILTRAR: en la tabla y en el desglose cada unidad conserva su
+            # propio nombre. Ver `_expansion_jerarquica_unidades`.
+            "expansion_filtro": _expansion_jerarquica_unidades,
         },
         "nivel_preparacion": {
             "label": "Nivel de Preparación",
@@ -479,6 +531,26 @@ def _campos_calta():
             "tipo": "numero",
             "categoria": "contrato",
             "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "contrato_determinado": {
+            "label": "Contrato Determinado",
+            # Se deduce del nomenclador de tipo de contrato: los que exigen
+            # motivo son los determinados. Mismo criterio que el informe
+            # «Contratos Determinados (Motivos)», para que las dos pantallas no
+            # puedan dar cifras distintas.
+            "ruta_orm": "tipo__requiere_motivo",
+            "tipo": "booleano",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+        "puesto_clave": {
+            "label": "Puesto Clave",
+            "ruta_orm": "cargo__ncargo__puesto_clave",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
             "sensible": False,
         },
         "mision": {
@@ -771,6 +843,10 @@ def _campos_cargoplantilla():
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
             "choices_dinamicas": _opciones_unidades_organizativas,
+            # Elegir una Unidad Principal suma también sus subunidades. Solo al
+            # FILTRAR: en la tabla y en el desglose cada unidad conserva su
+            # propio nombre. Ver `_expansion_jerarquica_unidades`.
+            "expansion_filtro": _expansion_jerarquica_unidades,
         },
         "funcionario": {
             "label": "Funcionario",
@@ -807,6 +883,25 @@ def _campos_cargoplantilla():
         "cant_cubierta": {
             "label": "Cantidad Cubierta",
             "ruta_orm": "cant_cubierta",
+            "tipo": "numero",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "puesto_clave": {
+            "label": "Puesto Clave",
+            "ruta_orm": "ncargo__puesto_clave",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+        "vacantes": {
+            "label": "Plazas Vacantes",
+            # Sin columna propia: es la resta de aprobadas menos cubiertas, y la
+            # calcula el motor por anotación. Guardarla sería un dato duplicado
+            # que se puede desincronizar de los otros dos.
+            "ruta_orm": None,
             "tipo": "numero",
             "categoria": "cargo",
             "filtrable": True, "ordenable": True, "agrupable": False,
@@ -1208,6 +1303,206 @@ DESGLOSES_ESPECIALES_POR_MODELO = {
 }
 
 
+def _opciones_periodos_cerrados():
+    """Períodos que REALMENTE tienen un cierre declarado, del más reciente al más
+    antiguo.
+
+    Es la lista que alimenta el desplegable de «Período» en las fuentes
+    históricas. Se construye desde los datos y no desde un rango de fechas a
+    propósito: así el usuario no puede pedir un mes que nadie cerró y recibir un
+    informe vacío sin entender por qué. Un mes sin cierre sencillamente no
+    aparece como opción.
+    """
+    from cierres.models import CierreUnidad
+    from cierres.periodos import Periodo
+
+    claves = (CierreUnidad.objects
+              .exclude(periodo_clave='')
+              .order_by('-anno', '-mes')
+              .values_list('periodo_clave', 'anno', 'mes')
+              .distinct())
+    vistos, opciones = set(), []
+    for clave, anno, mes in claves:
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        opciones.append((clave, Periodo(anno, mes).etiqueta))
+    return opciones
+
+
+def _campos_comunes_del_cierre():
+    """Campos de la cabecera del cierre, comunes a las dos gemelas.
+
+    `periodo` no es un campo más: es lo que el selector superior fija. Se
+    incluye igualmente como columna marcable porque al comparar varios meses
+    en un mismo informe hay que poder ver a qué mes pertenece cada fila.
+    """
+    return {
+        "periodo": {
+            "label": "Período del cierre",
+            "ruta_orm": "cierre__periodo_clave",
+            "tipo": "opcion",
+            "categoria": "periodo",
+            "filtrable": True, "ordenable": True, "agrupable": True,
+            "sensible": False,
+            "choices_dinamicas": _opciones_periodos_cerrados,
+        },
+        "declarado_por": {
+            "label": "Declarado por",
+            "ruta_orm": "cierre__declarado_por_nombre",
+            "tipo": "texto",
+            "categoria": "periodo",
+            "filtrable": True, "ordenable": True, "agrupable": True,
+            "sensible": False,
+        },
+        "en_plazo": {
+            "label": "Cierre declarado en plazo",
+            "ruta_orm": "cierre__en_plazo",
+            "tipo": "booleano",
+            "categoria": "periodo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+    }
+
+
+def _clonar_campo(campo_vivo, ruta_orm, **cambios):
+    """Copia la definición de un campo vivo cambiándole la ruta ORM.
+
+    Así la gemela histórica hereda etiqueta, tipo, `choices`, si es sensible y
+    demás sin repetirlo: lo único que cambia de verdad es de dónde sale el
+    dato. Repetir las definiciones a mano garantizaría que un día divergieran.
+    """
+    campo = dict(campo_vivo)
+    campo["ruta_orm"] = ruta_orm
+    campo.pop("ruta_visual", None)
+    campo.update(cambios)
+    return campo
+
+
+# Cada entrada es `clave_de_campo -> ruta_orm dentro de la fotografía`. La
+# clave es la MISMA que usa la fuente viva a propósito: así un informe favorito
+# guardado en tiempo real se puede ejecutar en un mes pasado sin traducir nada.
+_RUTAS_HISTORICAS_CONTRATO = {
+    "nombre_completo": "aspirante_nombre",
+    "carne_identidad": "doc_identidad",
+    "sexo": "sexo",
+    "fecha_nacimiento": "fecha_nacimiento",
+    "nivel_educ": "nivel_educ",
+    "grado_cientifico": "grado_cientifico",
+    "titulo_oro": "titulo_oro",
+    "especialidad": "especialidad_nombre",
+    "reg_militar": "reg_militar",
+    "profesional": "profesional",
+    "jubilado_recontratado": "jubilado_recontratado",
+    "cargo": "ncargo_descripcion",
+    "categoria_ocupacional": "cat_ocupacional",
+    "departamento": "departamento_descripcion",
+    "unidad_organizativa": "cierre__unidad_descripcion",
+    "no_expediente": "no_expediente",
+    "tipo_contrato": "tipo_descripcion",
+    "fecha_alta": "fecha_alta",
+    "fecha_alta_entidad": "fecha_alta_entidad",
+    "motivo": "motivo_descripcion",
+    "duracion": "duracion",
+    "puesto_clave": "puesto_clave",
+    "contrato_determinado": "requiere_motivo",
+    "mision": "mision",
+    "pais": "pais",
+    "funcionario_res": "funcionario_res",
+    "designado_res": "designado_res",
+    "c_formal_res": "c_formal_res",
+    "fecha_vence_lic": "fecha_vence_lic",
+    "fecha_vence_recal": "fecha_vence_recal",
+    "fecha_vence_seg": "fecha_vence_seg",
+    "salario": "salario",
+    "rol": "rol_tipo",
+    "tridente": "tridente_tipo",
+    "tipo_salario": "tipo_salario",
+    "maestria": "maestria",
+    "doctorado": "doctorado",
+    "cnci": "cnci",
+    "instructor": "instructor",
+    # Vienen de la fila de cargo de la MISMA fotografía, no de la plantilla
+    # viva: un cargo al que hoy le aprobaron plazas nuevas no debe cambiar el
+    # informe de agosto.
+    "nivel_preparacion": "cierre_cargo__nivel_preparacion_nombre",
+    "funcionario": "cierre_cargo__funcionario",
+    "designado": "cierre_cargo__designado",
+    "cant_aprobada": "cierre_cargo__cant_aprobada",
+    "cant_cubierta": "cierre_cargo__cant_cubierta",
+    # Datos personales que no son historia: se leen del registro vivo, para que
+    # corregir hoy un dato mal cargado arregle también los meses ya cerrados.
+    "serie_ci": "aspirante_vivo__serie_ci",
+    "raza": "aspirante_vivo__raza",
+}
+
+_RUTAS_HISTORICAS_CARGO = {
+    "cargo": "ncargo_descripcion",
+    "categoria_ocupacional": "cat_ocupacional",
+    "rol": "rol_tipo",
+    "nivel_preparacion": "nivel_preparacion_nombre",
+    "departamento": "departamento_descripcion",
+    "unidad_organizativa": "cierre__unidad_descripcion",
+    "funcionario": "funcionario",
+    "designado": "designado",
+    "activo": "activo",
+    "cant_aprobada": "cant_aprobada",
+    "cant_cubierta": "cant_cubierta",
+    "puesto_clave": "puesto_clave",
+}
+
+
+def _campos_historico(campos_vivos, rutas):
+    """Construye el catálogo de una gemela clonando el de su fuente viva."""
+    campos = _campos_comunes_del_cierre()
+    for clave, ruta in rutas.items():
+        campos[clave] = _clonar_campo(campos_vivos[clave], ruta)
+    return campos
+
+
+def _campos_historico_contrato():
+    campos_vivos = _campos_calta()
+    campos = _campos_historico(campos_vivos, _RUTAS_HISTORICAS_CONTRATO)
+
+    # `grupo_escala` se filtra por número en la fuente viva (para poder ordenar
+    # I < II < X); la fotografía solo congeló el nivel en romano, así que aquí
+    # es texto. Es el mismo dato, con menos capacidades de orden.
+    campos["grupo_escala"] = _clonar_campo(
+        campos_vivos["grupo_escala"], "grupo_escala_nivel", tipo="texto")
+
+    # Derivados: no tienen columna, los calcula el motor con una anotación a
+    # partir de fechas que SÍ están congeladas.
+    for clave in ("edad", "cumpleanos", "antiguedad"):
+        campos[clave] = _clonar_campo(campos_vivos[clave], None)
+
+    # Congelado pero renombrado: en el histórico se muestra el estado que tenía
+    # la persona en ese cierre, no el de hoy.
+    campos["estado_trabajador"] = {
+        "label": "Estado del trabajador (en ese cierre)",
+        "ruta_orm": "aspirante_estado",
+        "tipo": "opcion",
+        "categoria": "trabajador",
+        "filtrable": True, "ordenable": True, "agrupable": True,
+        "sensible": False,
+        "choices": [("ASPIRANTE", "Aspirante"), ("ACTIVO", "Activo"), ("BAJA", "Baja")],
+    }
+    return campos
+
+
+def _campos_historico_cargo():
+    campos_vivos = _campos_cargoplantilla()
+    campos = _campos_historico(campos_vivos, _RUTAS_HISTORICAS_CARGO)
+    # Derivado: la fotografía congela aprobadas y cubiertas, y la resta la hace
+    # el motor con una anotación, igual que en la fuente viva.
+    campos["vacantes"] = _clonar_campo(campos_vivos["vacantes"], None)
+    # Mismo caso que en el histórico de contratos: la fotografía congeló el
+    # nivel en romano, no el número con el que la fuente viva ordena.
+    campos["grupo_escala"] = _clonar_campo(
+        campos_vivos["grupo_escala"], "grupo_escala_nivel", tipo="texto")
+    return campos
+
+
 REGISTRO_MODELOS = {
     "CAlta": {
         "app_label": "contratos",
@@ -1260,7 +1555,59 @@ REGISTRO_MODELOS = {
         "campos": _campos_tmovimiento(),
         "desglose_por_defecto": "tipo_movimiento",
     },
+
 }
+
+
+# ---------------------------------------------------------------------------
+# GEMELAS HISTÓRICAS
+# ---------------------------------------------------------------------------
+# NO son fuentes que el usuario elija: no aparecen en «¿Sobre qué desea
+# informar?». Son el mismo informe de arriba, pero leído de la fotografía que
+# el módulo de Cierres congela cada mes.
+#
+# El usuario elige su informe de siempre y, si quiere, un período cerrado en el
+# selector de la parte superior. Cuando hay período, el motor cambia por debajo
+# el modelo raíz por su gemela y usa este catálogo — que usa DELIBERADAMENTE
+# las mismas claves de campo que la fuente viva, para que la configuración del
+# usuario (y sus informes favoritos) valga igual en tiempo real que en un mes
+# pasado.
+#
+# Solo existe gemela donde existe fotografía. Bajas, Aspirantes y Movimientos
+# de Nómina no se congelan, así que en esas tres el selector de período se
+# deshabilita en vez de prometer algo que no se puede cumplir.
+FUENTES_HISTORICAS = {
+    "CAlta": {
+        "modelo_historico": "CierreContrato",
+        "app_label": "cierres",
+        "ruta_unidad_organizativa": "cierre__unidad",
+        "campos": _campos_historico_contrato(),
+    },
+    "CargoPlantilla": {
+        "modelo_historico": "CierreCargo",
+        "app_label": "cierres",
+        "ruta_unidad_organizativa": "cierre__unidad",
+        "campos": _campos_historico_cargo(),
+    },
+}
+
+
+def definicion_historica(modelo_raiz):
+    """Gemela histórica de un modelo raíz, o None si no tiene fotografía."""
+    return FUENTES_HISTORICAS.get(modelo_raiz)
+
+
+def campos_sin_historico(modelo_raiz):
+    """Campos del informe vivo que la fotografía no puede reproducir.
+
+    La interfaz los deshabilita al elegir un período, para que el usuario sepa
+    POR QUÉ no puede pedirlos en vez de recibir una columna vacía.
+    """
+    historica = FUENTES_HISTORICAS.get(modelo_raiz)
+    if not historica:
+        return set()
+    vivos = set(REGISTRO_MODELOS[modelo_raiz]["campos"])
+    return vivos - set(historica["campos"])
 
 
 # ---------------------------------------------------------------------------
@@ -1326,6 +1673,115 @@ INDICADORES_POR_MODELO = {
             "icono": "bi-graph-up-arrow",
             "color": "azul",
         },
+        {
+            "key": "puestos_clave",
+            "label": "En puestos clave",
+            "tipo": "conteo_si",
+            "campo": "puesto_clave",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-star-fill",
+            "color": "naranja",
+        },
+        {
+            "key": "en_mision",
+            "label": "En misión internacional",
+            "tipo": "conteo_si",
+            "campo": "mision",
+            "valor": True,
+            "icono": "bi-airplane-fill",
+            "color": "azul",
+        },
+        {
+            "key": "antiguedad_promedio",
+            "label": "Antigüedad promedio",
+            "tipo": "promedio",
+            "campo": "antiguedad",
+            "formato": "decimal",
+            "sufijo": " años",
+            "icono": "bi-award-fill",
+            "color": "violeta",
+        },
+        {
+            "key": "cuadros",
+            "label": "Cuadros",
+            "tipo": "conteo_si",
+            "campo": "categoria_ocupacional",
+            # Directivos y Ejecutivos son dos códigos distintos y una sola idea.
+            "valor": ["CDI", "CEJ"],
+            "con_porcentaje": True,
+            "icono": "bi-person-badge-fill",
+            "color": "indigo",
+        },
+        {
+            "key": "mujeres_puestos_clave",
+            "label": "Mujeres en puestos clave",
+            "tipo": "conteo_si",
+            "condiciones": [
+                {"campo": "sexo", "valor": "F"},
+                {"campo": "puesto_clave", "valor": True},
+            ],
+            "icono": "bi-star-half",
+            "color": "violeta",
+        },
+        {
+            "key": "con_grado_cientifico",
+            "label": "Con grado científico",
+            "tipo": "conteo_si",
+            "campo": "grado_cientifico",
+            "valor": ["MC", "DC"],
+            "con_porcentaje": True,
+            "icono": "bi-mortarboard-fill",
+            "color": "esmeralda",
+        },
+        {
+            "key": "nivel_superior",
+            "label": "De nivel superior",
+            "tipo": "conteo_si",
+            "campo": "nivel_educ",
+            "valor": "NS",
+            "con_porcentaje": True,
+            "icono": "bi-book-fill",
+            "color": "azul",
+        },
+        {
+            "key": "titulo_oro",
+            "label": "Título de Oro",
+            "tipo": "conteo_si",
+            "campo": "titulo_oro",
+            "valor": True,
+            "icono": "bi-trophy-fill",
+            "color": "naranja",
+        },
+        {
+            "key": "profesionales",
+            "label": "Profesionales",
+            "tipo": "conteo_si",
+            "campo": "profesional",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-briefcase-fill",
+            "color": "indigo",
+        },
+        {
+            "key": "jubilados_recontratados",
+            "label": "Jubilados recontratados",
+            "tipo": "conteo_si",
+            "campo": "jubilado_recontratado",
+            "valor": True,
+            "icono": "bi-person-heart",
+            "color": "esmeralda",
+        },
+        {
+            "key": "determinados",
+            "label": "Contratos determinados",
+            "tipo": "conteo_si",
+            "campo": "contrato_determinado",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-hourglass-split",
+            "color": "naranja",
+        },
     ],
     "CBaja": [
         {
@@ -1380,6 +1836,54 @@ INDICADORES_POR_MODELO = {
             "icono": "bi-person-check-fill",
             "color": "azul",
         },
+        {
+            "key": "plazas_vacantes",
+            "label": "Plazas vacantes",
+            "tipo": "suma",
+            "campo": "vacantes",
+            "icono": "bi-person-dash",
+            "color": "naranja",
+        },
+        {
+            "key": "cobertura",
+            "label": "Cobertura de la plantilla",
+            "tipo": "razon",
+            "campo": "cant_cubierta",
+            "campo_divisor": "cant_aprobada",
+            "formato": "porcentaje",
+            "sufijo": " %",
+            "icono": "bi-pie-chart-fill",
+            "color": "violeta",
+        },
+        {
+            "key": "cargos_sin_cubrir",
+            "label": "Cargos sin cubrir",
+            "tipo": "conteo_si",
+            "campo": "cant_cubierta",
+            "valor": 0,
+            "con_porcentaje": True,
+            "icono": "bi-slash-circle",
+            "color": "naranja",
+        },
+        {
+            "key": "cargos_puesto_clave",
+            "label": "Cargos de puesto clave",
+            "tipo": "conteo_si",
+            "campo": "puesto_clave",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-star-fill",
+            "color": "azul",
+        },
+        {
+            "key": "cargos_inactivos",
+            "label": "Cargos inactivos",
+            "tipo": "conteo_si",
+            "campo": "activo",
+            "valor": False,
+            "icono": "bi-dash-circle",
+            "color": "esmeralda",
+        },
     ],
     "Aspirante": [
         {
@@ -1419,6 +1923,232 @@ INDICADORES_POR_MODELO = {
             "color": "azul",
         },
     ],
+    "CierreContrato": [
+        {
+            # Cuidado al leerlo: si el informe abarca varios períodos, cada
+            # trabajador cuenta una vez POR MES cerrado. Por eso la fuente
+            # desglosa por período de entrada.
+            "key": "total",
+            "label": "Filas del histórico",
+            "tipo": "conteo",
+            "icono": "bi-calendar-check-fill",
+            "color": "azul",
+        },
+        {
+            "key": "mujeres",
+            "label": "Mujeres",
+            "tipo": "conteo_si",
+            "campo": "sexo",
+            "valor": "F",
+            "con_porcentaje": True,
+            "icono": "bi-gender-female",
+            "color": "violeta",
+        },
+        {
+            "key": "salario_total",
+            "label": "Salario total",
+            "tipo": "suma",
+            "campo": "salario",
+            "formato": "moneda",
+            "icono": "bi-cash-stack",
+            "color": "naranja",
+        },
+        # Las mismas medidas que la fuente viva: mirar un mes cerrado no tiene
+        # por qué ofrecer menos tarjetas que mirar hoy. Todos estos datos los
+        # congela `CierreContrato`.
+        {
+            "key": "edad_promedio",
+            "label": "Edad promedio",
+            "tipo": "promedio",
+            "campo": "edad",
+            "formato": "decimal",
+            "sufijo": " años",
+            "icono": "bi-hourglass-split",
+            "color": "esmeralda",
+        },
+        {
+            "key": "puestos_clave",
+            "label": "En puestos clave",
+            "tipo": "conteo_si",
+            "campo": "puesto_clave",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-star-fill",
+            "color": "naranja",
+        },
+        {
+            "key": "en_mision",
+            "label": "En misión internacional",
+            "tipo": "conteo_si",
+            "campo": "mision",
+            "valor": True,
+            "icono": "bi-airplane-fill",
+            "color": "azul",
+        },
+        {
+            "key": "antiguedad_promedio",
+            "label": "Antigüedad promedio",
+            "tipo": "promedio",
+            "campo": "antiguedad",
+            "formato": "decimal",
+            "sufijo": " años",
+            "icono": "bi-award-fill",
+            "color": "violeta",
+        },
+        {
+            "key": "cuadros",
+            "label": "Cuadros",
+            "tipo": "conteo_si",
+            "campo": "categoria_ocupacional",
+            # Directivos y Ejecutivos son dos códigos distintos y una sola idea.
+            "valor": ["CDI", "CEJ"],
+            "con_porcentaje": True,
+            "icono": "bi-person-badge-fill",
+            "color": "indigo",
+        },
+        {
+            "key": "mujeres_puestos_clave",
+            "label": "Mujeres en puestos clave",
+            "tipo": "conteo_si",
+            "condiciones": [
+                {"campo": "sexo", "valor": "F"},
+                {"campo": "puesto_clave", "valor": True},
+            ],
+            "icono": "bi-star-half",
+            "color": "violeta",
+        },
+        {
+            "key": "con_grado_cientifico",
+            "label": "Con grado científico",
+            "tipo": "conteo_si",
+            "campo": "grado_cientifico",
+            "valor": ["MC", "DC"],
+            "con_porcentaje": True,
+            "icono": "bi-mortarboard-fill",
+            "color": "esmeralda",
+        },
+        {
+            "key": "nivel_superior",
+            "label": "De nivel superior",
+            "tipo": "conteo_si",
+            "campo": "nivel_educ",
+            "valor": "NS",
+            "con_porcentaje": True,
+            "icono": "bi-book-fill",
+            "color": "azul",
+        },
+        {
+            "key": "titulo_oro",
+            "label": "Título de Oro",
+            "tipo": "conteo_si",
+            "campo": "titulo_oro",
+            "valor": True,
+            "icono": "bi-trophy-fill",
+            "color": "naranja",
+        },
+        {
+            "key": "profesionales",
+            "label": "Profesionales",
+            "tipo": "conteo_si",
+            "campo": "profesional",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-briefcase-fill",
+            "color": "indigo",
+        },
+        {
+            "key": "jubilados_recontratados",
+            "label": "Jubilados recontratados",
+            "tipo": "conteo_si",
+            "campo": "jubilado_recontratado",
+            "valor": True,
+            "icono": "bi-person-heart",
+            "color": "esmeralda",
+        },
+        {
+            "key": "determinados",
+            "label": "Contratos determinados",
+            "tipo": "conteo_si",
+            "campo": "contrato_determinado",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-hourglass-split",
+            "color": "naranja",
+        },
+    ],
+    "CierreCargo": [
+        {
+            "key": "total",
+            "label": "Filas del histórico",
+            "tipo": "conteo",
+            "icono": "bi-calendar-check-fill",
+            "color": "azul",
+        },
+        {
+            "key": "plazas_aprobadas",
+            "label": "Plazas aprobadas",
+            "tipo": "suma",
+            "campo": "cant_aprobada",
+            "icono": "bi-people-fill",
+            "color": "esmeralda",
+        },
+        {
+            "key": "plazas_cubiertas",
+            "label": "Plazas cubiertas",
+            "tipo": "suma",
+            "campo": "cant_cubierta",
+            "icono": "bi-person-check-fill",
+            "color": "indigo",
+        },
+        {
+            "key": "plazas_vacantes",
+            "label": "Plazas vacantes",
+            "tipo": "suma",
+            "campo": "vacantes",
+            "icono": "bi-person-dash",
+            "color": "naranja",
+        },
+        {
+            "key": "cobertura",
+            "label": "Cobertura de la plantilla",
+            "tipo": "razon",
+            "campo": "cant_cubierta",
+            "campo_divisor": "cant_aprobada",
+            "formato": "porcentaje",
+            "sufijo": " %",
+            "icono": "bi-pie-chart-fill",
+            "color": "violeta",
+        },
+        {
+            "key": "cargos_sin_cubrir",
+            "label": "Cargos sin cubrir",
+            "tipo": "conteo_si",
+            "campo": "cant_cubierta",
+            "valor": 0,
+            "con_porcentaje": True,
+            "icono": "bi-slash-circle",
+            "color": "naranja",
+        },
+        {
+            "key": "cargos_puesto_clave",
+            "label": "Cargos de puesto clave",
+            "tipo": "conteo_si",
+            "campo": "puesto_clave",
+            "valor": True,
+            "con_porcentaje": True,
+            "icono": "bi-star-fill",
+            "color": "azul",
+        },
+        {
+            "key": "cargos_inactivos",
+            "label": "Cargos inactivos",
+            "tipo": "conteo_si",
+            "campo": "activo",
+            "valor": False,
+            "icono": "bi-dash-circle",
+            "color": "esmeralda",
+        },
+    ],
 }
 
 
@@ -1455,6 +2185,19 @@ def mapa_valor_a_etiqueta(campo):
             for valor in valores_db:
                 mapa[valor] = etiqueta
         return mapa
+    if campo.get("choices_dinamicas"):
+        # Hasta ahora esta rama no existía y los campos dinámicos salían con su
+        # valor crudo en la tabla. No se notaba porque todos los que había
+        # (cargos, departamentos, provincias...) usan el nombre como valor Y
+        # como etiqueta, así que la traducción era la identidad. Deja de serlo
+        # en cuanto un campo dinámico guarda un código distinto de lo que se
+        # muestra — el caso del Período de los cierres, que guarda '2026-09' y
+        # debe leerse 'Septiembre 2026'.
+        #
+        # El coste es una consulta por campo y por informe: quien llama
+        # (`views._construir_filas`, `motor._calcular_desglose`) construye este
+        # mapa una sola vez, no por fila.
+        return dict(campo["choices_dinamicas"]())
     return dict(campo.get("choices") or [])
 
 

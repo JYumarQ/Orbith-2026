@@ -4,6 +4,8 @@
     <form method="post"
           action="{% url 'updt_usuario' object.id %}"
           id="formEditarUsuario"
+          data-validacion-visual
+          data-recomendados="email,contrato"
           data-user-id="{{ object.id }}"
           data-confirm-text="¿Estás seguro de guardar los cambios para el usuario {{ object.username }}?">
       {% csrf_token %}
@@ -45,6 +47,18 @@
         <div class="mb-3">
           <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
           {{ form.unidades }}
+          {% comment %} Sin este bloque, un rechazo de `unidades` era invisible: la vista
+             repinta esta misma plantilla dentro del modal (ver `CustomUserUpdateView.
+             form_invalid`), asi que el formulario volvia a aparecer intacto y sin
+             explicar nada, como si el guardado se hubiera perdido. Importa sobre todo
+             para dos avisos: la unidad que ya tiene otro moderador —incluida una
+             subunidad heredada del padre, que es la que el Administrador necesita saber
+             cual es para liberarla— y la subunidad asignada sin su unidad principal.
+             `add_usuario.html` ya lo pintaba; esta pantalla se habia quedado atras.
+          {% endcomment %}
+          {% if form.unidades.errors %}
+            <div class="text-danger small">{{ form.unidades.errors }}</div>
+          {% endif %}
         </div>
 
         <div class="form-check form-switch mb-3">

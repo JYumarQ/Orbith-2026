@@ -109,30 +109,47 @@
     <div class="col-md-4 col-lg-3">
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-header bg-white border-bottom p-3 sticky-top zindex-1">
-                <h6 class="text-muted fw-bold text-uppercase small mb-2">
-                    <i class="fas fa-box-open me-1"></i> Sin Clasificar
-                </h6>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-muted fw-bold text-uppercase small mb-0">
+                        <i class="fas fa-box-open me-1"></i> Sin Clasificar
+                    </h6>
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="select-all-cargos" title="Seleccionar todos los visibles">
+                        <label class="form-check-label small text-muted" for="select-all-cargos">Todos</label>
+                    </div>
+                </div>
                 <div class="input-group input-group-merge">
                     <span class="input-group-text border-0 ps-2 bg-light"><i class="fas fa-search small"></i></span>
                     <input type="text" id="search-cargos" class="form-control border-0 bg-light shadow-none" placeholder="Buscar cargo...">
                 </div>
+                <button class="btn btn-sm btn-primary w-100 mt-2 d-none" id="btn-mover-seleccionados">
+                    <i class="fas fa-share-square me-1"></i> Mover seleccionados (<span id="count-seleccionados">0</span>)
+                </button>
+                {% comment %} El Shift+clic no se ve en pantalla: sin este aviso nadie
+                   descubriría el atajo, que es justo lo que ahorra los clics cuando
+                   hay decenas de cargos sin clasificar. {% endcomment %}
+                <small class="text-muted d-block mt-2" style="font-size: 0.68rem;">
+                    <i class="fas fa-lightbulb me-1"></i>Marque uno y haga
+                    <strong>Shift+clic</strong> en otro para seleccionar todo el rango.
+                </small>
             </div>
             
             <div class="card-body p-2 bg-light familia-column" id="unassigned-list">
                 {% for cargo in cargos_sin_familia %}
                     <div class="card mb-2 cargo-card shadow-sm border" data-id="{{ cargo.id }}">
-                        <div class="card-body p-2 d-flex justify-content-between align-items-center">
-                            <span class="small fw-semibold text-dark text-truncate cargo-desc" 
-                                    title="{{ cargo.descripcion }}" style="max-width: 75%;">
+                        <div class="card-body p-2 d-flex justify-content-between align-items-center gap-2">
+                            <input type="checkbox" class="form-check-input cargo-select-checkbox flex-shrink-0" value="{{ cargo.id }}">
+                            <span class="small fw-semibold text-dark text-truncate cargo-desc flex-grow-1"
+                                    title="{{ cargo.descripcion }}">
                                 {{ cargo.descripcion }}
                             </span>
-                            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu" 
+                            <button class="btn btn-sm btn-icon btn-text-secondary rounded-pill div-menu"
                                     onclick="abrirModalMover({{ cargo.id }})" title="Mover a...">
                                 <i class="fas fa-share-square text-primary"></i>
                             </button>
                             <div class="div-x d-none">
-                                <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100" 
-                                    onclick="removeFromFamily(this, {{ cargo.id }})" 
+                                <i class="fas fa-times text-danger cursor-pointer opacity-50 hover:opacity-100"
+                                    onclick="removeFromFamily(this, {{ cargo.id }})"
                                     title="Devolver a lista"></i>
                             </div>
                         </div>
@@ -244,6 +261,7 @@
 
     document.addEventListener('DOMContentLoaded', function() {
         initDragAndDrop();
+        initSeleccionMultiple();
     });
 
     function initDragAndDrop() {
@@ -255,7 +273,7 @@
         };
 
         new Sortable(unassignedList, {
-            ...commonConfig, sort: false,
+            ...commonConfig, sort: false, filter: '.cargo-select-checkbox', preventOnFilter: false,
             onAdd: function (evt) {
                 moverCargoAPI(evt.item.dataset.id, null);
                 actualizarContadores();
@@ -281,12 +299,17 @@
     function toggleControles(card, isAssigned) {
         const menu = card.querySelector('.div-menu');
         const xIcon = card.querySelector('.div-x');
+        const checkbox = card.querySelector('.cargo-select-checkbox');
         if(isAssigned) {
             if(menu) menu.classList.add('d-none');
             if(xIcon) xIcon.classList.remove('d-none');
         } else {
             if(menu) menu.classList.remove('d-none');
             if(xIcon) xIcon.classList.add('d-none');
+        }
+        if(checkbox) {
+            checkbox.checked = false;
+            actualizarBarraSeleccion();
         }
     }
 
@@ -313,7 +336,7 @@
             // Lógica de movimiento manual
             const card = document.querySelector(`.cargo-card[data-id="${cargoId}"]`);
             const targetContainer = document.querySelector(`.family-droppable[data-family-id="${familiaId}"]`);
-            
+
             if(card && targetContainer) {
                 targetContainer.appendChild(card);
                 toggleControles(card, true);
@@ -322,6 +345,176 @@
             }
         }
     };
+
+    // --- NUEVO: SELECCIÓN MÚLTIPLE EN "SIN CLASIFICAR" ---
+
+    /* Última tarjeta cuyo checkbox se pulsó. Es el ancla del Shift+clic.
+       No hace falta reiniciarla al cambiar de Tipo de Familia porque
+       `recargarContextoFamilias()` recarga la página entera. */
+    let ultimoPulsado = null;
+
+    /* Cargos que el usuario está VIENDO. El buscador oculta tarjetas con
+       `style.display`, y ni "Todos" ni Shift+clic deben marcar lo que no se ve. */
+    function cargosVisibles(unassignedList) {
+        return Array.from(unassignedList.querySelectorAll('.cargo-card'))
+            .filter(card => card.style.display !== 'none');
+    }
+
+    /* Aplica `marcado` a todas las tarjetas visibles entre el ancla y `hasta`,
+       ambas incluidas. Si el ancla ya no está en la lista —porque se movió a una
+       familia, o el buscador la ocultó— no hay rango que calcular y se ignora. */
+    function seleccionarRango(unassignedList, hasta, marcado) {
+        const visibles = cargosVisibles(unassignedList);
+        const desdeIdx = visibles.indexOf(ultimoPulsado);
+        const hastaIdx = visibles.indexOf(hasta);
+        if (desdeIdx === -1 || hastaIdx === -1) return;
+
+        const inicio = Math.min(desdeIdx, hastaIdx);
+        const fin = Math.max(desdeIdx, hastaIdx);
+        for (let i = inicio; i <= fin; i++) {
+            const cb = visibles[i].querySelector('.cargo-select-checkbox');
+            if (cb) cb.checked = marcado;
+        }
+    }
+
+    function initSeleccionMultiple() {
+        const unassignedList = document.getElementById('unassigned-list');
+        const selectAll = document.getElementById('select-all-cargos');
+        const btnMoverSeleccionados = document.getElementById('btn-mover-seleccionados');
+
+        unassignedList.addEventListener('change', function(evt) {
+            if (evt.target.classList.contains('cargo-select-checkbox')) {
+                actualizarBarraSeleccion();
+            }
+        });
+
+        /* Sin esto, mantener Shift mientras se hace clic selecciona el texto de
+           todas las tarjetas intermedias. `preventDefault` en `mousedown` evita
+           esa selección sin impedir que el checkbox se marque: el navegador lo
+           conmuta en el `click`, que es un evento posterior e independiente. */
+        unassignedList.addEventListener('mousedown', function(evt) {
+            if (evt.shiftKey && evt.target.classList.contains('cargo-select-checkbox')) {
+                evt.preventDefault();
+            }
+        });
+
+        /* Shift+clic marca el rango completo, como en cualquier gestor de
+           archivos. Convive con los checkboxes en vez de sustituirlos: el clic
+           normal sigue funcionando igual y el gesto solo añade un atajo.
+
+           Va en `click` y no en `change` porque `change` no informa de las teclas
+           pulsadas. Cuando llega el `click`, el navegador YA ha conmutado el
+           checkbox, así que `cb.checked` es el estado nuevo y es el que se
+           propaga al resto del rango: Shift+clic sobre uno que se marca marca
+           todo el rango, y sobre uno que se desmarca lo desmarca. */
+        unassignedList.addEventListener('click', function(evt) {
+            const cb = evt.target;
+            if (!cb.classList.contains('cargo-select-checkbox')) return;
+
+            const card = cb.closest('.cargo-card');
+            if (evt.shiftKey && ultimoPulsado && ultimoPulsado !== card) {
+                seleccionarRango(unassignedList, card, cb.checked);
+            }
+            ultimoPulsado = card;
+            actualizarBarraSeleccion();
+        });
+
+        selectAll.addEventListener('change', function() {
+            cargosVisibles(unassignedList).forEach(card => {
+                const cb = card.querySelector('.cargo-select-checkbox');
+                if (cb) cb.checked = selectAll.checked;
+            });
+            actualizarBarraSeleccion();
+        });
+
+        btnMoverSeleccionados.addEventListener('click', abrirModalMoverSeleccionados);
+    }
+
+    function getCargosSeleccionados() {
+        return Array.from(document.querySelectorAll('#unassigned-list .cargo-select-checkbox:checked'))
+            .map(cb => cb.value);
+    }
+
+    function actualizarBarraSeleccion() {
+        const seleccionados = getCargosSeleccionados();
+        const btnMoverSeleccionados = document.getElementById('btn-mover-seleccionados');
+        document.getElementById('count-seleccionados').textContent = seleccionados.length;
+        btnMoverSeleccionados.classList.toggle('d-none', seleccionados.length === 0);
+
+        // Sincroniza el checkbox "Todos" según los visibles marcados
+        const selectAll = document.getElementById('select-all-cargos');
+        const visibles = cargosVisibles(document.getElementById('unassigned-list'));
+        const visiblesMarcados = visibles.filter(card => card.querySelector('.cargo-select-checkbox')?.checked);
+        selectAll.checked = visibles.length > 0 && visiblesMarcados.length === visibles.length;
+    }
+
+    async function abrirModalMoverSeleccionados() {
+        const cargoIds = getCargosSeleccionados();
+        if (cargoIds.length === 0) return;
+
+        let opciones = '<option value="">Seleccione destino...</option>';
+        for (const [id, nombre] of Object.entries(FAMILIAS_OPTIONS)) {
+            opciones += `<option value="${id}">${nombre}</option>`;
+        }
+
+        const { value: familiaId } = await Swal.fire({
+            title: `Mover ${cargoIds.length} cargo(s) a...`,
+            html: `<select id="swal-familia-select" class="form-select">${opciones}</select>`,
+            showCancelButton: true,
+            confirmButtonText: 'Mover',
+            cancelButtonText: 'Cancelar',
+            preConfirm: () => {
+                const val = document.getElementById('swal-familia-select').value;
+                if (!val) {
+                    Swal.showValidationMessage('Debe seleccionar una familia destino');
+                }
+                return val;
+            }
+        });
+
+        if (!familiaId) return;
+
+        const targetContainer = document.querySelector(`.family-droppable[data-family-id="${familiaId}"]`);
+        if (!targetContainer) return;
+
+        moverCargosBulkAPI(cargoIds, familiaId, () => {
+            cargoIds.forEach(cargoId => {
+                const card = document.querySelector(`#unassigned-list .cargo-card[data-id="${cargoId}"]`);
+                if (card) {
+                    const cb = card.querySelector('.cargo-select-checkbox');
+                    if (cb) cb.checked = false;
+                    targetContainer.appendChild(card);
+                    toggleControles(card, true);
+                }
+            });
+            actualizarContadores();
+            actualizarBarraSeleccion();
+            window.mostrarToast(`${cargoIds.length} cargo(s) movidos.`, 'success');
+        });
+    }
+
+    function moverCargosBulkAPI(cargoIds, familiaId, onSuccess) {
+        const tipoId = document.getElementById('select-tipo-familia').value;
+
+        fetch("{% url 'api_cargo_move_bulk' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify({
+                cargo_ids: cargoIds,
+                familia_id: familiaId,
+                tipo_familia_id: tipoId
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                onSuccess();
+            } else {
+                window.mostrarToast(data.error || 'No se pudieron mover los cargos.', 'error');
+            }
+        })
+        .catch(err => console.error(err));
+    }
 
     function moverCargoAPI(cargoId, familiaId) {
         const tipoId = document.getElementById('select-tipo-familia').value; // <-- Obtenemos el Tipo de Familia actual
@@ -488,6 +681,7 @@
             const text = card.querySelector('.cargo-desc').textContent.toLowerCase();
             card.style.display = text.includes(term) ? '' : 'none';
         });
+        actualizarBarraSeleccion();
     });
 
     function actualizarContadores() {

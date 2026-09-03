@@ -195,7 +195,13 @@
             </p>
         </div>
 
-        <form method="post" id="form-parametros" class="swal-confirm" data-confirm-text="¿Estás seguro de guardar los cambios?" enctype="multipart/form-data">
+        <form method="post" {% comment %} `reup` y `provincia_entidad` van como recomendados porque son
+         justo los que reclama la regla CFG-002 de Subsanación: el REUP identifica
+         la entidad ante el Registro Estatal y la provincia sale en el encabezado
+         de los informes oficiales. Se pintan de amarillo mientras falten, pero no
+         bloquean el guardado — son opcionales en el modelo. {% endcomment %}
+      id="form-parametros" data-validacion-visual
+      data-recomendados="reup,org_superior,rama,correo,telefono,direccion,provincia_entidad" class="swal-confirm" data-confirm-text="¿Estás seguro de guardar los cambios?" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="active_tab" value="parametros">
 

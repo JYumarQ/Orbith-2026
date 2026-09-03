@@ -6,6 +6,7 @@ from django.db.models import F, Q
 from ..constantes import (
     CRITICIDAD_ALTA,
     CRITICIDAD_BAJA,
+    CRITICIDAD_CRITICA,
     CRITICIDAD_MEDIA,
     MODULO_ASPIRANTES,
     TAMANO_LOTE,
@@ -356,23 +357,38 @@ class NivelEducativoSinCompletar(ReglaAspirantes):
     NO reutiliza `_campo_de_texto_vacio` (que trataría cualquier valor no vacío como
     válido, cosa que aquí sí sería correcto) sino que compara contra `None`/`''`
     explícitamente: `'SA'` nunca debe reportarse como vacío.
+
+    Criticidad CRÍTICA, a diferencia de ASP-006 y ASP-008, que son datos que el
+    formulario tampoco exige. La diferencia es que el nivel educativo SÍ es ya un
+    campo obligatorio (`bolsa.Aspirante.nivel_educ`, `blank=False, null=False`):
+    ninguna alta ni edición nueva puede dejarlo vacío. Por tanto, todo lo que esta
+    regla encuentre es un registro heredado de antes de esa decisión, y hay que
+    vaciar la lista hasta cero en vez de convivir con ella.
     """
 
     codigo = 'ASP-007'
     nombre = 'Nivel educativo sin completar'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_CRITICA
     evaluable_en_caliente = True
 
     descripcion = (
         'Comprueba que el trabajador tenga registrado un nivel educativo (aunque '
         'sea «Sin Acreditar», que es una respuesta válida).')
     causa_probable = (
-        'El campo se dejó sin seleccionar al registrar al trabajador.')
+        'El trabajador se registró antes de que Orbith exigiera el nivel educativo. '
+        'Hoy el campo es obligatorio, así que ningún alta nueva puede quedarse sin '
+        'él: los que aparecen aquí son todos anteriores a ese cambio.')
     impacto = (
         'El nivel educativo es un dato reportable; dejarlo sin completar (en vez '
         'de marcar explícitamente «Sin Acreditar») distorsiona cualquier informe '
-        'que lo desglose.')
-    solucion = 'Abra el trabajador y seleccione su nivel educativo.'
+        'que lo desglose. Además, al ser ya un campo obligatorio, estos '
+        'trabajadores no se pueden guardar desde el formulario hasta que se les '
+        'asigne un nivel: cualquier otra corrección que haya que hacerles queda '
+        'bloqueada mientras tanto.')
+    solucion = (
+        'Abra el trabajador y seleccione su nivel educativo. Si no consta ninguna '
+        'acreditación, elija «Sin Acreditar», que es una respuesta válida y '
+        'distinta de dejar el campo vacío.')
 
     def _hallazgo(self, object_id, titulo, unidad_organizativa_id=None):
         return HallazgoDetectado(
@@ -400,6 +416,83 @@ class NivelEducativoSinCompletar(ReglaAspirantes):
         if nivel_educ is not None and nivel_educ != '':
             return None
         return [self._hallazgo(str(aspirante.pk), 'Sin nivel educativo')]
+
+
+class TrabajadorContratadoSinEspecialidad(ReglaAspirantes):
+    """Trabajador CONTRATADO con nivel Medio Superior (TM) o Superior y sin especialidad.
+
+    Solo se reclama a quien tiene contrato: el formulario habilita la especialidad
+    para los niveles TM y NS pero NO obliga a rellenarla, y en la bolsa de
+    candidatos ese hueco es normal —todavía no hay expediente ni papeles delante—.
+    En cambio, en alguien ya contratado el dato SÍ tiene que estar: es lo que dice
+    en qué se formó, y sin él los informes por especialidad lo dejan fuera.
+
+    «Tener contrato» se comprueba con la existencia de un `CAlta`, que es el
+    criterio del propio módulo de Contratos: al dar de baja a un trabajador su
+    `CAlta` desaparece y pasa a `CBaja`, así que un `CAlta` vivo es exactamente un
+    contrato vigente. Se usa `Exists` y no un `filter()` sobre la relación para que
+    un trabajador con más de un contrato no genere el hallazgo por duplicado.
+
+    NO es `evaluable_en_caliente`: saber si el trabajador tiene contrato exige
+    consultar la base de datos, y `evaluar_instancia()` corre dentro de `save()`
+    con un presupuesto estricto de operaciones O(1) sin consultas.
+    """
+
+    codigo = 'ASP-010'
+    nombre = 'Trabajador contratado sin especialidad'
+    criticidad = CRITICIDAD_MEDIA
+
+    # Niveles educativos que llevan especialidad. Es la misma pareja que usa
+    # `nomencladores.views.cargar_esp` para decidir qué lista ofrecer: TM da las
+    # especialidades de nivel medio y NS las de nivel superior. El resto de niveles
+    # no tiene especialidad que elegir, así que quedan fuera de esta regla.
+    NIVELES_CON_ESPECIALIDAD = ('TM', 'NS')
+
+    descripcion = (
+        'Comprueba que los trabajadores contratados con nivel Medio Superior (TM) o '
+        'Nivel Superior tengan registrada su especialidad.')
+    causa_probable = (
+        'La especialidad se habilita al elegir el nivel educativo, pero el '
+        'formulario permite guardar sin completarla: el dato se dejó pendiente al '
+        'dar de alta al trabajador y no se volvió sobre él al contratarlo.')
+    impacto = (
+        'La especialidad es lo que dice en qué se formó el trabajador. Sin ella, '
+        'los informes y las plantillas que se desglosan por especialidad lo dejan '
+        'fuera de la cuenta, y no hay forma de saber si el cargo que ocupa se '
+        'corresponde con su formación.')
+    solucion = (
+        'Abra el trabajador y seleccione su especialidad: al tener ya elegido el '
+        'nivel educativo, la lista muestra las que le corresponden.')
+
+    def ejecutar(self, contexto):
+        from django.db.models import Exists, OuterRef
+
+        CAlta = apps.get_model('contratos', 'CAlta')
+
+        filas = (self.base_queryset()
+                 .filter(nivel_educ__in=self.NIVELES_CON_ESPECIALIDAD,
+                         especialidad__isnull=True)
+                 .filter(Exists(CAlta.objects.filter(aspirante_id=OuterRef('pk'))))
+                 .values(*self.COLUMNAS_BASE, 'nivel_educ')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        etiquetas = dict(self.obtener_modelo()._meta.get_field('nivel_educ').choices)
+
+        for fila in filas:
+            nivel = etiquetas.get(fila['nivel_educ'], fila['nivel_educ'])
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'{nivel} sin especialidad'),
+                detalle=(
+                    f'El trabajador está contratado y tiene nivel «{nivel}», que '
+                    f'lleva especialidad, pero no tiene ninguna registrada.'),
+                datos={
+                    'nivel_educativo': nivel,
+                    'especialidad': 'Vacía',
+                },
+                unidad_organizativa_id=fila.get('unidad_organizativa_id'),
+                campo_formulario='especialidad',
+            )
 
 
 class SerieCarnetSinCompletar(ReglaAspirantes):

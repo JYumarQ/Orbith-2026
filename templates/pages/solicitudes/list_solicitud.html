@@ -264,7 +264,15 @@
     {% csrf_token %}
     <input type="hidden" name="tab" value="{{ tab_activa }}">
 </form>
+{% endblock %}
 
+{# `extra_scripts` va FUERA de `content`, no anidado dentro. Django renderiza un
+   bloque hijo tanto en el hueco que le reserva la plantilla base como allí donde
+   quede envuelto por otro bloque: estando dentro de `content`, este <script> se
+   escribía DOS veces en la página. La segunda copia moría con
+   «Identifier 'filaSeleccionada' has already been declared» y no llegaba a
+   ejecutarse —por eso el listado seguía funcionando—, pero dejaba un error en la
+   consola de cada carga. #}
 {% block extra_scripts %}
 <script>
     var $ = jQuery.noConflict();
@@ -422,5 +430,4 @@
     // forma fiable de que uno registrado aquí se ejecute ANTES que el
     // global para suprimirlo, así que no se duplica un handler local.
 </script>
-{% endblock %}
 {% endblock %}

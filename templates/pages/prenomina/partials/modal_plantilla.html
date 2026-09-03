@@ -50,7 +50,7 @@
         `hx-trigger` con `delay` en la descripción para no consultar en cada
         tecla; las casillas responden al instante porque son un solo clic.
       {% endcomment %}
-      <form id="form_plantilla"
+      <form id="form_plantilla" data-validacion-visual
             hx-post="{% if modo == 'duplicar' %}{% url 'prenomina:duplicar_plantilla' original.pk %}{% elif plantilla %}{% url 'prenomina:editar_plantilla' plantilla.pk %}{% else %}{% url 'prenomina:nueva_plantilla' %}{% endif %}"
             hx-target="#modal_generic" hx-swap="innerHTML" autocomplete="off">
         {% csrf_token %}

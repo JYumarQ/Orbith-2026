@@ -77,6 +77,12 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.orbith',
             ],
+            # `core` no es una app instalada (es el paquete de configuración), así
+            # que sus etiquetas de plantilla no se descubren solas: hay que
+            # registrarlas aquí para poder hacer `{% load estaticos %}`.
+            'libraries': {
+                'estaticos': 'core.templatetags.estaticos',
+            },
         },
     },
 ]

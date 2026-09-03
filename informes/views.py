@@ -1,6 +1,7 @@
 # 1. Librerías Estándar de Python
 import os
 import calendar
+import re
 from datetime import date, datetime
 
 # 2. Librerías y Módulos de Django
@@ -14,7 +15,8 @@ from django.views import View
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView
 from django.views.generic import TemplateView
 # 3. Librerías de Terceros
-from docxtpl import DocxTemplate
+from docx.shared import Mm
+from docxtpl import DocxTemplate, InlineImage
 from xhtml2pdf import pisa
 
 # 4. Modelos de tus Propias Aplicaciones
@@ -23,21 +25,126 @@ from xhtml2pdf import pisa
 from cierres.periodos import Periodo
 from configuracion.models import Configuracion
 from nomencladores.models import NTipoFamilia, NFamiliaCargo, NCargo
+from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import UnidadOrganizativa
+from usuarios.mixins import RequiereEdicionMixin
 from . import fuentes
 from .models import PlanMensualRegistro
 
 
-def _combo_unidades():
-    """Unidades que alimentan el desplegable de UEB.
+def _combo_unidades(usuario):
+    """Unidades que alimentan el selector de unidad de los informes.
 
     Se leen siempre de los datos vivos, también en modo histórico: es un control
     de navegación, no un dato del informe.
+
+    Se ofrecen las principales Y sus subunidades. Antes solo salían las raíces,
+    con el razonamiento de que elegir una principal ya arrastra a sus hijas
+    (`expandir_unidades`) y ofrecerlas todas sería redundante. Pero eso deja
+    fuera una pregunta legítima y frecuente: «¿cómo va SOLO este taller?».
+    Ahora se puede lo uno y lo otro — el total de la principal eligiéndola a
+    ella, o el de una subunidad concreta eligiéndola a ella—, que es justo la
+    diferencia entre un filtro jerárquico y uno plano.
+
+    Cada fila lleva `nivel` (0 raíz, 1 subunidad) para que la plantilla las
+    pueda indentar: sin esa pista visual, «Camagüey» y «Oficina Central»
+    parecerían dos unidades hermanas.
+
+    El Moderador ve exactamente las que tiene asignadas —que, por el invariante
+    de `usuarios/forms.py`, ya incluyen las subunidades de sus principales—.
+
+    Esto es comodidad, no seguridad: quien decide lo que cada usuario puede ver
+    es `fuentes.resolver_fuente()`, en el servidor.
     """
-    return (UnidadOrganizativa.objects
-            .select_related('tipo')
-            .filter(padre__isnull=True)
-            .order_by('orden_informe'))
+    permitidas = fuentes.unidades_visibles(usuario)
+    consulta = UnidadOrganizativa.objects.select_related('tipo', 'padre')
+    if permitidas is not None:
+        consulta = consulta.filter(pk__in=permitidas)
+    return ordenar_con_jerarquia(consulta)
+
+
+MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+            'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+
+def _nombre_del_alcance(request, por_defecto='Empresa Eléctrica Camagüey'):
+    """Texto que identifica el alcance del informe en un documento exportado.
+
+    Con el filtro de unidad convertido en selector múltiple, el encabezado de un
+    Word o un PDF ya no puede ser el nombre de una sola unidad. Sin nada elegido
+    se mantiene el nombre de la empresa, que es lo que ponía antes.
+    """
+    ids = [valor for valor in request.GET.getlist('ueb') if valor]
+    if not ids:
+        return por_defecto
+    nombres = list(UnidadOrganizativa.objects
+                   .filter(pk__in=ids)
+                   .order_by('orden_informe')
+                   .values_list('descripcion', flat=True))
+    return ', '.join(nombres) if nombres else por_defecto
+
+
+# Cuantas unidades se nombran en la cabecera que se repite en CADA pagina antes
+# de resumirlas con «y N mas». La lista completa se imprime una sola vez, al
+# principio del documento: una cabecera que crece con el numero de unidades le
+# robaria media hoja a la tabla en todas las paginas.
+UNIDADES_EN_CABECERA = 2
+
+
+def _cabecera_documento(request):
+    """Datos de identificacion que encabezan un informe exportado.
+
+    Un documento impreso tiene que decir por si solo de que empresa, de que
+    territorio y de quien es. Se arma una sola vez y la usan por igual la
+    pantalla, el Word y el PDF, para que los tres digan lo mismo.
+
+    La provincia sale SIEMPRE de Parametros Generales. El municipio solo cuando
+    el informe va de UNA unidad concreta, porque es el unico caso en que hay un
+    municipio que sea el del informe; con varias, el dato seria enganoso.
+
+    Quien exporta se identifica con el nombre del trabajador vinculado a su
+    cuenta —el mismo que se ve en su perfil—, sea del rol que sea. Si la cuenta
+    no tiene contrato vinculado se cae al nombre de usuario: es preferible a
+    dejar el hueco en blanco en un documento que se archiva.
+    """
+    from configuracion.models import Configuracion
+
+    config = Configuracion.objects.select_related('provincia_entidad').first()
+
+    ids = [valor for valor in request.GET.getlist('ueb')
+           if valor and str(valor).isdigit()]
+    unidades = list(UnidadOrganizativa.objects
+                    .filter(pk__in=ids)
+                    .select_related('municipio')
+                    .order_by('orden_informe', 'descripcion'))
+    nombres = [u.descripcion for u in unidades]
+
+    if len(nombres) <= UNIDADES_EN_CABECERA:
+        resumen = ', '.join(nombres)
+    else:
+        resumen = '%s y %d más' % (
+            ', '.join(nombres[:UNIDADES_EN_CABECERA]),
+            len(nombres) - UNIDADES_EN_CABECERA)
+
+    usuario = request.user
+    quien = (getattr(usuario, 'nombre_completo', None)
+             or getattr(usuario, 'username', '') or '')
+
+    return {
+        'config': config,
+        'nombre_empresa': config.nombre_empresa if config else 'Empresa Eléctrica',
+        'cab_provincia': (config.provincia_entidad.nombre
+                          if config and config.provincia_entidad_id else ''),
+        # Solo con UNA unidad: es el unico caso en que el informe tiene municipio.
+        'cab_municipio': (unidades[0].municipio.nombre
+                          if len(unidades) == 1 and unidades[0].municipio_id else ''),
+        'cab_unidades': nombres,
+        'cab_unidades_resumen': resumen or 'Todas las unidades',
+        # `True` cuando hay mas unidades de las que caben arriba: la plantilla
+        # imprime entonces la lista entera al principio del documento.
+        'cab_lista_aparte': len(nombres) > UNIDADES_EN_CABECERA,
+        'cab_exportado_por': quien,
+    }
 
 
 # Create your views here.
@@ -55,16 +162,13 @@ class InformeEconomiaView(TemplateView):
         fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
         context.update(contexto_fuente)
 
-        ueb_id = self.request.GET.get('ueb', '')
-
         from datetime import date
         hoy = date.today()
         context['mes_actual'] = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
         context['anno_actual'] = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
-        context['ueb_actual'] = str(ueb_id)
 
-        # LIMPIEZA: Trae Unidades Principales, Normales y Subunidades Independientes
-        context['unidades'] = _combo_unidades()
+        # `ueb_actual` (las unidades marcadas) lo trae ya `contexto_fuente`.
+        context['unidades'] = _combo_unidades(self.request.user)
 
         context['datos_tabla'], context['totales'] = self.calcular_consolidado(fuente)
 
@@ -126,8 +230,6 @@ class InformeEconomiaView(TemplateView):
 
 class ExportarConsolidadoWordView(InformeEconomiaView):
     def get(self, request, *args, **kwargs):
-        ueb_id = request.GET.get('ueb', '')
-
         # El documento sale de la misma fuente que la pantalla: si se está viendo
         # un cierre, lo que se exporta es ese cierre, no los datos de hoy.
         fuente, _ = fuentes.resolver_fuente(request)
@@ -140,11 +242,7 @@ class ExportarConsolidadoWordView(InformeEconomiaView):
         template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'consolidado_template.docx')
         doc = DocxTemplate(template_path)
         
-        nombre_ueb = "Empresa Eléctrica Camagüey"
-        if ueb_id:
-            ueb_obj = UnidadOrganizativa.objects.filter(pk=ueb_id).first()
-            if ueb_obj:
-                nombre_ueb = ueb_obj.descripcion
+        nombre_ueb = _nombre_del_alcance(request)
 
         context = {
             'datos': datos,
@@ -164,8 +262,6 @@ class ExportarConsolidadoWordView(InformeEconomiaView):
 
 class ExportarConsolidadoPDFView(InformeEconomiaView):
     def get(self, request, *args, **kwargs):
-        ueb_id = request.GET.get('ueb', '')
-
         fuente, _ = fuentes.resolver_fuente(request)
         hoy = date.today()
         mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
@@ -174,11 +270,7 @@ class ExportarConsolidadoPDFView(InformeEconomiaView):
         # Usamos tu misma matemática exacta
         datos, totales = self.calcular_consolidado(fuente)
 
-        nombre_ueb = "Empresa Eléctrica Camagüey"
-        if ueb_id:
-            ueb_obj = UnidadOrganizativa.objects.filter(pk=ueb_id).first()
-            if ueb_obj:
-                nombre_ueb = ueb_obj.descripcion
+        nombre_ueb = _nombre_del_alcance(request)
 
         context = {
             'datos': datos,
@@ -212,9 +304,10 @@ class InformeTrabajadoresUEBView(TemplateView):
         context = super().get_context_data(**kwargs)
         from datetime import date
 
-        # Informe global: compara TODAS las unidades entre sí, así que no admite
-        # filtro por unidad.
-        fuente, contexto_fuente = fuentes.resolver_fuente(self.request, usar_filtro_ueb=False)
+        # Compara las unidades entre sí. Con el filtro múltiple sigue teniendo
+        # sentido acotarlo ("compara estas tres"), y sin nada elegido se comporta
+        # igual que siempre: todas las que el usuario puede ver.
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
         context.update(contexto_fuente)
 
         hoy = date.today()
@@ -227,6 +320,7 @@ class InformeTrabajadoresUEBView(TemplateView):
         context['datos_uebs'] = datos_uebs
         context['total_general'] = total_general
         context['total_mujeres'] = total_mujeres
+        context['unidades'] = _combo_unidades(self.request.user)
 
         return context
 
@@ -301,14 +395,43 @@ class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
 
 # --- NUEVO INFORME: PUESTOS CLAVES ---
 
+# Como se organiza el informe de Puestos Clave. Lo elige el usuario con el
+# selector de la barra de filtros:
+#
+#   'desglosado'   Familia -> Unidad Organizativa -> cargos. Es el modelo
+#                  oficial: cada unidad encabeza con sus totales y debajo van
+#                  sus cargos. Una unidad principal encabeza en letra mayor con
+#                  la suma de sus subunidades, y cada subunidad lleva la suya.
+#   'consolidado'  Familia -> cargos, sumando cada cargo de TODAS las unidades.
+#                  Responde a «cuantas plazas de Liniero hay en la empresa».
+#
+# La eleccion se guarda en la sesion, asi que sobrevive a ir a otro informe y
+# volver, y se olvida al cerrar el navegador. Las tres salidas —pantalla, Word y
+# PDF— leen la misma estructura: en modo consolidado se construye una unica
+# «unidad» sin nombre y las plantillas no le pintan cabecera, de modo que hay un
+# solo camino de codigo en vez de dos que se puedan desincronizar.
+AGRUPACIONES = ('desglosado', 'consolidado')
+AGRUPACION_POR_DEFECTO = 'consolidado'
+CLAVE_AGRUPACION = 'puestos_clave_agrupacion'
+
+
 class InformePuestosClaveView(TemplateView):
     template_name = 'pages/informes/informe_puestos_clave.html'
 
-    def _resumen_de_ncargo(self, fuente, ncargo_id, nombre_alternativo=''):
+    def _resumen_de_ncargo(self, fuente, ncargo_id, nombre_alternativo='',
+                           unidades_ids=None):
         """Cifras de un nomenclador de cargo dentro de la fuente, o None si no tiene
-        ninguna plaza activa (el informe lo omite, igual que antes)."""
+        ninguna plaza activa (el informe lo omite, igual que antes).
+
+        Con `unidades_ids` las cifras se acotan a esas unidades, que es lo que
+        permite que el mismo cargo aparezca una vez por unidad con los numeros
+        de cada una. Sin ellas se suma todo, como antes.
+        """
+        def de_mi_alcance(fila):
+            return unidades_ids is None or fila.unidad_id in unidades_ids
+
         cargos = [c for c in fuente.cargos
-                  if c.ncargo_id == ncargo_id and c.activo]
+                  if c.ncargo_id == ncargo_id and c.activo and de_mi_alcance(c)]
         if not cargos:
             return None
 
@@ -320,7 +443,7 @@ class InformePuestosClaveView(TemplateView):
         # aspirantes en ACTIVO.
         contratos = [c for c in fuente.contratos
                      if c.ncargo_id == ncargo_id and c.cargo_activo
-                     and c.aspirante_estado == 'ACTIVO']
+                     and c.aspirante_estado == 'ACTIVO' and de_mi_alcance(c)]
 
         c_det = c_muj = c_adiest = 0
         for c in contratos:
@@ -347,19 +470,203 @@ class InformePuestosClaveView(TemplateView):
                                 ('det', 'det'), ('muj', 'muj'), ('adiest', 'adiest')):
             f_stats[destino] += puesto[origen]
 
+    # ------------------------------------------------------------------
+    # AGRUPACIÓN POR UNIDAD ORGANIZATIVA
+    # ------------------------------------------------------------------
+    # El informe oficial no lista los cargos en una sola tabla: los reparte por
+    # unidad, cada una con su cabecera y sus totales. Y una unidad principal
+    # encabeza toda su rama, con las subunidades debajo.
+    #
+    # Se construye a partir de `fuente.cargos`, que ya trae `unidad_id` en cada
+    # fila, así que la fotografía de un mes cerrado se agrupa por las unidades
+    # que EXISTÍAN entonces, no por las de hoy.
+    # ------------------------------------------------------------------
+
+    def _nodo_de_unidad(self, unidad_id, fuente, ncargos):
+        """Una unidad con sus cargos y sus totales, o None si no tiene ninguno.
+
+        Las unidades sin puestos clave se omiten del informe, igual que en el
+        modelo oficial: una cabecera con tres ceros no dice nada que no diga su
+        ausencia.
+        """
+        puestos = []
+        totales = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
+
+        for ncargo_id, nombre in ncargos:
+            puesto = self._resumen_de_ncargo(
+                fuente, ncargo_id, nombre_alternativo=nombre,
+                unidades_ids={unidad_id})
+            if puesto is None:
+                continue
+            puestos.append(puesto)
+            self._acumular(totales, puesto)
+
+        if not puestos:
+            return None
+
+        totales['porc'] = int(totales['cub'] / totales['aprob'] * 100) if totales['aprob'] else 0
+        fila = fuente.unidades.get(unidad_id)
+        return {
+            'id': unidad_id,
+            'nombre': fila.descripcion if fila else '',
+            'orden': (fila.orden if fila and fila.orden is not None else 9999),
+            'es_padre': False,
+            'subtotales': totales,
+            'puestos': puestos,
+            'subunidades': [],
+        }
+
+    def _agrupar_por_unidad(self, fuente, ncargos, alcance=None):
+        """Los cargos de una familia, repartidos por unidad y por rama.
+
+        Devuelve una lista de nodos de primer nivel. Un nodo con `subunidades`
+        es una unidad principal: sus totales son los suyos MÁS los de sus hijas,
+        que es lo que se espera al leer «Dirección Técnica: 57 plazas».
+
+        Una subunidad cuya principal queda FUERA del alcance del informe sube a
+        primer nivel. No es un detalle estetico: si el informe solo cubre el
+        Taller, encabezar con «Oficina Central» y sus 6 plazas diria que esa es
+        toda la direccion, cuando en realidad tiene 10. La principal solo
+        encabeza cuando el informe la abarca entera.
+
+        `alcance` es la lista de unidades que cubre el informe, o `None` para la
+        empresa completa (ver `informes.fuentes.resolver_fuente`).
+        """
+        def esta_en_el_informe(unidad_id):
+            return alcance is None or unidad_id in alcance
+
+        con_contenido = {}
+        for unidad_id in {c.unidad_id for c in fuente.cargos if c.activo}:
+            nodo = self._nodo_de_unidad(unidad_id, fuente, ncargos)
+            if nodo is not None:
+                con_contenido[unidad_id] = nodo
+
+        raices = {}
+        for unidad_id, nodo in con_contenido.items():
+            fila = fuente.unidades.get(unidad_id)
+            padre_id = fila.padre_id if fila else None
+
+            if (padre_id is None or padre_id not in fuente.unidades
+                    or not esta_en_el_informe(padre_id)):
+                raices[unidad_id] = nodo
+                continue
+
+            # La principal encabeza la rama aunque ella misma no tenga cargos
+            # (lo normal: todo cuelga de sus hijas), así que se crea vacía.
+            padre = raices.get(padre_id)
+            if padre is None:
+                padre = con_contenido.get(padre_id)
+                if padre is None:
+                    fila_padre = fuente.unidades[padre_id]
+                    padre = {
+                        'id': padre_id,
+                        'nombre': fila_padre.descripcion,
+                        'orden': (fila_padre.orden
+                                  if fila_padre.orden is not None else 9999),
+                        'es_padre': True,
+                        'subtotales': {'aprob': 0, 'cub': 0, 'vac': 0,
+                                       'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0},
+                        'puestos': [],
+                        'subunidades': [],
+                    }
+                raices[padre_id] = padre
+            padre['es_padre'] = True
+            padre['subunidades'].append(nodo)
+
+        # Totales de la rama y orden final. Se ordena por `orden_informe` —la
+        # posición en el organigrama—, que es el criterio de todos los informes
+        # del proyecto; el alfabético dejaría a las unidades en un orden que no
+        # es el que la empresa reconoce.
+        for nodo in raices.values():
+            if not nodo['subunidades']:
+                continue
+            nodo['subunidades'].sort(key=lambda n: (n['orden'], n['nombre']))
+            for hija in nodo['subunidades']:
+                for clave in ('aprob', 'cub', 'vac', 'det', 'muj', 'adiest'):
+                    nodo['subtotales'][clave] += hija['subtotales'][clave]
+            aprob = nodo['subtotales']['aprob']
+            nodo['subtotales']['porc'] = (
+                int(nodo['subtotales']['cub'] / aprob * 100) if aprob else 0)
+
+        return sorted(raices.values(), key=lambda n: (n['orden'], n['nombre']))
+
+    def _familia(self, fuente, nombre, ncargos, alcance=None,
+                 agrupacion=AGRUPACION_POR_DEFECTO):
+        """Un bloque del informe: la familia, sus unidades y sus subtotales.
+
+        Devuelve None si la familia no tiene ni un cargo con plazas, para que no
+        aparezca un epígrafe vacío.
+        """
+        if agrupacion == 'desglosado':
+            unidades = self._agrupar_por_unidad(fuente, ncargos, alcance)
+        else:
+            unidades = self._sin_agrupar(fuente, ncargos)
+
+        if not unidades:
+            return None
+
+        # Solo se suman los nodos de primer nivel: los totales de una principal
+        # YA incluyen a sus hijas, y volver a sumarlas duplicaría la rama entera.
+        subtotales = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
+        for nodo in unidades:
+            for clave in ('aprob', 'cub', 'vac', 'det', 'muj', 'adiest'):
+                subtotales[clave] += nodo['subtotales'][clave]
+        subtotales['porc'] = (
+            int(subtotales['cub'] / subtotales['aprob'] * 100)
+            if subtotales['aprob'] else 0)
+
+        return {'nombre': nombre, 'unidades': unidades, 'subtotales': subtotales}
+
+    def _sin_agrupar(self, fuente, ncargos):
+        """Modo consolidado: todos los cargos juntos, sumando todas las unidades.
+
+        Se devuelve con la misma forma que el modo desglosado —una lista con un
+        solo nodo, sin nombre— para que las plantillas no necesiten saber en qué
+        modo está el informe. Sin nombre, no pintan cabecera de unidad.
+        """
+        puestos = []
+        totales = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
+        for ncargo_id, nombre_cargo in ncargos:
+            puesto = self._resumen_de_ncargo(
+                fuente, ncargo_id, nombre_alternativo=nombre_cargo)
+            if puesto is None:
+                continue
+            puestos.append(puesto)
+            self._acumular(totales, puesto)
+
+        if not puestos:
+            return []
+
+        totales['porc'] = int(totales['cub'] / totales['aprob'] * 100) if totales['aprob'] else 0
+        return [{
+            'id': None, 'nombre': '', 'orden': 0, 'es_padre': False,
+            'subtotales': totales, 'puestos': puestos, 'subunidades': [],
+        }]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
         fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
         context.update(contexto_fuente)
 
-        # 1. Filtros
-        ueb_id = self.request.GET.get('ueb', '')
+        # 1. Filtros. Las unidades marcadas (`ueb_actual`) las trae ya
+        # `contexto_fuente`, que además es quien las cruza con el alcance del rol.
         tipo_id = self.request.GET.get('tipo_familia', '')
         mes = self.request.GET.get('mes', str(date.today().month))
         anno = self.request.GET.get('anno', str(date.today().year))
         if fuente.periodo:
             mes, anno = str(fuente.periodo.mes), str(fuente.periodo.anno)
+
+        # Modo de agrupación. Viene del selector; si no viene, se recuerda el
+        # último que eligió esta sesión, y en su defecto el modo por defecto.
+        # Guardarlo en la sesión de Django y no en el navegador evita la doble
+        # carga de leerlo con JavaScript y volver a pedir la página.
+        agrupacion = self.request.GET.get('agrupar')
+        if agrupacion in AGRUPACIONES:
+            self.request.session[CLAVE_AGRUPACION] = agrupacion
+        else:
+            agrupacion = self.request.session.get(
+                CLAVE_AGRUPACION, AGRUPACION_POR_DEFECTO)
 
         # 2. Tipos de Familia
         tipos_familia = NTipoFamilia.objects.all().order_by('nombre')
@@ -370,10 +677,9 @@ class InformePuestosClaveView(TemplateView):
         datos_familias = []
         stats = {'aprobada': 0, 'cubierta': 0, 'vacante': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porcentaje': 0}
 
-        # 4. Lógica de Agrupación con Subtotales
-        # ================================================
-        # CASO 1: FILTRO "PUESTOS CLAVE"
-        # ================================================
+        # 4. Los bloques del informe: una familia por epígrafe, y dentro de cada
+        #    una las unidades organizativas con sus cargos (ver
+        #    AGRUPACIONES, arriba).
         if tipo_id == 'puestos_clave':
             # Los NCargos marcados como Puesto Clave que tienen plazas en la fuente.
             # `puesto_clave` sale de la propia fila, así que en modo histórico se
@@ -381,95 +687,55 @@ class InformePuestosClaveView(TemplateView):
             # `.lower()` porque el orden venía de PostgreSQL, que no distingue
             # mayúsculas al ordenar texto; `sorted()` de Python sí, y colocaría
             # todos los cargos en minúscula al final de la lista.
-            ncargos_qs = sorted(
+            ncargos = sorted(
                 {c.ncargo_id: c.ncargo_descripcion
                  for c in fuente.cargos if c.puesto_clave and c.activo}.items(),
                 key=lambda par: (par[1] or '').lower())
 
-            # Creamos una "familia virtual" para agruparlos
-            virtual_family_name = '⭐ Puestos Clave'
-            f_stats = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
-            puestos_list = []
-
-            for ncargo_id, _descripcion in ncargos_qs:
-                puesto = self._resumen_de_ncargo(fuente, ncargo_id)
-                if puesto is None:
-                    continue
-                puestos_list.append(puesto)
-                self._acumular(f_stats, puesto)
-
-            if puestos_list:
-                f_stats['porc'] = int((f_stats['cub'] / f_stats['aprob'] * 100)) if f_stats['aprob'] > 0 else 0
-                datos_familias.append({
-                    'nombre': virtual_family_name,
-                    'puestos': puestos_list,
-                    'subtotales': f_stats
-                })
-                stats['aprobada'] += f_stats['aprob']
-                stats['cubierta'] += f_stats['cub']
-                stats['vacante'] += f_stats['vac']
-                stats['det'] += f_stats['det']
-                stats['muj'] += f_stats['muj']
-                stats['adiest'] += f_stats['adiest']
-
-        # ================================================
-        # CASO 2: FILTRO POR TIPO DE FAMILIA (Código original)
-        # ================================================
+            bloque = self._familia(fuente, '⭐ Puestos Clave', ncargos,
+                                   contexto_fuente.get('unidades_alcance'),
+                                   agrupacion)
+            if bloque:
+                datos_familias.append(bloque)
         else:
-            # Convertimos a entero para la consulta, manejando posible error
             try:
                 tipo_id_int = int(tipo_id)
             except (ValueError, TypeError):
                 tipo_id_int = None
-                
+
             if tipo_id_int:
-                familias = NFamiliaCargo.objects.filter(tipo_familia_id=tipo_id_int).prefetch_related('cargos')
-                
+                familias = (NFamiliaCargo.objects
+                            .filter(tipo_familia_id=tipo_id_int)
+                            .prefetch_related('cargos'))
                 for familia in familias:
-                    puestos_list = []
-                    f_stats = {'aprob': 0, 'cub': 0, 'vac': 0, 'det': 0, 'muj': 0, 'adiest': 0, 'porc': 0}
-                    
-                    for ncargo in familia.cargos.all():
-                        # Se mantiene el filtro de puesto_clave=True (solo plazas
-                        # clave dentro de esta familia). La pertenencia a la familia
-                        # se lee de los nomencladores vivos también en modo
-                        # histórico: es un agrupador global, como el propio nombre
-                        # de la familia, no un dato de la unidad.
-                        if not ncargo.puesto_clave:
-                            continue
+                    # Solo las plazas clave dentro de esta familia. La pertenencia
+                    # a la familia se lee de los nomencladores vivos también en
+                    # modo histórico: es un agrupador global, como el propio
+                    # nombre de la familia, no un dato de la unidad.
+                    ncargos = [(n.pk, n.descripcion)
+                               for n in familia.cargos.all() if n.puesto_clave]
+                    bloque = self._familia(
+                        fuente, familia.nombre, ncargos,
+                        contexto_fuente.get('unidades_alcance'), agrupacion)
+                    if bloque:
+                        datos_familias.append(bloque)
 
-                        puesto = self._resumen_de_ncargo(
-                            fuente, ncargo.pk, nombre_alternativo=ncargo.descripcion)
-                        if puesto is None:
-                            continue
-
-                        puestos_list.append(puesto)
-                        self._acumular(f_stats, puesto)
-
-                    if puestos_list:
-                        f_stats['porc'] = int((f_stats['cub'] / f_stats['aprob'] * 100)) if f_stats['aprob'] > 0 else 0
-                        
-                        datos_familias.append({
-                            'nombre': familia.nombre,
-                            'puestos': puestos_list,
-                            'subtotales': f_stats
-                        })
-                        
-                        stats['aprobada'] += f_stats['aprob']
-                        stats['cubierta'] += f_stats['cub']
-                        stats['vacante'] += f_stats['vac']
-                        stats['det'] += f_stats['det']
-                        stats['muj'] += f_stats['muj']
-                        stats['adiest'] += f_stats['adiest']
+        for bloque in datos_familias:
+            stats['aprobada'] += bloque['subtotales']['aprob']
+            stats['cubierta'] += bloque['subtotales']['cub']
+            stats['vacante'] += bloque['subtotales']['vac']
+            stats['det'] += bloque['subtotales']['det']
+            stats['muj'] += bloque['subtotales']['muj']
+            stats['adiest'] += bloque['subtotales']['adiest']
 
         if stats['aprobada'] > 0:
             stats['porcentaje'] = int((stats['cubierta'] / stats['aprobada']) * 100)
 
         dt = datetime.now()
-        meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
         dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        fecha_es = f"{dias[dt.weekday()]}, {dt.day:02d} de {meses[dt.month - 1]} de {dt.year} | {dt.strftime('%I:%M %p')}"
+        fecha_es = f"{dias[dt.weekday()]}, {dt.day:02d} de {MESES_ES[dt.month - 1]} de {dt.year} | {dt.strftime('%I:%M %p')}"
 
+        context.update(_cabecera_documento(self.request))
         context.update({
             'datos_familias': datos_familias,
             'fecha_generacion': fecha_es,
@@ -477,29 +743,72 @@ class InformePuestosClaveView(TemplateView):
             'tipos_familia': tipos_familia,
             'tipo_actual': tipo_id,
             # Filtramos el combo para no mostrar las subunidades sueltas, solo contenedores o independientes
-            'unidades': _combo_unidades(),
-            'ueb_actual': ueb_id,
+            'unidades': _combo_unidades(self.request.user),
             'mes_actual': mes,
             'anno_actual': anno,
+            'agrupacion': agrupacion,
         })
         return context
 
 
+def _nombre_de_fichero(context, extension):
+    """Nombre del documento descargado: informe, alcance y período.
+
+    `Puestos_Clave_Nuevitas_Septiembre_2026.docx` se reconoce de un vistazo en la
+    carpeta de descargas; `Puestos_Clave_9_2026.docx`, que es lo que se ponía
+    antes, no distingue el informe de una unidad del de la empresa entera.
+    """
+    partes = ['Puestos_Clave']
+
+    unidades = context.get('cab_unidades') or []
+    if len(unidades) == 1:
+        partes.append(unidades[0])
+    elif unidades:
+        partes.append('%d_unidades' % len(unidades))
+
+    try:
+        partes.append(MESES_ES[int(context.get('mes_actual')) - 1])
+    except (TypeError, ValueError, IndexError):
+        partes.append(str(context.get('mes_actual') or ''))
+    partes.append(str(context.get('anno_actual') or ''))
+
+    limpio = re.sub(r'[^\w\-]+', '_', '_'.join(p for p in partes if p), flags=re.UNICODE)
+    return '%s.%s' % (limpio.strip('_'), extension)
+
+
 class ExportarPuestosClaveWordView(InformePuestosClaveView):
     def get(self, request, *args, **kwargs):
-        # Obtenemos la data agrupada por familias directamente del contexto general
+        # La estructura por familia y unidad, la cabecera del documento y las
+        # cifras salen todas del contexto de la pantalla: el Word enseña
+        # exactamente lo mismo que se está viendo.
         context = self.get_context_data(**kwargs)
-        
+        context['ueb'] = _nombre_del_alcance(request)
+
         template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'puestos_clave_template.docx')
-        
+
         try:
             doc = DocxTemplate(template_path)
+
+            # El logo se inserta como imagen de verdad, no como ruta: docxtpl lo
+            # incrusta en el .docx con `InlineImage`. Sin logo configurado, la
+            # etiqueta se queda vacía y la cabecera no se descuadra.
+            config = context.get('config')
+            logo = ''
+            if config and config.logo:
+                try:
+                    # 28 mm: acompaña al cuerpo de letra de la cabecera, que
+                    # subió a 16 pt. Con 22 mm el logo se veía perdido al lado.
+                    logo = InlineImage(doc, config.logo.path, width=Mm(28))
+                except Exception:
+                    logo = ''
+            context['logo'] = logo
+
             doc.render(context)
-            
+
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-            filename = f'Puestos_Clave_{context.get("mes_actual")}_{context.get("anno_actual")}.docx'
+            filename = _nombre_de_fichero(context, 'docx')
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            
+
             doc.save(response)
             return response
         except Exception as e:
@@ -511,18 +820,15 @@ class ExportarPuestosClavePDFView(InformePuestosClaveView):
         # 1. Obtenemos la data de la vista principal
         context = self.get_context_data(**kwargs)
         
-        # 2. Inyección del Logo con Ruta Física Absoluta
-        from configuracion.models import Configuracion # Ajusta a tu app
-        config = Configuracion.objects.first()
-        context['config'] = config
-        context['nombre_empresa'] = config.nombre_empresa if config else "Empresa Eléctrica"
+        # El logo, la empresa, la provincia y el resto de la cabecera vienen ya
+        # de `_cabecera_documento()`, que comparten las tres salidas.
 
-        # 3. Renderizar PDF
+        # 2. Renderizar PDF
         template = get_template('pages/reportes/puestos_clave_pdf.html')
         html = template.render(context)
         
         response = HttpResponse(content_type='application/pdf')
-        filename = f'Puestos_Clave_{context.get("mes_actual")}_{context.get("anno_actual")}.pdf'
+        filename = _nombre_de_fichero(context, 'pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         pisa_status = pisa.CreatePDF(html, dest=response)
@@ -540,8 +846,7 @@ class InformeMisionesView(TemplateView):
         context = super().get_context_data(**kwargs)
         from datetime import date
 
-        # Informe global: recorre la empresa entera y no ofrece selector de unidad.
-        fuente, contexto_fuente = fuentes.resolver_fuente(self.request, usar_filtro_ueb=False)
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
         context.update(contexto_fuente)
 
         hoy = date.today()
@@ -602,6 +907,7 @@ class InformeMisionesView(TemplateView):
         context['importe_total'] = importe_total
         context['desglose'] = desglose
         context['uebs'] = uebs_ordenadas # Ahora es {Nombre: [lista_trabajadores]}
+        context['unidades'] = _combo_unidades(self.request.user)
         return context
     
 class RegistroDiarioView(TemplateView):
@@ -620,7 +926,13 @@ class RegistroDiarioView(TemplateView):
         if fuente.periodo:
             mes_actual, anno_actual = str(fuente.periodo.mes), str(fuente.periodo.anno)
 
-        ueb_filtro = self.request.GET.get('ueb', '')
+        # El Plan Mensual se guarda por (mes, año, UNA unidad, familia): esa clave
+        # es anterior al filtro múltiple y no cambia. Con exactamente una unidad
+        # marcada se usa la suya; con ninguna o con varias se usa la clave del
+        # plan consolidado (''), que es la misma que se usaba antes cuando no
+        # había filtro. Así ningún plan ya guardado se queda huérfano.
+        marcadas = [valor for valor in self.request.GET.getlist('ueb') if valor]
+        ueb_filtro = marcadas[0] if len(marcadas) == 1 else ''
         familia_filtro = self.request.GET.get('tipo_familia', '')
 
         # 1. Contratos de la fuente (ya acotados a la unidad seleccionada y a sus
@@ -707,18 +1019,26 @@ class RegistroDiarioView(TemplateView):
         # Enviar al contexto
         context['mes_actual'] = mes_actual
         context['anno_actual'] = anno_actual
-        context['ueb_actual'] = ueb_filtro
+        # `ueb_actual` (lo marcado en el selector) lo trae `contexto_fuente`;
+        # `ueb_filtro` es solo la clave del plan y no debe pisarlo.
         context['tipo_actual'] = familia_filtro
         context['datos'] = datos
         context['plan_editable'] = valor_plan
         # Para los combos (Ajusta NFamiliaCargo a tu modelo real)
-        context['unidades'] = _combo_unidades()
+        context['unidades'] = _combo_unidades(self.request.user)
         # context['tipos_familia'] = NFamiliaCargo.objects.all()
 
         return context
 
-# Vista para que JavaScript guarde el plan con Doble Clic sin recargar
-class GuardarPlanDiarioView(View):
+# Vista para que JavaScript guarde el plan con Doble Clic sin recargar.
+#
+# `RequiereEdicionMixin` cierra la escritura al Observador. Es la ÚNICA vista de
+# este módulo que escribe: el resto de Informes son de solo lectura, así que sin
+# este cierre un usuario de consulta podía grabar el Plan Mensual desde «Registro
+# Diario por Trabajadores» pese a que su rol no se lo permite en ninguna otra
+# pantalla. Responde JSON, y el mixin también: el doble clic recibe un 403 con
+# `error_popup` en vez de una página de error.
+class GuardarPlanDiarioView(RequiereEdicionMixin, View):
     def post(self, request, *args, **kwargs):
         import json
         data = json.loads(request.body)
@@ -741,9 +1061,6 @@ class InformeMotivosContratoView(TemplateView):
 
         fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
         context.update(contexto_fuente)
-
-        # 1. CAPTURAR EL FILTRO DE LA URL
-        ueb_id = self.request.GET.get('ueb', '')
 
         # Mismo criterio que la consulta original: solo aspirantes en ACTIVO y
         # tipos de contrato que exigen motivo. La cascada por unidad ya la aplicó
@@ -879,8 +1196,7 @@ class InformeMotivosContratoView(TemplateView):
             'mes_actual': (fuente.periodo or Periodo(hoy.year, hoy.month)).etiqueta.split()[0],
             'anno_actual': fuente.periodo.anno if fuente.periodo else hoy.year,
             # 4. ENVIAR LAS UNIDADES Y EL FILTRO ACTUAL AL TEMPLATE
-            'unidades': _combo_unidades(),
-            'ueb_actual': ueb_id,
+            'unidades': _combo_unidades(self.request.user),
         })
         
         return context

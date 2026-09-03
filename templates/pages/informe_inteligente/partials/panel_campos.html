@@ -5,6 +5,7 @@
         <span class="ii-panel-title">
             <span class="ii-icono-chip ii-color-violeta"><i class="bi bi-check2-square"></i></span>
             1. Campos a mostrar en el detalle
+            {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Campos a mostrar" contenido="Marca las columnas que quieres ver en la tabla del informe. Las columnas salen en el ORDEN EN QUE LAS MARCAS, no en el orden de esta lista: si quieres el nombre primero, márcalo primero. Usa el buscador para encontrar un campo por su nombre. Los campos con un candado son datos personales sensibles, como el carné o el salario: es solo un aviso, no impide usarlos. Si un campo aparece en gris es porque el cierre mensual que estás consultando no lo guardó." %}
         </span>
         <span class="d-flex align-items-center gap-2">
             <span class="badge ii-badge-contador" id="contadorCampos">0 campos seleccionados</span>

@@ -6,6 +6,17 @@
     
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Trabajadores por UEB" %}
 
+    {% comment %} Este informe no tenía filtro por unidad: la barra es la misma
+       que la de los demás informes, con el partial común. {% endcomment %}
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body py-3 d-flex align-items-center flex-wrap gap-3">
+            <small class="text-muted fw-bold" style="font-size: 11px;">
+                <i class="bx bx-filter-alt me-1 text-primary"></i>Filtro por Unidad
+            </small>
+            {% include 'pages/informes/partials/filtro_unidades.html' %}
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-12">
             <div class="card border-0 shadow-sm">

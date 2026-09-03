@@ -1,4 +1,5 @@
 {% load static %}
+{% load estaticos %}
 
 <style>
   /* Mismas reglas que `list_contrato.html`/`list_aspir.html`: no están en el CSS global,
@@ -169,7 +170,7 @@
   {% include 'pages/notificaciones/partials/_tabla.html' %}
 </div>
 
-<script src="{% static 'js/notificaciones.js' %}"></script>
+<script src="{% estatico 'js/notificaciones.js' %}"></script>
 <script>
   /* Los <select> del formulario de filtros quedan FUERA de #resultados-advertencias
      (solo se intercambia la tabla), así que no hay que reinicializar Select2 en cada

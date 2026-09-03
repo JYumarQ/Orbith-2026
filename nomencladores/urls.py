@@ -18,15 +18,22 @@ from django.urls import path
 
 from usuarios.decorators import admin_required
 
-from . import views
+from . import views, views_importes
 
 urlpatterns = [
 
-    # ---------- NCargo (vistas CBV) ----------
-    path('list_ncargo/', login_required(views.NCargoListView.as_view()), name='list_ncargo'),
-    path('add_ncargo/', admin_required(views.NCargoCreateView.as_view()), name='add_ncargo'),
-    path('updt_ncargo/<pk>/', admin_required(views.NCargoUpdateView.as_view()), name='updt_ncargo'),
-    path('del_ncargo/<pk>/', admin_required(views.NCargoDeleteView.as_view()), name='del_ncargo'),
+    # ---------- NCargo ----------
+    # La pantalla de página completa de Cargos (`list_ncargo` y su CRUD) se eliminó:
+    # estaba rota en tres sitios a la vez —la vista consultaba `familia` y `activo`,
+    # dos campos que `NCargo` ya no tiene desde que la relación con las familias pasó
+    # a ser Many-to-Many, y la plantilla llamaba a una ruta `search_cargos` que no
+    # existe—, así que devolvía un error 500 a cualquiera, Administrador incluido.
+    # Ninguna pantalla de la interfaz enlazaba con ella y duplicaba el trabajo de
+    # Configuración → Familias de Cargos, que sí funciona.
+    #
+    # `NCargoForm` NO se tocó: sigue vivo y lo usa el módulo de Solicitudes para el
+    # flujo de proponer un cargo nuevo (ver `solicitudes/operaciones.py`). Los cargos
+    # se crean y editan desde el editor en línea de Configuración (`api/cargos/`).
 
     path('salarios/modal/', admin_required(views.crear_salarios_por_grupo), name='agregar_salarios_modal'),
     path('api/grupo/<int:id>/', login_required(views.obtener_grupo), name='obtener_grupo'),
@@ -102,8 +109,11 @@ urlpatterns = [
     path('api/familias/create/', admin_required(views.api_familia_create), name='api_familia_create'),
     path('api/familias/<int:pk>/delete/', admin_required(views.api_familia_delete), name='api_familia_delete'),
     path('api/cargos/move/', admin_required(views.api_cargo_move), name='api_cargo_move'),
+    path('api/cargos/move-bulk/', admin_required(views.api_cargo_move_bulk), name='api_cargo_move_bulk'),
     path('api/familias/<int:pk>/update/', admin_required(views.api_familia_update), name='api_familia_update'),
-    path('api/familias/contexto/', login_required(views.api_get_contexto_familias), name='api_get_contexto_familias'),
+    # `api/familias/contexto/` se eliminó con su vista: ninguna pantalla la usaba y
+    # no podía funcionar (campo inexistente + plantilla que no existe). Ver la nota
+    # en `views.py`, donde estaba `api_get_contexto_familias`.
 
     # ---------- CRUD Tipo Familia ----------
     path('api/tipos-familia/create/', admin_required(views.tipo_familia_create), name='tipo_familia_create'),
@@ -132,6 +142,16 @@ urlpatterns = [
     # ---------- CRUD Tipos de Unidad Organizativa ----------
     path('api/tipo_unidad/guardar/', admin_required(views.guardar_tipo_unidad), name='guardar_tipo_unidad'),
     path('api/tipo_unidad/<int:pk>/eliminar/', admin_required(views.eliminar_tipo_unidad), name='eliminar_tipo_unidad'),
+
+    # ---------- Importes del contrato: Maestría, Doctorado, Instructor y CNCI ----------
+    # Las cuatro tarjetas de «Laborales y Profesionales» que alimentan los campos
+    # de importe del contrato. Van con el patrón de tarjeta + modal de Pre-Nómina
+    # (ver `views_importes.py`), no con el editor en línea del resto de esta
+    # pantalla. `admin_required` lo ponen las propias vistas.
+    path('importes/<str:slug>/tarjeta/', views_importes.tarjeta, name='importe_tarjeta'),
+    path('importes/<str:slug>/nuevo/', views_importes.guardar, name='importe_nuevo'),
+    path('importes/<str:slug>/<int:pk>/editar/', views_importes.guardar, name='importe_editar'),
+    path('importes/<str:slug>/<int:pk>/eliminar/', views_importes.eliminar, name='importe_eliminar'),
 
     # ---------- Nocturnidad ----------
     path('api/nocturnidad/create/', admin_required(views.nocturnidad_create), name='nocturnidad_create'),

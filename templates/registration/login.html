@@ -2,6 +2,7 @@
 <html lang="es" dir="ltr">
 <head>
     {% load static %}
+    {% load estaticos %}
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
@@ -245,10 +246,11 @@
                     {% comment %} type="button" es obligatorio: dentro de un <form>, un <button>
                        sin type actúa como submit y enviaría el login al pulsar el ojo. {% endcomment %}
                     <button type="button" id="btnVerClave" class="btn-ver-clave"
+                            data-ver-password="id_password"
                             aria-label="Mostrar contraseña" aria-pressed="false"
                             aria-controls="id_password" title="Mostrar contraseña">
-                        <svg id="iconoOjo" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <svg id="iconoOjoTachado" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+                        <svg data-icono="ver" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg data-icono="ocultar" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-6.5 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
                     </button>
                 </div>
 
@@ -306,41 +308,18 @@
         </div>
     </div>
 
+    <script src="{% estatico 'js/ver_password.js' %}"></script>
     <script>
     (function () {
         'use strict';
 
         // ---------- Mostrar / ocultar la contraseña ----------
-        // Solo cambia el atributo `type` del input: la contraseña NO se copia a
-        // ningún sitio ni se guarda en ninguna variable.
-        const campoClave      = document.getElementById('id_password');
-        const btnVerClave     = document.getElementById('btnVerClave');
-        const iconoOjo        = document.getElementById('iconoOjo');
-        const iconoOjoTachado = document.getElementById('iconoOjoTachado');
-
-        if (campoClave && btnVerClave) {
-            campoClave.classList.add('con-boton');
-
-            btnVerClave.addEventListener('click', function () {
-                const visible = campoClave.type === 'text';
-
-                campoClave.type = visible ? 'password' : 'text';
-
-                iconoOjo.style.display        = visible ? '' : 'none';
-                iconoOjoTachado.style.display = visible ? 'none' : '';
-
-                const etiqueta = visible ? 'Mostrar contraseña' : 'Ocultar contraseña';
-                btnVerClave.setAttribute('aria-label', etiqueta);
-                btnVerClave.setAttribute('title', etiqueta);
-                btnVerClave.setAttribute('aria-pressed', visible ? 'false' : 'true');
-
-                // Devolver el foco al campo y dejar el cursor al final: sin esto,
-                // el usuario tendría que volver a pinchar para seguir escribiendo.
-                campoClave.focus();
-                const fin = campoClave.value.length;
-                try { campoClave.setSelectionRange(fin, fin); } catch (e) { /* no aplica */ }
-            });
-        }
+        // La lógica vive en `static/js/ver_password.js` porque la comparte con el
+        // formulario de cambio de contraseña de «Mi Perfil», y porque es código de
+        // seguridad: el botón solo revela lo que el usuario haya ESCRITO, nunca una
+        // contraseña rellenada por el gestor del navegador. Ver ese fichero.
+        const campoClave = document.getElementById('id_password');
+        if (campoClave) campoClave.classList.add('con-boton');
 
         // ---------- Modal de ayuda ----------
         const enlaceAyuda = document.getElementById('enlaceAyudaAcceso');

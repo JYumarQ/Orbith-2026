@@ -99,7 +99,7 @@
                                     <tr data-id="{{ c.id }}">
                                         <td class="nombre-cell">{{ c.nombre }}</td>
                                         <td class="nocturnidad-cell text-center">
-                                            <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="{{ c.nocturnidad_id|default:'' }}" disabled>
+                                            <select class="form-select form-select-sm select-nocturnidad mx-auto" style="width: 80px;" data-prev-val="{{ c.nocturnidad_id|default:'' }}" disabled data-sin-select2>
                                                 <option value="">-</option>
                                                 {% for n in nocturnidades %}
                                                     <option value="{{ n.pk }}" 

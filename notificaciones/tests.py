@@ -918,7 +918,7 @@ class EventosDeContratacionYPlantillaTests(TestCase):
         municipio = NMunicipio.objects.create(nombre='Municipio eventos', provincia=provincia)
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Trab', papellido='Eventos', sapellido='Test',
             doc_identidad='90010154321', estado='ACTIVO', sexo='F', raza='BL',
             provincia=provincia, municipio=municipio)

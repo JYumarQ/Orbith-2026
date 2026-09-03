@@ -3,7 +3,9 @@ from django.db.models import Count, Q
 from django.urls import reverse_lazy
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
-from nomencladores.models import NRol, NTipoContrato, NCondicionLaboralAnormal
+from nomencladores.models import (NRol, NTipoContrato, NCondicionLaboralAnormal,
+                                  NImporteGradoCientifico, NPagoAdicional)
+from decimal import Decimal
 import json
 
 def _optimizar_queryset_cargos(queryset):
@@ -21,6 +23,26 @@ def _optimizar_queryset_cargos(queryset):
             distinct=True,
         )
     )
+
+
+#: Año más antiguo que se acepta en cualquier fecha de un contrato.
+#:
+#: Un `<input type="date">` nativo guarda lo que tenga escrito en cuanto el usuario sale
+#: del campo, aunque el año esté a medio teclear: escribir "2022" y salir antes de tiempo
+#: deja «0002» y ni Django ni PostgreSQL protestan. Ese es el origen de las fechas
+#: imposibles que llegaban a producción. Se corta en el servidor (aquí) y en el navegador
+#: (atributo `min` de los widgets, más abajo).
+ANO_MINIMO_FECHAS = 1900
+
+#: Fechas propias del contrato a las que se les exige `ANO_MINIMO_FECHAS`.
+CAMPOS_FECHA_CONTRATO = (
+    'fecha_alta', 'fecha_alta_entidad',
+    'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg',
+)
+
+#: Valor del atributo `min` de los `<input type="date">`, derivado de la constante para
+#: que navegador y servidor no puedan quedar desalineados.
+FECHA_MINIMA_HTML = f'{ANO_MINIMO_FECHAS}-01-01'
 
 
 class CLAModelChoiceField(forms.ModelChoiceField):
@@ -175,7 +197,8 @@ class CAltaForm(forms.ModelForm):
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
-            'maestria', 'doctorado', 'cnci', 'instructor', 'jubilado_recontratado',
+            'maestria', 'doctorado', 'cnci', 'instructor',
+            'instructor_nomenclador', 'cnci_nomenclador', 'jubilado_recontratado',
             'mision', 'pais', 'cla', 'nocturnidad_1', 'nocturnidad_2'
         )
         labels = {
@@ -198,8 +221,10 @@ class CAltaForm(forms.ModelForm):
             'funcionario_res': 'No. Res. Funcionario',
             'designado_res':'No. Res. Designado',
             'tipo_salario': 'Tipo de Salario',
-            'maestria': 'Maetría',
+            'maestria': 'Maestría',
             'cnci': 'CNCI',
+            'instructor_nomenclador': 'Instructor',
+            'cnci_nomenclador': 'CNCI',
             'jubilado_recontratado': 'Jubilado Recontratado',
             'mision': 'Misión',
             'pais': 'País'
@@ -208,8 +233,8 @@ class CAltaForm(forms.ModelForm):
             'no_expediente': forms.TextInput(attrs={'class':'form-control'}), 
             'tipo': forms.Select(attrs={'class':'form-select'}),
             'motivo': forms.Select(attrs={'class':'form-select', 'id': 'id_motivo', 'disabled': 'disabled'}),
-            'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled'}),
-            'fecha_alta_entidad': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fecha_alta_entidad', 'disabled': 'disabled'}),
+            'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
+            'fecha_alta_entidad': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fecha_alta_entidad', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
             'duracion': forms.NumberInput(attrs={'class':'form-control', 'disabled': 'disabled'}),
             'reg_militar': forms.Select(attrs={'class':'form-select'}),
             'tridente': forms.Select(attrs={
@@ -222,9 +247,9 @@ class CAltaForm(forms.ModelForm):
                 'hx-trigger': 'change'
             }),
             'profesional': forms.CheckboxInput(attrs={'class': 'form-check-input',  'id': 'id_profesional'}),
-            'fecha_vence_lic': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_lic', 'disabled': 'disabled'}),
-            'fecha_vence_recal': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_rec', 'disabled': 'disabled'}),
-            'fecha_vence_seg': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_seg', 'disabled': 'disabled'}),
+            'fecha_vence_lic': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_lic', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
+            'fecha_vence_recal': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_rec', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
+            'fecha_vence_seg': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'id': 'id_fv_seg', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
             'c_formal': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_c_formal'}),
             'c_formal_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_c_formal_res', 'disabled': 'disabled'}),
             'funcionario': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_funcionario'}),
@@ -239,18 +264,44 @@ class CAltaForm(forms.ModelForm):
                 'hx-include': '#id_cargo, #id_tridente',
                 'hx-trigger': 'change'
             }),
-            'maestria':forms.NumberInput(attrs={'class':'form-control'}),
-            'doctorado':forms.NumberInput(attrs={'class':'form-control'}),
-            'cnci':forms.NumberInput(attrs={'class':'form-control'}),
-            'instructor':forms.NumberInput(attrs={'class':'form-control'}),
+            # Los cuatro importes dejan de escribirse a mano.
+            #
+            # Maestría y doctorado salen del grado científico del trabajador y del
+            # nomenclador, así que viajan OCULTOS: lo que ve el usuario es una caja
+            # de solo lectura que pinta la plantilla con `form.texto_maestria` /
+            # `form.texto_doctorado`. Va en una caja aparte y no en este mismo
+            # widget porque el campo del modelo es un número y tiene que poder
+            # mostrar el texto «Nomenc. Vacío» cuando el nomenclador está sin
+            # definir.
+            #
+            # Instructor y CNCI también van ocultos: el usuario elige una entrada
+            # del nomenclador en los desplegables `instructor_nomenclador` y
+            # `cnci_nomenclador`, y `clean()` copia aquí su importe. El número se
+            # sigue guardando en el contrato para que la nómina ya emitida no
+            # cambie si mañana se retoca el nomenclador.
+            'maestria': forms.HiddenInput(),
+            'doctorado': forms.HiddenInput(),
+            'cnci': forms.HiddenInput(),
+            'instructor': forms.HiddenInput(),
+            'instructor_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_instructor_nomenclador'}),
+            'cnci_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_cnci_nomenclador'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
             'mision': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mision'}),
             'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'})
         }
         
-    def __init__(self, *args, user = None, **kwargs):
+    def __init__(self, *args, user=None, aspirante=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+
+        # De dónde sale el trabajador según el flujo: al EDITAR viene con el
+        # contrato; al CREAR el contrato todavía no existe, así que la vista lo
+        # pasa desde la URL (`ContratoCreateView.get_form_kwargs`).
+        self.aspirante = aspirante
+        if self.aspirante is None and self.instance and self.instance.pk:
+            self.aspirante = getattr(self.instance, 'aspirante', None)
+
+        self._preparar_importes()
 
         f_unidad = self.fields['unidad']
 
@@ -402,6 +453,96 @@ class CAltaForm(forms.ModelForm):
     # ---------------------------------------------------------
     # VALIDACIONES ESTRICTAS DE NEGOCIO (EL ESCUDO)
     # ---------------------------------------------------------
+    # ------------------------------------------------------------------
+    # IMPORTES DEL CONTRATO
+    # ------------------------------------------------------------------
+    #
+    # Los cuatro dejaron de escribirse a mano. Maestría y doctorado se deducen
+    # del grado científico del trabajador; instructor y CNCI se eligen de un
+    # desplegable. El número se sigue guardando en el contrato: es lo que hace
+    # que una nómina ya emitida no cambie porque alguien retoque el nomenclador
+    # meses después.
+
+    #: Texto que se muestra cuando el trabajador tiene el grado pero el
+    #: nomenclador está sin definir. Es un aviso, no un importe: el contrato
+    #: guarda 0 y la regla CFG-003 de Subsanación reclama el nomenclador.
+    TEXTO_NOMENCLADOR_VACIO = 'Nomenc. Vacío'
+    TEXTO_NO_APLICA = 'No aplica'
+
+    @staticmethod
+    def _importe_del_grado(grado):
+        """Importe del nomenclador para 'MC' o 'DC', o `None` si no está definido."""
+        if not grado:
+            return None
+        registro = NImporteGradoCientifico.objects.filter(grado=grado).first()
+        return registro.importe if registro else None
+
+    def _preparar_importes(self):
+        """Deja listos los desplegables y los textos de solo lectura.
+
+        `texto_maestria` y `texto_doctorado` los pinta la plantilla en una caja
+        de solo lectura. Van aparte del campo del formulario porque este es un
+        número y tiene que poder mostrar «Nomenc. Vacío», que no lo es.
+        """
+        # Desplegables acotados a su tipo: la lista de Instructor no debe ofrecer
+        # entradas de CNCI ni al revés.
+        if 'instructor_nomenclador' in self.fields:
+            self.fields['instructor_nomenclador'].queryset = (
+                NPagoAdicional.objects.filter(tipo=NPagoAdicional.INSTRUCTOR))
+            self.fields['instructor_nomenclador'].required = False
+            self.fields['instructor_nomenclador'].empty_label = 'Sin instructor'
+        if 'cnci_nomenclador' in self.fields:
+            self.fields['cnci_nomenclador'].queryset = (
+                NPagoAdicional.objects.filter(tipo=NPagoAdicional.CNCI))
+            self.fields['cnci_nomenclador'].required = False
+            self.fields['cnci_nomenclador'].empty_label = 'Sin CNCI'
+
+        grado = getattr(self.aspirante, 'grado_cientifico', None) if self.aspirante else None
+        importe = self._importe_del_grado(grado)
+
+        # Un trabajador es máster, doctor o ninguna de las dos cosas: nunca las
+        # dos. Lo garantiza el modelo (`grado_cientifico` es un solo campo con
+        # opciones), así que aquí basta con repartir el importe al que toque y
+        # dejar el otro en cero.
+        self.texto_maestria = self.TEXTO_NO_APLICA
+        self.texto_doctorado = self.TEXTO_NO_APLICA
+        valores = {'maestria': Decimal('0.00'), 'doctorado': Decimal('0.00')}
+
+        if grado in ('MC', 'DC'):
+            campo = 'maestria' if grado == 'MC' else 'doctorado'
+            if importe is None:
+                texto = self.TEXTO_NOMENCLADOR_VACIO
+            else:
+                valores[campo] = importe
+                texto = f'{importe:.2f}'
+            setattr(self, f'texto_{campo}', texto)
+
+        self.importes_del_grado = valores
+        for campo, valor in valores.items():
+            if campo in self.fields:
+                self.fields[campo].required = False
+                self.initial[campo] = valor
+
+    def _aplicar_importes(self, cleaned_data):
+        """Escribe los cuatro importes desde el nomenclador, ignorando lo enviado.
+
+        Se recalcula en el servidor a propósito: los campos viajan ocultos, así
+        que lo que llega en el POST no es de fiar. Y aunque lo fuera, el importe
+        correcto es el del nomenclador, no el que tuviera el navegador.
+        """
+        for campo, valor in self.importes_del_grado.items():
+            if campo in self.fields:
+                cleaned_data[campo] = valor
+
+        for campo_fk, campo_importe in (('instructor_nomenclador', 'instructor'),
+                                        ('cnci_nomenclador', 'cnci')):
+            if campo_importe not in self.fields:
+                continue
+            elegido = cleaned_data.get(campo_fk)
+            cleaned_data[campo_importe] = elegido.importe if elegido else Decimal('0.00')
+
+        return cleaned_data
+
     def clean_no_expediente(self):
         expediente = self.cleaned_data.get('no_expediente')
         if not expediente:
@@ -419,6 +560,7 @@ class CAltaForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        cleaned_data = self._aplicar_importes(cleaned_data)
         cargo = cleaned_data.get('cargo')
         
         # Obtener tipo_contrato del form, o de la instancia si estamos en un movimiento
@@ -475,7 +617,39 @@ class CAltaForm(forms.ModelForm):
                 'La F. Alta Entidad no puede ser posterior a la F. de Contratación.'
             )
 
+        # --- 4. NINGUNA FECHA DEL CONTRATO ANTERIOR AL AÑO 1900 ---
+        self._validar_ano_minimo(cleaned_data)
+
         return cleaned_data
+
+    def _validar_ano_minimo(self, cleaned_data):
+        """Rechaza las fechas con un año imposible (ver `ANO_MINIMO_FECHAS`).
+
+        Se salta el valor que YA está guardado en el contrato. Es deliberado: en
+        producción pueden existir contratos históricos con una fecha imposible ya
+        registrada, y `fecha_alta` ni siquiera es editable en el formulario de edición
+        (`updt_contrato.html` la pinta de solo lectura). Sin esta excepción, abrir uno de
+        esos contratos para corregir cualquier otra cosa daría un error en un campo que
+        el usuario no puede tocar, y el contrato quedaría imposible de editar.
+
+        Lo ya guardado no se pierde de vista: la regla CTR-017 de Subsanación lista los
+        contratos con la F. Alta Entidad anterior a 1900 para que se corrijan uno a uno.
+        Y en cuanto alguien cambia la fecha, el valor nuevo sí pasa por aquí.
+        """
+        for nombre in CAMPOS_FECHA_CONTRATO:
+            if nombre not in self.fields:
+                continue
+            valor = cleaned_data.get(nombre)
+            if not valor or valor.year >= ANO_MINIMO_FECHAS:
+                continue
+            if valor == getattr(self.instance, nombre, None):
+                continue
+            etiqueta = self.fields[nombre].label or nombre
+            self.add_error(
+                nombre,
+                f'El año de "{etiqueta}" debe ser {ANO_MINIMO_FECHAS} o posterior. '
+                f'Revise que haya escrito el año completo (por ejemplo 2022, no 0002).'
+            )
     
 
    

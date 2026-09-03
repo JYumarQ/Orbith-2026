@@ -2,6 +2,7 @@
 <html lang="es" class="light-style layout-menu-fixed" dir="ltr" data-theme="theme-default">
 <head>
     {% load static %}
+    {% load estaticos %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Orbith{% endblock %}</title>
@@ -9,15 +10,18 @@
 
     <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}" class="template-customizer-core-css">
     <link rel="stylesheet" href="{% static 'vendor/css/theme-default.css' %}" class="template-customizer-core-css">
-    <link rel="stylesheet" href="{% static 'css/demo.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/demo.css' %}">
 
     <link rel="stylesheet" href="{% static 'vendor/libs/perfect-scrollbar/perfect-scrollbar.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/css/select2-bootstrap-5-theme.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/select2-sneat-fix.css' %}"> 
+    <link rel="stylesheet" href="{% estatico 'css/select2-sneat-fix.css' %}"> 
+    {% comment %} Va DESPUÉS del anterior a propósito: unifica la forma de todos los
+       controles (selects, inputs y fechas) con la del multi-select del Dashboard. {% endcomment %}
+    <link rel="stylesheet" href="{% estatico 'css/orbith-controles.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
-    <link rel="stylesheet" href="{% static 'css/all.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/mobile-ux.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/all.min.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/mobile-ux.css' %}">
 
     {% block extra_head %}{% endblock %}
 
@@ -232,8 +236,8 @@
         });
     </script>
 
-    <script src="{% static 'js/ui-toasts.js' %}"></script>
-    <script src="{% static 'js/progreso_guia.js' %}"></script>
+    <script src="{% estatico 'js/ui-toasts.js' %}"></script>
+    <script src="{% estatico 'js/progreso_guia.js' %}"></script>
     <script src="{% static 'vendor/js/htmx.min.js' %}"></script>
     <script>
       document.body.addEventListener('htmx:configRequest', function (e) {

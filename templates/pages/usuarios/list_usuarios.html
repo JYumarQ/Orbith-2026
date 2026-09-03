@@ -90,7 +90,7 @@
 
         <!-- Grupo de botones a la derecha -->
         <div class="d-flex ms-auto gap-2 align-items-center flex-wrap">
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="actualizarConexiones()" title="Actualizar conexiones">
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-actualizar-conexiones" onclick="actualizarConexiones(this)" title="Actualizar conexiones">
             <i class="fas fa-rotate"></i> Actualizar conexiones
           </button>
 
@@ -122,6 +122,7 @@
               <th class="text-center">Nombre</th>
               <th class="text-center">Usuario</th>
               <th class="text-center">Departamento</th>
+              <th class="text-center">Rol</th>
               <th class="text-center">Estado</th>
               <th class="text-center">Conexión</th>
               <th class="text-center">Guía de Orbith</th>
@@ -149,6 +150,11 @@
 <div class="modal fade" id="eliminar_usuario" tabindex="-1" role="dialog" aria-hidden="true"></div>
 
 
+{% endblock %}
+
+{# `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
+   bloque dos veces en la página (una en su hueco de la plantilla base y otra
+   arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
 {% block extra_scripts %}
 <script type="text/javascript">
   var $ = jQuery.noConflict();
@@ -305,8 +311,24 @@ function showToast(message, type = 'success') {
     return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
   }
 
-  function actualizarConexiones() {
-    htmx.ajax('GET', "{% url 'search_usuarios' %}", { target: '#filter_usuarios_results' });
+  function actualizarConexiones(boton) {
+    // Conserva el filtro de búsqueda activo: sin esto, el botón reemplazaba
+    // la lista filtrada por el listado completo de usuarios.
+    const filtro = document.getElementById('search').value;
+    const iconoOriginal = boton.querySelector('i').className;
+    boton.disabled = true;
+    boton.querySelector('i').className = 'fas fa-spinner fa-spin';
+
+    htmx.ajax('GET', "{% url 'search_usuarios' %}?filter_usuario=" + encodeURIComponent(filtro), {
+      target: '#filter_usuarios_results'
+    }).then(function() {
+      showToast('Conexiones actualizadas.', 'success');
+    }).catch(function() {
+      showToast('Hubo un problema al actualizar las conexiones.', 'danger');
+    }).finally(function() {
+      boton.disabled = false;
+      boton.querySelector('i').className = iconoOriginal;
+    });
   }
 
   function expulsarSesion(boton) {
@@ -511,12 +533,4 @@ function showToast(message, type = 'success') {
     });
   });
 </script>
-{% endblock %}
-
-
-
-
-
-
-
 {% endblock %}

@@ -10,7 +10,9 @@ from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin,
 from bolsa.models import Aspirante
 from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
-from strorganizativa.models import Departamento, CargoPlantilla
+from strorganizativa.jerarquia import ordenar_con_jerarquia
+from strorganizativa.models import Departamento, CargoPlantilla, UnidadOrganizativa
+from .permisos import es_moderador
 from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia, NTipoContrato, NCargo
 from django.urls import reverse_lazy, reverse
 from configuracion.models import Configuracion
@@ -120,6 +122,47 @@ class ContratoListView(ListView):
         context['filtro_cat_ocupacional'] = self.request.GET.get('cat_ocupacional', '')
         context['filtro_tipo'] = self.request.GET.get('tipo', '')
 
+        # --- Filtros de estructura: unidad, departamento y cargo ---
+        #
+        # Los tres usan el selector de fichas compartido, así que admiten varios
+        # valores y se marcan comparando textos (`pk|stringformat:"s" in ...`).
+        #
+        # Solo se ofrece lo que el usuario puede ver: `contratos_visibles()` ya
+        # acota el listado por rol, y ofrecer en el desplegable una unidad fuera
+        # de su alcance sería un filtro que siempre devuelve vacío.
+        usuario_actual = self.request.user
+        if es_moderador(usuario_actual):
+            unidades_permitidas = UnidadOrganizativa.objects.filter(
+                pk__in=usuario_actual.unidades.values_list('pk', flat=True))
+        else:
+            unidades_permitidas = UnidadOrganizativa.objects.all()
+
+        context['unidades_filtro'] = ordenar_con_jerarquia(
+            unidades_permitidas.select_related('padre'))
+        departamentos = list(
+            Departamento.objects
+            .filter(unidad_organizativa__in=unidades_permitidas)
+            .select_related('unidad_organizativa')
+            .order_by('unidad_organizativa__orden_informe', 'descripcion'))
+        # El selector busca también por el nombre del padre: escribir «Oficina
+        # Central» deja visibles sus departamentos. Departamento no tiene campo
+        # `padre` —su superior es `unidad_organizativa`—, así que se le pone al
+        # vuelo, solo para pintar. No se guarda nada.
+        for departamento in departamentos:
+            departamento.padre = departamento.unidad_organizativa
+        context['departamentos_filtro'] = departamentos
+        # Por NOMENCLADOR de cargo: «Especialista B» existe una vez por
+        # departamento, y quien filtra por un cargo quiere verlos todos.
+        context['cargos_filtro'] = (
+            NCargo.objects
+            .filter(cargoplantilla__departamento__unidad_organizativa__in=unidades_permitidas)
+            .distinct()
+            .order_by('descripcion'))
+
+        context['filtro_unidad'] = self.request.GET.getlist('unidad')
+        context['filtro_departamento'] = self.request.GET.getlist('departamento')
+        context['filtro_cargo'] = self.request.GET.getlist('cargo')
+
         # LA CLAVE: Enviar la variable al HTML desde la carga inicial
         page_size = self.request.GET.get('per_page')
         context['current_page_size'] = str(page_size) if page_size else '8'
@@ -133,7 +176,6 @@ class ContratoListView(ListView):
             context['unidades_export'] = usuario.unidades.all().order_by('descripcion')
             context['mostrar_opcion_todas_uo'] = False
         else:
-            from strorganizativa.models import UnidadOrganizativa
             context['unidades_export'] = UnidadOrganizativa.objects.all().order_by('descripcion')
             context['mostrar_opcion_todas_uo'] = True
         return context
@@ -399,8 +441,13 @@ def solicitar_movimiento_nomina(request, pk):
             else:
                 contrato.en_proceso_movimiento = True
                 mensaje = 'Contrato enviado a la bandeja de movimientos pendientes.'
-                
+
             contrato.save()
+
+            if not es_cancelacion:
+                from progreso.servicios import completar_tarea
+                completar_tarea(request.user, 'primer_movimiento_cedido')
+
             return JsonResponse({'success': True, 'message': mensaje})
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=500)
@@ -786,6 +833,11 @@ class ContratoCreateView(RequiereEdicionMixin, CreateView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user  # <-- aquí pasas el usuario
+        # El formulario necesita al trabajador para resolver los importes de
+        # maestría y doctorado desde su grado científico. Al crear todavía no hay
+        # contrato del que sacarlo, así que se pasa desde la URL.
+        kwargs['aspirante'] = get_object_or_404(
+            Aspirante, doc_identidad=self.kwargs['aspirante_id'])
         return kwargs
 
     def get_context_data(self, **kwargs):
@@ -1023,6 +1075,13 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
 
 class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
     model = CAlta
+
+    # Solo POST. La baja se pide desde el modal que ya vive en `list_contrato.html`,
+    # nunca navegando a esta URL: no hay ninguna pantalla de confirmación propia. Sin
+    # esta restricción, `DeleteView` atendía el GET intentando pintar
+    # `contratos/calta_confirm_delete.html`, una plantilla que no existe, y respondía
+    # con un error 500 en lugar del 405 que corresponde a un método no admitido.
+    http_method_names = ['post']
 
     def post(self, request, *args, **kwargs):
         # Asegúrate de tener este import arriba del todo en el archivo:
@@ -1360,8 +1419,19 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
+            # La unidad ANTERIOR del contrato (antes de este cambio) ya era una de
+            # las mías -> lo hice todo yo (Caso 1, interno). Si no era mía, es que
+            # otro moderador la cedió y yo la estoy recibiendo ahora (Caso 3).
+            # Al Administrador (sin `unidades` propias) siempre se le cuenta como
+            # interno: no tiene sentido "recibir de otro moderador" para él.
+            usuario = self.request.user
+            codigo_tarea = 'primer_movimiento_interno'
+            if getattr(usuario, 'es_moderador', False) and unidad_ant_obj:
+                if not usuario.unidades.filter(pk=unidad_ant_obj.pk).exists():
+                    codigo_tarea = 'primer_movimiento_recibido'
+
             from progreso.servicios import completar_tarea
-            tarea = completar_tarea(self.request.user, 'primer_movimiento_nomina')
+            tarea = completar_tarea(usuario, codigo_tarea)
             if tarea:
                 messages.info(self.request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
 

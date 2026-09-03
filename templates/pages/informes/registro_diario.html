@@ -70,15 +70,7 @@
             </div>
             
             <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
-                <div class="input-group shadow-sm" style="width: auto; border: 1px solid #696cff; border-radius: 6px; overflow: hidden;">
-                    <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
-                    <select name="ueb" class="form-select border-0 shadow-none bg-white text-primary fw-bold" onchange="this.form.submit()">
-                        <option value="">Provincia Completa</option>
-                        {% for u in unidades %}
-                            <option value="{{ u.pk }}" {% if ueb_actual == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.descripcion }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                {% include 'pages/informes/partials/filtro_unidades.html' %}
             </form>
         </div>
     </div>
@@ -321,7 +313,12 @@
     window.rd_csrftoken = '{{ csrf_token }}';
     window.rd_mesFiltro = '{{ mes_actual }}';
     window.rd_annoFiltro = '{{ anno_actual }}';
-    window.rd_uebFiltro = '{{ ueb_actual }}';
+    {% comment %} El plan mensual se guarda por UNA unidad (o por la empresa
+       entera, con la cadena vacia). El filtro admite varias desde que se unifico
+       el selector, asi que aqui se toma la unica marcada; con varias, o con
+       ninguna, el plan es el global. Sin esto se enviaba el texto de la lista
+       —`[]` o `['3']`— como si fuera un id. {% endcomment %}
+    window.rd_uebFiltro = '{% if ueb_actual|length == 1 %}{{ ueb_actual.0 }}{% endif %}';
     window.rd_familiaFiltro = '{{ tipo_actual }}';
 
     // Control de la UI: Cambia entre Modo Edición y Modo Guardado

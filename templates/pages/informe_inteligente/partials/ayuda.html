@@ -1,0 +1,22 @@
+{% comment %}
+Icono de ayuda contextual. Se usa así:
+
+    {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="..." contenido="..." %}
+
+`data-bs-trigger="focus"` en un <button> es lo que hace que el globo se cierre
+al pulsar en cualquier otro sitio, sin necesidad de un botón de cerrar. El
+contenido va en texto plano a propósito: es una explicación corta, y así no hay
+que preocuparse de escapar marcado dentro de un atributo.
+{% endcomment %}
+<button type="button"
+        class="btn btn-link p-0 ms-1 align-baseline ii-ayuda"
+        style="line-height: 1; color: var(--ii-muted);"
+        data-bs-toggle="popover"
+        data-bs-trigger="focus"
+        data-bs-placement="top"
+        data-bs-custom-class="ii-popover"
+        data-bs-title="{{ titulo }}"
+        data-bs-content="{{ contenido }}"
+        aria-label="Ayuda: {{ titulo }}">
+    <i class="bi bi-question-circle"></i>
+</button>

@@ -57,6 +57,14 @@ ENLACES_POR_MODELO = {
     'solicitudes.Solicitud': {
         'url': 'ver_solicitud', 'etiqueta': 'Abrir solicitud', 'editable': False},
 
+    # Informe que otro usuario compartió (ver
+    # `informe_inteligente.views.compartir_favorito`). `editable=False` porque el
+    # destino no es un formulario: abre el módulo con ese informe ya cargado, y
+    # es el receptor quien decide si lo guarda en sus propios favoritos.
+    'informe_inteligente.InformePersonalizado': {
+        'url': 'informe_inteligente:ver_compartido', 'etiqueta': 'Ver informe',
+        'editable': False},
+
     # Sin formulario de edición: se degrada al listado.
     'contratos.CBaja': {
         'url': 'list_baja', 'etiqueta': 'Ver listado de bajas',
@@ -72,6 +80,21 @@ ENLACES_POR_MODELO = {
     'prenomina.CalendarioPago': {
         'url': 'prenomina:calendario', 'etiqueta': 'Abrir Calendario de Pago',
         'editable': False, 'sin_argumento': True},
+
+    # Los nomencladores no tienen pantalla propia: se editan en tarjetas dentro de
+    # Configuración → Parámetros Generales. El enlace lleva a esa pantalla y el
+    # texto `solucion` de cada regla dice en qué acordeón y en qué tarjeta está,
+    # que es lo mismo que ya hace `configuracion.Configuracion`.
+    #
+    # `solo_admin`: Parámetros Generales es una pantalla exclusiva del
+    # Administrador (`configuracion/urls.py`), así que ofrecerle el botón a un
+    # Moderador solo le llevaría a un «no tiene permiso».
+    'prenomina.NPagoImporte': {
+        'url': 'parametros', 'etiqueta': 'Abrir parámetros generales',
+        'editable': True, 'sin_argumento': True, 'solo_admin': True},
+    'nomencladores.NImporteGradoCientifico': {
+        'url': 'parametros', 'etiqueta': 'Abrir parámetros generales',
+        'editable': True, 'sin_argumento': True, 'solo_admin': True},
 }
 
 

@@ -150,7 +150,7 @@ class BaseCierres(TestCase):
             nombre='Playa', provincia=cls.provincia, siglas='PLA')
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Indeterminado', ocupa_plaza=True)
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
             unidad_organizativa=cls.unidad,
@@ -255,6 +255,275 @@ class CapturaDeLaFotografia(BaseCierres):
 
         cierre.refresh_from_db()
         self.assertEqual(cierre.unidad_descripcion, 'UEB Central')
+
+
+class DatosDelTrabajadorEnLaFotografia(BaseCierres):
+    """La fotografía trata dos clases de datos personales de forma distinta.
+
+    Lo que EVOLUCIONA con el tiempo (la formación) se congela: un informe de
+    2024 debe decir qué título tenía esa persona en 2024. Lo que NO es historia
+    (contacto, ubicación, tallas) se lee en vivo, para que corregir hoy un dato
+    mal cargado arregle también los cierres ya tomados.
+    """
+
+    def test_congela_la_formacion_y_la_fecha_de_nacimiento(self):
+        self.aspirante.nivel_educ = 'TM'
+        self.aspirante.grado_cientifico = 'MC'
+        self.aspirante.titulo_oro = True
+        self.aspirante.save()
+
+        cierre = self.declarar()
+        fila = cierre.contratos.get()
+
+        self.assertEqual(fila.nivel_educ, 'TM')
+        self.assertEqual(fila.grado_cientifico, 'MC')
+        self.assertTrue(fila.titulo_oro)
+        # `Aspirante.fecha_nacimiento` no se teclea: la deduce `save()` del
+        # carné. Lo que importa aquí es que la fotografía copie ese valor.
+        self.aspirante.refresh_from_db()
+        self.assertEqual(fila.fecha_nacimiento, self.aspirante.fecha_nacimiento)
+        self.assertIsNotNone(fila.fecha_nacimiento)
+
+    def test_terminar_una_maestria_despues_no_reescribe_el_pasado(self):
+        self.aspirante.nivel_educ = 'TM'
+        self.aspirante.save()
+        cierre = self.declarar()
+
+        self.aspirante.nivel_educ = 'NS'
+        self.aspirante.save()
+
+        fila = cierre.contratos.get()
+        self.assertEqual(fila.nivel_educ, 'TM')
+
+    def test_corregir_un_dato_de_contacto_si_llega_al_historico(self):
+        """El caso opuesto: `aspirante_vivo` es una relación viva a propósito."""
+        cierre = self.declarar()
+        otra_provincia = NProvincia.objects.create(nombre='Matanzas', siglas='MTZ')
+        otro_municipio = NMunicipio.objects.create(
+            nombre='Cárdenas', provincia=otra_provincia, siglas='CAR')
+        self.aspirante.provincia = otra_provincia
+        self.aspirante.municipio = otro_municipio
+        self.aspirante.save()
+
+        fila = cierre.contratos.get()
+        self.assertEqual(fila.aspirante_vivo.provincia, otra_provincia)
+
+    def test_borrar_a_la_persona_no_borra_su_fila_del_cierre(self):
+        """`aspirante_vivo` es SET_NULL: el cierre es un documento histórico y
+        tiene que sobrevivir aunque la persona ya no exista."""
+        cierre = self.declarar()
+        self.contrato.delete()
+        self.aspirante.delete()
+
+        fila = cierre.contratos.get()
+        self.assertIsNone(fila.aspirante_vivo)
+        # Lo congelado sigue ahí: el histórico no pierde a la persona.
+        self.assertEqual(fila.aspirante_nombre, 'Ana Pérez Gómez')
+
+    def test_el_periodo_se_guarda_como_clave_para_el_desplegable(self):
+        cierre = self.declarar(hoy=date(2026, 8, 22))
+        self.assertEqual(cierre.periodo_clave, '2026-08')
+
+
+class FuentesHistoricasDeInformeInteligente(BaseCierres):
+    """Las fotografías, expuestas como fuentes de Informe Inteligente.
+
+    Es la única forma de informar sobre un mes pasado: los datos vivos no
+    sirven porque al dar de baja a alguien su contrato se borra físicamente.
+    """
+
+    def test_el_desplegable_solo_ofrece_meses_realmente_cerrados(self):
+        from informe_inteligente.metadata import _opciones_periodos_cerrados
+
+        self.assertEqual(_opciones_periodos_cerrados(), [])
+
+        self.declarar(hoy=date(2026, 8, 22))
+        self.assertEqual(_opciones_periodos_cerrados(), [('2026-08', 'Agosto 2026')])
+
+    def test_los_periodos_se_ofrecen_del_mas_reciente_al_mas_antiguo(self):
+        from informe_inteligente.metadata import _opciones_periodos_cerrados
+
+        self.declarar(hoy=date(2026, 8, 22))
+        self.declarar(hoy=date(2026, 9, 22))
+
+        self.assertEqual(
+            [clave for clave, _ in _opciones_periodos_cerrados()],
+            ['2026-09', '2026-08'])
+
+    def test_el_moderador_solo_ve_el_historico_de_sus_unidades(self):
+        from informe_inteligente.motor import construir_queryset
+
+        self.declarar(hoy=date(2026, 8, 22), unidad=self.unidad)
+        self.declarar(hoy=date(2026, 8, 22), unidad=self.otra_unidad)
+
+        configuracion = {'campos': ['nombre_completo'], 'filtros': []}
+        kwargs = dict(periodo='2026-08')
+        propio = construir_queryset('CAlta', configuracion, self.moderador, **kwargs)
+        ajeno = construir_queryset('CAlta', configuracion, self.ajeno, **kwargs)
+        todo = construir_queryset('CAlta', configuracion, self.admin, **kwargs)
+
+        # La única fila de contrato está en `self.unidad`, la del moderador.
+        self.assertEqual(propio.count(), 1)
+        self.assertEqual(ajeno.count(), 0)
+        self.assertEqual(todo.count(), 1)
+
+    def test_el_historico_conserva_las_plazas_del_mes(self):
+        from informe_inteligente.motor import construir_queryset
+
+        self.declarar(hoy=date(2026, 8, 22))
+        # La plantilla cambia DESPUÉS del cierre: el informe de agosto no debe
+        # moverse.
+        self.cargo.cant_aprobada = 99
+        self.cargo.save()
+
+        filas = construir_queryset(
+            'CargoPlantilla', {'campos': ['cargo', 'cant_aprobada'], 'filtros': []},
+            self.admin, periodo='2026-08')
+        aprobadas = {f.ncargo_descripcion: f.cant_aprobada for f in filas}
+
+        self.assertEqual(aprobadas['Especialista B'], 10)
+
+    def test_el_periodo_acota_al_mes_pedido(self):
+        from informe_inteligente.motor import construir_queryset
+
+        self.declarar(hoy=date(2026, 8, 22))
+        self.declarar(hoy=date(2026, 9, 22))
+
+        configuracion = {'campos': ['nombre_completo'], 'filtros': []}
+        agosto = construir_queryset('CAlta', configuracion, self.admin, periodo='2026-08')
+
+        self.assertEqual(agosto.count(), 1)
+        self.assertEqual(agosto.first().cierre.periodo_clave, '2026-08')
+
+    def test_sin_periodo_el_informe_sigue_leyendo_los_datos_vivos(self):
+        """El comportamiento por defecto no cambia: sin fecha, tiempo real."""
+        from informe_inteligente.motor import construir_queryset
+
+        self.declarar(hoy=date(2026, 8, 22))
+        vivo = construir_queryset(
+            'CAlta', {'campos': ['nombre_completo'], 'filtros': []}, self.admin)
+
+        self.assertEqual(vivo.model.__name__, 'CAlta')
+
+    def test_una_fuente_sin_fotografia_rechaza_el_periodo(self):
+        """Bajas, Aspirantes y Movimientos no se congelan: pedirles un mes
+        pasado tiene que fallar con un mensaje claro, no devolver algo falso."""
+        from informe_inteligente.motor import construir_queryset
+        from informe_inteligente.motor import ConfiguracionInformeInvalida
+
+        self.declarar(hoy=date(2026, 8, 22))
+
+        for fuente in ('CBaja', 'Aspirante', 'TMovimiento'):
+            with self.subTest(fuente=fuente):
+                with self.assertRaises(ConfiguracionInformeInvalida):
+                    construir_queryset(
+                        fuente, {'campos': [], 'filtros': []},
+                        self.admin, periodo='2026-08')
+
+    def test_la_evolucion_devuelve_los_doce_meses_del_anno(self):
+        from informe_inteligente.motor import calcular_evolucion
+
+        self.declarar(hoy=date(2026, 8, 22))
+        self.declarar(hoy=date(2026, 9, 22))
+
+        puntos, etiqueta, _ = calcular_evolucion(
+            'CAlta', {'campos': ['nombre_completo'], 'filtros': []},
+            self.admin, '_total', 2026)
+
+        self.assertEqual(len(puntos), 12)
+        self.assertEqual(puntos[0]['etiqueta'], 'Enero')
+        self.assertEqual(puntos[-1]['etiqueta'], 'Diciembre')
+        self.assertEqual(etiqueta, 'Total de trabajadores')
+
+    def test_los_meses_sin_cierre_van_vacios_y_no_en_cero(self):
+        """Un cero diría que ese mes no había nadie. Lo cierto es que nadie lo
+        declaró, y son cosas distintas: el gráfico tiene que dejar el hueco."""
+        from informe_inteligente.motor import calcular_evolucion
+
+        self.declarar(hoy=date(2026, 8, 22))
+
+        puntos, _, _ = calcular_evolucion(
+            'CAlta', {'campos': ['nombre_completo'], 'filtros': []},
+            self.admin, '_total', 2026)
+        por_mes = {p['etiqueta']: p['valor'] for p in puntos}
+
+        self.assertEqual(por_mes['Agosto'], 1)
+        self.assertIsNone(por_mes['Enero'])
+        self.assertIsNone(por_mes['Diciembre'])
+
+    def test_la_evolucion_respeta_los_filtros_del_informe(self):
+        """Si el usuario está mirando solo una categoría, la línea es la de esa
+        categoría, no la de toda la plantilla."""
+        from informe_inteligente.motor import calcular_evolucion
+
+        self.declarar(hoy=date(2026, 8, 22))
+
+        configuracion = {
+            'campos': ['nombre_completo'],
+            'filtros': [{'campo': 'categoria_ocupacional',
+                         'operador': 'igual', 'valor': 'Obrero'}],
+        }
+        puntos, _, _ = calcular_evolucion(
+            'CAlta', configuracion, self.admin, '_total', 2026)
+        por_mes = {p['etiqueta']: p['valor'] for p in puntos}
+
+        # El único contrato es de categoría Técnico: filtrando por Obrero, el
+        # mes SÍ declarado queda en cero (que aquí sí es un cero de verdad).
+        self.assertEqual(por_mes['Agosto'], 0)
+
+    def test_la_evolucion_respeta_el_alcance_del_moderador(self):
+        from informe_inteligente.motor import calcular_evolucion
+
+        self.declarar(hoy=date(2026, 8, 22), unidad=self.unidad)
+        self.declarar(hoy=date(2026, 8, 22), unidad=self.otra_unidad)
+
+        configuracion = {'campos': ['nombre_completo'], 'filtros': []}
+        propio, _, _ = calcular_evolucion(
+            'CAlta', configuracion, self.moderador, '_total', 2026)
+        ajeno, _, _ = calcular_evolucion(
+            'CAlta', configuracion, self.ajeno, '_total', 2026)
+
+        self.assertEqual({p['etiqueta']: p['valor'] for p in propio}['Agosto'], 1)
+        self.assertEqual({p['etiqueta']: p['valor'] for p in ajeno}['Agosto'], 0)
+
+    def test_los_annos_con_cierre_no_se_repiten(self):
+        """`CierreUnidad` ordena por (-anno, -mes, unidad), y esas columnas se
+        cuelan en el SELECT DISTINCT: sin limpiar el orden, un año con tres
+        cierres salía tres veces y rompía la navegación por años."""
+        from informe_inteligente.motor import annos_con_cierre
+
+        self.declarar(hoy=date(2026, 7, 22))
+        self.declarar(hoy=date(2026, 8, 22))
+        self.declarar(hoy=date(2026, 9, 22))
+
+        self.assertEqual(annos_con_cierre(), [2026])
+
+    def test_una_fuente_sin_fotografia_no_tiene_evolucion(self):
+        from informe_inteligente.motor import (
+            calcular_evolucion, indicadores_graficables, ConfiguracionInformeInvalida)
+
+        self.assertEqual(indicadores_graficables('CBaja'), [])
+        with self.assertRaises(ConfiguracionInformeInvalida):
+            calcular_evolucion(
+                'CBaja', {'campos': [], 'filtros': []}, self.admin, '_total', 2026)
+
+    def test_la_gemela_usa_las_mismas_claves_de_campo_que_la_fuente_viva(self):
+        """Invariante del diseño: un informe favorito guardado en tiempo real
+        tiene que poder ejecutarse en un mes pasado sin traducir nada. Si una
+        clave dejara de coincidir, ese favorito se rompería en silencio."""
+        from informe_inteligente.metadata import (
+            REGISTRO_MODELOS, FUENTES_HISTORICAS, campos_sin_historico)
+
+        for fuente in FUENTES_HISTORICAS:
+            with self.subTest(fuente=fuente):
+                vivos = set(REGISTRO_MODELOS[fuente]['campos'])
+                historicos = set(FUENTES_HISTORICAS[fuente]['campos'])
+                # Lo único que puede faltar son las familias de cargo, que la
+                # fotografía guarda como lista JSON y no se pueden consultar.
+                self.assertEqual(
+                    vivos - historicos, campos_sin_historico(fuente))
+                self.assertTrue(campos_sin_historico(fuente) <= {
+                    'familia_cargo', 'tipo_familia_cargo'})
 
 
 class CicloDeDeclaracion(BaseCierres):

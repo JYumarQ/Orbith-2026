@@ -17,6 +17,8 @@ from .metadata import (
     LOOKUP_POR_OPERADOR,
     OPERADORES_MULTIVALOR,
     INDICADORES_POR_MODELO,
+    FUENTES_HISTORICAS,
+    definicion_historica,
     DESGLOSES_ESPECIALES_POR_MODELO,
     mapa_valor_a_etiqueta,
     valores_db_de_etiqueta,
@@ -115,6 +117,15 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
                 mes_nacimiento=ExtractMonth(F(f"{prefijo}fecha_nacimiento")),
                 dia_nacimiento=ExtractDay(F(f"{prefijo}fecha_nacimiento")),
             )
+        elif key == "vacantes":
+            # Plazas aprobadas menos cubiertas. No se guarda en ninguna tabla
+            # —sería un tercer número que se puede desincronizar de los otros
+            # dos— y sale igual de la fuente viva que de la fotografía mensual,
+            # porque el cierre congela las dos cantidades.
+            from django.db.models import IntegerField
+            queryset = queryset.annotate(
+                vacantes=F("cant_aprobada") - F("cant_cubierta"),
+            )
         # Si en el futuro se añade otro campo calculado, su anotación va aquí.
 
     return queryset
@@ -212,6 +223,25 @@ def _construir_q_de_filtro(definicion_modelo, filtro):
                 f"Seleccione al menos un valor para el filtro «{campo['label']}»."
             )
 
+    # Campos JERÁRQUICOS: el valor elegido representa también a los que cuelgan
+    # de él. Es el caso de la Unidad Organizativa, donde elegir una Dirección
+    # Principal debe traer también a sus subunidades — sin esto, filtrar por una
+    # principal no devolvía nada, porque no tiene cargos propios: todo cuelga de
+    # sus hijas.
+    #
+    # Se resuelve AQUÍ, en la construcción del filtro, y no con `grupos_valores`,
+    # que es el mecanismo vecino: aquel colapsa también la PRESENTACIÓN, y un
+    # trabajador de una subunidad acabaría mostrándose en la tabla y en el
+    # desglose con el nombre de su principal. Aquí cada valor se sigue viendo con
+    # su propio nombre y solo cambia a qué filas alcanza el filtro.
+    if campo.get("expansion_filtro") and operador in ("igual", "diferente", "en_lista", "no_en_lista"):
+        etiquetas = valor if isinstance(valor, (list, tuple)) else [valor]
+        # Se le pasa la lista ENTERA y no una etiqueta cada vez: así resuelve la
+        # expansión con una sola consulta aunque el usuario haya marcado varias
+        # unidades en un «Es alguno de».
+        q = Q(**{f"{ruta}__in": campo["expansion_filtro"](list(etiquetas))})
+        return ~q if operador in ("diferente", "no_en_lista") else q
+
     # Campos con valores agrupados (Categoría Ocupacional: "Cuadro" son CDI y
     # CEJ a la vez). El usuario elige la etiqueta y aquí se traduce a los
     # códigos reales de la base de datos, siempre con un lookup 'in'.
@@ -305,24 +335,50 @@ def _aplicar_filtro_aspirantes_vigentes(queryset):
     return queryset.filter(estado="ASPIRANTE")
 
 
-def _construir_queryset_filtrado(modelo_raiz, configuracion, usuario):
+def resolver_definicion(modelo_raiz, periodo=None):
+    """Definición a usar: la viva, o su gemela histórica si se pidió un período.
+
+    Es el único punto donde se decide si el informe mira los datos de ahora
+    mismo o la fotografía de un mes cerrado. Devuelve
+    `(definicion, nombre_del_modelo)`.
+    """
+    if not periodo:
+        return _obtener_definicion_modelo(modelo_raiz), modelo_raiz
+
+    historica = definicion_historica(modelo_raiz)
+    if historica is None:
+        raise ConfiguracionInformeInvalida(
+            "Este informe solo existe en tiempo real: no se guarda una "
+            "fotografía mensual de estos datos, así que no se puede consultar "
+            "un mes pasado.")
+    return historica, historica["modelo_historico"]
+
+
+def _construir_queryset_filtrado(modelo_raiz, configuracion, usuario, periodo=None):
     """
     Parte común a todos los modos de informe: aplica el alcance por rol,
     las anotaciones necesarias y los filtros del usuario. NO ordena, porque
     cada modo necesita un orden distinto.
 
+    Con `periodo` ('AAAA-MM') el informe se construye sobre la fotografía de
+    ese cierre en vez de sobre los datos vivos.
+
     Devuelve la tupla (queryset, definicion_modelo).
     """
-    definicion_modelo = _obtener_definicion_modelo(modelo_raiz)
+    definicion_modelo, nombre_modelo = resolver_definicion(modelo_raiz, periodo)
     app_label = definicion_modelo["app_label"]
-    Modelo = apps.get_model(app_label, modelo_raiz)
+    Modelo = apps.get_model(app_label, nombre_modelo)
 
     queryset = Modelo.objects.all()
 
+    if periodo:
+        # Acotar al mes pedido es lo primero: todo lo demás (alcance, filtros,
+        # indicadores) debe calcularse ya dentro de ese período.
+        queryset = queryset.filter(cierre__periodo_clave=periodo)
     # El informe de Bajas/Aspirantes es sobre el estado vigente del
     # trabajador, no un historial de eventos: se aplica siempre, antes que
     # cualquier otra cosa.
-    if modelo_raiz == "CBaja":
+    elif modelo_raiz == "CBaja":
         queryset = _aplicar_filtro_bajas_vigentes(queryset)
     elif modelo_raiz == "Aspirante":
         queryset = _aplicar_filtro_aspirantes_vigentes(queryset)
@@ -365,12 +421,16 @@ def _construir_queryset_filtrado(modelo_raiz, configuracion, usuario):
     return queryset, definicion_modelo
 
 
-def construir_queryset(modelo_raiz, configuracion, usuario):
+def construir_queryset(modelo_raiz, configuracion, usuario, periodo=None):
     """
     Modo LISTADO: devuelve un QuerySet de registros individuales, listo para
     paginar (sin evaluar todavía).
+
+    Con `periodo` ('AAAA-MM') el informe se construye sobre la fotografía de
+    ese cierre mensual en vez de sobre los datos vivos.
     """
-    queryset, definicion_modelo = _construir_queryset_filtrado(modelo_raiz, configuracion, usuario)
+    queryset, definicion_modelo = _construir_queryset_filtrado(
+        modelo_raiz, configuracion, usuario, periodo)
 
     # Orden.
     # Siempre se termina ordenando por 'pk' además del campo elegido: sin un
@@ -403,11 +463,63 @@ def _expresion_de_campo(campo, key_campo, ruta_aspirante=None):
     porque se calcula a partir de la fecha de nacimiento (directa en
     Aspirante, o vía 'aspirante__' en CAlta/CBaja — ver 'ruta_aspirante').
     """
+    from django.db.models import IntegerField
+
     if key_campo == "edad":
-        from django.db.models import IntegerField
         prefijo = f"{ruta_aspirante}__" if ruta_aspirante else ""
         return EdadExacta(F(f"{prefijo}fecha_nacimiento"), output_field=IntegerField())
+
+    # La antigüedad se calcula aquí, y NO se lee de la anotación del mismo
+    # nombre: las anotaciones solo se ponen para los campos que el usuario ha
+    # elegido, y el indicador de antigüedad promedio se calcula siempre, elija
+    # o no esa columna. Leer `F("antiguedad")` reventaría con FieldError en
+    # cuanto el informe no la incluyera.
+    if key_campo == "antiguedad":
+        return EdadExacta(F("fecha_alta_entidad"), output_field=IntegerField())
+
+    # Mismo motivo que la antigüedad: el indicador de plazas vacantes se calcula
+    # aunque el usuario no haya elegido esa columna, así que no puede depender
+    # de la anotación.
+    if key_campo == "vacantes":
+        return F("cant_aprobada") - F("cant_cubierta")
+
     return F(campo["ruta_orm"] or key_campo)
+
+
+def _condiciones_de(spec):
+    """Las condiciones de un indicador `conteo_si`, siempre como lista.
+
+    Un indicador puede pedir una sola condición —la forma corta `campo`/`valor`,
+    que es la de casi todos— o varias a la vez, con `condiciones`. «Mujeres en
+    puestos clave» es de las segundas: cruza sexo con puesto clave, y sin esto
+    habría que inventar un campo calculado en la base de datos para cada cruce
+    que a alguien se le ocurra.
+    """
+    if spec.get("condiciones"):
+        return spec["condiciones"]
+    return [{"campo": spec["campo"], "valor": spec["valor"]}]
+
+
+def _q_de_condiciones(definicion_modelo, condiciones):
+    """Traduce las condiciones de un indicador a un Q, o None si algún campo ya
+    no existe en este catálogo (la gemela historica puede no tenerlo todo).
+
+    Un valor de tipo lista se resuelve con `__in`: es lo que permite contar los
+    Cuadros —Directivos y Ejecutivos son dos códigos distintos— o a quien tiene
+    grado científico, sea Máster o Doctor, sin escribir dos indicadores.
+    """
+    filtro = Q()
+    for condicion in condiciones:
+        campo = definicion_modelo["campos"].get(condicion["campo"])
+        if not campo:
+            return None
+        ruta = campo["ruta_orm"] or condicion["campo"]
+        valor = condicion["valor"]
+        if isinstance(valor, (list, tuple, set)):
+            filtro &= Q(**{f"{ruta}__in": list(valor)})
+        else:
+            filtro &= Q(**{ruta: valor})
+    return filtro
 
 
 def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
@@ -430,14 +542,30 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
         if spec["tipo"] == "conteo":
             continue
 
+        if spec["tipo"] == "conteo_si":
+            filtro = _q_de_condiciones(definicion_modelo, _condiciones_de(spec))
+            if filtro is None:
+                continue  # algún campo ya no está en el registro
+            agregaciones[spec["key"]] = Count("id", filter=filtro)
+            continue
+
         key_campo = spec["campo"]
         campo = definicion_modelo["campos"].get(key_campo)
         if not campo:
             continue  # el campo se eliminó del registro: se omite el indicador
 
-        if spec["tipo"] == "conteo_si":
-            ruta = campo["ruta_orm"] or key_campo
-            agregaciones[spec["key"]] = Count("id", filter=Q(**{ruta: spec["valor"]}))
+        if spec["tipo"] == "razon":
+            # Dos sumas que luego se dividen. La división se hace en Python y no
+            # en SQL para poder decidir qué hacer cuando el divisor es cero, que
+            # en la base de datos sería un error y aquí es sencillamente «—».
+            divisor = definicion_modelo["campos"].get(spec["campo_divisor"])
+            if not divisor:
+                continue
+            ruta_aspirante_local = ruta_aspirante
+            agregaciones[spec["key"] + "__num"] = Sum(
+                _expresion_de_campo(campo, key_campo, ruta_aspirante_local))
+            agregaciones[spec["key"] + "__den"] = Sum(
+                _expresion_de_campo(divisor, spec["campo_divisor"], ruta_aspirante_local))
         elif spec["tipo"] == "suma":
             agregaciones[spec["key"]] = Sum(_expresion_de_campo(campo, key_campo, ruta_aspirante))
         elif spec["tipo"] == "promedio":
@@ -448,7 +576,13 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
 
     indicadores = []
     for spec in especificaciones:
-        valor = total if spec["tipo"] == "conteo" else crudos.get(spec["key"])
+        if spec["tipo"] == "conteo":
+            valor = total
+        elif spec["tipo"] == "razon":
+            valor = _razon(crudos.get(spec["key"] + "__num"),
+                           crudos.get(spec["key"] + "__den"))
+        else:
+            valor = crudos.get(spec["key"])
 
         indicador = {
             "label": spec["label"],
@@ -460,7 +594,148 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
             indicador["porcentaje"] = round((valor or 0) * 100 / total, 1) if total else 0
         indicadores.append(indicador)
 
+
     return indicadores, total
+
+
+def indicadores_graficables(modelo_raiz):
+    """Indicadores que tienen sentido dibujar en una línea de evolución.
+
+    Se devuelven TODOS, incluidos los que en la tarjeta del resumen llevan
+    porcentaje. Antes se excluían por miedo a confundir, y el efecto era el
+    contrario: «Mujeres» no se podía graficar en absoluto, cuando lo que se
+    dibuja es su CANTIDAD —el número entero del que sale ese porcentaje—, que
+    es justo lo que hace falta para ver si sube o baja mes a mes.
+
+    Se devuelven como pares (clave, etiqueta) para el desplegable del panel.
+    """
+    if modelo_raiz not in FUENTES_HISTORICAS:
+        return []
+    return [
+        (spec["key"] if spec["tipo"] != "conteo" else "_total", spec["label"])
+        for spec in INDICADORES_POR_MODELO.get(modelo_raiz, [])
+    ]
+
+
+def annos_con_cierre():
+    """Años que tienen al menos un cierre declarado, de menor a mayor.
+
+    El `order_by()` vacío es imprescindible: `CierreUnidad` ordena por defecto
+    por (-anno, -mes, unidad), y PostgreSQL añade esas columnas al SELECT del
+    DISTINCT, con lo que un año con tres cierres saldría tres veces.
+    """
+    from cierres.models import CierreUnidad
+    return sorted(
+        CierreUnidad.objects.order_by().values_list("anno", flat=True).distinct())
+
+
+def calcular_evolucion(modelo_raiz, configuracion, usuario, key_indicador, anno):
+    """Valor de un indicador en los DOCE meses de un año, para el gráfico.
+
+    Es la única lectura del módulo que atraviesa varios períodos a la vez: el
+    resto del informe siempre mira un momento concreto (ahora, o un cierre). Se
+    resuelve con una agregación por mes en vez de una consulta gigante agrupada,
+    porque cada período aplica por su cuenta el alcance del usuario y sus
+    filtros, y como mucho son doce.
+
+    Los meses sin cierre declarado devuelven `None`, NO cero: cero significaría
+    que ese mes no había nadie, cuando lo que ocurre es que nadie lo declaró.
+    El gráfico dibuja un hueco, que es lo único que no miente.
+
+    Los filtros que el usuario tenga puestos se respetan: si está mirando solo
+    Cuadros, la línea es la evolución de los Cuadros, no de toda la plantilla.
+    """
+    if modelo_raiz not in FUENTES_HISTORICAS:
+        raise ConfiguracionInformeInvalida(
+            "De este informe no se guarda una fotografía mensual, así que no "
+            "se puede dibujar su evolución.")
+
+    specs = {
+        (spec["key"] if spec["tipo"] != "conteo" else "_total"): spec
+        for spec in INDICADORES_POR_MODELO.get(modelo_raiz, [])
+    }
+    spec = specs.get(key_indicador)
+    if spec is None:
+        raise ConfiguracionInformeInvalida("La medida elegida no está disponible.")
+
+    # Los nombres de mes ya viven en el módulo de Cierres: una sola fuente.
+    from cierres.constantes import MESES
+
+    # Una sola consulta para saber qué meses de este año existen, en vez de
+    # doce agregaciones a ciegas de las que la mayoría no devolvería nada.
+    declarados = set(_opciones_periodos_cerrados_de(anno))
+
+    puntos = []
+    for mes in range(1, 13):
+        periodo = f"{anno}-{mes:02d}"
+        etiqueta = MESES[mes - 1]
+
+        if periodo not in declarados:
+            puntos.append({"periodo": periodo, "etiqueta": etiqueta, "valor": None})
+            continue
+
+        queryset, definicion = _construir_queryset_filtrado(
+            modelo_raiz, configuracion, usuario, periodo)
+
+        if spec["tipo"] == "conteo":
+            valor = queryset.count()
+        elif spec["tipo"] == "conteo_si":
+            # Mismo criterio que la tarjeta del resumen: se cuentan los registros
+            # que cumplen la condición. Es lo que permite dibujar la línea de
+            # Mujeres, de Cuadros o de quienes están en misión.
+            filtro = _q_de_condiciones(definicion, _condiciones_de(spec))
+            valor = None if filtro is None else queryset.filter(filtro).count()
+        elif spec["tipo"] == "razon":
+            campo = definicion["campos"].get(spec["campo"])
+            divisor = definicion["campos"].get(spec["campo_divisor"])
+            if not campo or not divisor:
+                valor = None
+            else:
+                ruta_aspirante = definicion.get("ruta_aspirante")
+                crudos = queryset.aggregate(
+                    num=Sum(_expresion_de_campo(campo, spec["campo"], ruta_aspirante)),
+                    den=Sum(_expresion_de_campo(
+                        divisor, spec["campo_divisor"], ruta_aspirante)))
+                valor = _razon(crudos["num"], crudos["den"])
+        else:
+            campo = definicion["campos"].get(spec["campo"])
+            if not campo:
+                valor = None
+            else:
+                expresion = _expresion_de_campo(
+                    campo, spec["campo"], definicion.get("ruta_aspirante"))
+                funcion = Sum if spec["tipo"] == "suma" else Avg
+                valor = queryset.aggregate(v=funcion(expresion))["v"]
+
+        puntos.append({
+            "periodo": periodo,
+            "etiqueta": etiqueta,
+            "valor": float(valor) if valor is not None else None,
+        })
+
+    return puntos, spec["label"], spec.get("formato", "entero")
+
+
+def _opciones_periodos_cerrados_de(anno):
+    """Claves 'AAAA-MM' con cierre declarado dentro de un año concreto."""
+    from cierres.models import CierreUnidad
+    return (CierreUnidad.objects
+            .filter(anno=anno)
+            .exclude(periodo_clave="")
+            .values_list("periodo_clave", flat=True)
+            .distinct())
+
+
+def _razon(numerador, divisor):
+    """Porcentaje de `numerador` sobre `divisor`, o None si no se puede.
+
+    Divisor cero o vacío devuelve None y la tarjeta muestra «—»: una plantilla
+    sin plazas aprobadas no tiene un 0 % de cobertura, no tiene cobertura
+    ninguna, y pintar un cero rotundo diría algo que no es.
+    """
+    if not divisor:
+        return None
+    return round(float(numerador or 0) * 100 / float(divisor), 1)
 
 
 def _formatear_valor(valor, formato, sufijo=""):
@@ -470,6 +745,8 @@ def _formatear_valor(valor, formato, sufijo=""):
 
     if formato == "moneda":
         texto = f"{float(valor):,.2f}"
+    elif formato == "porcentaje":
+        texto = f"{float(valor):,.1f}"
     elif formato == "decimal":
         texto = f"{float(valor):,.1f}"
     else:

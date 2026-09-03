@@ -17,6 +17,7 @@ de filtrado por alcance, reutilizado por todos los componentes del Dashboard
 (activos, altas, bajas, pirámide, plazas, recordatorios, advertencias, etc.).
 """
 
+from strorganizativa.jerarquia import expandir, ordenar_con_jerarquia
 from strorganizativa.models import Departamento, UnidadOrganizativa
 
 
@@ -72,7 +73,12 @@ def resolver_filtros(request):
     unidades_ids_visibles = set(unidades_qs.values_list('pk', flat=True))
 
     uo_pedidos = request.GET.getlist('uo')
-    uo_ids = {int(v) for v in uo_pedidos if v.isdigit()}
+    # Elegir una Unidad Principal significa también sus subunidades. Antes se
+    # comparaba el id exacto, y como una principal no tiene cargos propios —todo
+    # cuelga de sus hijas—, filtrar por ella dejaba el Dashboard entero en cero.
+    # La expansión se hace ANTES de cruzar con el alcance, para que un Moderador
+    # no reciba subunidades que no le corresponden.
+    uo_ids = set(expandir([v for v in uo_pedidos if v.isdigit()]))
     uo_ids &= unidades_ids_visibles
 
     es_moderador_puro = (
@@ -89,8 +95,18 @@ def resolver_filtros(request):
     ).count()
 
     contexto = {
-        'filtro_uo_opciones': unidades_qs.order_by('descripcion'),
+        # Ordenadas padre → hijas y con `nivel`, para que el desplegable pueda
+        # indentar las subunidades en vez de listarlas como si fueran hermanas.
+        'filtro_uo_opciones': ordenar_con_jerarquia(unidades_qs.select_related('padre')),
         'filtro_uo_seleccionadas': uo_ids,
+        # Los MISMOS ids en texto: la plantilla los compara con `in` contra el
+        # `pk|stringformat:"s"` de cada opción, y ahí 5 y '5' no son lo mismo.
+        # Solo se marcan los que el usuario pidió de verdad, no los que se
+        # añadieron al expandir: si no, elegir una principal dejaría marcadas
+        # también todas sus hijas y no habría forma de distinguir una cosa de
+        # la otra al volver a abrir el desplegable.
+        'filtro_uo_seleccionadas_txt': [
+            v for v in uo_pedidos if v.isdigit() and int(v) in unidades_ids_visibles],
         'uo_count': len(uo_ids_efectivas),
         'depto_count': depto_count,
     }

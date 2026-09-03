@@ -14,11 +14,34 @@
       Pruebe con otro estado o año, o limpie la búsqueda para ver todos los
       reportes a los que tiene acceso.
     </p>
+    {% comment %}
+      Limpia TODOS los filtros de la barra y lanza una sola recarga.
+
+      Tres detalles que no son obvios:
+
+      * El período se pone a cero con `orbithFijar('', '', true)`. Vaciar los
+        campos ocultos a mano dejaría el botón del selector anunciando el período
+        anterior, y el tercer argumento evita que el componente dispare su propia
+        recarga además de la de aquí.
+      * `#search` (la unidad, pese al nombre) y `#filtro_estado` son <select>
+        convertidos en Select2, que no repinta solo al cambiarles el `value`: hay
+        que avisarle con un `change` de jQuery. Antes se les ponía el `value` a
+        secas y el control seguía mostrando la opción anterior.
+      * El mes no se limpiaba: la barra tenía «Todos los meses» y el botón no lo
+        tocaba, así que un mes elegido sobrevivía a «Limpiar filtros».
+    {% endcomment %}
     <button type="button" class="btn btn-sm btn-outline-secondary"
-            onclick="document.getElementById('search').value='';
-                     document.getElementById('filtro_estado').value='';
-                     document.getElementById('filtro_anno').value='';
-                     htmx.trigger('#search', 'recargarTabla');">
+            onclick="(function () {
+                       ['search', 'filtro_estado'].forEach(function (id) {
+                         var campo = document.getElementById(id);
+                         if (!campo) return;
+                         campo.value = '';
+                         if (window.jQuery) jQuery(campo).trigger('change.select2');
+                       });
+                       var periodo = document.getElementById('caja_periodo_reportes');
+                       if (periodo && periodo.orbithFijar) periodo.orbithFijar('', '', true);
+                       htmx.trigger('#search', 'recargarTabla');
+                     })();">
       <i class="fas fa-rotate-left me-1"></i>Limpiar filtros
     </button>
   {% else %}

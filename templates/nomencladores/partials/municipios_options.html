@@ -4,8 +4,8 @@
         {% if is_filter %}
             onchange="triggerSearch()"
         {% else %}
-            /* Si es formulario normal, aquí SÍ queremos que se vea bonito con Bootstrap */
-            class="form-select" 
+            {% comment %} Si es formulario normal, aquí SÍ queremos que se vea bonito con Bootstrap {% endcomment %}
+            class="form-select"
             required
         {% endif %}
         

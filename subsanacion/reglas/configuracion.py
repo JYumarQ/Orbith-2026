@@ -4,7 +4,10 @@ Estas dos reglas son el único camino de los HALLAZGOS GLOBALES: los que no apun
 una fila concreta (`object_id` vacío) porque el problema es la ausencia del registro.
 """
 
+from django.db.models import Count
+
 from ..constantes import (
+    CRITICIDAD_ALTA,
     CRITICIDAD_CRITICA,
     CRITICIDAD_MEDIA,
     MODULO_CONFIGURACION,
@@ -139,4 +142,91 @@ class ConfiguracionIncompleta(ReglaBase):
                     'campo_vacio': etiqueta,
                     'para_que_sirve': motivo,
                 },
+            )
+
+
+class NomencladorDeGradoCientificoVacio(ReglaBase):
+    """Hay trabajadores con grado científico pero el nomenclador no tiene importe.
+
+    Nace de una decisión concreta: los campos «Maestría» y «Doctorado» del
+    contrato pasaron a ser de solo lectura y a rellenarse desde el nomenclador.
+    Si el nomenclador está vacío, el contrato muestra «Nomenc. Vacío» y guarda 0
+    — y quien edita el contrato ya NO puede arreglarlo desde ahí.
+
+    Por eso el hallazgo vive en Configuración y no en Contratos: apunta a quien
+    SÍ puede resolverlo, el Administrador, y una sola vez en lugar de repetirse
+    en cada contrato afectado.
+
+    Solo salta si hay alguien a quien le afecte. Un nomenclador sin definir en
+    una empresa sin ningún máster ni doctor no es un problema, y avisar de él
+    sería ruido.
+    """
+
+    codigo = 'CFG-003'
+    nombre = 'Nomenclador de grado científico sin importe definido'
+    modulo = MODULO_CONFIGURACION
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'nomencladores.NImporteGradoCientifico'
+
+    descripcion = (
+        'Comprueba que, si hay trabajadores registrados como Máster o como Doctor, '
+        'el importe correspondiente esté definido en el nomenclador.')
+    causa_probable = (
+        'Los importes de Maestría y Doctorado son tarjetas nuevas de Configuración '
+        'y todavía no se han rellenado, o se registró el primer trabajador con ese '
+        'grado científico después de configurar el sistema.')
+    impacto = (
+        'El contrato de esos trabajadores muestra «Nomenc. Vacío» y guarda 0 en el '
+        'importe, así que cobran de menos. Y no se puede arreglar desde el propio '
+        'contrato: el campo es de solo lectura.')
+    solucion = (
+        'Abra Configuración → Parámetros Generales → Nomencladores → Laborales y '
+        'Profesionales y defina el importe en la tarjeta que se indica abajo. '
+        'Después, abra y guarde los contratos afectados para que lo tomen.')
+
+    #: (clave del grado, etiqueta de la tarjeta) — la clave es la misma que usa
+    #: `bolsa.Aspirante.grado_cientifico`, así que no hay tabla de equivalencias
+    #: que se pueda desincronizar.
+    GRADOS = (('MC', 'Maestría'), ('DC', 'Doctorado'))
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+
+        Aspirante = apps.get_model('bolsa', 'Aspirante')
+        modelo = self.obtener_modelo()
+
+        # Dos consultas agregadas en total, no una por trabajador.
+        definidos = set(modelo._default_manager.values_list('grado', flat=True))
+        con_grado = {
+            grado: total for grado, total in
+            Aspirante.objects.filter(grado_cientifico__in=[g for g, _ in self.GRADOS],
+                                     estado='ACTIVO')
+            .values_list('grado_cientifico')
+            .annotate(total=Count('id'))
+        }
+
+        for grado, etiqueta in self.GRADOS:
+            afectados = con_grado.get(grado, 0)
+            if not afectados or grado in definidos:
+                continue
+
+            yield HallazgoDetectado(
+                # Hallazgo GLOBAL: el problema es la AUSENCIA del registro, así que
+                # no hay ninguna fila a la que apuntar. Es el mismo patrón que
+                # CFG-001. `clave_extra` separa el de Maestría del de Doctorado.
+                object_id='',
+                clave_extra=grado,
+                titulo=f'Sin importe de {etiqueta} y hay trabajadores con ese grado',
+                detalle=(
+                    f'{afectados} trabajador(es) activo(s) tienen el grado de '
+                    f'{etiqueta}, pero su importe no está definido en el nomenclador, '
+                    f'así que sus contratos guardan 0.'),
+                # El número de afectados NO entra en `datos`: cambia con cada alta o
+                # baja y movería la huella del hallazgo, devolviendo a Pendiente uno
+                # ya silenciado sin que el problema haya cambiado.
+                datos={
+                    'tarjeta_del_nomenclador': etiqueta,
+                    'importe': 'Sin definir',
+                },
+                campo_formulario='importe',
             )

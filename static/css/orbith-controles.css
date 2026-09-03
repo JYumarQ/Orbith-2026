@@ -1,0 +1,575 @@
+/* ==========================================================================
+   Controles de formulario unificados de Orbith
+   ==========================================================================
+
+   Un único lenguaje visual para TODOS los controles de la aplicación: selects
+   (nativos y Select2), campos de texto, fechas y áreas de texto.
+
+   El diseño de referencia es el multi-select de Unidad Organizativa del
+   Dashboard —el que RRHH señaló como el más logrado—: esquinas de 12px, caja
+   alta y aireada, panel flotante con sombra y buscador dentro. De él se toma
+   la GEOMETRÍA; los COLORES son los del tema Sneat, para que un select
+   enfocado se vea igual que un input enfocado o que un botón primario, y la
+   aplicación no acabe con dos azules casi iguales conviviendo.
+
+   Este archivo se carga DESPUÉS de `select2-sneat-fix.css` y lo sobreescribe
+   a propósito: aquel dejaba Select2 plano (6px, 38px) para imitar al <select>
+   nativo de Sneat, y ahora el criterio es el contrario —es el nativo el que se
+   parece al del Dashboard—. Se mantiene separado en vez de reescribir aquel
+   para que revertir todo el cambio sea quitar un <link> de `base.html`.
+
+   Nada de lo que hay aquí toca los estados de validación (amarillo = vacío,
+   verde = correcto, rojo = inválido): esas reglas siguen viviendo en
+   `select2-sneat-fix.css` y ganan por especificidad, así que el formulario de
+   contrato conserva sus colores intactos.
+   ========================================================================== */
+
+:root {
+    /* Geometría (del componente del Dashboard) */
+    --orb-radio: 12px;
+    --orb-radio-menor: 8px;
+    --orb-alto: 44px;
+    --orb-alto-sm: 36px;
+    --orb-panel-sombra: 0 12px 28px rgba(15, 23, 42, 0.12);
+
+    /* Paleta (del tema Sneat) */
+    --orb-borde: #d9dee3;
+    --orb-borde-hover: #b4b7c9;
+    --orb-foco: #696cff;
+    --orb-foco-sombra: 0 0 0 0.15rem rgba(105, 108, 255, 0.12);
+    --orb-texto: #697a8d;
+    --orb-tenue: #a1acb8;
+    --orb-opcion-hover: #f5f5fa;
+    --orb-opcion-activa-fondo: rgba(105, 108, 255, 0.08);
+    --orb-opcion-activa-texto: #696cff;
+    --orb-chip-fondo: rgba(105, 108, 255, 0.16);
+    --orb-chip-texto: #696cff;
+}
+
+/* --------------------------------------------------------------------------
+   1. Controles nativos
+   --------------------------------------------------------------------------
+   Los selects no pueden cambiar solos: si un <select> pasa a 44px y 12px pero
+   el campo de fecha de al lado se queda en 38px y 6px, se cambia una
+   incoherencia por otra. Por eso el mismo tratamiento alcanza a inputs y
+   textareas.
+
+   Se excluyen deliberadamente: casillas, radios, interruptores y rangos
+   (`.form-check-input`, `.form-range`), que tienen forma propia. */
+
+.form-control,
+.form-select {
+    border-radius: var(--orb-radio);
+    min-height: var(--orb-alto);
+    border-color: var(--orb-borde);
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+.form-control:hover:not(:disabled):not([readonly]),
+.form-select:hover:not(:disabled) {
+    border-color: var(--orb-borde-hover);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--orb-foco);
+    box-shadow: var(--orb-foco-sombra);
+}
+
+/* Un textarea crece con su contenido: solo hereda las esquinas. */
+textarea.form-control {
+    min-height: 0;
+    border-radius: var(--orb-radio);
+}
+
+/* Tamaño compacto: misma familia visual (esquinas, colores, foco) con menos
+   alto, para las barras de filtros y las cabeceras de tabla, donde 44px
+   empujaría el contenido hacia abajo en toda la aplicación. */
+.form-control-sm,
+.form-select-sm {
+    border-radius: var(--orb-radio-menor);
+    min-height: var(--orb-alto-sm);
+}
+
+/* Un input dentro de un grupo pega con su vecino: Bootstrap ya le quita las
+   esquinas del lado que toca, pero con 12px hay que reforzarlo o se ve un
+   escalón. */
+.input-group > .form-control:not(:last-child),
+.input-group > .form-select:not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.input-group > .form-control:not(:first-child),
+.input-group > .form-select:not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+
+/* --------------------------------------------------------------------------
+   2. Select2: la caja
+   --------------------------------------------------------------------------
+   `!important` en todo el bloque no es pereza: `select2-sneat-fix.css` fija
+   estas mismas propiedades con `!important` para aplanar el control, y sin él
+   ganaría el archivo anterior. Se limita a geometría — el color del borde se
+   deja intacto para no pisar los estados de validación. */
+
+.select2-container--bootstrap-5 .select2-selection {
+    border-radius: var(--orb-radio) !important;
+    min-height: var(--orb-alto) !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+
+.select2-container--bootstrap-5.select2-container--focus .select2-selection,
+.select2-container--bootstrap-5.select2-container--open .select2-selection {
+    box-shadow: var(--orb-foco-sombra) !important;
+}
+
+/* La flecha gira al abrir, igual que en el componente del Dashboard: es la
+   señal de que el panel está desplegado. */
+.select2-container--bootstrap-5 .select2-selection--single {
+    background-position: right 0.875rem center;
+    transition: background-image .15s ease;
+}
+.select2-container--bootstrap-5.select2-container--open .select2-selection--single {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23696cff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M14 11l-6-6-6 6'/%3e%3c/svg%3e") !important;
+}
+
+/* Variante compacta, gemela de `.form-select-sm`.
+   Se decide con un selector de hermano adyacente sobre el <select> ORIGINAL, y
+   no con una clase que ponga el inicializador en el contenedor. El motivo es
+   que varias pantallas llaman a `.select2()` por su cuenta —`informe_inteligente.js`
+   destruye y reconstruye su select de desglose cada vez que cambian los campos—
+   y en ese `destroy` se pierde cualquier clase añadida al contenedor: el control
+   volvía a los 44px mientras su vecino seguía en 36px. El <select> escondido, en
+   cambio, conserva sus clases pase lo que pase. */
+select.form-select-sm + .select2-container .select2-selection,
+select.form-control-sm + .select2-container .select2-selection {
+    border-radius: var(--orb-radio-menor) !important;
+    min-height: var(--orb-alto-sm) !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 0.8125rem !important;
+}
+
+/* --------------------------------------------------------------------------
+   3. Select2: selección múltiple (los chips del Dashboard)
+   -------------------------------------------------------------------------- */
+
+/* Un select múltiple vacío tiene que empezar en la misma línea vertical que
+   uno simple: mismo relleno izquierdo (0.875rem) que fija `select2-sneat-fix.css`
+   para la variante simple. Sin esto, «Desglosar el resumen por» arrancaba 4px a
+   la izquierda de «¿Sobre qué desea informar?», que están uno al lado del otro. */
+.select2-container--bootstrap-5 .select2-selection--multiple {
+    padding: 0.25rem 0.875rem !important;
+    align-items: center;
+}
+
+/* El texto de ayuda de un múltiple vacío lo pinta el `placeholder` de un <input>
+   interno, no un <span> como en el simple: hay que igualarle tipografía y
+   márgenes o se ve más pequeño y descolgado. */
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-search__field {
+    font-size: inherit !important;
+    line-height: inherit !important;
+    margin-top: 0 !important;
+    margin-left: 0 !important;
+    height: auto !important;
+}
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered {
+    padding-left: 0 !important;
+}
+
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.3rem;
+    background: var(--orb-chip-fondo) !important;
+    color: var(--orb-chip-texto) !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 0.15rem 0.6rem !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+    margin: 0.15rem 0.25rem 0.15rem 0 !important;
+}
+
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove {
+    color: var(--orb-chip-texto) !important;
+    background: transparent !important;
+    border: none !important;
+    opacity: 0.7;
+    padding: 0 !important;
+    margin-right: 0.1rem;
+}
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove:hover {
+    opacity: 1;
+    background: transparent !important;
+}
+
+/* --------------------------------------------------------------------------
+   4. Select2: el panel desplegable
+   --------------------------------------------------------------------------
+   Aquí está la mitad de lo que hace bonito al componente del Dashboard:
+   panel separado de la caja, esquinas completas y sombra suave. El archivo
+   anterior lo pegaba a la caja y le quitaba las esquinas de arriba; se
+   revierte. */
+
+.select2-container--bootstrap-5 .select2-dropdown {
+    border-radius: var(--orb-radio) !important;
+    border-color: var(--orb-borde) !important;
+    box-shadow: var(--orb-panel-sombra) !important;
+    padding: 0.4rem !important;
+    margin-top: 6px !important;
+    overflow: hidden;
+}
+.select2-container--bootstrap-5 .select2-dropdown.select2-dropdown--above {
+    margin-top: 0 !important;
+    margin-bottom: 6px !important;
+}
+
+/* Se anula el recorte de esquinas que hacía el archivo anterior para pegar el
+   panel al control. */
+.select2-container--bootstrap-5 .select2-dropdown.select2-dropdown--below,
+.select2-container--bootstrap-5 .select2-dropdown.select2-dropdown--above {
+    border-top-left-radius: var(--orb-radio) !important;
+    border-top-right-radius: var(--orb-radio) !important;
+    border-bottom-left-radius: var(--orb-radio) !important;
+    border-bottom-right-radius: var(--orb-radio) !important;
+}
+
+/* Buscador dentro del panel, como en el Dashboard. */
+.select2-container--bootstrap-5 .select2-search--dropdown {
+    padding: 0 0 0.4rem 0 !important;
+}
+.select2-container--bootstrap-5 .select2-search--dropdown .select2-search__field {
+    border-radius: var(--orb-radio-menor) !important;
+    min-height: var(--orb-alto-sm);
+    font-size: 0.875rem !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__options {
+    max-height: 260px !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option {
+    border-radius: var(--orb-radio-menor) !important;
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.875rem !important;
+}
+
+/* Opción bajo el cursor y opción ya elegida. El archivo anterior pintaba la
+   elegida de gris oscuro con texto blanco; se sustituye por el tratamiento
+   del Dashboard —fondo tenue del color primario y texto del mismo color—,
+   que es más legible y no parece un elemento deshabilitado. */
+.select2-container--bootstrap-5 .select2-results__option--highlighted:not([aria-selected="true"]) {
+    background-color: var(--orb-opcion-hover) !important;
+}
+
+.select2-container--bootstrap-5 .select2-results__option[aria-selected="true"],
+.select2-container--bootstrap-5 .select2-results__option--highlighted[aria-selected="true"],
+.select2-container--bootstrap-5 .select2-results__option--selected {
+    background-color: var(--orb-opcion-activa-fondo) !important;
+    color: var(--orb-opcion-activa-texto) !important;
+    font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------------------
+   5. El multi-select del Dashboard
+   --------------------------------------------------------------------------
+   Es un componente propio (chips + buscador escritos a mano en
+   `dashboard.html`) y se queda como está: su lógica de «al elegir una unidad
+   se incluyen sus departamentos» no tiene equivalente en Select2.
+
+   Lo que sí cambió es su paleta. Tenía colores propios (índigo #6366f1,
+   bordes slate, chips azules) y ahora consume los tokens de este archivo: la
+   sustitución está hecha en el propio `<style>` de `dashboard.html`, y no
+   aquí, porque ese bloque va incrustado en la página y se aplica DESPUÉS de
+   esta hoja — cualquier regla que se escribiera aquí perdería salvo a base de
+   `!important`.
+
+   Lo único que sí se añade desde aquí es el resplandor de foco, que el
+   componente no tenía y sus vecinos sí. */
+
+.chip-multiselect.open .chip-multiselect-box {
+    box-shadow: var(--orb-foco-sombra);
+}
+.chip-multiselect-box {
+    min-height: var(--orb-alto);
+}
+.chip-multiselect-search:focus {
+    border-color: var(--orb-foco);
+    box-shadow: var(--orb-foco-sombra);
+    outline: 0;
+}
+
+/* --------------------------------------------------------------------------
+   6. Convivencia con los patrones de la aplicación
+   --------------------------------------------------------------------------
+   Select2 no sustituye al <select>: lo esconde y planta al lado un <span> con
+   su propia interfaz. Todo lo que el maquetado colocaba alrededor del select
+   —un icono en un `.input-group`, un ancho a medida, un atributo `hidden`—
+   deja de aplicarle. Este bloque devuelve ese comportamiento. */
+
+/* 6.a Dentro de un grupo de entrada.
+   Bootstrap reparte el ancho entre los hijos que reconoce (`.form-select`,
+   `.form-control`, `.input-group-text`), y el contenedor de Select2 no es
+   ninguno: se quedaba con el 100% del ancho y empujaba el icono a una línea
+   propia, que es el «icono encima del select» de Familias de Cargos y del
+   filtro por unidad de Informes. Aquí se le dice que se comporte como el
+   control que sustituye. */
+.input-group > .select2-container {
+    flex: 1 1 auto;
+    width: 1% !important;
+    min-width: 0;
+}
+
+/* Y que se una con su vecino en vez de dibujar una caja completa al lado. */
+.input-group > .select2-container:not(:first-child) .select2-selection {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+.input-group > .select2-container:not(:last-child) .select2-selection {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+/* El icono del grupo tiene que igualar la altura y las esquinas nuevas del
+   control, o queda un escalón entre los dos. */
+.input-group > .input-group-text {
+    border-radius: var(--orb-radio);
+    min-height: var(--orb-alto);
+}
+.input-group-sm > .input-group-text {
+    border-radius: var(--orb-radio-menor);
+    min-height: var(--orb-alto-sm);
+}
+.input-group > .input-group-text:not(:first-child) {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+}
+.input-group > .input-group-text:not(:last-child) {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* 6.b Controles que se ajustan a su contenido.
+   Mismo criterio que la variante compacta: se lee del <select> original para que
+   sobreviva a que una pantalla reinicialice Select2 por su cuenta. */
+select.w-auto + .select2-container,
+select[style*="width: auto"] + .select2-container,
+select[style*="width:auto"] + .select2-container {
+    width: auto !important;
+    min-width: 0;
+}
+
+/* 6.c Selects ocultos de forma temporal.
+   El contenedor de Select2 no hereda el atributo `hidden` del <select>, así
+   que sin esto un control oculto se vería igualmente. Como es un selector de
+   hermano adyacente, se actualiza solo en cuanto la pantalla pone o quita el
+   atributo: no hace falta reinicializar nada. */
+select[hidden] + .select2-container {
+    display: none !important;
+}
+
+/* 6.d El panel abierto, por encima de cualquier capa flotante.
+   Select2 cuelga su desplegable de <body> cuando el control no está dentro de
+   un modal, y ahí competía en altura con lo que hubiera encima: los SweetAlert
+   del proyecto se dibujan a `z-index: 99999` —Familias de Cargos monta uno para
+   mover un cargo de familia— y se comían el panel entero. Se sube por encima de
+   todos ellos; para los que sí cuelgan de un modal es inocuo, porque allí
+   compiten dentro de su propio contexto de apilamiento. */
+.select2-container--open {
+    z-index: 100050 !important;
+}
+
+/* ==========================================================================
+   7. VALIDACIÓN VISUAL: EL ROJO
+   ==========================================================================
+
+   `static/js/validacion_visual.js` pinta de rojo el campo que tiene datos pero
+   no son válidos. Usa su propia clase, `campo-invalido`, y no la `is-invalid`
+   de Bootstrap, porque esa la ponen y la quitan otras validaciones del proyecto
+   (el Orden de Prioridad la usa tras preguntar al servidor si la posición está
+   ocupada) y pisarla se llevaría por delante su aviso.
+
+   El color es el mismo que el `is-invalid` de la plantilla Sneat, así que para
+   el usuario no hay dos rojos distintos: solo hay dos dueños del rojo.
+   ========================================================================== */
+
+.campo-invalido {
+    border-color: #ff3e1d !important;
+}
+
+.campo-invalido:focus {
+    border-color: #ff3e1d !important;
+    box-shadow: 0 0 0.25rem 0.05rem rgba(255, 62, 29, 0.1) !important;
+}
+
+/* Sobre un <select> convertido por Select2 el borde se ve en el control que
+   dibuja la librería, no en el <select> original, que queda oculto. Es el mismo
+   patrón que ya usaban el verde y el amarillo en `select2-sneat-fix.css`. */
+.select2-container--bootstrap-5 .select2-selection.campo-invalido {
+    border-color: #ff3e1d !important;
+}
+
+.select2-container--bootstrap-5 .select2-selection.campo-invalido:focus {
+    border-color: #ff3e1d !important;
+    box-shadow: 0 0 0.25rem 0.05rem rgba(255, 62, 29, 0.1) !important;
+}
+
+/* ==========================================================================
+   8. EL CURSOR DE LOS SELECTS
+   ==========================================================================
+
+   Un desplegable tiene que anunciar que se pulsa. Select2 dibuja el control
+   como un <span>, así que por defecto hereda el cursor de texto — y en los
+   multi-select es peor todavía, porque el hueco donde se escribe para filtrar
+   ocupa casi toda la caja y el puntero nunca llegaba a cambiar.
+
+   La regla es: MANITO en todo el control, y cursor de texto solo cuando el
+   panel ya está abierto y el usuario está escribiendo para filtrar. Es lo que
+   ya hacía el filtro de unidades del Dashboard, que es el que se toma como
+   referencia.
+   ========================================================================== */
+
+.select2-container--bootstrap-5 .select2-selection,
+.select2-container--bootstrap-5 .select2-selection *,
+.select2-container--bootstrap-5 .select2-selection__rendered,
+.select2-container--bootstrap-5 .select2-selection__choice,
+.select2-container--bootstrap-5 .select2-selection__arrow {
+    cursor: pointer;
+}
+
+/* El campo de búsqueda que Select2 mete DENTRO del control de un multi-select:
+   mientras el panel está cerrado no es más que relleno, así que también lleva
+   la manito. */
+.select2-container--bootstrap-5:not(.select2-container--open) .select2-search__field {
+    cursor: pointer;
+}
+
+/* Panel abierto: ahí sí se escribe, y el cursor de texto es la señal correcta. */
+.select2-container--bootstrap-5.select2-container--open .select2-search__field,
+.select2-container--open .select2-search--dropdown .select2-search__field {
+    cursor: text;
+}
+
+/* La aspa que quita una ficha es un botón, no parte del texto. */
+.select2-container--bootstrap-5 .select2-selection__choice__remove,
+.select2-container--bootstrap-5 .select2-selection__clear {
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   9. SELECTOR DE UNIDADES ORGANIZATIVAS
+   ==========================================================================
+
+   El control de fichas que estrenó el Dashboard, traído aquí para que lo usen
+   también Informes RRHH e Informe Inteligente. Antes vivía dentro de
+   `dashboard.html`, así que las otras dos pantallas no podían aprovecharlo.
+
+   Se añade sobre el original la INDENTACIÓN de las subunidades: listadas
+   planas y en orden alfabético, «Camagüey» y «Oficina Central» parecían dos
+   unidades hermanas cuando la primera cuelga de la segunda.
+   ========================================================================== */
+
+.chip-multiselect { position: relative; }
+/* El <select multiple> es la fuente de verdad, pero no se ve: lo que se ve es la
+   caja de fichas. Lleva el atributo `hidden`, y aun así se refuerza aquí porque
+   más de una pantalla trae reglas propias del tipo `.dropdown-menu select
+   { display: block !important; }` que lo sacaban a la vista. */
+select.chip-multiselect-native { display: none !important; }
+
+.chip-multiselect-box {
+    display: flex; align-items: center; gap: 0.5rem; min-height: var(--orb-alto);
+    border: 1px solid var(--orb-borde); border-radius: var(--orb-radio); background: #fff;
+    padding: 0.4rem 0.6rem; cursor: pointer; transition: border-color .15s ease;
+}
+.chip-multiselect-box:hover,
+.chip-multiselect.open .chip-multiselect-box { border-color: var(--orb-foco); }
+.chip-multiselect-box:focus-visible {
+    outline: none; border-color: var(--orb-foco); box-shadow: var(--orb-foco-sombra);
+}
+
+/* Variante ancha: la usan los Informes RRHH, donde el selector es un elemento
+   flexible dentro de la barra de filtros y se encogia hasta el ancho de su
+   texto. Los nombres reales de las unidades son largos ("Direccion de Recursos
+   Humanos y Capital Humano"), asi que se le da un ancho minimo y se le deja
+   crecer con el hueco disponible. */
+.chip-multiselect--ancho {
+    flex: 1 1 320px;
+    min-width: 320px;
+    max-width: 520px;
+}
+
+/* Variante compacta: la usan las pantallas donde el selector convive con
+   `form-select-sm`. Sin ella el control mide los 44px de alto estándar del
+   proyecto y sus vecinos 36px, y la fila se ve descuadrada. */
+.chip-multiselect--sm .chip-multiselect-box {
+    min-height: 2.25rem; padding: 0.2rem 0.5rem;
+}
+.chip-multiselect--sm .chip-multiselect-chip { padding: 0.05rem 0.45rem; font-size: 0.75rem; }
+.chip-multiselect--sm .chip-multiselect-chips:empty::before { font-size: 0.8125rem; }
+
+.chip-multiselect-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; flex: 1 1 auto;
+                          min-width: 0; }
+/* El texto de la caja vacía lo pone cada pantalla con `data-marcador`. */
+.chip-multiselect-chips:empty::before {
+    content: attr(data-vacio); color: var(--orb-tenue); font-size: 0.85rem;
+}
+.chip-multiselect-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    background: var(--orb-chip-fondo); color: var(--orb-chip-texto);
+    border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem;
+    font-weight: 600; white-space: nowrap;
+}
+.chip-multiselect-chip button {
+    border: none; background: transparent; color: var(--orb-chip-texto);
+    font-size: 0.9rem; line-height: 1; cursor: pointer; padding: 0; opacity: 0.7;
+}
+.chip-multiselect-chip button:hover { opacity: 1; }
+
+.chip-multiselect-badge {
+    background: var(--orb-foco); color: #fff; border-radius: 999px;
+    min-width: 22px; height: 22px; display: none; align-items: center;
+    justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+}
+.chip-multiselect-badge.show { display: inline-flex; }
+.chip-multiselect-arrow { color: var(--orb-tenue); transition: transform .15s ease; flex-shrink: 0; }
+.chip-multiselect.open .chip-multiselect-arrow { transform: rotate(180deg); }
+
+.chip-multiselect-panel {
+    display: none; position: absolute; z-index: 1060; top: calc(100% + 6px); left: 0; right: 0;
+    background: #fff; border: 1px solid var(--orb-borde); border-radius: var(--orb-radio);
+    box-shadow: var(--orb-panel-sombra); padding: 0.6rem; max-height: 300px; flex-direction: column;
+}
+.chip-multiselect.open .chip-multiselect-panel { display: flex; }
+.chip-multiselect-search {
+    border: 1px solid var(--orb-borde); border-radius: var(--orb-radio-menor);
+    padding: 0.4rem 0.6rem; font-size: 0.85rem; margin-bottom: 0.4rem; flex-shrink: 0;
+    cursor: text;
+}
+.chip-multiselect-options { overflow-y: auto; }
+.chip-multiselect-option {
+    padding: 0.4rem 0.6rem; border-radius: var(--orb-radio-menor); font-size: 0.85rem;
+    cursor: pointer; display: flex; align-items: center; gap: 0.5rem; color: var(--orb-texto);
+}
+.chip-multiselect-option:hover { background: var(--orb-opcion-hover); }
+.chip-multiselect-option.selected {
+    background: var(--orb-opcion-activa-fondo); color: var(--orb-opcion-activa-texto); font-weight: 600;
+}
+.chip-multiselect-option.hidden { display: none; }
+.chip-multiselect-option .bx-check { visibility: hidden; color: var(--orb-foco); }
+.chip-multiselect-option.selected .bx-check { visibility: visible; }
+.chip-multiselect-empty {
+    padding: 0.5rem; text-align: center; color: var(--orb-tenue); font-size: 0.8rem;
+}
+
+/* Subunidades: sangradas y con una guía, para que se lea de un vistazo de quién
+   cuelgan. El `└` va como pseudo-elemento y no en el texto de la opción para que
+   el buscador siga comparando solo el nombre real de la unidad. */
+.chip-multiselect-option--hija { padding-left: 1.6rem; position: relative; }
+.chip-multiselect-option--hija::after {
+    content: '└'; position: absolute; left: 0.75rem;
+    color: var(--orb-tenue); font-size: 0.8rem;
+}

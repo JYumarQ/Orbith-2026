@@ -1,0 +1,77 @@
+{% comment %}
+  Modal de alta y edición de los cuatro nomencladores de importes.
+
+  Uno solo para los cuatro porque el formulario cambia muy poco: Maestría y
+  Doctorado piden un importe; Instructor y CNCI, una descripción y un importe.
+  Ni el grado ni el tipo se preguntan: los pone la vista según la tarjeta desde
+  la que se abrió (ver `views_importes.guardar`), que es lo que impide crear un
+  segundo importe de Maestría o un Instructor desde la tarjeta de CNCI.
+
+  `data-validacion-visual` activa el criterio de colores común: amarillo lo que
+  falta, rojo lo que está mal, verde lo correcto.
+{% endcomment %}
+<div class="modal-dialog modal-dialog-centered" role="document">
+  <div class="modal-content">
+    <form hx-post="{% if objeto and not es_grado %}{% url 'importe_editar' slug objeto.pk %}{% else %}{% url 'importe_nuevo' slug %}{% endif %}"
+          hx-target="#modal_importes" hx-swap="innerHTML" autocomplete="off"
+          data-validacion-visual>
+      {% csrf_token %}
+
+      <div class="modal-header">
+        <h5 class="modal-title">
+          {% if objeto %}Editar{% else %}{% if es_grado %}Definir{% else %}Nuevo{% endif %}{% endif %}
+          · {{ titulo }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-exclamation-triangle me-2 mt-1"></i>
+            <div>{{ form.non_field_errors }}</div>
+          </div>
+        {% endif %}
+
+        {% for campo in form %}
+          <div class="mb-3">
+            <label class="form-label small fw-bold text-muted" for="{{ campo.id_for_label }}">
+              {{ campo.label }} *
+            </label>
+            {{ campo }}
+            {% if campo.errors %}
+              <div class="text-danger small mt-1">{{ campo.errors }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+
+        {% if es_grado %}
+          <div class="alert alert-info d-flex align-items-start p-2 mb-0" role="alert">
+            <i class="fas fa-circle-info me-2 mt-1"></i>
+            <div class="small">
+              Este importe se rellena solo en el contrato de cada trabajador
+              registrado con este grado científico. Cambiarlo aquí NO reescribe los
+              contratos ya guardados: la regla CTR-019 de Subsanación le avisará de
+              cuáles no coinciden para que decida usted si actualizarlos.
+            </div>
+          </div>
+        {% else %}
+          <div class="alert alert-info d-flex align-items-start p-2 mb-0" role="alert">
+            <i class="fas fa-circle-info me-2 mt-1"></i>
+            <div class="small">
+              Aparecerá como una opción del desplegable «{{ ficha.titulo }}» en los
+              formularios de crear y editar contrato.
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="fas fa-save me-1"></i>Guardar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

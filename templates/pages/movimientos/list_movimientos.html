@@ -47,6 +47,12 @@
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <h5 class="mb-0">Solicitudes Pendientes</h5>
 
+                {% comment %} Confirmar un movimiento es una escritura: `MovimientoUpdateView`
+                   la cierra al Observador con `RequiereEdicionMixin`. Antes el botón se
+                   le pintaba igual y solo descubría que no podía al recibir el 403, así
+                   que se retira. `puede_editar` es la misma función que aplica la vista.
+                {% endcomment %}
+                {% if puede_editar %}
                 <div id="movimiento-toolbar" class="d-flex gap-2 toolbar-disabled">
                     <button type="button" class="btn btn-primary" id="btn-confirmar-mov" 
                         onclick="ejecutarMovimiento()" 
@@ -54,6 +60,7 @@
                         <i class="bx bx-sync me-1"></i> Confirmar Movimiento
                     </button>
                 </div>
+                {% endif %}
             </div>
 
             <div class="table-responsive text-nowrap">
@@ -161,13 +168,19 @@
         fila.classList.add('table-active-row');
 
         // C. Activar Toolbar y pasar datos al botón
+        // El Observador no tiene este botón (ver la condición de arriba), así que
+        // seleccionar una fila no puede dar por hecho que exista: sin estas dos
+        // comprobaciones, un solo clic en la tabla lanzaría un TypeError y dejaría
+        // la página sin deseleccionar ni ordenar.
         const toolbar = document.getElementById('movimiento-toolbar');
-        toolbar.classList.remove('toolbar-disabled');
-        toolbar.classList.add('toolbar-active');
-        
+        if (toolbar) {
+            toolbar.classList.remove('toolbar-disabled');
+            toolbar.classList.add('toolbar-active');
+        }
+
         const btn = document.getElementById('btn-confirmar-mov');
         // Le pasamos la URL guardada en el data-attribute de la fila
-        btn.setAttribute('data-url-target', fila.dataset.urlMovimiento);
+        if (btn) btn.setAttribute('data-url-target', fila.dataset.urlMovimiento);
     }
 
     let colMovActual = -1;

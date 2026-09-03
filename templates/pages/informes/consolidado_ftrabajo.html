@@ -18,19 +18,12 @@
                 <div class="card-header border-bottom bg-transparent py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <h5 class="mb-0 text-primary fw-bold"><i class="bx bx-filter-alt me-1"></i> Filtro por Unidad</h5>
                     
-                    <form id="form-exportar" class="m-0" hx-get="{% url 'informe_economia' %}" hx-target="#tbody-consolidado" hx-trigger="change">
-                        <input type="hidden" name="mes" value="{{ mes_actual }}">
-                        <input type="hidden" name="anno" value="{{ anno_actual }}">
-                        <div class="input-group shadow-sm" style="border: 1px solid #696cff; border-radius: 6px;">
-                            <span class="input-group-text bg-white border-0 text-primary"><i class="bx bx-buildings"></i></span>
-                            <select class="form-select border-0 shadow-none bg-white text-primary fw-bold" name="ueb" style="min-width: 280px; cursor: pointer;">
-                                <option value="">Empresa Eléctrica (Consolidado Total)</option>
-                                {% for unidad in unidades %}
-                                    <option value="{{ unidad.pk }}" {% if ueb_actual == unidad.pk|stringformat:"s" %}selected{% endif %}>{{ unidad.descripcion }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </form>
+                    {% comment %} El filtro pasó a ser el partial común a los seis informes:
+                       admite varias unidades y recarga la página en vez de intercambiar solo
+                       el <tbody> por HTMX. El intercambio parcial ya no servía porque el
+                       filtro tiene que conservar `fuente` y `periodo` en la URL para que
+                       cambiar de unidad no te devuelva de un cierre a los datos de hoy. {% endcomment %}
+                    {% include 'pages/informes/partials/filtro_unidades.html' %}
                 </div>
 
                 <div class="table-responsive text-nowrap mt-2 pb-3">

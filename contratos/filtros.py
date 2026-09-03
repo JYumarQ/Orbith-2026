@@ -10,6 +10,8 @@ vistas llaman a la misma función, mismo patrón que `cierres/filtros.py` /
 
 from django.db.models import Q
 
+from strorganizativa.jerarquia import expandir
+
 from .permisos import es_administrador, es_moderador
 
 
@@ -75,5 +77,33 @@ def aplicar_filtros(request, qs):
 
     if tipo:
         qs = qs.filter(tipo__descripcion=tipo)
+
+    # --- Estructura: unidad organizativa, departamento y cargo ---
+    #
+    # Los tres admiten VARIOS valores (`?unidad=3&unidad=7`), porque la pregunta
+    # habitual no es «cómo va esta unidad» sino «cómo van estas dos».
+    #
+    # La unidad se EXPANDE a sus subunidades: una Unidad Principal no tiene
+    # cargos propios —todo cuelga de sus hijas—, así que sin expandir, filtrar
+    # por una principal devolvería un listado vacío. Mismo criterio que el
+    # Dashboard, Informes RRHH e Informe Inteligente.
+    # `expandir()` descarta lo que no sea un id, asi que se comprueba el
+    # resultado y no el parametro: con `?unidad=basura` no queda ningun id, y
+    # filtrar por una lista vacia dejaria el listado en blanco en vez de
+    # ignorar el filtro.
+    unidades = expandir([v for v in request.GET.getlist('unidad') if v])
+    if unidades:
+        qs = qs.filter(cargo__departamento__unidad_organizativa_id__in=unidades)
+
+    departamentos = [v for v in request.GET.getlist('departamento') if v.isdigit()]
+    if departamentos:
+        qs = qs.filter(cargo__departamento_id__in=departamentos)
+
+    # Por el NOMENCLADOR de cargo, no por la fila de plantilla: «Especialista B»
+    # existe una vez en cada departamento, y quien filtra por un cargo quiere
+    # verlos todos, no el de un departamento concreto.
+    cargos = [v for v in request.GET.getlist('cargo') if v.isdigit()]
+    if cargos:
+        qs = qs.filter(cargo__ncargo_id__in=cargos)
 
     return qs

@@ -1,0 +1,68 @@
+{% comment %}
+  Una Unidad Organizativa dentro del informe de Puestos Clave, en pantalla.
+
+  Se incluye A SÍ MISMA para las subunidades, así que sirve igual para una UEB
+  suelta que para una dirección principal con cinco hijas: la sangría y el
+  tamaño de letra salen del nivel, y no hay que escribir el mismo bloque dos
+  veces con el riesgo de que uno se quede atrás.
+
+  PARÁMETROS
+  ----------
+    unidad   Nodo que arma `InformePuestosClaveView._agrupar_por_unidad`:
+             nombre, subtotales, puestos y subunidades.
+    nivel    0 para las de primer nivel, 1 para las subunidades. Solo afecta al
+             aspecto.
+
+  Una unidad sin nombre es el modo antiguo del informe (todos los cargos juntos,
+  sin repartir por unidad): entonces no se pinta cabecera y solo salen los
+  cargos. Ver `AGRUPACION_PUESTOS_CLAVE` en `informes/views.py`.
+{% endcomment %}
+
+{% if unidad.nombre %}
+    <tr style="background-color: {% if nivel == 0 %}rgba(238, 242, 255, 0.65){% else %}rgba(248, 250, 252, 0.85){% endif %};">
+        <td class="{% if nivel == 0 %}px-4{% else %}px-4 ps-5{% endif %} py-2">
+            <div class="d-flex align-items-center gap-2">
+                {% if nivel == 0 %}
+                    <i class="bx bx-buildings text-indigo-600"></i>
+                    <span class="fw-black text-uppercase" style="font-size: 15px; color: #312e81; letter-spacing: .04em;">{{ unidad.nombre }}</span>
+                {% else %}
+                    <i class="bx bx-subdirectory-right text-slate-400"></i>
+                    <span class="fw-black text-uppercase" style="font-size: 12px; color: #475569; letter-spacing: .03em;">{{ unidad.nombre }}</span>
+                {% endif %}
+            </div>
+        </td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.aprob }}</td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.cub }}</td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.vac }}</td>
+        <td class="px-2 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 fw-black rounded-3" style="font-size: 11px; padding: 0.3rem 0.5rem;">{{ unidad.subtotales.porc }}%</span></td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.det }}</td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.muj }}</td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.adiest }}</td>
+    </tr>
+{% endif %}
+
+{% for p in unidad.puestos %}
+    <tr>
+        <td class="py-1 {% if not unidad.nombre %}px-4 ps-5{% elif nivel == 0 %}px-4 ps-5{% else %}px-4 ps-6{% endif %}" {% if nivel > 0 %}style="padding-left: 3.5rem !important;"{% endif %}>
+            <span class="fw-bold text-slate-700" style="font-size: 13px;">{{ p.nombre }}</span>
+        </td>
+        <td class="px-2 py-1 text-center font-monospace text-slate-500" style="font-size: 18px;">{{ p.aprob }}</td>
+        <td class="px-2 py-1 text-center"><span class="badge bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem;">{{ p.cub }}</span></td>
+        <td class="px-2 py-1 text-center"><span class="badge {% if p.vac > 0 %}bg-orange-50 text-orange-500 border-orange-100{% else %}bg-transparent text-slate-400{% endif %} rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem; border: 1px solid transparent;">{{ p.vac }}</span></td>
+        <td class="px-2 py-1 text-center" style="border-right: 1px solid rgba(238, 242, 255, 0.5);">
+            <div class="d-flex flex-column align-items-center justify-content-center gap-1">
+                <div class="progress rounded-pill shadow-none" style="width: 48px; height: 3px; background-color: #f1f5f9;">
+                    <div class="progress-bar {% if p.porc >= 80 %}bg-success{% elif p.porc >= 50 %}bg-warning{% else %}bg-danger{% endif %}" style="width: {{ p.porc }}%"></div>
+                </div>
+                <span class="fw-black text-slate-400" style="font-size: 10px;">{{ p.porc }}%</span>
+            </div>
+        </td>
+        <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.det }}</td>
+        <td class="px-2 py-1 text-center"><span class="fw-bold {% if p.muj > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}" style="font-size: 18px;">{{ p.muj }}</span></td>
+        <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.adiest }}</td>
+    </tr>
+{% endfor %}
+
+{% for subunidad in unidad.subunidades %}
+    {% include 'pages/informes/partials/puestos_clave_unidad.html' with unidad=subunidad nivel=1 %}
+{% endfor %}

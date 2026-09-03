@@ -36,6 +36,106 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.0.1",
+        "fecha": "2026-09-02",
+        "titulo": "Informes por unidad, filtros unificados y validación de formularios",
+        "cambios": [
+            ("nuevo", "Puestos Clave: el informe se puede ver repartido por "
+                    "Unidad Organizativa —cada unidad con sus totales y sus "
+                    "cargos debajo, y las direcciones principales encabezando "
+                    "su rama— o consolidado, sumando cada cargo de todas las "
+                    "unidades. Se elige con el conmutador «Desglosado / "
+                    "Consolidado» de la barra de filtros, que recuerda su "
+                    "última posición."),
+            ("nuevo", "Puestos Clave en Word y PDF: encabezado con el logo, la "
+                    "provincia, el municipio y la unidad del informe, quién lo "
+                    "exportó, el período y «Hoja X de Y» en todas las páginas. "
+                    "El nombre del fichero lleva la unidad y el mes."),
+            ("nuevo", "Filtro por Unidad Organizativa en TODOS los informes de "
+                    "RRHH, con selección múltiple. Elegir una unidad principal "
+                    "incluye sus subunidades, y cada subunidad se puede "
+                    "consultar por separado."),
+            ("nuevo", "Lista de Contratos: filtros por Unidad Organizativa, "
+                    "Departamento y Cargo, todos de selección múltiple."),
+            ("nuevo", "Nomencladores de importes: Maestría, Doctorado, "
+                    "Instructor y CNCI. El contrato toma de ahí sus importes en "
+                    "vez de escribirlos a mano, y una regla de Subsanación "
+                    "avisa de los contratos cuyo importe ya no coincide."),
+            ("nuevo", "Informe Inteligente: dieciséis medidas para Contratos "
+                    "—cuadros, mujeres en puestos clave, grado científico, "
+                    "nivel superior, título de oro, profesionales, jubilados "
+                    "recontratados, contratos determinados, antigüedad y "
+                    "misiones— y ocho para Estructura y Plantilla, con la "
+                    "cobertura de la plantilla y las plazas vacantes. Todas se "
+                    "pueden dibujar en la Evolución mensual."),
+            ("nuevo", "Informe Inteligente: campos nuevos de Puesto Clave y "
+                    "Contrato Determinado en Contratos, y Puesto Clave y Plazas "
+                    "Vacantes en Estructura y Plantilla."),
+            ("nuevo", "Selector de período unificado en Informes RRHH e Informe "
+                    "Inteligente: una rejilla de meses que marca en gris los "
+                    "que no tienen cierre declarado."),
+            ("nuevo", "Usuarios: columna de Rol en el listado y botón "
+                    "«Actualizar conexiones» para ver al momento quién está "
+                    "dentro."),
+            ("nuevo", "Usuarios: al asignar una Unidad Principal a un moderador "
+                    "entran también sus subunidades, y las unidades que ya "
+                    "lleva otro moderador aparecen apagadas en el desplegable. "
+                    "Una subunidad nueva se reparte sola, sin tener que reabrir "
+                    "la ficha del moderador."),
+            ("nuevo", "Subsanación: siete reglas nuevas —cargo sin nivel de "
+                    "preparación, unidad que no declaró su cierre mensual, "
+                    "moderador sin todas las subunidades de su principal, "
+                    "subunidad sin su principal, contrato determinado vencido "
+                    "con el trabajador activo, fecha de alta en la entidad "
+                    "imposible, importe distinto al del nomenclador y fórmula "
+                    "de Pago por Importe que ya no es válida."),
+            ("mejorado", "Un solo criterio de color en todos los formularios: "
+                        "amarillo el campo obligatorio que falta, rojo el dato "
+                        "escrito que no es válido y verde el correcto. El botón "
+                        "de guardar espera a que no quede nada pendiente. Los "
+                        "campos opcionales ya no se pintan de amarillo."),
+            ("mejorado", "Todos los desplegables de la aplicación se ven y se "
+                        "manejan igual, con buscador para escribir en vez de "
+                        "recorrer la lista."),
+            ("mejorado", "El selector de unidades del Dashboard, de Informes "
+                        "RRHH y de Informe Inteligente es el mismo control, con "
+                        "las subunidades indentadas bajo su principal y "
+                        "búsqueda por rama."),
+            ("mejorado", "Informes RRHH: el desplegable de tipo de informe "
+                        "conserva la fuente de datos —si está mirando un cierre "
+                        "de agosto, sigue en agosto al cambiar de informe."),
+            ("mejorado", "El Observador deja de tener acceso al panel de "
+                        "Notificaciones; conserva sus avisos personales en la "
+                        "campana."),
+            ("corregido", "La exportación a Word del Resumen de Puestos Clave y "
+                        "del Resumen por UEB no generaba el documento."),
+            ("corregido", "Puestos Clave: exportar a Word o PDF con el filtro de "
+                        "unidades puesto devolvía un error."),
+            ("corregido", "Lista de Contratos: al cambiar de página se perdían "
+                        "los filtros aplicados."),
+            ("corregido", "El panel de filtros de la Lista de Contratos se "
+                        "cerraba al elegir en un desplegable."),
+            ("corregido", "Informe Inteligente: el selector de Unidad "
+                        "Organizativa no respondía, y la pantalla saltaba al "
+                        "final al recuperar un informe guardado."),
+            ("corregido", "Parámetros Generales: el REUP no se validaba en el "
+                        "navegador."),
+            ("corregido", "Formulario de Baja: «Causa de Baja» es obligatorio y "
+                        "no se marcaba como tal."),
+            ("corregido", "Cierres mensuales: la fotografía guardaba los "
+                        "importes sin decimales."),
+            ("corregido", "Aspirantes: el sexo deducido del carné de identidad "
+                        "no se daba por válido, y los desplegables encadenados "
+                        "del contrato se quedaban en verde después de "
+                        "vaciarse."),
+            ("corregido", "Corregida la errata «Maetría» en el formulario de "
+                        "contrato."),
+            ("eliminado", "Retirada la pantalla de Cargos a página completa de "
+                        "Nomencladores: estaba rota y duplicaba Configuración → "
+                        "Familias de Cargos."),
+        ],
+    },
+    {
         "version": "3.0.0",
         "fecha": "2026-08-31",
         "titulo": "Pre-Nómina, seguridad del acceso y saneamiento de estáticos",
@@ -51,8 +151,11 @@ CHANGELOG = [
             ("nuevo", "Nomencladores propios de Pre-Nómina: Pago Asociado por "
                     "Horas, Pago Asociado por Importe, Escala de Años de "
                     "Servicio y Claves de Ausencia."),
-            ("nuevo", "Pantalla de acceso: botón para mostrar u ocultar la "
-                    "contraseña mientras se escribe."),
+            ("nuevo", "Pantalla de acceso y cambio de contraseña: botón para "
+                    "mostrar u ocultar la contraseña mientras se escribe. Solo "
+                    "muestra lo que usted teclea: nunca una contraseña "
+                    "rellenada por el navegador, para que nadie pueda leer en "
+                    "un equipo compartido una clave guardada que no conoce."),
             ("nuevo", "Pantalla de acceso: el enlace «¿Problemas para acceder?» "
                     "abre un formulario que envía la incidencia a la bandeja "
                     "del Administrador sin necesidad de iniciar sesión."),

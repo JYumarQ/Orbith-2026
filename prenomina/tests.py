@@ -32,7 +32,7 @@ from prenomina.constantes import (COLOR_AUSENCIA, COLOR_PAGO_HORAS,
                                   HOJA_REPORTE, PRIMERA_FILA_DATOS)
 from prenomina.formulas import ErrorDeFormula
 from prenomina.forms import NPagoImporteForm, ReportePagoForm
-from prenomina.models import (EstadoReporte, NClaveAusencia,
+from prenomina.models import (CalendarioPago, EstadoReporte, NClaveAusencia,
                               NEscalaAnnosServicio, NPagoHoras, NPagoImporte,
                               ReportePago, ReporteTrabajador,
                               TipoValorImporte)
@@ -628,7 +628,7 @@ class BasePreNomina(TestCase):
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Indeterminado', ocupa_plaza=True)
 
-        cls.aspirante = Aspirante.objects.create(
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
             provincia=cls.provincia, municipio=cls.municipio)
@@ -826,7 +826,7 @@ class CreacionDelReporte(BasePreNomina):
         cargo = CargoPlantilla.objects.create(
             ncargo=self.ncargo, departamento=departamento, cant_aprobada=5,
             orden_informe=1)
-        aspirante = Aspirante.objects.create(
+        aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Sub', papellido='Trabajador', sapellido='Uno',
             doc_identidad='90030376543', estado='ACTIVO', sexo='M', raza='BL',
             provincia=self.provincia, municipio=self.municipio)
@@ -1110,6 +1110,71 @@ class AlcancePorUnidad(BasePreNomina):
 
     def test_el_observador_no_gestiona_ninguna_unidad(self):
         self.assertEqual(filtros.unidades_gestionables(self.observador).count(), 0)
+
+
+class SelectorDePeriodo(BasePreNomina):
+    """Las parejas de <select> «Año»/«Mes» son ahora el selector común de período.
+
+    Lo que se fija aquí es el contrato entre las vistas y la rejilla de meses:
+    qué meses existen ya, entre qué años se navega y —en «Crear Período»— cuál es
+    el mínimo. Las tres pantallas conservan los `id` `filtro_anno`/`filtro_mes`
+    porque varios `hx-include` de Pre-Nómina apuntan a ellos.
+    """
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_el_calendario_dice_que_periodos_existen(self):
+        CalendarioPago.objects.create(usuario=self.admin, anno=2026, mes=8)
+        CalendarioPago.objects.create(usuario=self.admin, anno=2026, mes=9)
+
+        respuesta = self.client.get(reverse('prenomina:tarjeta_periodo'))
+
+        self.assertEqual(respuesta.context['periodos_existentes'], ['2026-09', '2026-08'])
+
+    def test_el_calendario_conserva_los_ids_que_usan_los_hx_include(self):
+        respuesta = self.client.get(reverse('prenomina:tarjeta_periodo'))
+        contenido = respuesta.content.decode()
+        self.assertIn('id="filtro_anno"', contenido)
+        self.assertIn('id="filtro_mes"', contenido)
+        self.assertIn('caja_periodo_calendario', contenido)
+
+    def test_crear_periodo_apaga_lo_anterior_al_ultimo(self):
+        """La regla de `crear_periodo()` se ve en la rejilla en vez de descubrirse
+        al recibir el error."""
+        CalendarioPago.objects.create(usuario=self.admin, anno=2026, mes=9)
+
+        respuesta = self.client.get(reverse('prenomina:nuevo_periodo'))
+
+        self.assertEqual(respuesta.context['minimo_periodo'], '2026-09')
+        self.assertEqual(respuesta.context['periodos_existentes'], ['2026-09'])
+
+    def test_sin_ningun_periodo_no_hay_minimo(self):
+        respuesta = self.client.get(reverse('prenomina:nuevo_periodo'))
+        self.assertEqual(respuesta.context['minimo_periodo'], '')
+        self.assertEqual(respuesta.context['periodos_existentes'], [])
+
+    def test_crear_periodo_repinta_lo_elegido_tras_un_error(self):
+        """Reabrir la rejilla en blanco obligaría a empezar de cero."""
+        CalendarioPago.objects.create(usuario=self.admin, anno=2026, mes=9)
+
+        # Junio es anterior al último período: `crear_periodo()` lo rechaza.
+        respuesta = self.client.post(reverse('prenomina:nuevo_periodo'),
+                                     {'anno': '2026', 'mes': '6'})
+
+        self.assertTrue(respuesta.context['error'])
+        self.assertEqual(respuesta.context['anno_inicial'], '2026')
+        self.assertEqual(respuesta.context['mes_inicial'], '6')
+
+    def test_el_formulario_sigue_enviando_anno_y_mes(self):
+        """Los campos ocultos del componente se llaman igual que los <select> que
+        sustituyen, así que el POST de alta no cambia."""
+        respuesta = self.client.post(reverse('prenomina:nuevo_periodo'),
+                                     {'anno': '2026', 'mes': '11'})
+
+        self.assertTrue(CalendarioPago.objects.filter(
+            usuario=self.admin, anno=2026, mes=11).exists())
+        self.assertEqual(respuesta.status_code, 204)
 
 
 class PantallaDeReportes(BasePreNomina):
@@ -1659,7 +1724,7 @@ class PantallaDeLaRejilla(BaseConConceptos):
 
     def _poblar(self, reporte, cuantos):
         for indice in range(2, 2 + cuantos):
-            aspirante = Aspirante.objects.create(
+            aspirante = Aspirante.objects.create(nivel_educ='SA', 
                 nombre=f'Trabajador{indice}', papellido='Prueba', sapellido='Test',
                 doc_identidad=f'9002025432{indice}', estado='ACTIVO',
                 sexo='M', raza='BL', provincia=self.provincia,

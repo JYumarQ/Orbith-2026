@@ -141,6 +141,19 @@
         evaluarPadre(true);
     }
 
+    // --- VALIDACIÓN VISUAL (amarillo = vacío, verde = con dato) ---
+    // Mismo criterio que el formulario de contrato, en `validacion_visual.js`.
+    // `padre` va como obligatorio porque `UnidadOrganizativa.clean()` lo exige a las
+    // subunidades; cuando no lo es, el propio formulario lo deshabilita y el ayudante
+    // lo deja sin color. `municipio` y `orden_informe` se pintan sin bloquear.
+    if (window.OrbithValidacionVisual) {
+        window.OrbithValidacionVisual.activar({
+            form: '#uniorgForm',
+            obligatorios: ['tipo', 'descripcion', 'grupo_nomina', 'padre'],
+            recomendados: ['municipio', 'orden_informe']
+        });
+    }
+
 
     // --- 2. HTMX: CONTROL DE ENVÍO Y RESTAURACIÓN ---
 
