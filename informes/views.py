@@ -1147,11 +1147,68 @@ class RegistroDiarioView(TemplateView):
         context['tipo_actual'] = familia_filtro
         context['datos'] = datos
         context['plan_editable'] = valor_plan
+
+        # Cifras de la Eficiencia del Plan, ya resueltas. En pantalla las calcula
+        # JavaScript sobre la marcha porque el plan se edita ahí mismo; el Word y
+        # el PDF no tienen JavaScript, así que se calculan aquí y las tres
+        # salidas dicen lo mismo.
+        real = sum(d['tot'] for llave, d in datos.items() if llave != 'Misiones')
+        context['plan_real'] = real
+        context['plan_diferencia'] = real - valor_plan
+        context['plan_cumplimiento'] = (round(real * 100 / valor_plan, 1)
+                                        if valor_plan else 0)
+        context['total_mujeres'] = sum(
+            d['muj'] for llave, d in datos.items() if llave != 'Misiones')
+
         # Para los combos (Ajusta NFamiliaCargo a tu modelo real)
         context['unidades'] = _combo_unidades(self.request.user)
-        # context['tipos_familia'] = NFamiliaCargo.objects.all()
+        context.update(_cabecera_documento(self.request))
 
         return context
+
+
+class ExportarRegistroDiarioWordView(RegistroDiarioView):
+    """Registro Diario en Word.
+
+    Los gráficos no van: son de JavaScript y no existen fuera del navegador. El
+    documento lleva la Eficiencia del Plan y los indicadores, que es el dato que
+    se archiva.
+    """
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        template_path = os.path.join(
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
+            'registro_diario_template.docx')
+        try:
+            doc = DocxTemplate(template_path)
+            context['logo'] = _logo_para_word(doc, context.get('config'))
+            doc.render(context)
+
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = (
+                'attachment; filename="%s"'
+                % _nombre_de_fichero(context, 'docx', 'Registro_Diario'))
+            doc.save(response)
+            return response
+        except Exception as e:
+            return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
+
+
+class ExportarRegistroDiarioPDFView(RegistroDiarioView):
+    """Registro Diario en PDF."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        html = get_template('pages/reportes/registro_diario_pdf.html').render(context)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Registro_Diario'))
+        if pisa.CreatePDF(html, dest=response).err:
+            return HttpResponse('Hubo un error al generar el PDF', status=500)
+        return response
 
 # Vista para que JavaScript guarde el plan con Doble Clic sin recargar.
 #
@@ -1226,7 +1283,6 @@ class InformeMotivosContratoView(TemplateView):
         conteo_motivos = {} 
         
         datos_agrupados = {}
-        filas_documento = []
 
         for c in contratos:
             total_contratos += 1
@@ -1264,8 +1320,18 @@ class InformeMotivosContratoView(TemplateView):
             datos_agrupados[tipo_desc]['total'] += 1
 
             if motivo_desc not in datos_agrupados[tipo_desc]['motivos']:
-                datos_agrupados[tipo_desc]['motivos'][motivo_desc] = {'total': 0, 'uebs': {}}
+                # `uebs` reparte por unidad —el modo desglosado— y `contratos`
+                # los guarda todos juntos, que es el modo consolidado: mismo
+                # agrupamiento por tipo y motivo, sin el nivel de la unidad.
+                # Son dos índices de los MISMOS contratos, no dos copias.
+                datos_agrupados[tipo_desc]['motivos'][motivo_desc] = {
+                    'total': 0, 'uebs': {}, 'contratos': []}
             datos_agrupados[tipo_desc]['motivos'][motivo_desc]['total'] += 1
+            # La unidad viaja con el contrato porque en consolidado deja de ser
+            # una cabecera y pasa a ser una columna. `FilaContrato` es inmutable,
+            # así que no se le puede colgar el nombre encima.
+            datos_agrupados[tipo_desc]['motivos'][motivo_desc]['contratos'].append(
+                {'contrato': c, 'unidad': ueb_desc, 'color': ueb_color})
 
             if ueb_desc not in datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs']:
                 datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc] = {
@@ -1276,35 +1342,6 @@ class InformeMotivosContratoView(TemplateView):
                 }
                 
             datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc]['contratos'].append(c)
-
-            # Lista PLANA para los documentos. La pantalla puede permitirse tres
-            # niveles anidados —tipo, motivo, unidad— porque se pliegan y se
-            # despliegan; en papel eso son tres cabeceras por cada puñado de
-            # filas, y en la plantilla de Word serían seis bucles encajados que
-            # nadie podría retocar después sin romperlos. Cada fila lleva su
-            # tipo, su motivo y su unidad como columnas.
-            filas_documento.append({
-                'tipo': tipo_desc,
-                'motivo': motivo_desc,
-                'unidad': ueb_desc,
-                'expediente': c.no_expediente,
-                'nombre': c.aspirante_nombre,
-                'cargo': c.ncargo_descripcion or '-',
-                'categoria': (c.cat_ocupacional or '-')[:1],
-                'fecha_alta': c.fecha_alta,
-                # Ya formateada: el Word no tiene los filtros de Django, y con
-                # la fecha en crudo salía en formato ISO mientras el PDF y la
-                # pantalla la mostraban a la cubana.
-                'fecha_alta_texto': (c.fecha_alta.strftime('%d/%m/%Y')
-                                     if c.fecha_alta else '-'),
-                'duracion': c.duracion,
-                'dias_restantes': c.dias_restantes,
-                # El estado de vencimiento, ya resuelto: la plantilla no tiene
-                # por qué repetir los cortes de 15 y 30 días en tres sitios.
-                'estado': ('Crítico' if c.dias_restantes is not None and c.dias_restantes <= 15
-                           else 'Advertencia' if c.dias_restantes is not None and c.dias_restantes <= 30
-                           else 'Vigente' if c.dias_restantes is not None else '-'),
-            })
 
         conteo_motivos_ordenado = dict(sorted(conteo_motivos.items(), key=lambda item: item[1], reverse=True))
 
@@ -1348,7 +1385,6 @@ class InformeMotivosContratoView(TemplateView):
             'agrupacion': _agrupacion_elegida(
                 self.request, CLAVE_AGRUPACION_MOTIVOS, 'desglosado'),
             'datos_agrupados': datos_agrupados,
-            'filas_documento': filas_documento,
             'total_contratos': total_contratos,
             'total_mujeres': total_mujeres,
             'total_hombres': total_hombres,

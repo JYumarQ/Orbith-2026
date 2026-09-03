@@ -102,37 +102,52 @@
        cada uno— o corrido, con esos tres datos como columnas. El modo viaja en
        la URL, asi que el documento sale como se esta viendo. {% endcomment %}
     {% if agrupacion == 'consolidado' %}
+        {% comment %} CONSOLIDADO: agrupa igual por tipo y por motivo, pero sin el
+           nivel de la unidad. La unidad no se pierde: pasa a ser una columna.
+        {% endcomment %}
         <table class="data-table" repeat="1">
             <thead>
                 <tr>
                     <th class="th-main th-main-dark" style="width: 8%;">Exp.</th>
-                    <th class="th-main th-main-dark" style="width: 20%;">Nombre y Apellidos</th>
-                    <th class="th-main th-main-dark" style="width: 18%;">Cargo</th>
+                    <th class="th-main th-main-dark" style="width: 23%;">Nombre y Apellidos</th>
                     <th class="th-main th-main-blue" style="width: 16%;">Unidad</th>
-                    <th class="th-main th-main-blue" style="width: 16%;">Motivo</th>
+                    <th class="th-main th-main-dark" style="width: 21%;">Cargo u Ocupación</th>
+                    <th class="th-main th-main-blue" style="width: 6%;">Sexo</th>
+                    <th class="th-main th-main-blue" style="width: 6%;">Cat.</th>
+                    <th class="th-main th-main-blue" style="width: 8%;">G. Escala</th>
                     <th class="th-main th-main-orange" style="width: 8%;">F. Alta</th>
-                    <th class="th-main th-main-orange" style="width: 6%;">Días</th>
-                    <th class="th-main th-main-orange" style="width: 8%;">Estado</th>
+                    <th class="th-main th-main-orange" style="width: 8%;">T. Restante</th>
                 </tr>
             </thead>
             <tbody>
-                {% for f in filas_documento %}
-                <tr class="row-cargo">
-                    <td>{{ f.expediente }}</td>
-                    <td class="td-nombre">{{ f.nombre }}</td>
-                    <td class="td-nombre">{{ f.cargo }}</td>
-                    <td>{{ f.unidad }}</td>
-                    <td>{{ f.motivo }}</td>
-                    <td>{{ f.fecha_alta|date:"d/m/Y" }}</td>
-                    <td class="bold">{{ f.dias_restantes|default_if_none:"-" }}</td>
-                    <td class="{% if f.estado == 'Crítico' %}estado-critico{% elif f.estado == 'Advertencia' %}estado-alerta{% elif f.estado == 'Vigente' %}estado-vigente{% endif %}">{{ f.estado }}</td>
-                </tr>
+                {% for tipo_nombre, tipo_data in datos_agrupados.items %}
+                    <tr class="row-tipo">
+                        <td colspan="9">{{ tipo_nombre|upper }} &mdash; total {{ tipo_data.total }}</td>
+                    </tr>
+                    {% for motivo_nombre, motivo_data in tipo_data.motivos.items %}
+                        <tr class="row-motivo">
+                            <td colspan="9">Motivo: {{ motivo_nombre }} &mdash; total {{ motivo_data.total }}</td>
+                        </tr>
+                        {% for f in motivo_data.contratos %}
+                        <tr class="row-cargo">
+                            <td>{{ f.contrato.no_expediente }}</td>
+                            <td class="td-nombre">{{ f.contrato.aspirante_nombre }}</td>
+                            <td class="td-nombre">{{ f.unidad }}</td>
+                            <td class="td-nombre">{{ f.contrato.ncargo_descripcion|default:"-" }}</td>
+                            <td>{{ f.contrato.sexo }}</td>
+                            <td class="bold">{{ f.contrato.cat_ocupacional|slice:":1" }}</td>
+                            <td class="bold">{{ f.contrato.grupo_escala_nivel|default:"-" }}</td>
+                            <td>{{ f.contrato.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
+                            <td class="bold">{{ f.contrato.dias_restantes|default_if_none:"-" }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endfor %}
                 {% empty %}
-                <tr class="row-cargo"><td colspan="8">No hay contratos determinados en el alcance de este informe.</td></tr>
+                    <tr class="row-cargo"><td colspan="9">No hay contratos determinados en el alcance de este informe.</td></tr>
                 {% endfor %}
 
                 <tr class="row-total">
-                    <td colspan="6" class="td-nombre">Total de contratos determinados</td>
+                    <td colspan="7" class="td-nombre">Total de contratos determinados</td>
                     <td colspan="2">{{ total_contratos }}</td>
                 </tr>
             </tbody>

@@ -34,6 +34,8 @@ urlpatterns = [
     # 5. INFORMES: PLAN MENSUAL DE TRABAJO (REGISTRO DIARIO)
     # ---------------------------------------------------------
     path('registro-diario/', views.RegistroDiarioView.as_view(), name='informe_registro_diario'),
+    path('registro-diario/exportar-word/', views.ExportarRegistroDiarioWordView.as_view(), name='exportar_registro_diario_word'),
+    path('registro-diario/exportar-pdf/', views.ExportarRegistroDiarioPDFView.as_view(), name='exportar_registro_diario_pdf'),
     path('registro-diario/guardar-plan/', views.GuardarPlanDiarioView.as_view(), name='guardar_plan_diario'),
     path('motivos-contratos/', views.InformeMotivosContratoView.as_view(), name='informe_motivos_contrato'),
     path('motivos-contratos/exportar-word/', views.ExportarMotivosWordView.as_view(), name='exportar_motivos_word'),

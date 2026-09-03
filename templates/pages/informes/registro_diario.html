@@ -23,22 +23,56 @@
     .fila-categoria td { font-weight: 800; font-size: 0.9rem; color: #334155; }
     .fila-sub td { font-size: 0.75rem; color: #64748b; padding-left: 2.5rem !important; }
     
-    /* ESTILO PARA EL NUEVO BOTÓN AÑADIR PLAN */
-    .btn-edit-plan {
-        background-color: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 159, 67, 0.6);
-        color: #ff9f43;
-        font-weight: 800;
-        letter-spacing: 0.8px;
-        padding: 0.4rem 1rem;
-        border-radius: 50rem;
-        font-size: 0.7rem;
-        transition: all 0.3s ease;
+    /* CAMPO DEL PLAN
+       Se ve como las otras tres cifras de la tarjeta —que son <div>— y solo se
+       delata como editable al entrar en edicion. Sin esto arrastraba el relleno
+       y la altura minima de `form-control`, y su recuadro salia mas alto. */
+    /* Las cuatro cifras de la tarjeta comparten alto de linea y no se parten:
+       basta que una haga dos lineas para que el recuadro crezca y la fila se
+       vea descuadrada. */
+    .campo-plan,
+    #resumen-real,
+    #resumen-porcentaje,
+    #resumen-diferencia {
+        line-height: 1.2;
+        white-space: nowrap;
     }
-    .btn-edit-plan:hover {
-        background-color: #ff9f43;
-        color: #fff;
-        box-shadow: 0 4px 10px rgba(255, 159, 67, 0.4);
+    .campo-plan {
+        width: 100%;
+        /* Alto explícito: un <input> no resuelve `line-height` igual que un
+           <div>, y sin esto el recuadro del Plan quedaba tres píxeles más alto
+           que los otros tres. */
+        height: 1.2em;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        background: transparent;
+        text-align: center;
+        line-height: 1;
+        cursor: pointer;
+        -moz-appearance: textfield;   /* Fuera las flechitas del <input number> */
+    }
+    .campo-plan::-webkit-outer-spin-button,
+    .campo-plan::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .campo-plan:focus { outline: none; }
+    /* Pista de que la cifra se puede tocar: un subrayado de puntos apenas
+       visible sobre el azul de la tarjeta. Se marca un poco mas al pasar por
+       encima, y solo al entrar en edicion el campo se declara del todo. */
+    .campo-plan[readonly] {
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
+    }
+    .campo-plan[readonly]:hover {
+        border-bottom-color: rgba(255, 255, 255, 0.75);
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 0.3rem;
+    }
+    /* En edicion: fondo claro y borde naranja, para que se vea que se puede escribir. */
+    .campo-plan.editando {
+        background: #fff;
+        color: #1e293b !important;
+        border: 2px solid #ff6600;
+        border-radius: 0.4rem;
+        cursor: text;
     }
 
     .chart-container {
@@ -226,9 +260,12 @@
                             <h6 class="m-0 text-white fw-bold text-uppercase tracking-widest"><i class="bx bx-line-chart text-warning me-2"></i>Eficiencia del Plan</h6>
                         </div>
                         
-                        <button type="button" id="btn-edit-plan" class="btn btn-outline-warning btn-sm fw-bold d-flex align-items-center" onclick="window.toggleEdicionPlan()">
-                            <i id="icon-edit-plan" class="bx bx-edit-alt me-1"></i> 
-                            <span id="text-edit-plan">EDITAR PLAN</span>
+                        {% comment %} El botón de guardar solo aparece mientras se edita. Para
+                           entrar en edición se hace DOBLE CLIC sobre la cifra del Plan: un
+                           botón permanente ocupa sitio en la cabecera para algo que se
+                           toca una vez al mes. {% endcomment %}
+                        <button type="button" id="btn-guardar-plan" class="btn btn-warning btn-sm fw-bold text-dark d-none align-items-center" onclick="window.guardarPlan()">
+                            <i class="bx bx-save me-1"></i> <span>GUARDAR PLAN</span>
                         </button>
                     </div>
 
@@ -237,7 +274,11 @@
                             <div class="rounded-3 p-2" style="background-color: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
                                 <p class="fw-bold mb-1 text-uppercase" style="font-size: 0.6rem; color: rgba(255,255,255,0.8);">Plan</p>
                                 
-                                <input type="number" id="input-plan" class="form-control text-center fw-bold text-white border-0 bg-transparent px-1" value="{{ plan_editable|default:'0' }}" readonly oninput="window.calcularMatematica()" style="font-size: 1.5rem;">
+                                {% comment %} Sin `form-control`: esa clase le da a un <input> el
+                                   relleno y la altura minima de Bootstrap, y por eso el Plan se
+                                   veia mas alto que Real, Cumpl. % y Dif., que son <div>. Las
+                                   cuatro cifras comparten ahora tamaño y peso. {% endcomment %}
+                                <input type="number" id="input-plan" class="campo-plan fs-4 fw-black text-white" value="{{ plan_editable|default:'0' }}" readonly title="Doble clic para editar el plan" oninput="window.calcularMatematica()">
                             </div>
                         </div>
 
@@ -299,6 +340,19 @@
     </div>
 </div>
 
+<script>
+    {% comment %} Los graficos no viajan al documento: son de JavaScript y no
+       existen fuera del navegador. Lo que se exporta son las cifras. {% endcomment %}
+    function ejecutarWord() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_registro_diario_word' %}" + window.location.search;
+    }
+    function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_registro_diario_pdf' %}" + window.location.search;
+    }
+</script>
+
 <script src="{% static 'vendor/js/chart.umd.js' %}"></script>
 <script>
     // Asignación explícita al objeto window para evadir choques de variables con HTMX o base.html
@@ -313,47 +367,72 @@
     window.rd_uebFiltro = '{% if ueb_actual|length == 1 %}{{ ueb_actual.0 }}{% endif %}';
     window.rd_familiaFiltro = '{{ tipo_actual }}';
 
-    // Control de la UI: Cambia entre Modo Edición y Modo Guardado
-    window.toggleEdicionPlan = function() {
+    /* EDICION DEL PLAN
+     *
+     * Se entra con DOBLE CLIC sobre la cifra y se sale guardando: con Enter,
+     * con el boton que aparece al lado, o pinchando fuera. Antes hacia falta un
+     * boton permanente en la cabecera para algo que se toca una vez al mes.
+     *
+     * Escape sale sin guardar y devuelve el valor que habia, que es lo que se
+     * espera de una edicion en sitio. */
+    window.rd_planOriginal = null;
+
+    window.entrarEnEdicionDelPlan = function () {
         var input = document.getElementById('input-plan');
-        var btn = document.getElementById('btn-edit-plan');
-        var icon = document.getElementById('icon-edit-plan');
-        var text = document.getElementById('text-edit-plan');
+        var boton = document.getElementById('btn-guardar-plan');
+        if (!input || !input.hasAttribute('readonly')) return;
 
-        if (input.hasAttribute('readonly')) {
-            // PASAR A MODO EDICIÓN
-            input.removeAttribute('readonly');
-            input.classList.remove('text-white', 'border-0', 'bg-transparent');
-            input.classList.add('text-dark', 'bg-white'); // Fondo blanco, letra oscura
-            input.style.border = '2px solid #ff6600';
-            
-            btn.classList.remove('btn-outline-warning');
-            btn.classList.add('btn-warning', 'text-dark');
-            icon.className = 'bx bx-save me-1';
-            text.textContent = 'GUARDAR PLAN';
-            
-            input.focus();
-            input.select();
-        } else {
-            // PASAR A MODO GUARDADO
-            input.setAttribute('readonly', 'true');
-            input.classList.remove('text-dark', 'bg-white');
-            input.classList.add('text-white', 'border-0', 'bg-transparent'); // Vuelve a ser texto invisible
-            input.style.border = 'none';
-            
-            btn.classList.remove('btn-warning', 'text-dark');
-            btn.classList.add('btn-outline-warning');
-            icon.className = 'bx bx-edit-alt me-1';
-            text.textContent = 'EDITAR PLAN';
-
-            // Ejecuta el guardado en Base de Datos
-            window.guardarPlanEnBD(input.value);
-        }
+        window.rd_planOriginal = input.value;
+        input.removeAttribute('readonly');
+        input.classList.add('editando');
+        boton.classList.remove('d-none');
+        boton.classList.add('d-flex');
+        input.focus();
+        input.select();
     };
+
+    window.salirDeEdicionDelPlan = function () {
+        var input = document.getElementById('input-plan');
+        var boton = document.getElementById('btn-guardar-plan');
+        input.setAttribute('readonly', 'true');
+        input.classList.remove('editando');
+        boton.classList.add('d-none');
+        boton.classList.remove('d-flex');
+    };
+
+    window.guardarPlan = function () {
+        var input = document.getElementById('input-plan');
+        window.salirDeEdicionDelPlan();
+        window.guardarPlanEnBD(input.value);
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var input = document.getElementById('input-plan');
+        if (!input) return;
+
+        input.addEventListener('dblclick', window.entrarEnEdicionDelPlan);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window.guardarPlan();
+            } else if (e.key === 'Escape') {
+                // Se descarta el cambio y se recalculan los porcentajes con el
+                // valor anterior, o la tarjeta se quedaria con las cifras de lo
+                // que se escribio y luego se desecho.
+                input.value = window.rd_planOriginal;
+                window.calcularMatematica();
+                window.salirDeEdicionDelPlan();
+            }
+        });
+        // Pinchar fuera NO guarda: el plan se graba en la base de datos, y un
+        // clic despistado en cualquier parte de la pantalla no puede cambiar
+        // una cifra que se revisa una vez al mes. El campo se queda abierto
+        // hasta que se decida: «Guardar plan» graba, Escape descarta.
+    });
 
     // Envío silencioso a la BD por AJAX
     window.guardarPlanEnBD = function(nuevoValor) {
-        var btn = document.getElementById('btn-edit-plan');
+        var btn = document.getElementById('btn-guardar-plan');
         if (btn) btn.style.opacity = '0.5';
 
         fetch("{% url 'guardar_plan_diario' %}", {
@@ -463,7 +542,7 @@
                 diferencia = real - planActual;
             }
 
-            document.getElementById('resumen-porcentaje').textContent = porcentaje.toFixed(2) + '%';
+            document.getElementById('resumen-porcentaje').textContent = porcentaje.toFixed(1) + '%';
             document.getElementById('progress-text').textContent = porcentaje.toFixed(2) + '%';
             document.getElementById('resumen-diferencia').textContent = diferencia > 0 ? '+' + diferencia : diferencia;
             

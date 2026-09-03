@@ -5,8 +5,8 @@
 
 Escribe en `plantillas_word/informes_economia/`:
 
-    motivos_template.docx              modo desglosado (tres niveles)
-    motivos_consolidado_template.docx  modo consolidado (tabla corrida)
+    motivos_template.docx              desglosado: tipo -> motivo -> unidad
+    motivos_consolidado_template.docx  consolidado: tipo -> motivo
 
 La vista (`informes.views.ExportarMotivosWordView`) elige una u otra segun el
 conmutador de la pantalla.
@@ -26,8 +26,8 @@ que no se puede es borrar ni fusionar esas filas: el informe saldria vacio o con
 las filas repetidas, y sin ningun mensaje de error. El mapa de filas esta junto
 al codigo que las escribe.
 
-La plantilla del modo consolidado no tiene ese problema: una sola pareja de
-etiquetas.
+La del modo consolidado tiene un nivel menos —la unidad pasa a ser una
+columna—, asi que son seis filas de etiquetas en vez de ocho.
 """
 import os
 import sys
@@ -189,33 +189,54 @@ lista_de_unidades(documento)
 tarjetas(documento, TARJETAS)
 resumen_por_motivo(documento)
 
-escribir(documento.add_paragraph(), 'Detalle de contratos', 12, negrita=True,
-         color=AZUL, mayusculas=True)
+escribir(documento.add_paragraph(), 'Detalle por tipo y motivo', 12,
+         negrita=True, color=AZUL, mayusculas=True)
 
 COLUMNAS_CORRIDO = [('Exp.', False), ('Nombre y Apellidos', True),
-                    ('Cargo', True), ('Unidad', True), ('Motivo', True),
-                    ('F. Alta', False), ('Días', False), ('Estado', False)]
-ANCHOS_CORRIDO = [Cm(2.0), Cm(5.2), Cm(4.4), Cm(4.0), Cm(4.0), Cm(2.2),
-                  Cm(1.5), Cm(2.6)]
+                    ('Unidad', True), ('Cargo u Ocupación', True),
+                    ('Sexo', False), ('Cat.', False), ('G. Escala', False),
+                    ('F. Alta', False), ('T. Restante', False)]
+ANCHOS_CORRIDO = [Cm(2.0), Cm(5.0), Cm(3.6), Cm(4.6), Cm(1.5), Cm(1.5),
+                  Cm(2.0), Cm(2.4), Cm(2.5)]
 
-#   0  cabecera de columnas    1  for fila    2  datos    3  endfor
-tabla = documento.add_table(rows=4, cols=len(COLUMNAS_CORRIDO))
+#   0  cabecera de columnas (se repite en cada pagina)
+#   1  for tipo             2  cabecera del tipo
+#   3  for motivo           4  cabecera del motivo
+#   5  for contrato         6  datos del contrato
+#   7  endfor (contratos)
+#   8  endfor (motivos)
+#   9  endfor (tipos)
+#
+# Seis filas de etiquetas en vez de las ocho del modo desglosado: aqui falta el
+# nivel de la unidad, que pasa a ser una columna.
+tabla = documento.add_table(rows=10, cols=len(COLUMNAS_CORRIDO))
 tabla.style = 'Table Grid'
 tabla.autofit = False
 cabecera_de_tabla(tabla, COLUMNAS_CORRIDO, ANCHOS_CORRIDO)
 
-fila_de_control(tabla, 1, '{%tr for f in filas_documento %}')
-escribir_fila(tabla.rows[2], [
-    ('{{ f.expediente }}', False, PIZARRA),
-    ('{{ f.nombre }}', True, PIZARRA),
-    ('{{ f.cargo }}', True, GRIS),
-    ('{{ f.unidad }}', True, GRIS),
-    ('{{ f.motivo }}', True, GRIS),
-    ('{{ f.fecha_alta_texto }}', False, GRIS),
-    ('{{ f.dias_restantes }}', False, PIZARRA),
-    ('{{ f.estado }}', False, PIZARRA),
+fila_de_control(tabla, 1, '{%tr for tipo_nombre, tipo_data in datos_agrupados.items() %}')
+fila_de_nivel(tabla, 2, '{{ tipo_nombre }} — total {{ tipo_data.total }}',
+              13, PIZARRA, 'E2E8F0', 0)
+
+fila_de_control(tabla, 3, '{%tr for motivo_nombre, motivo_data in tipo_data.motivos.items() %}')
+fila_de_nivel(tabla, 4, 'Motivo: {{ motivo_nombre }} — total {{ motivo_data.total }}',
+              11, AZUL, 'E0E7FF', 0.4)
+
+fila_de_control(tabla, 5, '{%tr for f in motivo_data.contratos %}')
+escribir_fila(tabla.rows[6], [
+    ('{{ f.contrato.no_expediente }}', False, PIZARRA),
+    ('{{ f.contrato.aspirante_nombre }}', True, PIZARRA),
+    ('{{ f.unidad }}', True, AZUL),
+    ('{{ f.contrato.ncargo_descripcion }}', True, GRIS),
+    ('{{ f.contrato.sexo }}', False, GRIS),
+    ('{{ f.contrato.cat_ocupacional[:1] }}', False, PIZARRA),
+    ('{{ f.contrato.grupo_escala_nivel }}', False, GRIS),
+    ("{{ f.contrato.fecha_alta.strftime('%d/%m/%Y') if f.contrato.fecha_alta else '-' }}", False, GRIS),
+    ('{{ f.contrato.dias_restantes }}', False, PIZARRA),
 ])
-fila_de_control(tabla, 3, '{%tr endfor %}')
+
+for indice in (7, 8, 9):
+    fila_de_control(tabla, indice, '{%tr endfor %}')
 
 total_final(documento)
 documento.save(DESTINO_CONSOLIDADO)

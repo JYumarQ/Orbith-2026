@@ -1,0 +1,87 @@
+{% extends 'pages/reportes/base_informe_pdf.html' %}
+
+{% comment %}
+  PDF de «Registro Diario por Trabajadores».
+
+  La Eficiencia del Plan va ARRIBA y a todo lo ancho, no a la derecha como en la
+  pantalla: en papel el ancho es fijo y una columna lateral deja la tabla
+  estrecha y la eficiencia perdida.
+
+  Los gráficos no van: son de JavaScript y no existen fuera del navegador. Lo
+  que se archiva son las cifras.
+{% endcomment %}
+
+{% block titulo_documento %}Registro Diario por Trabajadores{% endblock %}
+{% block titulo_informe %}Registro Diario por Trabajadores{% endblock %}
+
+{% block estilos_extra %}
+        .plan-caja { background-color: #002b6b; padding: 8px; text-align: center; }
+        .plan-rotulo { font-size: 9pt; font-weight: bold; text-transform: uppercase; color: #bfdbfe; margin-bottom: 3px; }
+        .plan-cifra { font-size: 22pt; font-weight: bold; color: #ffffff; }
+        .plan-titulo { font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #ffffff; }
+
+        .fila-sub td { font-size: 9pt; color: #64748b; padding-left: 22px; }
+        .fila-sub .td-nombre { padding-left: 22px; }
+{% endblock %}
+
+{% block contenido %}
+    {% comment %} EFICIENCIA DEL PLAN, arriba y a todo lo ancho. {% endcomment %}
+    <table style="width: 100%; background-color: #002b6b; margin-bottom: 15px;">
+        <tr>
+            <td colspan="9" style="padding: 8px 10px;">
+                <span class="plan-titulo">Eficiencia del Plan</span>
+            </td>
+        </tr>
+        <tr>
+            <td class="plan-caja">
+                <div class="plan-rotulo">Plan</div>
+                <div class="plan-cifra">{{ plan_editable }}</div>
+            </td>
+            <td style="width: 2%; background-color: #002b6b;"></td>
+            <td class="plan-caja">
+                <div class="plan-rotulo">Real</div>
+                <div class="plan-cifra">{{ plan_real }}</div>
+            </td>
+            <td style="width: 2%; background-color: #002b6b;"></td>
+            <td class="plan-caja">
+                <div class="plan-rotulo">Cumplimiento</div>
+                <div class="plan-cifra" style="color: #fbbf24;">{{ plan_cumplimiento }}%</div>
+            </td>
+            <td style="width: 2%; background-color: #002b6b;"></td>
+            <td class="plan-caja">
+                <div class="plan-rotulo">Diferencia</div>
+                <div class="plan-cifra" style="color: #fca5a5;">{{ plan_diferencia }}</div>
+            </td>
+            <td style="width: 2%; background-color: #002b6b;"></td>
+            <td class="plan-caja">
+                <div class="plan-rotulo">Mujeres</div>
+                <div class="plan-cifra">{{ total_mujeres }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="data-table" repeat="1">
+        <thead>
+            <tr>
+                <th class="th-main th-main-dark" style="width: 60%;">Indicadores de Control</th>
+                <th class="th-main th-main-blue" style="width: 20%;">Trabajadores</th>
+                <th class="th-main th-main-orange" style="width: 20%;">De ellos, Mujeres</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for nombre, cifras in datos.items %}
+            <tr class="row-cargo">
+                <td class="td-nombre">{{ nombre }}</td>
+                <td class="bold">{{ cifras.tot }}</td>
+                <td class="bold" style="color: #1e3a8a;">{{ cifras.muj }}</td>
+            </tr>
+            {% endfor %}
+
+            <tr class="row-total">
+                <td class="td-nombre">Total de trabajadores físicos</td>
+                <td>{{ plan_real }}</td>
+                <td>{{ total_mujeres }}</td>
+            </tr>
+        </tbody>
+    </table>
+{% endblock %}

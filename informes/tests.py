@@ -1054,15 +1054,19 @@ class ExportacionesDeMisionesYMotivos(BaseInformes):
 
     # --- Contratos Determinados ------------------------------------------
 
-    def test_motivos_arma_una_lista_plana_para_el_documento(self):
-        """La pantalla agrupa en tres niveles; el documento necesita filas."""
+    def test_cada_motivo_indexa_sus_contratos_de_las_dos_formas(self):
+        """`uebs` los reparte por unidad —modo desglosado— y `contratos` los
+        guarda todos juntos —modo consolidado—. Son dos índices de los MISMOS
+        contratos, así que los totales tienen que coincidir."""
         respuesta = self.client.get(reverse('informe_motivos_contrato'))
-        filas = respuesta.context['filas_documento']
-        self.assertEqual(len(filas), respuesta.context['total_contratos'])
-        if filas:
-            for clave in ('tipo', 'motivo', 'unidad', 'expediente', 'nombre',
-                          'cargo', 'estado', 'fecha_alta_texto'):
-                self.assertIn(clave, filas[0])
+        for tipo in respuesta.context['datos_agrupados'].values():
+            for motivo in tipo['motivos'].values():
+                por_unidad = sum(len(u['contratos']) for u in motivo['uebs'].values())
+                self.assertEqual(len(motivo['contratos']), por_unidad)
+                self.assertEqual(len(motivo['contratos']), motivo['total'])
+                # La unidad viaja con el contrato: en consolidado deja de ser
+                # una cabecera y pasa a ser una columna.
+                self.assertIn('unidad', motivo['contratos'][0])
 
     def test_motivos_exporta_a_word_y_pdf(self):
         word = self.client.get(reverse('exportar_motivos_word'))
@@ -1118,10 +1122,15 @@ class ModoDeAgrupacionMotivos(BaseInformes):
         unidad = list(motivo['uebs'].values())[0]
         self.assertIn('contratos', unidad)
 
-    def test_consolidado_da_una_fila_por_contrato(self):
+    def test_consolidado_agrupa_por_tipo_y_motivo_sin_la_unidad(self):
+        """Lo único que se quita es el nivel de la Unidad Organizativa: el tipo
+        y el motivo siguen encabezando, como en la pantalla de siempre."""
         contexto = self.pedir(agrupar='consolidado').context
-        self.assertEqual(len(contexto['filas_documento']),
-                         contexto['total_contratos'])
+        contratos = 0
+        for tipo in contexto['datos_agrupados'].values():
+            for motivo in tipo['motivos'].values():
+                contratos += len(motivo['contratos'])
+        self.assertEqual(contratos, contexto['total_contratos'])
 
     def test_las_cifras_no_cambian_entre_modos(self):
         desglosado = self.pedir(agrupar='desglosado').context
@@ -1155,5 +1164,76 @@ class ModoDeAgrupacionMotivos(BaseInformes):
 
                 pdf = self.client.get(reverse('exportar_motivos_pdf'),
                                       {'agrupar': modo})
+                self.assertEqual(pdf.status_code, 200)
+                self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+
+class RegistroDiarioExportaYPlan(BaseInformes):
+    """El Registro Diario: sus cifras del plan y sus dos exportaciones.
+
+    Era el único informe sin Word ni PDF. Las cifras de la Eficiencia del Plan
+    las calculaba solo el JavaScript de la pantalla, así que fuera del navegador
+    no existían.
+    """
+
+    def informe(self, **parametros):
+        return self.client.get(reverse('informe_registro_diario'), parametros)
+
+    def test_las_cifras_del_plan_se_calculan_en_el_servidor(self):
+        """Sin esto, el Word y el PDF salían con la eficiencia en blanco: en
+        pantalla la calcula JavaScript porque el plan se edita ahí mismo."""
+        contexto = self.informe().context
+        self.assertEqual(contexto['plan_real'], 1)
+        self.assertEqual(contexto['total_mujeres'], 1)
+        self.assertEqual(contexto['plan_diferencia'],
+                         contexto['plan_real'] - contexto['plan_editable'])
+        esperado = round(contexto['plan_real'] * 100 / contexto['plan_editable'], 1)
+        self.assertEqual(contexto['plan_cumplimiento'], esperado)
+
+    def test_las_misiones_no_cuentan_como_trabajadores_fisicos(self):
+        """«Misiones» es un indicador aparte: sumarlo al total contaría dos
+        veces a quien está en misión, que ya está en su categoría."""
+        contexto = self.informe().context
+        suma_categorias = sum(
+            d['tot'] for llave, d in contexto['datos'].items() if llave != 'Misiones')
+        self.assertEqual(contexto['plan_real'], suma_categorias)
+
+    def test_un_plan_en_cero_no_divide_por_cero(self):
+        from informes.models import PlanMensualRegistro
+        from datetime import date
+
+        hoy = date.today()
+        PlanMensualRegistro.objects.create(
+            mes=str(hoy.month), anno=str(hoy.year), ueb_id='', familia_id='',
+            valor=0)
+        self.assertEqual(self.informe().context['plan_cumplimiento'], 0)
+
+    def test_exporta_a_word_y_pdf(self):
+        word = self.client.get(reverse('exportar_registro_diario_word'))
+        self.assertEqual(word.status_code, 200)
+        self.assertTrue(word.content.startswith(b'PK'))
+        self.assertIn('Registro_Diario', word['Content-Disposition'])
+
+        pdf = self.client.get(reverse('exportar_registro_diario_pdf'))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+    def test_los_seis_informes_exportan_en_los_dos_formatos(self):
+        """Guarda: que ninguno se quede sin una de las dos salidas."""
+        parejas = [
+            ('exportar_consolidado_word', 'exportar_consolidado_pdf'),
+            ('exportar_resumen_ueb_word', 'exportar_resumen_ueb_pdf'),
+            ('exportar_puestos_clave_word', 'exportar_puestos_clave_pdf'),
+            ('exportar_misiones_word', 'exportar_misiones_pdf'),
+            ('exportar_registro_diario_word', 'exportar_registro_diario_pdf'),
+            ('exportar_motivos_word', 'exportar_motivos_pdf'),
+        ]
+        for ruta_word, ruta_pdf in parejas:
+            with self.subTest(informe=ruta_word):
+                word = self.client.get(reverse(ruta_word))
+                self.assertEqual(word.status_code, 200)
+                self.assertTrue(word.content.startswith(b'PK'))
+
+                pdf = self.client.get(reverse(ruta_pdf))
                 self.assertEqual(pdf.status_code, 200)
                 self.assertEqual(pdf['Content-Type'], 'application/pdf')

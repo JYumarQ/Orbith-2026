@@ -212,27 +212,22 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0" id="contractsTable">
                     <thead class="bg-dark text-white">
-                        {% comment %} La cabecera cambia con el modo: en consolidado el tipo,
-                           el motivo y la unidad son COLUMNAS, y sin cambiarla los datos
-                           quedaban bajo el rótulo equivocado. {% endcomment %}
+                        {% comment %} En consolidado la unidad es una COLUMNA en vez de una
+                           cabecera, así que la tabla tiene una columna más. {% endcomment %}
                         <tr>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Exp.</th>
                             <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Nombre</th>
                             {% if agrupacion == 'consolidado' %}
-                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
-                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Tipo</th>
-                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Motivo</th>
                                 <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Unidad</th>
-                            {% else %}
-                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Sexo</th>
-                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
-                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Cat.</th>
-                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">G. Escala</th>
                             {% endif %}
+                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Sexo</th>
+                            <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
+                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Cat.</th>
+                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">G. Escala</th>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Fecha Alta</th>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Duración</th>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">T. Restante</th>
-                            <th class="text-white text-end text-uppercase fw-bold" style="font-size: 13px;">{% if agrupacion == 'consolidado' %}Estado{% else %}Renovación{% endif %}</th>
+                            <th class="text-white text-end text-uppercase fw-bold" style="font-size: 13px;">Renovación</th>
                         </tr>
                     </thead>
                     <tbody class="table-border-bottom-0">
@@ -250,7 +245,7 @@
                         {% if agrupacion != 'consolidado' %}
                         {% for tipo_nombre, tipo_data in datos_agrupados.items %}
                             <tr class="header-tipo row-tipo">
-                                <td colspan="10" class="py-3 px-4">
+                                <td colspan="{% if agrupacion == 'consolidado' %}11{% else %}10{% endif %}" class="py-3 px-4">
                                     <div class="d-flex justify-content-between align-items-center">
                                         <div><i class="fas fa-file-signature me-2"></i> {{ tipo_nombre }}</div>
                                         <div>Total: {{ tipo_data.total }}</div>
@@ -260,7 +255,7 @@
 
                             {% for motivo_nombre, motivo_data in tipo_data.motivos.items %}
                                 <tr class="header-motivo row-motivo border-top border-dark">
-                                    <td colspan="10" class="py-2 px-4">
+                                    <td colspan="{% if agrupacion == 'consolidado' %}11{% else %}10{% endif %}" class="py-2 px-4">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div><i class="fas fa-folder-open fs-5 me-2"></i> Motivo: {{ motivo_nombre }}</div>
                                             <div>Total Motivo: {{ motivo_data.total }}</div>
@@ -270,7 +265,7 @@
 
                                 {% for ueb_nombre, ueb_data in motivo_data.uebs.items %}
                                     <tr class="header-ueb row-ueb" style="border-left: 5px solid {{ ueb_data.color }} !important;">
-                                        <td colspan="10" class="py-2 px-4">
+                                        <td colspan="{% if agrupacion == 'consolidado' %}11{% else %}10{% endif %}" class="py-2 px-4">
                                             <div class="d-flex justify-content-between align-items-center ps-2">
                                                 <div style="color: {{ ueb_data.color }};"><i class="fas fa-building me-2"></i> <span class="fw-bold">{{ ueb_nombre }}</span></div>
                                                 <div class="fw-bold text-muted">UEB: <span style="color: {{ ueb_data.color }};">{{ ueb_data.contratos|length }}</span></div>
@@ -340,34 +335,72 @@
                             {% endfor %}
                         {% empty %}
                             <tr class="no-data-row">
-                                <td colspan="10" class="text-center py-5">
+                                <td colspan="{% if agrupacion == 'consolidado' %}11{% else %}10{% endif %}" class="text-center py-5">
                                     <i class="fas fa-inbox fs-1 text-dark opacity-50 mb-3"></i>
                                     <h5 class="text-dark fw-bold">No se encontraron contratos vigentes en este periodo.</h5>
                                 </td>
                             </tr>
                         {% endfor %}
                         {% else %}
-                            {% for f in filas_documento %}
-                                <tr class="contrato-row"
-                                    data-name="{{ f.nombre }} {{ f.expediente }}"
-                                    data-cat="{{ f.categoria }}"
-                                    data-estado="{% if f.estado == 'Crítico' %}critica{% elif f.estado == 'Advertencia' %}advertencia{% else %}vigente{% endif %}">
-                                    <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ f.expediente }}</td>
-                                    <td><span class="text-dark" style="font-size: 13px;">{{ f.nombre }}</span></td>
-                                    <td><span class="text-dark" style="font-size: 13px;">{{ f.cargo }}</span></td>
-                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.tipo }}</span></td>
-                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.motivo }}</span></td>
-                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.unidad }}</span></td>
-                                    <td class="text-center font-monospace text-dark" style="font-size: 14px;">{{ f.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
-                                    <td class="text-center font-monospace text-dark" style="font-size: 14px;">{{ f.duracion|default:"-" }}</td>
-                                    <td class="text-center font-monospace fw-bold" style="font-size: 14px;">{{ f.dias_restantes|default_if_none:"-" }}</td>
-                                    <td class="text-end">
-                                        <span class="badge {% if f.estado == 'Crítico' %}bg-danger{% elif f.estado == 'Advertencia' %}bg-warning text-dark{% elif f.estado == 'Vigente' %}bg-success{% else %}bg-secondary{% endif %} fw-bold">{{ f.estado }}</span>
+                            {% comment %} CONSOLIDADO: mismo agrupamiento por tipo y por
+                               motivo, sin el nivel de la unidad. La unidad no se pierde:
+                               pasa a ser una columna. Sirve para leer un motivo de corrido
+                               sin que se parta en tantos bloques como unidades tenga.
+                            {% endcomment %}
+                            {% for tipo_nombre, tipo_data in datos_agrupados.items %}
+                                <tr class="header-tipo row-tipo">
+                                    <td colspan="11" class="py-3 px-4">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div><i class="fas fa-file-signature me-2"></i> {{ tipo_nombre }}</div>
+                                            <div>Total: {{ tipo_data.total }}</div>
+                                        </div>
                                     </td>
                                 </tr>
+
+                                {% for motivo_nombre, motivo_data in tipo_data.motivos.items %}
+                                    <tr class="header-motivo row-motivo border-top border-dark">
+                                        <td colspan="11" class="py-2 px-4">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div><i class="fas fa-folder-open fs-5 me-2"></i> Motivo: {{ motivo_nombre }}</div>
+                                                <div>Total Motivo: {{ motivo_data.total }}</div>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    {% for f in motivo_data.contratos %}
+                                        <tr class="contrato-row {% if f.contrato.dias_restantes is not None and f.contrato.dias_restantes <= 5 %}table-danger{% endif %}"
+                                            data-name="{{ f.contrato.aspirante_nombre }} {{ f.contrato.no_expediente }}"
+                                            data-cat="{{ f.contrato.cat_ocupacional|slice:':1' }}"
+                                            data-estado="{% if f.contrato.dias_restantes is None %}vigente{% elif f.contrato.dias_restantes <= 15 %}critica{% elif f.contrato.dias_restantes <= 30 %}advertencia{% else %}vigente{% endif %}">
+
+                                            <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ f.contrato.no_expediente }}</td>
+                                            <td><span class="text-dark" style="font-size: 13px;">{{ f.contrato.aspirante_nombre }}</span></td>
+                                            <td><span class="fw-bold" style="font-size: 12px; color: {{ f.color }};"><i class="fas fa-building me-1"></i>{{ f.unidad }}</span></td>
+                                            <td class="text-center fw-bold text-dark" style="font-size: 13px;">{{ f.contrato.sexo }}</td>
+                                            <td><span class="text-dark" style="font-size: 13px;">{{ f.contrato.ncargo_descripcion }}</span></td>
+                                            <td class="text-center">
+                                                <span class="badge bg-dark fw-bold border px-2 py-1" style="font-size: 12px;">{{ f.contrato.cat_ocupacional|slice:":1" }}</span>
+                                            </td>
+                                            <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ f.contrato.grupo_escala_nivel|default:"-" }}</td>
+                                            <td class="text-center font-monospace text-dark" style="font-size: 14px;">{{ f.contrato.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
+                                            <td class="text-center"><span class="badge bg-dark text-white fw-bold rounded-pill" style="font-size: 12px;">{{ f.contrato.duracion|default:"0" }} d</span></td>
+                                            <td class="text-center">
+                                                <span class="badge badge-tiempo rounded-pill px-3 py-1
+                                                    {% if f.contrato.dias_restantes is not None %}
+                                                        {% if f.contrato.dias_restantes <= 15 %} text-danger fw-bold
+                                                        {% elif f.contrato.dias_restantes <= 30 %} text-warning fw-bold
+                                                        {% else %} text-success fw-bold {% endif %}
+                                                    {% else %} text-dark fw-bold {% endif %}" style="font-size: 12px;">
+                                                    {% if f.contrato.dias_restantes is not None %}{{ f.contrato.dias_restantes }} días{% else %}-{% endif %}
+                                                </span>
+                                            </td>
+                                            <td class="text-end font-monospace text-dark" style="font-size: 14px;">{{ f.contrato.fecha_vencimiento|date:"d/m/Y"|default:"-" }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                {% endfor %}
                             {% empty %}
                                 <tr class="no-data-row">
-                                    <td colspan="10" class="text-center py-5">
+                                    <td colspan="11" class="text-center py-5">
                                         <i class="fas fa-inbox fs-1 text-dark opacity-50 mb-3"></i>
                                         <h5 class="text-dark fw-bold">No se encontraron contratos vigentes en este periodo.</h5>
                                     </td>
