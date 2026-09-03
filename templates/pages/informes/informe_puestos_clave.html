@@ -2,82 +2,11 @@
 {% load static %}
 {% block title %}Panel de Puestos Claves{% endblock %}
 {% block content %}
-<style>
-    .bg-indigo-50 { background-color: #eef2ff !important; } .text-indigo-600 { color: #4f46e5 !important; }
-    .bg-emerald-50 { background-color: #ecfdf5 !important; } .text-emerald-600 { color: #059669 !important; }
-    .bg-orange-50 { background-color: #fff7ed !important; } .text-orange-500 { color: #f97316 !important; }
-    .text-slate-400 { color: #94a3b8 !important; } .text-slate-500 { color: #64748b !important; }
-    .text-slate-600 { color: #475569 !important; } .text-slate-700 { color: #334155 !important; }
-    .text-slate-800 { color: #1e293b !important; } .bg-slate-50 { background-color: #f8fafc !important; }
-    .border-slate-100 { border-color: #f1f5f9 !important; } .border-slate-200 { border-color: #e2e8f0 !important; }
-    .bg-slate-900 { background-color: #0f172a !important; }
-    .tracking-widest { letter-spacing: 0.1em; } .tracking-tighter { letter-spacing: -0.05em; }
-    .fw-black { font-weight: 900 !important; }
-    .border-b-4 { border-bottom-width: 4px !important; border-bottom-style: solid !important; }
-    .border-b-indigo-600 { border-bottom-color: #4f46e5 !important; }
-    .border-b-emerald-500 { border-bottom-color: #10b981 !important; }
-    .border-b-orange-500 { border-bottom-color: #f97316 !important; }
-    .rounded-[1.5rem] { border-radius: 1.5rem !important; }
-    .table-moderna th { border-bottom: 1px solid #f1f5f9 !important; padding: 0.8rem 0.5rem !important; }
-    .table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
-</style>
-
-<style>
-    /* PILDORA DESGLOSADO / CONSOLIDADO
-       Calcada del control «Sector» de Parametros Generales para que el proyecto
-       tenga un solo lenguaje visual: el <select> real queda oculto —es el que
-       viaja en el GET— y lo que se ve son dos etiquetas con un fondo blanco que
-       se desliza de una a otra. */
-    .agrupacion-toggle {
-        position: relative;
-        display: flex;
-        background-color: #f1f5f9;
-        border-radius: 1rem;
-        height: 38px;
-        min-width: 230px;
-        padding: 4px;
-        margin: 0;
-        cursor: pointer;
-        user-select: none;
-    }
-    .agrupacion-toggle input[type="radio"] { display: none; }
-    .agrupacion-option {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .03em;
-        color: #94a3b8;
-        z-index: 2;
-        transition: color .3s ease;
-        cursor: pointer;
-        margin: 0;
-    }
-    .agrupacion-slider {
-        position: absolute;
-        top: 4px;
-        left: 4px;
-        width: calc(50% - 4px);
-        height: calc(100% - 8px);
-        background-color: #fff;
-        border-radius: .75rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
-        transition: transform .3s cubic-bezier(.4, 0, .2, 1);
-        z-index: 1;
-    }
-    /* El estado lo manda el propio radio marcado, no una clase de JavaScript:
-       asi la pildora refleja siempre lo que se va a enviar. */
-    .agrupacion-toggle input[value="consolidado"]:checked ~ .agrupacion-slider {
-        transform: translateX(100%);
-    }
-    .agrupacion-toggle input[value="consolidado"]:checked ~ .opt-consolidado,
-    .agrupacion-toggle input[value="desglosado"]:checked ~ .opt-desglosado {
-        color: #6366f1;
-    }
-</style>
+{% comment %} Las utilidades de color y tipografia y el conmutador ya no viven
+   aqui: estaban en un <style> privado de esta plantilla, y por eso los otros
+   cinco informes usaban los mismos nombres de clase sin que hicieran nada.
+   Ahora las define `static/css/informes-rrhh.css`, que carga `base.html`.
+{% endcomment %}
 
 <div class="container-xxl flex-grow-1 container-p-y" style="background-color: #F4F7FB;">
     
@@ -131,7 +60,7 @@
                             data-bs-trigger="focus"
                             data-bs-placement="bottom"
                             data-bs-title="Desglosado o Consolidado"
-                            data-bs-content="Desglosado reparte los cargos por Unidad Organizativa: cada unidad encabeza con sus totales y debajo van sus puestos clave; una unidad principal encabeza toda su rama con sus subunidades dentro. Sirve para ver a quién le faltan plazas. Consolidado suma cada cargo de todas las unidades del informe y lo lista una sola vez. Sirve para saber cuántas plazas hay en total de un cargo. Las cifras generales de arriba son las mismas en los dos modos."
+                            data-bs-content="Desglosado: cada unidad con sus puestos clave, para ver a quién le faltan plazas. Consolidado: cada cargo una sola vez, sumando todas las unidades."
                             aria-label="Ayuda: Desglosado o Consolidado">
                         <i class="bx bx-help-circle fs-5"></i>
                     </button>

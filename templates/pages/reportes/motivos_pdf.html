@@ -3,10 +3,12 @@
 {% comment %}
   PDF de «Contratos Determinados (Motivos)».
 
-  La pantalla agrupa en tres niveles —tipo, motivo y unidad— porque ahí se
-  pliegan y se despliegan. En papel eso serían tres cabeceras por cada puñado de
-  filas, así que el documento lleva una tabla plana donde el tipo, el motivo y
-  la unidad son columnas, más los dos resúmenes que encabezan la pantalla.
+  Sale como se esté viendo la pantalla, porque el conmutador viaja en la URL:
+  agrupado en tres niveles —tipo de contrato, motivo y unidad, con el total de
+  cada uno— o corrido, con esos tres datos como columnas.
+
+  Los dos resúmenes que encabezan la pantalla —totales por motivo y por
+  categoría ocupacional— van en los dos modos.
 {% endcomment %}
 
 {% block titulo_documento %}Contratos Determinados{% endblock %}
@@ -23,6 +25,13 @@
             font-size: 10pt;
         }
         .tabla-resumen th { background-color: #f1f5f9; color: #475569; text-transform: uppercase; font-size: 9pt; }
+
+        /* JERARQUIA DE LOS TRES NIVELES.
+           Tipo > Motivo > Unidad. El tamaño y la sangria son lo unico que los
+           distingue en papel, donde los fondos apenas se aprecian al imprimir. */
+        .row-tipo td { background-color: #0f172a; color: #fff; font-weight: bold; font-size: 13pt; text-align: left; padding-left: 8px; }
+        .row-motivo td { background-color: #e0e7ff; color: #1e3a8a; font-weight: bold; font-size: 11pt; text-align: left; padding-left: 18px; }
+        .row-unidad td { background-color: #f8fafc; color: #475569; font-weight: bold; font-size: 10pt; text-align: left; padding-left: 28px; }
 {% endblock %}
 
 {% block contenido %}
@@ -88,39 +97,96 @@
         </tr>
     </table>
 
-    <table class="data-table" repeat="1">
-        <thead>
-            <tr>
-                <th class="th-main th-main-dark" style="width: 8%;">Exp.</th>
-                <th class="th-main th-main-dark" style="width: 20%;">Nombre y Apellidos</th>
-                <th class="th-main th-main-dark" style="width: 18%;">Cargo</th>
-                <th class="th-main th-main-blue" style="width: 16%;">Unidad</th>
-                <th class="th-main th-main-blue" style="width: 16%;">Motivo</th>
-                <th class="th-main th-main-orange" style="width: 8%;">F. Alta</th>
-                <th class="th-main th-main-orange" style="width: 6%;">Días</th>
-                <th class="th-main th-main-orange" style="width: 8%;">Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for f in filas_documento %}
-            <tr class="row-cargo">
-                <td>{{ f.expediente }}</td>
-                <td class="td-nombre">{{ f.nombre }}</td>
-                <td class="td-nombre">{{ f.cargo }}</td>
-                <td>{{ f.unidad }}</td>
-                <td>{{ f.motivo }}</td>
-                <td>{{ f.fecha_alta|date:"d/m/Y" }}</td>
-                <td class="bold">{{ f.dias_restantes|default_if_none:"-" }}</td>
-                <td class="{% if f.estado == 'Crítico' %}estado-critico{% elif f.estado == 'Advertencia' %}estado-alerta{% elif f.estado == 'Vigente' %}estado-vigente{% endif %}">{{ f.estado }}</td>
-            </tr>
-            {% empty %}
-            <tr class="row-cargo"><td colspan="8">No hay contratos determinados en el alcance de este informe.</td></tr>
-            {% endfor %}
+    {% comment %} DOS FORMAS DE VER LO MISMO, la que elija el conmutador de la
+       pantalla: agrupado en tres niveles —tipo, motivo y unidad, con el total de
+       cada uno— o corrido, con esos tres datos como columnas. El modo viaja en
+       la URL, asi que el documento sale como se esta viendo. {% endcomment %}
+    {% if agrupacion == 'consolidado' %}
+        <table class="data-table" repeat="1">
+            <thead>
+                <tr>
+                    <th class="th-main th-main-dark" style="width: 8%;">Exp.</th>
+                    <th class="th-main th-main-dark" style="width: 20%;">Nombre y Apellidos</th>
+                    <th class="th-main th-main-dark" style="width: 18%;">Cargo</th>
+                    <th class="th-main th-main-blue" style="width: 16%;">Unidad</th>
+                    <th class="th-main th-main-blue" style="width: 16%;">Motivo</th>
+                    <th class="th-main th-main-orange" style="width: 8%;">F. Alta</th>
+                    <th class="th-main th-main-orange" style="width: 6%;">Días</th>
+                    <th class="th-main th-main-orange" style="width: 8%;">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for f in filas_documento %}
+                <tr class="row-cargo">
+                    <td>{{ f.expediente }}</td>
+                    <td class="td-nombre">{{ f.nombre }}</td>
+                    <td class="td-nombre">{{ f.cargo }}</td>
+                    <td>{{ f.unidad }}</td>
+                    <td>{{ f.motivo }}</td>
+                    <td>{{ f.fecha_alta|date:"d/m/Y" }}</td>
+                    <td class="bold">{{ f.dias_restantes|default_if_none:"-" }}</td>
+                    <td class="{% if f.estado == 'Crítico' %}estado-critico{% elif f.estado == 'Advertencia' %}estado-alerta{% elif f.estado == 'Vigente' %}estado-vigente{% endif %}">{{ f.estado }}</td>
+                </tr>
+                {% empty %}
+                <tr class="row-cargo"><td colspan="8">No hay contratos determinados en el alcance de este informe.</td></tr>
+                {% endfor %}
 
-            <tr class="row-total">
-                <td colspan="6" class="td-nombre">Total de contratos determinados</td>
-                <td colspan="2">{{ total_contratos }}</td>
-            </tr>
-        </tbody>
-    </table>
+                <tr class="row-total">
+                    <td colspan="6" class="td-nombre">Total de contratos determinados</td>
+                    <td colspan="2">{{ total_contratos }}</td>
+                </tr>
+            </tbody>
+        </table>
+    {% else %}
+        <table class="data-table" repeat="1">
+            <thead>
+                <tr>
+                    <th class="th-main th-main-dark" style="width: 9%;">Exp.</th>
+                    <th class="th-main th-main-dark" style="width: 26%;">Nombre y Apellidos</th>
+                    <th class="th-main th-main-dark" style="width: 25%;">Cargo u Ocupación</th>
+                    <th class="th-main th-main-blue" style="width: 7%;">Sexo</th>
+                    <th class="th-main th-main-blue" style="width: 7%;">Cat.</th>
+                    <th class="th-main th-main-blue" style="width: 9%;">G. Escala</th>
+                    <th class="th-main th-main-orange" style="width: 9%;">F. Alta</th>
+                    <th class="th-main th-main-orange" style="width: 8%;">T. Restante</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tipo_nombre, tipo_data in datos_agrupados.items %}
+                    <tr class="row-tipo">
+                        <td colspan="8">{{ tipo_nombre|upper }} &mdash; total {{ tipo_data.total }}</td>
+                    </tr>
+                    {% for motivo_nombre, motivo_data in tipo_data.motivos.items %}
+                        <tr class="row-motivo">
+                            <td colspan="8">Motivo: {{ motivo_nombre }} &mdash; total {{ motivo_data.total }}</td>
+                        </tr>
+                        {% for ueb_nombre, ueb_data in motivo_data.uebs.items %}
+                            <tr class="row-unidad">
+                                <td colspan="8">{{ ueb_nombre }} &mdash; {{ ueb_data.contratos|length }}</td>
+                            </tr>
+                            {% for c in ueb_data.contratos %}
+                            <tr class="row-cargo">
+                                <td>{{ c.no_expediente }}</td>
+                                <td class="td-nombre">{{ c.aspirante_nombre }}</td>
+                                <td class="td-nombre">{{ c.ncargo_descripcion|default:"-" }}</td>
+                                <td>{{ c.sexo }}</td>
+                                <td class="bold">{{ c.cat_ocupacional|slice:":1" }}</td>
+                                <td class="bold">{{ c.grupo_escala_nivel|default:"-" }}</td>
+                                <td>{{ c.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
+                                <td class="bold">{{ c.dias_restantes|default_if_none:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    {% endfor %}
+                {% empty %}
+                    <tr class="row-cargo"><td colspan="8">No hay contratos determinados en el alcance de este informe.</td></tr>
+                {% endfor %}
+
+                <tr class="row-total">
+                    <td colspan="6" class="td-nombre">Total de contratos determinados</td>
+                    <td colspan="2">{{ total_contratos }}</td>
+                </tr>
+            </tbody>
+        </table>
+    {% endif %}
 {% endblock %}

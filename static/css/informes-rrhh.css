@@ -81,6 +81,16 @@
 .border-orange-100 { border-color: #fed7aa !important; }
 
 .text-emerald-600 { color: var(--inf-verde) !important; }
+.border-slate-100 { border-color: var(--inf-gris-100) !important; }
+.border-slate-200 { border-color: var(--inf-gris-200) !important; }
+.border-b-4 { border-bottom-width: 4px !important; border-bottom-style: solid !important; }
+.border-b-emerald-500 { border-bottom-color: #10b981 !important; }
+.border-b-orange-500 { border-bottom-color: var(--inf-naranja) !important; }
+.rounded-\[1\.5rem\] { border-radius: 1.5rem !important; }
+
+/* Tabla compacta de Puestos Clave y de Misiones. */
+.table-moderna th { border-bottom: 1px solid var(--inf-gris-100) !important; padding: 0.8rem 0.5rem !important; }
+.table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
 .bg-emerald-50 { background-color: var(--inf-verde-tinte) !important; }
 .border-emerald-100 { border-color: #a7f3d0 !important; }
 
@@ -275,4 +285,67 @@
     display: block;
     font-size: 12px;
     color: var(--inf-gris-400);
+}
+
+/* --------------------------------------------------------------------------
+   5. Conmutador Desglosado / Consolidado
+   --------------------------------------------------------------------------
+   Lo usan Puestos Clave y Contratos Determinados. Es la misma pildora del
+   control «Sector» de Parametros Generales, para que el proyecto tenga un solo
+   lenguaje visual: los radios reales quedan ocultos —son los que viajan en el
+   GET— y lo que se ve son dos etiquetas con un fondo blanco que se desliza.
+
+   Vivia dentro de `informe_puestos_clave.html`. Al estrenarlo el segundo
+   informe habria que copiarlo, y dos copias de sesenta lineas de CSS divergen
+   en cuanto alguien toca una.
+   -------------------------------------------------------------------------- */
+
+.agrupacion-toggle {
+    position: relative;
+    display: flex;
+    background-color: var(--inf-gris-100);
+    border-radius: 1rem;
+    height: 38px;
+    min-width: 230px;
+    padding: 4px;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+}
+.agrupacion-toggle input[type="radio"] { display: none; }
+.agrupacion-option {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--inf-gris-400);
+    z-index: 2;
+    transition: color .3s ease;
+    cursor: pointer;
+    margin: 0;
+}
+.agrupacion-slider {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: calc(50% - 4px);
+    height: calc(100% - 8px);
+    background-color: #fff;
+    border-radius: .75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+    transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+    z-index: 1;
+}
+/* El estado lo manda el propio radio marcado, no una clase de JavaScript: asi
+   la pildora refleja siempre lo que se va a enviar. */
+.agrupacion-toggle input[value="consolidado"]:checked ~ .agrupacion-slider {
+    transform: translateX(100%);
+}
+.agrupacion-toggle input[value="consolidado"]:checked ~ .opt-consolidado,
+.agrupacion-toggle input[value="desglosado"]:checked ~ .opt-desglosado {
+    color: var(--inf-indigo-claro);
 }

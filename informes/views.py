@@ -473,6 +473,21 @@ AGRUPACION_POR_DEFECTO = 'consolidado'
 CLAVE_AGRUPACION = 'puestos_clave_agrupacion'
 
 
+def _agrupacion_elegida(request, clave, por_defecto=AGRUPACION_POR_DEFECTO):
+    """El modo de agrupación de un informe: el del filtro, o el recordado.
+
+    Lo usan Puestos Clave y Contratos Determinados, cada uno con su `clave` de
+    sesión: son informes distintos y cada uno recuerda lo suyo. Guardarlo en la
+    sesión de Django, y no en el navegador, evita la doble carga de leerlo con
+    JavaScript y volver a pedir la página.
+    """
+    elegida = request.GET.get('agrupar')
+    if elegida in AGRUPACIONES:
+        request.session[clave] = elegida
+        return elegida
+    return request.session.get(clave, por_defecto)
+
+
 class InformePuestosClaveView(TemplateView):
     template_name = 'pages/informes/informe_puestos_clave.html'
 
@@ -715,16 +730,7 @@ class InformePuestosClaveView(TemplateView):
         if fuente.periodo:
             mes, anno = str(fuente.periodo.mes), str(fuente.periodo.anno)
 
-        # Modo de agrupación. Viene del selector; si no viene, se recuerda el
-        # último que eligió esta sesión, y en su defecto el modo por defecto.
-        # Guardarlo en la sesión de Django y no en el navegador evita la doble
-        # carga de leerlo con JavaScript y volver a pedir la página.
-        agrupacion = self.request.GET.get('agrupar')
-        if agrupacion in AGRUPACIONES:
-            self.request.session[CLAVE_AGRUPACION] = agrupacion
-        else:
-            agrupacion = self.request.session.get(
-                CLAVE_AGRUPACION, AGRUPACION_POR_DEFECTO)
+        agrupacion = _agrupacion_elegida(self.request, CLAVE_AGRUPACION)
 
         # 2. Tipos de Familia
         tipos_familia = NTipoFamilia.objects.all().order_by('nombre')
@@ -1169,6 +1175,20 @@ class GuardarPlanDiarioView(RequiereEdicionMixin, View):
         )
         return JsonResponse({'status': 'ok', 'nuevo_valor': plan.valor})\
         
+# Como se organiza Contratos Determinados. Mismas dos palabras que en Puestos
+# Clave —quien aprende el conmutador en un informe lo reconoce en el otro—,
+# aunque aqui lo que se desglosa son tres niveles y alli uno:
+#
+#   'desglosado'   Tipo de contrato -> Motivo -> Unidad -> los contratos, con el
+#                  total de cada nivel. Es como se ha visto siempre la pantalla.
+#   'consolidado'  Una sola tabla corrida, con el tipo, el motivo y la unidad
+#                  como columnas. Sirve para buscar, ordenar y llevarse la lista.
+#
+# Arranca DESGLOSADO, que es lo que esta pantalla ya hacia: el conmutador solo
+# añade la posibilidad de verla corrida.
+CLAVE_AGRUPACION_MOTIVOS = 'motivos_agrupacion'
+
+
 class InformeMotivosContratoView(TemplateView):
     template_name = "pages/informes/informe_motivos_contrato.html"
 
@@ -1325,6 +1345,8 @@ class InformeMotivosContratoView(TemplateView):
 
         context.update(_cabecera_documento(self.request))
         context.update({
+            'agrupacion': _agrupacion_elegida(
+                self.request, CLAVE_AGRUPACION_MOTIVOS, 'desglosado'),
             'datos_agrupados': datos_agrupados,
             'filas_documento': filas_documento,
             'total_contratos': total_contratos,
@@ -1356,9 +1378,15 @@ class ExportarMotivosWordView(InformeMotivosContratoView):
 
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
+
+        # Una plantilla por modo. Se podría envolver las dos tablas en un `if`
+        # dentro de un solo .docx, pero entonces quien lo abriera para retocar
+        # el diseño tendría que adivinar cuál de las dos está viendo.
+        plantilla = ('motivos_consolidado_template.docx'
+                     if context.get('agrupacion') == 'consolidado'
+                     else 'motivos_template.docx')
         template_path = os.path.join(
-            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
-            'motivos_template.docx')
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia', plantilla)
         try:
             doc = DocxTemplate(template_path)
             context['logo'] = _logo_para_word(doc, context.get('config'))

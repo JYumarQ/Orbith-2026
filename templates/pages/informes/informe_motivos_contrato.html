@@ -151,7 +151,7 @@
                     
                 </div>
 
-                <div class="d-flex flex-column flex-md-row justify-content-between gap-3 border-top border-dark pt-3">
+                <div class="d-flex flex-column flex-md-row flex-wrap justify-content-between align-items-md-center gap-3 border-top border-dark pt-3">
                     <div class="d-flex align-items-center gap-2 overflow-auto pb-1">
                         <span class="text-dark fw-black text-uppercase me-2 fs-6">Alertas:</span>
                         <button onclick="setStatusFilter('all')" id="btn-status-all" class="btn btn-sm btn-dark fw-bold rounded-pill shadow-sm fs-6">Todos</button>
@@ -169,27 +169,85 @@
                         <button onclick="setCategoryFilter('O')" id="btn-cat-O" class="btn btn-sm btn-outline-dark fw-bold rounded-pill bg-white fs-6">O</button>
                         <button onclick="setCategoryFilter('S')" id="btn-cat-S" class="btn btn-sm btn-outline-dark fw-bold rounded-pill bg-white fs-6">S</button>
                     </div>
+
+                    {% comment %} CONMUTADOR DESGLOSADO / CONSOLIDADO
+                       Mismo control que en Puestos Clave, y por eso su estilo vive en
+                       `static/css/informes-rrhh.css` y no aquí: dos copias de sesenta
+                       líneas de CSS divergen en cuanto alguien toca una.
+
+                       Los dos radios viajan en el GET, así que el Word y el PDF heredan
+                       el modo al exportar sin nada más. {% endcomment %}
+                    <form method="GET" class="d-flex align-items-center gap-1 m-0">
+                        {% comment %} El resto de la URL se conserva: el filtro de unidad y
+                           el período viven ahí y no pueden perderse al conmutar. {% endcomment %}
+                        {% if ueb_actual %}{% for u in ueb_actual %}<input type="hidden" name="ueb" value="{{ u }}">{% endfor %}{% endif %}
+                        {% if fuente_modo %}<input type="hidden" name="fuente" value="{{ fuente_modo }}">{% endif %}
+                        {% if fuente_periodo %}<input type="hidden" name="periodo" value="{{ fuente_periodo }}">{% endif %}
+
+                        <div class="agrupacion-toggle" title="Cómo se organiza el informe">
+                            <input type="radio" name="agrupar" id="agrupar_desglosado"
+                                   value="desglosado" onchange="this.form.submit()"
+                                   {% if agrupacion != 'consolidado' %}checked{% endif %}>
+                            <input type="radio" name="agrupar" id="agrupar_consolidado"
+                                   value="consolidado" onchange="this.form.submit()"
+                                   {% if agrupacion == 'consolidado' %}checked{% endif %}>
+                            <div class="agrupacion-slider"></div>
+                            <label for="agrupar_desglosado" class="agrupacion-option opt-desglosado">Desglosado</label>
+                            <label for="agrupar_consolidado" class="agrupacion-option opt-consolidado">Consolidado</label>
+                        </div>
+                        <button type="button" class="btn btn-link p-0 text-slate-400"
+                                style="line-height: 1;"
+                                data-bs-toggle="popover"
+                                data-bs-trigger="focus"
+                                data-bs-placement="left"
+                                data-bs-title="Desglosado o Consolidado"
+                                data-bs-content="Desglosado: agrupa por tipo de contrato, motivo y unidad, con el total de cada uno. Consolidado: una sola tabla corrida, con esos tres datos como columnas."
+                                aria-label="Ayuda: Desglosado o Consolidado">
+                            <i class="bx bx-help-circle fs-5"></i>
+                        </button>
+                    </form>
                 </div>
             </div>
 
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0" id="contractsTable">
                     <thead class="bg-dark text-white">
+                        {% comment %} La cabecera cambia con el modo: en consolidado el tipo,
+                           el motivo y la unidad son COLUMNAS, y sin cambiarla los datos
+                           quedaban bajo el rótulo equivocado. {% endcomment %}
                         <tr>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Exp.</th>
                             <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Nombre</th>
-                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Sexo</th>
-                            <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
-                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Cat.</th>
-                            <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">G. Escala</th>
+                            {% if agrupacion == 'consolidado' %}
+                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
+                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Tipo</th>
+                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Motivo</th>
+                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Unidad</th>
+                            {% else %}
+                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Sexo</th>
+                                <th class="text-white text-uppercase fw-bold" style="font-size: 13px;">Cargo u Ocupación</th>
+                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Cat.</th>
+                                <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">G. Escala</th>
+                            {% endif %}
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Fecha Alta</th>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">Duración</th>
                             <th class="text-white text-center text-uppercase fw-bold" style="font-size: 13px;">T. Restante</th>
-                            <th class="text-white text-end text-uppercase fw-bold" style="font-size: 13px;">Renovación</th>
+                            <th class="text-white text-end text-uppercase fw-bold" style="font-size: 13px;">{% if agrupacion == 'consolidado' %}Estado{% else %}Renovación{% endif %}</th>
                         </tr>
                     </thead>
                     <tbody class="table-border-bottom-0">
                         
+                        {% comment %} DOS FORMAS DE VER LO MISMO.
+                           Desglosado: los tres niveles de siempre —tipo, motivo y
+                           unidad— con el total de cada uno. Consolidado: una tabla
+                           corrida con esos tres datos como columnas, que es lo que sirve
+                           para buscar, ordenar y llevarse la lista.
+
+                           Los filtros de alerta y de categoria de arriba son de
+                           JavaScript y actuan sobre `.contrato-row`, asi que funcionan
+                           igual en los dos modos: las filas de contrato llevan la misma
+                           clase y los mismos `data-`. {% endcomment %}
+                        {% if agrupacion != 'consolidado' %}
                         {% for tipo_nombre, tipo_data in datos_agrupados.items %}
                             <tr class="header-tipo row-tipo">
                                 <td colspan="10" class="py-3 px-4">
@@ -288,6 +346,34 @@
                                 </td>
                             </tr>
                         {% endfor %}
+                        {% else %}
+                            {% for f in filas_documento %}
+                                <tr class="contrato-row"
+                                    data-name="{{ f.nombre }} {{ f.expediente }}"
+                                    data-cat="{{ f.categoria }}"
+                                    data-estado="{% if f.estado == 'Crítico' %}critica{% elif f.estado == 'Advertencia' %}advertencia{% else %}vigente{% endif %}">
+                                    <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ f.expediente }}</td>
+                                    <td><span class="text-dark" style="font-size: 13px;">{{ f.nombre }}</span></td>
+                                    <td><span class="text-dark" style="font-size: 13px;">{{ f.cargo }}</span></td>
+                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.tipo }}</span></td>
+                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.motivo }}</span></td>
+                                    <td><span class="text-slate-500" style="font-size: 12px;">{{ f.unidad }}</span></td>
+                                    <td class="text-center font-monospace text-dark" style="font-size: 14px;">{{ f.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
+                                    <td class="text-center font-monospace text-dark" style="font-size: 14px;">{{ f.duracion|default:"-" }}</td>
+                                    <td class="text-center font-monospace fw-bold" style="font-size: 14px;">{{ f.dias_restantes|default_if_none:"-" }}</td>
+                                    <td class="text-end">
+                                        <span class="badge {% if f.estado == 'Crítico' %}bg-danger{% elif f.estado == 'Advertencia' %}bg-warning text-dark{% elif f.estado == 'Vigente' %}bg-success{% else %}bg-secondary{% endif %} fw-bold">{{ f.estado }}</span>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr class="no-data-row">
+                                    <td colspan="10" class="text-center py-5">
+                                        <i class="fas fa-inbox fs-1 text-dark opacity-50 mb-3"></i>
+                                        <h5 class="text-dark fw-bold">No se encontraron contratos vigentes en este periodo.</h5>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% endif %}
                     </tbody>
                 </table>
             </div>

@@ -1082,3 +1082,78 @@ class ExportacionesDeMisionesYMotivos(BaseInformes):
                 contexto = self.client.get(reverse(nombre)).context
                 self.assertTrue(contexto['fecha_generacion'])
                 self.assertIn('cab_provincia', contexto)
+
+
+class ModoDeAgrupacionMotivos(BaseInformes):
+    """El conmutador Desglosado / Consolidado de Contratos Determinados.
+
+    Mismas dos palabras que en Puestos Clave, pero aquí lo que se desglosa son
+    tres niveles —tipo de contrato, motivo y unidad— y allí uno. Cada informe
+    recuerda su propio modo.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        # El informe solo mira los tipos de contrato que exigen motivo.
+        cls.tipo_contrato.requiere_motivo = True
+        cls.tipo_contrato.save()
+
+    def pedir(self, **parametros):
+        return self.client.get(reverse('informe_motivos_contrato'), parametros)
+
+    def test_arranca_desglosado(self):
+        """Es como se ha visto siempre esta pantalla: el conmutador solo añade
+        la posibilidad de verla corrida."""
+        self.assertEqual(self.pedir().context['agrupacion'], 'desglosado')
+
+    def test_desglosado_agrupa_en_tres_niveles(self):
+        contexto = self.pedir(agrupar='desglosado').context
+        agrupados = contexto['datos_agrupados']
+        self.assertTrue(agrupados)
+        tipo = list(agrupados.values())[0]
+        self.assertIn('motivos', tipo)
+        motivo = list(tipo['motivos'].values())[0]
+        self.assertIn('uebs', motivo)
+        unidad = list(motivo['uebs'].values())[0]
+        self.assertIn('contratos', unidad)
+
+    def test_consolidado_da_una_fila_por_contrato(self):
+        contexto = self.pedir(agrupar='consolidado').context
+        self.assertEqual(len(contexto['filas_documento']),
+                         contexto['total_contratos'])
+
+    def test_las_cifras_no_cambian_entre_modos(self):
+        desglosado = self.pedir(agrupar='desglosado').context
+        consolidado = self.pedir(agrupar='consolidado').context
+        for clave in ('total_contratos', 'total_mujeres', 'vencen_critico',
+                      'vencen_alerta', 'vencen_vigente'):
+            self.assertEqual(desglosado[clave], consolidado[clave], clave)
+
+    def test_cada_informe_recuerda_su_propio_modo(self):
+        """Cambiar el de Contratos Determinados no puede cambiar el de Puestos
+        Clave: son dos claves de sesión distintas."""
+        self.pedir(agrupar='consolidado')
+        puestos = self.client.get(reverse('informe_puestos_clave'))
+        self.assertEqual(puestos.context['agrupacion'], 'consolidado')
+
+        self.client.get(reverse('informe_puestos_clave'),
+                        {'agrupar': 'desglosado'})
+        self.assertEqual(self.pedir().context['agrupacion'], 'consolidado')
+
+    def test_el_modo_se_recuerda_en_la_sesion(self):
+        self.pedir(agrupar='consolidado')
+        self.assertEqual(self.pedir().context['agrupacion'], 'consolidado')
+
+    def test_los_documentos_salen_en_los_dos_modos(self):
+        for modo in ('desglosado', 'consolidado'):
+            with self.subTest(modo=modo):
+                word = self.client.get(reverse('exportar_motivos_word'),
+                                       {'agrupar': modo})
+                self.assertEqual(word.status_code, 200)
+                self.assertTrue(word.content.startswith(b'PK'))
+
+                pdf = self.client.get(reverse('exportar_motivos_pdf'),
+                                      {'agrupar': modo})
+                self.assertEqual(pdf.status_code, 200)
+                self.assertEqual(pdf['Content-Type'], 'application/pdf')
