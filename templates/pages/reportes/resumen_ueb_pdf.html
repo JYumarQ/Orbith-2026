@@ -1,0 +1,72 @@
+{% extends 'pages/reportes/base_informe_pdf.html' %}
+
+{% comment %}
+  PDF de «Trabajadores por Unidad Empresarial de Base».
+
+  Toda la envoltura —página, cabecera repetida, pie, numeración y paleta— sale
+  de la base. Aquí solo van las cuatro cifras y la tabla.
+{% endcomment %}
+
+{% block titulo_documento %}Trabajadores por UEB{% endblock %}
+{% block titulo_informe %}Trabajadores por Unidad Empresarial de Base{% endblock %}
+
+{% block contenido %}
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-box" style="border-bottom: 3px solid #1e3a8a;">
+                <div class="kpi-title" style="color: #94a3b8;">Total de Trabajadores</div>
+                <div class="kpi-value" style="color: #1e293b;">{{ total_general }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #3b82f6;">
+                <div class="kpi-title" style="color: #3b82f6;">Mujeres</div>
+                <div class="kpi-value" style="color: #1e3a8a;">{{ total_mujeres }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #059669;">
+                <div class="kpi-title" style="color: #059669;">Unidades con Personal</div>
+                <div class="kpi-value" style="color: #059669;">{{ unidades_con_personal }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box-solid">
+                <div class="kpi-title" style="color: #bfdbfe;">% de Mujeres</div>
+                <div class="kpi-value" style="color: #ffffff;">{{ porciento_mujeres }}%</div>
+            </td>
+        </tr>
+    </table>
+
+    {% comment %} `repeat="2"` y no `<thead>`: es la forma que tiene xhtml2pdf de
+       repetir las filas de cabecera cuando la tabla pasa de página. {% endcomment %}
+    <table class="data-table" repeat="2">
+        <thead>
+            <tr>
+                <th rowspan="2" class="th-main th-main-dark" style="width: 55%; font-size: 11pt;">Unidad Empresarial de Base</th>
+                <th colspan="2" class="th-main th-main-blue" style="font-size: 12pt;">Trabajadores</th>
+                <th rowspan="2" class="th-main th-main-orange" style="font-size: 11pt;">% del Total</th>
+            </tr>
+            <tr>
+                <th class="th-sub th-sub-blue">Total</th>
+                <th class="th-sub th-sub-blue">Mujeres</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dato in datos_uebs %}
+            <tr class="row-cargo">
+                <td class="td-nombre">{{ dato.nombre }}</td>
+                <td class="bold">{{ dato.total }}</td>
+                <td class="bold" style="color: #1e3a8a;">{{ dato.mujeres }}</td>
+                <td class="bold" style="color: #ea580c;">{{ dato.porciento }}%</td>
+            </tr>
+            {% empty %}
+            <tr class="row-cargo"><td colspan="4">No se encontraron datos disponibles para las UEB.</td></tr>
+            {% endfor %}
+
+            <tr class="row-total">
+                <td class="td-nombre">Total general</td>
+                <td>{{ total_general }}</td>
+                <td>{{ total_mujeres }}</td>
+                <td>100%</td>
+            </tr>
+        </tbody>
+    </table>
+{% endblock %}

@@ -1,0 +1,278 @@
+/* ==========================================================================
+   Paleta y piezas comunes de los Informes de RRHH
+   ==========================================================================
+
+   La referencia es «Resumen Puestos Clave», que es el informe que mejor quedó:
+   índigo para lo principal, naranja para lo que falta o alerta, esmeralda para
+   lo cubierto, y una escala de grises fría para el texto y los fondos.
+
+   POR QUÉ EXISTE ESTE FICHERO
+   ---------------------------
+   Hasta ahora la paleta vivía repartida en atributos `style` dentro de cada
+   plantilla, con el mismo índigo escrito a mano en veinte sitios. Y peor: las
+   plantillas usaban nombres de clase al estilo Tailwind —`fw-black`,
+   `text-indigo-600`, `bg-slate-900`, `tracking-widest`— que NO EXISTÍAN en
+   ninguna hoja de estilos del proyecto. No hacían nada: lo que se veía venía de
+   los `style` de al lado. Aquí se definen de verdad, así que el marcado que ya
+   estaba escrito empieza a funcionar como su autor esperaba, y el informe que
+   se cree mañana puede usar clases en vez de repetir códigos de color.
+
+   Las variables son el contrato: si algún día cambia el índigo de la empresa,
+   se cambia aquí y cambian los seis informes.
+   ========================================================================== */
+
+:root {
+    /* Principal: identidad de los informes. */
+    --inf-indigo: #4f46e5;
+    --inf-indigo-claro: #6366f1;
+    --inf-indigo-tinte: #eef2ff;
+    --inf-indigo-oscuro: #312e81;
+
+    /* Lo que falta, vence o hay que mirar. */
+    --inf-naranja: #f97316;
+    --inf-naranja-tinte: #fff7ed;
+    --inf-naranja-oscuro: #c2410c;
+
+    /* Lo cubierto, lo cumplido. */
+    --inf-verde: #059669;
+    --inf-verde-tinte: #ecfdf5;
+
+    /* Datos de género y enlaces dentro de las tablas. */
+    --inf-azul: #1e3a8a;
+    --inf-azul-claro: #3b82f6;
+
+    /* Escala fría de grises. Son los tonos `slate` de Tailwind, que es de donde
+       salieron los nombres de clase que ya usaban las plantillas. */
+    --inf-gris-50: #f8fafc;
+    --inf-gris-100: #f1f5f9;
+    --inf-gris-200: #e2e8f0;
+    --inf-gris-400: #94a3b8;
+    --inf-gris-500: #64748b;
+    --inf-gris-700: #334155;
+    --inf-gris-800: #1e293b;
+    --inf-gris-900: #0f172a;
+}
+
+/* --------------------------------------------------------------------------
+   1. Utilidades que las plantillas ya usaban y no existían
+   --------------------------------------------------------------------------
+   Se definen con los mismos valores que tendrian en Tailwind, para que el
+   marcado que ya estaba escrito se vea como su autor pretendia.
+   -------------------------------------------------------------------------- */
+
+.fw-black { font-weight: 900 !important; }
+.tracking-widest { letter-spacing: 0.1em !important; }
+.tracking-tighter { letter-spacing: -0.02em !important; }
+
+.text-slate-400 { color: var(--inf-gris-400) !important; }
+.text-slate-500 { color: var(--inf-gris-500) !important; }
+.text-slate-600 { color: var(--inf-gris-500) !important; }
+.text-slate-700 { color: var(--inf-gris-700) !important; }
+.text-slate-800 { color: var(--inf-gris-800) !important; }
+.bg-slate-50 { background-color: var(--inf-gris-50) !important; }
+.bg-slate-900 { background-color: var(--inf-gris-900) !important; }
+
+.text-indigo-600 { color: var(--inf-indigo) !important; }
+.bg-indigo-50 { background-color: var(--inf-indigo-tinte) !important; }
+.border-b-indigo-600 { border-bottom-color: var(--inf-indigo) !important; }
+
+.text-orange-500 { color: var(--inf-naranja) !important; }
+.bg-orange-50 { background-color: var(--inf-naranja-tinte) !important; }
+.border-orange-100 { border-color: #fed7aa !important; }
+
+.text-emerald-600 { color: var(--inf-verde) !important; }
+.bg-emerald-50 { background-color: var(--inf-verde-tinte) !important; }
+.border-emerald-100 { border-color: #a7f3d0 !important; }
+
+/* --------------------------------------------------------------------------
+   2. Tarjeta de cifra (KPI)
+   --------------------------------------------------------------------------
+   Las cuatro cifras que encabezan un informe. Nacieron en Puestos Clave con
+   quince líneas de `style` repetidas cuatro veces; aquí son una clase y un
+   modificador de color.
+
+       <div class="inf-kpi inf-kpi--indigo">
+           <div class="inf-kpi-cabeza">
+               <span class="inf-kpi-icono"><i class="bx bx-group"></i></span>
+               <span class="inf-kpi-rotulo">Total</span>
+           </div>
+           <div class="inf-kpi-cifra">54</div>
+       </div>
+   -------------------------------------------------------------------------- */
+
+.inf-kpi {
+    background: #fff;
+    border: 0;
+    border-bottom: 4px solid var(--inf-indigo);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    height: 100%;
+}
+.inf-kpi-cabeza {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+}
+.inf-kpi-icono {
+    display: inline-flex;
+    padding: 0.3rem;
+    border-radius: 0.4rem;
+    background: var(--inf-indigo-tinte);
+    color: var(--inf-indigo);
+    font-size: 1rem;
+    line-height: 1;
+}
+.inf-kpi-rotulo {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--inf-gris-400);
+    text-align: right;
+}
+.inf-kpi-cifra {
+    font-size: 1.75rem;
+    font-weight: 900;
+    line-height: 1;
+    color: var(--inf-gris-800);
+}
+.inf-kpi-pie {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--inf-gris-400);
+    margin-top: 0.15rem;
+}
+
+/* Modificadores: cambian el borde inferior y el icono, nunca la cifra. Que la
+   cifra sea siempre oscura es lo que deja comparar las cuatro de un vistazo. */
+.inf-kpi--naranja { border-bottom-color: var(--inf-naranja); }
+.inf-kpi--naranja .inf-kpi-icono { background: var(--inf-naranja-tinte); color: var(--inf-naranja); }
+.inf-kpi--verde { border-bottom-color: var(--inf-verde); }
+.inf-kpi--verde .inf-kpi-icono { background: var(--inf-verde-tinte); color: var(--inf-verde); }
+.inf-kpi--azul { border-bottom-color: var(--inf-azul-claro); }
+.inf-kpi--azul .inf-kpi-icono { background: #eff6ff; color: var(--inf-azul-claro); }
+
+/* La cuarta tarjeta de Puestos Clave es sólida, para cerrar la fila con peso. */
+.inf-kpi--solida {
+    background: linear-gradient(135deg, var(--inf-indigo-claro) 0%, var(--inf-indigo) 100%);
+    border-bottom-color: var(--inf-indigo-oscuro);
+}
+.inf-kpi--solida .inf-kpi-icono { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.inf-kpi--solida .inf-kpi-rotulo,
+.inf-kpi--solida .inf-kpi-cifra,
+.inf-kpi--solida .inf-kpi-pie { color: #fff; }
+
+/* --------------------------------------------------------------------------
+   3. Tabla del informe
+   --------------------------------------------------------------------------
+   Cabecera en dos alturas —grupo arriba, columna abajo— y fila de totales
+   oscura al pie. Es la forma de los modelos oficiales.
+   -------------------------------------------------------------------------- */
+
+.inf-tabla { width: 100%; margin-bottom: 0; }
+
+.inf-tabla thead th {
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--inf-gris-400);
+    padding: 0.75rem 0.5rem;
+    border-bottom: 1px solid var(--inf-gris-200);
+    vertical-align: middle;
+}
+.inf-tabla thead .th-grupo-indigo {
+    color: var(--inf-indigo);
+    background-color: rgba(238, 242, 255, 0.5);
+    text-align: center;
+}
+.inf-tabla thead .th-grupo-naranja {
+    color: var(--inf-naranja);
+    background-color: rgba(255, 247, 237, 0.5);
+    text-align: center;
+}
+.inf-tabla thead .th-columna {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--inf-gris-500);
+}
+
+.inf-tabla tbody td {
+    padding: 0.55rem 0.5rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--inf-gris-100);
+}
+.inf-tabla tbody tr:hover td { background-color: var(--inf-gris-50); }
+
+/* Nombre de la fila: lo único alineado a la izquierda. */
+.inf-tabla .td-nombre {
+    text-align: left;
+    font-weight: 700;
+    color: var(--inf-gris-700);
+    font-size: 13px;
+}
+/* Las cifras, tabulares: así los millares quedan en columna y se comparan. */
+.inf-tabla .td-cifra {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    color: var(--inf-gris-500);
+}
+.inf-tabla .td-cifra--fuerte { font-weight: 700; color: var(--inf-gris-800); }
+.inf-tabla .td-cifra--verde { color: var(--inf-verde); font-weight: 700; }
+.inf-tabla .td-cifra--naranja { color: var(--inf-naranja); font-weight: 700; }
+.inf-tabla .td-cifra--azul { color: var(--inf-azul); font-weight: 700; }
+/* Un cero no es un dato que mirar: se apaga para que resalte lo que sí lo es. */
+.inf-tabla .td-cifra--cero { color: var(--inf-gris-400); font-weight: 400; }
+
+/* Fila de totales. Oscura y con el filo naranja del modelo. */
+.inf-tabla .fila-total td {
+    background-color: var(--inf-gris-900);
+    color: #fff;
+    font-weight: 900;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 0;
+    border-top: 4px solid var(--inf-naranja);
+}
+.inf-tabla .fila-total .td-nombre { color: #fff; }
+
+/* Fila sin datos. */
+.inf-tabla .fila-vacia td {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--inf-gris-400);
+    font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   4. Tarjeta que envuelve al informe
+   -------------------------------------------------------------------------- */
+
+.inf-tarjeta {
+    background: #fff;
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+.inf-tarjeta-cabeza {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--inf-gris-200);
+}
+.inf-tarjeta-titulo {
+    margin: 0;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--inf-indigo);
+}
+.inf-tarjeta-nota {
+    display: block;
+    font-size: 12px;
+    color: var(--inf-gris-400);
+}

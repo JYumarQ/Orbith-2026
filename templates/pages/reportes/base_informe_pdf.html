@@ -1,0 +1,192 @@
+{% comment %}
+  Base de los PDF de los Informes de RRHH.
+
+  Todo lo que es igual en los cuatro —la página apaisada, la cabecera que se
+  repite en cada hoja con el logo y el alcance del informe, el pie con la fecha,
+  la numeración y la paleta— vive aquí. Cada informe extiende esta plantilla y
+  solo escribe su contenido:
+
+      {% verbatim %}{% extends 'pages/reportes/base_informe_pdf.html' %}
+      {% block titulo_documento %}Trabajadores por UEB{% endblock %}
+      {% block contenido %} ... {% endblock %}{% endverbatim %}
+
+  Se extrajo del PDF de Puestos Clave, que es el modelo de diseño. Antes cada
+  informe que quisiera exportar tenía que copiar doscientas líneas de estilos y
+  de configuración de página, y a la tercera copia ya nadie garantiza que las
+  cuatro digan lo mismo.
+
+  NOTAS DE xhtml2pdf QUE CUESTAN UNA TARDE SI NO SE SABEN
+  ------------------------------------------------------
+  * Las cabeceras de tabla NO se repiten con `<thead>`: hay que poner el
+    atributo `repeat="N"` en el `<table>`, con el número de filas de cabecera.
+  * `page-break-inside` no existe. Para que un bloque no se parta, hay que
+    darle su propia `<table>`.
+  * Los `@frame` de cabecera y pie se rellenan con el contenido de los `<div>`
+    cuyos ids se nombran ahí, y esos div tienen que existir aunque estén vacíos.
+{% endcomment %}<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block titulo_documento %}Informe de RRHH{% endblock %}</title>
+    <style>
+        @page {
+            size: {% block tamano_pagina %}letter landscape{% endblock %};
+            margin: 1cm 1.5cm;
+            /* El margen superior tiene que dejar sitio al frame de la cabecera,
+               o la tabla se le monta encima. */
+            margin-top: 4.5cm;
+            margin-bottom: 2cm;
+
+            @frame header {
+                -pdf-frame-content: header_content;
+                top: 1cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 3.5cm;
+            }
+
+            @frame footer {
+                -pdf-frame-content: footer_content;
+                bottom: 0.5cm;
+                left: 1.5cm;
+                right: 1.5cm;
+                height: 1cm;
+            }
+        }
+
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 16px; }
+        .uppercase { text-transform: uppercase; }
+        .bold { font-weight: bold; }
+
+        /* --- Tarjetas de cifra de la primera página --- */
+        .kpi-table { width: 100%; margin-bottom: 15px; }
+        .kpi-box { padding: 4px; text-align: center; background-color: #f8fafc; }
+        .kpi-box-solid { background-color: #1e3a8a; padding: 4px; text-align: center; color: white; }
+        .kpi-title { font-size: 10pt; margin-bottom: 4px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+        .kpi-value { font-size: 22pt; font-weight: bold; }
+
+        /* --- Tabla de datos --- */
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        .data-table th { padding: 8px 6px; border: 1px solid #e2e8f0; }
+        .data-table td {
+            padding: 2pt 7pt;
+            border-bottom: 1px solid #f1f5f9;
+            text-align: center;
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        .th-main { font-size: 10pt; font-weight: bold; text-transform: uppercase; text-align: center; }
+        .th-sub { font-size: 9pt; font-weight: bold; text-transform: uppercase; text-align: center; }
+        .th-main-dark { background-color: #0f172a; color: white; }
+        .th-main-blue { background-color: #1e3a8a; color: white; }
+        .th-main-orange { background-color: #ffedd5; color: #ea580c; }
+        .th-sub-blue { background-color: #e0e7ff; color: #1e3a8a; }
+        .th-sub-orange { background-color: #ffedd5; color: #ea580c; }
+
+        /* --- Filas --- */
+        .row-cargo td { color: #475569; }
+        .td-cargo-title { text-align: center; font-weight: bold; font-size: 11pt; }
+        .td-nombre { text-align: left; font-weight: bold; font-size: 11pt; padding-left: 10px; }
+        .row-total td {
+            background-color: #0f172a;
+            color: #fff;
+            font-weight: bold;
+            font-size: 13pt;
+            text-transform: uppercase;
+        }
+        .row-total .td-nombre { color: #fff; }
+
+        /* --- Lista completa de unidades, cuando no caben en la cabecera --- */
+        .lista-unidades { font-size: 9pt; color: #475569; margin-bottom: 10px; }
+        .lista-unidades strong { color: #1e3a8a; }
+
+        /* --- Resumen inferior --- */
+        .burbujas-title { font-size: 14pt; color: #ea580c; font-weight: bold; text-transform: uppercase; text-align: center; margin-bottom: 8px; text-decoration: underline; }
+        .burbuja-inferior { padding: 6px; text-align: center; background-color: #f8fafc; border-bottom: 3px solid #cbd5e1; }
+        .burbuja-label { font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #64748b; margin-bottom: 2px; }
+        .burbuja-val { font-size: 24pt; font-weight: bold; color: #1e293b; }
+
+        {% block estilos_extra %}{% endblock %}
+    </style>
+</head>
+<body>
+
+    {% comment %} CABECERA REPETIDA EN CADA HOJA.
+       Logo, empresa, territorio, quién exporta, período y «Hoja X de Y». Los
+       datos los arma `informes.views._cabecera_documento`, así que los tres
+       formatos —pantalla, Word y PDF— dicen exactamente lo mismo. {% endcomment %}
+    <div id="header_content">
+        <table style="width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px;">
+            <tr>
+                <td style="width: 15%; vertical-align: middle; text-align: center;">
+                    {% if config.logo %}
+                        <img src="{{ config.logo.path }}" width="80" alt="Logo">
+                    {% else %}
+                        <div style="background-color: #1e3a8a; color: white; width: 50px; height: 50px; text-align: center; line-height: 50px; font-weight: bold; border-radius: 8px; font-size: 14px;">
+                            UNE
+                        </div>
+                    {% endif %}
+                </td>
+                <td style="width: 55%; vertical-align: middle; padding-left: 10px;">
+                    <h1 style="color: #1e3a8a; font-size: 18px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        {{ nombre_empresa }}
+                    </h1>
+                    {% comment %} La provincia va SIEMPRE; el municipio solo cuando el
+                       informe es de UNA unidad, que es el único caso en que hay un
+                       municipio que sea el del informe. {% endcomment %}
+                    <p style="color: #475569; font-size: 9px; font-weight: bold; margin: 0; text-transform: uppercase; margin-top: 2px;">
+                        {% if cab_provincia %}{{ cab_provincia }}{% endif %}{% if cab_municipio %} &middot; {{ cab_municipio }}{% endif %} &middot; {{ cab_unidades_resumen }}
+                    </p>
+                    <p style="color: #94a3b8; font-size: 9px; font-weight: bold; margin: 0; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;">
+                        Gestión de Capital Humano{% if cab_exportado_por %} &middot; Exportado por {{ cab_exportado_por }}{% endif %}
+                    </p>
+                </td>
+                <td style="width: 30%; text-align: right; vertical-align: middle;">
+                    <p style="color: #94a3b8; font-size: 10px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                        Hoja # <pdf:pagenumber> de <pdf:pagecount>
+                    </p>
+                    <div style="background-color: #f1f5f9; padding: 4px; margin-top: 5px; text-align: center; border-radius: 4px;">
+                        <span style="color: #475569; font-size: 10px; font-weight: bold; text-transform: uppercase;">
+                            Periodo: {{ mes_actual }} / {{ anno_actual }}
+                        </span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div id="footer_content">
+        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+            <tr>
+                <td style="width: 50%; color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; text-align: left;">
+                    Generado: {{ fecha_generacion }}
+                </td>
+                <td style="width: 50%; color: #94a3b8; font-size: 9px; font-weight: bold; text-transform: uppercase; text-align: right;">
+                    Orbith &middot; Gestión de Recursos Humanos
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 12px;">
+        <div style="font-size: 16px; color: #1e3a8a; text-transform: uppercase; font-weight: bold; font-style: italic; text-decoration: underline;">
+            {% block titulo_informe %}Informe de RRHH{% endblock %}
+        </div>
+        <div style="font-size: 10px; color: #94a3b8; font-weight: bold; text-transform: uppercase; margin-top: 4px;">
+            {% if cab_unidades %}Reporte de Unidad Empresarial{% else %}Reporte Estadístico Provincial{% endif %}
+        </div>
+    </div>
+
+    {% comment %} La lista entera de unidades se imprime UNA sola vez: en la cabecera
+       que se repite solo caben las dos primeras. {% endcomment %}
+    {% if cab_lista_aparte %}
+    <div class="lista-unidades">
+        <strong>Unidades incluidas:</strong> {{ cab_unidades|join:" &middot; " }}
+    </div>
+    {% endif %}
+
+    {% block contenido %}{% endblock %}
+
+</body>
+</html>

@@ -320,7 +320,10 @@ class InformeTrabajadoresUEBView(TemplateView):
         context['datos_uebs'] = datos_uebs
         context['total_general'] = total_general
         context['total_mujeres'] = total_mujeres
+        context.update(self._cifras_de_cabecera(
+            datos_uebs, total_general, total_mujeres))
         context['unidades'] = _combo_unidades(self.request.user)
+        context.update(_cabecera_documento(self.request))
 
         return context
 
@@ -355,11 +358,35 @@ class InformeTrabajadoresUEBView(TemplateView):
                 'es_principal': ueb.es_principal,
                 'es_subunidad': ueb.es_subunidad,
                 'total': total_ueb,
-                'mujeres': mujeres_ueb
+                'mujeres': mujeres_ueb,
+                # Se rellena abajo: hasta no recorrerlas todas no se sabe el total.
+                'porciento': 0,
             })
             total_general += total_ueb; total_mujeres += mujeres_ueb
 
+        # Peso de cada unidad sobre la plantilla de la empresa. Es lo que
+        # convierte la tabla en una comparación y no en una lista de números.
+        for fila in datos_uebs:
+            fila['porciento'] = (round(fila['total'] * 100 / total_general, 1)
+                                 if total_general else 0)
+
         return datos_uebs, total_general, total_mujeres
+
+    def _cifras_de_cabecera(self, datos_uebs, total_general, total_mujeres):
+        """Las cuatro cifras que encabezan el informe.
+
+        Se calculan aquí, y no en la plantilla, porque las comparten la
+        pantalla, el Word y el PDF: en la plantilla habría que repetir la misma
+        división tres veces y arriesgarse a que una se quede atrás.
+        """
+        con_personal = [d for d in datos_uebs if d['total']]
+        mayor = max(con_personal, key=lambda d: d['total']) if con_personal else None
+        return {
+            'porciento_mujeres': (round(total_mujeres * 100 / total_general, 1)
+                                  if total_general else 0),
+            'unidades_con_personal': len(con_personal),
+            'unidad_mayor': mayor,
+        }
 
 
 class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
@@ -390,6 +417,28 @@ class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
         response['Content-Disposition'] = f'attachment; filename="Resumen_Trabajadores_UEB_{mes}_{anno}.docx"'
         doc.save(response)
         
+        return response
+
+
+class ExportarResumenUEBPDFView(InformeTrabajadoresUEBView):
+    """El mismo informe en PDF.
+
+    Hereda de la vista de pantalla, así que las cifras salen del mismo cálculo:
+    no hay forma de que el papel diga una cosa y el navegador otra.
+    """
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+
+        html = get_template('pages/reportes/resumen_ueb_pdf.html').render(context)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Trabajadores_UEB'))
+
+        if pisa.CreatePDF(html, dest=response).err:
+            return HttpResponse('Hubo un error al generar el PDF', status=500)
         return response
     
 
@@ -751,14 +800,14 @@ class InformePuestosClaveView(TemplateView):
         return context
 
 
-def _nombre_de_fichero(context, extension):
+def _nombre_de_fichero(context, extension, informe='Puestos_Clave'):
     """Nombre del documento descargado: informe, alcance y período.
 
     `Puestos_Clave_Nuevitas_Septiembre_2026.docx` se reconoce de un vistazo en la
     carpeta de descargas; `Puestos_Clave_9_2026.docx`, que es lo que se ponía
     antes, no distingue el informe de una unidad del de la empresa entera.
     """
-    partes = ['Puestos_Clave']
+    partes = [informe]
 
     unidades = context.get('cab_unidades') or []
     if len(unidades) == 1:

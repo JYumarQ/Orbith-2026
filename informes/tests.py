@@ -949,3 +949,63 @@ class ModoDeAgrupacionPuestosClave(PuestosClavePorUnidad):
                                     {'agrupar': 'desglosado'})
         self.assertEqual(respuesta.status_code, 200)
         self.assertTrue(respuesta.content.startswith(b'PK'))
+
+
+class TrabajadoresPorUEB(BaseInformes):
+    """El informe por UEB: sus cifras de cabecera y sus dos exportaciones.
+
+    Era el más pobre de los seis —una tabla plana sin cifras— y el único sin
+    PDF. Estas pruebas fijan lo que ahora calcula la vista, que es lo que
+    comparten la pantalla, el Word y el PDF.
+    """
+
+    def informe(self, **parametros):
+        return self.client.get(reverse('informe_trabajadores_ueb'), parametros)
+
+    def test_reparte_los_trabajadores_por_unidad(self):
+        contexto = self.informe().context
+        filas = {d['nombre']: d['total'] for d in contexto['datos_uebs']}
+        self.assertEqual(filas['UEB Central'], 1)
+        self.assertEqual(filas['UEB Norte'], 0)
+        self.assertEqual(contexto['total_general'], 1)
+
+    def test_cada_fila_lleva_su_peso_sobre_el_total(self):
+        """Sin el porcentaje la tabla es una lista de números; con él, una
+        comparación."""
+        filas = {d['nombre']: d['porciento'] for d in self.informe().context['datos_uebs']}
+        self.assertEqual(filas['UEB Central'], 100.0)
+        self.assertEqual(filas['UEB Norte'], 0)
+
+    def test_las_cifras_de_cabecera_resumen_el_informe(self):
+        contexto = self.informe().context
+        self.assertEqual(contexto['total_mujeres'], 1)
+        self.assertEqual(contexto['porciento_mujeres'], 100.0)
+        self.assertEqual(contexto['unidades_con_personal'], 1)
+        self.assertEqual(contexto['unidad_mayor']['nombre'], 'UEB Central')
+
+    def test_sin_trabajadores_no_se_divide_por_cero(self):
+        """Una unidad recién creada, o un filtro que no devuelve nada, no puede
+        tumbar el informe."""
+        CAlta.objects.all().delete()
+        contexto = self.informe().context
+        self.assertEqual(contexto['total_general'], 0)
+        self.assertEqual(contexto['porciento_mujeres'], 0)
+        self.assertEqual(contexto['unidades_con_personal'], 0)
+        self.assertIsNone(contexto['unidad_mayor'])
+
+    def test_exporta_a_pdf(self):
+        respuesta = self.client.get(reverse('exportar_resumen_ueb_pdf'))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta['Content-Type'], 'application/pdf')
+        self.assertIn('Trabajadores_UEB', respuesta['Content-Disposition'])
+
+    def test_exporta_a_word(self):
+        respuesta = self.client.get(reverse('exportar_resumen_ueb_word'))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(respuesta.content.startswith(b'PK'))
+
+    def test_el_pdf_respeta_el_filtro_de_unidad(self):
+        respuesta = self.client.get(reverse('exportar_resumen_ueb_pdf'),
+                                    {'ueb': self.unidad.pk})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta['Content-Type'], 'application/pdf')

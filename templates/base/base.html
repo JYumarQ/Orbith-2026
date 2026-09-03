@@ -19,6 +19,11 @@
     {% comment %} Va DESPUÉS del anterior a propósito: unifica la forma de todos los
        controles (selects, inputs y fechas) con la del multi-select del Dashboard. {% endcomment %}
     <link rel="stylesheet" href="{% estatico 'css/orbith-controles.css' %}">
+    {% comment %} Paleta y piezas comunes de los Informes de RRHH. Va aqui y no en
+       cada informe porque tambien define utilidades que varias plantillas del
+       proyecto ya usaban sin que existieran (`fw-black`, `text-slate-400`...).
+    {% endcomment %}
+    <link rel="stylesheet" href="{% estatico 'css/informes-rrhh.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/all.min.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/mobile-ux.css' %}">

@@ -2,46 +2,107 @@
 {% load static %}
 {% block title %}Trabajadores por UEB{% endblock %}
 {% block content %}
-<div class="container-xxl flex-grow-1 container-p-y">
-    
+{% comment %}
+  Trabajadores por Unidad Empresarial de Base.
+
+  Era el informe más pobre de los seis: una tabla plana, sin cifras de cabecera
+  y con la paleta de serie de Bootstrap, mientras los demás seguían la de
+  «Resumen Puestos Clave». Ahora usa las piezas comunes de
+  `static/css/informes-rrhh.css` —tarjetas de cifra, tabla de cabecera en dos
+  alturas y fila de totales— para que los seis se lean igual.
+{% endcomment %}
+<div class="container-xxl flex-grow-1 container-p-y" style="background-color: #f8fafc;">
+
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Trabajadores por UEB" %}
 
-    
-    <div class="row">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header border-bottom bg-transparent py-3">
-                    <h5 class="mb-0 text-primary fw-bold">Listado de Trabajadores por Unidad Empresarial de Base</h5>
-                    <small class="text-muted">Desglose detallado por género y unidad operativa.</small>
+    {% comment %} Las cifras del informe, antes de la tabla: cuántos hay, cuántas son
+       mujeres y entre cuántas unidades se reparten. El porcentaje de mujeres se
+       calcula en la vista para no repetir la división en las tres salidas. {% endcomment %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-group"></i></span>
+                    <span class="inf-kpi-rotulo">Total</span>
                 </div>
-
-                <div class="table-responsive text-nowrap mt-2 pb-3">
-                    <table class="table text-center align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="text-start border-end">Unidad Empresarial de Base (UEB)</th>
-                                <th class="border-end"><i class="bx bx-group me-1"></i>Total Trabajadores</th>
-                                <th class="text-primary"><i class="bx bx-female me-1"></i>Mujeres</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for dato in datos_uebs %} <tr>
-                                <td class="text-start border-end fw-semibold text-dark">{{ dato.nombre }}</td> 
-                                <td class="border-end fs-6">{{ dato.total }}</td>
-                                <td class="text-primary fw-bold fs-6">{{ dato.mujeres }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr><td colspan="3" class="text-muted py-4">No se encontraron datos disponibles para las UEB.</td></tr>
-                            {% endfor %}
-                            <tr class="bg-dark text-white fw-bold text-uppercase">
-                                <td class="text-start border-end border-secondary text-white">TOTAL GENERAL</td>
-                                <td class="border-end border-secondary text-white fs-5">{{ total_general }}</td>
-                                <td class="text-white fs-5">{{ total_mujeres }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <div class="inf-kpi-cifra">{{ total_general }}</div>
+                <div class="inf-kpi-pie">Trabajadores activos</div>
             </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--azul">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-female"></i></span>
+                    <span class="inf-kpi-rotulo">Mujeres</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ total_mujeres }}</div>
+                <div class="inf-kpi-pie">{{ porciento_mujeres }} % del total</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--verde">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-buildings"></i></span>
+                    <span class="inf-kpi-rotulo">Con personal</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ unidades_con_personal }}</div>
+                <div class="inf-kpi-pie">de {{ datos_uebs|length }} unidades</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--solida">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-trophy"></i></span>
+                    <span class="inf-kpi-rotulo">Mayor plantilla</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ unidad_mayor.total|default:"0" }}</div>
+                <div class="inf-kpi-pie">{{ unidad_mayor.nombre|default:"Sin datos" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="inf-tarjeta">
+        <div class="inf-tarjeta-cabeza">
+            <h5 class="inf-tarjeta-titulo">Listado de Trabajadores por Unidad Empresarial de Base</h5>
+            <small class="inf-tarjeta-nota">Desglose por unidad y por género. Una unidad principal suma las de sus subunidades.</small>
+        </div>
+
+        <div class="table-responsive text-nowrap">
+            <table class="inf-tabla">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width: 55%;">Unidad Empresarial de Base</th>
+                        <th colspan="2" class="th-grupo-indigo">Trabajadores</th>
+                        <th rowspan="2" class="th-grupo-naranja">% del total</th>
+                    </tr>
+                    <tr>
+                        <th class="th-columna text-center">Total</th>
+                        <th class="th-columna text-center">Mujeres</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dato in datos_uebs %}
+                        <tr>
+                            <td class="td-nombre">{{ dato.nombre }}</td>
+                            <td class="td-cifra {% if dato.total %}td-cifra--fuerte{% else %}td-cifra--cero{% endif %}">{{ dato.total }}</td>
+                            <td class="td-cifra {% if dato.mujeres %}td-cifra--azul{% else %}td-cifra--cero{% endif %}">{{ dato.mujeres }}</td>
+                            <td class="td-cifra {% if dato.porciento %}td-cifra--naranja{% else %}td-cifra--cero{% endif %}">{{ dato.porciento }} %</td>
+                        </tr>
+                    {% empty %}
+                        <tr class="fila-vacia"><td colspan="4">No se encontraron datos disponibles para las UEB.</td></tr>
+                    {% endfor %}
+
+                    <tr class="fila-total">
+                        <td class="td-nombre">Total general</td>
+                        <td class="td-cifra">{{ total_general }}</td>
+                        <td class="td-cifra">{{ total_mujeres }}</td>
+                        <td class="td-cifra">100 %</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -49,7 +110,11 @@
 <script>
     function ejecutarWord() {
         window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_resumen_ueb_word' %}";
+        window.location.href = "{% url 'exportar_resumen_ueb_word' %}" + window.location.search;
+    }
+    function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_resumen_ueb_pdf' %}" + window.location.search;
     }
 </script>
 {% endblock %}

@@ -14,6 +14,7 @@ urlpatterns = [
     # ---------------------------------------------------------
     path('economia/trabajadores-ueb/', views.InformeTrabajadoresUEBView.as_view(), name='informe_trabajadores_ueb'),
     path('economia/trabajadores-ueb/exportar-word/', views.ExportarResumenUEBWordView.as_view(), name='exportar_resumen_ueb_word'),
+    path('economia/trabajadores-ueb/exportar-pdf/', views.ExportarResumenUEBPDFView.as_view(), name='exportar_resumen_ueb_pdf'),
 
     # ---------------------------------------------------------
     # 3. INFORMES: RESUMEN PUESTOS CLAVE
