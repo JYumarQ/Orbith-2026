@@ -123,3 +123,66 @@ class AuditoriaInlineTests(TestCase):
         evento = EventoAuditoria.objects.filter(
             object_id=str(municipio_pk), accion='DEL').latest('fecha')
         self.assertEqual(evento.usuario_id, self.admin.pk)
+
+
+class ColoresDeCategoriaOcupacional(TestCase):
+    """La paleta de las categorías ocupacionales.
+
+    Los colores viven en Python, al lado de los códigos que colorean, y se
+    repiten en `static/css/informes-rrhh.css` para poder pintar insignias sin
+    JavaScript. Estas pruebas son la guarda de que los dos sitios no se
+    separen: sin ellas, cambiar un color en uno y olvidar el otro deja la
+    aplicación pintando la misma categoría de dos maneras.
+    """
+
+    def test_todas_las_categorias_tienen_color(self):
+        """Añadir una categoría obliga a decidir su color: sin esto, la nueva
+        saldría gris en todos los gráficos sin que nadie se entere."""
+        from nomencladores.models import COLORES_CAT_OCUPACIONAL, NCargo
+
+        codigos = {codigo for codigo, _ in NCargo._meta.get_field('cat_ocupacional').choices}
+        self.assertEqual(codigos, set(COLORES_CAT_OCUPACIONAL))
+
+    def test_los_dos_cuadros_comparten_color(self):
+        """La aplicación los agrupa como «Cuadros» en todas partes."""
+        from nomencladores.models import COLORES_CAT_OCUPACIONAL
+
+        self.assertEqual(COLORES_CAT_OCUPACIONAL['CDI'],
+                         COLORES_CAT_OCUPACIONAL['CEJ'])
+
+    def test_ninguna_categoria_usa_un_color_de_alerta(self):
+        """En los informes el naranja significa «falta» y el rojo «crítico». Si
+        una categoría fuera naranja, una barra naranja dejaría de querer decir
+        algo. Se comprueba que ningún color cae en la franja cálida."""
+        from nomencladores.models import COLORES_CAT_OCUPACIONAL
+
+        for codigo, color in COLORES_CAT_OCUPACIONAL.items():
+            rojo = int(color[1:3], 16)
+            verde = int(color[3:5], 16)
+            azul = int(color[5:7], 16)
+            with self.subTest(categoria=codigo):
+                # Cálido = el rojo domina claramente sobre el azul.
+                self.assertLessEqual(rojo, azul + 40,
+                                     '%s (%s) tira a cálido' % (codigo, color))
+
+    def test_el_css_repite_exactamente_los_mismos_colores(self):
+        import io
+        import os
+
+        from django.conf import settings
+        from nomencladores.models import COLORES_CAT_OCUPACIONAL
+
+        ruta = os.path.join(settings.BASE_DIR, 'static', 'css', 'informes-rrhh.css')
+        css = io.open(ruta, encoding='utf-8').read().lower()
+
+        for codigo, color in COLORES_CAT_OCUPACIONAL.items():
+            with self.subTest(categoria=codigo):
+                self.assertIn(color.lower(), css,
+                              'El color de %s no está en informes-rrhh.css' % codigo)
+
+    def test_un_codigo_desconocido_no_deja_el_grafico_sin_color(self):
+        from nomencladores.models import COLOR_CAT_DESCONOCIDA, color_de_categoria
+
+        self.assertEqual(color_de_categoria('XXX'), COLOR_CAT_DESCONOCIDA)
+        self.assertEqual(color_de_categoria(None), COLOR_CAT_DESCONOCIDA)
+        self.assertEqual(color_de_categoria(''), COLOR_CAT_DESCONOCIDA)

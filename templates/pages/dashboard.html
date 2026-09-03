@@ -601,7 +601,12 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         },
         labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
-        colors: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'],
+        {% comment %} Paleta comun de categorias: la misma en el Dashboard, en los
+           informes y en las insignias de los listados. Vive en
+           `nomencladores.models.COLORES_CAT_OCUPACIONAL`. {% endcomment %}
+        colors: ['{{ colores_categoria.OPE }}', '{{ colores_categoria.TEC }}',
+                 '{{ colores_categoria.ADM }}', '{{ colores_categoria.SER }}',
+                 '{{ colores_categoria.CDI }}'],
         plotOptions: { donut: { size: '60%' } },
         dataLabels: {
             enabled: true,

@@ -128,6 +128,48 @@ class NFamiliaCargo(Base):
         return f"{self.nombre} ({self.tipo_familia.nombre})"
 
 
+# ==========================================================================
+# COLOR DE CADA CATEGORÍA OCUPACIONAL
+# ==========================================================================
+# Fuente única del color con el que se pinta cada categoría en TODA la
+# aplicación: los gráficos del Dashboard y de los informes, las insignias de las
+# tablas y los desgloses. Antes cada pantalla elegía los suyos —y en Contratos
+# Determinados se asignaban por orden de tamaño, así que la misma categoría
+# cambiaba de color según los datos.
+#
+# Vive aquí, al lado de los códigos que colorea, para que añadir una categoría
+# nueva obligue a decidir su color en el mismo sitio.
+#
+# LA PALETA ES FRÍA A PROPÓSITO. En los informes el naranja significa «falta»
+# (plazas vacantes) y el rojo «crítico» (contratos por vencer). Si una categoría
+# fuera naranja, una barra naranja dejaría de querer decir algo. Los cinco tonos
+# tienen además claridades distintas, así que se distinguen impresos en blanco y
+# negro.
+#
+# Cuadro Directivo y Cuadro Ejecutivo comparten color: la aplicación los agrupa
+# como «Cuadros» en todas partes.
+COLORES_CAT_OCUPACIONAL = {
+    'OPE': '#0ea5e9',   # Obreros — cielo
+    'TEC': '#14b8a6',   # Técnicos — turquesa
+    'ADM': '#6366f1',   # Administrativos — índigo
+    'SER': '#a855f7',   # Servicios — púrpura
+    'CDI': '#0f172a',   # Cuadro Directivo — pizarra
+    'CEJ': '#0f172a',   # Cuadro Ejecutivo — pizarra (mismo que Directivo)
+}
+
+#: Color de lo que no tiene categoría, o la tiene sin reconocer.
+COLOR_CAT_DESCONOCIDA = '#94a3b8'
+
+
+def color_de_categoria(codigo):
+    """Color de una categoría ocupacional por su código ('TEC', 'OPE'...).
+
+    Devuelve el gris neutro si el código no existe: un dato incompleto no puede
+    dejar una barra sin pintar ni reventar un gráfico.
+    """
+    return COLORES_CAT_OCUPACIONAL.get(codigo or '', COLOR_CAT_DESCONOCIDA)
+
+
 class NCargo(Base):
     descripcion = models.CharField(max_length=150)
     cat_ocupacional = models.CharField(max_length=20, choices=[

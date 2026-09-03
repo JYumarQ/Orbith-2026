@@ -316,9 +316,14 @@
                 </div>
             </div>
 
-            <div class="card card-moderna border-0 text-white flex-grow-1" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.08);">
+            {% comment %} Fondo claro, no oscuro: el pizarra de la categoria Cuadros se
+               perdia contra el. De paso, las dos tarjetas de graficos quedan como el
+               resto de los informes. La de «Eficiencia del Plan» sigue en azul: es el
+               dato destacado de la pantalla y no lleva colores de categoria.
+            {% endcomment %}
+            <div class="card card-moderna border-0 bg-white flex-grow-1">
                 <div class="card-body p-3">
-                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #94a3b8;"><i class="bx bx-bar-chart-alt text-primary me-2"></i>Distribución Ocupacional</h6>
+                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #64748b;"><i class="bx bx-bar-chart-alt text-primary me-2"></i>Distribución Ocupacional</h6>
                     <!-- AQUÍ ESTÁ LA MAGIA DEL TAMAÑO: height a 350px -->
                     <div style="position: relative; height: 350px; width: 100%;">
                         <canvas id="chartCategorias"></canvas>
@@ -326,9 +331,9 @@
                 </div>
             </div>
 
-            <div class="card card-moderna border-0 text-white flex-grow-1" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid rgba(255,255,255,0.08);">
+            <div class="card card-moderna border-0 bg-white flex-grow-1">
                 <div class="card-body p-3">
-                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #94a3b8;"><i class="bx bx-male-female text-pink-600 me-2"></i>Participación por Sexo</h6>
+                    <h6 class="fw-bold text-uppercase mb-3" style="font-size: 0.75rem; color: #64748b;"><i class="bx bx-male-female text-pink-600 me-2"></i>Participación por Sexo</h6>
                     <!-- AQUÍ TAMBIÉN: height a 350px -->
                     <div style="position: relative; height: 350px; width: 100%;">
                         <canvas id="chartSexo"></canvas>
@@ -596,7 +601,16 @@
                 labels: ['Obreros', 'Técnicos', 'Admin.', 'Servicios', 'Cuadros'],
                 datasets: [{
                     data: datosCat,
-                    backgroundColor: '#ff6600',
+                    // Un color por categoria, no uno solo para las cinco: la
+                    // paleta es la misma en toda la aplicacion y sale de
+                    // `nomencladores.models.COLORES_CAT_OCUPACIONAL`.
+                    backgroundColor: [
+                        '{{ colores_categoria.OPE }}',
+                        '{{ colores_categoria.TEC }}',
+                        '{{ colores_categoria.ADM }}',
+                        '{{ colores_categoria.SER }}',
+                        '{{ colores_categoria.CDI }}'
+                    ],
                     borderRadius: 6,
                     barThickness: 25 // Barras más gruesas
                 }]
@@ -611,8 +625,8 @@
                 },
                 scales: {
                     // TAMAÑO DE LETRAS AUMENTADO AQUÍ (de 10 a 14 y de 12 a 15)
-                    x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8', font: { size: 14 } } },
-                    y: { grid: { display: false }, ticks: { color: '#ffffff', font: { size: 15, weight: 'bold' } } }
+                    x: { grid: { color: '#e2e8f0' }, ticks: { color: '#64748b', font: { size: 14 } } },
+                    y: { grid: { display: false }, ticks: { color: '#1e293b', font: { size: 15, weight: 'bold' } } }
                 }
             }
         });
@@ -673,7 +687,7 @@
                     legend: { 
                         position: 'bottom', 
                         // TAMAÑO DE LETRAS AUMENTADO EN LA LEYENDA (de 12 a 15)
-                        labels: { color: '#ffffff', font: { size: 15, weight: 'bold' }, padding: 20 } 
+                        labels: { color: '#1e293b', font: { size: 15, weight: 'bold' }, padding: 20 } 
                     },
                     tooltip: {
                         callbacks: {

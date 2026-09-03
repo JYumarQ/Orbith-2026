@@ -349,3 +349,65 @@
 .agrupacion-toggle input[value="desglosado"]:checked ~ .opt-desglosado {
     color: var(--inf-indigo-claro);
 }
+
+/* --------------------------------------------------------------------------
+   6. Color por Categoria Ocupacional
+   --------------------------------------------------------------------------
+   La FUENTE de estos colores es `nomencladores.models.COLORES_CAT_OCUPACIONAL`,
+   no este fichero: alli viven al lado de los codigos que colorean, y de alli
+   los toman los graficos, que son JavaScript y no pueden leer CSS.
+
+   Aqui se repiten para poder pintar insignias y fondos sin JavaScript. Que no
+   se separen lo vigila una prueba (`nomencladores/tests.py`), que compara los
+   valores de este fichero con los de Python y falla si alguien cambia uno solo
+   de los dos sitios.
+
+   La paleta es FRIA a proposito: en los informes el naranja significa «falta» y
+   el rojo «critico», asi que ninguna categoria los usa.
+   -------------------------------------------------------------------------- */
+
+:root {
+    --cat-ope: #0ea5e9;   /* Obreros */
+    --cat-tec: #14b8a6;   /* Tecnicos */
+    --cat-adm: #6366f1;   /* Administrativos */
+    --cat-ser: #a855f7;   /* Servicios */
+    --cat-cua: #0f172a;   /* Cuadros (Directivo y Ejecutivo) */
+    --cat-sin: #94a3b8;   /* Sin categoria reconocida */
+}
+
+/* Insignia de la columna «Cat.» de los listados y de los desgloses. */
+.cat-insignia {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    padding: 0.15rem 0.45rem;
+    border-radius: 0.35rem;
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    line-height: 1.2;
+    background-color: var(--cat-sin);
+}
+.cat-OPE { background-color: var(--cat-ope); }
+.cat-TEC { background-color: var(--cat-tec); }
+.cat-ADM { background-color: var(--cat-adm); }
+.cat-SER { background-color: var(--cat-ser); }
+.cat-CDI,
+.cat-CEJ { background-color: var(--cat-cua); }
+
+/* Punto de color para leyendas y listas. */
+.cat-punto {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.4rem;
+    background-color: var(--cat-sin);
+}
+.cat-punto.cat-OPE { background-color: var(--cat-ope); }
+.cat-punto.cat-TEC { background-color: var(--cat-tec); }
+.cat-punto.cat-ADM { background-color: var(--cat-adm); }
+.cat-punto.cat-SER { background-color: var(--cat-ser); }
+.cat-punto.cat-CDI,
+.cat-punto.cat-CEJ { background-color: var(--cat-cua); }

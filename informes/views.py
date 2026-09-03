@@ -24,7 +24,8 @@ from xhtml2pdf import pisa
 # de `fuentes.py`, que es quien decide si sirve datos vivos o un cierre mensual.
 from cierres.periodos import Periodo
 from configuracion.models import Configuracion
-from nomencladores.models import NTipoFamilia, NFamiliaCargo, NCargo
+from nomencladores.models import (NTipoFamilia, NFamiliaCargo, NCargo,
+                                  color_de_categoria)
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import UnidadOrganizativa
 from usuarios.mixins import RequiereEdicionMixin
@@ -966,6 +967,10 @@ class InformeMisionesView(TemplateView):
                 'nombre': c.aspirante_nombre,
                 'cargo': c.ncargo_descripcion or "-",
                 'cat_letra': cat_sigla[0] if cat_sigla else "-",
+                # El codigo completo, para que la insignia pueda tomar el color
+                # de su categoria: con la inicial sola, Cuadro Directivo y
+                # Cuadro Ejecutivo serian indistinguibles de «C» de nada.
+                'cat_codigo': cat_sigla,
                 'g_escala': c.grupo_escala_nivel or "-",
                 'pais': c.pais, 'dias': 0, 'importe': 0.00
             })
@@ -1359,22 +1364,21 @@ class InformeMotivosContratoView(TemplateView):
             m_porc = int((m_count / total_contratos) * 100) if total_contratos > 0 else 0
             lista_motivos.append({'nombre': m_nom, 'count': m_count, 'porc': m_porc})
 
+        # El color sale de la CATEGORÍA, no del puesto que ocupe en el ranking.
+        # Antes se repartía una escala por orden de tamaño, así que la misma
+        # categoría cambiaba de color según los datos: Obreros era rojo un mes y
+        # verde al siguiente, y el color dejaba de significar nada.
         lista_categorias = [
-            {'nombre': '[C] Cuadros', 'count': cat_c},
-            {'nombre': '[T] Técnicos', 'count': cat_t},
-            {'nombre': '[A] Administrativos', 'count': cat_a},
-            {'nombre': '[O] Obreros', 'count': cat_o},
-            {'nombre': '[S] Servicios', 'count': cat_s},
+            {'nombre': '[C] Cuadros', 'count': cat_c, 'codigo': 'CDI'},
+            {'nombre': '[T] Técnicos', 'count': cat_t, 'codigo': 'TEC'},
+            {'nombre': '[A] Administrativos', 'count': cat_a, 'codigo': 'ADM'},
+            {'nombre': '[O] Obreros', 'count': cat_o, 'codigo': 'OPE'},
+            {'nombre': '[S] Servicios', 'count': cat_s, 'codigo': 'SER'},
         ]
         lista_categorias.sort(key=lambda x: x['count'], reverse=True)
 
-        colores_jerarquia = ['#E63946', '#F4A261', '#E9C46A', '#2A9D8F', '#A8DADC']
-        current_color_idx = 0
-
-        for i, item in enumerate(lista_categorias):
-            if i > 0 and item['count'] < lista_categorias[i-1]['count']:
-                current_color_idx = min(current_color_idx + 1, 4)
-            item['color'] = colores_jerarquia[current_color_idx]
+        for item in lista_categorias:
+            item['color'] = color_de_categoria(item['codigo'])
             item['porc'] = int((item['count'] / total_contratos * 100)) if total_contratos else 0
 
         porc_mujeres = round((total_mujeres / total_contratos * 100) if total_contratos else 0, 1)

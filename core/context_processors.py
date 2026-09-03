@@ -1,4 +1,5 @@
 """Context processors globales de Orbith."""
+from nomencladores.models import COLORES_CAT_OCUPACIONAL
 from usuarios.mixins import puede_editar as _puede_editar
 
 from .changelog import ORBITH_INFO, ORBITH_VERSION, obtener_changelog
@@ -25,6 +26,11 @@ def orbith(request):
         'orbith_version': ORBITH_VERSION,
         'orbith_info': ORBITH_INFO,
         'orbith_changelog': obtener_changelog(),
+        # Color de cada categoría ocupacional. Se expone globalmente porque lo
+        # consumen pantallas de tres módulos distintos —Dashboard, Informes y
+        # los listados— y varios de ellos por JavaScript, en gráficos que no
+        # pueden leer el CSS. La fuente es `nomencladores.models`.
+        'colores_categoria': COLORES_CAT_OCUPACIONAL,
         # Valores por defecto: coinciden con los del modelo PreferenciasUsuario.
         'pref_sidebar_colapsada': False,
         'pref_animaciones_activas': True,
