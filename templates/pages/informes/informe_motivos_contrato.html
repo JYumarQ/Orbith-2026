@@ -453,4 +453,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 </script>
+
+<script>
+    function ejecutarWord() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_motivos_word' %}" + window.location.search;
+    }
+    function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_motivos_pdf' %}" + window.location.search;
+    }
+</script>
 {% endblock %}

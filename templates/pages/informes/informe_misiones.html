@@ -78,16 +78,17 @@
                     </tr>
                 </thead>
                 <tbody class="border-top-0">
-                    {% for ueb_nombre, trabajadores in uebs.items %}
+                    {% for unidad in misiones_por_unidad %}
                         <tr style="background-color: rgba(248, 250, 252, 0.9);">
                             <td colspan="8" class="px-4 py-2 border-bottom border-slate-200">
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="rounded-pill" style="width: 5px; height: 18px; background-color: #4f46e5;"></div>
-                                    <span class="fw-black text-uppercase tracking-widest" style="font-size: 13px; color: #312e81;">{{ ueb_nombre }}</span>
+                                    <span class="fw-black text-uppercase tracking-widest" style="font-size: 13px; color: #312e81;">{{ unidad.nombre }}</span>
+                                    <span class="text-slate-400 fw-bold" style="font-size: 11px;">{{ unidad.total }} en misión</span>
                                 </div>
                             </td>
                         </tr>
-                        {% for t in trabajadores %}
+                        {% for t in unidad.trabajadores %}
                         <tr>
                             <td class="px-4 py-2 font-monospace fw-bold text-slate-500" style="font-size: 13px;">{{ t.expediente }}</td>
                             <td class="px-4 py-2 fw-bold text-slate-700" style="font-size: 13px;">{{ t.nombre }}</td>
@@ -111,6 +112,17 @@
         </div>
     </div>
 </div>
+
+<script>
+    function ejecutarWord() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_misiones_word' %}" + window.location.search;
+    }
+    function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_misiones_pdf' %}" + window.location.search;
+    }
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

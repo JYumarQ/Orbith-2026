@@ -27,6 +27,8 @@ urlpatterns = [
     # 4. INFORMES: MISIONES INTERNACIONALES
     # ---------------------------------------------------------
     path('misiones/', views.InformeMisionesView.as_view(), name='informe_misiones'),
+    path('misiones/exportar-word/', views.ExportarMisionesWordView.as_view(), name='exportar_misiones_word'),
+    path('misiones/exportar-pdf/', views.ExportarMisionesPDFView.as_view(), name='exportar_misiones_pdf'),
 
     # ---------------------------------------------------------
     # 5. INFORMES: PLAN MENSUAL DE TRABAJO (REGISTRO DIARIO)
@@ -34,6 +36,8 @@ urlpatterns = [
     path('registro-diario/', views.RegistroDiarioView.as_view(), name='informe_registro_diario'),
     path('registro-diario/guardar-plan/', views.GuardarPlanDiarioView.as_view(), name='guardar_plan_diario'),
     path('motivos-contratos/', views.InformeMotivosContratoView.as_view(), name='informe_motivos_contrato'),
+    path('motivos-contratos/exportar-word/', views.ExportarMotivosWordView.as_view(), name='exportar_motivos_word'),
+    path('motivos-contratos/exportar-pdf/', views.ExportarMotivosPDFView.as_view(), name='exportar_motivos_pdf'),
 
 
     

@@ -1,0 +1,93 @@
+{% extends 'pages/reportes/base_informe_pdf.html' %}
+
+{% comment %}
+  PDF de «Misiones Internacionales».
+
+  La envoltura sale de la base común. Aquí van las cifras, y la tabla agrupada
+  por unidad con el mismo reparto que la pantalla.
+{% endcomment %}
+
+{% block titulo_documento %}Misiones Internacionales{% endblock %}
+{% block titulo_informe %}Personal en Misión Internacional{% endblock %}
+
+{% block estilos_extra %}
+        .row-unidad td {
+            background-color: #eef2ff;
+            color: #312e81;
+            font-weight: bold;
+            font-size: 12pt;
+            text-align: left;
+            padding-left: 10px;
+        }
+{% endblock %}
+
+{% block contenido %}
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-box" style="border-bottom: 3px solid #1e3a8a;">
+                <div class="kpi-title" style="color: #94a3b8;">Total en Misión</div>
+                <div class="kpi-value" style="color: #1e293b;">{{ total_misiones }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #059669;">
+                <div class="kpi-title" style="color: #059669;">Países</div>
+                <div class="kpi-value" style="color: #059669;">{{ paises }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #ea580c;">
+                <div class="kpi-title" style="color: #ea580c;">Unidades</div>
+                <div class="kpi-value" style="color: #ea580c;">{{ unidades_con_mision }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box-solid">
+                <div class="kpi-title" style="color: #bfdbfe;">Importe Total</div>
+                <div class="kpi-value" style="color: #ffffff;">{{ importe_total|floatformat:2 }}</div>
+            </td>
+        </tr>
+    </table>
+
+    {% comment %} Desglose por categoría ocupacional, en una línea. {% endcomment %}
+    <table class="kpi-table">
+        <tr>
+            {% for nombre, cantidad in desglose.items %}
+                <td class="burbuja-inferior" style="border-bottom-color: #4f46e5;">
+                    <div class="burbuja-label" style="font-size: 9pt;">{{ nombre }}</div>
+                    <div class="burbuja-val" style="font-size: 16pt;">{{ cantidad }}</div>
+                </td>
+                <td style="width: 1%;"></td>
+            {% endfor %}
+        </tr>
+    </table>
+
+    <table class="data-table" repeat="1">
+        <thead>
+            <tr>
+                <th class="th-main th-main-dark" style="width: 12%;">Exp. Laboral</th>
+                <th class="th-main th-main-dark" style="width: 26%;">Nombre y Apellidos</th>
+                <th class="th-main th-main-dark" style="width: 30%;">Cargo u Ocupación</th>
+                <th class="th-main th-main-blue" style="width: 14%;">País</th>
+                <th class="th-main th-main-blue" style="width: 8%;">Cat.</th>
+                <th class="th-main th-main-blue" style="width: 10%;">G. Escala</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for unidad in misiones_por_unidad %}
+                <tr class="row-unidad">
+                    <td colspan="6">{{ unidad.nombre|upper }} &mdash; {{ unidad.total }} en misión</td>
+                </tr>
+                {% for t in unidad.trabajadores %}
+                <tr class="row-cargo">
+                    <td>{{ t.expediente }}</td>
+                    <td class="td-nombre">{{ t.nombre }}</td>
+                    <td class="td-nombre">{{ t.cargo }}</td>
+                    <td class="bold" style="color: #1e3a8a;">{{ t.pais }}</td>
+                    <td class="bold">{{ t.cat_letra }}</td>
+                    <td class="bold">{{ t.g_escala }}</td>
+                </tr>
+                {% endfor %}
+            {% empty %}
+                <tr class="row-cargo"><td colspan="6">No hay personal en misión internacional.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

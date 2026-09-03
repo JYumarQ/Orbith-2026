@@ -130,6 +130,14 @@ def _cabecera_documento(request):
     quien = (getattr(usuario, 'nombre_completo', None)
              or getattr(usuario, 'username', '') or '')
 
+    # Fecha y hora de la exportación, en español. `strftime('%B')` devolvería el
+    # mes en el idioma del servidor, que aquí es inglés.
+    ahora = datetime.now()
+    dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+    fecha_es = (f"{dias[ahora.weekday()]}, {ahora.day:02d} de "
+                f"{MESES_ES[ahora.month - 1]} de {ahora.year} | "
+                f"{ahora.strftime('%I:%M %p')}")
+
     return {
         'config': config,
         'nombre_empresa': config.nombre_empresa if config else 'Empresa Eléctrica',
@@ -144,6 +152,7 @@ def _cabecera_documento(request):
         # imprime entonces la lista entera al principio del documento.
         'cab_lista_aparte': len(nombres) > UNIDADES_EN_CABECERA,
         'cab_exportado_por': quien,
+        'fecha_generacion': fecha_es,
     }
 
 
@@ -780,14 +789,11 @@ class InformePuestosClaveView(TemplateView):
         if stats['aprobada'] > 0:
             stats['porcentaje'] = int((stats['cubierta'] / stats['aprobada']) * 100)
 
-        dt = datetime.now()
-        dias = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
-        fecha_es = f"{dias[dt.weekday()]}, {dt.day:02d} de {MESES_ES[dt.month - 1]} de {dt.year} | {dt.strftime('%I:%M %p')}"
-
+        # La fecha de generación la trae `_cabecera_documento`, que es común a
+        # todos los informes.
         context.update(_cabecera_documento(self.request))
         context.update({
             'datos_familias': datos_familias,
-            'fecha_generacion': fecha_es,
             'stats': stats,
             'tipos_familia': tipos_familia,
             'tipo_actual': tipo_id,
@@ -798,6 +804,21 @@ class InformePuestosClaveView(TemplateView):
             'agrupacion': agrupacion,
         })
         return context
+
+
+def _logo_para_word(doc, config):
+    """El logo de la empresa como imagen incrustada en un .docx.
+
+    Devuelve cadena vacía si no hay logo configurado o si el fichero no se puede
+    leer: la etiqueta queda vacía y la cabecera no se descuadra, que es mejor que
+    tumbar la exportación por una imagen.
+    """
+    if not (config and config.logo):
+        return ''
+    try:
+        return InlineImage(doc, config.logo.path, width=Mm(28))
+    except Exception:
+        return ''
 
 
 def _nombre_de_fichero(context, extension, informe='Puestos_Clave'):
@@ -844,18 +865,8 @@ class ExportarPuestosClaveWordView(InformePuestosClaveView):
             doc = DocxTemplate(template_path)
 
             # El logo se inserta como imagen de verdad, no como ruta: docxtpl lo
-            # incrusta en el .docx con `InlineImage`. Sin logo configurado, la
-            # etiqueta se queda vacía y la cabecera no se descuadra.
-            config = context.get('config')
-            logo = ''
-            if config and config.logo:
-                try:
-                    # 28 mm: acompaña al cuerpo de letra de la cabecera, que
-                    # subió a 16 pt. Con 22 mm el logo se veía perdido al lado.
-                    logo = InlineImage(doc, config.logo.path, width=Mm(28))
-                except Exception:
-                    logo = ''
-            context['logo'] = logo
+            # incrusta en el .docx con `InlineImage`.
+            context['logo'] = _logo_para_word(doc, context.get('config'))
 
             doc.render(context)
 
@@ -955,15 +966,67 @@ class InformeMisionesView(TemplateView):
 
         # Ordenamos las llaves según el mapa de orden y reconstruimos
         sorted_keys = sorted(orden_map.keys(), key=lambda k: orden_map[k])
-        uebs_ordenadas = {k: datos_por_ueb[k] for k in sorted_keys}
+
+        # Una LISTA de unidades, cada una con los suyos, y no un diccionario:
+        # es la forma que entienden por igual la plantilla de pantalla, la del
+        # PDF y los bucles de docxtpl del Word. Un diccionario obliga a cada una
+        # a recorrerlo a su manera.
+        misiones_por_unidad = [
+            {'nombre': nombre,
+             'total': len(datos_por_ueb[nombre]),
+             'trabajadores': datos_por_ueb[nombre]}
+            for nombre in sorted_keys
+        ]
 
         context['total_misiones'] = total_misiones
         context['importe_total'] = importe_total
         context['desglose'] = desglose
-        context['uebs'] = uebs_ordenadas # Ahora es {Nombre: [lista_trabajadores]}
+        context['misiones_por_unidad'] = misiones_por_unidad
+        context['paises'] = len({c.pais for c in contratos if c.pais})
+        context['unidades_con_mision'] = len(misiones_por_unidad)
         context['unidades'] = _combo_unidades(self.request.user)
+        context.update(_cabecera_documento(self.request))
         return context
     
+class ExportarMisionesWordView(InformeMisionesView):
+    """Misiones Internacionales en Word."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        template_path = os.path.join(
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
+            'misiones_template.docx')
+        try:
+            doc = DocxTemplate(template_path)
+            context['logo'] = _logo_para_word(doc, context.get('config'))
+            doc.render(context)
+
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = (
+                'attachment; filename="%s"'
+                % _nombre_de_fichero(context, 'docx', 'Misiones'))
+            doc.save(response)
+            return response
+        except Exception as e:
+            return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
+
+
+class ExportarMisionesPDFView(InformeMisionesView):
+    """Misiones Internacionales en PDF."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        html = get_template('pages/reportes/misiones_pdf.html').render(context)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Misiones'))
+        if pisa.CreatePDF(html, dest=response).err:
+            return HttpResponse('Hubo un error al generar el PDF', status=500)
+        return response
+
+
 class RegistroDiarioView(TemplateView):
     template_name = "pages/informes/registro_diario.html"
 
@@ -1143,6 +1206,7 @@ class InformeMotivosContratoView(TemplateView):
         conteo_motivos = {} 
         
         datos_agrupados = {}
+        filas_documento = []
 
         for c in contratos:
             total_contratos += 1
@@ -1193,6 +1257,35 @@ class InformeMotivosContratoView(TemplateView):
                 
             datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc]['contratos'].append(c)
 
+            # Lista PLANA para los documentos. La pantalla puede permitirse tres
+            # niveles anidados —tipo, motivo, unidad— porque se pliegan y se
+            # despliegan; en papel eso son tres cabeceras por cada puñado de
+            # filas, y en la plantilla de Word serían seis bucles encajados que
+            # nadie podría retocar después sin romperlos. Cada fila lleva su
+            # tipo, su motivo y su unidad como columnas.
+            filas_documento.append({
+                'tipo': tipo_desc,
+                'motivo': motivo_desc,
+                'unidad': ueb_desc,
+                'expediente': c.no_expediente,
+                'nombre': c.aspirante_nombre,
+                'cargo': c.ncargo_descripcion or '-',
+                'categoria': (c.cat_ocupacional or '-')[:1],
+                'fecha_alta': c.fecha_alta,
+                # Ya formateada: el Word no tiene los filtros de Django, y con
+                # la fecha en crudo salía en formato ISO mientras el PDF y la
+                # pantalla la mostraban a la cubana.
+                'fecha_alta_texto': (c.fecha_alta.strftime('%d/%m/%Y')
+                                     if c.fecha_alta else '-'),
+                'duracion': c.duracion,
+                'dias_restantes': c.dias_restantes,
+                # El estado de vencimiento, ya resuelto: la plantilla no tiene
+                # por qué repetir los cortes de 15 y 30 días en tres sitios.
+                'estado': ('Crítico' if c.dias_restantes is not None and c.dias_restantes <= 15
+                           else 'Advertencia' if c.dias_restantes is not None and c.dias_restantes <= 30
+                           else 'Vigente' if c.dias_restantes is not None else '-'),
+            })
+
         conteo_motivos_ordenado = dict(sorted(conteo_motivos.items(), key=lambda item: item[1], reverse=True))
 
         mayor_motivo_nombre = "Sin Datos"
@@ -1230,8 +1323,10 @@ class InformeMotivosContratoView(TemplateView):
         porc_mujeres = round((total_mujeres / total_contratos * 100) if total_contratos else 0, 1)
         porc_hombres = round((total_hombres / total_contratos * 100) if total_contratos else 0, 1)
 
+        context.update(_cabecera_documento(self.request))
         context.update({
             'datos_agrupados': datos_agrupados,
+            'filas_documento': filas_documento,
             'total_contratos': total_contratos,
             'total_mujeres': total_mujeres,
             'total_hombres': total_hombres,
@@ -1254,3 +1349,42 @@ class InformeMotivosContratoView(TemplateView):
         })
         
         return context
+
+
+class ExportarMotivosWordView(InformeMotivosContratoView):
+    """Contratos Determinados en Word."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        template_path = os.path.join(
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
+            'motivos_template.docx')
+        try:
+            doc = DocxTemplate(template_path)
+            context['logo'] = _logo_para_word(doc, context.get('config'))
+            doc.render(context)
+
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = (
+                'attachment; filename="%s"'
+                % _nombre_de_fichero(context, 'docx', 'Contratos_Determinados'))
+            doc.save(response)
+            return response
+        except Exception as e:
+            return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
+
+
+class ExportarMotivosPDFView(InformeMotivosContratoView):
+    """Contratos Determinados en PDF."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        html = get_template('pages/reportes/motivos_pdf.html').render(context)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Contratos_Determinados'))
+        if pisa.CreatePDF(html, dest=response).err:
+            return HttpResponse('Hubo un error al generar el PDF', status=500)
+        return response

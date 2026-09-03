@@ -1,0 +1,126 @@
+{% extends 'pages/reportes/base_informe_pdf.html' %}
+
+{% comment %}
+  PDF de «Contratos Determinados (Motivos)».
+
+  La pantalla agrupa en tres niveles —tipo, motivo y unidad— porque ahí se
+  pliegan y se despliegan. En papel eso serían tres cabeceras por cada puñado de
+  filas, así que el documento lleva una tabla plana donde el tipo, el motivo y
+  la unidad son columnas, más los dos resúmenes que encabezan la pantalla.
+{% endcomment %}
+
+{% block titulo_documento %}Contratos Determinados{% endblock %}
+{% block titulo_informe %}Contratos Determinados por Motivo{% endblock %}
+
+{% block estilos_extra %}
+        .estado-critico { color: #dc2626; font-weight: bold; }
+        .estado-alerta { color: #ea580c; font-weight: bold; }
+        .estado-vigente { color: #059669; font-weight: bold; }
+        .tabla-resumen { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .tabla-resumen td, .tabla-resumen th {
+            border: 1px solid #e2e8f0;
+            padding: 4pt 7pt;
+            font-size: 10pt;
+        }
+        .tabla-resumen th { background-color: #f1f5f9; color: #475569; text-transform: uppercase; font-size: 9pt; }
+{% endblock %}
+
+{% block contenido %}
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-box" style="border-bottom: 3px solid #1e3a8a;">
+                <div class="kpi-title" style="color: #94a3b8;">Total Determinados</div>
+                <div class="kpi-value" style="color: #1e293b;">{{ total_contratos }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #059669;">
+                <div class="kpi-title" style="color: #059669;">Vigentes (+30 días)</div>
+                <div class="kpi-value" style="color: #059669;">{{ vencen_vigente }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #ea580c;">
+                <div class="kpi-title" style="color: #ea580c;">Advertencia (≤30 días)</div>
+                <div class="kpi-value" style="color: #ea580c;">{{ vencen_alerta }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box-solid" style="background-color: #dc2626;">
+                <div class="kpi-title" style="color: #fecaca;">Críticos (≤15 días)</div>
+                <div class="kpi-value" style="color: #ffffff;">{{ vencen_critico }}</div>
+            </td>
+        </tr>
+    </table>
+
+    {% comment %} Los dos resúmenes de la pantalla, uno al lado del otro. {% endcomment %}
+    <table style="width: 100%;">
+        <tr>
+            <td style="width: 49%; vertical-align: top;">
+                <table class="tabla-resumen">
+                    <tr><th colspan="3">Totales por motivo</th></tr>
+                    {% for m in lista_motivos %}
+                    <tr>
+                        <td>{{ m.nombre }}</td>
+                        <td style="text-align: center; font-weight: bold;">{{ m.count }}</td>
+                        <td style="text-align: center; color: #64748b;">{{ m.porc }}%</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" style="text-align: center; color: #94a3b8;">Sin datos</td></tr>
+                    {% endfor %}
+                </table>
+            </td>
+            <td style="width: 2%;"></td>
+            <td style="width: 49%; vertical-align: top;">
+                <table class="tabla-resumen">
+                    <tr><th colspan="3">Por categoría ocupacional</th></tr>
+                    {% for c in categorias_ordenadas %}
+                    <tr>
+                        <td>{{ c.nombre }}</td>
+                        <td style="text-align: center; font-weight: bold;">{{ c.count }}</td>
+                        <td style="text-align: center; color: #64748b;">{{ c.porc }}%</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td>Mujeres / Hombres</td>
+                        <td style="text-align: center; font-weight: bold;">{{ total_mujeres }} / {{ total_hombres }}</td>
+                        <td style="text-align: center; color: #64748b;">{{ porc_mujeres }}%</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <table class="data-table" repeat="1">
+        <thead>
+            <tr>
+                <th class="th-main th-main-dark" style="width: 8%;">Exp.</th>
+                <th class="th-main th-main-dark" style="width: 20%;">Nombre y Apellidos</th>
+                <th class="th-main th-main-dark" style="width: 18%;">Cargo</th>
+                <th class="th-main th-main-blue" style="width: 16%;">Unidad</th>
+                <th class="th-main th-main-blue" style="width: 16%;">Motivo</th>
+                <th class="th-main th-main-orange" style="width: 8%;">F. Alta</th>
+                <th class="th-main th-main-orange" style="width: 6%;">Días</th>
+                <th class="th-main th-main-orange" style="width: 8%;">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in filas_documento %}
+            <tr class="row-cargo">
+                <td>{{ f.expediente }}</td>
+                <td class="td-nombre">{{ f.nombre }}</td>
+                <td class="td-nombre">{{ f.cargo }}</td>
+                <td>{{ f.unidad }}</td>
+                <td>{{ f.motivo }}</td>
+                <td>{{ f.fecha_alta|date:"d/m/Y" }}</td>
+                <td class="bold">{{ f.dias_restantes|default_if_none:"-" }}</td>
+                <td class="{% if f.estado == 'Crítico' %}estado-critico{% elif f.estado == 'Advertencia' %}estado-alerta{% elif f.estado == 'Vigente' %}estado-vigente{% endif %}">{{ f.estado }}</td>
+            </tr>
+            {% empty %}
+            <tr class="row-cargo"><td colspan="8">No hay contratos determinados en el alcance de este informe.</td></tr>
+            {% endfor %}
+
+            <tr class="row-total">
+                <td colspan="6" class="td-nombre">Total de contratos determinados</td>
+                <td colspan="2">{{ total_contratos }}</td>
+            </tr>
+        </tbody>
+    </table>
+{% endblock %}

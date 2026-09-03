@@ -1009,3 +1009,76 @@ class TrabajadoresPorUEB(BaseInformes):
                                     {'ueb': self.unidad.pk})
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta['Content-Type'], 'application/pdf')
+
+
+class ExportacionesDeMisionesYMotivos(BaseInformes):
+    """Las cuatro exportaciones nuevas: Misiones y Contratos Determinados.
+
+    Los dos informes tenían pantalla y nada más. Se comprueba que salen, que
+    respetan el filtro de unidad y que la estructura que alimenta al documento
+    es la que las plantillas esperan.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.contrato.mision = True
+        cls.contrato.pais = 'Venezuela'
+        cls.contrato.save()
+
+    # --- Misiones --------------------------------------------------------
+
+    def test_misiones_agrupa_por_unidad(self):
+        respuesta = self.client.get(reverse('informe_misiones'))
+        unidades = respuesta.context['misiones_por_unidad']
+        self.assertEqual([u['nombre'] for u in unidades], ['UEB Central'])
+        self.assertEqual(unidades[0]['total'], 1)
+        self.assertEqual(respuesta.context['total_misiones'], 1)
+        self.assertEqual(respuesta.context['paises'], 1)
+
+    def test_misiones_exporta_a_word_y_pdf(self):
+        word = self.client.get(reverse('exportar_misiones_word'))
+        self.assertEqual(word.status_code, 200)
+        self.assertTrue(word.content.startswith(b'PK'))
+
+        pdf = self.client.get(reverse('exportar_misiones_pdf'))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+    def test_misiones_respeta_el_filtro_de_unidad(self):
+        """Filtrando por la otra unidad no queda nadie en misión."""
+        respuesta = self.client.get(reverse('informe_misiones'),
+                                    {'ueb': self.otra_unidad.pk})
+        self.assertEqual(respuesta.context['total_misiones'], 0)
+        self.assertEqual(respuesta.context['misiones_por_unidad'], [])
+
+    # --- Contratos Determinados ------------------------------------------
+
+    def test_motivos_arma_una_lista_plana_para_el_documento(self):
+        """La pantalla agrupa en tres niveles; el documento necesita filas."""
+        respuesta = self.client.get(reverse('informe_motivos_contrato'))
+        filas = respuesta.context['filas_documento']
+        self.assertEqual(len(filas), respuesta.context['total_contratos'])
+        if filas:
+            for clave in ('tipo', 'motivo', 'unidad', 'expediente', 'nombre',
+                          'cargo', 'estado', 'fecha_alta_texto'):
+                self.assertIn(clave, filas[0])
+
+    def test_motivos_exporta_a_word_y_pdf(self):
+        word = self.client.get(reverse('exportar_motivos_word'))
+        self.assertEqual(word.status_code, 200)
+        self.assertTrue(word.content.startswith(b'PK'))
+
+        pdf = self.client.get(reverse('exportar_motivos_pdf'))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+    def test_los_documentos_llevan_la_fecha_de_generacion(self):
+        """Un documento archivado tiene que decir cuándo se sacó. La fecha la
+        pone `_cabecera_documento`, común a todos los informes."""
+        for nombre in ('informe_misiones', 'informe_motivos_contrato',
+                       'informe_trabajadores_ueb', 'informe_puestos_clave'):
+            with self.subTest(informe=nombre):
+                contexto = self.client.get(reverse(nombre)).context
+                self.assertTrue(contexto['fecha_generacion'])
+                self.assertIn('cab_provincia', contexto)
