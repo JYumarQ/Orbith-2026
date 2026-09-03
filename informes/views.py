@@ -784,6 +784,11 @@ class ExportarPuestosClaveWordView(InformePuestosClaveView):
         context = self.get_context_data(**kwargs)
         context['ueb'] = _nombre_del_alcance(request)
 
+        # La plantilla NO se edita a mano: la fabrica
+        # `plantillas_word/generadores/crear_puestos_clave.py`. Su tabla lleva
+        # diez filas que parecen vacías y en realidad son las etiquetas de los
+        # bucles de docxtpl; borrar una al retocar el documento en Word deja el
+        # informe vacío sin dar ningún error.
         template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'puestos_clave_template.docx')
 
         try:
