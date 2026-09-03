@@ -17,16 +17,20 @@
     }
     .btn-export:active { transform: scale(0.96); }
 
-    /* Botón PDF (Naranja/Rojo estilo Outline) */
+    /* Botón PDF. Sólido, gemelo del de Word: era el único «outline» de la
+       barra —fondo transparente y borde rojo— y al lado de un botón relleno no
+       parecía un botón, sino un texto con recuadro. Solo se llenaba de rojo al
+       pasar por encima, que es justo cuando ya no hace falta la pista. */
     .btn-pdf {
-        background-color: transparent;
-        color: #ff3e1d;
-        border: 2px solid #ff3e1d;
+        background: linear-gradient(135deg, #ff5b3d 0%, #e0341a 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 10px rgba(255, 62, 29, 0.3);
     }
     .btn-pdf:hover {
-        background-color: #ff3e1d;
+        box-shadow: 0 6px 15px rgba(255, 62, 29, 0.4);
+        transform: translateY(-2px);
         color: #fff;
-        box-shadow: 0 5px 15px rgba(255, 62, 29, 0.3);
     }
 
     /* Botón Word (Azul Degradado) */
@@ -105,7 +109,7 @@
             </div>
         </div>
 
-        <div class="d-flex flex-column flex-md-row align-items-center gap-3 ms-xl-auto pe-xl-5 me-xl-5">
+        <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-xl-end gap-3 ms-xl-auto">
 
             {% comment %} Un <select> normal y corriente: `select_unificado.js` lo
                convierte con el mismo Select2 —tema, alto, buscador— que los de Unidad
@@ -114,7 +118,21 @@
                Antes iba envuelto en un `input-group` con borde e icono propios y se
                inicializaba aparte SIN buscador, asi que era el unico control de la
                aplicacion con otro aspecto y otro comportamiento. {% endcomment %}
-            <div style="min-width: 260px; width: 100%; max-width: 350px;">
+            {% comment %} FILTRO DE UNIDAD ORGANIZATIVA
+               Vive aqui, en la barra del titulo, y no dentro de cada informe: es el
+               unico filtro que tienen los SEIS, y hasta ahora cada pantalla lo
+               montaba en una tarjeta propia, con su icono y su rotulo. El resultado
+               era que el mismo filtro aparecia en un sitio distinto segun el informe.
+
+               Los filtros PROPIOS de cada informe —Tipo de Familia, o el conmutador
+               Desglosado/Consolidado de Puestos Clave— se quedan en su tarjeta: son
+               de ese informe y solo de ese. {% endcomment %}
+            <div class="d-flex align-items-center gap-2" style="flex: 1 1 250px; min-width: 250px; max-width: 340px;">
+                <i class="bx bx-buildings fs-5 text-primary flex-shrink-0" title="Filtro por Unidad Organizativa"></i>
+                {% include 'pages/informes/partials/filtro_unidades.html' %}
+            </div>
+
+            <div style="flex: 1 1 230px; min-width: 230px; max-width: 320px;">
                 <select id="selector-informes" class="form-select" title="Elegir informe">
                     <option value="{% url 'informe_economia' %}">Consolidado F. Trabajo</option>
                     <option value="{% url 'informe_trabajadores_ueb' %}">Trabajadores x UEB</option>

@@ -63,17 +63,9 @@
 
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Registro Diario por Trabajadores" %}
 
-    <div class="card card-moderna mb-4 bg-white">
-        <div class="card-header py-3 d-flex align-items-center flex-wrap gap-3">
-            <div class="me-2">
-                <small class="text-muted fw-bold" style="font-size: 11px;"><i class="bx bx-filter-alt me-1 text-primary"></i>Filtros de Análisis</small>
-            </div>
-            
-            <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
-                {% include 'pages/informes/partials/filtro_unidades.html' %}
-            </form>
-        </div>
-    </div>
+    {% comment %} Este informe no tiene filtros propios: el único que usaba era el de
+       Unidad Organizativa, que ahora vive en la barra del título. La tarjeta que lo
+       contenía se quedaba vacía, así que desaparece. {% endcomment %}
 
     <div class="row g-4">
         

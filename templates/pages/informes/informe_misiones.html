@@ -26,17 +26,7 @@
     
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Misiones Internacionales" %}
 
-    {% comment %} Este informe no tenía filtro por unidad: la barra es la misma
-       que la de los demás informes, con el partial común. {% endcomment %}
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body py-3 d-flex align-items-center flex-wrap gap-3">
-            <small class="text-muted fw-bold" style="font-size: 11px;">
-                <i class="bx bx-filter-alt me-1 text-primary"></i>Filtro por Unidad
-            </small>
-            {% include 'pages/informes/partials/filtro_unidades.html' %}
-        </div>
-    </div>
-
+    
     <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4">
         
         <div class="card-body bg-slate-50 pt-3 pb-2 border-bottom border-slate-200">

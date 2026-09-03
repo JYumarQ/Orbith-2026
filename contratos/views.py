@@ -1748,7 +1748,13 @@ class ModeloMovimientoDocxView(View):
 
         # --- GENERACIÓN DEL DOCUMENTO ---
         try:
-            template_path = os.path.join(settings.BASE_DIR, 'templates', 'pages', 'reportes', '13-MOVIMIENTO DE NOMINAS.docx')
+            # Todas las plantillas de Word viven juntas en `plantillas_word/`.
+            # Esta estaba suelta dentro de `templates/`, que es la carpeta de las
+            # plantillas HTML de Django: un .docx ahí no lo encuentra nadie que
+            # vaya a buscarlo, y Django además rastrea ese directorio.
+            template_path = os.path.join(
+                settings.BASE_DIR, 'plantillas_word', 'documentos_legales',
+                '13-MOVIMIENTO DE NOMINAS.docx')
             doc = DocxTemplate(template_path)
             doc.render(context)
             

@@ -15,15 +15,9 @@
     <div class="row">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
-                <div class="card-header border-bottom bg-transparent py-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
-                    <h5 class="mb-0 text-primary fw-bold"><i class="bx bx-filter-alt me-1"></i> Filtro por Unidad</h5>
-                    
-                    {% comment %} El filtro pasó a ser el partial común a los seis informes:
-                       admite varias unidades y recarga la página en vez de intercambiar solo
-                       el <tbody> por HTMX. El intercambio parcial ya no servía porque el
-                       filtro tiene que conservar `fuente` y `periodo` en la URL para que
-                       cambiar de unidad no te devuelva de un cierre a los datos de hoy. {% endcomment %}
-                    {% include 'pages/informes/partials/filtro_unidades.html' %}
+                <div class="card-header border-bottom bg-transparent py-3">
+                    <h5 class="mb-0 text-primary fw-bold">Consolidado de la Fuerza de Trabajo</h5>
+                    <small class="text-muted">Plantilla aprobada, cubierta y contratada por categoría ocupacional.</small>
                 </div>
 
                 <div class="table-responsive text-nowrap mt-2 pb-3">

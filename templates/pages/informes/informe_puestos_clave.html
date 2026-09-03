@@ -90,7 +90,9 @@
             </div>
             
             <form id="form-filtros" class="d-flex align-items-center gap-2 m-0 flex-grow-1" method="GET">
-                {% include 'pages/informes/partials/filtro_unidades.html' %}
+                {% comment %} Solo los filtros PROPIOS de este informe. El de Unidad
+                   Organizativa subió a la barra del título: es el único común a los
+                   seis informes. {% endcomment %}
                 <div class="input-group shadow-sm me-auto" style="width: auto; border: 1px solid #fd7e14; border-radius: 6px; overflow: hidden;">
                     <span class="input-group-text bg-white border-0 text-warning"><i class="bx bx-filter-alt"></i></span>
                     <select name="tipo_familia" class="form-select border-0 shadow-none bg-white text-warning fw-bold" onchange="this.form.submit()">
