@@ -71,6 +71,19 @@
   </div>
 {% endif %}
 
+{% comment %} Los tres botones siguientes cambian de pestaña DENTRO del panel de
+   Subsanación (#paneHallazgos, #paneDashboard, #paneAnalisis). Cuando la cadena la
+   arranca el botón «Ejecutar todos los análisis» de la lista de Usuarios
+   (`origen = MANTENIMIENTO`), esas pestañas no existen en la página y el
+   `querySelector(...).click()` reventaría, así que allí se ofrece un simple enlace
+   al módulo. {% endcomment %}
+{% if ejecucion.origen == 'GLO' %}
+<div class="d-flex flex-wrap gap-2 mt-3">
+  <a class="btn btn-sm btn-primary" href="{% url 'subsanacion:index' %}">
+    <i class="bi bi-list-check me-1"></i>Ver los hallazgos en Subsanación
+  </a>
+</div>
+{% else %}
 <div class="d-flex flex-wrap gap-2 mt-3">
   <button class="btn btn-sm btn-primary"
           hx-get="{% url 'subsanacion:panel_hallazgos' %}"
@@ -90,3 +103,4 @@
     <i class="bi bi-arrow-clockwise me-1"></i>Analizar otra vez
   </button>
 </div>
+{% endif %}

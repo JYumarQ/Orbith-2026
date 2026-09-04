@@ -671,3 +671,118 @@ def guardar_preferencias(request):
         'sidebar_colapsada': preferencias.sidebar_colapsada,
         'animaciones_activas': preferencias.animaciones_activas,
     })
+
+# =========================================================================
+# «EJECUTAR TODOS LOS ANÁLISIS» (solo Administrador)
+#
+# Los tres procesos de mantenimiento de Orbith (escaneo de incidencias,
+# recordatorios y análisis de integridad de Subsanación) estaban pensados para
+# correr como tareas programadas del sistema operativo —de ahí los comandos
+# `escanear_incidencias` y `analizar_integridad`—, pero en este despliegue no hay
+# acceso para configurarlas, así que en la práctica solo corrían si alguien
+# pulsaba tres botones repartidos por dos pantallas. Este botón los junta.
+#
+# Dos decisiones importantes:
+#
+# 1) Alcance GLOBAL, no el del administrador que pulsa. Se llama a
+#    `escanear_globalmente_y_notificar_por_unidad()`, la misma función que usa el
+#    comando de consola, y NO a `escanear_para_usuario()` (la del botón «Buscar
+#    incidencias»), que solo crea notificaciones para quien lo pulsa. Aquí se
+#    reparte cada hallazgo a los destinatarios de SU unidad, que es lo que se
+#    espera de un mantenimiento de toda la empresa.
+#
+# 2) El análisis de Subsanación NO se ejecuta aquí dentro. No cabe en una sola
+#    petición: `subsanacion/views.py::ejecutar_modulo` documenta que la cadena
+#    está troceada por categorías precisamente para no pasar el límite de tiempo
+#    de Gunicorn, ya que el proyecto no tiene workers de fondo. Esta vista solo
+#    ABRE la ejecución y devuelve el primer eslabón de esa cadena, que continúa
+#    sola por HTMX contra las URLs que ya existen en Subsanación.
+# =========================================================================
+
+@require_POST
+def ejecutar_todos_los_analisis(request):
+    """Encadena los tres procesos de mantenimiento y devuelve el parcial de progreso.
+
+    Los dos primeros pasos (incidencias y recordatorios) son rápidos y se resuelven
+    en esta misma petición. El tercero solo se arranca: la plantilla devuelta lleva
+    el disparador HTMX que va ejecutando las categorías una a una.
+    """
+    from notificaciones.escaneo import escanear_globalmente_y_notificar_por_unidad
+    from notificaciones.recordatorios import generar_recordatorios
+    from subsanacion import servicios
+    from subsanacion.constantes import CLAVES_MODULOS, ETIQUETA_MODULO, MODULOS
+    from subsanacion.models import EjecucionAnalisis
+    from subsanacion.reglas import total_reglas
+    from subsanacion.servicios import AnalisisEnCurso
+
+    contexto = {'pasos': [], 'ejecucion': None}
+
+    def _paso(etiqueta, funcion):
+        """Ejecuta un paso y lo traduce a una línea de resultado.
+
+        Cada paso se aísla: si el escaneo falla, los recordatorios deben correr
+        igual. Ninguno de los dos deja la base de datos a medias —ambos son
+        idempotentes y se reconcilian en la pasada siguiente—, así que abortar
+        todo por un fallo parcial daría menos información y ninguna seguridad
+        extra.
+        """
+        try:
+            return funcion(), None
+        except Exception as exc:                     # noqa: BLE001
+            logger.exception('Falló el paso «%s» de Ejecutar todos los análisis', etiqueta)
+            contexto['pasos'].append({'etiqueta': etiqueta, 'error': str(exc)})
+            return None, exc
+
+    resumen_incidencias, fallo = _paso('Búsqueda de incidencias',
+                                       escanear_globalmente_y_notificar_por_unidad)
+    if fallo is None:
+        detalle = (f"{resumen_incidencias['notificados']} incidencia(s) notificada(s) "
+                   f"a los destinatarios de cada unidad")
+        if resumen_incidencias['sin_unidad']:
+            detalle += (f"; {resumen_incidencias['sin_unidad']} sin unidad organizativa "
+                        f"se enviaron a los administradores")
+        contexto['pasos'].append({'etiqueta': 'Búsqueda de incidencias', 'detalle': detalle})
+
+    resumen_recordatorios, fallo = _paso('Actualización de recordatorios',
+                                         generar_recordatorios)
+    if fallo is None:
+        detalle = f"{resumen_recordatorios['generados']} recordatorio(s) actualizado(s)"
+        if resumen_recordatorios['sin_unidad']:
+            detalle += (f"; {resumen_recordatorios['sin_unidad']} sin unidad organizativa "
+                        f"se enviaron a los administradores")
+        contexto['pasos'].append({'etiqueta': 'Actualización de recordatorios',
+                                  'detalle': detalle})
+
+    # --- Tercer paso: solo se abre la ejecución; la cadena sigue por HTMX ---
+    try:
+        ejecucion = servicios.iniciar_ejecucion(
+            usuario=request.user, origen=EjecucionAnalisis.MANTENIMIENTO)
+    except AnalisisEnCurso as exc:
+        minutos = 0
+        if exc.ejecucion is not None:
+            minutos = int((timezone.now() - exc.ejecucion.iniciada_en).total_seconds() // 60)
+        contexto['pasos'].append({
+            'etiqueta': 'Análisis de la base de datos',
+            'error': (f'Ya había un análisis en curso, iniciado hace {minutos} minuto(s), '
+                      f'así que este no se lanzó. Los dos pasos anteriores sí se '
+                      f'completaron.'),
+        })
+        return render(request, 'pages/usuarios/partials/analisis_global.html', contexto)
+
+    if total_reglas() == 0:
+        servicios.finalizar_ejecucion(ejecucion)
+        contexto['pasos'].append({
+            'etiqueta': 'Análisis de la base de datos',
+            'error': 'No hay ninguna regla de diagnóstico activa, así que no había nada '
+                     'que analizar.',
+        })
+        return render(request, 'pages/usuarios/partials/analisis_global.html', contexto)
+
+    solicitados = list(ejecucion.modulos_solicitados or CLAVES_MODULOS)
+    contexto.update({
+        'ejecucion': ejecucion,
+        'modulos': MODULOS,
+        'primer_modulo': solicitados[0] if solicitados else None,
+        'etiqueta_primero': ETIQUETA_MODULO.get(solicitados[0]) if solicitados else '',
+    })
+    return render(request, 'pages/usuarios/partials/analisis_global.html', contexto)

@@ -33,6 +33,12 @@ urlpatterns = [
     path('validar_username/', admin_required(views.validar_username), name='validar_username'),
     path('search_usuarios/', admin_required(views.search_usuarios), name='search_usuarios'),
 
+    # Mantenimiento de datos: los tres análisis de la aplicación en un solo botón
+    # (ver el comentario largo en `views.ejecutar_todos_los_analisis`).
+    path('usuarios/ejecutar-todos-los-analisis/',
+         admin_required(views.ejecutar_todos_los_analisis),
+         name='ejecutar_todos_los_analisis'),
+
     # --- MANTENIMIENTO Y SESIONES (solo Administrador) ---
     path('mantenimiento/activar/', admin_required(views.activar_mantenimiento), name='activar_mantenimiento'),
     path('mantenimiento/desactivar/', admin_required(views.desactivar_mantenimiento), name='desactivar_mantenimiento'),

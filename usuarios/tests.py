@@ -594,3 +594,117 @@ class BorradoDeAdministradoresTests(TestCase):
 
         victima.refresh_from_db()
         self.assertTrue(victima.is_active)
+
+
+class EjecutarTodosLosAnalisisTests(TestCase):
+    """Botón «Ejecutar todos los análisis» de la lista de Usuarios.
+
+    Se comprueba el contrato de la vista, no lo que detecta cada regla: que solo
+    entre un Administrador, que use el escaneo GLOBAL (no el del usuario que pulsa),
+    que arranque la cadena de Subsanación y que un análisis ya en curso no impida los
+    dos pasos anteriores.
+    """
+
+    def setUp(self):
+        self.url = reverse('ejecutar_todos_los_analisis')
+        self.admin = CustomUser.objects.create_user(
+            username='admin_analisis', password='ClaveSegura123', es_admin=True,
+        )
+        self.moderador = CustomUser.objects.create_user(
+            username='mod_analisis', password='ClaveSegura123', es_moderador=True,
+        )
+
+    def test_un_moderador_no_puede_lanzarlo(self):
+        self.client.login(username='mod_analisis', password='ClaveSegura123')
+
+        respuesta = self.client.post(self.url)
+
+        self.assertEqual(respuesta.status_code, 403)
+
+    def test_get_no_esta_permitido(self):
+        self.client.login(username='admin_analisis', password='ClaveSegura123')
+
+        respuesta = self.client.get(self.url)
+
+        self.assertEqual(respuesta.status_code, 405)
+
+    def test_ejecuta_los_tres_pasos_y_abre_la_ejecucion(self):
+        from unittest.mock import patch
+
+        from subsanacion.models import EjecucionAnalisis
+
+        self.client.login(username='admin_analisis', password='ClaveSegura123')
+
+        with patch('notificaciones.escaneo.escanear_globalmente_y_notificar_por_unidad',
+                   return_value={'notificados': 3, 'sin_unidad': 1}) as escaneo, \
+             patch('notificaciones.recordatorios.generar_recordatorios',
+                   return_value={'generados': 2, 'sin_unidad': 0}) as recordatorios:
+            respuesta = self.client.post(self.url)
+
+        self.assertEqual(respuesta.status_code, 200)
+        escaneo.assert_called_once_with()
+        recordatorios.assert_called_once_with()
+
+        contenido = respuesta.content.decode()
+        self.assertIn('3 incidencia(s) notificada(s)', contenido)
+        self.assertIn('2 recordatorio(s) actualizado(s)', contenido)
+
+        # El tercer paso solo se ABRE: la cadena continúa por HTMX.
+        ejecucion = EjecucionAnalisis.objects.get()
+        self.assertEqual(ejecucion.estado, EjecucionAnalisis.EN_CURSO)
+        self.assertEqual(ejecucion.origen, EjecucionAnalisis.MANTENIMIENTO)
+        self.assertEqual(ejecucion.lanzada_por, self.admin)
+
+    def test_usa_el_escaneo_global_y_no_el_del_usuario_que_pulsa(self):
+        """`escanear_para_usuario()` solo notifica a quien pulsa; aquí no sirve."""
+        from unittest.mock import patch
+
+        self.client.login(username='admin_analisis', password='ClaveSegura123')
+
+        with patch('notificaciones.escaneo.escanear_para_usuario') as por_usuario, \
+             patch('notificaciones.escaneo.escanear_globalmente_y_notificar_por_unidad',
+                   return_value={'notificados': 0, 'sin_unidad': 0}), \
+             patch('notificaciones.recordatorios.generar_recordatorios',
+                   return_value={'generados': 0, 'sin_unidad': 0}):
+            self.client.post(self.url)
+
+        por_usuario.assert_not_called()
+
+    def test_un_analisis_en_curso_no_impide_los_dos_primeros_pasos(self):
+        from unittest.mock import patch
+
+        from subsanacion.models import EjecucionAnalisis
+
+        EjecucionAnalisis.objects.create(estado=EjecucionAnalisis.EN_CURSO)
+        self.client.login(username='admin_analisis', password='ClaveSegura123')
+
+        with patch('notificaciones.escaneo.escanear_globalmente_y_notificar_por_unidad',
+                   return_value={'notificados': 5, 'sin_unidad': 0}) as escaneo, \
+             patch('notificaciones.recordatorios.generar_recordatorios',
+                   return_value={'generados': 1, 'sin_unidad': 0}) as recordatorios:
+            respuesta = self.client.post(self.url)
+
+        self.assertEqual(respuesta.status_code, 200)
+        escaneo.assert_called_once_with()
+        recordatorios.assert_called_once_with()
+        self.assertIn('Ya hab\u00eda un an\u00e1lisis en curso', respuesta.content.decode())
+        # No se abrió una segunda ejecución.
+        self.assertEqual(EjecucionAnalisis.objects.count(), 1)
+
+    def test_si_falla_un_paso_los_demas_siguen(self):
+        from unittest.mock import patch
+
+        from subsanacion.models import EjecucionAnalisis
+
+        self.client.login(username='admin_analisis', password='ClaveSegura123')
+
+        with patch('notificaciones.escaneo.escanear_globalmente_y_notificar_por_unidad',
+                   side_effect=RuntimeError('fallo simulado')), \
+             patch('notificaciones.recordatorios.generar_recordatorios',
+                   return_value={'generados': 4, 'sin_unidad': 0}) as recordatorios:
+            respuesta = self.client.post(self.url)
+
+        self.assertEqual(respuesta.status_code, 200)
+        recordatorios.assert_called_once_with()
+        self.assertIn('fallo simulado', respuesta.content.decode())
+        self.assertEqual(EjecucionAnalisis.objects.count(), 1)

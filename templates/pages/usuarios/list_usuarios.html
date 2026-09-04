@@ -95,6 +95,22 @@
           </button>
 
           {% if request.user.es_admin %}
+          {% comment %} Los tres procesos de mantenimiento (incidencias, recordatorios
+             y análisis de integridad) en un solo botón y con alcance de TODA la
+             empresa. Ver `usuarios/views.py::ejecutar_todos_los_analisis`. {% endcomment %}
+          <button type="button" class="btn btn-sm btn-outline-info"
+              id="btn-ejecutar-analisis"
+              title="Busca incidencias, actualiza los recordatorios y analiza la base de datos, para todas las unidades"
+              hx-post="{% url 'ejecutar_todos_los_analisis' %}"
+              hx-target="#cuerpoAnalisisGlobal"
+              hx-swap="innerHTML"
+              hx-disabled-elt="this"
+              onclick="abrir_modal_analisis_global()">
+            <i class="fas fa-stethoscope"></i> Ejecutar todos los análisis
+          </button>
+          {% endif %}
+
+          {% if request.user.es_admin %}
           <span id="badge-mantenimiento"
               class="badge {% if configuracion.modo_mantenimiento %}bg-label-danger{% else %}bg-label-success{% endif %}">
             {% if configuracion.modo_mantenimiento %}🔧 Mantenimiento ACTIVO{% else %}Mantenimiento inactivo{% endif %}
@@ -149,12 +165,40 @@
 <div class="modal fade" id="cambiar_password" tabindex="-1" role="dialog" aria-hidden="true"></div>
 <div class="modal fade" id="eliminar_usuario" tabindex="-1" role="dialog" aria-hidden="true"></div>
 
+{% if request.user.es_admin %}
+{% comment %} Progreso de «Ejecutar todos los análisis». `data-bs-backdrop="static"` y
+   sin botón de cerrar mientras corre: la cadena de Subsanación avanza con una petición
+   HTMX por categoría y, si se cierra a medias, la ejecución queda incompleta (el propio
+   fragmento de progreso lo advierte). {% endcomment %}
+<div class="modal fade" id="analisis_global" tabindex="-1" role="dialog" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-stethoscope me-2"></i>Mantenimiento de datos
+        </h5>
+      </div>
+      <div class="modal-body" id="cuerpoAnalisisGlobal">
+        <div class="d-flex align-items-center gap-2">
+          <div class="spinner-border spinner-border-sm"></div>
+          <span class="small">Buscando incidencias y actualizando recordatorios…</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 
 {% endblock %}
 
-{# `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
-   bloque dos veces en la página (una en su hueco de la plantilla base y otra
-   arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
+{% comment %} `extra_scripts` fuera de `content`: anidado dentro, Django escribía
+   este bloque dos veces en la página (una en su hueco de la plantilla base y otra
+   arrastrado por `content`), ejecutando el mismo <script> por duplicado. {% endcomment %}
 {% block extra_scripts %}
 <script type="text/javascript">
   var $ = jQuery.noConflict();
@@ -230,6 +274,17 @@ function showToast(message, type = 'success') {
               }
           });
       });
+  }
+
+  /* «Ejecutar todos los análisis»: HTMX ya lanza el POST y pinta el resultado en
+     #cuerpoAnalisisGlobal; esto solo abre el modal y restaura el mensaje de espera,
+     porque al reabrirlo el cuerpo conservaría el resultado de la vez anterior. */
+  function abrir_modal_analisis_global() {
+    document.getElementById('cuerpoAnalisisGlobal').innerHTML =
+      '<div class="d-flex align-items-center gap-2">' +
+      '<div class="spinner-border spinner-border-sm"></div>' +
+      '<span class="small">Buscando incidencias y actualizando recordatorios…</span></div>';
+    $('#analisis_global').modal('show');
   }
 
   function abrir_modal_cambiar_password(url) {
@@ -366,12 +421,20 @@ function showToast(message, type = 'success') {
     });
   }
 
-  // `var`, no `const`: el bloque "extra_scripts" de esta página se renderiza dos
-  // veces (una vía base/scripts.html, otra vía base/base.html — ambas plantillas
-  // declaran ese mismo bloque), así que este script se ejecuta dos veces.
-  // `const`/`let` de nivel superior lanzarían "already been declared" en la
-  // segunda ejecución; `var` se puede redeclarar sin error, igual que el
-  // `var $ = jQuery.noConflict()` de arriba.
+  // `var`, no `const`, por precaución histórica: cuando `extra_scripts` estaba
+  // anidado dentro de `content`, Django escribía este bloque DOS veces en la
+  // página y los `const`/`let` de nivel superior rompían la segunda copia con
+  // "already been declared". Eso ya no ocurre —el bloque está fuera de `content`
+  // (ver el comentario junto a la apertura del bloque) y hoy se renderiza una
+  // sola vez—, pero se mantiene `var` porque no cuesta nada y sobrevive a que
+  // alguien vuelva a anidar el bloque por error.
+  //
+  // Ojo con una explicación que circulaba aquí y es FALSA: que se duplicaba
+  // porque `base/base.html` y `base/scripts.html` declaran ambas el bloque. No es
+  // así: `base.html` INCLUYE a `scripts.html` con la etiqueta `include`, y un
+  // `include` no participa en la herencia de bloques, de modo que el
+  // `extra_scripts` de `scripts.html`
+  // sale siempre vacío y una plantilla hija jamás puede rellenarlo.
   var btnToggleMantenimiento = document.getElementById('btn-toggle-mantenimiento');
   if (btnToggleMantenimiento) {
     btnToggleMantenimiento.addEventListener('click', function() {

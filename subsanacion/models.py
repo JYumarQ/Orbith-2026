@@ -51,10 +51,18 @@ class EjecucionAnalisis(models.Model):
     MANUAL = 'MAN'
     COMANDO = 'CMD'
     PROGRAMADA = 'PRG'
+    # Lanzada desde el botón «Ejecutar todos los análisis» de la lista de Usuarios,
+    # que antes de este análisis corre el escaneo global de incidencias y los
+    # recordatorios. Se distingue de MANUAL por dos razones: en el historial deja
+    # constancia de que esa pasada sí cubrió los tres procesos, y el resumen final
+    # necesita saberlo para no ofrecer los botones de pestaña de Subsanación
+    # («Ver los hallazgos», «Ir al dashboard»), que fuera de esa pantalla no existen.
+    MANTENIMIENTO = 'GLO'
     ORIGENES = [
         (MANUAL, 'Manual (desde la interfaz)'),
         (COMANDO, 'Comando de consola'),
         (PROGRAMADA, 'Programada'),
+        (MANTENIMIENTO, 'Mantenimiento (todos los análisis)'),
     ]
 
     estado = models.CharField(

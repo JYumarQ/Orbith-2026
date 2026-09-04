@@ -1,0 +1,40 @@
+{% comment %} Resultado de «Ejecutar todos los análisis» (lista de Usuarios).
+
+   Los dos primeros pasos ya vienen resueltos desde la vista. El tercero —el análisis
+   de integridad de Subsanación— NO cabe en una sola petición, así que aquí solo se
+   incrusta el arranque de su cadena HTMX: `progreso_analisis.html` es el mismo
+   fragmento que usa el panel de Subsanación y va encadenando una categoría por
+   petición contra las URLs de ese módulo. No se duplica nada de esa lógica.
+
+   Los estilos `.sub-paso*` viven en `pages/subsanacion/index.html`, que no se carga
+   en esta pantalla; por eso se repiten aquí abajo, acotados al modal. {% endcomment %}
+
+<style>
+  #cuerpoAnalisisGlobal .sub-paso {
+    display: flex; align-items: center; gap: .625rem;
+    padding: .5rem .75rem; border-radius: .375rem; font-size: .8125rem;
+  }
+  #cuerpoAnalisisGlobal .sub-paso + .sub-paso { margin-top: .25rem; }
+  #cuerpoAnalisisGlobal .sub-paso-hecho { background: #ecfdf5; color: #065f46; }
+  #cuerpoAnalisisGlobal .sub-paso-curso { background: #eef2ff; color: #3730a3; }
+  #cuerpoAnalisisGlobal .sub-paso-error { background: #fef2f2; color: #991b1b; }
+</style>
+
+{% for paso in pasos %}
+  {% if paso.error %}
+    <div class="sub-paso sub-paso-error">
+      <i class="bi bi-exclamation-octagon"></i>
+      <span><strong>{{ paso.etiqueta }}</strong> — {{ paso.error }}</span>
+    </div>
+  {% else %}
+    <div class="sub-paso sub-paso-hecho">
+      <i class="bi bi-check-circle-fill"></i>
+      <span><strong>{{ paso.etiqueta }}</strong> — {{ paso.detalle }}</span>
+    </div>
+  {% endif %}
+{% endfor %}
+
+{% if ejecucion and ejecucion.estado == 'CUR' %}
+  <hr class="my-3">
+  {% include 'pages/subsanacion/partials/progreso_analisis.html' %}
+{% endif %}

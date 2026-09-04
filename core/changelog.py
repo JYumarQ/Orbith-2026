@@ -37,9 +37,20 @@ TIPOS_CAMBIO = {
 CHANGELOG = [
     {
         "version": "3.0.2",
-        "fecha": "2026-09-03",
+        "fecha": "2026-09-04",
         "titulo": "Los seis Informes de RRHH exportan a Word y PDF, con una imagen común",
         "cambios": [
+            ("nuevo", "Botón «Ejecutar todos los análisis» en la lista de "
+                    "Usuarios, solo para Administradores: busca incidencias, "
+                    "actualiza los recordatorios y analiza la integridad de la "
+                    "base de datos, los tres seguidos y mostrando el progreso. "
+                    "Antes había que pulsar tres botones repartidos en dos "
+                    "pantallas."),
+            ("corregido", "La búsqueda de incidencias creaba los avisos solo "
+                        "para quien pulsaba el botón. El nuevo «Ejecutar todos "
+                        "los análisis» los reparte a los destinatarios de cada "
+                        "Unidad Organizativa, y los que no tienen unidad van a "
+                        "los Administradores."),
             ("nuevo", "Los SEIS Informes de RRHH se exportan ya a Word y a PDF. "
                     "Antes solo tres tenían Word y dos, PDF: estrenan salida "
                     "Trabajadores por UEB, Misiones Internacionales, Contratos "
