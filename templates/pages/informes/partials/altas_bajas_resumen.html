@@ -1,0 +1,69 @@
+{% comment %}
+  Hoja de resumen del modelo de la UNE: los totales del mes a la izquierda y, a
+  su derecha, DOS desgloses por cargo —puestos clave y puestos no clave— con la
+  misma estructura cada uno.
+
+  El mismo trozo sirve para altas y para bajas —las dos hojas de resumen del
+  libro son idénticas salvo el rótulo—, así que se incluye dos veces con
+  `resumen` y `rotulo` distintos en vez de duplicarlo.
+
+  Se recorre `desglose_par`, que trae las dos listas ya emparejadas fila a fila
+  desde `altas_bajas.resumen()`. Los dos desgloses casi nunca miden lo mismo, y
+  emparejarlos en Python es lo que permite que las cuatro salidas —pantalla,
+  Excel, Word y PDF— recorran UNA sola lista: la de Word son bucles de docxtpl,
+  que no saben ir por dos a la vez.
+
+  Solo se listan los cargos que tuvieron movimiento. Cada desglose suma su total
+  correspondiente, y los dos juntos suman el total del mes: si alguna vez no
+  cuadraran, el error estaría en `altas_bajas.resumen()`.
+{% endcomment %}
+<div class="table-responsive">
+    <table class="inf-tabla">
+        <thead>
+            <tr>
+                <th rowspan="2">Provincia</th>
+                <th rowspan="2">Municipio</th>
+                <th rowspan="2" class="th-grupo-indigo text-center">Total {{ rotulo }}</th>
+                <th colspan="3" class="th-grupo-naranja text-center">De ellas en Cargos Claves</th>
+                <th colspan="3" class="th-grupo-indigo text-center">De ellas en Puestos NO Clave</th>
+            </tr>
+            <tr>
+                <th class="th-columna text-center">Total Puestos Clave</th>
+                <th class="th-columna">Cargo</th>
+                <th class="th-columna text-center">Cantidad</th>
+                <th class="th-columna text-center">Total Puestos NO Clave</th>
+                <th class="th-columna">Cargo</th>
+                <th class="th-columna text-center">Cantidad</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for par in resumen.desglose_par %}
+                <tr>
+                    {% if forloop.first %}
+                        <td class="td-nombre" rowspan="{{ resumen.desglose_par|length }}">{{ cab_provincia|default:"—" }}</td>
+                        <td class="td-nombre" rowspan="{{ resumen.desglose_par|length }}">{{ municipio_resumen }}</td>
+                        <td class="td-cifra td-cifra--fuerte" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total }}</td>
+                        <td class="td-cifra td-cifra--naranja" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_claves }}</td>
+                    {% endif %}
+                    <td>{{ par.cargo_clave|default:"" }}</td>
+                    <td class="td-cifra {% if par.cantidad_clave %}td-cifra--fuerte{% endif %}">{{ par.cantidad_clave }}</td>
+                    {% if forloop.first %}
+                        <td class="td-cifra td-cifra--azul" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_no_claves }}</td>
+                    {% endif %}
+                    <td>{{ par.cargo_no_clave|default:"" }}</td>
+                    <td class="td-cifra {% if par.cantidad_no_clave %}td-cifra--fuerte{% endif %}">{{ par.cantidad_no_clave }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td class="td-nombre">{{ cab_provincia|default:"—" }}</td>
+                    <td class="td-nombre">{{ municipio_resumen }}</td>
+                    <td class="td-cifra td-cifra--cero">0</td>
+                    <td class="td-cifra td-cifra--cero">0</td>
+                    <td colspan="2" class="text-muted">Sin movimiento este mes.</td>
+                    <td class="td-cifra td-cifra--cero">0</td>
+                    <td colspan="2" class="text-muted">Sin movimiento este mes.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

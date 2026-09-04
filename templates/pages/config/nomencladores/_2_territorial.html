@@ -107,11 +107,20 @@
         </div>
     </div>
 </div>
+
+{% comment %} Abreviaturas estándar de los municipios cubanos, para PROPONER la
+   sigla al escribir el nombre. Viajan con `json_script`, que las serializa de
+   forma segura; las provincias no tienen tabla y usan las tres primeras letras.
+{% endcomment %}
+{{ abreviaturas_municipios|json_script:"datosAbreviaturas" }}
+
 <script>
 
 /* ==========================================================================
    NUEVA LÓGICA: TERRITORIAL (MAESTRO-DETALLE)
    ========================================================================== */
+  const ABREVIATURAS = JSON.parse(
+      document.getElementById('datosAbreviaturas')?.textContent || '{}');
   let stateGeo = { provId: null, provName: '', muniId: null, muniName: '' };
 
   function seleccionarProvincia(tr) {
@@ -214,9 +223,32 @@
                   <small id="swal-siglas-msg" class="fw-bold d-block mt-1" style="display:none; padding: 0 1em;"></small>
               `,
               didOpen: () => {
+                  const $nombre = document.getElementById('swal-nombre');
                   const $siglas = document.getElementById('swal-siglas');
                   const $msg = document.getElementById('swal-siglas-msg');
                   let timerSiglas = null;
+
+                  /* La sigla se propone sola al escribir el nombre, en SU PROPIA
+                     casilla —que se guarda en su propia columna—. Así nadie tiene
+                     que teclear 167 siglas a mano, y sobre todo: si nadie las
+                     teclea, nadie puede teclearlas en la casilla equivocada, que
+                     es exactamente como apareció el municipio «Florida      Flo».
+
+                     Solo se propone si la casilla está VACÍA: una sigla escrita a
+                     mano no se pisa nunca. Y siempre se puede cambiar. */
+                  let siglaTocadaAMano = Boolean($siglas.value);
+
+                  $siglas.addEventListener('keydown', () => { siglaTocadaAMano = true; });
+
+                  $nombre.addEventListener('input', () => {
+                      if (siglaTocadaAMano) return;
+                      const nombre = $nombre.value.trim();
+                      if (!nombre) { $siglas.value = ''; return; }
+                      $siglas.value = (ABREVIATURAS[nombre]
+                                       || nombre.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ]/g, '')
+                                                .slice(0, 3).toUpperCase());
+                      $siglas.dispatchEvent(new Event('input'));
+                  });
 
                   $siglas.addEventListener('input', () => {
                       // Forzar solo letras mayúsculas mientras se escribe

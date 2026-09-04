@@ -1,4 +1,5 @@
 {% load informe_inteligente_extras %}
+{% load presentacion %}
 
 <div class="ii-panel">
 
@@ -33,7 +34,10 @@
                 <tr>
                     <th class="ii-col-indice">#</th>
                     {% for campo in campos_elegidos %}
-                        <th{% if campo.tipo == 'numero' %} class="text-end"{% endif %}>{{ campo.label }}</th>
+                        {% comment %} Los campos de contenido corto van centrados, aquí y en
+                           las tres exportaciones: `es_campo_corto` lo decide una sola vez
+                           en `metadata.py`. {% endcomment %}
+                        <th{% if campo.corto %} class="celda-corta"{% endif %}>{{ campo.label }}</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -44,15 +48,23 @@
                         {% for campo in campos_elegidos %}
                             {% with valor=fila|get_item:campo.key %}
                                 {% if valor == None or valor == '' %}
-                                    <td class="text-muted">—</td>
+                                    <td class="text-muted{% if campo.corto %} celda-corta{% endif %}">—</td>
+                                {% elif campo.key == 'sexo' %}
+                                    {% comment %} «F» y «M» con su color global, el mismo del
+                                       Dashboard y de los exportables. {% endcomment %}
+                                    <td class="celda-corta"><span class="sexo-insignia sexo-{{ valor }}">{{ valor }}</span></td>
+                                {% elif campo.key == 'categoria_ocupacional' %}
+                                    {% comment %} La inicial, con el color de su categoría. El
+                                       valor ya viene como inicial desde `_construir_filas`. {% endcomment %}
+                                    <td class="celda-corta"><span class="cat-insignia" style="background-color: {{ valor|color_por_inicial }};">{{ valor }}</span></td>
                                 {% elif campo.tipo == 'fecha' %}
-                                    <td>{{ valor|date:"d/m/Y" }}</td>
+                                    <td class="celda-corta">{{ valor|date:"d/m/Y" }}</td>
                                 {% elif campo.tipo == 'numero' %}
-                                    <td class="text-end font-monospace">{{ valor }}</td>
+                                    <td class="celda-corta font-monospace">{{ valor }}</td>
                                 {% elif campo.tipo == 'opcion' %}
-                                    <td><span class="ii-badge-opcion{% if campo.key == 'sexo' and valor == 'Femenino' %} ii-badge-femenino{% endif %}">{{ valor }}</span></td>
+                                    <td{% if campo.corto %} class="celda-corta"{% endif %}><span class="ii-badge-opcion">{{ valor }}</span></td>
                                 {% else %}
-                                    <td>{{ valor }}</td>
+                                    <td{% if campo.corto %} class="celda-corta"{% endif %}>{{ valor }}</td>
                                 {% endif %}
                             {% endwith %}
                         {% endfor %}

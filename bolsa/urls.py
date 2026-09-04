@@ -16,6 +16,12 @@ urlpatterns = [
     path('list_baja/', login_required(views.BajaListView.as_view()), name='list_baja'),
     path('search_baja/', login_required(views.search_bajas), name='search_bajas'),
 
+    # --- SELECTOR DE ASPIRANTES PARA CONTRATAR (modal) ---
+    # Lo piden por HTMX la Lista de Contratos y el Gestor de Cargos, para no
+    # tener que ir hasta la Lista de Aspirantes solo para empezar un contrato.
+    path('seleccionar_aspirante/', views.seleccionar_aspirante,
+         name='seleccionar_aspirante'),
+
     # --- UTILIDADES ---
     path('validar_datos/', login_required(views.validar_datos_aspirante), name='validar_datos_aspirante'),
 ]

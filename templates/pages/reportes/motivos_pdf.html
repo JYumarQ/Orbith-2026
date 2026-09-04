@@ -15,6 +15,9 @@
 {% block titulo_informe %}Contratos Determinados por Motivo{% endblock %}
 
 {% block estilos_extra %}
+        /* Color global del sexo, el mismo de la pantalla y del Excel. */
+        .sexo-F { color: #db2777; font-weight: bold; }
+        .sexo-M { color: #03c3ec; font-weight: bold; }
         .estado-critico { color: #dc2626; font-weight: bold; }
         .estado-alerta { color: #ea580c; font-weight: bold; }
         .estado-vigente { color: #059669; font-weight: bold; }
@@ -134,7 +137,7 @@
                             <td class="td-nombre">{{ f.contrato.aspirante_nombre }}</td>
                             <td class="td-nombre">{{ f.unidad }}</td>
                             <td class="td-nombre">{{ f.contrato.ncargo_descripcion|default:"-" }}</td>
-                            <td>{{ f.contrato.sexo }}</td>
+                            <td class="sexo-{{ f.contrato.sexo }}">{{ f.contrato.sexo }}</td>
                             <td class="bold">{{ f.contrato.cat_ocupacional|slice:":1" }}</td>
                             <td class="bold">{{ f.contrato.grupo_escala_nivel|default:"-" }}</td>
                             <td>{{ f.contrato.fecha_alta|date:"d/m/Y"|default:"-" }}</td>
@@ -184,7 +187,7 @@
                                 <td>{{ c.no_expediente }}</td>
                                 <td class="td-nombre">{{ c.aspirante_nombre }}</td>
                                 <td class="td-nombre">{{ c.ncargo_descripcion|default:"-" }}</td>
-                                <td>{{ c.sexo }}</td>
+                                <td class="sexo-{{ c.sexo }}">{{ c.sexo }}</td>
                                 <td class="bold">{{ c.cat_ocupacional|slice:":1" }}</td>
                                 <td class="bold">{{ c.grupo_escala_nivel|default:"-" }}</td>
                                 <td>{{ c.fecha_alta|date:"d/m/Y"|default:"-" }}</td>

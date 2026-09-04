@@ -292,10 +292,14 @@
                         </div>
                     </div>
 
+                    {% comment %} Abre el modal de aspirantes en vez de llevar a la Lista
+                       de Aspirantes: la decisión es «a quién contrato», y para eso no
+                       hace falta cambiar de pantalla. {% endcomment %}
                     {% if puede_editar %}
-                    <a href="{% url 'list_aspir' %}" id="btn-nuevo-contrato" class="btn btn-primary">
+                    <button type="button" id="btn-nuevo-contrato" class="btn btn-primary"
+                            onclick="window.abrirModalNuevoContrato()">
                         <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nuevo</span>
-                    </a>
+                    </button>
                     {% endif %}
                 </div>
             </div>
@@ -909,28 +913,11 @@ document.addEventListener('keydown', function(e) {
         }
     });
 
-    const btnNuevo = document.getElementById('btn-nuevo-contrato');
-    if (btnNuevo) {
-        btnNuevo.addEventListener('click', function(e) {
-            e.preventDefault();
-            const url = this.href;
-            Swal.fire({
-                title: 'Antes de continuar',
-                text: 'Serás redirigido al listado de aspirantes para seleccionar un candidato.',
-                icon: 'info',
-                confirmButtonText: 'Ir al listado',
-                showCancelButton: true,
-                cancelButtonText: 'Cancelar',
-                customClass: {
-                    confirmButton: 'btn btn-primary me-2',
-                    cancelButton: 'btn btn-label-secondary'
-                },
-                buttonsStyling: false
-            }).then((result) => {
-                if (result.isConfirmed) window.location.href = url;
-            });
-        });
-    }
+    /* El botón «Nuevo» abre el modal de aspirantes desde su propio `onclick`.
+
+       Aquí había un manejador que avisaba «serás redirigido al listado de
+       aspirantes» y navegaba: sobraba en cuanto el listado dejó de estar en
+       otra pantalla, y además salía ENCIMA del modal recién abierto. */
 
     /* Los tres filtros de estructura son selectores de fichas: no avisan en cada
        clic, sino al CERRAR el panel, para poder marcar varias sin que la tabla
@@ -1016,4 +1003,5 @@ document.addEventListener('keydown', function(e) {
 
 </script>
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
+{% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}
 {% endblock %}

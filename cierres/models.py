@@ -280,6 +280,12 @@ class CierreContrato(models.Model):
     profesional = models.BooleanField(default=False)
     jubilado_recontratado = models.BooleanField(default=False)
     fecha_alta_entidad = models.DateField(null=True, blank=True)
+    # La Calificación Formal se guardaba a medias: su número de resolución sí, y
+    # el sí/no que dice si la tiene, no. Con solo la resolución, un mes pasado
+    # no podía responder «cuántos tienen calificación formal», que es justo la
+    # pregunta que se hace. Los cierres declarados antes de esta columna la
+    # tendrán en falso, como el resto de columnas añadidas después.
+    c_formal = models.BooleanField(default=False)
     funcionario_res = models.CharField(max_length=50, blank=True)
     designado_res = models.CharField(max_length=50, blank=True)
     c_formal_res = models.CharField(max_length=50, blank=True)

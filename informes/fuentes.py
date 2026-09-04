@@ -268,8 +268,14 @@ def unidades_visibles(usuario):
     return []
 
 
-def _acotar_al_alcance(elegidas, permitidas):
+def acotar_al_alcance(elegidas, permitidas):
     """Cruza lo que el usuario PIDIÓ con lo que tiene PERMITIDO ver.
+
+    Es pública porque el informe de Altas y Bajas no pasa por `resolver_fuente`
+    —consulta movimientos entre fechas, no una fotografía— y necesita aplicar
+    exactamente este mismo cruce. Duplicarlo allí sería tener dos versiones de
+    una regla de permisos, que es la manera clásica de que una de las dos se
+    quede atrás.
 
     Que el alcance se aplique aquí, en el servidor, y no limitando el desplegable
     de la plantilla, es lo que impide que un Moderador amplíe su visibilidad
@@ -564,7 +570,7 @@ def resolver_fuente(request):
 
     if periodo is None:
         elegidas = expandir_varias_unidades(seleccionadas)
-        unidades_ids = _acotar_al_alcance(elegidas, permitidas)
+        unidades_ids = acotar_al_alcance(elegidas, permitidas)
         fuente = fuente_actual(unidades_ids)
         modo = FUENTE_ACTUAL
     else:
@@ -572,7 +578,7 @@ def resolver_fuente(request):
         # cargar antes las unidades de ese cierre.
         unidades_del_cierre = fuente_de_cierre(periodo).unidades
         elegidas = expandir_varias_unidades(seleccionadas, unidades_del_cierre)
-        unidades_ids = _acotar_al_alcance(elegidas, permitidas)
+        unidades_ids = acotar_al_alcance(elegidas, permitidas)
         fuente = fuente_de_cierre(periodo, unidades_ids)
 
     contexto = {

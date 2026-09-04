@@ -1,0 +1,153 @@
+{% extends 'pages/reportes/base_informe_pdf.html' %}
+
+{% comment %}
+  PDF de «Altas y Bajas del Mes».
+
+  Mismo orden que la pantalla y que el libro de Excel: resumen de altas, detalle
+  de altas, resumen de bajas, detalle de bajas. Cada detalle empieza en página
+  nueva, porque son tablas largas y partirlas por la mitad no ayuda a nadie.
+
+  El `repeat="2"` de las tablas de detalle NO es decorativo: xhtml2pdf ignora
+  <thead> y solo repite la cabecera en cada página si se le dice con ese
+  atributo cuántas filas de cabecera tiene la tabla.
+{% endcomment %}
+
+{% block titulo_documento %}Altas y Bajas del Mes{% endblock %}
+{% block titulo_informe %}Altas y Bajas · {{ periodo_texto }}{% endblock %}
+
+{% block estilos_extra %}
+        .seccion { font-size: 13pt; font-weight: bold; color: #1e3a8a; text-transform: uppercase; margin: 4px 0 8px 0; }
+        .pagina-nueva { page-break-before: always; }
+        .td-izq { text-align: left; padding-left: 6pt; }
+        .fila-par td { background-color: #f8fafc; }
+        .detalle { font-size: 8pt; }
+        .detalle td { padding: 1pt 3pt; }
+        .detalle .th-sub { font-size: 7.5pt; }
+        /* Color global del sexo, el mismo de la pantalla y del Excel. */
+        .sexo-F { color: #db2777; font-weight: bold; }
+        .sexo-M { color: #03c3ec; font-weight: bold; }
+{% endblock %}
+
+{% block contenido %}
+
+    {# ------------------------------ Las cifras del mes ------------------------------ #}
+    <table class="kpi-table">
+        <tr>
+            <td class="kpi-box" style="border-bottom: 3px solid #059669;">
+                <div class="kpi-title" style="color: #059669;">Altas</div>
+                <div class="kpi-value" style="color: #059669;">{{ resumen_altas.total }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #ea580c;">
+                <div class="kpi-title" style="color: #ea580c;">Bajas</div>
+                <div class="kpi-value" style="color: #ea580c;">{{ resumen_bajas.total }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box" style="border-bottom: 3px solid #1e3a8a;">
+                <div class="kpi-title" style="color: #1e3a8a;">En puestos clave</div>
+                <div class="kpi-value" style="color: #1e3a8a;">{{ resumen_altas.total_claves }} / {{ resumen_bajas.total_claves }}</div>
+            </td>
+            <td style="width: 2%;"></td>
+            <td class="kpi-box-solid">
+                <div class="kpi-title">Saldo del mes</div>
+                <div class="kpi-value">{{ saldo_texto }}</div>
+            </td>
+        </tr>
+    </table>
+
+    {# --------------------------------- Resumen Altas -------------------------------- #}
+    <div class="seccion">Resumen de Altas</div>
+    {% include 'pages/reportes/partials/altas_bajas_resumen_pdf.html' with resumen=resumen_altas rotulo="Total Altas" %}
+
+    {# --------------------------------- Detalle Altas -------------------------------- #}
+    <div class="pagina-nueva"></div>
+    <div class="seccion">Altas del mes ({{ resumen_altas.total }})</div>
+    <table class="data-table detalle" repeat="1">
+        <tr>
+            <th class="th-main th-main-blue" width="3%">No</th>
+            <th class="th-main th-main-blue" width="14%">Nombre y Apellidos</th>
+            <th class="th-main th-main-blue" width="13%">Cargo</th>
+            <th class="th-main th-main-blue" width="11%">Área</th>
+            <th class="th-main th-main-orange" width="4%">Cargos Claves</th>
+            <th class="th-main th-main-blue" width="3%">Sexo</th>
+            <th class="th-main th-main-blue" width="3%">Edad</th>
+            <th class="th-main th-main-blue" width="4%">Cat. Ocup.</th>
+            <th class="th-main th-main-blue" width="4%">Nivel</th>
+            <th class="th-main th-main-blue" width="11%">Graduado en</th>
+            <th class="th-main th-main-blue" width="5%">Fecha</th>
+            <th class="th-main th-main-blue" width="13%">Dirección / Área o UEB</th>
+            <th class="th-main th-main-blue" width="12%">Municipio</th>
+        </tr>
+        {% for fila in altas %}
+            <tr class="{% cycle '' 'fila-par' %}">
+                <td>{{ forloop.counter }}</td>
+                <td class="td-izq">{{ fila.nombre }}</td>
+                <td class="td-izq">{{ fila.cargo }}</td>
+                <td class="td-izq">{{ fila.area }}</td>
+                <td>{% if fila.puesto_clave %}Sí{% else %}No{% endif %}</td>
+                <td class="sexo-{{ fila.sexo }}">{{ fila.sexo }}</td>
+                <td>{{ fila.edad }}</td>
+                <td>{{ fila.categoria }}</td>
+                <td>{{ fila.nivel_escolar }}</td>
+                <td class="td-izq">{{ fila.graduado_en }}</td>
+                <td>{{ fila.fecha|date:"d/m/y" }}</td>
+                <td class="td-izq">{{ fila.unidad }}</td>
+                <td>{{ fila.municipio }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="13">No hubo altas en {{ periodo_texto }}.</td></tr>
+        {% endfor %}
+    </table>
+
+    {# --------------------------------- Resumen Bajas -------------------------------- #}
+    <div class="pagina-nueva"></div>
+    <div class="seccion">Resumen de Bajas</div>
+    {% include 'pages/reportes/partials/altas_bajas_resumen_pdf.html' with resumen=resumen_bajas rotulo="Total Bajas" %}
+
+    {# --------------------------------- Detalle Bajas -------------------------------- #}
+    <div class="pagina-nueva"></div>
+    <div class="seccion">Bajas del mes ({{ resumen_bajas.total }})</div>
+    <table class="data-table detalle" repeat="1">
+        <tr>
+            <th class="th-main th-main-blue" width="3%">No</th>
+            <th class="th-main th-main-blue" width="12%">Nombre y Apellidos</th>
+            <th class="th-main th-main-blue" width="11%">Cargo</th>
+            <th class="th-main th-main-orange" width="4%">Cargos Claves</th>
+            <th class="th-main th-main-blue" width="9%">Área</th>
+            <th class="th-main th-main-blue" width="3%">Sexo</th>
+            <th class="th-main th-main-blue" width="3%">Edad</th>
+            <th class="th-main th-main-blue" width="4%">Cat. Ocup.</th>
+            <th class="th-main th-main-blue" width="4%">Nivel</th>
+            <th class="th-main th-main-blue" width="5%">Fecha</th>
+            <th class="th-main th-main-blue" width="10%">Causa de la Baja</th>
+            <th class="th-main th-main-orange" width="5%">Comp.<br/>Cargo</th>
+            <th class="th-main th-main-blue" width="7%">Años en la Org.</th>
+            <th class="th-main th-main-blue" width="9%">Dirección / Área o UEB</th>
+            <th class="th-main th-main-blue" width="7%">Municipio</th>
+            <th class="th-main th-main-orange" width="4%">SPxR</th>
+        </tr>
+        {% for fila in bajas %}
+            <tr class="{% cycle '' 'fila-par' %}">
+                <td>{{ forloop.counter }}</td>
+                <td class="td-izq">{{ fila.nombre }}</td>
+                <td class="td-izq">{{ fila.cargo }}</td>
+                <td>{% if fila.puesto_clave %}Sí{% else %}No{% endif %}</td>
+                <td class="td-izq">{{ fila.area }}</td>
+                <td class="sexo-{{ fila.sexo }}">{{ fila.sexo }}</td>
+                <td>{{ fila.edad }}</td>
+                <td>{{ fila.categoria }}</td>
+                <td>{{ fila.nivel_escolar }}</td>
+                <td>{{ fila.fecha|date:"d/m/y" }}</td>
+                <td class="td-izq">{{ fila.causa }}</td>
+                <td>{% if fila.completar_cargo %}Sí{% else %}No{% endif %}</td>
+                <td>{{ fila.antiguedad }}</td>
+                <td class="td-izq">{{ fila.unidad }}</td>
+                <td>{{ fila.municipio }}</td>
+                <td>{% if fila.cobro_sistema_pago %}Sí{% else %}No{% endif %}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="16">No hubo bajas en {{ periodo_texto }}.</td></tr>
+        {% endfor %}
+    </table>
+
+{% endblock %}

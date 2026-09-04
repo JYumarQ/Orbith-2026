@@ -8,6 +8,7 @@ from django.views.generic import ListView, CreateView, DeleteView, UpdateView
 from django.urls import reverse, reverse_lazy
 from django.db.models import Q, ProtectedError, Value, RestrictedError, OuterRef, Subquery
 from django.db.models.functions import Concat
+from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
 from nomencladores.models import NProvincia
@@ -484,3 +485,57 @@ class AspiranteDeleteView(DeleteView):
         return HttpResponseNotAllowed(['POST'])
 
 
+
+
+# ---------------------------------------------------------------------------
+# SELECTOR DE ASPIRANTES PARA CONTRATAR (modal)
+# ---------------------------------------------------------------------------
+# Antes, «Nuevo contrato» llevaba a la Lista de Aspirantes y desde alli habia
+# que buscar a la persona, seleccionarla y pulsar «Contratar». Tres pantallas
+# para una sola decision. Ahora la lista viene al usuario en un modal.
+#
+# Solo salen los CONTRATABLES —`estado='ASPIRANTE'`—, que es el mismo criterio
+# de la Lista de Aspirantes. Los de la Lista de Bajas (`estado='BAJA'`) no
+# aparecen: contratarlos desde aqui no tendria sentido y el formulario los
+# rechazaria despues.
+
+ASPIRANTES_POR_PAGINA_MODAL = 15
+
+
+@login_required
+def seleccionar_aspirante(request):
+    """Listado paginado y buscable de aspirantes contratables, para el modal.
+
+    La busqueda entiende nombre, apellido, nombre y apellido juntos, o carnet.
+    El nombre completo se arma en SQL con `Concat` para que «Ana Perez» case
+    aunque el nombre y el apellido esten en columnas distintas; buscar solo en
+    `nombre` obligaria a escribir exactamente una de las dos partes.
+    """
+    query = (request.GET.get('q') or '').strip()
+
+    qs = Aspirante.objects.filter(estado='ASPIRANTE')
+    if query:
+        qs = qs.annotate(
+            nombre_completo=Concat('nombre', Value(' '), 'papellido',
+                                   Value(' '), 'sapellido')
+        ).filter(
+            Q(doc_identidad__icontains=query)
+            | Q(nombre_completo__icontains=query)
+            | Q(nombre__icontains=query)
+            | Q(papellido__icontains=query)
+            | Q(sapellido__icontains=query)
+        )
+
+    paginator = Paginator(qs.order_by('nombre', 'papellido', 'sapellido'),
+                          ASPIRANTES_POR_PAGINA_MODAL)
+    page_obj = paginator.get_page(request.GET.get('page', 1))
+
+    return render(request, 'pages/contrato/partials/tabla_aspirantes_modal.html', {
+        'aspirantes': page_obj,
+        'page_obj': page_obj,
+        'q': query,
+        # El cargo desde el que se abrio el modal, si viene del Gestor de
+        # Cargos: viaja hasta el enlace de contratar para que el formulario
+        # llegue con la plaza ya elegida.
+        'cargo_id': request.GET.get('cargo') or '',
+    })

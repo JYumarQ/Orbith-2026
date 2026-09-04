@@ -897,4 +897,37 @@
         window.initOrbithContrato(); 
     });
 
+    {% if cargo_propuesto %}
+    /* CARGO PROPUESTO desde el Gestor de Cargos.
+
+       Unidad, Departamento y Cargo son una cascada de HTMX: cada uno carga las
+       opciones del siguiente. Para dejar el cargo elegido no basta con asignar
+       su valor —cuando llega la página, el <select> de Cargo está vacío—, hay
+       que recorrer la cascada esperando a que cada paso traiga sus opciones.
+
+       Por eso se escucha `htmx:afterSwap` sobre cada destino en vez de usar
+       esperas de tiempo fijo: una red lenta rompería cualquier `setTimeout`. */
+    $(document).ready(function () {
+        const unidad = '{{ cargo_propuesto.departamento.unidad_organizativa_id }}';
+        const departamento = '{{ cargo_propuesto.departamento_id }}';
+        const cargo = '{{ cargo_propuesto.pk }}';
+
+        function elegir(selector, valor) {
+            const $select = $(selector);
+            if (!$select.find('option[value="' + valor + '"]').length) return false;
+            $select.val(valor).trigger('change.select2');
+            $select[0].dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        }
+
+        document.body.addEventListener('htmx:afterSwap', function (evento) {
+            const destino = evento.detail.target ? evento.detail.target.id : '';
+            if (destino === 'id_departamento') elegir('#id_departamento', departamento);
+            if (destino === 'id_cargo') elegir('#id_cargo', cargo);
+        });
+
+        elegir('#id_unidad', unidad);
+    });
+    {% endif %}
+
 </script>

@@ -82,6 +82,10 @@ TEMPLATES = [
             # registrarlas aquí para poder hacer `{% load estaticos %}`.
             'libraries': {
                 'estaticos': 'core.templatetags.estaticos',
+                # Sigla y color globales del sexo, del nivel educacional y de la
+                # categoría ocupacional. Los usan plantillas de varios módulos,
+                # así que viven en `core` y no en ninguno de ellos.
+                'presentacion': 'core.templatetags.presentacion',
             },
         },
     },

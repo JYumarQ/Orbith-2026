@@ -12,6 +12,13 @@ from django.db.models.functions import Concat, ExtractYear, ExtractMonth, Extrac
 from django.db.models.expressions import Func
 from django.apps import apps
 
+# La paleta de las categorías ocupacionales vive en `nomencladores`, que es su
+# fuente única: la misma que pintan las insignias de los listados, las barras
+# del Dashboard y las columnas de los Excel de RRHH.
+from nomencladores.models import (COLORES_CAT_OCUPACIONAL, COLORES_SEXO,
+                                  color_de_categoria, color_de_sexo,
+                                  sigla_de_nivel_educacional)
+
 from .metadata import (
     REGISTRO_MODELOS,
     LOOKUP_POR_OPERADOR,
@@ -522,18 +529,40 @@ def _q_de_condiciones(definicion_modelo, condiciones):
     return filtro
 
 
-def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
+def indicadores_disponibles(modelo_raiz):
+    """Las tarjetas de resumen que este modelo sabe calcular: clave y rótulo.
+
+    Alimenta el selector múltiple del panel: el usuario elige cuáles quiere ver
+    en vez de recibir las dieciséis de golpe.
+    """
+    return [{"key": spec["key"], "label": spec["label"]}
+            for spec in INDICADORES_POR_MODELO.get(modelo_raiz, [])]
+
+
+def calcular_indicadores(queryset, definicion_modelo, modelo_raiz, keys=None):
     """
     Calcula las tarjetas del panel de resumen (total, % de mujeres, edad y
     salario promedio...) sobre el mismo conjunto de registros que se lista.
 
-    TODAS se resuelven en UNA sola consulta de agregación: se acumulan en un
-    diccionario y se envían juntas a .aggregate(). Con 50.000 trabajadores el
+    `keys` son las tarjetas que el usuario ha pedido. Sin ellas no se calcula
+    ninguna: el resumen aparece cuando se pide, igual que el desglose. Antes se
+    calculaban y se pintaban las dieciséis siempre, y no había forma de quitar
+    las que no interesaban.
+
+    El total de registros se devuelve SIEMPRE, aunque no se pida ninguna
+    tarjeta: lo necesitan la paginación, los porcentajes del desglose y el aviso
+    de tamaño al exportar.
+
+    Las pedidas se resuelven en UNA sola consulta de agregación: se acumulan en
+    un diccionario y se envían juntas a .aggregate(). Con 50.000 trabajadores el
     coste es prácticamente el mismo que con 50.
     """
-    especificaciones = INDICADORES_POR_MODELO.get(modelo_raiz, [])
+    todas = INDICADORES_POR_MODELO.get(modelo_raiz, [])
+    pedidas = set(keys or [])
+    especificaciones = [spec for spec in todas if spec["key"] in pedidas]
+
     if not especificaciones:
-        return [], 0
+        return [], queryset.count()
 
     ruta_aspirante = definicion_modelo.get("ruta_aspirante")
     agregaciones = {"_total": Count("id")}
@@ -585,6 +614,9 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz):
             valor = crudos.get(spec["key"])
 
         indicador = {
+            # La clave viaja hasta la plantilla porque los exportables la usan
+            # para respetar el orden en que el usuario eligió las tarjetas.
+            "key": spec["key"],
             "label": spec["label"],
             "icono": spec["icono"],
             "color": spec["color"],
@@ -838,26 +870,67 @@ def calcular_desglose(queryset, definicion_modelo, key_campo, total, modelo_raiz
     )
 
     ruta_a_mostrar = ruta_visual or ruta_valor
-    traduccion = mapa_valor_a_etiqueta(campo)
+    traduccion = _traduccion_del_desglose(key_campo, campo)
 
     # Varios valores de la base de datos pueden compartir etiqueta (CDI y CEJ
     # son ambos "Cuadro"), así que se acumulan bajo la misma fila.
+    #
+    # Se guarda además UN código crudo por etiqueta. Sirve para darle a la barra
+    # el color global de su categoría ocupacional: la etiqueta sola no basta
+    # porque es texto traducido, y el color está definido por código. Que CDI y
+    # CEJ compartan fila no estorba: comparten también color.
     acumulado = {}
+    codigos = {}
     for grupo in grupos:
         valor_crudo = grupo.get(ruta_a_mostrar)
         etiqueta = traduccion.get(valor_crudo, valor_crudo)
         acumulado[etiqueta] = acumulado.get(etiqueta, 0) + grupo["cantidad"]
+        codigos.setdefault(etiqueta, valor_crudo)
 
     filas = [
         {
             "valor": etiqueta,
             "cantidad": cantidad,
             "porcentaje": round(cantidad * 100 / total, 1) if total else 0,
+            "color": _color_de_grupo(codigos.get(etiqueta)),
         }
         for etiqueta, cantidad in sorted(acumulado.items(), key=lambda par: -par[1])
     ]
 
     return filas, campo["label"]
+
+
+def _traduccion_del_desglose(key_campo, campo):
+    """Cómo se escribe cada valor en las barras del desglose.
+
+    Dos campos no usan su etiqueta larga sino la forma corta que usa la empresa,
+    la misma que muestran la tabla y los tres exportables: el SEXO se escribe
+    «F» y «M», y el NIVEL EDUCACIONAL en siglas. Un desglose que dijera
+    «Femenino» junto a una tabla que dice «F» serían dos formas de nombrar lo
+    mismo en la misma pantalla.
+    """
+    if key_campo == 'sexo':
+        # El código guardado ya ES la sigla: basta con no traducir.
+        return {}
+    if key_campo == 'nivel_educ':
+        return {codigo: sigla_de_nivel_educacional(codigo)
+                for codigo, _ in (campo.get('choices') or [])}
+    return mapa_valor_a_etiqueta(campo)
+
+
+def _color_de_grupo(codigo):
+    """El color global del grupo, o None si el valor no tiene uno asignado.
+
+    Se decide por el CÓDIGO y no por el nombre del campo, así que cualquier
+    desglose cuyos valores sean categorías ocupacionales o sexos sale coloreado
+    sin tener que enumerar los campos aquí. El resto devuelven None y la
+    plantilla los pinta con su color de siempre.
+    """
+    if codigo in COLORES_CAT_OCUPACIONAL:
+        return color_de_categoria(codigo)
+    if codigo in COLORES_SEXO:
+        return color_de_sexo(codigo)
+    return None
 
 
 def obtener_rutas_select_related(definicion_modelo, keys_campos):

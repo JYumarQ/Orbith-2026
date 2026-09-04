@@ -1,4 +1,20 @@
-{% load informe_inteligente_extras %}
+{% load presentacion informe_inteligente_extras %}{% comment %}
+  PDF de Informe Inteligente, con la imagen de los informes de RRHH.
+
+  No extiende `pages/reportes/base_informe_pdf.html` a propósito: aquel es de
+  `informes/` y se decidió no tocar ese módulo. La envoltura se replica aquí,
+  con la contrapartida conocida de que si algún día cambia la imagen, hay que
+  cambiar las dos.
+
+  El ancho de cada columna viene calculado desde Python
+  (`informe_inteligente.exportacion.repartir_anchos`), midiendo el contenido
+  real que se va a imprimir. No se puede escribir a mano como en los informes de
+  RRHH porque aquí las columnas las elige el usuario.
+
+  El `repeat="1"` no es decorativo: xhtml2pdf ignora <thead> y solo repite la
+  cabecera en cada página si se le dice con ese atributo cuántas filas de
+  cabecera tiene la tabla.
+{% endcomment %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,15 +24,20 @@
         @page {
             size: letter landscape;
             margin: 1cm 1.5cm;
-            margin-top: 4cm;
-            margin-bottom: 1.5cm;
+            /* El margen superior tiene que dejar sitio al frame de la cabecera,
+               o la tabla se le monta encima. Los marcos se declaran con `left` y
+               `right` y NO con `width`: con `width`, xhtml2pdf descartaba el
+               contenido del marco entero —logo incluido— sin dar ningún error,
+               y el PDF salía sin cabecera y pesando 6 KB en vez de 900. */
+            margin-top: 4.5cm;
+            margin-bottom: 2cm;
 
             @frame header {
                 -pdf-frame-content: header_content;
                 top: 1cm;
                 left: 1.5cm;
                 right: 1.5cm;
-                height: 3cm;
+                height: 3.5cm;
             }
 
             @frame footer {
@@ -28,60 +49,67 @@
             }
         }
 
-        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 10pt; }
-        .uppercase { text-transform: uppercase; }
+        body { font-family: Helvetica, Arial, sans-serif; color: #1e293b; font-size: 9pt; }
         .bold { font-weight: bold; }
 
-        .data-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-        .data-table th {
-            padding: 6px 5px;
-            border: 1px solid #e2e8f0;
-            background-color: #0f172a;
-            color: white;
-            font-size: 9pt;
-            text-transform: uppercase;
-            text-align: left;
-        }
-        .data-table td {
-            padding: 4px 5px;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 9pt;
-            vertical-align: middle;
-        }
-        .data-table tr:nth-child(even) td { background-color: #f8fafc; }
-        .col-indice { width: 3%; text-align: center; color: #94a3b8; }
+        .titulo { font-size: 15pt; color: #1e3a8a; text-transform: uppercase; font-weight: bold; text-align: center; }
+        .subtitulo { font-size: 11pt; color: #1e293b; font-weight: bold; text-align: center; margin-top: 2pt; }
+        .descripcion { font-size: 9pt; color: #64748b; text-align: center; margin-top: 2pt; }
+
+        .filtros { font-size: 8.5pt; color: #475569; margin: 8pt 0; }
+        .filtros strong { color: #1e3a8a; }
+
+        .seccion { font-size: 11pt; font-weight: bold; color: #1e3a8a; text-transform: uppercase; margin: 10pt 0 5pt 0; }
+
+        .kpi-table { width: 100%; margin-bottom: 10pt; }
+        .kpi-box { padding: 4pt; text-align: center; background-color: #f8fafc; border-bottom: 3px solid #1e3a8a; }
+        .kpi-title { font-size: 8pt; color: #64748b; font-weight: bold; text-transform: uppercase; }
+        .kpi-value { font-size: 17pt; font-weight: bold; color: #1e293b; }
+        .kpi-pct { font-size: 8pt; color: #ea580c; font-weight: bold; }
+
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; }
+        .data-table th { background-color: #1e3a8a; color: #fff; font-size: 8pt; font-weight: bold; padding: 4pt 3pt; border: 1px solid #e2e8f0; text-align: center; }
+        .data-table td { font-size: 7.5pt; padding: 2pt 3pt; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .fila-par td { background-color: #f8fafc; }
+        .num { text-align: center; }
+
+        /* Los campos de contenido corto van centrados, aquí y en la pantalla:
+           lo decide `metadata.es_campo_corto`, no cada plantilla. */
+        .corta { text-align: center; vertical-align: middle; }
+        .sexo-F { color: #db2777; font-weight: bold; }
+        .sexo-M { color: #03c3ec; font-weight: bold; }
+
+        .aviso { font-size: 8.5pt; color: #c2410c; font-weight: bold; margin-top: 6pt; }
+        .vacio { text-align: center; color: #94a3b8; padding: 14pt; font-size: 9pt; }
     </style>
 </head>
 <body>
 
     <div id="header_content">
-        <table style="width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 8px;">
+        <table style="width: 100%; border-bottom: 2px solid #1e3a8a; padding-bottom: 5pt;">
             <tr>
-                <td style="width: 15%; vertical-align: middle; text-align: center;">
+                <td style="width: 12%; vertical-align: middle; text-align: center;">
                     {% if config.logo %}
-                        <img src="{{ config.logo.path }}" width="70" alt="Logo">
+                        <img src="{{ config.logo.path }}" width="62" alt="Logo">
                     {% else %}
-                        <div style="background-color: #1e3a8a; color: white; width: 45px; height: 45px; text-align: center; line-height: 45px; font-weight: bold; border-radius: 8px; font-size: 13px;">
-                            UNE
-                        </div>
+                        <div style="background-color: #1e3a8a; color: white; width: 40px; height: 40px; text-align: center; line-height: 40px; font-weight: bold; border-radius: 6px; font-size: 12px;">UNE</div>
                     {% endif %}
                 </td>
-                <td style="width: 55%; vertical-align: middle; padding-left: 10px;">
-                    <h1 style="color: #1e3a8a; font-size: 16px; font-weight: bold; margin: 0; text-transform: uppercase;">
-                        {{ nombre_empresa }}
-                    </h1>
-                    <p style="color: #ea580c; font-size: 9px; font-weight: bold; margin: 0; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px;">
-                        Gestión de Capital Humano
-                    </p>
+                <td style="width: 58%; vertical-align: middle; padding-left: 8pt;">
+                    <div style="color: #1e3a8a; font-size: 13pt; font-weight: bold; text-transform: uppercase;">{{ nombre_empresa }}</div>
+                    <div style="color: #475569; font-size: 8pt; font-weight: bold; text-transform: uppercase;">
+                        {% if cab_provincia %}{{ cab_provincia }} &middot; {% endif %}{{ cab_unidades_resumen }}
+                    </div>
+                    <div style="color: #94a3b8; font-size: 8pt; font-weight: bold; text-transform: uppercase;">
+                        Gestión de Capital Humano{% if cab_exportado_por %} &middot; Exportado por {{ cab_exportado_por }}{% endif %}
+                    </div>
                 </td>
                 <td style="width: 30%; text-align: right; vertical-align: middle;">
-                    <p style="color: #94a3b8; font-size: 9px; font-weight: bold; margin: 0; text-transform: uppercase;">
+                    <div style="color: #94a3b8; font-size: 8pt; font-weight: bold; text-transform: uppercase;">
                         Hoja # <pdf:pagenumber> de <pdf:pagecount>
-                    </p>
-                    <div style="background-color: #f1f5f9; padding: 4px; margin-top: 5px; text-align: center; border-radius: 4px;">
-                        <span style="color: #475569; font-size: 9px; font-weight: bold; text-transform: uppercase;">
-                            {{ total_registros }} registro{{ total_registros|pluralize }}
-                        </span>
+                    </div>
+                    <div style="background-color: #f1f5f9; padding: 3pt; margin-top: 3pt; text-align: center; border-radius: 4px;">
+                        <span style="color: #475569; font-size: 8pt; font-weight: bold; text-transform: uppercase;">{{ periodo_texto }}</span>
                     </div>
                 </td>
             </tr>
@@ -89,50 +117,107 @@
     </div>
 
     <div id="footer_content">
-        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+        <table style="width: 100%; border-top: 1px solid #e2e8f0; padding-top: 4pt;">
             <tr>
-                <td style="width: 50%; color: #94a3b8; font-size: 8px; font-weight: bold; text-transform: uppercase; text-align: left;">
+                <td style="width: 50%; color: #94a3b8; font-size: 7.5pt; font-weight: bold; text-transform: uppercase;">
                     Generado: {{ fecha_generacion }}
                 </td>
-                <td style="width: 50%; color: #94a3b8; font-size: 8px; font-weight: bold; text-transform: uppercase; text-align: right;">
-                    Orbith System RRHH | Camagüey - 2026
+                <td style="width: 50%; color: #94a3b8; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; text-align: right;">
+                    Orbith &middot; Informe Inteligente
                 </td>
             </tr>
         </table>
     </div>
 
-    <div style="text-align: center; margin-bottom: 10px;">
-        <div style="font-size: 14px; color: #1e3a8a; text-transform: uppercase; font-weight: bold; font-style: italic; text-decoration: underline;">
-            {{ titulo_informe }}
-        </div>
+    {# ---------------------------------- Título ---------------------------------- #}
+    <div class="titulo">{{ titulo_informe }}</div>
+    {% if informe_nombre %}<div class="subtitulo">{{ informe_nombre }}</div>{% endif %}
+    {% if informe_descripcion %}<div class="descripcion">{{ informe_descripcion }}</div>{% endif %}
+
+    {# --------------------------------- Filtros ---------------------------------- #}
+    <div class="filtros">
+        {% if filtros_aplicados %}
+            <strong>Filtros aplicados:</strong>
+            {% for filtro in filtros_aplicados %}{{ filtro }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}
+        {% else %}
+            <strong>Sin filtros:</strong> todos los registros ({{ total_registros }}).
+        {% endif %}
     </div>
 
-    <table class="data-table">
-        <thead>
+    {# -------------------------------- Tarjetas ---------------------------------- #}
+    {% if indicadores %}
+    <table class="kpi-table">
+        <tr>
+            {% for indicador in indicadores %}
+                <td class="kpi-box">
+                    <div class="kpi-title">{{ indicador.label }}</div>
+                    <div class="kpi-value">{{ indicador.valor }}</div>
+                    {% if indicador.porcentaje != None %}<div class="kpi-pct">{{ indicador.porcentaje }}%</div>{% endif %}
+                </td>
+                {% if not forloop.last %}<td style="width: 1%;"></td>{% endif %}
+            {% endfor %}
+        </tr>
+    </table>
+    {% endif %}
+
+    {# -------------------------------- Desgloses --------------------------------- #}
+    {% for grupo in desgloses %}
+        <div class="seccion">Desglose por {{ grupo.etiqueta|lower }}</div>
+        <table class="data-table" repeat="1">
             <tr>
-                <th class="col-indice">#</th>
+                <th style="width: 60%;">Grupo</th>
+                <th style="width: 20%;">Cantidad</th>
+                <th style="width: 20%;">% del total</th>
+            </tr>
+            {% for fila in grupo.filas %}
+                <tr class="{% cycle '' 'fila-par' %}">
+                    <td>{% if fila.valor %}{{ fila.valor }}{% else %}Sin definir{% endif %}</td>
+                    <td class="num bold">{{ fila.cantidad }}</td>
+                    <td class="num" style="color: #ea580c; font-weight: bold;">{{ fila.porcentaje }} %</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endfor %}
+
+    {# --------------------------------- Detalle ---------------------------------- #}
+    {% if modo == 'resumen' %}
+        <div class="seccion">Detalle</div>
+        <div class="aviso">
+            Este documento es solo el resumen: el listado tiene {{ total_registros }} filas
+            y no cabe en papel. Use la exportación a Excel para el detalle completo.
+        </div>
+    {% else %}
+        <div class="seccion">Detalle{% if filas_omitidas %} (primeras {{ filas_mostradas }} de {{ total_registros }}){% endif %}</div>
+        <table class="data-table" repeat="1">
+            <tr>
                 {% for campo in campos_elegidos %}
-                    <th>{{ campo.label }}</th>
+                    <th width="{{ campo.ancho }}%">{{ campo.label }}</th>
                 {% endfor %}
             </tr>
-        </thead>
-        <tbody>
-            {% for fila in filas %}
-                <tr>
-                    <td class="col-indice">{{ forloop.counter }}</td>
-                    {% for campo in campos_elegidos %}
-                        <td>{{ fila|get_item:campo.key|default:"—" }}</td>
+            {% comment %} Se recorren a la vez la fila y las columnas para saber de cada
+               celda si su campo es corto —va centrada— y si es el sexo o la categoría
+               ocupacional, que llevan su color global. Los emparejа `emparejar`. {% endcomment %}
+            {% for fila in matriz %}
+                <tr class="{% cycle '' 'fila-par' %}">
+                    {% for par in campos_elegidos|emparejar:fila %}
+                        <td class="{% if par.0.corto %}corta{% endif %}{% if par.0.key == 'sexo' %} sexo-{{ par.1 }}{% endif %}"
+                            {% if par.0.key == 'categoria_ocupacional' %}style="color: {{ par.1|color_por_inicial }}; font-weight: bold;"{% endif %}>{{ par.1|default_if_none:"" }}</td>
                     {% endfor %}
                 </tr>
             {% empty %}
-                <tr>
-                    <td colspan="{{ campos_elegidos|length|add:1 }}" style="text-align: center; color: #94a3b8; padding: 20px;">
-                        No se encontraron registros que cumplan los filtros aplicados.
-                    </td>
-                </tr>
+                <tr><td colspan="{{ campos_elegidos|length }}" class="vacio">
+                    No se encontraron registros que cumplan los filtros aplicados.
+                </td></tr>
             {% endfor %}
-        </tbody>
-    </table>
+        </table>
+
+        {% if filas_omitidas %}
+            <div class="aviso">
+                Se muestran {{ filas_mostradas }} de {{ total_registros }} filas.
+                Use la exportación a Excel para el listado completo.
+            </div>
+        {% endif %}
+    {% endif %}
 
 </body>
 </html>

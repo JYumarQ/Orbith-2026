@@ -47,8 +47,14 @@
                                         {{ fila.valor }}
                                     {% endif %}
                                 </div>
+                                {% comment %} Cuando la fila es una categoría ocupacional, la
+                                   barra toma su color global —el mismo de las insignias de
+                                   los listados y de los gráficos del Dashboard—. El resto
+                                   de desgloses conservan el color de siempre, que pone el
+                                   CSS de `.ii-desglose-relleno`. {% endcomment %}
                                 <div class="ii-desglose-barra">
-                                    <div class="ii-desglose-relleno" style="width: {{ fila.porcentaje }}%;"></div>
+                                    <div class="ii-desglose-relleno"
+                                         style="width: {{ fila.porcentaje }}%;{% if fila.color %} background: {{ fila.color }};{% endif %}"></div>
                                 </div>
                                 <div class="ii-desglose-cifras">
                                     <span class="ii-desglose-cantidad">{{ fila.cantidad }}</span>

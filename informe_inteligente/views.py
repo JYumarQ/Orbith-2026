@@ -22,7 +22,11 @@ from openpyxl.utils import get_column_letter
 from xhtml2pdf import pisa
 
 from configuracion.models import Configuracion
+from nomencladores.models import SIGLAS_NIVEL_EDUCACIONAL
+from strorganizativa.models import UnidadOrganizativa
 
+from . import exportacion
+from .documentos import documento_word_del_informe, libro_excel_del_informe
 from .metadata import (
     REGISTRO_MODELOS,
     PLANTILLAS_RAPIDAS,
@@ -30,6 +34,7 @@ from .metadata import (
     FUENTES_HISTORICAS,
     agrupar_campos_por_categoria,
     campos_sin_historico,
+    es_campo_corto,
     mapa_valor_a_etiqueta,
     _opciones_periodos_cerrados,
 )
@@ -37,6 +42,7 @@ from .motor import (
     construir_queryset,
     resolver_definicion,
     calcular_evolucion,
+    indicadores_disponibles,
     indicadores_graficables,
     annos_con_cierre,
     calcular_indicadores,
@@ -102,6 +108,12 @@ def _contexto_index(request):
         # Medidas que el panel de evolución puede dibujar, por fuente.
         "medidas_evolucion": {
             clave: indicadores_graficables(clave) for clave in FUENTES_HISTORICAS
+        },
+        # Tarjetas de resumen que ofrece cada modelo. El usuario elige cuáles
+        # quiere ver; antes se pintaban las dieciséis siempre y no había forma
+        # de quitar las que no interesaban.
+        "tarjetas_disponibles": {
+            clave: indicadores_disponibles(clave) for clave in REGISTRO_MODELOS
         },
 
         # --- Selector de Unidad Organizativa (fila superior) ---
@@ -182,12 +194,17 @@ def _preparar_datos_informe(request):
     if rutas_precarga:
         queryset = queryset.select_related(*rutas_precarga)
 
-    # ---- Panel de resumen: se calcula SIEMPRE, encima de la tabla ----
-    indicadores, total_registros = calcular_indicadores(queryset, definicion_modelo, modelo_raiz)
+    # ---- Panel de resumen: solo las tarjetas que el usuario haya pedido ----
+    keys_tarjetas = _normalizar_lista(configuracion.get("tarjetas"))
+    indicadores, total_registros = calcular_indicadores(
+        queryset, definicion_modelo, modelo_raiz, keys_tarjetas)
 
-    keys_desglose = _normalizar_desglose(
-        configuracion.get("desglosar_por") or definicion_modelo.get("desglose_por_defecto")
-    )
+    # Solo los desgloses que el usuario haya pedido. Antes, si no elegía
+    # ninguno, se imponía el `desglose_por_defecto` del modelo —categoría
+    # ocupacional en Contratos, causa de baja en Bajas—, y aparecía un desglose
+    # que nadie había pedido y que no había forma de quitar: elegir «ninguno» no
+    # se distinguía de no haber elegido todavía.
+    keys_desglose = _normalizar_desglose(configuracion.get("desglosar_por"))
     desgloses = []
     for key_desglose in keys_desglose:
         filas_desglose, etiqueta = calcular_desglose(
@@ -200,6 +217,10 @@ def _preparar_datos_informe(request):
             "key": k,
             "label": definicion_modelo["campos"][k]["label"],
             "tipo": definicion_modelo["campos"][k]["tipo"],
+            # Los de contenido corto se centran, en la pantalla y en las tres
+            # exportaciones. Se decide aquí, una vez, para que las cuatro
+            # salidas alineen igual la misma columna.
+            "corto": es_campo_corto(definicion_modelo["campos"][k], k),
         }
         for k in keys_campos
     ]
@@ -218,6 +239,16 @@ def _preparar_datos_informe(request):
     }
 
 
+# Campos que NO se traducen a su etiqueta larga sino a una forma corta, la
+# misma en la pantalla y en los tres exportables. Las tablas viven en
+# `nomencladores.models`, que es de donde las leen también los informes de RRHH.
+_SIGLAS_POR_CAMPO = {
+    "nivel_educ": dict(SIGLAS_NIVEL_EDUCACIONAL),
+    "categoria_ocupacional": {"OPE": "O", "TEC": "T", "ADM": "A",
+                              "SER": "S", "CDI": "C", "CEJ": "C"},
+}
+
+
 def _construir_filas(definicion_modelo, keys_campos, objetos):
     """
     Traduce cada objeto del queryset a un dict {clave_campo: valor_a_mostrar}.
@@ -234,6 +265,22 @@ def _construir_filas(definicion_modelo, keys_campos, objetos):
         for key in keys_campos
         if definicion_modelo["campos"][key]["tipo"] == "opcion"
     }
+
+    # Tres campos NO se traducen a su etiqueta larga, sino a la forma corta que
+    # usa la empresa. Se decide aquí, en el único sitio por el que pasan las
+    # cuatro salidas —pantalla, Word, PDF y Excel—, para que digan lo mismo:
+    #
+    #   sexo                  «F» y «M», nunca «Femenino» ni «Masculino».
+    #   nivel_educ            siglas, con MS(TM) y MS(DG) distinguiendo las dos
+    #                         ramas de Medio Superior.
+    #   categoria_ocupacional la inicial (O, T, A, S, C).
+    #
+    # El código guardado ya ES la sigla del sexo, así que basta con no traducir.
+    for key in ("sexo", "cat_ocupacional"):
+        traducciones.pop(key, None)
+    for key in keys_campos:
+        if key in ("nivel_educ", "categoria_ocupacional"):
+            traducciones[key] = _SIGLAS_POR_CAMPO[key]
     # Los campos booleanos se muestran como "Sí"/"No" (más amigable que
     # True/False) en las 4 salidas del informe: tabla, PDF, Word y Excel.
     traducciones.update({
@@ -328,40 +375,138 @@ def generar_vista_previa(request):
 
 @login_required
 @require_POST
+def comprobar_exportacion(request):
+    """Dice si el informe cabe en un documento, ANTES de generarlo.
+
+    Lo consulta el navegador para poder preguntar en vez de que el usuario lo
+    descubra con el fichero ya descargado y las columnas ilegibles. La medida
+    del ancho necesita TODAS las filas, y el navegador solo tiene la primera
+    página de la tabla, así que se resuelve aquí.
+    """
+    try:
+        datos = _preparar_datos_informe(request)
+    except ConfiguracionInformeInvalida as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"],
+                             datos["queryset"][:exportacion.LIMITE_DE_FILAS])
+    return JsonResponse(exportacion.diagnostico(
+        datos["campos_elegidos"],
+        [[fila.get(c["key"]) for c in datos["campos_elegidos"]] for fila in filas],
+        datos["total_registros"]))
+
+
+def _contexto_de_exportacion(request, datos):
+    """Todo lo que comparten el PDF, el Word y el Excel del módulo.
+
+    La cabecera imita a la de Informes RRHH: logo, empresa, territorio, quién
+    exporta y cuándo. El territorio se resuelve distinto porque aquí los filtros
+    son libres: siempre la provincia de Parámetros Generales y, si entre las
+    condiciones hay una de Unidad Organizativa, también la unidad.
+
+    El MODO lo decide el usuario en el aviso previo:
+      'completo'   todas las filas (informes pequeños);
+      'recortado'  las primeras `LIMITE_DE_FILAS`, avisando de cuántas faltan;
+      'resumen'    sin tabla: solo cifras y desgloses.
+    """
+    config = Configuracion.objects.first()
+    definicion = datos["definicion_modelo"]
+
+    modo = request.POST.get("modo") or "completo"
+    if modo == "resumen":
+        filas = []
+    elif modo == "recortado":
+        filas = _construir_filas(definicion, datos["keys_campos"],
+                                 datos["queryset"][:exportacion.LIMITE_DE_FILAS])
+    else:
+        filas = _construir_filas(definicion, datos["keys_campos"],
+                                 datos["queryset"])
+
+    columnas = datos["campos_elegidos"]
+    matriz = [[fila.get(c["key"]) for c in columnas] for fila in filas]
+    pesos, _ = exportacion.repartir_anchos(columnas, matriz)
+
+    # El ancho de cada columna en tanto por ciento, para la tabla del PDF.
+    for columna, peso in zip(columnas, pesos):
+        columna["ancho"] = round(peso * 100, 2)
+
+    unidades = _unidades_del_informe(request, datos)
+
+    return {
+        "titulo_informe": definicion["label"],
+        "informe_nombre": (request.POST.get("informe_nombre") or "").strip(),
+        "informe_descripcion": (request.POST.get("informe_descripcion") or "").strip(),
+        "filtros_aplicados": exportacion.describir_filtros(
+            definicion, datos["configuracion"]),
+
+        "campos_elegidos": columnas,
+        "filas": filas,
+        "matriz": matriz,
+        "indicadores": datos["indicadores"],
+        "desgloses": datos["desgloses"],
+        "total_registros": datos["total_registros"],
+
+        "modo": modo,
+        "filas_mostradas": len(filas),
+        "filas_omitidas": max(datos["total_registros"] - len(filas), 0),
+
+        "config": config,
+        "nombre_empresa": config.nombre_empresa if config else "Empresa Eléctrica",
+        "cab_provincia": (config.provincia_entidad.nombre
+                          if config and config.provincia_entidad_id else ""),
+        "cab_unidades": unidades,
+        "cab_unidades_resumen": ", ".join(unidades) if unidades else "Todas las unidades",
+        "cab_exportado_por": (getattr(request.user, "nombre_completo", None)
+                              or getattr(request.user, "username", "") or ""),
+        "fecha_generacion": exportacion.fecha_generacion_es(),
+        "periodo_texto": datos["periodo"] or "Información actual",
+    }
+
+
+def _unidades_del_informe(request, datos):
+    """Las unidades filtradas, si las hay. Para la cabecera del documento.
+
+    En Informes RRHH la unidad es un control fijo y siempre se sabe cuál es.
+    Aquí viaja como un filtro más, así que hay que buscarla entre las
+    condiciones; si no está, el informe es de toda la empresa.
+    """
+    ids = []
+    for filtro in (datos["configuracion"].get("filtros") or []):
+        if isinstance(filtro, dict) and filtro.get("campo") == "unidad_organizativa":
+            valor = filtro.get("valor")
+            ids.extend(valor if isinstance(valor, (list, tuple)) else [valor])
+
+    ids = [str(v) for v in ids if str(v).isdigit()]
+    if not ids:
+        return []
+    return list(UnidadOrganizativa.objects.filter(pk__in=ids)
+                .order_by("orden_informe", "descripcion")
+                .values_list("descripcion", flat=True))
+
+
+def _nombre_de_descarga(context, extension):
+    """«Escala_Salarial_20260903_1830.xlsx»: el nombre del informe, si lo tiene."""
+    base = context["informe_nombre"] or "Informe_Inteligente"
+    base = re.sub(r"[^\w\-]+", "_", base, flags=re.UNICODE).strip("_")
+    return "%s_%s.%s" % (base, datetime.now().strftime("%Y%m%d_%H%M"), extension)
+
+
+@login_required
+@require_POST
 def exportar_pdf(request):
-    """
-    Exporta a PDF exactamente lo que el usuario configuró en pantalla
-    (mismos filtros, columnas y orden que la vista previa), con el logo,
-    nombre de empresa y fecha en el mismo estilo que usa la exportación
-    del Informe de Puestos Claves (`informes/views.py::ExportarPuestosClavePDFView`).
-    """
+    """El informe en PDF, con la misma imagen que los de RRHH."""
     try:
         datos = _preparar_datos_informe(request)
     except ConfiguracionInformeInvalida as e:
         return HttpResponse(str(e), status=400)
 
-    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
-
-    config = Configuracion.objects.first()
-    context = {
-        "titulo_informe": datos["definicion_modelo"]["label"],
-        "campos_elegidos": datos["campos_elegidos"],
-        "filas": filas,
-        "total_registros": datos["total_registros"],
-        "config": config,
-        "nombre_empresa": config.nombre_empresa if config else "Empresa Eléctrica",
-        "fecha_generacion": _fecha_generacion_es(),
-    }
-
-    template = get_template("pages/informe_inteligente/partials/informe_pdf.html")
-    html = template.render(context)
+    context = _contexto_de_exportacion(request, datos)
+    html = get_template("pages/informe_inteligente/partials/informe_pdf.html").render(context)
 
     response = HttpResponse(content_type="application/pdf")
-    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.pdf'
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-
-    pisa_status = pisa.CreatePDF(html, dest=response)
-    if pisa_status.err:
+    response["Content-Disposition"] = (
+        'attachment; filename="%s"' % _nombre_de_descarga(context, "pdf"))
+    if pisa.CreatePDF(html, dest=response).err:
         return HttpResponse("Hubo un error al generar el PDF", status=500)
     return response
 
@@ -369,119 +514,58 @@ def exportar_pdf(request):
 @login_required
 @require_POST
 def exportar_word(request):
-    """
-    Igual que `exportar_pdf` pero en Word. Se genera directamente con
-    python-docx (sin plantilla .docx externa) porque el mecanismo de
-    plantilla que usa Puestos Claves (docxtpl) depende de un archivo
-    .docx que no existe en el repositorio.
+    """El informe en Word.
+
+    Se construye por código y no desde una plantilla `.docx` como los de RRHH:
+    las plantillas de docxtpl repiten FILAS, y aquí el número de COLUMNAS lo
+    elige el usuario en el panel de campos. No hay forma de expresar eso en una
+    plantilla, así que la imagen se replica aquí.
     """
     try:
         datos = _preparar_datos_informe(request)
     except ConfiguracionInformeInvalida as e:
         return HttpResponse(str(e), status=400)
 
-    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
-    campos_elegidos = datos["campos_elegidos"]
-
-    config = Configuracion.objects.first()
-    nombre_empresa = config.nombre_empresa if config else "Empresa Eléctrica"
-
-    documento = Document()
-
-    if config and config.logo:
-        try:
-            documento.add_picture(config.logo.path, width=Inches(1.0))
-        except Exception:
-            pass  # sin logo físico disponible: el documento se genera igual
-
-    encabezado = documento.add_heading(nombre_empresa, level=1)
-    encabezado.runs[0].font.color.rgb = RGBColor(0x1e, 0x3a, 0x8a)
-
-    subtitulo = documento.add_paragraph()
-    run_subtitulo = subtitulo.add_run("Gestión de Capital Humano")
-    run_subtitulo.font.color.rgb = RGBColor(0xea, 0x58, 0x0c)
-    run_subtitulo.font.bold = True
-
-    documento.add_heading(datos["definicion_modelo"]["label"], level=2)
-
-    meta = documento.add_paragraph()
-    meta.add_run(
-        f'Generado: {_fecha_generacion_es()}  |  Total de registros: {datos["total_registros"]}'
-    ).italic = True
-
-    tabla = documento.add_table(rows=1, cols=len(campos_elegidos))
-    tabla.style = "Light Grid Accent 1"
-
-    celdas_cabecera = tabla.rows[0].cells
-    for i, campo in enumerate(campos_elegidos):
-        celdas_cabecera[i].text = campo["label"]
-        for parrafo in celdas_cabecera[i].paragraphs:
-            for run in parrafo.runs:
-                run.font.bold = True
-
-    for fila in filas:
-        celdas = tabla.add_row().cells
-        for i, campo in enumerate(campos_elegidos):
-            valor = fila.get(campo["key"])
-            celdas[i].text = "" if valor in (None, "") else str(valor)
-
-    buffer = io.BytesIO()
-    documento.save(buffer)
-    buffer.seek(0)
+    context = _contexto_de_exportacion(request, datos)
+    documento = documento_word_del_informe(context)
 
     response = HttpResponse(
-        buffer.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
-    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.docx'
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    response["Content-Disposition"] = (
+        'attachment; filename="%s"' % _nombre_de_descarga(context, "docx"))
+    documento.save(response)
     return response
 
 
 @login_required
 @require_POST
 def exportar_excel(request):
-    """
-    Igual que `exportar_pdf`/`exportar_word` pero en Excel, con `openpyxl`
-    (misma librería que ya usa `contratos/views.py::exportar_contratos_excel`
-    para sus exportaciones). Las columnas son dinámicas: salen de
-    `campos_elegidos`, no de una lista fija como en Contratos.
+    """El informe en Excel: portada, resumen y datos, como los de RRHH.
+
+    Sin avisos de tamaño: una hoja de cálculo no pagina ni tiene ancho de papel,
+    así que es justamente la salida a la que se invita cuando el informe no cabe
+    en un documento. Va siempre completo.
     """
     try:
         datos = _preparar_datos_informe(request)
     except ConfiguracionInformeInvalida as e:
         return HttpResponse(str(e), status=400)
 
-    filas = _construir_filas(datos["definicion_modelo"], datos["keys_campos"], datos["queryset"])
-    campos_elegidos = datos["campos_elegidos"]
+    # El modo que eligió el usuario vale para el PDF y el Word; aquí se ignora
+    # a propósito. Si el Excel también recortara, el usuario se quedaría sin
+    # NINGUNA forma de obtener el listado completo.
+    request.POST = request.POST.copy()
+    request.POST['modo'] = 'completo'
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    # Excel limita el nombre de hoja a 31 caracteres y prohíbe \ / * ? : [ ]
-    # (el label del modelo, p. ej. "Contratos / Trabajadores Activos", trae "/").
-    titulo_hoja = re.sub(r'[\\/*?:\[\]]', '-', datos["definicion_modelo"]["label"])[:31]
-    ws.title = titulo_hoja
+    context = _contexto_de_exportacion(request, datos)
+    libro = libro_excel_del_informe(context)
 
-    negrita_blanca = Font(bold=True, color="FFFFFF")
-    fondo_indigo = PatternFill(start_color="696CFF", end_color="696CFF", fill_type="solid")
-    alineacion_centro = Alignment(horizontal="center", vertical="center")
-
-    ws.append([campo["label"] for campo in campos_elegidos])
-    for col_num, cell in enumerate(ws[1], 1):
-        cell.font = negrita_blanca
-        cell.fill = fondo_indigo
-        cell.alignment = alineacion_centro
-        ws.column_dimensions[get_column_letter(col_num)].width = 22
-
-    for fila in filas:
-        ws.append([fila.get(campo["key"]) if fila.get(campo["key"]) not in (None, "") else "" for campo in campos_elegidos])
-
-    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    filename = f'Informe_Inteligente_{datetime.now().strftime("%Y%m%d_%H%M")}.xlsx'
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    wb.save(response)
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = (
+        'attachment; filename="%s"' % _nombre_de_descarga(context, "xlsx"))
+    libro.save(response)
     return response
-
 
 def _leer_configuracion(configuracion_cruda):
     """
@@ -505,16 +589,22 @@ def _leer_configuracion(configuracion_cruda):
     return configuracion
 
 
-def _normalizar_desglose(valor):
-    """
-    'desglosar_por' era un string único; ahora admite varios campos a la vez.
-    Esta función acepta ambas formas para que favoritos y plantillas rápidas
-    guardados con el formato viejo (string) sigan funcionando sin migración:
-    un string se envuelve en una lista de un elemento, una lista se usa tal cual.
+def _normalizar_lista(valor):
+    """Un valor de configuración que puede venir suelto o en lista, siempre en lista.
+
+    'desglosar_por' era un string único antes de admitir varios campos, y hay
+    favoritos y plantillas guardados con el formato viejo. Aceptar las dos
+    formas evita una migración de datos y que un informe guardado hace meses
+    deje de abrirse. 'tarjetas' nació ya como lista, pero usa la misma función
+    para no tener dos maneras de leer lo mismo.
     """
     if not valor:
         return []
     return [valor] if isinstance(valor, str) else list(valor)
+
+
+# Nombre anterior, conservado porque el resto del módulo lo usa por su nombre.
+_normalizar_desglose = _normalizar_lista
 
 
 def _obtener_definicion(modelo_raiz):

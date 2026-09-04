@@ -38,25 +38,45 @@
         transition: all 0.2s ease;
     }
     .ii-btn-export:active { transform: scale(0.96); }
+    /* Los tres botones de exportar, con el mismo aspecto que en Informes RRHH
+       (`pages/informes/partials/toolbar_informes.html`): sólidos, en degradado y
+       con el color propio de cada programa. El de PDF y el de Excel eran aquí
+       de contorno —fondo transparente y borde— y solo se llenaban al pasar el
+       ratón por encima, que es cuando la pista ya no hace falta. Los tres hacen
+       lo mismo, llevarse el informe, así que tienen que pesar igual. */
     .ii-btn-pdf {
-        background-color: transparent;
-        color: #ff3e1d;
-        border: 1.5px solid #ff3e1d;
+        background: linear-gradient(135deg, #ff5b3d 0%, #e0341a 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 10px rgba(255, 62, 29, 0.3);
     }
-    .ii-btn-pdf:hover { background-color: #ff3e1d; color: #fff; }
+    .ii-btn-pdf:hover {
+        color: #fff;
+        box-shadow: 0 6px 15px rgba(255, 62, 29, 0.4);
+        transform: translateY(-2px);
+    }
     .ii-btn-word {
         background: linear-gradient(135deg, #696cff 0%, #4346e3 100%);
-        color: white;
+        color: #fff;
         border: none;
-        box-shadow: 0 2px 6px rgba(105, 108, 255, 0.3);
+        box-shadow: 0 4px 10px rgba(105, 108, 255, 0.3);
     }
-    .ii-btn-word:hover { color: white; box-shadow: 0 4px 10px rgba(105, 108, 255, 0.4); }
+    .ii-btn-word:hover {
+        color: #fff;
+        box-shadow: 0 6px 15px rgba(105, 108, 255, 0.4);
+        transform: translateY(-2px);
+    }
     .ii-btn-excel {
-        background-color: transparent;
-        color: #059669;
-        border: 1.5px solid #059669;
+        background: linear-gradient(135deg, #21a366 0%, #107c41 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 10px rgba(16, 124, 65, 0.3);
     }
-    .ii-btn-excel:hover { background-color: #059669; color: #fff; }
+    .ii-btn-excel:hover {
+        color: #fff;
+        box-shadow: 0 6px 15px rgba(16, 124, 65, 0.4);
+        transform: translateY(-2px);
+    }
 
     /* ---------- Colores reutilizables ---------- */
     .ii-color-indigo    { --c: var(--ii-indigo);    --c-bg: var(--ii-indigo-bg); }
@@ -581,6 +601,20 @@
                     <select class="form-select form-select-sm" id="selectDesglosarPor" multiple></select>
                 </div>
             </div>
+
+            {% comment %} Tarjetas del resumen. Antes salían las dieciséis siempre y no
+               había forma de quitarlas; ahora se eligen igual que el desglose, con un
+               desplegable de selección múltiple y buscador. Va en su propia fila porque
+               es la lista más larga de las cuatro y necesita ancho. {% endcomment %}
+            <div class="row g-3 mt-1">
+                <div class="col-12">
+                    <label class="form-label small fw-semibold mb-1" style="color: var(--ii-muted);">
+                        <i class="bi bi-grid-1x2-fill me-1" style="color: var(--ii-violeta);"></i>Tarjetas del resumen
+                        {% include 'pages/informe_inteligente/partials/ayuda.html' with titulo="Tarjetas del resumen" contenido="Las cifras que aparecen encima de la tabla. Elija solo las que necesite: si no marca ninguna, el resumen no se muestra. Son independientes de las columnas del detalle —puede ver la edad promedio sin llevar la columna Edad— y de los filtros, que se aplican igual. Las que elija son también las que salen en el PDF, el Word y el Excel." %}
+                    </label>
+                    <select class="form-select form-select-sm" id="selectTarjetas" multiple></select>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -927,6 +961,7 @@
 {{ soporte_historico|json_script:"datosSoporteHistorico" }}
 {{ periodos_cerrados|json_script:"datosPeriodosCerrados" }}
 {{ medidas_evolucion|json_script:"datosMedidasEvolucion" }}
+{{ tarjetas_disponibles|json_script:"datosTarjetasDisponibles" }}
 {% if informe_compartido %}
     {{ informe_compartido.configuracion|json_script:"datosInformeCompartido" }}
     <span id="modeloInformeCompartido" data-modelo="{{ informe_compartido.modelo_raiz }}"></span>
@@ -943,7 +978,8 @@
         eliminarFavorito: "{% url 'informe_inteligente:eliminar_favorito' 0 %}",
         exportarPDF: "{% url 'informe_inteligente:exportar_pdf' %}",
         exportarWord: "{% url 'informe_inteligente:exportar_word' %}",
-        exportarExcel: "{% url 'informe_inteligente:exportar_excel' %}"
+        exportarExcel: "{% url 'informe_inteligente:exportar_excel' %}",
+        comprobarExportacion: "{% url 'informe_inteligente:comprobar_exportacion' %}"
     };
 </script>
 <script src="{% estatico 'js/informe_inteligente.js' %}"></script>

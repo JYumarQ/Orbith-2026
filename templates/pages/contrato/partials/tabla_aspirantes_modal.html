@@ -1,0 +1,91 @@
+{% comment %}
+  Tabla del modal «Nuevo contrato»: los aspirantes contratables.
+
+  La devuelve `bolsa.views.seleccionar_aspirante` por HTMX, así que se
+  reemplaza sola al buscar o al cambiar de página sin recargar la pantalla que
+  hay detrás —la Lista de Contratos o el Gestor de Cargos—.
+
+  Cada fila lleva en `data-url` el destino de «Contratar Aspirante». Se arma
+  aquí, en el servidor, y no en JavaScript: es el mismo `add_contrato` al que
+  lleva el botón «Contratar» de la Lista de Aspirantes, y construirlo a mano en
+  el navegador sería una segunda versión de la misma ruta.
+{% endcomment %}
+<div class="table-responsive" style="max-height: 46vh; overflow-y: auto;">
+    <table class="table table-hover table-sm align-middle mb-0">
+        <thead class="table-light" style="position: sticky; top: 0; z-index: 2;">
+            <tr>
+                <th style="width: 45%;">Nombre y Apellidos</th>
+                <th style="width: 25%;">Carné de Identidad</th>
+                <th class="text-center" style="width: 15%;">Sexo</th>
+                <th class="text-center" style="width: 15%;">Edad</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in aspirantes %}
+                <tr class="fila-aspirante-modal" style="cursor: pointer;"
+                    data-id="{{ a.pk }}"
+                    data-nombre="{{ a.nombre }} {{ a.papellido }} {{ a.sapellido|default:'' }}"
+                    data-url="{% url 'add_contrato' a.doc_identidad %}{% if cargo_id %}?cargo={{ cargo_id }}{% endif %}">
+                    <td class="fw-semibold">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido|default:'' }}</td>
+                    <td class="font-monospace">{{ a.doc_identidad }}</td>
+                    <td class="text-center">{{ a.get_sexo_display }}</td>
+                    <td class="text-center">{{ a.get_edad|default:"—" }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        {% if q %}
+                            No hay aspirantes que coincidan con «{{ q }}».
+                        {% else %}
+                            No hay aspirantes disponibles para contratar.
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% comment %} Paginación de 15 en 15. Conserva la búsqueda y el cargo de origen
+   para no perderlos al pasar de página. {% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mt-2 px-1">
+    <small class="text-muted">
+        {{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ page_obj.paginator.count }}
+    </small>
+    {% comment %} Los números de página se piden DENTRO de su `{% if %}`.
+       `previous_page_number` lanza `EmptyPage` en la primera página y
+       `next_page_number` en la última: Django no silencia esa excepción, así
+       que escribirlos en un botón desactivado tumbaba la petición entera con un
+       error 500 en vez de dibujar un botón apagado. {% endcomment %}
+    <div class="btn-group btn-group-sm">
+        {% if page_obj.has_previous %}
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-get="{% url 'seleccionar_aspirante' %}?q={{ q|urlencode }}&cargo={{ cargo_id }}&page={{ page_obj.previous_page_number }}"
+                    hx-target="#contenido-aspirantes-modal">
+                <i class="bx bx-chevron-left"></i>
+            </button>
+        {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled>
+                <i class="bx bx-chevron-left"></i>
+            </button>
+        {% endif %}
+
+        <span class="btn btn-outline-secondary disabled">
+            {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+            <button type="button" class="btn btn-outline-secondary"
+                    hx-get="{% url 'seleccionar_aspirante' %}?q={{ q|urlencode }}&cargo={{ cargo_id }}&page={{ page_obj.next_page_number }}"
+                    hx-target="#contenido-aspirantes-modal">
+                <i class="bx bx-chevron-right"></i>
+            </button>
+        {% else %}
+            <button type="button" class="btn btn-outline-secondary" disabled>
+                <i class="bx bx-chevron-right"></i>
+            </button>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

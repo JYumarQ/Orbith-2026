@@ -74,7 +74,18 @@ def campo(parrafo, instruccion):
 
 def escribir(parrafo, texto, tamano=11, negrita=False, color=PIZARRA,
              mayusculas=False):
-    run = parrafo.add_run(texto)
+    """Un fragmento de texto con formato. Un `\\n` parte la linea de verdad.
+
+    python-docx NO interpreta el salto de linea: `add_run('a\\nb')` escribe la
+    barra invertida y la ene tal cual. Hace falta un `<w:br/>` explicito, y es lo
+    que permite partir en dos lineas un rotulo de columna estrecha —«Comp.» /
+    «Cargo»— en vez de dejarlo a merced de donde decida cortar Word.
+    """
+    run = parrafo.add_run()
+    for indice, linea in enumerate(str(texto).split('\n')):
+        if indice:
+            run.add_break()
+        run.add_text(linea)
     run.bold = negrita
     run.font.size = Pt(tamano)
     run.font.color.rgb = color

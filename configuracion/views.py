@@ -48,6 +48,13 @@ class ParametrosGeneralesView(FormView):
 
         context['salarios'] = salarios
         context['active_tab'] = self.request.GET.get('tab', 'parametros')
+
+        # Abreviaturas estándar de los municipios cubanos. El panel Territorial
+        # las usa para PROPONER la sigla al escribir el nombre, en su propia
+        # casilla. Que nadie tenga que teclearla es lo que evita que acabe
+        # tecleada en la casilla equivocada.
+        from nomencladores.views import ABR_MUNICIPIOS
+        context['abreviaturas_municipios'] = ABR_MUNICIPIOS
         context['tipos_unidades'] = NTipoUnidadOrganizativa.objects.all()
         context['tridentes'] = NTridente.objects.all()
         context['roles'] = NRol.objects.all()

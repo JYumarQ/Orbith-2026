@@ -840,11 +840,36 @@ class ContratoCreateView(RequiereEdicionMixin, CreateView):
             Aspirante, doc_identidad=self.kwargs['aspirante_id'])
         return kwargs
 
+    def get_initial(self):
+        """El cargo desde el que se abrió el modal, si vino del Gestor de Cargos.
+
+        Llega como `?cargo=<id>`. Se comprueba que exista y esté activo antes de
+        proponerlo: la URL se puede escribir a mano, y un id inventado dejaría el
+        formulario apuntando a una plaza que no está.
+        """
+        initial = super().get_initial()
+        cargo_id = self.request.GET.get('cargo')
+        if cargo_id and str(cargo_id).isdigit():
+            cargo = CargoPlantilla.objects.filter(pk=cargo_id, activo=True).first()
+            if cargo:
+                initial['cargo'] = cargo.pk
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # aspirante_id viene en la URL
         aspirante_id = self.kwargs['aspirante_id']
         context['aspirante'] = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
+
+        # El cargo propuesto, para que la pantalla pueda preseleccionar también
+        # su Unidad y su Departamento: el <select> de cargo depende de los dos.
+        cargo = None
+        cargo_id = self.initial.get('cargo') or self.get_initial().get('cargo')
+        if cargo_id:
+            cargo = (CargoPlantilla.objects
+                     .select_related('departamento__unidad_organizativa')
+                     .filter(pk=cargo_id).first())
+        context['cargo_propuesto'] = cargo
         return context
 
     def form_valid(self, form):
@@ -1188,6 +1213,10 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
                     fecha_baja=fecha_baja,
                     causa_baja_id=causa_id,
                     fecha_alta=contrato.fecha_alta,
+                    # La entrada real a la empresa, que `fecha_alta` (la del contrato)
+                    # no representa en quien ha sido recontratado. Es lo que necesita
+                    # la columna «Años en la Organización» del modelo de bajas.
+                    fecha_alta_entidad=contrato.fecha_alta_entidad,
                     fecha_documento=fecha_efectiva,
                     tridente=contrato.tridente,
                     cobro_sistema_pago=cobro_sistema,
@@ -2355,6 +2384,15 @@ class ExportarContratoWordView(FormView):
         context['contrato'] = contrato
         context['config'] = Configuracion.objects.first()
         context['provincias'] = NProvincia.objects.all().order_by('nombre')
+
+        # Municipio de la unidad organizativa del contrato, para precargarlo en
+        # el desplegable. La provincia NO se toca: todas las unidades comparten
+        # la de Parámetros Generales y solo se les declara el municipio, que
+        # además es opcional. Si esta unidad no lo tiene, queda vacío como antes.
+        unidad = (contrato.cargo.departamento.unidad_organizativa
+                  if contrato.cargo and contrato.cargo.departamento_id else None)
+        context['municipio_unidad_id'] = (
+            unidad.municipio_id if unidad and unidad.municipio_id else '')
 
         # Preparar Grados Científicos para solo lectura
         grados = []

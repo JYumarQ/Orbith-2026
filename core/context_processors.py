@@ -1,5 +1,5 @@
 """Context processors globales de Orbith."""
-from nomencladores.models import COLORES_CAT_OCUPACIONAL
+from nomencladores.models import COLORES_CAT_OCUPACIONAL, COLORES_SEXO
 from usuarios.mixins import puede_editar as _puede_editar
 
 from .changelog import ORBITH_INFO, ORBITH_VERSION, obtener_changelog
@@ -31,6 +31,9 @@ def orbith(request):
         # los listados— y varios de ellos por JavaScript, en gráficos que no
         # pueden leer el CSS. La fuente es `nomencladores.models`.
         'colores_categoria': COLORES_CAT_OCUPACIONAL,
+        # Color del sexo, por el mismo motivo: lo pintan el Dashboard, los
+        # listados, los informes y sus exportables, y algunos por JavaScript.
+        'colores_sexo': COLORES_SEXO,
         # Valores por defecto: coinciden con los del modelo PreferenciasUsuario.
         'pref_sidebar_colapsada': False,
         'pref_animaciones_activas': True,

@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -176,6 +177,71 @@ def color_de_categoria(codigo):
     return COLORES_CAT_OCUPACIONAL.get(codigo or '', COLOR_CAT_DESCONOCIDA)
 
 
+# --------------------------------------------------------------------------
+# SEXO: SIGLA Y COLOR, GLOBALES
+# --------------------------------------------------------------------------
+# Igual que las categorías ocupacionales: un color por valor, decidido en un
+# solo sitio y usado por la pantalla, los gráficos, el Word, el PDF y el Excel.
+#
+# Antes había dos criterios distintos: el Dashboard pintaba a las mujeres de
+# rojo y a los hombres de cian, e Informe Inteligente usaba rosa para el
+# femenino y nada para el masculino. El rojo, además, significa «crítico» en
+# todos los informes: no podía significar también «mujer».
+#
+# El cian del masculino es el que ya usaba la barra de Equilibrio de Género.
+# Queda cerca del cielo de los Obreros, así que en una tabla con las dos
+# columnas conviene no ampliar ninguno de los dos.
+COLORES_SEXO = {
+    'F': '#db2777',   # Femenino — rosa
+    'M': '#03c3ec',   # Masculino — cian
+}
+
+COLOR_SEXO_DESCONOCIDO = '#94a3b8'
+
+
+def color_de_sexo(codigo):
+    """Color del sexo por su código ('F' o 'M'), o gris si no viene."""
+    return COLORES_SEXO.get((codigo or '').upper(), COLOR_SEXO_DESCONOCIDO)
+
+
+# --------------------------------------------------------------------------
+# NIVEL EDUCACIONAL: LA SIGLA QUE SE MUESTRA
+# --------------------------------------------------------------------------
+# La base guarda unos códigos y la aplicación enseña OTROS. No es un descuido:
+# los códigos guardados vienen de antiguo y renombrarlos exigiría una migración
+# de datos; las siglas que se muestran son las que usa la empresa.
+#
+# La diferencia entre las dos ramas de Medio Superior —Técnico Medio y Doce
+# Grado— tiene que verse: son el mismo nivel por caminos distintos, y en un
+# informe de plantilla no da igual cuál de los dos.
+SIGLAS_NIVEL_EDUCACIONAL = {
+    'SA': 'SA',        # Sin Acreditar
+    'PR': 'PR',        # Primaria
+    'NG': 'NM',        # Nivel Medio  (el código guardado es NG, de antiguo)
+    'OC': 'OC',        # Obrero Calificado
+    'TM': 'MS(TM)',    # Medio Superior — Técnico Medio
+    'MS': 'MS(DG)',    # Medio Superior — Doce Grado
+    'NS': 'NS',        # Nivel Superior
+}
+
+#: Lo que significa cada sigla, para la leyenda de los documentos exportados.
+LEYENDA_NIVEL_EDUCACIONAL = (
+    'SA: Sin Acreditar · PR: Primaria · NM: Nivel Medio · '
+    'OC: Obrero Calificado · MS(TM): Medio Superior Técnico Medio · '
+    'MS(DG): Medio Superior Doce Grado · NS: Nivel Superior'
+)
+
+
+def sigla_de_nivel_educacional(codigo):
+    """La sigla que se muestra, a partir del código guardado.
+
+    Un código que no esté en la tabla se devuelve tal cual: es preferible
+    enseñar algo raro que un hueco, porque el hueco no se puede investigar.
+    """
+    codigo = (codigo or '').strip()
+    return SIGLAS_NIVEL_EDUCACIONAL.get(codigo, codigo)
+
+
 class NCargo(Base):
     descripcion = models.CharField(max_length=150)
     cat_ocupacional = models.CharField(max_length=20, choices=[
@@ -289,8 +355,50 @@ class NCondicionLaboralAnormal(models.Model):
 
 
 #?PARAMETROS GENERALES
+# --------------------------------------------------------------------------
+# NOMBRE Y SIGLAS DEL TERRITORIO
+# --------------------------------------------------------------------------
+# El nombre y las siglas son DOS columnas distintas, y así se guardan. Aun así
+# apareció un municipio llamado «Florida      Flo»: alguien escribió las siglas
+# dentro de la casilla del nombre y dejó la de siglas vacía. No entró por la
+# pantalla —su modal ya valida—, sino por una vía que el JavaScript no vigila:
+# el admin de Django, un script o la carga inicial de datos.
+#
+# Por eso la defensa vive AQUÍ, en el modelo: es el único punto por el que
+# pasan todas esas vías.
+
+RE_SIGLAS = re.compile(r'^[A-ZÁÉÍÓÚÑ]{3}$')
+
+
+def _normalizar_nombre(nombre):
+    """Recorta los extremos y colapsa los espacios repetidos.
+
+    «Florida      Flo» seguiría estando mal después de esto —quedaría
+    «Florida Flo»—, pero los seis espacios seguidos son la señal que delata el
+    problema, y `_validar_territorio` la usa para rechazarlo.
+    """
+    return ' '.join((nombre or '').split())
+
+
+def _validar_territorio(instancia):
+    """Reglas comunes a Provincia y Municipio. Devuelve los errores por campo."""
+    errores = {}
+
+    crudo = instancia.nombre or ''
+    if '  ' in crudo.strip():
+        errores['nombre'] = (
+            'El nombre no puede llevar espacios repetidos. Si intentaba '
+            'escribir las siglas, van en su propia casilla.')
+
+    if instancia.siglas and not RE_SIGLAS.match(instancia.siglas.strip().upper()):
+        errores['siglas'] = (
+            'Las siglas son exactamente tres letras, sin números ni espacios.')
+
+    return errores
+
+
 class NProvincia(Base):
-    
+
     nombre = models.CharField(max_length=50, unique=True)
     siglas = models.CharField(
         max_length=3,
@@ -298,12 +406,22 @@ class NProvincia(Base):
         verbose_name="Siglas",
         help_text="Exactamente 3 letras mayúsculas"
     )
-    
+
     class Meta:
         verbose_name = ("NProvincia")
         verbose_name_plural = ("NProvincias")
 
+    def clean(self):
+        super().clean()
+        errores = _validar_territorio(self)
+        if errores:
+            raise ValidationError(errores)
+
     def save(self, *args, **kwargs):
+        # La normalización va en `save` y no solo en `clean` porque `clean` no
+        # se ejecuta al guardar desde un script o una importación, que es por
+        # donde entró el dato roto que motivó todo esto.
+        self.nombre = _normalizar_nombre(self.nombre)
         if self.siglas:
             self.siglas = self.siglas.strip().upper()
         super().save(*args, **kwargs)
@@ -327,7 +445,16 @@ class NMunicipio(Base):
         verbose_name_plural = ("NMunicipios")
         unique_together = ('nombre', 'provincia')
 
+    def clean(self):
+        super().clean()
+        errores = _validar_territorio(self)
+        if errores:
+            raise ValidationError(errores)
+
     def save(self, *args, **kwargs):
+        # Ver la nota en `NProvincia.save`: la normalización va aquí para que
+        # también alcance a los scripts y a las importaciones.
+        self.nombre = _normalizar_nombre(self.nombre)
         if self.siglas:
             self.siglas = self.siglas.strip().upper()
         super().save(*args, **kwargs)

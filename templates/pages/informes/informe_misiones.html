@@ -122,6 +122,10 @@
         window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_misiones_pdf' %}" + window.location.search;
     }
+    function ejecutarExcel() {
+        window.mostrarToast('Preparando el libro de Excel…', 'info');
+        window.location.href = "{% url 'exportar_misiones_excel' %}" + window.location.search;
+    }
 </script>
 
 <script>

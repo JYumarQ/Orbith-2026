@@ -17,6 +17,15 @@
     }
     .btn-export:active { transform: scale(0.96); }
 
+    /* El panel del selector de período, por delante de la barra lateral.
+       La barra es `position: fixed` con z-index 1080 y los desplegables de
+       Bootstrap salen con 1000, así que el panel quedaba ATRAPADO detrás de ella
+       cuando estaba desplegada: se abría y no se veía. Le pasaba en los siete
+       informes. Un desplegable es una ventana temporal y su sitio es delante de
+       todo; correrlo a la derecha habría escondido el síntoma solo mientras la
+       pantalla fuera ancha. */
+    .toolbar-card .dropdown-menu { z-index: 1085; }
+
     /* Botón PDF. Sólido, gemelo del de Word: era el único «outline» de la
        barra —fondo transparente y borde rojo— y al lado de un botón relleno no
        parecía un botón, sino un texto con recuadro. Solo se llenaba de rojo al
@@ -29,6 +38,22 @@
     }
     .btn-pdf:hover {
         box-shadow: 0 6px 15px rgba(255, 62, 29, 0.4);
+        transform: translateY(-2px);
+        color: #fff;
+    }
+
+    /* Botón Excel. Verde de Excel, sólido como sus dos vecinos: los tres
+       botones son la misma acción —llevarse el informe— y tienen que pesar
+       igual. El color es lo único que los distingue, y es el que cada programa
+       usa como suyo. */
+    .btn-excel {
+        background: linear-gradient(135deg, #21a366 0%, #107c41 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 0 4px 10px rgba(16, 124, 65, 0.3);
+    }
+    .btn-excel:hover {
+        box-shadow: 0 6px 15px rgba(16, 124, 65, 0.4);
         transform: translateY(-2px);
         color: #fff;
     }
@@ -99,7 +124,25 @@
                meses tienen cierre. «Volver a datos actuales» sustituye a la opción
                «Información actual» del primer desplegable. {% endcomment %}
             <div class="d-flex align-items-center justify-content-center justify-content-xl-start flex-wrap gap-2 mt-2">
-                {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_informes' modo='solo-con-datos' annos=periodos_annos con_datos=periodos_claves anno=periodo_anno mes=periodo_mes etiqueta_vacia='Información actual' plantilla_etiqueta='Cierre de {mes} {anno}' texto_sin_dato='sin cierre declarado' texto_limpiar='Volver a la información actual' ayuda='Los meses en gris no tienen cierre declarado.' icono='bx bx-calendar-event' %}
+                {% comment %} El MISMO control, con dos significados según el informe.
+
+                   Seis de los siete son fotografías: el selector elige entre la
+                   información actual y el cierre de un mes, y por eso solo ofrece
+                   meses que tengan cierre declarado.
+
+                   «Altas y Bajas del Mes» es de movimientos y no lee cierres
+                   (ver `informes/altas_bajas.py`): ahí el selector elige el mes
+                   de los movimientos, ofrece cualquiera, resalta los que tuvieron
+                   altas o bajas, y no ofrece «volver a la información actual»
+                   porque un informe de movimientos siempre necesita un mes.
+
+                   Tener un solo control en un solo sitio, y no dos, es lo que
+                   evita la pregunta «¿cuál de los dos manda?». {% endcomment %}
+                {% if periodo_de_movimientos %}
+                    {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_informes' modo='todos' annos=periodos_annos con_datos=periodos_claves anno=periodo_anno mes=periodo_mes plantilla_etiqueta='Mov. de {mes} {anno}' texto_sin_dato='sin movimientos' ayuda='Los meses resaltados tuvieron altas o bajas. Los demás se pueden consultar igual: dirán cero.' icono='bx bx-transfer' %}
+                {% else %}
+                    {% include 'base/partials/selector_periodo.html' with id_caja='caja_periodo_informes' modo='solo-con-datos' annos=periodos_annos con_datos=periodos_claves anno=periodo_anno mes=periodo_mes etiqueta_vacia='Información actual' plantilla_etiqueta='Cierre de {mes} {anno}' texto_sin_dato='sin cierre declarado' texto_limpiar='Volver a la información actual' ayuda='Los meses en gris no tienen cierre declarado.' icono='bx bx-calendar-event' %}
+                {% endif %}
 
                 {% if es_historico %}
                     <span class="badge bg-label-info">
@@ -140,6 +183,7 @@
                     <option value="{% url 'informe_misiones' %}">Misiones Internacionales</option>
                     <option value="{% url 'informe_registro_diario' %}">Registro Diario por Trabajadores</option>
                     <option value="{% url 'informe_motivos_contrato' %}">Contratos Determinados (Motivos)</option>
+                    <option value="{% url 'informe_altas_bajas' %}">Altas y Bajas del Mes</option>
                 </select>
             </div>
 
@@ -150,8 +194,13 @@
                 </button>
                 
                 <button type="button" onclick="descargarWord()" class="btn btn-export btn-word d-flex align-items-center gap-2" title="Exportar a Word">
-                    <i class="bx bxs-file-doc fs-5"></i> 
+                    <i class="bx bxs-file-doc fs-5"></i>
                     <span>Word</span>
+                </button>
+
+                <button type="button" onclick="descargarExcel()" class="btn btn-export btn-excel d-flex align-items-center gap-2" title="Exportar a Excel">
+                    <i class="bx bxs-file fs-5"></i>
+                    <span>Excel</span>
                 </button>
             </div>
 
@@ -220,18 +269,40 @@ $(document).ready(function() {
        El selector de período no navega por su cuenta: escribe año y mes en sus
        campos ocultos y avisa con `orbith:periodo`. Aquí se traduce a los
        parámetros `fuente` y `periodo` que entiende `informes.fuentes`, y se
-       conserva el resto de la URL para no perder el filtro por unidad. */
+       conserva el resto de la URL para no perder el filtro por unidad.
+
+       En «Altas y Bajas del Mes» el mismo control significa otra cosa —el mes de
+       los movimientos, no una fotografía— y por eso escribe `mes` y `anno` en vez
+       de `fuente` y `periodo`. Si escribiera `fuente=cierre`, pedir un mes sin
+       cierre declarado devolvería un informe vacío con un aviso de unidades que
+       no cerraron, que es justo lo contrario de lo que ese informe sabe hacer. */
+    var ESCRIBE_MES = {% if periodo_de_movimientos %}true{% else %}false{% endif %};
+
     document.getElementById('caja_periodo_informes')
         .addEventListener('orbith:periodo', function (evento) {
             var elegido = evento.detail.clave;
             var params = new URLSearchParams(window.location.search);
-            if (elegido) {
+
+            if (ESCRIBE_MES) {
+                if (elegido) {
+                    params.set('anno', elegido.slice(0, 4));
+                    params.set('mes', String(parseInt(elegido.slice(5), 10)));
+                } else {
+                    params.delete('anno');
+                    params.delete('mes');
+                }
+                // Restos de otro informe: aquí no significan nada y, si se
+                // quedaran, `resolver_fuente` los leería y mandaría sobre el mes.
+                params.delete('fuente');
+                params.delete('periodo');
+            } else if (elegido) {
                 params.set('fuente', 'cierre');
                 params.set('periodo', elegido);
             } else {
                 params.delete('fuente');
                 params.delete('periodo');
             }
+
             var cadena = params.toString();
             window.location.href = window.location.pathname + (cadena ? '?' + cadena : '');
         });
@@ -246,5 +317,10 @@ function descargarPDF() {
 function descargarWord() {
     if (typeof ejecutarWord === 'function') ejecutarWord();
     else Swal.fire('Aviso', 'La exportación a Word para este informe está en desarrollo.', 'info');
+}
+
+function descargarExcel() {
+    if (typeof ejecutarExcel === 'function') ejecutarExcel();
+    else Swal.fire('Aviso', 'La exportación a Excel para este informe está en desarrollo.', 'info');
 }
 </script>

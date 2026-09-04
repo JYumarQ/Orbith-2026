@@ -373,9 +373,14 @@
                         </div>
 
                         <div class="vr mx-1 opacity-25"></div>
-                        <a href="{% url 'list_aspir' %}" class="btn btn-xs btn-primary px-2" id="btn-add-personal" title="Contratar">
+                        {% comment %} Abre el modal de aspirantes llevándose el cargo que
+                           se está mirando, para que el formulario llegue con la plaza
+                           ya elegida. Antes avisaba con un SweetAlert de que iba a
+                           redirigir a la Lista de Aspirantes, y allí se perdía el
+                           cargo. {% endcomment %}
+                        <button type="button" class="btn btn-xs btn-primary px-2" id="btn-add-personal" title="Contratar">
                             <i class="fas fa-plus"></i>
-                        </a>
+                        </button>
                     </div>
                 </div>
 
@@ -986,10 +991,10 @@
     if (btnAddPersonal) {
         btnAddPersonal.addEventListener('click', function(e) {
             e.preventDefault();
-            Swal.fire({
-                title: 'Nuevo Contrato', text: 'Serás redirigido al listado de aspirantes.', icon: 'info',
-                showCancelButton: true, confirmButtonText: 'Ir al listado'
-            }).then((result) => { if (result.isConfirmed) window.location.href = this.href; });
+            /* El cargo sobre el que se pulsó viaja al modal y de ahí al
+               formulario. `selectedCargoId` es el que ya mantiene esta pantalla
+               al marcar un cargo en la columna central. */
+            window.abrirModalNuevoContrato(selectedCargoId || '');
         });
     }
 
@@ -1099,4 +1104,6 @@
         });
     }
 </script>
+
+{% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}
 {% endblock %}

@@ -438,14 +438,39 @@ class IndicadoresYEvolucionTests(TestCase):
         cls.admin = CustomUser.objects.create_user(
             username='admin_ii_indicadores', password='x', es_admin=True)
 
-    def _indicadores(self, modelo_raiz='CAlta'):
+    def _indicadores(self, modelo_raiz='CAlta', keys=None):
+        """Las tarjetas calculadas. Por omisión, TODAS las del modelo.
+
+        Estas pruebas comprueban la aritmética de cada tarjeta, no cuáles se
+        muestran: eso lo elige el usuario y se prueba aparte. Por eso se piden
+        todas explícitamente en vez de confiar en un valor por defecto.
+        """
         from informe_inteligente import motor
+        from informe_inteligente.metadata import INDICADORES_POR_MODELO
+
+        if keys is None:
+            keys = [spec['key'] for spec in INDICADORES_POR_MODELO[modelo_raiz]]
 
         queryset, definicion = motor._construir_queryset_filtrado(
             modelo_raiz, {'filtros': []}, self.admin)
         tarjetas, total = motor.calcular_indicadores(
-            queryset, definicion, modelo_raiz)
+            queryset, definicion, modelo_raiz, keys)
         return {t['label']: t for t in tarjetas}, total
+
+    def test_sin_tarjetas_pedidas_no_se_calcula_ninguna(self):
+        """El resumen aparece cuando se pide, igual que el desglose.
+
+        Antes se pintaban las dieciséis siempre y no había forma de quitarlas.
+        """
+        tarjetas, total = self._indicadores(keys=[])
+        self.assertEqual(tarjetas, {})
+        # El total sigue viniendo: lo necesitan la paginación, los porcentajes
+        # del desglose y el aviso de tamaño al exportar.
+        self.assertEqual(total, 3)
+
+    def test_solo_se_calculan_las_tarjetas_pedidas(self):
+        tarjetas, _ = self._indicadores(keys=['mujeres'])
+        self.assertEqual(list(tarjetas), ['Mujeres'])
 
     # --- Tarjetas del resumen -------------------------------------------
 

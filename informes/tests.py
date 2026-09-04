@@ -19,6 +19,7 @@ from django.urls import reverse
 from bolsa.models import Aspirante
 from cierres import servicios as servicios_cierres
 from contratos.models import CAlta
+from informes import altas_bajas as altas_bajas_modulo
 from informes import fuentes
 from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
                                   NTipoContrato, NTipoUnidadOrganizativa)
@@ -1237,3 +1238,285 @@ class RegistroDiarioExportaYPlan(BaseInformes):
                 pdf = self.client.get(reverse(ruta_pdf))
                 self.assertEqual(pdf.status_code, 200)
                 self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+
+class AltasYBajasDelMes(BaseInformes):
+    """El informe del modelo de la UNE.
+
+    Lo que de verdad se prueba aquí es que las altas se busquen en las DOS
+    tablas. Es el único de los siete informes que no puede leer solo `CAlta`:
+    dar de baja a alguien BORRA su contrato, así que quien entra y sale el mismo
+    mes desaparecería del informe de ese mes.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from contratos.models import CBaja
+        self.CBaja = CBaja
+
+        # Entró en marzo y sigue en plantilla.
+        self.aspirante_activo = Aspirante.objects.create(
+            nivel_educ='NS', nombre='Luis', papellido='Ruiz', sapellido='Mora',
+            doc_identidad='90020254321', estado='ACTIVO', sexo='M', raza='BL',
+            unidad_organizativa=self.unidad,
+            provincia=self.provincia, municipio=self.municipio)
+        CAlta.objects.create(
+            aspirante=self.aspirante_activo, no_expediente='00200',
+            tipo=self.tipo_contrato, cargo=self.cargo,
+            fecha_alta=date(2026, 3, 10))
+
+        # Entró en marzo y se fue en abril: solo existe ya como CBaja.
+        self.aspirante_ida = Aspirante.objects.create(
+            nivel_educ='NG', nombre='Rosa', papellido='Lima', sapellido='Paz',
+            doc_identidad='88030398765', estado='BAJA', sexo='F', raza='BL',
+            unidad_organizativa=self.unidad,
+            provincia=self.provincia, municipio=self.municipio)
+        self.baja = CBaja.objects.create(
+            aspirante=self.aspirante_ida, no_expediente='00300',
+            tipo=self.tipo_contrato, cargo=self.cargo,
+            fecha_alta=date(2026, 3, 20), fecha_baja=date(2026, 4, 5),
+            fecha_alta_entidad=date(2020, 3, 20))
+
+    def informe(self, **parametros):
+        parametros.setdefault('mes', 3)
+        parametros.setdefault('anno', 2026)
+        return self.client.get(reverse('informe_altas_bajas'), parametros)
+
+    def test_las_altas_incluyen_a_quien_ya_fue_dado_de_baja(self):
+        """Rosa entró en marzo y se fue en abril: marzo tiene que contarla.
+
+        Si esta prueba falla, el informe de un mes cerrado devolvería cifras
+        distintas cada vez que se genere, que es justo lo que no puede pasar en
+        un documento que se archiva.
+        """
+        respuesta = self.informe()
+        nombres = [f.nombre for f in respuesta.context['altas']]
+        self.assertIn('Rosa Lima Paz', nombres)
+        self.assertIn('Luis Ruiz Mora', nombres)
+        self.assertEqual(respuesta.context['resumen_altas']['total'], 2)
+
+    def test_la_baja_sale_en_su_propio_mes_y_no_en_otro(self):
+        self.assertEqual(
+            self.informe(mes=4).context['resumen_bajas']['total'], 1)
+        self.assertEqual(
+            self.informe(mes=3).context['resumen_bajas']['total'], 0)
+
+    def test_el_desglose_suma_el_total_de_puestos_clave(self):
+        """Si estas dos cifras no cuadran, la hoja de resumen se contradice."""
+        resumen = self.informe().context['resumen_altas']
+        self.assertEqual(sum(cantidad for _, cantidad in resumen['desglose']),
+                         resumen['total_claves'])
+
+    def test_la_antiguedad_se_mide_desde_la_entrada_a_la_entidad(self):
+        """Rosa lleva seis años en la empresa aunque su contrato sea de marzo."""
+        fila = self.informe(mes=4).context['bajas'][0]
+        self.assertEqual(fila.antiguedad, '6 años')
+
+    def test_sin_fecha_de_entidad_se_cae_a_la_del_contrato(self):
+        """Las bajas anteriores a la migración no tienen el dato nuevo."""
+        self.baja.fecha_alta_entidad = None
+        self.baja.save()
+        fila = self.informe(mes=4).context['bajas'][0]
+        self.assertEqual(fila.antiguedad, '16 días')
+
+    def test_un_mes_imposible_no_revienta(self):
+        """La URL se escribe a mano: `?mes=99` cae al mes en curso."""
+        self.assertEqual(self.informe(mes=99).status_code, 200)
+        self.assertEqual(self.informe(mes='marzo').status_code, 200)
+
+    def test_las_tres_exportaciones_responden(self):
+        for nombre in ('exportar_altas_bajas_word',
+                       'exportar_altas_bajas_pdf',
+                       'exportar_altas_bajas_excel'):
+            with self.subTest(exportacion=nombre):
+                respuesta = self.client.get(
+                    reverse(nombre), {'mes': 3, 'anno': 2026})
+                self.assertEqual(respuesta.status_code, 200)
+                self.assertGreater(len(respuesta.content), 3000)
+
+    def test_el_moderador_no_ve_los_movimientos_de_otra_unidad(self):
+        """El alcance se aplica en el servidor, no limitando el desplegable."""
+        moderador = CustomUser.objects.create_user(
+            username='mod_altas_bajas', password='x', es_moderador=True)
+        moderador.unidades.set([self.otra_unidad])
+        self.client.force_login(moderador)
+
+        # Pide explícitamente la unidad que NO tiene asignada.
+        respuesta = self.informe(ueb=self.unidad.pk)
+        self.assertEqual(respuesta.context['resumen_altas']['total'], 0)
+
+    def test_por_defecto_se_abre_en_el_mes_anterior(self):
+        """El que se envía a la UNE es el último mes COMPLETO.
+
+        Abrir en el mes en curso enseñaría un total a medio hacer con toda la
+        apariencia de estar terminado.
+        """
+        from datetime import timedelta
+        hoy = date.today()
+        anterior = date(hoy.year, hoy.month, 1) - timedelta(days=1)
+
+        contexto = self.client.get(reverse('informe_altas_bajas')).context
+        self.assertEqual(contexto['mes_actual'], str(anterior.month))
+        self.assertEqual(contexto['anno_actual'], str(anterior.year))
+
+    def test_el_municipio_es_el_de_la_unidad_de_cada_persona(self):
+        self.unidad.municipio = self.municipio
+        self.unidad.save()
+        fila = self.informe().context['altas'][0]
+        self.assertEqual(fila.municipio, self.municipio.nombre)
+
+    def test_sin_municipio_declarado_se_escribe_la_marca_de_hueco(self):
+        """Una celda en blanco no distingue «no lo tiene» de «se olvidó»."""
+        self.unidad.municipio = None
+        self.unidad.save()
+        fila = self.informe().context['altas'][0]
+        self.assertEqual(fila.municipio, altas_bajas_modulo.SIN_MUNICIPIO)
+
+    def test_los_meses_resaltados_son_los_que_tuvieron_movimiento(self):
+        """La rejilla del selector marca meses con altas o bajas, no con cierre."""
+        claves = self.informe().context['periodos_claves']
+        self.assertIn('2026-03', claves)   # las dos altas
+        self.assertIn('2026-04', claves)   # la baja
+        self.assertNotIn('2026-02', claves)
+
+    def test_el_desglose_de_no_clave_suma_su_propio_total(self):
+        """Los dos desgloses juntos tienen que sumar el total del mes."""
+        resumen = self.informe().context['resumen_altas']
+        suma_clave = sum(c for _, c in resumen['desglose'])
+        suma_no_clave = sum(c for _, c in resumen['desglose_no_clave'])
+
+        self.assertEqual(suma_clave, resumen['total_claves'])
+        self.assertEqual(suma_no_clave, resumen['total_no_claves'])
+        self.assertEqual(suma_clave + suma_no_clave, resumen['total'])
+
+    def test_los_dos_desgloses_se_emparejan_a_la_longitud_del_mayor(self):
+        """Las cuatro salidas recorren UNA lista, así que vienen ya cuadradas.
+
+        El de Word son bucles de docxtpl, que no saben ir por dos colecciones a
+        la vez; emparejar en Python es lo que permite pintarlos uno al lado del
+        otro en los cuatro formatos.
+        """
+        resumen = self.informe().context['resumen_altas']
+        esperado = max(len(resumen['desglose']), len(resumen['desglose_no_clave']))
+        self.assertEqual(len(resumen['desglose_par']), esperado)
+
+        # Las celdas sobrantes del bloque más corto van vacías, no a cero: un
+        # cero significaría «este cargo tuvo cero movimientos», que es falso.
+        for par in resumen['desglose_par']:
+            self.assertIn(par['cantidad_clave'].__class__, (int, str))
+
+    def test_las_pantallas_de_detalle_no_repiten_la_provincia(self):
+        """Es la misma en todas las filas y ya la declara la cabecera."""
+        html = self.informe().content.decode()
+        self.assertIn('Municipio', html)
+        # El resumen sí la lleva —una vez por cada una de las dos hojas—; las
+        # dos listas de personas, no.
+        self.assertEqual(html.count('>Provincia</th>'), 2)
+
+
+class ExportacionesAExcel(BaseInformes):
+    """Los SIETE informes de RRHH tienen que producir un libro de verdad.
+
+    Es la misma guardia que `ExportacionesAWord` monta sobre los Word, y por el
+    mismo motivo: un fallo en una exportación no se ve hasta que alguien pulsa
+    el botón, y son siete botones. La lista se recorre entera, así que añadir un
+    informe nuevo sin su Excel hace saltar esta prueba.
+    """
+
+    EXPORTACIONES = (
+        ('exportar_consolidado_excel', 'Consolidado'),
+        ('exportar_resumen_ueb_excel', 'Trabajadores por UEB'),
+        ('exportar_puestos_clave_excel', 'Puestos Clave'),
+        ('exportar_misiones_excel', 'Misiones'),
+        ('exportar_registro_diario_excel', 'Indicadores'),
+        ('exportar_motivos_excel', 'Contratos Determinados'),
+        ('exportar_altas_bajas_excel', None),
+    )
+
+    def libro(self, nombre_url):
+        """Descarga la exportación y devuelve el libro ya abierto."""
+        import io as _io
+
+        from openpyxl import load_workbook
+
+        respuesta = self.client.get(reverse(nombre_url))
+        self.assertEqual(respuesta.status_code, 200,
+                         '%s devolvió %s: %s' % (nombre_url,
+                                                 respuesta.status_code,
+                                                 respuesta.content[:200]))
+        return load_workbook(_io.BytesIO(respuesta.content))
+
+    def test_los_siete_generan_un_libro_valido(self):
+        for nombre_url, hoja_de_datos in self.EXPORTACIONES:
+            with self.subTest(exportacion=nombre_url):
+                libro = self.libro(nombre_url)
+                # La portada es obligatoria en los siete: es lo que identifica
+                # de quién es el documento cuando se envía suelto.
+                self.assertIn('Portada', libro.sheetnames)
+                if hoja_de_datos:
+                    self.assertIn(hoja_de_datos, libro.sheetnames)
+
+    def test_los_seis_propios_llevan_hoja_de_resumen(self):
+        """«Altas y Bajas» no la lleva: su resumen son dos hojas del modelo UNE."""
+        for nombre_url, _ in self.EXPORTACIONES[:-1]:
+            with self.subTest(exportacion=nombre_url):
+                self.assertIn('Resumen', self.libro(nombre_url).sheetnames)
+
+    def test_los_informes_con_niveles_traen_las_dos_vistas(self):
+        """Una hoja plana y filtrable, y otra que imita los niveles."""
+        for nombre_url, plana, niveles in (
+                ('exportar_puestos_clave_excel', 'Puestos Clave', 'Por niveles'),
+                ('exportar_misiones_excel', 'Misiones', 'Por unidad'),
+                ('exportar_motivos_excel', 'Contratos Determinados', 'Por niveles')):
+            with self.subTest(exportacion=nombre_url):
+                hojas = self.libro(nombre_url).sheetnames
+                self.assertIn(plana, hojas)
+                self.assertIn(niveles, hojas)
+
+    def test_el_conmutador_manda_sobre_el_volcado(self):
+        """En consolidado desaparece el nivel de unidad, como en pantalla.
+
+        Se ejercita el volcado directamente y no la vista porque el juego de
+        datos de estas pruebas no tiene contratos determinados, y sin ellos las
+        dos hojas saldrían vacías y la comparación no probaría nada.
+
+        La regresión que vigila: antes el modo se decidía mirando si el motivo
+        traía `uebs`, y como la vista indexa cada contrato SIEMPRE de las dos
+        formas, «Desglosado» y «Consolidado» devolvían el mismo desglose.
+        """
+        from informes.views import ExportarMotivosExcelView
+
+        class ContratoFalso:
+            no_expediente = '00777'
+            aspirante_nombre = 'Ana Pérez'
+            sexo = 'F'
+
+        contrato = ContratoFalso()
+        agrupados = {
+            'Determinado': {
+                'total': 1,
+                'motivos': {
+                    'Sustitución': {
+                        'total': 1,
+                        'uebs': {'UEB Central': {'contratos': [contrato]}},
+                        'contratos': [{'contrato': contrato,
+                                       'unidad': 'UEB Central'}],
+                    },
+                },
+            },
+        }
+
+        vista = ExportarMotivosExcelView()
+        _, con_unidad = vista._volcar(agrupados, consolidado=False)
+        _, sin_unidad = vista._volcar(agrupados, consolidado=True)
+
+        # Las filas son ternas (papel, profundidad, valores).
+        self.assertEqual(len(con_unidad) - len(sin_unidad), 1)
+        self.assertTrue(any('UEB Central' in fila[0]
+                            for _, _, fila in con_unidad))
+        self.assertFalse(any('UEB Central' in fila[0]
+                             for _, _, fila in sin_unidad))
+
+        # Y sin el nivel de unidad, el contrato sube un escalón.
+        profundidad = {papel: nivel for papel, nivel, _ in sin_unidad}
+        self.assertEqual(profundidad['dato'], 2)

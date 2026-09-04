@@ -419,6 +419,14 @@ def _campos_calta():
             "sensible": False,
             "choices_dinamicas": _opciones_niveles_preparacion,
         },
+        "c_formal": {
+            "label": "Calif. Formal",
+            "ruta_orm": "c_formal",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
         "funcionario": {
             "label": "Funcionario",
             "ruta_orm": "cargo__funcionario",
@@ -703,6 +711,7 @@ def _campos_cbaja():
         "cnci", "instructor",
         "fecha_vence_lic", "fecha_vence_recal", "fecha_vence_seg",
         "jubilado_recontratado", "salario",
+        "c_formal", "funcionario_res", "designado_res", "c_formal_res",
     }
     campos = {key: valor for key, valor in base.items() if key not in solo_calta}
 
@@ -1411,6 +1420,7 @@ _RUTAS_HISTORICAS_CONTRATO = {
     "pais": "pais",
     "funcionario_res": "funcionario_res",
     "designado_res": "designado_res",
+    "c_formal": "c_formal",
     "c_formal_res": "c_formal_res",
     "fecha_vence_lic": "fecha_vence_lic",
     "fecha_vence_recal": "fecha_vence_recal",
@@ -1513,7 +1523,6 @@ REGISTRO_MODELOS = {
         "ruta_aspirante": "aspirante",
         "campos": _campos_calta(),
         # Por qué campo se desglosa el resumen si el usuario no elige otro.
-        "desglose_por_defecto": "categoria_ocupacional",
     },
     "CBaja": {
         "app_label": "contratos",
@@ -1521,14 +1530,12 @@ REGISTRO_MODELOS = {
         "ruta_unidad_organizativa": "cargo__departamento__unidad_organizativa",
         "ruta_aspirante": "aspirante",
         "campos": _campos_cbaja(),
-        "desglose_por_defecto": "causa_baja",
     },
     "CargoPlantilla": {
         "app_label": "strorganizativa",
         "label": "Estructura y Plantilla Aprobada",
         "ruta_unidad_organizativa": "departamento__unidad_organizativa",
         "campos": _campos_cargoplantilla(),
-        "desglose_por_defecto": "categoria_ocupacional",
     },
     "Aspirante": {
         "app_label": "bolsa",
@@ -1540,7 +1547,6 @@ REGISTRO_MODELOS = {
         # Aspirante ES el dato personal (sin FK intermedio): ruta_aspirante
         # queda sin definir a propósito, así el prefijo de anotación es vacío.
         "campos": _campos_aspirante(),
-        "desglose_por_defecto": "estado",
     },
     "TMovimiento": {
         "app_label": "contratos",
@@ -1553,7 +1559,6 @@ REGISTRO_MODELOS = {
         "ruta_unidad_organizativa": ["unidad_anterior_fk", "unidad_nueva_fk"],
         "ruta_aspirante": "aspirante",
         "campos": _campos_tmovimiento(),
-        "desglose_por_defecto": "tipo_movimiento",
     },
 
 }
@@ -2336,6 +2341,44 @@ PLANTILLAS_RAPIDAS = {
         },
     ],
 }
+
+
+# --------------------------------------------------------------------------
+# CAMPOS DE CONTENIDO CORTO
+# --------------------------------------------------------------------------
+# Se muestran CENTRADOS en horizontal y en vertical, en la pantalla y en las
+# tres exportaciones. Alineado a la izquierda, un dato de dos caracteres queda
+# pegado al borde de su columna y la columna parece vacía.
+#
+# Tres tipos lo son por naturaleza y no hace falta enumerarlos: las fechas
+# (dd/mm/aa), los booleanos (Sí/No) y los números. El resto —opciones y textos
+# que resultan ser cortos— se marcan aquí uno a uno, por CLAVE y no por modelo:
+# `sexo` es corto en Contratos, en Aspirantes y en donde aparezca.
+#
+# Se marcan y no se deducen midiendo el contenido a propósito: midiendo, el
+# mismo campo saldría centrado en un informe y a la izquierda en otro según los
+# datos de cada uno, y una columna que cambia de sitio no se reconoce.
+TIPOS_CORTOS = ('fecha', 'booleano', 'numero')
+
+CAMPOS_CORTOS = {
+    # Identificación
+    'sexo', 'carne_identidad', 'serie_ci', 'no_expediente', 'cumpleanos',
+    'raza', 'estado', 'reg_militar',
+    # Formación y categoría
+    'nivel_educ', 'grado_cientifico', 'categoria_ocupacional',
+    'nivel_preparacion',
+    # Nómina
+    'rol', 'tridente', 'tipo_salario',
+    # Resoluciones: son un número y dos cifras de año, «123/26»
+    'funcionario_res', 'designado_res', 'c_formal_res',
+    # Misión
+    'pais',
+}
+
+
+def es_campo_corto(campo, key=''):
+    """Si el contenido de este campo cabe en unos pocos caracteres."""
+    return (campo.get('tipo') in TIPOS_CORTOS) or (key in CAMPOS_CORTOS)
 
 
 def agrupar_campos_por_categoria(definicion_modelo):

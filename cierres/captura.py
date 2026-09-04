@@ -137,6 +137,7 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         profesional=bool(contrato.profesional),
         jubilado_recontratado=bool(contrato.jubilado_recontratado),
         fecha_alta_entidad=contrato.fecha_alta_entidad,
+        c_formal=bool(contrato.c_formal),
         funcionario_res=contrato.funcionario_res or '',
         designado_res=contrato.designado_res or '',
         c_formal_res=contrato.c_formal_res or '',

@@ -189,6 +189,39 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /**
+     * Rellena el desplegable de tarjetas del resumen con las que ofrece el
+     * modelo elegido. Es independiente de los campos marcados: una tarjeta
+     * responde preguntas que ninguna columna contesta —la edad promedio no
+     * necesita la columna Edad— y atarlas haría que añadir una columna al
+     * detalle cambiara el resumen sin haberlo pedido.
+     */
+    function refrescarSelectTarjetas() {
+        const select = elem('selectTarjetas');
+        if (!select || !window.jQuery) return;
+
+        const valoresPrevios = $(select).val() || [];
+        if ($(select).data('select2')) $(select).select2('destroy');
+        select.innerHTML = '';
+
+        const porModelo = leerJsonEmbebido('datosTarjetasDisponibles') || {};
+        (porModelo[modeloRaizActual()] || []).forEach(function (tarjeta) {
+            const opcion = document.createElement('option');
+            opcion.value = tarjeta.key;
+            opcion.textContent = tarjeta.label;
+            select.appendChild(opcion);
+        });
+
+        const disponibles = Array.from(select.options).map(o => o.value);
+        $(select).val(valoresPrevios.filter(v => disponibles.includes(v)));
+        $(select).select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: '— Sin tarjetas de resumen —',
+            allowClear: true,
+        });
+    }
+
+    /**
      * Rellena el desplegable de desglose (Select2 de selección múltiple) con
      * TODOS los campos agrupables del modelo, estén o no marcados para
      * mostrar: el resumen es independiente de las columnas del detalle.
@@ -322,6 +355,7 @@ document.addEventListener('DOMContentLoaded', function () {
         actualizarAvisoFiltros();
         refrescarSelectOrden();
         refrescarSelectDesglose();
+        refrescarSelectTarjetas();
         // Ya mismo, sin esperar a que HTMX traiga los campos: si la fuente nueva
         // no se fotografía, el selector de fecha no puede quedar ni un instante
         // habilitado con el mes anterior todavía puesto.
@@ -335,6 +369,7 @@ document.addEventListener('DOMContentLoaded', function () {
         actualizarContadorCampos();
         refrescarSelectOrden();
         refrescarSelectDesglose();
+        refrescarSelectTarjetas();
         // El panel recién inyectado trae su propio icono de ayuda sin activar.
         activarAyudaContextual(evt.target);
         // Los checkboxes acaban de llegar: hay que volver a aplicarles el estado
@@ -773,6 +808,7 @@ document.addEventListener('DOMContentLoaded', function () {
             campos: camposSeleccionados().map(cb => cb.value),
             filtros: [],
             desglosar_por: window.jQuery ? ($(elem('selectDesglosarPor')).val() || []) : [],
+            tarjetas: window.jQuery ? ($(elem('selectTarjetas')).val() || []) : [],
             ordenar_por: elem('selectOrdenarPor')?.value || '',
             orden_direccion: elem('selectOrdenDireccion')?.value || 'asc'
         };
@@ -852,9 +888,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         refrescarSelectDesglose();
+        refrescarSelectTarjetas();
+
         const selectDesglose = elem('selectDesglosarPor');
         if (selectDesglose && window.jQuery) {
             $(selectDesglose).val(normalizarDesglose(configuracion.desglosar_por)).trigger('change');
+        }
+
+        const selectTarjetas = elem('selectTarjetas');
+        if (selectTarjetas && window.jQuery) {
+            $(selectTarjetas).val(normalizarDesglose(configuracion.tarjetas)).trigger('change');
         }
 
         const campos = configuracion.campos || [];
@@ -1123,6 +1166,7 @@ document.addEventListener('DOMContentLoaded', function () {
         actualizarContadorCampos();
         refrescarSelectOrden();
         refrescarSelectDesglose();
+        refrescarSelectTarjetas();
     }
 
     // =====================================================================
@@ -1538,6 +1582,13 @@ document.addEventListener('DOMContentLoaded', function () {
      * navegador dispara la descarga a partir del Content-Disposition
      * que devuelve el servidor.
      */
+    /* Informe guardado del que salió lo que hay en pantalla, o null si se armó
+       sobre la marcha. Solo se rellena al cargar un favorito: al aplicar una
+       plantilla rápida NO, porque una plantilla es un punto de partida y no un
+       informe con nombre propio. */
+    let informeGuardadoActual = null;
+    window.olvidarInformeGuardado = function () { informeGuardadoActual = null; };
+
     function ejecutarExportacionInformeInteligente(tipo) {
         const configuracion = obtenerConfiguracion();
         if (!configuracion.campos.length) {
@@ -1549,6 +1600,90 @@ document.addEventListener('DOMContentLoaded', function () {
         const url = URLS_EXPORTACION[tipo] || URLS.exportarPDF;
         if (!url) return;
 
+        /* El Excel no tiene límites: no pagina ni tiene ancho de papel, así que
+           es justamente la salida a la que se invita cuando el informe no cabe
+           en un documento. Se exporta sin preguntar nada. */
+        if (tipo === 'excel') return enviarExportacion(url, tipo, 'completo');
+
+        comprobarAntesDeExportar(configuracion, function (aviso) {
+            preguntarYExportar(aviso, url, tipo);
+        });
+    }
+
+    /**
+     * Pregunta al servidor si el informe cabe en un documento ANTES de
+     * generarlo. Es una consulta aparte y no un cálculo aquí porque el
+     * navegador solo tiene la primera página de la tabla: para saber cuánto
+     * mide la columna más ancha hay que mirar todas las filas.
+     */
+    function comprobarAntesDeExportar(configuracion, continuar) {
+        const datos = new FormData();
+        datos.append('csrfmiddlewaretoken', csrftoken);
+        datos.append('modelo_raiz', modeloRaizActual());
+        datos.append('configuracion', JSON.stringify(configuracion));
+        datos.append('periodo', periodoActual());
+
+        fetch(URLS.comprobarExportacion, { method: 'POST', body: datos })
+            .then(r => r.ok ? r.json() : Promise.reject())
+            // Si la comprobación falla, se exporta igual: un aviso que no se
+            // puede dar no debe impedir descargar el documento.
+            .then(continuar)
+            .catch(() => continuar(null));
+    }
+
+    function preguntarYExportar(aviso, url, tipo) {
+        if (!aviso) return enviarExportacion(url, tipo, 'completo');
+
+        // 1) Demasiadas columnas para el ancho del papel.
+        if (!aviso.cabe_a_lo_ancho) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Demasiadas columnas',
+                html: 'Ha elegido <b>' + aviso.columnas + ' columnas</b> y no caben con '
+                    + 'holgura en una hoja apaisada.<br><br>Quite algunas en «Campos a '
+                    + 'mostrar», o exporte a <b>Excel</b>, que no tiene límite de ancho.',
+                showCancelButton: true,
+                confirmButtonText: 'Exportar igual',
+                cancelButtonText: 'Volver y quitar columnas',
+                customClass: { confirmButton: 'btn btn-warning me-2',
+                               cancelButton: 'btn btn-label-secondary' },
+                buttonsStyling: false
+            }).then(function (r) {
+                if (r.isConfirmed) avisarPorFilas(aviso, url, tipo);
+            });
+            return;
+        }
+        avisarPorFilas(aviso, url, tipo);
+    }
+
+    /* 2) Demasiadas filas: se deja elegir entre el listado recortado y el
+       resumen sin tabla. La opción de imprimirlo entero no se ofrece a
+       propósito: con 2.000 trabajadores son cientos de páginas. */
+    function avisarPorFilas(aviso, url, tipo) {
+        if (!aviso.excede_filas) return enviarExportacion(url, tipo, 'completo');
+
+        Swal.fire({
+            icon: 'info',
+            title: 'El informe tiene ' + aviso.filas + ' filas',
+            html: 'Un documento con tantas filas ocupa cientos de páginas.<br><br>'
+                + 'Para el listado completo, use el <b>Excel</b>.',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'Primeras ' + aviso.limite_filas + ' filas',
+            denyButtonText: 'Solo el resumen',
+            cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'btn btn-primary me-2',
+                           denyButton: 'btn btn-label-info me-2',
+                           cancelButton: 'btn btn-label-secondary' },
+            buttonsStyling: false
+        }).then(function (r) {
+            if (r.isConfirmed) enviarExportacion(url, tipo, 'recortado');
+            else if (r.isDenied) enviarExportacion(url, tipo, 'resumen');
+        });
+    }
+
+    function enviarExportacion(url, tipo, modo) {
+        const configuracion = obtenerConfiguracion();
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = url;
@@ -1560,7 +1695,12 @@ document.addEventListener('DOMContentLoaded', function () {
             configuracion: JSON.stringify(configuracion),
             // El documento exportado tiene que ser de la MISMA fecha que lo que
             // se ve en pantalla; si no, el PDF diría otra cosa que la tabla.
-            periodo: periodoActual()
+            periodo: periodoActual(),
+            // 'completo', 'recortado' (las primeras N filas) o 'resumen' (sin
+            // tabla). Lo decide el usuario en el aviso previo.
+            modo: modo || 'completo',
+            informe_nombre: informeGuardadoActual ? informeGuardadoActual.nombre : '',
+            informe_descripcion: informeGuardadoActual ? informeGuardadoActual.descripcion : ''
         };
         Object.keys(campos).forEach(function (nombre) {
             const input = document.createElement('input');
@@ -1818,6 +1958,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
                 if (!aplicarConfiguracion(datos.configuracion)) return;
+
+                /* El nombre y la descripción del informe guardado encabezan los
+                   documentos exportados. Se recuerdan aquí porque es el único
+                   momento en que se conocen: la configuración que viaja al
+                   servidor lleva campos y filtros, no de dónde salió. */
+                informeGuardadoActual = {
+                    nombre: datos.nombre || '',
+                    descripcion: datos.descripcion || ''
+                };
 
                 document.querySelectorAll('.btn-plantilla').forEach(c => c.classList.remove('active'));
                 bootstrap.Offcanvas.getInstance(elem('panelFavoritos'))?.hide();

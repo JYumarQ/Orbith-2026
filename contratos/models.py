@@ -561,6 +561,20 @@ class CBaja(ContratoBase):
     fecha_alta = models.DateField(null=True, blank=True) # Necesario para guardar el historial
     fecha_documento = models.DateField(null=True, blank=True, verbose_name="Fecha de documento")
 
+    # Entrada REAL a la empresa, copiada del contrato al darlo de baja.
+    #
+    # `fecha_alta` guarda la del CONTRATO, que no es lo mismo: a un trabajador de
+    # veinte años recontratado hace dos, `fecha_alta` le da dos. El modelo de bajas
+    # de la UNE pide «Años en la Organización», y con la fecha del contrato salía
+    # sistemáticamente corta en todo el que hubiera cambiado de contrato alguna vez.
+    #
+    # Las bajas YA registradas se quedan a NULL —ese dato no existe en ninguna
+    # parte y no se puede inventar—; para ellas la antigüedad se sigue calculando
+    # con `fecha_alta`. Las nuevas la dan exacta.
+    fecha_alta_entidad = models.DateField(
+        null=True, blank=True,
+        verbose_name="Fecha de entrada a la entidad")
+
     tridente = models.ForeignKey(
         NTridente,
         on_delete=models.RESTRICT,

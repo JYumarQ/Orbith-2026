@@ -1,0 +1,163 @@
+{% comment %}
+  Modal «Nuevo contrato»: elegir el aspirante sin salir de donde estás.
+
+  Se incluye en la Lista de Contratos y en el Gestor de Cargos. Antes, el botón
+  llevaba a la Lista de Aspirantes y había que buscar, seleccionar y pulsar
+  «Contratar»: tres pantallas para una sola decisión.
+
+  Se abre con `window.abrirModalNuevoContrato(cargoId)`. El `cargoId` es
+  opcional y solo lo pasa el Gestor de Cargos, para que el formulario llegue con
+  la plaza que se estaba mirando ya elegida.
+
+  La tabla la sirve `bolsa.views.seleccionar_aspirante` por HTMX: el modal solo
+  pone el marco, el buscador y el botón.
+{% endcomment %}
+{% comment %} Contenedor donde se carga el formulario de contrato. Lo aporta este
+   mismo fichero para que las dos pantallas que incluyen el modal —Lista de
+   Contratos y Gestor de Cargos— no tengan que acordarse de declararlo.
+   Se vacía al cerrarse: si no, al abrir otro contrato se vería un instante el
+   formulario del anterior. {% endcomment %}
+<div class="modal fade" id="crear_contrato" tabindex="-1" aria-hidden="true"></div>
+
+<div class="modal fade" id="modalNuevoContrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bx bx-user-plus text-primary me-1"></i>Nuevo contrato
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Elija el aspirante que va a contratar. Solo aparecen los que están
+                    disponibles: quien ya tiene contrato o está de baja no se lista.
+                </p>
+
+                {% comment %} Busca por nombre, apellido, los dos juntos o carné.
+
+                   El disparador es `input` y no `keyup`, que es lo que usa el resto
+                   de la aplicación: `keyup` se pierde el texto pegado con el ratón y
+                   el que rellena el navegador. El `delay` espera a que se deje de
+                   teclear; sin esa pausa saldría una consulta por cada letra. {% endcomment %}
+                <div class="input-group input-group-sm mb-3">
+                    <span class="input-group-text"><i class="bx bx-search"></i></span>
+                    <input type="search" class="form-control" id="buscadorAspirantesModal"
+                           name="q" placeholder="Buscar por nombre, apellido o carné de identidad…"
+                           autocomplete="off"
+                           hx-get="{% url 'seleccionar_aspirante' %}"
+                           hx-trigger="input changed delay:350ms, search"
+                           hx-target="#contenido-aspirantes-modal"
+                           hx-include="#cargoOrigenModal">
+                    <input type="hidden" name="cargo" id="cargoOrigenModal" value="">
+                </div>
+
+                <div id="contenido-aspirantes-modal">
+                    <div class="text-center text-muted py-4">
+                        <span class="spinner-border spinner-border-sm me-2"></span>Cargando aspirantes…
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <span class="me-auto small text-muted" id="aspiranteElegidoModal">
+                    Ningún aspirante seleccionado
+                </span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                    Cancelar
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" id="btnContratarAspirante" disabled>
+                    <i class="bx bx-file-blank me-1"></i>Contratar Aspirante
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    /* Estado del modal: qué fila está marcada. Vive aquí y no en la tabla
+       porque la tabla se reemplaza entera en cada búsqueda y en cada cambio de
+       página, y con ella se perdería la selección. */
+    let urlDelAspirante = null;
+
+    const modal = document.getElementById('modalNuevoContrato');
+    const boton = document.getElementById('btnContratarAspirante');
+    const rotulo = document.getElementById('aspiranteElegidoModal');
+    const buscador = document.getElementById('buscadorAspirantesModal');
+    const campoCargo = document.getElementById('cargoOrigenModal');
+
+    function limpiarSeleccion() {
+        urlDelAspirante = null;
+        boton.disabled = true;
+        rotulo.textContent = 'Ningún aspirante seleccionado';
+        modal.querySelectorAll('.fila-aspirante-modal.table-active')
+             .forEach(f => f.classList.remove('table-active'));
+    }
+
+    /* Delegación en el contenedor y no en cada fila: las filas llegan por HTMX
+       después de que este script se haya ejecutado, así que engancharlas una a
+       una solo funcionaría con las de la primera carga. */
+    modal.addEventListener('click', function (evento) {
+        const fila = evento.target.closest('.fila-aspirante-modal');
+        if (!fila) return;
+
+        modal.querySelectorAll('.fila-aspirante-modal')
+             .forEach(f => f.classList.remove('table-active'));
+        fila.classList.add('table-active');
+
+        urlDelAspirante = fila.dataset.url;
+        boton.disabled = false;
+        rotulo.textContent = 'Seleccionado: ' + fila.dataset.nombre;
+    });
+
+    // Al cambiar de página o de búsqueda, la fila marcada ya no está en pantalla.
+    modal.addEventListener('htmx:afterSwap', limpiarSeleccion);
+
+    /* El formulario de contrato NO es una página: está hecho para vivir dentro
+       de un modal, que es como lo abre la Lista de Aspirantes desde siempre.
+       Navegar a su URL lo enseñaba sin estilos ni menú, porque la plantilla es
+       el cuerpo de un modal y no extiende la base.
+
+       Así que se cierra el de aspirantes y se carga el formulario en el
+       contenedor `#crear_contrato`, que este mismo fichero aporta más abajo. */
+    function abrirFormularioDeContrato() {
+        if (!urlDelAspirante) return;
+        const destino = urlDelAspirante;
+
+        bootstrap.Modal.getOrCreateInstance(modal).hide();
+        $('#crear_contrato').load(destino, function () {
+            $(this).modal('show');
+            if (window.htmx) htmx.process(this);
+        });
+    }
+
+    boton.addEventListener('click', abrirFormularioDeContrato);
+
+    /* Doble clic: contratar directamente, que es lo que espera quien ya sabe a
+       quién busca. Un solo clic sigue limitándose a seleccionar. */
+    modal.addEventListener('dblclick', function (evento) {
+        if (evento.target.closest('.fila-aspirante-modal')) abrirFormularioDeContrato();
+    });
+
+    $('#crear_contrato').on('hidden.bs.modal', function () { $(this).empty(); });
+
+    window.abrirModalNuevoContrato = function (cargoId) {
+        campoCargo.value = cargoId || '';
+        buscador.value = '';
+        limpiarSeleccion();
+
+        // Se pide la lista cada vez que se abre: entre una apertura y otra
+        // pueden haberse dado altas o bajas.
+        htmx.ajax('GET',
+                  "{% url 'seleccionar_aspirante' %}?cargo=" + encodeURIComponent(cargoId || ''),
+                  '#contenido-aspirantes-modal');
+
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+        setTimeout(() => buscador.focus(), 300);
+    };
+})();
+</script>

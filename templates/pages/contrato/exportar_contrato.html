@@ -393,6 +393,12 @@
     // ==========================================
     // CARGA DINÁMICA DE MUNICIPIOS (Entidad)
     // ==========================================
+    /* El municipio de la unidad organizativa del contrato. Se usa UNA sola vez,
+       en la carga inicial: a partir de ahí, si el usuario cambia de provincia a
+       mano, el municipio vuelve a quedar vacío para que no arrastre uno que no
+       pertenece a la provincia elegida. */
+    var municipioDeLaUnidad = '{{ municipio_unidad_id }}';
+
     $('#id_provincia_entidad').on('change', function() {
         var provId = $(this).val();
         var $muni = $('#id_municipio_entidad');
@@ -404,7 +410,16 @@
                     var options = $(html).find('option');
                     if (options.length > 1) { // hay al menos una opción real
                         $muni.empty().append(options);
-                        $muni.val('');
+                        /* Antes esto era siempre `$muni.val('')`, y esa línea era
+                           justo la que impedía preseleccionar nada: cargaba las
+                           opciones y acto seguido borraba la elección. */
+                        if (municipioDeLaUnidad
+                            && $muni.find('option[value="' + municipioDeLaUnidad + '"]').length) {
+                            $muni.val(municipioDeLaUnidad);
+                        } else {
+                            $muni.val('');
+                        }
+                        municipioDeLaUnidad = '';
                     } else {
                         $muni.html('<option value="">No hay municipios</option>');
                     }
@@ -417,16 +432,13 @@
         }
     });
 
-    // Carga inicial al cargar la página
-    $(document).ready(function() {
-        if ($('#id_provincia_entidad').val()) {
-            $('#id_provincia_entidad').trigger('change');
-        }
-    });
+    /* Carga inicial de los municipios de la provincia precargada.
 
-    // Ejecutar al cargar la página para cargar los municipios de la provincia precargada
+       Este bloque estaba DUPLICADO —dos `$(document).ready` idénticos, uno
+       detrás de otro— y disparaba el `change` dos veces. Mientras el manejador
+       se limitaba a vaciar el municipio daba igual; ahora no: la primera pasada
+       preselecciona el de la unidad y la segunda lo borraría. */
     $(document).ready(function() {
-        // Disparar el change si hay una provincia seleccionada
         if ($('#id_provincia_entidad').val()) {
             $('#id_provincia_entidad').trigger('change');
         }

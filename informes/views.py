@@ -2,7 +2,7 @@
 import os
 import calendar
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 # 2. Librerías y Módulos de Django
 from django.conf import settings
@@ -29,6 +29,8 @@ from nomencladores.models import (NTipoFamilia, NFamiliaCargo, NCargo,
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import UnidadOrganizativa
 from usuarios.mixins import RequiereEdicionMixin
+from . import altas_bajas
+from . import excel
 from . import fuentes
 from .models import PlanMensualRegistro
 
@@ -180,9 +182,50 @@ class InformeEconomiaView(TemplateView):
         # `ueb_actual` (las unidades marcadas) lo trae ya `contexto_fuente`.
         context['unidades'] = _combo_unidades(self.request.user)
 
-        context['datos_tabla'], context['totales'] = self.calcular_consolidado(fuente)
+        datos, totales = self.calcular_consolidado(fuente)
+        context['datos_tabla'], context['totales'] = datos, totales
+
+        # `datos`, `mes`, `anno` y `ueb` son los nombres que esperan la plantilla
+        # de Word y la del PDF desde antes de que este informe tuviera contexto
+        # compartido. Se dejan como alias para que las TRES exportaciones lean
+        # de este único sitio en vez de armarse cada una el suyo por su cuenta,
+        # que es lo que permitía que se desincronizaran.
+        context['datos'] = datos
+        context['mes'] = context['mes_actual']
+        context['anno'] = context['anno_actual']
+        context['ueb'] = _nombre_del_alcance(self.request)
+        context['periodo_texto'] = '%s %s' % (
+            MESES_ES[int(context['mes_actual']) - 1], context['anno_actual'])
+
+        context['cifras_consolidado'] = self.cifras_de_cabecera(totales)
+
+        # Empresa, provincia, logo, quién exporta y cuándo. Era el único de los
+        # siete informes que no los tenía: sus exportaciones a Word y PDF son
+        # anteriores a la cabecera común y se armaban su propio contexto aparte.
+        context.update(_cabecera_documento(self.request))
 
         return context
+
+    @staticmethod
+    def cifras_de_cabecera(totales):
+        """Las cinco cifras que encabezan el documento, como en los otros seis.
+
+        Este informe no tiene tarjetas en pantalla: su tabla termina en una fila
+        TOTAL que ya las contiene. Se derivan de ahí —y no de una consulta
+        aparte— para que no puedan contradecir a la tabla que llevan encima.
+
+        Ternas (rótulo, valor, pie), el mismo formato que usa `LibroDeInforme`.
+        """
+        cobertura = (round(totales['cub'] / totales['aprob'] * 100, 1)
+                     if totales['aprob'] else 0)
+        return [
+            ('Total de trabajadores', totales['t_tot'],
+             'Plantilla cubierta más contratos'),
+            ('Mujeres', totales['t_muj'], 'Del total de trabajadores'),
+            ('Plantilla aprobada', totales['aprob'], 'Plazas del organigrama'),
+            ('Vacantes', totales['vac'], 'Plazas aprobadas sin cubrir'),
+            ('Cobertura', '%s %%' % cobertura, 'Cubiertas sobre aprobadas'),
+        ]
 
 
     def mapear_categoria(self, codigo):
@@ -239,71 +282,47 @@ class InformeEconomiaView(TemplateView):
     
 
 class ExportarConsolidadoWordView(InformeEconomiaView):
+    """Consolidado de la Fuerza de Trabajo en Word.
+
+    Lee el contexto de la pantalla, como las otras seis exportaciones a Word.
+    Antes se armaba el suyo llamando a `calcular_consolidado` por su cuenta: la
+    misma cuenta hecha en tres sitios, y ninguno de los tres tenía la cabecera
+    común, así que el documento salía sin logo ni identificación.
+    """
+
     def get(self, request, *args, **kwargs):
-        # El documento sale de la misma fuente que la pantalla: si se está viendo
-        # un cierre, lo que se exporta es ese cierre, no los datos de hoy.
-        fuente, _ = fuentes.resolver_fuente(request)
-        hoy = date.today()
-        mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
-        anno = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
+        context = self.get_context_data(**kwargs)
+        template_path = os.path.join(
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
+            'consolidado_template.docx')
+        try:
+            doc = DocxTemplate(template_path)
+            context['logo'] = _logo_para_word(doc, context.get('config'))
+            doc.render(context)
 
-        datos, totales = self.calcular_consolidado(fuente)
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = (
+                'attachment; filename="%s"'
+                % _nombre_de_fichero(context, 'docx', 'Consolidado'))
+            doc.save(response)
+            return response
+        except Exception as e:
+            return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
 
-        template_path = os.path.join(settings.BASE_DIR, 'plantillas_word', 'informes_economia', 'consolidado_template.docx')
-        doc = DocxTemplate(template_path)
-        
-        nombre_ueb = _nombre_del_alcance(request)
-
-        context = {
-            'datos': datos,
-            'totales': totales,
-            'mes': mes,
-            'anno': anno,
-            'ueb': nombre_ueb
-        }
-        doc.render(context)
-        
-        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        response['Content-Disposition'] = f'attachment; filename="Consolidado_{mes}_{anno}.docx"'
-        doc.save(response)
-        
-        return response
-    
 
 class ExportarConsolidadoPDFView(InformeEconomiaView):
+    """Consolidado de la Fuerza de Trabajo en PDF."""
+
     def get(self, request, *args, **kwargs):
-        fuente, _ = fuentes.resolver_fuente(request)
-        hoy = date.today()
-        mes = str(fuente.periodo.mes) if fuente.periodo else str(hoy.month)
-        anno = str(fuente.periodo.anno) if fuente.periodo else str(hoy.year)
+        context = self.get_context_data(**kwargs)
+        html = get_template('pages/reportes/consolidado_pdf.html').render(context)
 
-        # Usamos tu misma matemática exacta
-        datos, totales = self.calcular_consolidado(fuente)
-
-        nombre_ueb = _nombre_del_alcance(request)
-
-        context = {
-            'datos': datos,
-            'totales': totales,
-            'mes': mes,
-            'anno': anno,
-            'ueb': nombre_ueb
-        }
-
-        # 1. Cargamos el HTML que creamos
-        template = get_template('pages/reportes/consolidado_pdf.html')
-        html = template.render(context)
-        
-        # 2. Preparamos el navegador para recibir un PDF
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="Consolidado_{mes}_{anno}.pdf"'
-        
-        # 3. Convertimos el HTML a PDF usando xhtml2pdf
-        pisa_status = pisa.CreatePDF(html, dest=response)
-        
-        if pisa_status.err:
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Consolidado'))
+        if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
-            
         return response
     
 
@@ -1456,3 +1475,533 @@ class ExportarMotivosPDFView(InformeMotivosContratoView):
         if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
         return response
+
+
+# ---------------------------------------------------------------------------
+# INFORME: ALTAS Y BAJAS DEL MES (modelo de la UNE)
+# ---------------------------------------------------------------------------
+
+class InformeAltasBajasView(TemplateView):
+    """Quien entro y quien salio en un mes, en el formato que pide la UNE.
+
+    Es el unico informe de RRHH que NO lee de `fuentes.FuenteDatos`. Los otros
+    seis son fotografias —cuantos hay hoy, o cuantos habia al cerrar agosto— y
+    por eso pueden servirse de un cierre mensual. Este es de movimientos: pregunta
+    quien cruzo la puerta entre dos fechas, y un cierre no sabe responder eso.
+    El detalle esta explicado en `informes/altas_bajas.py`.
+
+    Del selector de periodo de la barra superior solo se toma el mes y el anno,
+    no la fotografia: elegir «cierre de agosto» equivale aqui a «movimientos de
+    agosto».
+    """
+
+    template_name = "pages/informes/informe_altas_bajas.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Se llama aunque no se use su lista de contratos: es quien alimenta el
+        # selector de periodo de la barra comun.
+        fuente, contexto_fuente = fuentes.resolver_fuente(self.request)
+        context.update(contexto_fuente)
+
+        anno, mes = self._periodo(fuente)
+        unidades_ids = altas_bajas.unidades_pedidas(self.request)
+
+        altas = altas_bajas.altas_del_mes(anno, mes, unidades_ids)
+        bajas = altas_bajas.bajas_del_mes(anno, mes, unidades_ids)
+
+        claves = altas_bajas.meses_con_movimiento(unidades_ids)
+        # Se arma UNA vez: consulta la configuración y las unidades, y este
+        # contexto la necesita dos veces (la cabecera y el municipio del resumen).
+        cabecera = _cabecera_documento(self.request)
+
+        context.update({
+            'mes_actual': str(mes),
+            'anno_actual': str(anno),
+            'mes_nombre': MESES_ES[mes - 1],
+            'periodo_texto': '%s %d' % (MESES_ES[mes - 1], anno),
+
+            'altas': altas,
+            'bajas': bajas,
+            'resumen_altas': altas_bajas.resumen(altas),
+            'resumen_bajas': altas_bajas.resumen(bajas),
+
+            # Con signo siempre, tambien cuando el saldo es positivo: «+4» se lee
+            # como una ganancia de plantilla, y «4» a secas no dice nada.
+            'saldo_texto': '%+d' % (len(altas) - len(bajas)),
+
+            # Municipio de la fila de resumen. Solo hay UNO cuando el informe va
+            # de una sola unidad; con varias, ninguno seria «el» municipio del
+            # informe, asi que se escribe la marca de hueco. Es la misma regla
+            # que sigue la cabecera del documento desde Puestos Clave.
+            'municipio_resumen': (cabecera['cab_municipio']
+                                  or altas_bajas.SIN_MUNICIPIO),
+
+            # El selector de período de la barra común manda también aquí. En
+            # los otros seis elige QUÉ FOTOGRAFÍA mirar (información actual o el
+            # cierre de un mes) y solo ofrece meses con cierre declarado; en
+            # este elige el MES DE LOS MOVIMIENTOS, y por eso:
+            #   - `modo=todos`: cualquier mes vale, este informe no lee cierres;
+            #   - los meses resaltados son los que tuvieron altas o bajas, no
+            #     los que tienen cierre;
+            #   - no hay opción de «volver a la información actual», porque un
+            #     informe de movimientos siempre necesita un mes.
+            'periodo_de_movimientos': True,
+            'periodos_claves': claves,
+            'periodos_annos': altas_bajas.annos_con_movimiento(claves, anno),
+            'periodo_anno': anno,
+            'periodo_mes': mes,
+
+            # Este informe nunca lee un cierre, así que jamás es «histórico».
+            # Si se llega desde otro informe con `?fuente=cierre` en la URL, se
+            # aprovecha su mes pero no se hereda el aviso de fotografía.
+            'es_historico': False,
+            'unidades_sin_cierre': [],
+
+            'unidades': _combo_unidades(self.request.user),
+        })
+        context.update(cabecera)
+        return context
+
+    def _periodo(self, fuente):
+        """El mes del informe, con el MES ANTERIOR por defecto.
+
+        El mes anterior y no el corriente porque este es el informe que se envía
+        a la UNE, y lo que se envía es un mes completo: a día 3 de septiembre lo
+        que hace falta es agosto entero, no los tres días que van de septiembre.
+        Abrir en el mes en curso enseñaría un total a medio hacer con toda la
+        apariencia de estar terminado.
+
+        Cualquier valor imposible cae a ese mismo mes por defecto en vez de
+        reventar: la vista se alcanza escribiendo la URL a mano, y `?mes=99` no
+        debe devolver un error 500.
+        """
+        hoy = date.today()
+        anterior = date(hoy.year, hoy.month, 1) - timedelta(days=1)
+        defecto = (anterior.year, anterior.month)
+
+        if fuente.periodo:
+            return fuente.periodo.anno, fuente.periodo.mes
+        try:
+            mes = int(self.request.GET.get('mes') or defecto[1])
+            anno = int(self.request.GET.get('anno') or defecto[0])
+        except (TypeError, ValueError):
+            return defecto
+        if not 1 <= mes <= 12 or not 1900 <= anno <= 2200:
+            return defecto
+        return anno, mes
+
+
+class ExportarAltasBajasExcelView(InformeAltasBajasView):
+    """El libro de cuatro hojas del modelo de la UNE, listo para enviar."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        try:
+            libro = excel.libro_de_altas_bajas(context)
+        except Exception as e:
+            return HttpResponse('Error al generar el Excel: %s' % e, status=500)
+        return excel.respuesta(
+            libro, _nombre_de_fichero(context, 'xlsx', 'Altas_y_Bajas'))
+
+
+class ExportarAltasBajasWordView(InformeAltasBajasView):
+    """Altas y Bajas del Mes en Word."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        template_path = os.path.join(
+            settings.BASE_DIR, 'plantillas_word', 'informes_economia',
+            'altas_bajas_template.docx')
+        try:
+            doc = DocxTemplate(template_path)
+            context['logo'] = _logo_para_word(doc, context.get('config'))
+            doc.render(context)
+
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+            response['Content-Disposition'] = (
+                'attachment; filename="%s"'
+                % _nombre_de_fichero(context, 'docx', 'Altas_y_Bajas'))
+            doc.save(response)
+            return response
+        except Exception as e:
+            return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
+
+
+class ExportarAltasBajasPDFView(InformeAltasBajasView):
+    """Altas y Bajas del Mes en PDF."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        html = get_template('pages/reportes/altas_bajas_pdf.html').render(context)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = (
+            'attachment; filename="%s"'
+            % _nombre_de_fichero(context, 'pdf', 'Altas_y_Bajas'))
+        if pisa.CreatePDF(html, dest=response).err:
+            return HttpResponse('Hubo un error al generar el PDF', status=500)
+        return response
+
+
+# ---------------------------------------------------------------------------
+# EXPORTACIÓN A EXCEL DE LOS SEIS INFORMES DE RRHH
+# ---------------------------------------------------------------------------
+# Todas heredan de la vista de pantalla del informe, así que el libro sale de
+# EXACTAMENTE los mismos datos que se están viendo: mismo filtro por unidad,
+# mismo período, mismo modo de agrupación. Ninguna recalcula nada por su cuenta.
+#
+# Los tres informes con niveles —Puestos Clave, Misiones y Contratos
+# Determinados— llevan DOS hojas de contenido: una plana con el nivel repetido
+# en columnas, filtrable y ordenable, y otra que imita los niveles de la
+# pantalla. Son dos usos distintos del mismo dato y ninguna sustituye a la otra.
+
+
+def _libro_a_respuesta(libro, context, informe):
+    return excel.respuesta(
+        libro.libro, _nombre_de_fichero(context, 'xlsx', informe))
+
+
+class ExportarConsolidadoExcelView(InformeEconomiaView):
+    """Consolidado de la Fuerza de Trabajo en Excel."""
+
+    # Las cinco categorías del modelo, en el orden en que se leen en pantalla.
+    CATEGORIAS = ('Obreros', 'Técnico', 'Cuadro', 'Servicio', 'Administrativo')
+
+    COLUMNAS = ('Cargo u Ocupación', 'Plantilla Aprobada', 'Plantilla Cubierta',
+                'Plantilla Vacante', 'Mujeres', 'Determinados',
+                'Determinados Mujeres', 'Adiestrados', 'Adiestrados Mujeres',
+                'Total', 'Total Mujeres')
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        datos, totales = context['datos_tabla'], context['totales']
+
+        # Las mismas cifras que encabezan su Word y su PDF: las calcula la vista
+        # de pantalla una sola vez. Antes se repetían aquí, y una cuenta escrita
+        # dos veces es una cuenta que puede decir dos cosas distintas.
+        cifras = context['cifras_consolidado']
+
+        libro = excel.LibroDeInforme(context, 'Consolidado de la Fuerza de Trabajo')
+        libro.portada(cifras)
+        libro.resumen(cifras)
+
+        filas = [[nombre] + [datos[nombre][clave] for clave in (
+                    'aprob', 'cub', 'vac', 'p_muj', 'd_tot', 'd_muj',
+                    'a_tot', 'a_muj', 't_tot', 't_muj')]
+                 for nombre in self.CATEGORIAS]
+        total = ['TOTAL'] + [totales[clave] for clave in (
+            'aprob', 'cub', 'vac', 'p_muj', 'd_tot', 'd_muj',
+            'a_tot', 'a_muj', 't_tot', 't_muj')]
+
+        libro.datos('Consolidado', self.COLUMNAS, filas,
+                    anchos=[26] + [14] * 10,
+                    centradas=tuple(range(2, 12)), total=total)
+        return _libro_a_respuesta(libro, context, 'Consolidado')
+
+
+class ExportarResumenUEBExcelView(InformeTrabajadoresUEBView):
+    """Trabajadores por UEB en Excel."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+
+        cifras = [
+            ('Total de trabajadores', context['total_general'], 'Trabajadores activos'),
+            ('Mujeres', context['total_mujeres'],
+             '%s %% del total' % context['porciento_mujeres']),
+            ('Unidades con personal', context['unidades_con_personal'],
+             'de %d unidades' % len(context['datos_uebs'])),
+            ('Mayor plantilla', context['unidad_mayor']['total'],
+             context['unidad_mayor']['nombre']),
+        ]
+
+        libro = excel.LibroDeInforme(context, 'Trabajadores por UEB')
+        libro.portada(cifras)
+        libro.resumen(cifras)
+
+        filas = [[d['nombre'], d['total'], d['mujeres'], d['porciento']]
+                 for d in context['datos_uebs']]
+        total = ['TOTAL GENERAL', context['total_general'],
+                 context['total_mujeres'], 100]
+
+        libro.datos('Trabajadores por UEB',
+                    ('Unidad Empresarial de Base', 'Trabajadores', 'Mujeres',
+                     '% del total'),
+                    filas, anchos=[52, 16, 14, 14],
+                    centradas=(2, 3, 4), total=total)
+        return _libro_a_respuesta(libro, context, 'Trabajadores_UEB')
+
+
+class ExportarPuestosClaveExcelView(InformePuestosClaveView):
+    """Resumen de Puestos Clave en Excel, plano y por niveles."""
+
+    COLUMNAS = ('Aprobada', 'Cubierta', 'Vacantes', '% Efic.', 'Determinados',
+                'Mujeres', 'Adiestramiento')
+    CLAVES = ('aprob', 'cub', 'vac', 'porc', 'det', 'muj', 'adiest')
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        stats = context['stats']
+
+        cifras = [
+            ('Plantilla aprobada', stats['aprobada'], 'Plazas de puestos clave'),
+            ('Cubierta activa', stats['cubierta'], 'Plazas ocupadas hoy'),
+            ('Vacantes críticas', stats['vacante'], 'Puestos clave sin cubrir'),
+            ('Eficiencia global', '%s %%' % stats['porcentaje'],
+             'Cubiertas sobre aprobadas'),
+            ('Determinados', stats['det'], 'Contratos determinados'),
+            ('Mujeres', stats['muj'], 'En puestos clave'),
+            ('Adiestramiento', stats['adiest'], 'En adiestramiento'),
+        ]
+
+        libro = excel.LibroDeInforme(context, 'Resumen de Puestos Clave')
+        libro.portada(cifras)
+        libro.resumen(cifras)
+
+        planas, niveles = self._volcar(context['datos_familias'])
+
+        # En modo consolidado no hay nivel de unidad —es justo lo que el
+        # conmutador quita—, así que su columna saldría vacía en todas las
+        # filas. Una columna siempre en blanco en una hoja con autofiltro es
+        # ruido: se ofrece para filtrar por algo que no existe.
+        if context.get('agrupacion') == 'consolidado':
+            cabeceras = ('Familia', 'Cargo') + self.COLUMNAS
+            planas = [[fila[0]] + fila[2:] for fila in planas]
+            anchos = [26, 46] + [13] * 7
+            centradas = tuple(range(3, 10))
+        else:
+            cabeceras = ('Familia', 'Unidad', 'Cargo') + self.COLUMNAS
+            anchos = [26, 30, 46] + [13] * 7
+            centradas = tuple(range(4, 11))
+
+        libro.datos('Puestos Clave', cabeceras, planas,
+                    anchos=anchos, centradas=centradas)
+        libro.por_niveles('Por niveles',
+                          ('Familia / Unidad / Cargo',) + self.COLUMNAS,
+                          niveles, anchos=[62] + [13] * 7,
+                          centradas=tuple(range(2, 9)))
+        return _libro_a_respuesta(libro, context, 'Puestos_Clave')
+
+    def _volcar(self, familias):
+        """Las dos vistas del mismo árbol, en un solo recorrido.
+
+        Se recorre una vez y se llenan las dos listas a la vez: recorrerlo dos
+        veces abriría la puerta a que una hoja y la otra dejaran de coincidir.
+        """
+        planas, niveles = [], []
+
+        def cifras(origen):
+            return [origen[clave] for clave in self.CLAVES]
+
+        def unidad(nodo, familia, profundidad):
+            """Una unidad, sus cargos y sus hijas, cada cual a su altura.
+
+            La profundidad se pasa y no se deduce del papel: una subunidad se
+            pinta igual que su unidad padre pero cuelga un nivel por debajo, y
+            sin este parametro las dos salian al mismo nivel y la jerarquia se
+            perdia justo donde mas importa.
+
+            Una unidad sin nombre es la que fabrica el modo consolidado para no
+            tener dos caminos de codigo: no se pinta, y sus cargos suben un
+            nivel porque en ese modo el nivel de unidad no existe.
+            """
+            nombre = nodo.get('nombre') or ''
+            if nombre:
+                niveles.append(('unidad', profundidad, [nombre]
+                                + cifras(nodo['subtotales'])))
+                profundidad_del_cargo = profundidad + 1
+            else:
+                profundidad_del_cargo = profundidad
+
+            for puesto in nodo['puestos']:
+                planas.append([familia, nombre, puesto['nombre']]
+                              + cifras(puesto))
+                niveles.append(('dato', profundidad_del_cargo,
+                                [puesto['nombre']] + cifras(puesto)))
+
+            for hija in nodo.get('subunidades') or []:
+                unidad(hija, familia, profundidad + 1)
+
+        for familia in familias:
+            niveles.append(('familia', 0, [familia['nombre']]
+                            + cifras(familia['subtotales'])))
+            for nodo in familia['unidades']:
+                unidad(nodo, familia['nombre'], 1)
+
+        return planas, niveles
+
+
+class ExportarMisionesExcelView(InformeMisionesView):
+    """Misiones Internacionales en Excel, plano y por unidad."""
+
+    COLUMNAS = ('Expediente', 'Nombre y Apellidos', 'Cargo', 'Cat. Ocup.',
+                'Grupo Escala', 'País')
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+        desglose = context['desglose']
+
+        cifras = [
+            ('Total en misión', context['total_misiones'], 'Trabajadores en el exterior'),
+            ('Países', context['paises'], 'Destinos distintos'),
+            ('Unidades', context['unidades_con_mision'], 'Con personal en misión'),
+        ] + [(nombre, valor, 'Por categoría ocupacional')
+             for nombre, valor in desglose.items()]
+
+        libro = excel.LibroDeInforme(context, 'Misiones Internacionales')
+        libro.portada(cifras[:3])
+        libro.resumen(cifras)
+
+        planas, niveles, categorias = [], [], []
+        for unidad in context['misiones_por_unidad']:
+            niveles.append(('unidad', 0, ['%s (%d en misión)'
+                                          % (unidad['nombre'], unidad['total'])]
+                            + [''] * (len(self.COLUMNAS) - 1)))
+            for t in unidad['trabajadores']:
+                fila = [t['expediente'], t['nombre'], t['cargo'],
+                        t['cat_letra'], t['g_escala'], t['pais']]
+                planas.append([unidad['nombre']] + fila)
+                niveles.append(('dato', 1, [fila[1]] + fila[2:] + ['']))
+                categorias.append(t['cat_codigo'])
+
+        libro.datos('Misiones',
+                    ('Dirección / Área o UEB',) + self.COLUMNAS,
+                    planas, anchos=[30, 12, 34, 40, 11, 14, 20],
+                    centradas=(2, 5, 6), col_categoria=5,
+                    categorias=categorias)
+        libro.por_niveles('Por unidad',
+                          ('Unidad / Trabajador',) + self.COLUMNAS[2:] + ('',),
+                          niveles, anchos=[40, 40, 11, 14, 20, 12],
+                          centradas=(3, 4))
+        return _libro_a_respuesta(libro, context, 'Misiones')
+
+
+class ExportarRegistroDiarioExcelView(RegistroDiarioView):
+    """Registro Diario por Trabajadores en Excel.
+
+    Sin gráficos: son de JavaScript y no existen fuera del navegador. Lo que se
+    archiva son las cifras, igual que en el Word y en el PDF.
+    """
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+
+        cifras = [
+            ('Plan mensual', context['plan_editable'], 'Plan declarado para el mes'),
+            ('Real', context['plan_real'], 'Trabajadores físicos'),
+            ('Cumplimiento', '%s %%' % context['plan_cumplimiento'],
+             'Real sobre plan'),
+            ('Diferencia', context['plan_diferencia'], 'Real menos plan'),
+            ('Mujeres', context['total_mujeres'], 'Del total de trabajadores'),
+        ]
+
+        libro = excel.LibroDeInforme(context, 'Registro Diario por Trabajadores')
+        libro.portada(cifras)
+        libro.resumen(cifras)
+
+        filas = [[nombre, valores['tot'], valores['muj']]
+                 for nombre, valores in context['datos'].items()]
+        total = ['TOTAL DE TRABAJADORES FÍSICOS', context['plan_real'],
+                 context['total_mujeres']]
+
+        libro.datos('Indicadores',
+                    ('Indicadores de Control', 'Trabajadores',
+                     'De ellos, Mujeres'),
+                    filas, anchos=[52, 18, 20], centradas=(2, 3), total=total)
+        return _libro_a_respuesta(libro, context, 'Registro_Diario')
+
+
+class ExportarMotivosExcelView(InformeMotivosContratoView):
+    """Contratos Determinados en Excel, plano y por niveles."""
+
+    def get(self, request, *args, **kwargs):
+        context = self.get_context_data(**kwargs)
+
+        cifras = [
+            ('Total determinados', context['total_contratos'], 'Contratos vigentes'),
+            ('Vigentes', context['vencen_vigente'], 'Vencen a más de 30 días'),
+            ('Advertencia', context['vencen_alerta'], 'Vencen en 30 días o menos'),
+            ('Críticos', context['vencen_critico'], 'Vencen en 15 días o menos'),
+            ('Mujeres', context['total_mujeres'],
+             '%s %% del total' % context['porc_mujeres']),
+        ]
+
+        libro = excel.LibroDeInforme(context, 'Contratos Determinados')
+        libro.portada(cifras[:4])
+        libro.resumen(cifras)
+
+        planas, niveles = self._volcar(
+            context['datos_agrupados'],
+            consolidado=context.get('agrupacion') == 'consolidado')
+
+        libro.datos('Contratos Determinados',
+                    ('Tipo de Contrato', 'Motivo', 'Unidad', 'Expediente',
+                     'Nombre y Apellidos', 'Sexo'),
+                    planas, anchos=[26, 34, 30, 12, 36, 8],
+                    centradas=(4, 6))
+        libro.por_niveles('Por niveles',
+                          ('Tipo / Motivo / Unidad / Trabajador', 'Expediente',
+                           'Sexo', 'Total'),
+                          niveles, anchos=[62, 14, 8, 12], centradas=(2, 3, 4))
+
+        # El desglose por motivo que la pantalla enseña como barras.
+        libro.datos('Motivos',
+                    ('Motivo', 'Contratos', '% del total'),
+                    [[m['nombre'], m['count'], m['porc']]
+                     for m in context['lista_motivos']],
+                    anchos=[52, 16, 14], centradas=(2, 3))
+        return _libro_a_respuesta(libro, context, 'Contratos_Determinados')
+
+    def _volcar(self, agrupados, consolidado=False):
+        """Las dos vistas del mismo árbol, en un solo recorrido.
+
+        El conmutador se decide AQUÍ y no mirando si hay `uebs`: la vista indexa
+        cada contrato dos veces —una por unidad en `uebs` y otra en `contratos`
+        con la unidad dentro— y las dos listas existen siempre, en los dos modos.
+        Preguntar por `uebs` daba el mismo desglose para «Desglosado» y para
+        «Consolidado», que es justamente lo que el conmutador debe distinguir.
+
+        En consolidado se recorre `contratos`, que lleva la unidad en cada fila:
+        el nivel de unidad desaparece del árbol pero el dato no se pierde, y en
+        la hoja plana sigue habiendo columna de Unidad.
+        """
+        planas, niveles = [], []
+
+        for tipo, datos_tipo in agrupados.items():
+            niveles.append(('familia', 0, [tipo, '', '', datos_tipo['total']]))
+
+            for motivo, datos_motivo in datos_tipo['motivos'].items():
+                niveles.append(('unidad', 1, [motivo, '', '',
+                                              datos_motivo['total']]))
+
+                uebs = None if consolidado else datos_motivo.get('uebs')
+                if uebs:
+                    # Ojo: `uebs[x]['contratos']` guarda los contratos PELADOS,
+                    # mientras que `motivo['contratos']` guarda diccionarios con
+                    # el contrato dentro. Son dos índices del mismo dato hechos
+                    # en momentos distintos (ver `InformeMotivosContratoView`).
+                    for ueb, datos_ueb in uebs.items():
+                        niveles.append(('unidad', 2, [ueb, '', '',
+                                                      len(datos_ueb['contratos'])]))
+                        for contrato in datos_ueb['contratos']:
+                            self._contrato(planas, niveles, tipo, motivo, ueb,
+                                           contrato, profundidad=3)
+                else:
+                    for fila in datos_motivo['contratos']:
+                        # Sin nivel de unidad, el contrato sube uno.
+                        self._contrato(planas, niveles, tipo, motivo,
+                                       fila['unidad'], fila['contrato'],
+                                       profundidad=2)
+
+        return planas, niveles
+
+    @staticmethod
+    def _contrato(planas, niveles, tipo, motivo, unidad, contrato,
+                  profundidad):
+        planas.append([tipo, motivo, unidad, contrato.no_expediente,
+                       contrato.aspirante_nombre, contrato.sexo])
+        niveles.append(('dato', profundidad, [contrato.aspirante_nombre,
+                                              contrato.no_expediente,
+                                              contrato.sexo, '']))

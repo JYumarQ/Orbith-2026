@@ -11,6 +11,11 @@ urlpatterns = [
     path("campos/<str:modelo_raiz>/", views.campos_del_modelo, name="campos_del_modelo"),
     path("vista-previa/", views.generar_vista_previa, name="generar_vista_previa"),
     path("evolucion/", views.datos_evolucion, name="datos_evolucion"),
+    # Se consulta ANTES de exportar: dice si el informe cabe en un documento
+    # y si trae demasiadas filas, para poder preguntar en vez de que el
+    # usuario lo descubra con el fichero ya descargado.
+    path("comprobar-exportacion/", views.comprobar_exportacion,
+         name="comprobar_exportacion"),
     path("exportar-pdf/", views.exportar_pdf, name="exportar_pdf"),
     path("exportar-word/", views.exportar_word, name="exportar_word"),
     path("exportar-excel/", views.exportar_excel, name="exportar_excel"),

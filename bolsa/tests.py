@@ -245,3 +245,66 @@ class ValidarDatosAspiranteTests(TestCase):
         datos = self._consultar(serie='ZZ99ZZ99Z')
 
         self.assertFalse(datos['serie_existe'])
+
+
+class SelectorDeAspirantesParaContratar(TestCase):
+    """El modal de «Nuevo contrato» de la Lista de Contratos y del Gestor.
+
+    Lo que se fija aquí es QUIÉN sale en la lista: solo los contratables. Los de
+    la Lista de Bajas no, porque contratarlos desde ahí no tiene sentido y el
+    formulario los rechazaría después.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        provincia = NProvincia.objects.create(nombre='Camagüey', siglas='CMG')
+        municipio = NMunicipio.objects.create(
+            nombre='Nuevitas', provincia=provincia, siglas='NUE')
+
+        def persona(nombre, apellido, ci, estado):
+            return Aspirante.objects.create(
+                doc_identidad=ci, nombre=nombre, papellido=apellido,
+                sapellido='Solis', sexo='F', raza='BL', estado=estado,
+                nivel_educ='MS', provincia=provincia, municipio=municipio)
+
+        cls.contratable = persona('Ana', 'Pérez', '85010112345', 'ASPIRANTE')
+        cls.activo = persona('Luis', 'Gómez', '85010112346', 'ACTIVO')
+        cls.de_baja = persona('Rosa', 'Lima', '85010112347', 'BAJA')
+
+        cls.usuario = CustomUser.objects.create_user(
+            username='usuario_modal', password='x', es_admin=True)
+
+    def setUp(self):
+        self.client.force_login(self.usuario)
+
+    def listar(self, **parametros):
+        return self.client.get(reverse('seleccionar_aspirante'), parametros)
+
+    def test_solo_lista_a_los_contratables(self):
+        nombres = [a.nombre for a in self.listar().context['aspirantes']]
+        self.assertEqual(nombres, ['Ana'])
+
+    def test_busca_por_nombre_apellido_o_carnet(self):
+        for termino in ('Ana', 'Pérez', 'Ana Pérez', '8501011234'):
+            with self.subTest(busqueda=termino):
+                encontrados = self.listar(q=termino).context['aspirantes']
+                self.assertEqual(len(encontrados), 1, termino)
+
+    def test_una_busqueda_sin_resultados_no_revienta(self):
+        respuesta = self.listar(q='nadie con este nombre')
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(respuesta.context['aspirantes']), 0)
+
+    def test_la_primera_pagina_se_dibuja_sin_error(self):
+        """La paginación pedía `previous_page_number` en la página 1.
+
+        Django no silencia el `EmptyPage` que eso lanza, así que la petición
+        entera se caía con un error 500 en vez de dibujar el botón apagado.
+        """
+        self.assertEqual(self.listar().status_code, 200)
+        self.assertEqual(self.listar(page=1).status_code, 200)
+
+    def test_el_cargo_de_origen_viaja_hasta_el_enlace(self):
+        """Abierto desde el Gestor de Cargos, el contrato hereda la plaza."""
+        html = self.listar(cargo='77').content.decode()
+        self.assertIn('?cargo=77', html)

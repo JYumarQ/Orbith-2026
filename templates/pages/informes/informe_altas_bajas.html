@@ -1,0 +1,246 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% block title %}Altas y Bajas del Mes{% endblock %}
+{% block content %}
+{% comment %}
+  Altas y Bajas del Mes — el modelo que la provincia envía a la UNE.
+
+  Cuatro pestañas porque el libro oficial tiene cuatro hojas, y en el mismo
+  orden: el resumen de altas, su detalle, el resumen de bajas y su detalle. Así
+  lo que se ve en pantalla y lo que sale en el Excel son la misma cosa, y
+  revisar antes de enviar consiste en mirar, no en traducir.
+
+  El mes se elige en el selector de la barra del título, el MISMO control que en
+  los otros seis informes. Aquí significa «mes de los movimientos» en vez de «qué
+  fotografía mirar», y por eso ofrece cualquier mes y resalta los que tuvieron
+  altas o bajas. Hubo un momento en que esta tarjeta tuvo su propia pareja de
+  desplegables año/mes: eran dos controles para una sola decisión y obligaban a
+  preguntarse cuál de los dos mandaba.
+{% endcomment %}
+<div class="container-xxl flex-grow-1 container-p-y" style="background-color: #f8fafc;">
+
+    {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Altas y Bajas del Mes" %}
+
+    {% comment %} Las cuatro cifras que resumen el mes. El saldo es la que responde
+       de un vistazo a «¿creció o encogió la plantilla?». {% endcomment %}
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--verde">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-log-in"></i></span>
+                    <span class="inf-kpi-rotulo">Altas</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ resumen_altas.total }}</div>
+                <div class="inf-kpi-pie">{{ resumen_altas.total_claves }} en puestos clave</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--naranja">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-log-out"></i></span>
+                    <span class="inf-kpi-rotulo">Bajas</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ resumen_bajas.total }}</div>
+                <div class="inf-kpi-pie">{{ resumen_bajas.total_claves }} en puestos clave</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--azul">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-female"></i></span>
+                    <span class="inf-kpi-rotulo">Mujeres</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ resumen_altas.total_mujeres }}</div>
+                <div class="inf-kpi-pie">de alta · {{ resumen_bajas.total_mujeres }} de baja</div>
+            </div>
+        </div>
+
+        <div class="col-6 col-lg-3">
+            <div class="inf-kpi inf-kpi--solida">
+                <div class="inf-kpi-cabeza">
+                    <span class="inf-kpi-icono"><i class="bx bx-transfer"></i></span>
+                    <span class="inf-kpi-rotulo">Saldo del mes</span>
+                </div>
+                <div class="inf-kpi-cifra">{{ saldo_texto }}</div>
+                <div class="inf-kpi-pie">Altas menos bajas</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="inf-tarjeta">
+        <div class="inf-tarjeta-cabeza pb-0">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#hoja-resumen-altas" type="button">
+                        Resumen Altas
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#hoja-altas" type="button">
+                        Altas <span class="badge bg-label-success ms-1">{{ resumen_altas.total }}</span>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#hoja-resumen-bajas" type="button">
+                        Resumen Bajas
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#hoja-bajas" type="button">
+                        Bajas <span class="badge bg-label-warning ms-1">{{ resumen_bajas.total }}</span>
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <div class="tab-content p-0">
+
+            {# ----------------------------- Resumen Altas ----------------------------- #}
+            <div class="tab-pane fade show active" id="hoja-resumen-altas">
+                {% include 'pages/informes/partials/altas_bajas_resumen.html' with resumen=resumen_altas rotulo="Altas" %}
+            </div>
+
+            {# ------------------------------- Altas ----------------------------------- #}
+            <div class="tab-pane fade" id="hoja-altas">
+                <div class="table-responsive text-nowrap">
+                    <table class="inf-tabla">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">No</th>
+                                <th>Nombre y Apellidos</th>
+                                <th>Cargo</th>
+                                <th>Área en la que Laborará</th>
+                                <th class="th-grupo-naranja celda-corta">Clave</th>
+                                <th class="celda-corta">Sexo</th>
+                                <th class="celda-corta">Edad</th>
+                                <th class="celda-corta">Cat. Ocup.</th>
+                                <th class="celda-corta">Nivel</th>
+                                <th>Graduado en</th>
+                                <th class="celda-corta">Fecha del alta</th>
+                                <th>Dirección / Área o UEB</th>
+                                <th>Municipio</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in altas %}
+                                <tr>
+                                    <td class="td-cifra celda-corta">{{ forloop.counter }}</td>
+                                    <td class="td-nombre">{{ fila.nombre }}</td>
+                                    <td>{{ fila.cargo|default:"—" }}</td>
+                                    <td>{{ fila.area|default:"—" }}</td>
+                                    <td class="celda-corta">
+                                        {% if fila.puesto_clave %}
+                                            <span class="badge bg-label-warning">Sí</span>
+                                        {% else %}
+                                            <span class="text-muted">No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="celda-corta"><span class="sexo-insignia sexo-{{ fila.sexo }}">{{ fila.sexo|default:"—" }}</span></td>
+                                    <td class="td-cifra celda-corta">{{ fila.edad|default:"—" }}</td>
+                                    <td class="celda-corta">
+                                        <span class="cat-insignia cat-{{ fila.cat_codigo }}">{{ fila.categoria|default:"—" }}</span>
+                                    </td>
+                                    <td class="celda-corta">{{ fila.nivel_escolar|default:"—" }}</td>
+                                    <td>{{ fila.graduado_en|default:"—" }}</td>
+                                    <td class="celda-corta">{{ fila.fecha|date:"d/m/Y" }}</td>
+                                    <td>{{ fila.unidad }}</td>
+                                    <td>{{ fila.municipio }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr class="fila-vacia"><td colspan="13">No hubo altas en {{ periodo_texto }}.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {# ----------------------------- Resumen Bajas ----------------------------- #}
+            <div class="tab-pane fade" id="hoja-resumen-bajas">
+                {% include 'pages/informes/partials/altas_bajas_resumen.html' with resumen=resumen_bajas rotulo="Bajas" %}
+            </div>
+
+            {# -------------------------------- Bajas ---------------------------------- #}
+            <div class="tab-pane fade" id="hoja-bajas">
+                <div class="table-responsive text-nowrap">
+                    <table class="inf-tabla">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">No</th>
+                                <th>Nombre y Apellidos</th>
+                                <th>Cargo</th>
+                                <th class="th-grupo-naranja celda-corta">Clave</th>
+                                <th>Actividad que realizaba</th>
+                                <th>Área en la que Laboraba</th>
+                                <th class="celda-corta">Sexo</th>
+                                <th class="celda-corta">Edad</th>
+                                <th class="celda-corta">Cat. Ocup.</th>
+                                <th class="celda-corta">Nivel</th>
+                                <th>Graduado en</th>
+                                <th class="celda-corta">Fecha de la baja</th>
+                                <th>Causa de la Baja</th>
+                                <th class="celda-corta">Comp.<br>Cargo</th>
+                                <th>Años en la Organización</th>
+                                <th>Dirección / Área o UEB</th>
+                                <th>Municipio</th>
+                                <th class="celda-corta">SPxR</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fila in bajas %}
+                                <tr>
+                                    <td class="td-cifra celda-corta">{{ forloop.counter }}</td>
+                                    <td class="td-nombre">{{ fila.nombre }}</td>
+                                    <td>{{ fila.cargo|default:"—" }}</td>
+                                    <td class="celda-corta">
+                                        {% if fila.puesto_clave %}
+                                            <span class="badge bg-label-warning">Sí</span>
+                                        {% else %}
+                                            <span class="text-muted">No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ fila.actividad|default:"—" }}</td>
+                                    <td>{{ fila.area|default:"—" }}</td>
+                                    <td class="celda-corta"><span class="sexo-insignia sexo-{{ fila.sexo }}">{{ fila.sexo|default:"—" }}</span></td>
+                                    <td class="td-cifra celda-corta">{{ fila.edad|default:"—" }}</td>
+                                    <td class="celda-corta">
+                                        <span class="cat-insignia cat-{{ fila.cat_codigo }}">{{ fila.categoria|default:"—" }}</span>
+                                    </td>
+                                    <td class="celda-corta">{{ fila.nivel_escolar|default:"—" }}</td>
+                                    <td>{{ fila.graduado_en|default:"—" }}</td>
+                                    <td class="celda-corta">{{ fila.fecha|date:"d/m/Y" }}</td>
+                                    <td>{{ fila.causa|default:"—" }}</td>
+                                    <td class="celda-corta">{% if fila.completar_cargo %}Sí{% else %}No{% endif %}</td>
+                                    <td>{{ fila.antiguedad|default:"—" }}</td>
+                                    <td>{{ fila.unidad }}</td>
+                                    <td>{{ fila.municipio }}</td>
+                                    <td class="celda-corta">{% if fila.cobro_sistema_pago %}Sí{% else %}No{% endif %}</td>
+                                </tr>
+                            {% empty %}
+                                <tr class="fila-vacia"><td colspan="18">No hubo bajas en {{ periodo_texto }}.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function ejecutarWord() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_altas_bajas_word' %}" + window.location.search;
+    }
+    function ejecutarPDF() {
+        window.mostrarToast('Preparando documento…', 'info');
+        window.location.href = "{% url 'exportar_altas_bajas_pdf' %}" + window.location.search;
+    }
+    function ejecutarExcel() {
+        window.mostrarToast('Preparando el libro de Excel…', 'info');
+        window.location.href = "{% url 'exportar_altas_bajas_excel' %}" + window.location.search;
+    }
+</script>
+{% endblock %}

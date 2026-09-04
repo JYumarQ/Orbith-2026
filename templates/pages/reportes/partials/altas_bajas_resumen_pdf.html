@@ -1,0 +1,53 @@
+{% comment %}
+  Hoja de resumen del modelo de la UNE, en PDF.
+
+  Las dos —altas y bajas— son idénticas salvo el rótulo, así que se incluye dos
+  veces con `resumen` y `rotulo` distintos. Se corresponde una a una con
+  `pages/informes/partials/altas_bajas_resumen.html`, que es la de pantalla,
+  salvo en la Provincia: aquí no va, porque la cabecera que se repite en cada
+  página ya la declara y sería la misma en todas las filas.
+
+  Se recorre `desglose_par`, con las dos listas —clave y no clave— ya
+  emparejadas fila a fila desde `altas_bajas.resumen()`.
+{% endcomment %}
+<table class="data-table" repeat="2">
+    <tr>
+        <th rowspan="2" class="th-main th-main-blue" width="10%">Municipio</th>
+        <th rowspan="2" class="th-main th-main-blue" width="6%">{{ rotulo }}</th>
+        <th colspan="3" class="th-main th-main-orange">De ellas en Cargos Claves</th>
+        <th colspan="3" class="th-main th-main-blue">De ellas en Puestos NO Clave</th>
+    </tr>
+    <tr>
+        <th class="th-sub th-sub-orange" width="7%">Total Puestos Clave</th>
+        <th class="th-sub th-sub-orange" width="26%">Cargo</th>
+        <th class="th-sub th-sub-orange" width="6%">Cantidad</th>
+        <th class="th-sub th-sub-blue" width="7%">Total Puestos NO Clave</th>
+        <th class="th-sub th-sub-blue" width="32%">Cargo</th>
+        <th class="th-sub th-sub-blue" width="6%">Cantidad</th>
+    </tr>
+    {% for par in resumen.desglose_par %}
+        <tr>
+            {% if forloop.first %}
+                <td rowspan="{{ resumen.desglose_par|length }}" class="bold">{{ municipio_resumen }}</td>
+                <td rowspan="{{ resumen.desglose_par|length }}" class="bold" style="font-size: 14pt;">{{ resumen.total }}</td>
+                <td rowspan="{{ resumen.desglose_par|length }}" class="bold" style="font-size: 14pt; color: #ea580c;">{{ resumen.total_claves }}</td>
+            {% endif %}
+            <td class="td-izq">{{ par.cargo_clave }}</td>
+            <td class="bold">{{ par.cantidad_clave }}</td>
+            {% if forloop.first %}
+                <td rowspan="{{ resumen.desglose_par|length }}" class="bold" style="font-size: 14pt; color: #1e3a8a;">{{ resumen.total_no_claves }}</td>
+            {% endif %}
+            <td class="td-izq">{{ par.cargo_no_clave }}</td>
+            <td class="bold">{{ par.cantidad_no_clave }}</td>
+        </tr>
+    {% empty %}
+        <tr>
+            <td class="bold">{{ municipio_resumen }}</td>
+            <td class="bold" style="font-size: 14pt;">0</td>
+            <td class="bold">0</td>
+            <td colspan="2">Sin movimiento este mes.</td>
+            <td class="bold">0</td>
+            <td colspan="2">Sin movimiento este mes.</td>
+        </tr>
+    {% endfor %}
+</table>

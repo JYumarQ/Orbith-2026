@@ -412,3 +412,69 @@
 .cat-punto.cat-SER { background-color: var(--cat-ser); }
 .cat-punto.cat-CDI,
 .cat-punto.cat-CEJ { background-color: var(--cat-cua); }
+
+
+/* --------------------------------------------------------------------------
+   7. SEXO: SIGLA Y COLOR GLOBALES
+   --------------------------------------------------------------------------
+   Mismo trato que las categorias ocupacionales y por el mismo motivo: el sexo
+   se escribe SIEMPRE «F» o «M», nunca con la palabra entera, y cada uno lleva
+   su color en toda la aplicacion.
+
+   La FUENTE es `nomencladores.models.COLORES_SEXO`; aqui se repiten para poder
+   pintar sin JavaScript, y una prueba vigila que los dos sitios no se separen.
+
+   Antes habia dos criterios: el Dashboard pintaba a las mujeres de ROJO y a los
+   hombres de cian, e Informe Inteligente usaba rosa para el femenino y nada
+   para el masculino. El rojo, ademas, significa «critico» en todos los
+   informes: no podia significar tambien «mujer».
+   -------------------------------------------------------------------------- */
+
+:root {
+    --sexo-f: #db2777;   /* Femenino — rosa */
+    --sexo-m: #03c3ec;   /* Masculino — cian */
+    --sexo-sin: #94a3b8; /* Sin declarar */
+}
+
+.sexo-insignia {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    padding: 0.12rem 0.4rem;
+    border-radius: 0.35rem;
+    color: #fff;
+    font-weight: 800;
+    font-size: 12px;
+    line-height: 1.2;
+    background-color: var(--sexo-sin);
+}
+.sexo-F { background-color: var(--sexo-f); }
+.sexo-M { background-color: var(--sexo-m); }
+
+/* Version sin fondo, para tablas muy densas donde una fila de insignias
+   macizas pesa demasiado: solo la letra, en su color. */
+.sexo-letra { font-weight: 800; color: var(--sexo-sin); }
+.sexo-letra.sexo-F { background: none; color: var(--sexo-f); }
+.sexo-letra.sexo-M { background: none; color: var(--sexo-m); }
+
+
+/* --------------------------------------------------------------------------
+   8. CELDAS DE CONTENIDO CORTO
+   --------------------------------------------------------------------------
+   Sexo, edad, siglas, fechas, cifras, marcas de Si/No... Todo lo que cabe en
+   media docena de caracteres va centrado en horizontal Y en vertical: alineado
+   a la izquierda, una columna estrecha deja el dato pegado al borde y la
+   columna parece vacia.
+
+   Los textos largos —nombres, cargos, causas— siguen a la izquierda, que es
+   como se lee un texto.
+   -------------------------------------------------------------------------- */
+
+.celda-corta,
+.inf-tabla td.celda-corta,
+.inf-tabla th.celda-corta {
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+}

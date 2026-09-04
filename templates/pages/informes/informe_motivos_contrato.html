@@ -283,8 +283,8 @@
                                             
                                             <td><span class="text-dark" style="font-size: 13px;">{{ c.aspirante_nombre }}</span></td>
                                             
-                                            <td class="text-center fw-bold text-dark" style="font-size: 13px;">
-                                                {{ c.sexo }}
+                                            <td class="celda-corta">
+                                                <span class="sexo-insignia sexo-{{ c.sexo }}">{{ c.sexo }}</span>
                                             </td>
 
                                             <td><span class="text-dark" style="font-size: 13px;">{{ c.ncargo_descripcion }}</span></td>
@@ -376,7 +376,7 @@
                                             <td class="text-center font-monospace fw-bold text-dark" style="font-size: 14px;">{{ f.contrato.no_expediente }}</td>
                                             <td><span class="text-dark" style="font-size: 13px;">{{ f.contrato.aspirante_nombre }}</span></td>
                                             <td><span class="fw-bold" style="font-size: 12px; color: {{ f.color }};"><i class="fas fa-building me-1"></i>{{ f.unidad }}</span></td>
-                                            <td class="text-center fw-bold text-dark" style="font-size: 13px;">{{ f.contrato.sexo }}</td>
+                                            <td class="celda-corta"><span class="sexo-insignia sexo-{{ f.contrato.sexo }}">{{ f.contrato.sexo }}</span></td>
                                             <td><span class="text-dark" style="font-size: 13px;">{{ f.contrato.ncargo_descripcion }}</span></td>
                                             <td class="text-center">
                                                 <span class="cat-insignia cat-{{ f.contrato.cat_ocupacional }}">{{ f.contrato.cat_ocupacional|slice:":1" }}</span>
@@ -581,6 +581,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function ejecutarPDF() {
         window.mostrarToast('Preparando documento…', 'info');
         window.location.href = "{% url 'exportar_motivos_pdf' %}" + window.location.search;
+    }
+    function ejecutarExcel() {
+        window.mostrarToast('Preparando el libro de Excel…', 'info');
+        window.location.href = "{% url 'exportar_motivos_excel' %}" + window.location.search;
     }
 </script>
 {% endblock %}

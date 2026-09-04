@@ -215,5 +215,9 @@
         window.mostrarToast('Preparando documento…', 'info');
         window.location.href = urlDeExportacion("{% url 'exportar_puestos_clave_pdf' %}");
     }
+    function ejecutarExcel() {
+        window.mostrarToast('Preparando el libro de Excel…', 'info');
+        window.location.href = "{% url 'exportar_puestos_clave_excel' %}" + window.location.search;
+    }
 </script>
 {% endblock %}

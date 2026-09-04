@@ -216,3 +216,172 @@ class ColoresDeCategoriaOcupacional(TestCase):
         self.assertEqual(color_de_categoria('XXX'), COLOR_CAT_DESCONOCIDA)
         self.assertEqual(color_de_categoria(None), COLOR_CAT_DESCONOCIDA)
         self.assertEqual(color_de_categoria(''), COLOR_CAT_DESCONOCIDA)
+
+
+class ColoresYSiglasDelSexo(TestCase):
+    """La paleta del sexo, con la misma guarda que la de las categorías.
+
+    El sexo se escribe «F» o «M» y cada uno lleva su color en toda la
+    aplicación. Antes había dos criterios: el Dashboard pintaba a las mujeres de
+    rojo y a los hombres de cian, e Informe Inteligente usaba rosa para el
+    femenino y nada para el masculino.
+    """
+
+    def test_los_dos_sexos_del_modelo_tienen_color(self):
+        from bolsa.models import Aspirante
+        from nomencladores.models import COLORES_SEXO
+
+        codigos = {codigo for codigo, _ in Aspirante._meta.get_field('sexo').choices}
+        self.assertEqual(codigos, set(COLORES_SEXO))
+
+    def test_el_femenino_no_usa_un_color_de_alerta(self):
+        """El rojo significa «crítico» en todos los informes: no puede
+        significar también «mujer». El rosa es el que se eligió justamente para
+        no chocar con esa lectura."""
+        from nomencladores.models import COLORES_SEXO
+
+        color = COLORES_SEXO['F']
+        rojo, verde, azul = (int(color[i:i + 2], 16) for i in (1, 3, 5))
+        self.assertGreater(azul, verde,
+                           'El femenino %s tira a rojo puro' % color)
+
+    def test_el_css_repite_exactamente_los_mismos_colores(self):
+        import io
+        import os
+
+        from django.conf import settings
+        from nomencladores.models import COLORES_SEXO
+
+        ruta = os.path.join(settings.BASE_DIR, 'static', 'css', 'informes-rrhh.css')
+        css = io.open(ruta, encoding='utf-8').read().lower()
+
+        for codigo, color in COLORES_SEXO.items():
+            with self.subTest(sexo=codigo):
+                self.assertIn(color.lower(), css,
+                              'El color de %s no está en informes-rrhh.css' % codigo)
+
+    def test_un_sexo_sin_declarar_no_deja_la_celda_sin_color(self):
+        from nomencladores.models import COLOR_SEXO_DESCONOCIDO, color_de_sexo
+
+        for valor in (None, '', 'X'):
+            with self.subTest(valor=valor):
+                self.assertEqual(color_de_sexo(valor), COLOR_SEXO_DESCONOCIDO)
+
+
+class SiglasDelNivelEducacional(TestCase):
+    """Lo que se guarda y lo que se muestra NO coinciden, y es a propósito.
+
+    Los códigos guardados vienen de antiguo —`NG` para Nivel Medio— y
+    renombrarlos exigiría migrar datos. Las siglas que se muestran son las que
+    usa la empresa, y distinguen las dos ramas de Medio Superior.
+    """
+
+    def test_cada_nivel_del_modelo_tiene_su_sigla(self):
+        """Añadir un nivel obliga a decidir cómo se escribe."""
+        from bolsa.models import Aspirante
+        from nomencladores.models import SIGLAS_NIVEL_EDUCACIONAL
+
+        codigos = {codigo for codigo, _ in Aspirante._meta.get_field('nivel_educ').choices
+                   if codigo}
+        self.assertEqual(codigos, set(SIGLAS_NIVEL_EDUCACIONAL))
+
+    def test_las_dos_ramas_de_medio_superior_se_distinguen(self):
+        """Son el mismo nivel por caminos distintos, y en un informe de
+        plantilla no da igual cuál de los dos."""
+        from nomencladores.models import sigla_de_nivel_educacional
+
+        self.assertEqual(sigla_de_nivel_educacional('TM'), 'MS(TM)')
+        self.assertEqual(sigla_de_nivel_educacional('MS'), 'MS(DG)')
+
+    def test_el_nivel_medio_se_muestra_como_nm(self):
+        """La base guarda NG por razones históricas; nadie lo llama así."""
+        from nomencladores.models import sigla_de_nivel_educacional
+
+        self.assertEqual(sigla_de_nivel_educacional('NG'), 'NM')
+
+    def test_un_codigo_desconocido_se_muestra_tal_cual(self):
+        """Enseñar algo raro se puede investigar; un hueco, no."""
+        from nomencladores.models import sigla_de_nivel_educacional
+
+        self.assertEqual(sigla_de_nivel_educacional('ZZ'), 'ZZ')
+        self.assertEqual(sigla_de_nivel_educacional(''), '')
+
+
+class NombreYSiglasDelTerritorio(TestCase):
+    """El seguro que evita otro «Florida      Flo».
+
+    Aquel municipio se guardó con las siglas escritas DENTRO de la casilla del
+    nombre y la de siglas vacía. Las dos columnas siempre estuvieron separadas:
+    lo que falló fue quién escribió dónde, y no entró por la pantalla —cuyo
+    modal ya validaba— sino por una vía sin JavaScript.
+
+    Por eso la defensa está en el modelo, que es el único punto por el que pasan
+    todas las vías: el modal, el admin, un script y una importación.
+    """
+
+    def setUp(self):
+        from nomencladores.models import NProvincia
+
+        self.provincia = NProvincia.objects.create(nombre='Camagüey',
+                                                   siglas='CMG')
+
+    def test_el_nombre_se_normaliza_al_guardar(self):
+        """Aunque llegue de un script, que no ejecuta `clean()`."""
+        from nomencladores.models import NMunicipio
+
+        municipio = NMunicipio.objects.create(nombre='  Santa   Cruz  ',
+                                              provincia=self.provincia)
+        municipio.refresh_from_db()
+        self.assertEqual(municipio.nombre, 'Santa Cruz')
+
+    def test_un_nombre_con_la_sigla_dentro_se_rechaza(self):
+        """El caso exacto que motivó todo esto."""
+        from django.core.exceptions import ValidationError
+
+        from nomencladores.models import NMunicipio
+
+        municipio = NMunicipio(nombre='Florida      Flo',
+                               provincia=self.provincia)
+        with self.assertRaises(ValidationError) as capturado:
+            municipio.full_clean()
+        self.assertIn('nombre', capturado.exception.error_dict)
+
+    def test_las_siglas_son_exactamente_tres_letras(self):
+        from django.core.exceptions import ValidationError
+
+        from nomencladores.models import NMunicipio
+
+        for malas in ('FL', 'FLOR', 'F1O', 'F L'):
+            with self.subTest(siglas=malas):
+                municipio = NMunicipio(nombre='Florida', siglas=malas,
+                                       provincia=self.provincia)
+                with self.assertRaises(ValidationError) as capturado:
+                    municipio.full_clean()
+                self.assertIn('siglas', capturado.exception.error_dict)
+
+    def test_las_siglas_siguen_siendo_opcionales(self):
+        """Se pueden dejar en blanco; lo que no se puede es escribirlas mal."""
+        from nomencladores.models import NMunicipio
+
+        municipio = NMunicipio(nombre='Esmeralda', provincia=self.provincia)
+        municipio.full_clean()   # no levanta nada
+
+    def test_las_siglas_se_guardan_en_su_propia_columna(self):
+        """El invariante que el usuario temía roto: son dos columnas.
+
+        Se comprueba leyendo la tabla directamente, no el objeto de Python.
+        """
+        from django.db import connection
+
+        from nomencladores.models import NMunicipio
+
+        NMunicipio.objects.create(nombre='Florida', siglas='flo',
+                                  provincia=self.provincia)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT nombre, siglas FROM nomencladores_nmunicipio '
+                'WHERE nombre = %s', ['Florida'])
+            nombre, siglas = cursor.fetchone()
+
+        self.assertEqual(nombre, 'Florida')
+        self.assertEqual(siglas, 'FLO')   # y se normalizan a mayúsculas
