@@ -4,17 +4,19 @@
 Organizativas puede consultar cada usuario en este módulo, mismo patrón que
 `cierres/filtros.py::unidades_visibles()` y `dashboard/filtros.py`.
 
-El reparto es el mismo que en el Dashboard y en el listado de Contratos: el
-Administrador y el **Observador** ven toda la empresa; el Moderador, solo su
-parcela.
+El reparto es el mismo que en el Dashboard y en el listado de Contratos, y lo
+decide `usuarios.alcance`: el Administrador ve toda la empresa; el Moderador,
+solo su parcela; y el **Observador** ve toda la empresa mientras no tenga
+unidades asignadas — si el Administrador le asignó alguna, ve exactamente esa
+parcela, con las mismas reglas que un Moderador.
 
 Antes esta decisión estaba escrita a mano en cada vista como
 `if request.user.is_superuser: todas else: request.user.unidades`. Esa condición
 dejaba fuera al Observador —que no es superusuario— y le mostraba el Gestor de
 Plantilla vacío, aunque su rol es precisamente el de consultar toda la empresa.
 
-QUÉ CUENTA COMO «SU PARCELA» PARA UN MODERADOR
-----------------------------------------------
+QUÉ CUENTA COMO «SU PARCELA»
+----------------------------
 Sus unidades asignadas (`CustomUser.unidades`) **y las subunidades que cuelgan
 de ellas**. Esto no amplía lo que ya veía: es exactamente lo que el Gestor le
 pinta hoy. `gestor_plantilla_view` lista arriba solo las unidades raíz y cuelga
@@ -37,18 +39,13 @@ SE VE, nunca QUÉ SE PUEDE TOCAR.
 
 from django.db.models import Q
 
+from usuarios.alcance import es_administrador, ve_toda_la_empresa  # noqa: F401
+
 from .models import UnidadOrganizativa
 
-
-def es_administrador(usuario):
-    if not getattr(usuario, 'is_authenticated', False):
-        return False
-    return bool(usuario.is_superuser or getattr(usuario, 'es_admin', False))
-
-
-def ve_toda_la_empresa(usuario):
-    """Administrador u Observador: sin restricción de Unidad Organizativa."""
-    return es_administrador(usuario) or bool(getattr(usuario, 'es_observador', False))
+# `es_administrador` y `ve_toda_la_empresa` se reexportan a propósito: vivían
+# aquí y las importan las vistas y las pruebas de este módulo. Ahora la regla es
+# única y vive en `usuarios.alcance`; este módulo solo la aplica.
 
 
 def unidades_visibles(usuario):

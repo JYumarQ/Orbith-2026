@@ -73,6 +73,7 @@ def _fila_de_cargo(cierre, cargo):
         # contador denormalizado que puede quedar desfasado, y una fotografía con
         # cifras desfasadas no vale para nada.
         cant_cubierta=cargo.cant_cubierta_real,
+        en_plantilla=bool(cargo.en_plantilla),
         funcionario=bool(cargo.funcionario),
         designado=bool(cargo.designado),
         orden_informe=cargo.orden_informe,
@@ -178,8 +179,12 @@ def construir_fotografia(cierre):
 
     return {
         'total_cargos': len(filas_cargo),
-        'total_plazas_aprobadas': sum(f.cant_aprobada for f in filas_cargo),
-        'total_plazas_cubiertas': sum(f.cant_cubierta for f in filas_cargo),
+        # Los cargos fuera de la plantilla aprobada se congelan (su gente cobró
+        # ese mes), pero sus plazas no son plantilla: no suman en los totales.
+        'total_plazas_aprobadas': sum(
+            f.cant_aprobada for f in filas_cargo if f.en_plantilla),
+        'total_plazas_cubiertas': sum(
+            f.cant_cubierta for f in filas_cargo if f.en_plantilla),
         'total_contratos': len(filas_contrato),
     }
 

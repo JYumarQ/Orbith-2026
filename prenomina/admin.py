@@ -77,12 +77,14 @@ class NEscalaAnnosServicioAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
 class ReportePagoAdmin(admin.ModelAdmin):
     """Inspección, nunca edición. Ver el docstring del módulo."""
 
-    list_display = ('unidad_descripcion', 'anno', 'mes', 'estado',
+    # `quincena` va en la lista porque con pago Quincenal hay dos reportes por
+    # unidad y mes: sin esa columna, las dos filas serían indistinguibles.
+    list_display = ('unidad_descripcion', 'anno', 'mes', 'quincena', 'estado',
                     'fondo_tiempo', 'total_trabajadores', 'total_importes',
                     'fecha_cierre')
-    list_filter = ('estado', 'anno', 'mes')
+    list_filter = ('estado', 'anno', 'mes', 'quincena')
     search_fields = ('unidad_descripcion',)
-    ordering = ('-anno', '-mes')
+    ordering = ('-anno', '-mes', '-quincena')
     date_hierarchy = 'fecha_desde'
 
     def has_add_permission(self, request):

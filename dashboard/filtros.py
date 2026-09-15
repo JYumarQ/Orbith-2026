@@ -2,9 +2,11 @@
 
 `unidades_visibles()` es el único punto donde se decide qué Unidades
 Organizativas puede ver cada usuario, mismo patrón que
-`cierres/filtros.py::unidades_visibles()`. Un Administrador y un Observador ven
-todas las UO; un Moderador solo las que tiene asignadas en
-`CustomUser.unidades`.
+`cierres/filtros.py::unidades_visibles()`. El reparto lo decide
+`usuarios.alcance`: el Administrador ve todas las UO; el Moderador solo las que
+tiene asignadas en `CustomUser.unidades`; y el Observador ve todas SOLO si no
+tiene ninguna asignada — si el Administrador le asignó unidades, queda acotado
+a ellas igual que un Moderador.
 
 `resolver_filtros()` es el único punto que valida lo que llega por querystring:
 nunca confía en los ids que pida el cliente, siempre los intersecta contra el
@@ -19,19 +21,14 @@ de filtrado por alcance, reutilizado por todos los componentes del Dashboard
 
 from strorganizativa.jerarquia import expandir, ordenar_con_jerarquia
 from strorganizativa.models import Departamento, UnidadOrganizativa
-
-
-def es_administrador(usuario):
-    if not getattr(usuario, 'is_authenticated', False):
-        return False
-    return bool(usuario.is_superuser or getattr(usuario, 'es_admin', False))
+from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
 
 def unidades_visibles(usuario):
     """Unidades Organizativas que el usuario puede ver/filtrar en el Dashboard."""
-    if es_administrador(usuario) or getattr(usuario, 'es_observador', False):
+    if ve_toda_la_empresa(usuario):
         return UnidadOrganizativa.objects.all()
-    if getattr(usuario, 'es_moderador', False):
+    if tiene_alcance_acotado(usuario):
         return usuario.unidades.all()
     return UnidadOrganizativa.objects.none()
 
@@ -55,11 +52,12 @@ def resolver_filtros(request):
     usuario. Devuelve `(uo_ids, contexto)`.
 
     Reglas:
-    - Los ids de UO pedidos se intersectan contra `unidades_visibles()`. Un
-      Moderador que pida (por URL o manipulando el `<select>`) una UO que no
-      tiene asignada, simplemente no la obtiene: no hay error, no hay aviso,
+    - Los ids de UO pedidos se intersectan contra `unidades_visibles()`. Quien
+      pida (por URL o manipulando el `<select>`) una UO que no tiene asignada,
+      simplemente no la obtiene: no hay error, no hay aviso,
       el resultado es idéntico a no haberla pedido.
-    - Si el usuario es Moderador y, tras la intersección, no queda ninguna UO
+    - Si el usuario tiene el alcance acotado (Moderador, u Observador con
+      unidades asignadas) y, tras la intersección, no queda ninguna UO
       seleccionada (no pidió ninguna, o solo pidió ids ajenos/inválidos), el
       alcance por defecto es TODAS sus UO asignadas — nunca el universo
       completo ni un conjunto vacío.
@@ -81,12 +79,10 @@ def resolver_filtros(request):
     uo_ids = set(expandir([v for v in uo_pedidos if v.isdigit()]))
     uo_ids &= unidades_ids_visibles
 
-    es_moderador_puro = (
-        not es_administrador(usuario)
-        and not getattr(usuario, 'es_observador', False)
-        and getattr(usuario, 'es_moderador', False)
-    )
-    if not uo_ids and es_moderador_puro:
+    # Sin selección válida, quien tiene el alcance acotado (Moderador, u
+    # Observador con unidades asignadas) cae en TODAS sus unidades: nunca en el
+    # universo completo ni en un conjunto vacío.
+    if not uo_ids and tiene_alcance_acotado(usuario):
         uo_ids = set(unidades_ids_visibles)
 
     uo_ids_efectivas = uo_ids if uo_ids else unidades_ids_visibles

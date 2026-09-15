@@ -562,8 +562,13 @@ class CicloDeDeclaracion(BaseCierres):
     def test_la_fotografia_de_un_mes_regularizado_es_del_momento_de_declarar(self):
         """Contraintuitivo pero deliberado: solo la etiqueta es de agosto."""
         self.declarar(hoy=date(2026, 7, 22))
+        # NCargo nuevo: los dos de la base ya ocupan este departamento dentro de
+        # la plantilla y no se pueden repetir del mismo lado.
+        tercer_ncargo = NCargo.objects.create(
+            descripcion='Auxiliar', cat_ocupacional='SER',
+            grupo_escala=self.grupo, salario_basico=2500)
         CargoPlantilla.objects.create(
-            ncargo=self.ncargo, departamento=self.departamento,
+            ncargo=tercer_ncargo, departamento=self.departamento,
             cant_aprobada=99, orden_informe=3)
 
         cierre = self.declarar(hoy=date(2026, 9, 10))
@@ -626,8 +631,13 @@ class Reapertura(BaseCierres):
         """Regla 12: la fotografía válida es la de la última declaración."""
         self.declarar(hoy=date(2026, 8, 22))
         servicios.reabrir(self.unidad, self.admin, hoy=date(2026, 8, 24))
+        # Mismo motivo que arriba: NCargo propio para no repetir uno ya usado en
+        # este departamento dentro de la plantilla aprobada.
+        tercer_ncargo = NCargo.objects.create(
+            descripcion='Auxiliar', cat_ocupacional='SER',
+            grupo_escala=self.grupo, salario_basico=2500)
         CargoPlantilla.objects.create(
-            ncargo=self.ncargo, departamento=self.departamento,
+            ncargo=tercer_ncargo, departamento=self.departamento,
             cant_aprobada=7, orden_informe=3)
 
         nuevo = self.declarar(hoy=date(2026, 8, 25))

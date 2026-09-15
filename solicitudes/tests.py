@@ -978,6 +978,10 @@ class CargoPlantillaDesviado(BaseDepartamento):
             'rol': self.rol.pk,
             'cant_aprobada': 3,
             'cant_cubierta': 0,
+            # El switch «En Plantilla» viaja como cualquier checkbox: si no se
+            # envía, el formulario entiende que está apagado. El cargo de la
+            # prueba está dentro de la plantilla aprobada, como el 99% de ellos.
+            'en_plantilla': 'on',
             'orden_informe': 1,
         }
         datos.update(cambios)

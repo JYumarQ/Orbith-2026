@@ -319,14 +319,25 @@
                     </div>
                 </div>
                 
-                <div class="p-1 border-bottom bg-light d-flex justify-content-between align-items-center pe-3">
+                <div class="p-1 border-bottom bg-light d-flex justify-content-between align-items-center pe-3 gap-2">
                     <input type="text" class="form-control form-control-sm border-0 bg-transparent" 
                            id="search-cargo" placeholder="Filtrar..." disabled
                            name="q" hx-trigger="keyup changed delay:500ms, search" 
                            hx-target="#col-cargos" hx-indicator="#col-cargos"
-                           hx-vals='js:{"sort": sortState.cargo.sort, "order": sortState.cargo.order}'>
-                    
-                    <span class="small fw-bold text-muted text-uppercase cursor-pointer user-select-none d-flex align-items-center gap-1" 
+                           hx-vals='js:{"sort": sortState.cargo.sort, "order": sortState.cargo.order, "plantilla": valorFiltroPlantilla()}'>
+
+                    {% comment %} Filtro de plantilla. No lanza su propia petición: reutiliza la del
+                       buscador, que es quien conoce el departamento seleccionado. {% endcomment %}
+                    <select id="filtro-plantilla" class="form-select form-select-sm border-0 bg-transparent w-auto flex-shrink-0"
+                            disabled onchange="recargarCargos()"
+                            title="Mostrar cargos dentro o fuera de la plantilla aprobada"
+                            style="font-size: 0.7rem;">
+                        <option value="todos">Todos</option>
+                        <option value="si">En plantilla</option>
+                        <option value="no">Fuera de plantilla</option>
+                    </select>
+
+                    <span class="small fw-bold text-muted text-uppercase cursor-pointer user-select-none d-flex align-items-center gap-1 flex-shrink-0" 
                           onclick="sortColumn('cargo', 'estado', this)" title="Ordenar Activos/Inactivos"
                           style="font-size: 0.65rem; letter-spacing: 0.5px;">
                           Estado <i class="fas fa-sort text-muted opacity-50 sort-icon"></i>
@@ -580,7 +591,9 @@
             values: { 
                 sort: criteria, 
                 order: current.order,
-                q: document.querySelector(inputSearchId)?.value || ''
+                q: document.querySelector(inputSearchId)?.value || '',
+                // Solo lo lee la columna de Cargos; las demás lo ignoran.
+                plantilla: valorFiltroPlantilla()
             },
             indicator: target 
         });
@@ -830,10 +843,29 @@
         if(input) {
             input.disabled = false; 
             input.value = '';
+            // El filtro de plantilla vive fuera del input pero viaja en su
+            // misma petición: se habilita y se resetea con él.
+            if (inputId === '#search-cargo') {
+                let filtro = document.getElementById('filtro-plantilla');
+                if (filtro) { filtro.disabled = false; filtro.value = 'todos'; }
+            }
             input.setAttribute('hx-get', url);
             htmx.process(input);
             htmx.trigger(input, 'search'); 
         }
+    }
+
+    // Valor actual del filtro «En plantilla / Fuera de plantilla».
+    function valorFiltroPlantilla() {
+        let filtro = document.getElementById('filtro-plantilla');
+        return filtro ? filtro.value : 'todos';
+    }
+
+    // Relanza la carga de cargos con el filtro recién elegido. Se apoya en el
+    // buscador porque es quien tiene el `hx-get` con el departamento actual.
+    window.recargarCargos = function() {
+        let input = document.getElementById('search-cargo');
+        if (input && !input.disabled) htmx.trigger(input, 'search');
     }
 
     function resetPanel(id, msg) {
@@ -959,7 +991,7 @@
         if (selectedDeptId) {
             htmx.ajax('GET', "{% url 'htmx_load_cargos' 0 %}".replace('0', selectedDeptId), { 
                 target: '#col-cargos', indicator: '#col-cargos', 
-                values: { sort: sortState.cargo.sort, order: sortState.cargo.order, q: document.getElementById('search-cargo')?.value || '' }
+                values: { sort: sortState.cargo.sort, order: sortState.cargo.order, q: document.getElementById('search-cargo')?.value || '', plantilla: valorFiltroPlantilla() }
             }); 
         }
     });
@@ -999,6 +1031,38 @@
     }
 
     // ================= LÓGICA DE CONTRATOS INTEGRADA =================
+
+    /* Los modales de Contrato y de Datos Personales, cuando se abren DESDE esta
+       pantalla, NO deben navegar a ningún listado: la selección de unidad,
+       departamento y cargo vive solo en el navegador y una recarga la perdería,
+       dejando al usuario en la Lista de Contratos.
+
+       Publican aquí este ayudante y ellos lo llaman si existe. Solo existe en el
+       Gestor: en el resto de pantallas esos modales siguen navegando como siempre,
+       que es lo correcto allí.
+
+       Es el mismo comportamiento que ya tenían «Dar de Baja» y «Enviar a Mov.
+       Nómina» desde esta misma barra. */
+    window.OrbithGestorSinNavegar = function(mensaje) {
+        const modalVisible = document.querySelector('.modal.show');
+        if (modalVisible) {
+            const instancia = bootstrap.Modal.getInstance(modalVisible);
+            if (instancia) instancia.hide();
+        }
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open').css('overflow', '');
+
+        if (mensaje) window.mostrarToast(mensaje, 'success');
+
+        /* Contratos, porque la persona pudo cambiar. Y Cargos, porque sus cifras
+           de plazas cubiertas salen de los contratos: si al editar se le cambió el
+           cargo al trabajador, las dos columnas quedan desfasadas.
+           El cargo seleccionado NO se toca: el usuario se queda donde estaba, y si
+           la persona se movió a otro cargo sencillamente deja de aparecer en la
+           lista, que es lo que se acordó. */
+        document.body.dispatchEvent(new Event('updateContratoList'));
+        document.body.dispatchEvent(new Event('updateCargoList'));
+    };
 
     window.confirmarSolicitudMovimiento = function() {
         const btn = document.getElementById('btn-movimiento');

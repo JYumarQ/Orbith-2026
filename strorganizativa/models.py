@@ -152,6 +152,12 @@ class CargoPlantilla(Base):
     cant_aprobada = models.IntegerField(default=0)
     cant_cubierta = models.IntegerField(default=0)
     activo = models.BooleanField(default=True)
+    # Un cargo «en plantilla» es la plaza aprobada por el organismo: es lo que
+    # ha existido siempre y su lógica no cambia. En False significa que la plaza
+    # existe y tiene gente, pero NO está en la plantilla aprobada: no suma en
+    # ningún total de plazas aprobadas (dashboard, Anexo 14, informes de
+    # plantilla, cierres) y no admite contratos que ocupen plaza.
+    en_plantilla = models.BooleanField(default=True, verbose_name='En Plantilla')
     funcionario = models.BooleanField(default=False, verbose_name='Funcionario')
     designado = models.BooleanField(default=False, verbose_name='Designado')
     orden_informe = models.PositiveIntegerField(
@@ -205,7 +211,17 @@ class CargoPlantilla(Base):
                 fields=['departamento', 'orden_informe'],
                 name='unique_orden_cargo_por_departamento',
                 deferrable=models.Deferrable.DEFERRED,  # comprobar al confirmar, no fila por fila
-            )
+            ),
+            # Un mismo NCargo puede repetirse en el departamento SOLO como pareja:
+            # uno dentro de la plantilla aprobada y otro fuera. Nunca dos iguales
+            # del mismo lado. La validación amable (con mensaje) vive en
+            # `CargoPlantillaForm.clean`; esto es el blindaje de la base de datos,
+            # para las vías que no pasan por el formulario: shell, Django Admin,
+            # importaciones masivas.
+            models.UniqueConstraint(
+                fields=['departamento', 'ncargo', 'en_plantilla'],
+                name='unique_cargo_por_departamento_y_plantilla',
+            ),
         ]
             
 
@@ -220,7 +236,14 @@ class CargoPlantilla(Base):
         # LÓGICA AUTOMÁTICA: Si plazas es 0 -> Inactivo, si > 0 -> Activo
         if self.cant_aprobada is not None:
             self.activo = self.cant_aprobada > 0
-        
+
+        # Mismo criterio que `UnidadOrganizativa.save()`: la validación del
+        # modelo corre SIEMPRE, no solo cuando el guardado viene de un
+        # formulario. Sin esto, un `objects.create()` desde el shell, el Django
+        # Admin o una importación podían dejar un cargo marcado a la vez como
+        # Funcionario y Designado, que es justo lo que `clean()` prohíbe.
+        self.clean()
+
         es_nuevo = self.pk is None
         super().save(*args, **kwargs)  # Guarda primero para obtener el PK
 

@@ -1,6 +1,3 @@
-from cProfile import label
-from dataclasses import fields
-from pyexpat import model
 from django import forms
 from django.forms import widgets
 from .models import CargoPlantilla, Departamento, UnidadOrganizativa
@@ -12,13 +9,24 @@ from configuracion.models import Configuracion
 class SelectNCargoConGrupoWidget(forms.Select):
     """
     Select del campo 'ncargo' que añade a cada <option>:
-      - data-grupo : nivel del Grupo Escala (tooltip de Select2).
-      - disabled   : si ese NCargo ya está usado en el departamento actual.
+      - data-grupo    : nivel del Grupo Escala (tooltip de Select2).
+      - data-usado-si : ese NCargo ya existe en el departamento DENTRO de la plantilla.
+      - data-usado-no : ese NCargo ya existe en el departamento FUERA de la plantilla.
+      - disabled      : si está bloqueado para el estado actual del switch «En Plantilla».
+
+    Un mismo NCargo puede repetirse en el departamento como PAREJA: uno dentro
+    de la plantilla aprobada y otro fuera. Nunca dos con el mismo estado. Por eso
+    ya no basta un único conjunto de «usados»: hay que saber en qué lado está
+    cada uno. El bloqueo definitivo lo decide `CargoPlantillaForm.clean`; esto
+    solo pinta el desplegable, y el JS lo recalcula al mover el switch.
     """
 
-    # Ids de NCargo ya usados en el departamento.
-    # Lo rellena CargoPlantillaForm.__init__
-    ncargos_usados = frozenset()
+    # Ids de NCargo ya usados en el departamento, separados por lado.
+    # Los rellena CargoPlantillaForm.__init__
+    ncargos_en_plantilla = frozenset()
+    ncargos_fuera_plantilla = frozenset()
+    # Estado del switch con el que se pinta el formulario (True = En Plantilla).
+    en_plantilla_actual = True
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(
@@ -33,15 +41,26 @@ class SelectNCargoConGrupoWidget(forms.Select):
             if grupo is not None:
                 option['attrs']['data-grupo'] = grupo.nivel
 
-            # --- ¿Este cargo ya existe en el departamento? ---
+            # --- ¿Este cargo ya existe en el departamento, y de qué lado? ---
             try:
                 pk = int(getattr(value, 'value', value))
             except (TypeError, ValueError):
                 pk = None
 
-            if pk is not None and pk in self.ncargos_usados:
-                option['attrs']['disabled'] = True     # Select2 lo respeta de forma nativa
-                option['attrs']['data-usado'] = 'true'  # Para el gris del templateResult
+            if pk is not None:
+                usado_si = pk in self.ncargos_en_plantilla
+                usado_no = pk in self.ncargos_fuera_plantilla
+
+                if usado_si:
+                    option['attrs']['data-usado-si'] = 'true'
+                if usado_no:
+                    option['attrs']['data-usado-no'] = 'true'
+
+                # Solo choca con el lado en el que se está creando/editando
+                bloqueado = usado_si if self.en_plantilla_actual else usado_no
+                if bloqueado:
+                    option['attrs']['disabled'] = True     # Select2 lo respeta de forma nativa
+                    option['attrs']['data-usado'] = 'true'  # Para el gris del templateResult
 
         return option
     
@@ -61,7 +80,7 @@ class CargoPlantillaForm(forms.ModelForm):
     
     class Meta:
         model = CargoPlantilla
-        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo', 'funcionario', 'designado', 'orden_informe')
+        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo', 'en_plantilla', 'funcionario', 'designado', 'orden_informe')
         labels = {
             'ncargo': 'Cargo', 
             'departamento': 'Departamento', 
@@ -70,6 +89,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'cant_aprobada': 'Cantidad Aprobada', 
             'cant_cubierta': 'Cantidad Cubierta', 
             'activo': 'Estado (Automático)',
+            'en_plantilla': 'En Plantilla',
             'orden_informe': 'Orden de Prioridad',
         }
         widgets = {
@@ -80,6 +100,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'cant_aprobada': forms.NumberInput(attrs={'class': 'form-control'}),
             'cant_cubierta': forms.NumberInput(attrs={'class': 'form-control'}),
             'activo': forms.CheckboxInput(attrs={'class':'form-check-input', 'disabled': 'disabled', 'id': 'id_activo'}),
+            'en_plantilla': forms.CheckboxInput(attrs={'class':'form-check-input', 'role': 'switch', 'id': 'id_en_plantilla'}),
             'funcionario': forms.CheckboxInput(attrs={'class':'form-check-input', 'id': 'id_funcionario'}),
             'designado': forms.CheckboxInput(attrs={'class':'form-check-input', 'id': 'id_designado'}),
             'orden_informe': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'placeholder': 'Ej: 1 (Mayor prioridad)'}),
@@ -92,18 +113,37 @@ class CargoPlantillaForm(forms.ModelForm):
 
         self.fields['ncargo'].queryset = self.fields['ncargo'].queryset.select_related('grupo_escala').order_by('descripcion')
 
-        # --- Cargos ya utilizados en este departamento (se muestran deshabilitados) ---
+        # --- Valor inicial del switch «En Plantilla» ---
+        # Regla única de excepción: los cargos que cuelgan de una Unidad
+        # Organizativa de tipo temporal nacen FUERA de la plantilla aprobada.
+        # Es solo el valor de arranque: el usuario puede cambiarlo sin ninguna
+        # restricción.
         dpto_id = self._obtener_departamento_id()
-        usados = set()
+
+        if not self.instance.pk and 'en_plantilla' not in self.data:
+            self.fields['en_plantilla'].initial = not self._departamento_es_temporal(dpto_id)
+
+        en_plantilla_actual = self._en_plantilla_actual()
+
+        # --- Cargos ya utilizados en este departamento (se muestran deshabilitados) ---
+        # Un mismo NCargo admite PAREJA (uno dentro de la plantilla y otro fuera),
+        # así que se separan por lado: solo bloquea el que choca con el estado
+        # actual del switch.
+        usados_si = set()
+        usados_no = set()
 
         if dpto_id:
             qs_usados = CargoPlantilla.objects.filter(departamento_id=dpto_id)
             # En edición, el propio registro no debe bloquearse a sí mismo
             if self.instance.pk:
                 qs_usados = qs_usados.exclude(pk=self.instance.pk)
-            usados = set(qs_usados.values_list('ncargo_id', flat=True))
+            for ncargo_id, en_plantilla in qs_usados.values_list('ncargo_id', 'en_plantilla'):
+                (usados_si if en_plantilla else usados_no).add(ncargo_id)
 
-        self.fields['ncargo'].widget.ncargos_usados = frozenset(usados)
+        widget_ncargo = self.fields['ncargo'].widget
+        widget_ncargo.ncargos_en_plantilla = frozenset(usados_si)
+        widget_ncargo.ncargos_fuera_plantilla = frozenset(usados_no)
+        widget_ncargo.en_plantilla_actual = en_plantilla_actual
 
         # 1) Restringe por usuario (si aplica)
         # 1) Restringe por usuario (Solo si NO es superusuario)
@@ -153,7 +193,45 @@ class CargoPlantillaForm(forms.ModelForm):
         except (TypeError, ValueError):
             return None
 
-        
+    @staticmethod
+    def _departamento_es_temporal(dpto_id):
+        """¿El departamento cuelga de una Unidad Organizativa de tipo temporal?"""
+        if not dpto_id:
+            return False
+        return Departamento.objects.filter(
+            pk=dpto_id, unidad_organizativa__tipo__es_temporal=True
+        ).exists()
+
+    def _en_plantilla_actual(self):
+        """Estado del switch con el que se está pintando el formulario.
+
+        Un checkbox que viene apagado NO aparece en el POST, así que en un
+        formulario enviado la ausencia de la clave significa False. Fuera del
+        POST manda la instancia (edición) y, si no la hay, el valor inicial.
+        """
+        if self.is_bound:
+            return 'en_plantilla' in self.data
+        if self.instance.pk:
+            return bool(self.instance.en_plantilla)
+        return bool(self.fields['en_plantilla'].initial)
+
+    def _contrato_que_ocupa_plaza(self):
+        """Contrato activo del cargo que consume plaza oficial, o None.
+
+        Es lo único que impide sacar un cargo de la plantilla aprobada: si la
+        plaza no es plantilla, no puede sostener un contrato que ocupe plaza.
+        """
+        if not self.instance.pk:
+            return None
+
+        from contratos.models import CAlta
+        return (CAlta.objects
+                .filter(cargo=self.instance,
+                        aspirante__estado='ACTIVO',
+                        tipo__ocupa_plaza=True)
+                .select_related('tipo', 'aspirante')
+                .first())
+
     def clean(self):
         cleaned_data = super().clean()
         funcionario = cleaned_data.get('funcionario')
@@ -172,16 +250,35 @@ class CargoPlantillaForm(forms.ModelForm):
         ncargo = cleaned_data.get('ncargo')
         rol = cleaned_data.get('rol')
 
-        # --- Un departamento no puede repetir el mismo NCargo ---
+        # --- Un departamento no puede repetir el mismo NCargo EN EL MISMO LADO ---
+        # Sí admite la pareja: uno dentro de la plantilla aprobada y otro fuera.
+        en_plantilla = cleaned_data.get('en_plantilla')
         departamento = cleaned_data.get('departamento')
         if ncargo and departamento:
-            duplicados = CargoPlantilla.objects.filter(departamento=departamento, ncargo=ncargo)
+            duplicados = CargoPlantilla.objects.filter(
+                departamento=departamento, ncargo=ncargo, en_plantilla=en_plantilla)
             if self.instance.pk:
                 duplicados = duplicados.exclude(pk=self.instance.pk)
             if duplicados.exists():
+                lado = ('dentro de la plantilla aprobada' if en_plantilla
+                        else 'fuera de la plantilla aprobada')
                 self.add_error(
                     'ncargo',
-                    f'El cargo "{ncargo.descripcion}" ya existe en el departamento "{departamento.descripcion}".'
+                    f'El cargo "{ncargo.descripcion}" ya existe {lado} en el departamento '
+                    f'"{departamento.descripcion}". Un mismo cargo solo puede repetirse '
+                    f'si uno está dentro de la plantilla aprobada y el otro fuera.'
+                )
+
+        # --- Sacar un cargo de la plantilla aprobada: solo si nadie ocupa plaza ---
+        # Se comprueba únicamente en el sentido True -> False. Volver a meter un
+        # cargo en la plantilla no rompe nada y no necesita permiso.
+        if self.instance.pk and self.instance.en_plantilla and en_plantilla is False:
+            if self._contrato_que_ocupa_plaza():
+                self.add_error(
+                    'en_plantilla',
+                    'El cargo que desea sacar de la plantilla aprobada tiene asociado '
+                    'un contrato indeterminado. Para poder quitar este cargo de la '
+                    'plantilla aprobada, el contrato asociado no puede ser Indeterminado.'
                 )
 
         # --- La posición de orden no puede repetirse dentro del departamento ---

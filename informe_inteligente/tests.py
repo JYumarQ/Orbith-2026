@@ -565,10 +565,17 @@ class IndicadoresYEvolucionTests(TestCase):
 
     def test_cuenta_los_cargos_que_nadie_ocupa(self):
         from strorganizativa.models import CargoPlantilla, Departamento
+        from nomencladores.models import NCargo, NGrupoEscala
 
         departamento = Departamento.objects.get(descripcion='Produccion')
+        # NCargo propio: 'Operario' ya está en este departamento y un cargo no
+        # puede repetirse del mismo lado de la plantilla. Al test le da igual
+        # cuál sea: lo que cuenta es que nadie lo ocupe.
+        ncargo_vacante = NCargo.objects.create(
+            descripcion='Auxiliar', cat_ocupacional='SER',
+            grupo_escala=NGrupoEscala.objects.first(), salario_basico=2500)
         CargoPlantilla.objects.create(
-            ncargo=self.ncargo_normal, departamento=departamento,
+            ncargo=ncargo_vacante, departamento=departamento,
             cant_aprobada=2, orden_informe=3)
 
         tarjetas, _ = self._indicadores('CargoPlantilla')

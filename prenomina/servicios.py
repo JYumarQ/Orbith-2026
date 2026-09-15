@@ -36,10 +36,10 @@ from . import calculos
 from .captura import construir_trabajadores, datos_de_trabajador, datos_de_unidad
 from .constantes import FACTOR_TECHO_HORAS, MODULO
 from .models import (EstadoReporte, NClaveAusencia, NEscalaAnnosServicio,
-                     NPagoHoras, NPagoImporte, ReporteConceptoAusencia,
-                     ReporteConceptoHoras, ReporteConceptoImporte, ReportePago,
-                     ReporteTrabajador, TipoValorImporte, ValorAusencia,
-                     ValorHoras, ValorImporte)
+                     NPagoHoras, NPagoImporte, Quincena,
+                     ReporteConceptoAusencia, ReporteConceptoHoras,
+                     ReporteConceptoImporte, ReportePago, ReporteTrabajador,
+                     TipoValorImporte, ValorAusencia, ValorHoras, ValorImporte)
 from .permisos import gestiona_unidad, puede_escribir
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,90 @@ logger = logging.getLogger(__name__)
 
 class ErrorDePreNomina(Exception):
     """Transición o dato no permitido. El mensaje va directo al usuario."""
+
+
+# --------------------------------------------------------------------------- #
+# Período de pago de la entidad
+# --------------------------------------------------------------------------- #
+
+def es_pago_quincenal():
+    """¿La entidad paga por quincenas? Lo dice Configuración → Parámetros Generales.
+
+    `Configuracion.periodo` guarda los DÍAS del período (15 Quincenal, 30
+    Mensual). Se lee aquí y no se copia en el reporte porque es una regla de la
+    entidad, no un dato del documento: lo que el reporte congela es la quincena
+    que le tocó, que ya no depende de que mañana se cambie el parámetro.
+
+    Sin configuración creada se asume Mensual, que es el comportamiento que
+    tenía Pre-Nómina antes de existir este campo.
+    """
+    from configuracion.models import Configuracion
+    configuracion = Configuracion.objects.first()
+    if configuracion is None:
+        return False
+    return configuracion.periodo == Configuracion.PERIODO_QUINCENAL
+
+
+def limites_del_periodo(anno, mes, quincena):
+    """Fechas «desde» y «hasta» que le corresponden a un período de pago.
+
+    Mes completo: del 1 al último día. 1ra quincena: del 1 al 15. 2da quincena:
+    del 16 al último día — y no «del 16 al 30», porque febrero existe.
+
+    Es solo la propuesta con la que se rellena el formulario: el usuario puede
+    ajustarla antes de crear el reporte.
+    """
+    import calendar as _calendario
+    from datetime import date
+
+    ultimo = _calendario.monthrange(anno, mes)[1]
+    if quincena == Quincena.PRIMERA:
+        return date(anno, mes, 1), date(anno, mes, 15)
+    if quincena == Quincena.SEGUNDA:
+        return date(anno, mes, 16), date(anno, mes, ultimo)
+    return date(anno, mes, 1), date(anno, mes, ultimo)
+
+
+def siguiente_quincena(unidad_pk, anno, mes):
+    """Qué reporte toca crear para esa unidad y mes, o `None` si ya no falta ninguno.
+
+    La quincena **no la elige el usuario**: se deduce de lo que ya existe. Con
+    pago Mensual solo cabe MES_COMPLETO; con pago Quincenal se devuelve la
+    primera de las dos que falte, así que el orden natural sale solo y rehacer
+    una quincena borrada la vuelve a ofrecer.
+    """
+    existentes = set(
+        ReportePago.objects
+        .filter(unidad_id=unidad_pk, anno=anno, mes=mes)
+        .values_list('quincena', flat=True))
+
+    if not es_pago_quincenal():
+        candidatas = [Quincena.MES_COMPLETO]
+    else:
+        candidatas = [Quincena.PRIMERA, Quincena.SEGUNDA]
+
+    for candidata in candidatas:
+        if candidata not in existentes:
+            return candidata
+    return None
+
+
+def _fondo_de_tarifa():
+    """Divisor con el que se obtiene la tarifa horaria a partir del salario.
+
+    Sale siempre de Configuración → Parámetros Generales. Dejó de preguntarse en
+    el formulario de alta: era un número que el usuario no decidía —siempre
+    aceptaba el que se le proponía— y que ya vivía en un solo sitio.
+
+    Se sigue COPIANDO en el reporte (`ReportePago.fondo_tarifa`) en vez de leerlo
+    al vuelo: un reporte cerrado tiene que poder recalcularse igual dentro de dos
+    años, aunque el parámetro haya cambiado desde entonces.
+    """
+    from configuracion.models import Configuracion
+    configuracion = Configuracion.objects.first()
+    if configuracion and configuracion.fondo_tiempo_calc_tarif:
+        return configuracion.fondo_tiempo_calc_tarif
+    return Decimal('190.60')
 
 
 # --------------------------------------------------------------------------- #
@@ -99,14 +183,22 @@ def _nombre_de(usuario):
 # --------------------------------------------------------------------------- #
 
 @transaction.atomic
-def crear_reporte(unidad, periodo, usuario, *, fondo_tarifa,
-                  fecha_desde, fecha_hasta, hecho_por='', fondo_tiempo=None,
-                  plantilla=None):
+def crear_reporte(unidad, periodo, usuario, *,
+                  fecha_desde, fecha_hasta, hecho_por='', revisado_por='',
+                  aprobado_por='', fondo_tiempo=None, plantilla=None,
+                  fondo_tarifa=None):
     """Crea el reporte de una unidad para un período y congela sus trabajadores.
 
     El objeto que se bloquea es la **unidad** y no el reporte, porque el reporte
     todavía no existe. Es el mismo recurso que bloquea
     `cierres.servicios.declarar_actualizada`.
+
+    La QUINCENA se decide aquí dentro, con la unidad ya bloqueada, y no en el
+    formulario: es la única forma de que dos usuarios creando a la vez el reporte
+    del mismo mes no se peleen por la misma quincena.
+
+    `fondo_tarifa` es opcional y solo lo pasan el panel de administración y los
+    tests: el alta normal lo toma de Configuración (`_fondo_de_tarifa()`).
     """
     _exigir_permiso(usuario, unidad.pk)
 
@@ -115,8 +207,14 @@ def crear_reporte(unidad, periodo, usuario, *, fondo_tarifa,
     unidad = (type(unidad).objects.select_for_update()
               .select_related('tipo').get(pk=unidad.pk))
 
-    if ReportePago.objects.filter(unidad=unidad, anno=periodo.anno,
-                                  mes=periodo.mes).exists():
+    quincena = siguiente_quincena(unidad.pk, periodo.anno, periodo.mes)
+    if quincena is None:
+        # Con pago Mensual solo cabía un reporte; con pago Quincenal, dos. En
+        # ambos casos significa lo mismo: ese mes ya está cubierto entero.
+        if es_pago_quincenal():
+            raise ErrorDePreNomina(
+                f'{unidad.descripcion} ya tiene las dos quincenas de '
+                f'{periodo.etiqueta}.')
         raise ErrorDePreNomina(
             f'Ya existe un reporte de {unidad.descripcion} para '
             f'{periodo.etiqueta}.')
@@ -127,21 +225,24 @@ def crear_reporte(unidad, periodo, usuario, *, fondo_tarifa,
         unidad=unidad, estado=EstadoReporte.BORRADOR).first()
     if abierto:
         raise ErrorDePreNomina(
-            f'{unidad.descripcion} ya tiene el reporte de {abierto.periodo.etiqueta} '
-            f'en Borrador. Ciérrelo antes de empezar otro.')
+            f'{unidad.descripcion} ya tiene el reporte de '
+            f'{abierto.etiqueta_periodo} en Borrador. Ciérrelo antes de '
+            f'empezar otro.')
 
     if fecha_hasta < fecha_desde:
         raise ErrorDePreNomina(
             'La fecha final del período no puede ser anterior a la inicial.')
 
     reporte = ReportePago.objects.create(
-        unidad=unidad, anno=periodo.anno, mes=periodo.mes,
+        unidad=unidad, anno=periodo.anno, mes=periodo.mes, quincena=quincena,
         estado=EstadoReporte.BORRADOR,
         # Valor de arranque: `_fondo_de_referencia()` lo sustituye unas líneas
         # más abajo, ya con los trabajadores congelados y sus jornadas conocidas.
-        fondo_tiempo=fondo_tiempo or Decimal('0.01'), fondo_tarifa=fondo_tarifa,
+        fondo_tiempo=fondo_tiempo or Decimal('0.01'),
+        fondo_tarifa=fondo_tarifa if fondo_tarifa is not None else _fondo_de_tarifa(),
         fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
         hecho_por=hecho_por or _nombre_de(usuario),
+        revisado_por=revisado_por, aprobado_por=aprobado_por,
         **datos_de_unidad(unidad))
 
     filas = construir_trabajadores(reporte, usuario)
@@ -169,7 +270,7 @@ def crear_reporte(unidad, periodo, usuario, *, fondo_tarifa,
 
     _auditar(usuario, AccionAuditoria.CREAR, reporte,
              f'Reporte de pago de {reporte.unidad_descripcion} — '
-             f'{reporte.periodo.etiqueta} ({len(filas)} trabajadores'
+             f'{reporte.etiqueta_periodo} ({len(filas)} trabajadores'
              f'{f", plantilla «{plantilla.descripcion}»" if plantilla else ""})')
     return reporte
 
@@ -234,12 +335,18 @@ def _exigir_sin_solape(reporte, expedientes):
     sus hijas pondría a los mismos trabajadores en dos nóminas del mismo mes.
     Se comprueba por expediente y no por unidad porque es el trabajador, no la
     unidad, lo que no puede pagarse dos veces.
+
+    La comparación incluye la QUINCENA. Sin ella esta comprobación bloquearía
+    justamente lo que las quincenas vienen a permitir: con pago Quincenal el
+    mismo trabajador tiene que aparecer en la 1ra y en la 2da del mismo mes, y
+    eso no es un doble pago sino los dos medios pagos de ese mes.
     """
     if not expedientes:
         return
 
     solapados = (ReporteTrabajador.objects
                  .filter(reporte__anno=reporte.anno, reporte__mes=reporte.mes,
+                         reporte__quincena=reporte.quincena,
                          no_expediente__in=expedientes)
                  .exclude(reporte_id=reporte.pk)
                  .select_related('reporte')[:5])
@@ -250,9 +357,9 @@ def _exigir_sin_solape(reporte, expedientes):
     ejemplos = ', '.join(t.no_expediente for t in solapados)
     raise ErrorDePreNomina(
         f'Algunos trabajadores ya están en otro reporte de '
-        f'{reporte.periodo.etiqueta}: {ejemplos}. Ese reporte es de '
+        f'{reporte.etiqueta_periodo}: {ejemplos}. Ese reporte es de '
         f'{", ".join(otros)}. Un trabajador no puede aparecer en dos nóminas '
-        f'del mismo mes.')
+        f'del mismo período.')
 
 
 def _archivar_anteriores(reporte):
@@ -261,12 +368,17 @@ def _archivar_anteriores(reporte):
     Se hace por consulta y no recorriendo `es_ultimo` fila a fila: al crear el
     reporte de agosto, todos los cerrados de esa unidad son anteriores por
     definición.
+
+    La quincena desempata dentro del mes, igual que en `es_ultimo`: al crear la
+    2da quincena, la 1ra ya cerrada de ese mismo mes pasa a Histórico.
     """
     from django.db.models import Q
     return (ReportePago.objects
             .filter(unidad_id=reporte.unidad_id, estado=EstadoReporte.CERRADO)
             .filter(Q(anno__lt=reporte.anno)
-                    | Q(anno=reporte.anno, mes__lt=reporte.mes))
+                    | Q(anno=reporte.anno, mes__lt=reporte.mes)
+                    | Q(anno=reporte.anno, mes=reporte.mes,
+                        quincena__lt=reporte.quincena))
             .update(estado=EstadoReporte.HISTORICO))
 
 
@@ -333,7 +445,7 @@ def agregar_trabajador(reporte, no_expediente, usuario):
 
     _auditar(usuario, accion, reporte,
              f'{fila.nombre_completo} ({no_expediente}) {verbo} el reporte '
-             f'{reporte.periodo.etiqueta}')
+             f'{reporte.etiqueta_periodo}')
     return fila
 
 
@@ -354,7 +466,7 @@ def quitar_trabajador(reporte, trabajador_pk, usuario):
     calculos.refrescar_totales(reporte)
 
     _auditar(usuario, AccionAuditoria.ELIMINAR, reporte,
-             f'{etiqueta} retirado del reporte {reporte.periodo.etiqueta}')
+             f'{etiqueta} retirado del reporte {reporte.etiqueta_periodo}')
 
 
 # --------------------------------------------------------------------------- #
@@ -398,7 +510,7 @@ def cerrar_reporte(reporte, usuario, *, revisado_por='', aprobado_por=''):
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
              f'Cerrado el reporte de {reporte.unidad_descripcion} — '
-             f'{reporte.periodo.etiqueta}')
+             f'{reporte.etiqueta_periodo}')
     return reporte
 
 
@@ -501,7 +613,7 @@ def reabrir_reporte(reporte, usuario):
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
              f'Reabierto el reporte de {reporte.unidad_descripcion} — '
-             f'{reporte.periodo.etiqueta}')
+             f'{reporte.etiqueta_periodo}')
     return reporte
 
 
@@ -617,7 +729,7 @@ def configurar_conceptos(reporte, usuario, *, codigos_ausencia=(),
     calculos.recalcular_reporte(reporte)
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
-             f'Conceptos del reporte {reporte.periodo.etiqueta}: '
+             f'Conceptos del reporte {reporte.etiqueta_periodo}: '
              f'{len(claves)} ausencias, {len(pagos_horas)} por horas, '
              f'{len(automaticos) + len(manuales)} por importe')
     return resumen
@@ -772,7 +884,7 @@ def guardar_valores(trabajador_pk, usuario, *, ausencias=None, horas=None):
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
              f'Valores de {trabajador.nombre_completo} ({trabajador.no_expediente}) '
-             f'en el reporte {reporte.periodo.etiqueta}')
+             f'en el reporte {reporte.etiqueta_periodo}')
     return trabajador
 
 
@@ -872,5 +984,5 @@ def importar_valores(reporte, filas, usuario):
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
              f'Importadas {len(filas)} filas en el reporte '
-             f'{reporte.periodo.etiqueta} de {reporte.unidad_descripcion}')
+             f'{reporte.etiqueta_periodo} de {reporte.unidad_descripcion}')
     return {'filas': len(filas)}

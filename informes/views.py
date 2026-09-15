@@ -53,8 +53,9 @@ def _combo_unidades(usuario):
     pueda indentar: sin esa pista visual, «Camagüey» y «Oficina Central»
     parecerían dos unidades hermanas.
 
-    El Moderador ve exactamente las que tiene asignadas —que, por el invariante
-    de `usuarios/forms.py`, ya incluyen las subunidades de sus principales—.
+    Quien tiene el alcance acotado —el Moderador, y el Observador con unidades
+    asignadas— ve exactamente las que tiene asignadas, que por el invariante de
+    `usuarios/forms.py` ya incluyen las subunidades de sus principales.
 
     Esto es comodidad, no seguridad: quien decide lo que cada usuario puede ver
     es `fuentes.resolver_fuente()`, en el servidor.
@@ -242,8 +243,11 @@ class InformeEconomiaView(TemplateView):
         }
 
         # Cargos Aprobados, Cubiertos y Vacantes
+        # `en_plantilla`: las plazas fuera de la plantilla aprobada no son
+        # plantilla, así que no suman aquí. Sus trabajadores sí siguen contando
+        # más abajo (existen y cobran), igual que en la prenómina.
         for cargo in fuente.cargos:
-            if not cargo.activo:
+            if not cargo.activo or not cargo.en_plantilla:
                 continue
             cat = self.mapear_categoria(cargo.cat_ocupacional)
             datos[cat]['aprob'] += cargo.cant_aprobada
@@ -524,7 +528,8 @@ class InformePuestosClaveView(TemplateView):
             return unidades_ids is None or fila.unidad_id in unidades_ids
 
         cargos = [c for c in fuente.cargos
-                  if c.ncargo_id == ncargo_id and c.activo and de_mi_alcance(c)]
+                  if c.ncargo_id == ncargo_id and c.activo and c.en_plantilla
+                  and de_mi_alcance(c)]
         if not cargos:
             return None
 
@@ -534,8 +539,14 @@ class InformePuestosClaveView(TemplateView):
 
         # Mismo filtro que la consulta original: contratos de cargos activos y de
         # aspirantes en ACTIVO.
+        #
+        # `en_plantilla` es imprescindible aquí, no un extra: los contratos se
+        # emparejan por `ncargo_id`, y un mismo NCargo puede existir DOS veces en
+        # el departamento (la pareja dentro/fuera de la plantilla aprobada). Sin
+        # este filtro, los trabajadores del cargo de fuera se contarían en la fila
+        # del de dentro, cuyas plazas sí se excluyeron tres líneas más arriba.
         contratos = [c for c in fuente.contratos
-                     if c.ncargo_id == ncargo_id and c.cargo_activo
+                     if c.ncargo_id == ncargo_id and c.cargo_activo and c.en_plantilla
                      and c.aspirante_estado == 'ACTIVO' and de_mi_alcance(c)]
 
         c_det = c_muj = c_adiest = 0
@@ -629,7 +640,8 @@ class InformePuestosClaveView(TemplateView):
             return alcance is None or unidad_id in alcance
 
         con_contenido = {}
-        for unidad_id in {c.unidad_id for c in fuente.cargos if c.activo}:
+        for unidad_id in {c.unidad_id for c in fuente.cargos
+                          if c.activo and c.en_plantilla}:
             nodo = self._nodo_de_unidad(unidad_id, fuente, ncargos)
             if nodo is not None:
                 con_contenido[unidad_id] = nodo
@@ -773,7 +785,8 @@ class InformePuestosClaveView(TemplateView):
             # todos los cargos en minúscula al final de la lista.
             ncargos = sorted(
                 {c.ncargo_id: c.ncargo_descripcion
-                 for c in fuente.cargos if c.puesto_clave and c.activo}.items(),
+                 for c in fuente.cargos
+                 if c.puesto_clave and c.activo and c.en_plantilla}.items(),
                 key=lambda par: (par[1] or '').lower())
 
             bloque = self._familia(fuente, '⭐ Puestos Clave', ncargos,
@@ -1151,7 +1164,7 @@ class RegistroDiarioView(TemplateView):
             valor_plan = plan_guardado.valor
         else:
             # Si no existe, calculamos el de la plantilla de la fuente
-            cargos_plan = [c for c in fuente.cargos if c.activo]
+            cargos_plan = [c for c in fuente.cargos if c.activo and c.en_plantilla]
             if familia_filtro:
                 try:
                     familia_id = int(familia_filtro)

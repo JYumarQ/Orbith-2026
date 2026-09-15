@@ -354,25 +354,41 @@ class ComandoSincronizarUnidadesTests(BaseEstructura):
         self.assertIn('Camaguey',
                       usuario.unidades.values_list('descripcion', flat=True))
 
-    def test_por_defecto_no_toca_a_los_observadores(self):
-        """El Observador ve toda la empresa por su rol, así que sus unidades no
-        deciden nada y no hay motivo para reescribirlas."""
+    def test_por_defecto_tambien_repara_a_los_observadores_acotados(self):
+        """Desde que el alcance del Observador se puede acotar por unidad (ver
+        `usuarios/alcance.py`), sus unidades deciden lo mismo que las de un
+        Moderador: un descuadre le esconde media empresa igual de callado.
+
+        Antes el comando los ignoraba salvo que se le pasara una bandera, con el
+        razonamiento —correcto entonces— de que el Observador veía toda la
+        empresa por su rol."""
         observador = CustomUser.objects.create_user(
             username='obs_descuadrado', password=CLAVE, es_observador=True)
         observador.unidades.set([self.padre])
 
         self.ejecutar()
 
-        self.assertEqual(observador.unidades.count(), 1)
+        self.assertEqual(observador.unidades.count(), 3)
 
-    def test_con_la_bandera_si_incluye_a_los_observadores(self):
+    def test_no_le_inventa_unidades_al_observador_global(self):
+        """Un Observador SIN unidades ve toda la empresa. El comando no debe
+        asignarle ninguna: hacerlo lo convertiría en acotado por sorpresa y le
+        recortaría justo lo que su rol le da."""
         observador = CustomUser.objects.create_user(
-            username='obs_incluido', password=CLAVE, es_observador=True)
+            username='obs_global', password=CLAVE, es_observador=True)
+
+        self.ejecutar()
+
+        self.assertEqual(observador.unidades.count(), 0)
+
+    def test_con_solo_moderadores_no_toca_a_los_observadores(self):
+        observador = CustomUser.objects.create_user(
+            username='obs_excluido', password=CLAVE, es_observador=True)
         observador.unidades.set([self.padre])
 
-        self.ejecutar('--incluir-observadores')
+        self.ejecutar('--solo-moderadores')
 
-        self.assertEqual(observador.unidades.count(), 3)
+        self.assertEqual(observador.unidades.count(), 1)
 
 
 class UnidadesOcupadasEnElDesplegableTests(BaseEstructura):

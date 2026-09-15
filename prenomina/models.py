@@ -308,6 +308,27 @@ class EstadoReporte(models.TextChoices):
     HISTORICO = 'H', 'Histórico'
 
 
+class Quincena(models.IntegerChoices):
+    """Qué trozo del mes cubre un reporte.
+
+    Lo decide el período de pago de la entidad (`Configuracion.periodo`), no el
+    usuario: con pago Mensual solo existe MES_COMPLETO y hay un reporte por
+    unidad y mes; con pago Quincenal hay dos, PRIMERA y SEGUNDA.
+
+    Se guarda como número —y no como un booleano «es quincenal»— porque forma
+    parte de la clave que identifica al reporte (`unidad + año + mes +
+    quincena`) y porque su orden natural es el que usan `es_ultimo` y
+    `_archivar_anteriores` para saber qué reporte va delante de cuál.
+
+    MES_COMPLETO vale 0 a propósito: es el valor que reciben los reportes que ya
+    existían cuando se añadió el campo, y es también el que ordena primero.
+    """
+
+    MES_COMPLETO = 0, 'Mes completo'
+    PRIMERA = 1, '1ra Quincena'
+    SEGUNDA = 2, '2da Quincena'
+
+
 class ReportePago(Base):
     """Cabecera del Reporte de Pago de una unidad para un mes.
 
@@ -322,6 +343,12 @@ class ReportePago(Base):
         related_name='reportes_pago', verbose_name='Unidad Organizativa')
     anno = models.PositiveSmallIntegerField(verbose_name='Año')
     mes = models.PositiveSmallIntegerField(verbose_name='Mes')
+    # Completa la identidad del reporte. Con pago Mensual siempre es
+    # MES_COMPLETO y todo se comporta como antes; con pago Quincenal es lo que
+    # permite que convivan dos reportes de la misma unidad en el mismo mes.
+    quincena = models.PositiveSmallIntegerField(
+        choices=Quincena.choices, default=Quincena.MES_COMPLETO,
+        verbose_name='Quincena')
 
     # Plantilla de la que salieron sus conceptos. Es **trazabilidad, no
     # dependencia**: los conceptos del reporte son copias congeladas
@@ -386,20 +413,29 @@ class ReportePago(Base):
     class Meta:
         verbose_name = 'Reporte de Pago'
         verbose_name_plural = 'Reportes de Pago'
-        ordering = ['-anno', '-mes', 'unidad_orden_informe']
+        ordering = ['-anno', '-mes', '-quincena', 'unidad_orden_informe']
         constraints = [
+            # `quincena` entra en la clave: con pago Mensual siempre vale 0 y la
+            # regla es la misma de antes (un reporte por unidad y mes); con pago
+            # Quincenal permite exactamente dos, la 1ra y la 2da.
             models.UniqueConstraint(
-                fields=['unidad', 'anno', 'mes'],
+                fields=['unidad', 'anno', 'mes', 'quincena'],
                 name='reporte_pago_unico_por_unidad_y_periodo'),
             # Una unidad no puede tener dos borradores a la vez. Es la mitad en
             # base de datos de la regla de ciclo de vida: para empezar el mes
             # siguiente hay que cerrar el actual. Índice único parcial.
+            #
+            # Se mantiene tal cual con las quincenas: para empezar la 2da hay
+            # que cerrar la 1ra, que es lo que se decidió al implementarlas.
             models.UniqueConstraint(
                 fields=['unidad'], condition=Q(estado='B'),
                 name='reporte_pago_un_borrador_por_unidad'),
             models.CheckConstraint(
                 condition=Q(mes__gte=1) & Q(mes__lte=12),
                 name='reporte_pago_mes_valido'),
+            models.CheckConstraint(
+                condition=Q(quincena__gte=0) & Q(quincena__lte=2),
+                name='reporte_pago_quincena_valida'),
             models.CheckConstraint(
                 condition=Q(fecha_hasta__gte=F('fecha_desde')),
                 name='reporte_pago_fechas_coherentes'),
@@ -410,7 +446,7 @@ class ReportePago(Base):
         ]
 
     def __str__(self):
-        return f'{self.unidad_descripcion} — {self.periodo.etiqueta}'
+        return f'{self.unidad_descripcion} — {self.etiqueta_periodo}'
 
     @property
     def periodo(self):
@@ -424,6 +460,19 @@ class ReportePago(Base):
         return Periodo(self.anno, self.mes)
 
     @property
+    def etiqueta_periodo(self):
+        """Cómo se nombra este reporte: «Agosto 2026» o «1ra Quincena de Agosto 2026».
+
+        Existe porque `periodo.etiqueta` solo sabe de mes y año, y con pago
+        Quincenal habría DOS reportes de la misma unidad con exactamente el
+        mismo texto en el listado. La quincena solo se menciona cuando la hay:
+        con pago Mensual la etiqueta es la de siempre, sin coletillas.
+        """
+        if self.quincena == Quincena.MES_COMPLETO:
+            return self.periodo.etiqueta
+        return f'{self.get_quincena_display()} de {self.periodo.etiqueta}'
+
+    @property
     def editable(self):
         return self.estado == EstadoReporte.BORRADOR
 
@@ -433,11 +482,17 @@ class ReportePago(Base):
 
         Es lo que decide si puede reabrirse: en cuanto existe uno posterior, éste
         queda bloqueado definitivamente.
+
+        La quincena entra en la comparación como tercer criterio de desempate,
+        detrás del año y el mes: sin ella, la 1ra quincena de un mes se creería
+        reabrible teniendo ya la 2da cerrada detrás.
         """
         return not (ReportePago.objects
                     .filter(unidad_id=self.unidad_id)
                     .filter(Q(anno__gt=self.anno)
-                            | Q(anno=self.anno, mes__gt=self.mes))
+                            | Q(anno=self.anno, mes__gt=self.mes)
+                            | Q(anno=self.anno, mes=self.mes,
+                                quincena__gt=self.quincena))
                     .exists())
 
     @property

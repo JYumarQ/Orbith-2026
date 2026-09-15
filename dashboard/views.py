@@ -582,7 +582,9 @@ class DashboardView(TemplateView):
         return context
 
     def get_plazas(self, uo_ids=None):
-        cargos = CargoPlantilla.objects.filter(activo=True)
+        # `en_plantilla=True`: las plazas fuera de la plantilla aprobada existen
+        # y tienen gente, pero no son plantilla y no deben inflar las tarjetas.
+        cargos = CargoPlantilla.objects.filter(activo=True, en_plantilla=True)
         if uo_ids:
             cargos = cargos.filter(departamento__unidad_organizativa_id__in=uo_ids)
         t_cubiertas = sum(c.cant_cubierta or 0 for c in cargos)

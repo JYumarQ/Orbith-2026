@@ -12,23 +12,29 @@ from django.db.models import Q
 
 from strorganizativa.jerarquia import expandir
 
-from .permisos import es_administrador, es_moderador
+from usuarios.alcance import tiene_alcance_acotado
+
+from .permisos import es_administrador  # noqa: F401  (lo usan otras vistas del módulo)
 
 
 def contratos_visibles(usuario):
     """Base del listado: alcance por rol, único punto donde se decide.
 
-    Administrador y Observador ven todos los contratos (el listado es
-    informativo, no expone acciones de edición). El Moderador solo ve los
-    contratos cuyo cargo cuelga de una de sus Unidades Organizativas
-    asignadas (`CustomUser.unidades`), mismo criterio que
+    El Administrador ve todos los contratos. El Moderador solo ve los contratos
+    cuyo cargo cuelga de una de sus Unidades Organizativas asignadas
+    (`CustomUser.unidades`), mismo criterio que
     `cierres/filtros.py::unidades_visibles()` y
     `solicitudes/filtros.py::solicitudes_visibles()`.
+
+    El Observador ve todos los contratos mientras no tenga unidades asignadas
+    (el listado es informativo, no expone acciones de edición, y así lo pidió
+    RRHH). En cuanto el Administrador le asigna unidades, se filtra exactamente
+    igual que un Moderador. La regla la decide `usuarios.alcance`.
     """
     from .models import CAlta
 
     qs = CAlta.objects.all()
-    if es_moderador(usuario):
+    if tiene_alcance_acotado(usuario):
         return qs.filter(
             cargo__departamento__unidad_organizativa__in=usuario.unidades.all())
     return qs

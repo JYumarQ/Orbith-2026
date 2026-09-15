@@ -34,7 +34,7 @@ from prenomina.formulas import ErrorDeFormula
 from prenomina.forms import NPagoImporteForm, ReportePagoForm
 from prenomina.models import (CalendarioPago, EstadoReporte, NClaveAusencia,
                               NEscalaAnnosServicio, NPagoHoras, NPagoImporte,
-                              ReportePago, ReporteTrabajador,
+                              Quincena, ReportePago, ReporteTrabajador,
                               TipoValorImporte)
 from strorganizativa.models import (CargoPlantilla, Departamento,
                                     UnidadOrganizativa)
@@ -859,6 +859,158 @@ class CreacionDelReporte(BasePreNomina):
             EventoAuditoria.objects.filter(modulo='prenomina').exists())
 
 
+class PagoQuincenal(BasePreNomina):
+    """Con período de pago Quincenal caben DOS reportes por unidad y mes.
+
+    Lo decide `Configuracion.periodo` (15 Quincenal, 30 Mensual). El resto de
+    las pruebas del módulo corren sin ninguna `Configuracion` creada, así que
+    para ellas la entidad es Mensual y todo se comporta como antes: aquí se
+    prueba justamente lo contrario.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from configuracion.models import Configuracion
+        Configuracion.objects.all().delete()
+        Configuracion.objects.create(
+            nombre_empresa='Prueba',
+            periodo=Configuracion.PERIODO_QUINCENAL)
+
+    def test_el_primer_reporte_del_mes_es_la_primera_quincena(self):
+        reporte = self.crear()
+        self.assertEqual(reporte.quincena, Quincena.PRIMERA)
+        self.assertIn('1ra Quincena', reporte.etiqueta_periodo)
+
+    def test_el_segundo_reporte_del_mes_es_la_segunda_quincena(self):
+        primero = self.crear()
+        servicios.cerrar_reporte(primero, self.moderador)
+
+        segundo = self.crear()
+        self.assertEqual(segundo.quincena, Quincena.SEGUNDA)
+        self.assertEqual(segundo.anno, primero.anno)
+        self.assertEqual(segundo.mes, primero.mes)
+
+    def test_no_cabe_una_tercera_quincena(self):
+        servicios.cerrar_reporte(self.crear(), self.moderador)
+        servicios.cerrar_reporte(self.crear(), self.moderador)
+
+        with self.assertRaises(servicios.ErrorDePreNomina) as caja:
+            self.crear()
+        self.assertIn('las dos quincenas', str(caja.exception))
+
+    def test_el_mismo_trabajador_puede_estar_en_las_dos_quincenas(self):
+        """Lo que `_exigir_sin_solape` NO debe bloquear.
+
+        Antes de las quincenas, esa comprobación miraba solo año y mes, así que
+        habría rechazado la 2da quincena por «doble pago» del mismo trabajador.
+        """
+        primera = self.crear()
+        servicios.cerrar_reporte(primera, self.moderador)
+        segunda = self.crear()
+
+        self.assertEqual(primera.trabajadores.first().no_expediente, '00100')
+        self.assertEqual(segunda.trabajadores.first().no_expediente, '00100')
+
+    def test_la_base_de_datos_sigue_impidiendo_repetir_la_misma_quincena(self):
+        """La clave única pasó a incluir la quincena, no a desaparecer."""
+        self.crear()
+        with self.assertRaises(IntegrityError):
+            ReportePago.objects.create(
+                unidad=self.unidad, anno=2026, mes=7,
+                quincena=Quincena.PRIMERA, estado=EstadoReporte.CERRADO,
+                fondo_tiempo=Decimal('184'), fondo_tarifa=Decimal('190.6'),
+                fecha_desde=date(2026, 7, 1), fecha_hasta=date(2026, 7, 15))
+
+    def test_hay_que_cerrar_la_primera_antes_de_empezar_la_segunda(self):
+        self.crear()
+        with self.assertRaises(servicios.ErrorDePreNomina) as caja:
+            self.crear()
+        self.assertIn('Borrador', str(caja.exception))
+
+    def test_la_segunda_quincena_archiva_a_la_primera(self):
+        primera = self.crear()
+        servicios.cerrar_reporte(primera, self.moderador)
+        self.crear()
+
+        primera.refresh_from_db()
+        self.assertEqual(primera.estado, EstadoReporte.HISTORICO)
+        self.assertFalse(primera.es_ultimo)
+
+    def test_las_fechas_propuestas_parten_el_mes(self):
+        self.assertEqual(
+            servicios.limites_del_periodo(2026, 7, Quincena.PRIMERA),
+            (date(2026, 7, 1), date(2026, 7, 15)))
+        self.assertEqual(
+            servicios.limites_del_periodo(2026, 7, Quincena.SEGUNDA),
+            (date(2026, 7, 16), date(2026, 7, 31)))
+        # Febrero: la 2da quincena termina el 28, no el 30.
+        self.assertEqual(
+            servicios.limites_del_periodo(2026, 2, Quincena.SEGUNDA),
+            (date(2026, 2, 16), date(2026, 2, 28)))
+
+    def test_con_pago_mensual_la_etiqueta_no_menciona_quincenas(self):
+        from configuracion.models import Configuracion
+        Configuracion.objects.update(periodo=Configuracion.PERIODO_MENSUAL)
+        reporte = self.crear()
+        self.assertEqual(reporte.quincena, Quincena.MES_COMPLETO)
+        self.assertNotIn('Quincena', reporte.etiqueta_periodo)
+
+
+class FirmasRecordadas(BasePreNomina):
+    """«Hecho por», «Revisado por» y «Aprobado por» se recuerdan por usuario."""
+
+    def test_al_crear_un_reporte_se_guardan_las_tres_firmas(self):
+        self.client.force_login(self.moderador)
+        plantilla = self.plantilla_de()
+        # Sin Calendario de Pago, `crear_reporte()` se niega antes de llegar a
+        # las firmas: esta prueba va de las firmas, no de esa negativa.
+        self.preparar_calendario(self.moderador, Periodo(2026, 7))
+
+        respuesta = self.client.post(reverse('prenomina:nuevo_reporte'), {
+            'unidad': self.unidad.pk, 'anno': 2026, 'mes': 7,
+            'plantilla': plantilla.pk,
+            'fecha_desde': '2026-07-01', 'fecha_hasta': '2026-07-31',
+            'hecho_por': 'Ana Gestora', 'revisado_por': 'Luis Revisor',
+            'aprobado_por': 'Marta Directora',
+        }, HTTP_HX_REQUEST='true')
+        self.assertEqual(respuesta.status_code, 204)
+
+        reporte = ReportePago.objects.get(anno=2026, mes=7)
+        self.assertEqual(reporte.revisado_por, 'Luis Revisor')
+        self.assertEqual(reporte.aprobado_por, 'Marta Directora')
+
+        preferencias = self.moderador.obtener_preferencias()
+        self.assertEqual(preferencias.reporte_hecho_por, 'Ana Gestora')
+        self.assertEqual(preferencias.reporte_revisado_por, 'Luis Revisor')
+        self.assertEqual(preferencias.reporte_aprobado_por, 'Marta Directora')
+
+    def test_el_formulario_llega_con_las_firmas_de_la_vez_anterior(self):
+        preferencias = self.moderador.obtener_preferencias()
+        preferencias.reporte_hecho_por = 'Ana Gestora'
+        preferencias.reporte_revisado_por = 'Luis Revisor'
+        preferencias.reporte_aprobado_por = 'Marta Directora'
+        preferencias.save()
+
+        formulario = ReportePagoForm(usuario=self.moderador)
+        self.assertEqual(formulario.initial['hecho_por'], 'Ana Gestora')
+        self.assertEqual(formulario.initial['revisado_por'], 'Luis Revisor')
+        self.assertEqual(formulario.initial['aprobado_por'], 'Marta Directora')
+
+    def test_sin_nada_recordado_se_propone_el_nombre_del_propio_usuario(self):
+        formulario = ReportePagoForm(usuario=self.moderador)
+        self.assertTrue(formulario.initial['hecho_por'])
+        self.assertEqual(formulario.initial['revisado_por'], '')
+
+    def test_el_formulario_muestra_el_periodo_de_pago_de_la_configuracion(self):
+        from configuracion.models import Configuracion
+        Configuracion.objects.all().delete()
+        Configuracion.objects.create(
+            nombre_empresa='Prueba',
+            periodo=Configuracion.PERIODO_QUINCENAL)
+        formulario = ReportePagoForm(usuario=self.moderador)
+        self.assertEqual(formulario.initial['periodo_pago'], 'Quincenal')
+
+
 class CongeladoDelTrabajador(BasePreNomina):
     """El hito de la fase: la fotografía tiene que sobrevivir a los datos vivos."""
 
@@ -1290,16 +1442,23 @@ class PantallaDeReportes(BasePreNomina):
         self.assertEqual(respuesta.status_code, 200)
         self.assertContains(respuesta, 'Borrador')
 
-    def test_el_formulario_sugiere_el_fondo_de_tarifa_de_la_configuracion(self):
-        from configuracion.models import Configuracion
-        Configuracion.objects.create(nombre_empresa='Prueba',
-                                     fondo_tiempo_calc_tarif=Decimal('176.00'))
-        formulario = ReportePagoForm(usuario=self.moderador)
-        self.assertEqual(formulario.initial['fondo_tarifa'], Decimal('176.00'))
+    def test_el_reporte_congela_el_fondo_de_tarifa_de_la_configuracion(self):
+        """El fondo de la tarifa dejó de preguntarse: sale de Configuración.
 
-    def test_sin_configuracion_el_formulario_no_revienta(self):
-        formulario = ReportePagoForm(usuario=self.moderador)
-        self.assertEqual(formulario.initial['fondo_tarifa'], Decimal('190.60'))
+        `fondo_tarifa=None` es el alta normal, la que ya no incluye ese campo en
+        el formulario. El número se sigue COPIANDO en el reporte para que cerrar
+        y recalcular años después dé lo mismo aunque el parámetro cambie.
+        """
+        from configuracion.models import Configuracion
+        Configuracion.objects.create(
+            nombre_empresa='Prueba', fondo_tiempo_calc_tarif=Decimal('176.00'),
+            periodo=Configuracion.PERIODO_MENSUAL)
+        reporte = self.crear(fondo_tarifa=None)
+        self.assertEqual(reporte.fondo_tarifa, Decimal('176.00'))
+
+    def test_sin_configuracion_se_usa_el_fondo_por_defecto(self):
+        reporte = self.crear(fondo_tarifa=None)
+        self.assertEqual(reporte.fondo_tarifa, Decimal('190.60'))
 
     def test_cerrar_y_reabrir_desde_la_pantalla(self):
         reporte = self.crear()

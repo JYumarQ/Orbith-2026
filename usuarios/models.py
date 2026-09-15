@@ -172,6 +172,30 @@ class PreferenciasUsuario(models.Model):
         default=True,
         verbose_name="Animaciones de la interfaz activas"
     )
+
+    # --- Firmas del Reporte de Pago (Pre-Nómina) ---
+    # Los tres nombres que imprime el encabezado del reporte se escriben una vez
+    # y se arrastran a TODOS los reportes que cree ese usuario, hasta que él
+    # mismo los cambie. Van aquí y no en `ReportePago` porque son una comodidad
+    # de quien prepara la nómina, no un dato del documento: cada reporte guarda
+    # su propia copia congelada en el momento de crearse.
+    #
+    # Son preferencias de interfaz como las dos de arriba, así que comparten
+    # tabla y el mismo motivo para no vivir en `CustomUser`: guardarlas no debe
+    # disparar el `full_clean()` ni el reajuste de roles de `CustomUser.save()`.
+    reporte_hecho_por = models.CharField(
+        max_length=150, blank=True, default='',
+        verbose_name="Reporte de pago — Hecho por"
+    )
+    reporte_revisado_por = models.CharField(
+        max_length=150, blank=True, default='',
+        verbose_name="Reporte de pago — Revisado por"
+    )
+    reporte_aprobado_por = models.CharField(
+        max_length=150, blank=True, default='',
+        verbose_name="Reporte de pago — Aprobado por"
+    )
+
     fecha_actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:

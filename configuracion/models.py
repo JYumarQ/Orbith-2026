@@ -1,11 +1,23 @@
 from decimal import Decimal
 from django.db import models
-from django.core.validators import MinValueValidator, RegexValidator
+from django.core.validators import RegexValidator
 from auditoria.models import Base
 from nomencladores.models import NProvincia
 
 # Create your models here.
 class Configuracion(Base):
+
+    # Frecuencia con la que la entidad paga el salario. Se sigue guardando en
+    # DÍAS (no como booleano) porque el valor numérico es el que consume el
+    # asistente de exportar contrato para marcar las casillas «Quincenal» /
+    # «Mensual» de la plantilla Word (ver contratos/views.py). El dominio queda
+    # cerrado a estas dos opciones; en la interfaz se muestra como un toggle.
+    PERIODO_QUINCENAL = 15
+    PERIODO_MENSUAL = 30
+    PERIODO_PAGO_CHOICES = [
+        (PERIODO_QUINCENAL, 'Quincenal'),
+        (PERIODO_MENSUAL, 'Mensual'),
+    ]
 
     #?GENERALES
     nombre_empresa = models.CharField(max_length=100)
@@ -23,7 +35,14 @@ class Configuracion(Base):
     unidad_presup = models.BooleanField(default=False)
     rama = models.CharField(max_length=50, blank=True, null=True)
     moneda_local = models.CharField(max_length=10, default='CUP')
-    periodo = models.PositiveIntegerField(default=15, validators=[MinValueValidator(7)], null=False, blank=False)
+    # El validador de mínimo ya no hace falta: `choices` cierra el dominio a 15 o 30.
+    periodo = models.PositiveIntegerField(
+        default=PERIODO_QUINCENAL,
+        choices=PERIODO_PAGO_CHOICES,
+        null=False,
+        blank=False,
+        verbose_name="Período de Pago",
+    )
     fondo_tiempo_calc_tarif = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('190.6'), null=False, blank=False)
     porcentaje_horas_extras = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.25'), null=False, blank=False, verbose_name="Porcentaje Horas Extras")
     correo = models.EmailField(null=True, blank=True)

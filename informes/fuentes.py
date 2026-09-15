@@ -36,6 +36,7 @@ from cierres.models import CierreCargo, CierreContrato, CierreUnidad
 from cierres.periodos import Periodo, desde_clave
 from contratos.models import CAlta
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
+from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
 COLOR_POR_DEFECTO = '#697a8d'
 
@@ -74,6 +75,10 @@ class FilaCargo:
     cant_cubierta: int
     funcionario: bool
     designado: bool
+    # False = la plaza existe y tiene gente, pero NO está en la plantilla
+    # aprobada por el organismo. Los informes de plantilla la excluyen de sus
+    # cifras de plazas (aprobadas, cubiertas y vacantes).
+    en_plantilla: bool = True
 
     @property
     def activo(self):
@@ -117,6 +122,11 @@ class FilaContrato:
     duracion: int
     salario: object
     dias_restantes: int
+    # Del cargo que ocupa. Los contratos se emparejan por `ncargo_id`, y un mismo
+    # NCargo puede existir DOS veces en el departamento (uno dentro de la
+    # plantilla aprobada y otro fuera). Sin este dato, los trabajadores del cargo
+    # de fuera se sumarían a la fila del de dentro.
+    en_plantilla: bool = True
 
     @property
     def es_mujer(self):
@@ -241,27 +251,32 @@ def unidades_visibles(usuario):
     """Unidades que este usuario puede ver en los informes, o `None` si todas.
 
     Mismo reparto de roles que Informe Inteligente
-    (`informe_inteligente.motor._aplicar_alcance_por_rol`): Administrador y
-    Observador ven la empresa entera; el Moderador, solo lo suyo. Se replica aquí
-    porque hasta ahora los informes de RRHH **no acotaban nada**: un Moderador de
-    una sola UEB abría el consolidado y veía la plantilla de toda la empresa.
+    (`informe_inteligente.motor._aplicar_alcance_por_rol`), decidido en
+    `usuarios.alcance`: el Administrador ve la empresa entera; el Moderador, solo
+    lo suyo; y el Observador ve la empresa entera SOLO mientras no tenga unidades
+    asignadas — en cuanto el Administrador le asigna una, queda acotado a ellas.
+    Se replica aquí porque hasta ahora los informes de RRHH **no acotaban nada**:
+    un Moderador de una sola UEB abría el consolidado y veía la plantilla de toda
+    la empresa.
 
     Con UNA diferencia deliberada: aquí las unidades asignadas se expanden a sus
-    subunidades. Informe Inteligente no lo hace, y por eso un Moderador que tenga
+    subunidades. Informe Inteligente no lo hace, y por eso un usuario que tenga
     asignada una unidad PRINCIPAL —una Dirección, que no tiene cargos propios—
     no vería ni una fila: todo cuelga de sus hijas. Además, en este módulo elegir
     una unidad principal en el filtro SIEMPRE ha arrastrado a sus subunidades
-    (`expandir_unidades`), así que no expandir aquí el alcance dejaría al
-    Moderador viendo menos con su unidad asignada que eligiéndola a mano.
+    (`expandir_unidades`), así que no expandir aquí el alcance dejaría al usuario
+    viendo menos con su unidad asignada que eligiéndola a mano.
 
     `None` significa «sin restricción» y NO es lo mismo que `[]`. Una lista
     vacía es un Moderador sin ninguna unidad asignada, que no debe ver ni una
     fila —la regla VIS-007 de Subsanación ya reclama esa situación—; devolver
     `[]` como «sin filtro» le enseñaría justo lo contrario, la empresa entera.
+    Un Observador sin unidades sí devuelve `None`, y esa asimetría es la regla
+    del rol: ver toda la empresa es su estado por defecto (ver `usuarios.alcance`).
     """
-    if usuario.is_superuser or usuario.es_admin or usuario.es_observador:
+    if ve_toda_la_empresa(usuario):
         return None
-    if usuario.es_moderador:
+    if tiene_alcance_acotado(usuario):
         return expandir_varias_unidades(
             usuario.unidades.values_list('pk', flat=True))
     # Usuario sin rol reconocido: por seguridad, no ve nada.
@@ -285,7 +300,7 @@ def acotar_al_alcance(elegidas, permitidas):
     entienden como «toda la empresa».
     """
     if permitidas is None:
-        # Administrador u Observador: manda su elección, o todo si no eligió.
+        # Sin restricción de unidad: manda su elección, o todo si no eligió.
         return elegidas or None
     if not elegidas:
         # Sin elección explícita, el filtro es su alcance completo.
@@ -375,6 +390,7 @@ def fuente_actual(unidades_ids=None):
             cant_cubierta=cargo.cant_cubierta_real,
             funcionario=bool(cargo.funcionario),
             designado=bool(cargo.designado),
+            en_plantilla=bool(cargo.en_plantilla),
         ))
 
     hoy = timezone.localdate()
@@ -411,6 +427,7 @@ def fuente_actual(unidades_ids=None):
             duracion=contrato.duracion,
             salario=contrato.salario_actual,
             dias_restantes=_dias_restantes(contrato.fecha_alta, contrato.duracion, hoy),
+            en_plantilla=bool(cargo.en_plantilla) if cargo else True,
         ))
 
     return FuenteDatos(
@@ -484,12 +501,21 @@ def fuente_de_cierre(periodo, unidades_ids=None):
             cant_cubierta=fila.cant_cubierta,
             funcionario=fila.funcionario,
             designado=fila.designado,
+            en_plantilla=fila.en_plantilla,
         )
         for fila in CierreCargo.objects.filter(cierre_id__in=ids)
     ]
 
-    aprobadas_por_cargo = dict(
-        CierreCargo.objects.filter(cierre_id__in=ids).values_list('pk', 'cant_aprobada'))
+    # Los dos datos que cada contrato necesita de SU fila de cargo: si el cargo
+    # tenía plazas (`cargo_activo`) y si estaba dentro de la plantilla aprobada.
+    # Se resuelven en un diccionario, con una sola consulta, para no cruzar la
+    # clave foránea una vez por contrato.
+    datos_por_cargo = {
+        pk: (aprobadas, en_plantilla)
+        for pk, aprobadas, en_plantilla in CierreCargo.objects
+        .filter(cierre_id__in=ids)
+        .values_list('pk', 'cant_aprobada', 'en_plantilla')}
+    SIN_CARGO = (0, True)  # la fila de cargo se perdió: se asume plantilla
 
     contratos = [
         FilaContrato(
@@ -505,7 +531,7 @@ def fuente_de_cierre(periodo, unidades_ids=None):
             cat_ocupacional=fila.cat_ocupacional,
             puesto_clave=fila.puesto_clave,
             grupo_escala_nivel=fila.grupo_escala_nivel,
-            cargo_activo=aprobadas_por_cargo.get(fila.cierre_cargo_id, 0) > 0,
+            cargo_activo=datos_por_cargo.get(fila.cierre_cargo_id, SIN_CARGO)[0] > 0,
             tipo_descripcion=fila.tipo_descripcion,
             ocupa_plaza=fila.ocupa_plaza,
             requiere_motivo=fila.requiere_motivo,
@@ -517,6 +543,7 @@ def fuente_de_cierre(periodo, unidades_ids=None):
             salario=fila.salario,
             dias_restantes=_dias_restantes(
                 fila.fecha_alta, fila.duracion, fecha_de_cierre.get(fila.cierre_id)),
+            en_plantilla=datos_por_cargo.get(fila.cierre_cargo_id, SIN_CARGO)[1],
         )
         for fila in CierreContrato.objects.filter(cierre_id__in=ids)
     ]

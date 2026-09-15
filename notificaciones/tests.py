@@ -924,10 +924,22 @@ class EventosDeContratacionYPlantillaTests(TestCase):
             provincia=provincia, municipio=municipio)
         cls.hoy = date.today()
         cls.CargoPlantilla = CargoPlantilla
+        cls.NCargo = NCargo
+        cls.grupo_escala = grupo
 
     def _crear_cargo(self, orden=1):
+        """Un cargo nuevo en el departamento de la prueba.
+
+        Cada llamada estrena su propio NCargo: un departamento no puede repetir
+        el mismo cargo del mismo lado de la plantilla aprobada, y estas pruebas
+        crean varios seguidos. Cuál sea el nomenclador es indiferente para lo que
+        miden (que el evento genere su notificación).
+        """
+        ncargo = self.NCargo.objects.create(
+            descripcion='Especialista de eventos %d' % orden, cat_ocupacional='TEC',
+            grupo_escala=self.grupo_escala, salario_basico=4000)
         return self.CargoPlantilla.objects.create(
-            ncargo=self.ncargo, departamento=self.departamento,
+            ncargo=ncargo, departamento=self.departamento,
             cant_aprobada=1, orden_informe=orden)
 
     def _crear_alta(self, cargo, no_expediente):

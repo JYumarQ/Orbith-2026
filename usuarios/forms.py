@@ -15,8 +15,23 @@ from strorganizativa.models import UnidadOrganizativa
 # =========================================================================
 # ASIGNACION DE UNIDADES ORGANIZATIVAS A UN USUARIO
 #
+# QUIEN PUEDE TENER UNIDADES
+# --------------------------
+# El Moderador (siempre: sin unidades no ve nada) y el Observador (de forma
+# OPCIONAL). Para el Observador la lista vacia significa «toda la empresa», que
+# es como se ha comportado siempre el rol; asignarle una, varias o todas las
+# unidades lo acota a ellas. Esa regla la decide `usuarios/alcance.py` y la
+# aplican los seis modulos que filtran por Unidad Organizativa.
+#
+# El Administrador no las usa: su alcance es su rol, no una relacion en la base
+# de datos, asi que el selector se le apaga en la pantalla.
+#
+# Una unidad puede tener VARIOS observadores, pero un unico moderador. Por eso
+# `validar_moderador_unico()` solo mira `es_moderador`: dos personas vigilando
+# la misma unidad no se estorban, dos personas gestionandola si.
+#
 # Una subunidad NO se asigna por separado: se asigna su Unidad Principal, y las
-# subunidades entran con ella. Así lo pidió el usuario, y además evita el caso
+# subunidades entran con ella. Vale igual para los dos roles. Así lo pidió el usuario, y además evita el caso
 # absurdo que existía antes —un moderador con una subunidad suelta cuyo padre
 # llevaba otra persona—.
 #
@@ -104,6 +119,16 @@ class SelectUnidadesConDueno(forms.SelectMultiple):
     está escrita en la propia opción.
 
     La validación del servidor se mantiene: esto es la comodidad, no la barrera.
+
+    OJO: apagar solo tiene sentido si se está asignando un MODERADOR. Un
+    Observador puede vigilar una unidad que ya gestiona otra persona, así que
+    para él no hay choque que evitar. Como el rol se elige en el mismo
+    formulario —con unos interruptores que el usuario puede cambiar sin recargar
+    la página—, el servidor no puede saber al pintar cuál será el rol final: por
+    eso cada opción ocupada se marca además con `data-ocupada`, y el JavaScript
+    de la pantalla le quita el `disabled` en cuanto se marca «Es Observador».
+    Si ese JavaScript fallara, lo peor que pasa es que el Administrador no pueda
+    asignarle una unidad ocupada; nunca que se guarde algo indebido.
     """
 
     #: `{pk_unidad: username}` de las unidades que lleva OTRO moderador.
@@ -127,6 +152,9 @@ class SelectUnidadesConDueno(forms.SelectMultiple):
         dueno = self.ocupadas.get(pk)
         if dueno and pk not in (self.ya_asignadas or ()):
             opcion['attrs']['disabled'] = True
+            # Lo lee el JavaScript de la pantalla para volver a habilitarla
+            # cuando el rol elegido es Observador (ver el docstring).
+            opcion['attrs']['data-ocupada'] = dueno
             opcion['label'] = f'{label}  ·  la lleva {dueno}'
         return opcion
 
@@ -223,6 +251,10 @@ def validar_moderador_unico(formulario, cleaned):
     cada unidad tiene un único moderador responsable (más todos los
     administradores, que deciden sobre cualquiera de ellas por su rol y no por
     esta relación).
+
+    No se aplica a los Observadores, y es deliberado: una misma unidad puede
+    tener tantos observadores como haga falta. El Observador solo consulta, así
+    que no hay responsabilidad que repartir ni acciones que puedan chocar.
 
     Vive en una función suelta, y no en `CustomUser.clean()`, porque la relación
     `unidades` es ManyToMany: hasta que el usuario no está guardado no hay filas

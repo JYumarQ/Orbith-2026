@@ -226,3 +226,138 @@ class AlcanceDelObservadorTests(BaseObservadorTests):
 
         self.assertIn('id="btn-create-dept"', html)
         self.assertIn('id="btn-edit-unit"', html)
+
+
+class AlcancePorUnidadDelObservadorTests(BaseObservadorTests):
+    """ALCANCE ACOTADO: el Observador con unidades asignadas solo ve esas.
+
+    La novedad de esta tanda. Hasta ahora `CustomUser.unidades` no se consultaba
+    en ninguna decisión de alcance del Observador: se le podían guardar unidades
+    y no servían para nada. Ahora deciden, y con una regla que hay que fijar por
+    escrito porque no es simétrica con la del Moderador:
+
+        Observador SIN unidades  -> toda la empresa (su comportamiento de siempre)
+        Observador CON unidades  -> solo esas
+        Moderador SIN unidades   -> nada
+
+    La asimetría es deliberada (ver `usuarios/alcance.py`): para el Moderador la
+    lista vacía siempre significó «nada», y cambiarlo abriría la empresa entera
+    a cualquier moderador recién creado.
+
+    Se comprueban los SEIS puntos de alcance del proyecto, uno por módulo, y no
+    una muestra: la regla estaba repetida en los seis y el riesgo real es que
+    uno se quede atrás sin que nadie lo note.
+    """
+
+    def setUp(self):
+        # `acotado` es un Observador con UNA unidad; `self.observador` sigue sin
+        # ninguna y hace de contraprueba en cada caso.
+        self.acotado = CustomUser.objects.create_user(
+            username='observador_acotado', password='x', es_observador=True)
+        self.acotado.unidades.add(self.unidad_propia)
+
+    # -- El helper compartido ------------------------------------------------
+    def test_la_regla_del_rol_esta_donde_dice_estar(self):
+        from . import alcance
+
+        self.assertTrue(alcance.ve_toda_la_empresa(self.admin))
+        self.assertTrue(alcance.ve_toda_la_empresa(self.observador))
+        self.assertFalse(alcance.ve_toda_la_empresa(self.acotado))
+        self.assertFalse(alcance.ve_toda_la_empresa(self.moderador))
+
+        self.assertTrue(alcance.tiene_alcance_acotado(self.acotado))
+        self.assertTrue(alcance.tiene_alcance_acotado(self.moderador))
+        self.assertFalse(alcance.tiene_alcance_acotado(self.observador))
+        self.assertFalse(alcance.tiene_alcance_acotado(self.admin))
+
+    def test_un_administrador_nunca_queda_acotado_por_sus_unidades(self):
+        """`CustomUser.save()` fuerza `is_superuser=True` en los administradores.
+        Si `es_observador` no excluyera al admin, un admin con unidades
+        guardadas de una edición anterior se acotaría a sí mismo."""
+        from . import alcance
+
+        self.admin.unidades.add(self.unidad_propia)
+        self.assertTrue(alcance.ve_toda_la_empresa(self.admin))
+        self.assertFalse(alcance.tiene_alcance_acotado(self.admin))
+
+    # -- Los seis módulos ----------------------------------------------------
+    def test_dashboard(self):
+        from dashboard.filtros import unidades_visibles
+
+        self.assertEqual(unidades_visibles(self.observador).count(), 2)
+        self.assertEqual(
+            list(unidades_visibles(self.acotado).values_list('pk', flat=True)),
+            [self.unidad_propia.pk])
+
+    def test_gestor_de_plantilla(self):
+        from strorganizativa.permisos import unidades_visibles
+
+        self.assertEqual(unidades_visibles(self.observador).count(), 2)
+        self.assertEqual(
+            list(unidades_visibles(self.acotado).values_list('pk', flat=True)),
+            [self.unidad_propia.pk])
+
+    def test_informes_de_rrhh(self):
+        from informes.fuentes import unidades_visibles
+
+        # `None` es «sin restricción», y no es lo mismo que una lista vacía.
+        self.assertIsNone(unidades_visibles(self.observador))
+        self.assertEqual(list(unidades_visibles(self.acotado)),
+                         [self.unidad_propia.pk])
+
+    def test_informe_inteligente(self):
+        from informe_inteligente.motor import _aplicar_alcance_por_rol
+
+        definicion = {'ruta_unidad_organizativa':
+                      'cargo__departamento__unidad_organizativa'}
+        base = CargoPlantilla.objects.all()
+
+        self.assertEqual(
+            _aplicar_alcance_por_rol(UnidadOrganizativa.objects.all(),
+                                     {'ruta_unidad_organizativa': None},
+                                     self.observador).count(), 2)
+        # El cargo de prueba cuelga de `unidad_propia`, que el acotado sí tiene.
+        definicion_cargo = {'ruta_unidad_organizativa':
+                            'departamento__unidad_organizativa'}
+        self.assertEqual(
+            _aplicar_alcance_por_rol(base, definicion_cargo, self.acotado).count(), 1)
+        self.assertEqual(definicion['ruta_unidad_organizativa'],
+                         'cargo__departamento__unidad_organizativa')
+
+    def test_listado_de_contratos(self):
+        from contratos.filtros import contratos_visibles
+
+        # Sin contratos montados, lo que se comprueba es que el queryset del
+        # acotado SÍ lleva el filtro por unidad y el del global no.
+        self.assertNotIn('unidad_organizativa',
+                         str(contratos_visibles(self.observador).query))
+        self.assertIn('unidad_organizativa',
+                      str(contratos_visibles(self.acotado).query))
+
+    def test_anexo_14(self):
+        from informes_anexo.views import _unidades_del_alcance
+
+        self.assertIsNone(_unidades_del_alcance(self.observador))
+        self.assertEqual(_unidades_del_alcance(self.acotado),
+                         {self.unidad_propia.pk})
+        self.assertEqual(_unidades_del_alcance(self.moderador),
+                         {self.unidad_propia.pk})
+
+    # -- De punta a punta, por la URL ----------------------------------------
+    def test_el_gestor_de_plantilla_no_le_ensena_la_unidad_ajena(self):
+        self.client.force_login(self.acotado)
+        html = self.client.get(reverse('gestor_plantilla')).content.decode()
+
+        self.assertIn('UEB Propia Observador', html)
+        self.assertNotIn('UEB Ajena Observador', html)
+
+    def test_sigue_sin_poder_escribir_aunque_tenga_la_unidad_asignada(self):
+        """Tener una unidad no le da permisos de edición: el alcance decide QUÉ
+        VE, nunca QUÉ PUEDE TOCAR."""
+        self.client.force_login(self.acotado)
+        respuesta = self.client.post(
+            reverse('add_dpto'),
+            {'descripcion': 'Intento', 'unidad_organizativa': self.unidad_propia.pk})
+        self.assertEqual(respuesta.status_code, 403)
+        self.assertFalse(
+            Departamento.objects.filter(descripcion='Intento').exists())

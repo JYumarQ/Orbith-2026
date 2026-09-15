@@ -393,8 +393,20 @@ def construir_libro(reporte):
 
 
 def nombre_de_archivo(reporte):
+    """Nombre del fichero descargado.
+
+    Lleva la quincena SOLO cuando la hay: con pago Mensual el nombre es el de
+    siempre. Sin ese sufijo, descargar las dos quincenas del mismo mes dejaría
+    dos ficheros con idéntico nombre en la carpeta de descargas y el segundo
+    taparía al primero.
+
+    La firma del libro (`_mensaje_de_firma`) NO se toca: ya identifica al
+    reporte por su `pk`, y cambiarla invalidaría los ficheros exportados antes
+    de existir las quincenas.
+    """
     unidad = slugify(reporte.unidad_descripcion) or 'unidad'
-    return f'prenomina_{unidad}_{reporte.anno}_{reporte.mes:02d}.xlsx'
+    sufijo = f'_q{reporte.quincena}' if reporte.quincena else ''
+    return f'prenomina_{unidad}_{reporte.anno}_{reporte.mes:02d}{sufijo}.xlsx'
 
 
 def exportar(reporte):

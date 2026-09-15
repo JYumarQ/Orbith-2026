@@ -197,3 +197,68 @@
         aspiranteId: {{ object.pk }}
     });
 </script>
+
+{% comment %} Envío sin recarga, SOLO cuando este formulario se abre desde el
+   Gestor de Plantilla (que es quien publica `OrbithGestorSinNavegar`).
+
+   Por qué hace falta desmontar `swal-confirm`: el confirmador universal de
+   `base.html` termina llamando a `form.submit()`, el método nativo del DOM, que
+   NO dispara los manejadores de `submit`. Es decir, no basta con escuchar el
+   evento: habría que competir con él. Se le quita la clase a este formulario y
+   se reproduce aquí su misma confirmación, seguida de un envío por AJAX.
+
+   En el resto de pantallas `OrbithGestorSinNavegar` no existe, este bloque no
+   hace nada y el formulario se comporta exactamente igual que siempre. {% endcomment %}
+<script>
+(function () {
+    if (typeof window.OrbithGestorSinNavegar !== 'function') return;
+
+    const formulario = document.getElementById('aspiranteForm');
+    if (!formulario) return;
+
+    formulario.classList.remove('swal-confirm');
+
+    $(formulario).off('submit.gestor').on('submit.gestor', function (e) {
+        e.preventDefault();
+
+        Swal.fire({
+            title: formulario.dataset.confirmTitle || '¿Estás seguro?',
+            text: formulario.dataset.confirmText || '¿Deseas continuar?',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar',
+            cancelButtonText: 'Cancelar',
+            customClass: {
+                confirmButton: 'btn btn-primary px-4 me-2',
+                cancelButton: 'btn btn-secondary px-4'
+            },
+            buttonsStyling: false
+        }).then(function (resultado) {
+            if (!resultado.isConfirmed) return;
+
+            $.ajax({
+                url: formulario.action,
+                type: 'POST',
+                data: $(formulario).serialize(),
+                success: function (datos) {
+                    if (datos && datos.form_is_valid) {
+                        window.OrbithGestorSinNavegar(datos.mensaje || 'Datos actualizados.');
+                        return;
+                    }
+                    // Respuesta en HTML: el formulario volvió con errores.
+                    $(formulario).closest('.modal-content')
+                        .html($(datos).find('.modal-content').html() || datos);
+                },
+                error: function (xhr) {
+                    if (xhr.responseText && xhr.responseText.indexOf('errorlist') !== -1) {
+                        $(formulario).closest('.modal-content')
+                            .html($(xhr.responseText).find('.modal-content').html() || xhr.responseText);
+                    } else {
+                        Swal.fire({ title: 'Error', text: 'No se pudieron guardar los datos.', icon: 'error' });
+                    }
+                }
+            });
+        });
+    });
+})();
+</script>

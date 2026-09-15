@@ -17,6 +17,8 @@ Protocolo, el mismo del resto del proyecto (`solicitudes/views.py`):
 """
 
 import json
+import logging
+from datetime import date
 from itertools import groupby
 
 from django.db.models import ProtectedError
@@ -33,6 +35,8 @@ from .forms import (NClaveAusenciaForm, NEscalaAnnosServicioForm,
 from .models import (NClaveAusencia, NEscalaAnnosServicio, NPagoHoras,
                      NPagoImporte)
 from .permisos import acceso_prenomina, requiere_escritura, solo_admin
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------- #
 # Registro de nomencladores
@@ -300,23 +304,108 @@ def nuevo_reporte(request):
             reporte = servicios.crear_reporte(
                 datos['unidad'], Periodo(datos['anno'], datos['mes']),
                 request.user,
-                fondo_tarifa=datos['fondo_tarifa'],
                 fecha_desde=datos['fecha_desde'],
                 fecha_hasta=datos['fecha_hasta'],
                 hecho_por=datos['hecho_por'],
+                revisado_por=datos['revisado_por'],
+                aprobado_por=datos['aprobado_por'],
                 plantilla=datos['plantilla'])
         except servicios.ErrorDePreNomina as error:
             # El mensaje del servicio ya está redactado para el usuario: se
             # cuelga del formulario en vez de inventar otro texto en la vista.
             formulario.add_error(None, str(error))
         else:
+            # Las tres firmas se recuerdan SOLO cuando el reporte se creó de
+            # verdad. Guardarlas antes dejaría memorizado lo que el usuario
+            # escribió en un intento que acabó en error.
+            _recordar_firmas(request.user, reporte)
             return _respuesta_reporte(
                 f'Reporte de {reporte.unidad_descripcion} — '
-                f'{reporte.periodo.etiqueta} creado con '
+                f'{reporte.etiqueta_periodo} creado con '
                 f'{reporte.total_trabajadores} trabajadores.')
 
-    return render(request, 'pages/prenomina/partials/modal_reporte.html',
-                  {'form': formulario})
+    # El bloque del período va incrustado en el modal la primera vez y se
+    # recarga solo después (`periodo_reporte`), así que necesita aquí el mismo
+    # contexto que le pasa aquella vista.
+    from .models import Quincena
+    quincenal = servicios.es_pago_quincenal()
+    quincena_inicial = Quincena.PRIMERA if quincenal else Quincena.MES_COMPLETO
+    return render(request, 'pages/prenomina/partials/modal_reporte.html', {
+        'form': formulario,
+        'quincenal': quincenal,
+        'quincena_texto': Quincena(quincena_inicial).label,
+        'periodo_completo': False,
+    })
+
+
+def _recordar_firmas(usuario, reporte):
+    """Deja en las preferencias del usuario los tres nombres que acaba de usar.
+
+    Es una comodidad, no un dato del reporte: si falla, el reporte ya está
+    creado y no hay nada que deshacer, así que no se propaga el error.
+    """
+    try:
+        preferencias = usuario.obtener_preferencias()
+        preferencias.reporte_hecho_por = reporte.hecho_por
+        preferencias.reporte_revisado_por = reporte.revisado_por
+        preferencias.reporte_aprobado_por = reporte.aprobado_por
+        preferencias.save(update_fields=['reporte_hecho_por',
+                                         'reporte_revisado_por',
+                                         'reporte_aprobado_por',
+                                         'fecha_actualizado'])
+    except Exception:
+        logger.exception('No se pudieron recordar las firmas del usuario %s.',
+                         getattr(usuario, 'pk', None))
+
+
+@acceso_prenomina
+@requiere_escritura
+def periodo_reporte(request):
+    """Bloque del período del modal de alta, recalculado al vuelo.
+
+    Lo pide el modal cada vez que cambian la unidad, el año o el mes. Devuelve
+    el período de pago de la entidad, qué reporte tocaría crear (mes completo,
+    1ra o 2da quincena) y las fechas «desde/hasta» que le corresponden.
+
+    Es INFORMATIVO: la quincena de verdad la asigna `servicios.crear_reporte()`
+    con la unidad bloqueada. Aquí se consulta sin bloqueo porque solo se está
+    pintando una previsión, y si entre medias otro usuario crea ese reporte, el
+    alta fallará con su mensaje correspondiente.
+    """
+    from .models import Quincena
+
+    anno = (request.GET.get('anno') or '').strip()
+    mes = (request.GET.get('mes') or '').strip()
+    unidad = (request.GET.get('unidad') or '').strip()
+
+    hoy = date.today()
+    anno = int(anno) if anno.isdigit() and 2000 <= int(anno) <= 2100 else hoy.year
+    mes = int(mes) if mes.isdigit() and 1 <= int(mes) <= 12 else hoy.month
+
+    quincenal = servicios.es_pago_quincenal()
+    completo = False
+
+    if unidad.isdigit() and unidades_gestionables(request.user).filter(
+            pk=int(unidad)).exists():
+        quincena = servicios.siguiente_quincena(int(unidad), anno, mes)
+        if quincena is None:
+            # Ese mes ya está cubierto. Se avisa aquí para que el usuario lo vea
+            # antes de rellenar el resto, aunque el alta lo volvería a rechazar.
+            completo = True
+            quincena = Quincena.SEGUNDA if quincenal else Quincena.MES_COMPLETO
+    else:
+        quincena = Quincena.PRIMERA if quincenal else Quincena.MES_COMPLETO
+
+    formulario = ReportePagoForm(
+        usuario=request.user, quincena=quincena,
+        initial={'anno': anno, 'mes': mes})
+
+    return render(request, 'pages/prenomina/partials/_periodo_reporte.html', {
+        'form': formulario,
+        'quincenal': quincenal,
+        'quincena_texto': Quincena(quincena).label,
+        'periodo_completo': completo,
+    })
 
 
 @acceso_prenomina
@@ -329,7 +418,7 @@ def cerrar_reporte(request, pk):
     except servicios.ErrorDePreNomina as error:
         return _respuesta_reporte(str(error), icono='error')
     return _respuesta_reporte(
-        f'Reporte de {reporte.periodo.etiqueta} cerrado.')
+        f'Reporte de {reporte.etiqueta_periodo} cerrado.')
 
 
 @acceso_prenomina
@@ -380,7 +469,7 @@ def reabrir_reporte(request, pk):
     except servicios.ErrorDePreNomina as error:
         return _respuesta_reporte(str(error), icono='error')
     return _respuesta_reporte(
-        f'Reporte de {reporte.periodo.etiqueta} reabierto.')
+        f'Reporte de {reporte.etiqueta_periodo} reabierto.')
 
 
 # --------------------------------------------------------------------------- #

@@ -99,8 +99,14 @@ class FuenteEnTiempoReal(BaseInformes):
 
     def test_refleja_los_cambios_al_instante(self):
         antes = self.consolidado().context['totales']['aprob']
+        # Un NCargo distinto del de la base: un departamento no puede repetir el
+        # mismo cargo del mismo lado de la plantilla. Lo que prueba el test es
+        # que el informe recoge una plaza nueva, no de qué cargo es.
+        otro_ncargo = NCargo.objects.create(
+            descripcion='Especialista A', cat_ocupacional='TEC',
+            grupo_escala=self.grupo, salario_basico=4500)
         CargoPlantilla.objects.create(
-            ncargo=self.ncargo, departamento=self.departamento,
+            ncargo=otro_ncargo, departamento=self.departamento,
             cant_aprobada=5, orden_informe=2)
 
         self.assertEqual(self.consolidado().context['totales']['aprob'], antes + 5)

@@ -12,7 +12,7 @@ from .models import CAlta, CBaja, TMovimiento
 from .forms import CAltaForm
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import Departamento, CargoPlantilla, UnidadOrganizativa
-from .permisos import es_moderador
+from usuarios.alcance import tiene_alcance_acotado
 from nomencladores.models import NSalario, NCausaAltaBaja, NRol, NProvincia, NTipoContrato, NCargo
 from django.urls import reverse_lazy, reverse
 from configuracion.models import Configuracion
@@ -131,7 +131,7 @@ class ContratoListView(ListView):
         # acota el listado por rol, y ofrecer en el desplegable una unidad fuera
         # de su alcance sería un filtro que siempre devuelve vacío.
         usuario_actual = self.request.user
-        if es_moderador(usuario_actual):
+        if tiene_alcance_acotado(usuario_actual):
             unidades_permitidas = UnidadOrganizativa.objects.filter(
                 pk__in=usuario_actual.unidades.values_list('pk', flat=True))
         else:
@@ -168,11 +168,12 @@ class ContratoListView(ListView):
         context['current_page_size'] = str(page_size) if page_size else '8'
 
         # Modal de exportación a Excel filtrada por Unidad Organizativa (ver
-        # exportar_contratos_excel): Admin y Observador pueden elegir "Todas" o
-        # una/varias UO de toda la app; el Moderador solo puede elegir entre las
-        # suyas (mismo criterio de alcance que contratos_visibles()).
+        # exportar_contratos_excel): quien ve toda la empresa puede elegir
+        # "Todas" o una/varias UO de toda la app; quien tiene el alcance acotado
+        # —el Moderador, y el Observador con unidades asignadas— solo puede
+        # elegir entre las suyas (mismo criterio que contratos_visibles()).
         usuario = self.request.user
-        if getattr(usuario, 'es_moderador', False):
+        if tiene_alcance_acotado(usuario):
             context['unidades_export'] = usuario.unidades.all().order_by('descripcion')
             context['mostrar_opcion_todas_uo'] = False
         else:
@@ -478,6 +479,16 @@ def validar_plazas_cargo(request):
                 except NTipoContrato.DoesNotExist:
                     pass
         
+            # Un cargo fuera de la plantilla aprobada no tiene plazas oficiales
+            # que ofrecer: no es que estén agotadas, es que no existen.
+            if not cargo.en_plantilla:
+                data['plazas_agotadas'] = True
+                data['mensaje'] = (
+                    f"El Cargo '{cargo.ncargo.descripcion}' está fuera de la plantilla "
+                    f"aprobada, por lo que no admite contratos que ocupen plaza."
+                )
+                return JsonResponse(data)
+
             if cargo.cant_cubierta_real >= cargo.cant_aprobada:
                 data['plazas_agotadas'] = True
                 data['mensaje'] = f"El Cargo '{cargo.ncargo.descripcion}' no tiene plazas oficiales disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada})"
@@ -2091,6 +2102,17 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         contrato.rol = cargo_obj.rol
 
                     if contrato.tipo and contrato.tipo.ocupa_plaza:
+                        if not cargo_obj.en_plantilla:
+                            transaction.set_rollback(True)
+                            return JsonResponse({
+                                'form_is_valid': False,
+                                'error_popup': (
+                                    f'El cargo "{cargo_obj.ncargo.descripcion}" está fuera de la '
+                                    'plantilla aprobada, por lo que no admite contratos que '
+                                    'ocupen plaza.'
+                                )
+                            }, status=400)
+
                         if cargo_obj.cant_cubierta_real >= cargo_obj.cant_aprobada:
                             transaction.set_rollback(True)
                             return JsonResponse({

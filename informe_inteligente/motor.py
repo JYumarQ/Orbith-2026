@@ -18,6 +18,7 @@ from django.apps import apps
 from nomencladores.models import (COLORES_CAT_OCUPACIONAL, COLORES_SEXO,
                                   color_de_categoria, color_de_sexo,
                                   sigla_de_nivel_educacional)
+from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
 from .metadata import (
     REGISTRO_MODELOS,
@@ -280,6 +281,11 @@ def _aplicar_alcance_por_rol(queryset, definicion_modelo, usuario):
     Restringe el queryset según el rol del usuario. SIEMPRE se aplica,
     nunca es opcional desde la interfaz.
 
+    El reparto lo decide `usuarios.alcance`: el Administrador ve todo; el
+    Moderador solo sus unidades; y el Observador ve todo SOLO mientras no tenga
+    unidades asignadas — si el Administrador le asignó alguna, se filtra igual
+    que un Moderador.
+
     'ruta_unidad_organizativa' en el registro de metadata.py admite 3 formas:
       - un string: se filtra por esa única ruta (caso normal: CAlta, CBaja,
         CargoPlantilla).
@@ -288,13 +294,13 @@ def _aplicar_alcance_por_rol(queryset, definicion_modelo, usuario):
         donde un movimiento puede afectar a la unidad de origen o de destino.
       - None: el modelo no tiene ningún concepto de Unidad Organizativa
         (decisión de negocio, ej. Aspirante — un aspirante no pertenece a
-        ninguna unidad todavía). Sin nada que acotar, el moderador ve todo,
-        igual que Admin/Observador.
+        ninguna unidad todavía). Sin nada que acotar, quien tiene el alcance
+        acotado ve todo, igual que el Administrador.
     """
-    if usuario.is_superuser or usuario.es_admin or usuario.es_observador:
+    if ve_toda_la_empresa(usuario):
         return queryset  # Ven todo, sin restricción
 
-    if usuario.es_moderador:
+    if tiene_alcance_acotado(usuario):
         ruta_uo = definicion_modelo.get("ruta_unidad_organizativa")
         if ruta_uo is None:
             return queryset  # Sin concepto de Unidad Organizativa: ve todo.
@@ -567,6 +573,17 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz, keys=None):
     ruta_aspirante = definicion_modelo.get("ruta_aspirante")
     agregaciones = {"_total": Count("id")}
 
+    # Las tarjetas de la plantilla IGNORAN los cargos fuera de la plantilla
+    # aprobada: existen y pueden tener gente, pero no son plantilla y no deben
+    # inflar «Plazas aprobadas», «Cobertura» ni ninguna otra cifra oficial.
+    # `_total` se queda sin este filtro a propósito: es el que pagina el listado,
+    # y el listado sí los muestra. Para lo que miden las tarjetas se usa
+    # `_total_indicadores`. En la gemela histórica el campo se llama igual, así
+    # que la misma condición sirve para el informe vivo y para un mes cerrado.
+    filtro_plantilla = Q(en_plantilla=True) if modelo_raiz == "CargoPlantilla" else None
+    if filtro_plantilla is not None:
+        agregaciones["_total_indicadores"] = Count("id", filter=filtro_plantilla)
+
     for spec in especificaciones:
         if spec["tipo"] == "conteo":
             continue
@@ -575,6 +592,8 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz, keys=None):
             filtro = _q_de_condiciones(definicion_modelo, _condiciones_de(spec))
             if filtro is None:
                 continue  # algún campo ya no está en el registro
+            if filtro_plantilla is not None:
+                filtro = filtro & filtro_plantilla
             agregaciones[spec["key"]] = Count("id", filter=filtro)
             continue
 
@@ -592,21 +611,30 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz, keys=None):
                 continue
             ruta_aspirante_local = ruta_aspirante
             agregaciones[spec["key"] + "__num"] = Sum(
-                _expresion_de_campo(campo, key_campo, ruta_aspirante_local))
+                _expresion_de_campo(campo, key_campo, ruta_aspirante_local),
+                filter=filtro_plantilla)
             agregaciones[spec["key"] + "__den"] = Sum(
-                _expresion_de_campo(divisor, spec["campo_divisor"], ruta_aspirante_local))
+                _expresion_de_campo(divisor, spec["campo_divisor"], ruta_aspirante_local),
+                filter=filtro_plantilla)
         elif spec["tipo"] == "suma":
-            agregaciones[spec["key"]] = Sum(_expresion_de_campo(campo, key_campo, ruta_aspirante))
+            agregaciones[spec["key"]] = Sum(
+                _expresion_de_campo(campo, key_campo, ruta_aspirante),
+                filter=filtro_plantilla)
         elif spec["tipo"] == "promedio":
-            agregaciones[spec["key"]] = Avg(_expresion_de_campo(campo, key_campo, ruta_aspirante))
+            agregaciones[spec["key"]] = Avg(
+                _expresion_de_campo(campo, key_campo, ruta_aspirante),
+                filter=filtro_plantilla)
 
     crudos = queryset.aggregate(**agregaciones)
     total = crudos.get("_total") or 0
+    # Base de las tarjetas: sin los cargos fuera de plantilla cuando aplica.
+    total_indicadores = (crudos.get("_total_indicadores") or 0
+                         if filtro_plantilla is not None else total)
 
     indicadores = []
     for spec in especificaciones:
         if spec["tipo"] == "conteo":
-            valor = total
+            valor = total_indicadores
         elif spec["tipo"] == "razon":
             valor = _razon(crudos.get(spec["key"] + "__num"),
                            crudos.get(spec["key"] + "__den"))
@@ -623,7 +651,8 @@ def calcular_indicadores(queryset, definicion_modelo, modelo_raiz, keys=None):
             "valor": _formatear_valor(valor, spec.get("formato", "entero"), spec.get("sufijo", "")),
         }
         if spec.get("con_porcentaje"):
-            indicador["porcentaje"] = round((valor or 0) * 100 / total, 1) if total else 0
+            indicador["porcentaje"] = (round((valor or 0) * 100 / total_indicadores, 1)
+                                       if total_indicadores else 0)
         indicadores.append(indicador)
 
 
@@ -708,6 +737,11 @@ def calcular_evolucion(modelo_raiz, configuracion, usuario, key_indicador, anno)
 
         queryset, definicion = _construir_queryset_filtrado(
             modelo_raiz, configuracion, usuario, periodo)
+
+        # Mismo criterio que las tarjetas del resumen: la evolución de la
+        # plantilla no cuenta los cargos que quedaron fuera de ella.
+        if modelo_raiz == "CargoPlantilla":
+            queryset = queryset.filter(en_plantilla=True)
 
         if spec["tipo"] == "conteo":
             valor = queryset.count()
@@ -812,6 +846,13 @@ def _calcular_desglose_por_suma(queryset, spec):
     """
     ruta_agrupacion = spec["ruta_agrupacion"]
     ruta_suma = spec["ruta_suma"]
+
+    # Un desglose puede acotar su propio conjunto (`filtro` en su definición).
+    # Se aplica aquí, sobre el queryset ya filtrado por el usuario, para que el
+    # desglose y la tarjeta que mide lo mismo cuenten siempre lo mismo.
+    filtro = spec.get("filtro")
+    if filtro:
+        queryset = queryset.filter(**filtro)
 
     grupos = (
         queryset

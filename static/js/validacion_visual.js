@@ -101,7 +101,27 @@
     }
 
     function estaVacio(campo) {
-        if (campo.type === 'checkbox' || campo.type === 'radio') return !campo.checked;
+        if (campo.type === 'checkbox') return !campo.checked;
+
+        /* UN GRUPO DE RADIOS ES UN SOLO DATO, no uno por opción.
+         *
+         * Solo está vacío si NINGUNA de sus opciones está marcada. Comprobando
+         * `campo.checked` a secas, la opción NO elegida de un toggle contaba
+         * como dato pendiente: se pintaba de amarillo y `evaluarBoton()` dejaba
+         * Guardar bloqueado para siempre. Y encima de forma invisible, porque
+         * esos radios suelen ir ocultos por CSS detrás de la pastilla (el
+         * Período de Pago de Parámetros Generales, Quincenal/Mensual). */
+        if (campo.type === 'radio') {
+            var nombre = campo.name;
+            if (!nombre) return !campo.checked;
+            var ambito = campo.form || document;
+            var hermanos = ambito.querySelectorAll('input[type="radio"]');
+            for (var i = 0; i < hermanos.length; i++) {
+                if (hermanos[i].name === nombre && hermanos[i].checked) return false;
+            }
+            return true;
+        }
+
         var valor = campo.value;
         return valor === null || valor === undefined || String(valor).trim() === '';
     }

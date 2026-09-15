@@ -881,6 +881,18 @@ def _campos_cargoplantilla():
             "filtrable": True, "ordenable": False, "agrupable": True,
             "sensible": False,
         },
+        # Sí = la plaza está en la plantilla aprobada por el organismo (lo normal).
+        # No = existe y puede tener gente, pero está fuera de esa plantilla. Se
+        # filtra igual que cualquier otro Sí/No, y así se obtiene el listado de
+        # los cargos fuera de plantilla.
+        "en_plantilla": {
+            "label": "En Plantilla",
+            "ruta_orm": "en_plantilla",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
         "cant_aprobada": {
             "label": "Cantidad Aprobada",
             "ruta_orm": "cant_aprobada",
@@ -1307,6 +1319,12 @@ DESGLOSES_ESPECIALES_POR_MODELO = {
             "label": "Plazas Aprob. por Unid. Org.",
             "ruta_agrupacion": "departamento__unidad_organizativa__descripcion",
             "ruta_suma": "cant_aprobada",
+            # Mismo criterio que las tarjetas del panel: los cargos fuera de la
+            # plantilla aprobada no son plantilla y no suman. Sin esto, la tarjeta
+            # «Plazas aprobadas» y este desglose daban totales distintos en la
+            # MISMA pantalla. En la gemela histórica el campo se llama igual, así
+            # que la condición sirve para el informe vivo y para un mes cerrado.
+            "filtro": {"en_plantilla": True},
         },
     ],
 }
@@ -1457,6 +1475,7 @@ _RUTAS_HISTORICAS_CARGO = {
     "funcionario": "funcionario",
     "designado": "designado",
     "activo": "activo",
+    "en_plantilla": "en_plantilla",
     "cant_aprobada": "cant_aprobada",
     "cant_cubierta": "cant_cubierta",
     "puesto_clave": "puesto_clave",

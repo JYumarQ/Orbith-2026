@@ -158,33 +158,122 @@ def _contexto_periodo(request):
     }
 
 
+#: Valor del filtro de calendario que pide «los que todavía no tienen ninguno».
+#: Es una cadena y no un número para que nunca choque con un `pk` real.
+SIN_CALENDARIO = 'sin'
+
+
 def _contexto_trabajadores(request):
     """Trabajadores del alcance del usuario, para la tarjeta de asignación.
 
     Se filtran por la unidad elegida en el select. Sin unidad elegida no se
     lista nada: una empresa entera son cientos de filas y ninguna decisión
     útil que tomar sobre ellas a la vez.
+
+    Elegir una unidad PRINCIPAL arrastra a sus subunidades. Es la misma cascada
+    que ya aplicaba el resto del módulo —`captura.unidades_del_reporte()` llama
+    a `informes.fuentes.expandir_unidades()` desde que existe— y esta pantalla
+    era la única que no lo hacía: filtraba por `unidad_organizativa_id` a secas,
+    así que elegir una Dirección Principal (que no tiene cargos propios, todo
+    cuelga de sus hijas) devolvía la lista vacía.
+
+    No amplía el alcance de nadie: cuando a un Moderador se le asigna una
+    unidad principal, `usuarios/forms.py` guarda TAMBIÉN sus subunidades en
+    `CustomUser.unidades`, así que lo que devuelve la cascada ya estaba dentro
+    de `unidades_gestionables()`.
+
+    Sobre la unidad elegida actúan además tres filtros opcionales —departamento,
+    calendario y texto libre—, todos acumulativos.
     """
     from contratos.models import CAlta
+    from django.db.models import Q, Value
+    from django.db.models.functions import Concat
+    from informes.fuentes import expandir_unidades
+    from strorganizativa.jerarquia import ordenar_con_jerarquia
+    from strorganizativa.models import Departamento
 
-    unidades = unidades_gestionables(request.user)
+    # `ordenar_con_jerarquia` deja cada padre seguido de sus hijas y les pone
+    # `nivel`, que es lo que el selector de fichas usa para indentarlas.
+    unidades = ordenar_con_jerarquia(
+        unidades_gestionables(request.user).select_related('tipo', 'padre'))
+
     unidad = (request.GET.get('unidad') or '').strip()
+    departamento = (request.GET.get('departamento') or '').strip()
+    calendario_filtro = (request.GET.get('calendario') or '').strip()
+    busqueda = (request.GET.get('buscar') or '').strip()
 
     trabajadores = []
-    if unidad.isdigit() and unidades.filter(pk=int(unidad)).exists():
-        trabajadores = list(
+    departamentos = []
+    permitidas = {unidad_organizativa.pk for unidad_organizativa in unidades}
+
+    if unidad.isdigit() and int(unidad) in permitidas:
+        ramas = expandir_unidades(int(unidad)) or [int(unidad)]
+
+        # Los departamentos que se ofrecen son los de la rama completa, para que
+        # el desplegable no quede vacío al elegir una unidad principal.
+        departamentos = list(
+            Departamento.objects
+            .filter(unidad_organizativa_id__in=ramas)
+            .order_by('unidad_organizativa__orden_informe', 'orden_informe',
+                      'descripcion'))
+
+        consulta = (
             CAlta.objects
-            .filter(cargo__departamento__unidad_organizativa_id=int(unidad),
+            .filter(cargo__departamento__unidad_organizativa_id__in=ramas,
                     aspirante__estado='ACTIVO')
             .select_related('aspirante', 'cargo', 'cargo__departamento',
                             'cargo__ncargo', 'asignacion_calendario',
-                            'asignacion_calendario__calendario')
-            .order_by('cargo__departamento__orden_informe',
-                      'aspirante__papellido', 'aspirante__nombre'))
+                            'asignacion_calendario__calendario'))
+
+        # Al cambiar de unidad, el departamento que quedaba elegido viaja en la
+        # misma petición (`hx-include` manda todos los filtros juntos) y casi
+        # nunca pertenece a la rama nueva. Filtrar por él devolvería una lista
+        # vacía sin explicación, así que un departamento ajeno se descarta: es
+        # el propio servidor quien decide que ese filtro ya no aplica.
+        if departamento.isdigit() and any(
+                d.pk == int(departamento) for d in departamentos):
+            consulta = consulta.filter(cargo__departamento_id=int(departamento))
+        else:
+            departamento = ''
+
+        if calendario_filtro == SIN_CALENDARIO:
+            consulta = consulta.filter(asignacion_calendario__isnull=True)
+        elif calendario_filtro.isdigit():
+            consulta = consulta.filter(
+                asignacion_calendario__calendario_id=int(calendario_filtro))
+
+        # Buscador idéntico al del listado de contratos
+        # (`contratos.views.search_contratos`): se concatenan los tres nombres y
+        # se busca `icontains` sobre el resultado, que es lo que hace que valgan
+        # por igual el nombre suelto, el apellido suelto y «nombre + apellido».
+        if busqueda:
+            consulta = consulta.annotate(
+                nombre_completo=Concat(
+                    'aspirante__nombre', Value(' '),
+                    'aspirante__papellido', Value(' '),
+                    'aspirante__sapellido')
+            ).filter(Q(no_expediente__icontains=busqueda)
+                     | Q(nombre_completo__icontains=busqueda))
+
+        trabajadores = list(
+            consulta.order_by('cargo__departamento__orden_informe',
+                              'aspirante__papellido', 'aspirante__nombre'))
 
     return {
         'unidades': unidades,
         'unidad_actual': unidad,
+        # El selector de fichas compara con `in`, así que necesita una LISTA de
+        # textos. Pasarle la cadena suelta haría que «5» se diera por elegida
+        # estando marcada la unidad «15».
+        'unidad_seleccionada': [unidad] if unidad else [],
+        'departamentos': departamentos,
+        'departamento_actual': departamento,
+        'calendario_actual': calendario_filtro,
+        'sin_calendario': SIN_CALENDARIO,
+        'busqueda': busqueda,
+        # Hay filtros puestos y ninguna fila: la pantalla debe decir eso y no
+        # «esta unidad no tiene trabajadores», que sería falso.
+        'hay_filtros': bool(departamento or calendario_filtro or busqueda),
         'trabajadores': trabajadores,
         'calendarios_activos': list(
             Calendario.objects.filter(usuario=request.user, activo=True)),

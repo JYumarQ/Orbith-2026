@@ -79,7 +79,7 @@
           <tr class="pn-fila-reporte" data-href="{% url 'prenomina:detalle_reporte' reporte.pk %}">
             <td>
               <span class="pn-periodo">
-                {{ reporte.periodo.etiqueta }}
+                {{ reporte.etiqueta_periodo }}
                 <small>{{ reporte.fecha_desde|date:"d/m" }} — {{ reporte.fecha_hasta|date:"d/m" }}</small>
               </span>
             </td>

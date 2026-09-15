@@ -1,0 +1,72 @@
+{% comment %}
+  Bloque del período dentro del modal de alta de un reporte de pago.
+
+  Se pinta dos veces: incrustado por `modal_reporte.html` al abrir el modal, y
+  otra vez por `views.periodo_reporte` cada vez que cambian la Unidad
+  Organizativa, el año o el mes — de esos tres depende qué reporte toca crear y,
+  con él, las fechas del período.
+
+  Por eso vive en su propio fragmento y por eso lleva el `id` fuera de los
+  campos: el intercambio de HTMX reemplaza este `div` entero.
+
+  El «Período de pago» y la quincena son informativos. La quincena de verdad la
+  asigna `servicios.crear_reporte()` con la unidad bloqueada; aquí solo se
+  adelanta cuál será para que el usuario no cree a ciegas.
+{% endcomment %}
+<div class="row g-3" id="bloque_periodo_reporte">
+
+  <div class="col-md-6">
+    <label class="form-label small fw-bold text-muted" for="{{ form.periodo_pago.id_for_label }}">
+      {{ form.periodo_pago.label }}
+    </label>
+    {{ form.periodo_pago }}
+    <div class="form-text" style="font-size: .72rem;">{{ form.periodo_pago.help_text }}</div>
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label small fw-bold text-muted">Reporte a crear</label>
+    {% comment %} Sin `name`: es un rótulo, no un campo que viaje en el POST. {% endcomment %}
+    <input type="text" class="form-control form-control-sm" tabindex="-1" disabled
+           value="{{ quincena_texto }}">
+    <div class="form-text" style="font-size: .72rem;">
+      {% if quincenal %}
+        Se asigna automáticamente: primero la 1ra Quincena y después la 2da.
+      {% else %}
+        Con pago Mensual cada unidad tiene un solo reporte por mes.
+      {% endif %}
+    </div>
+  </div>
+
+  {% if periodo_completo %}
+    <div class="col-12">
+      <div class="alert alert-warning d-flex align-items-start p-2 mb-0" role="alert">
+        <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+        <div class="small">
+          Esta unidad ya tiene
+          {% if quincenal %}las dos quincenas{% else %}el reporte{% endif %}
+          de este mes. Elija otro mes o revise los reportes existentes.
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="col-md-6">
+    <label class="form-label small fw-bold text-muted" for="{{ form.fecha_desde.id_for_label }}">
+      {{ form.fecha_desde.label }}
+    </label>
+    {{ form.fecha_desde }}
+    {% if form.fecha_desde.errors %}
+      <div class="text-danger small mt-1 fw-bold">{{ form.fecha_desde.errors.0 }}</div>
+    {% endif %}
+  </div>
+
+  <div class="col-md-6">
+    <label class="form-label small fw-bold text-muted" for="{{ form.fecha_hasta.id_for_label }}">
+      {{ form.fecha_hasta.label }}
+    </label>
+    {{ form.fecha_hasta }}
+    {% if form.fecha_hasta.errors %}
+      <div class="text-danger small mt-1 fw-bold">{{ form.fecha_hasta.errors.0 }}</div>
+    {% endif %}
+  </div>
+</div>

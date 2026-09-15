@@ -41,6 +41,12 @@
         if (!raiz || raiz.dataset.iniciado === '1') return;
         raiz.dataset.iniciado = '1';
 
+        /* Modo de UNA sola opción (`data-unica="1"`). Mismo control y mismo
+           aspecto; sólo cambia que marcar una desmarca la anterior y que el
+           panel se cierra al elegir, porque ya no queda nada más que decidir.
+           Lo usa Pre-Nómina → Asignación de Trabajadores. */
+        var unica = raiz.dataset.unica === '1';
+
         var nativo = raiz.querySelector('.chip-multiselect-native');
         var caja = raiz.querySelector('.chip-multiselect-box');
         var fichas = raiz.querySelector('.chip-multiselect-chips');
@@ -71,6 +77,18 @@
             item.querySelector('span').textContent = op.etiqueta;
             item.addEventListener('click', function (e) {
                 e.stopPropagation();
+                if (unica) {
+                    // Volver a pulsar la que ya estaba marcada la quita: es la
+                    // única manera de regresar a «ninguna» sin abrir el panel a
+                    // buscar la ficha.
+                    var yaEstaba = op.el.selected;
+                    opciones.forEach(function (otra) { otra.el.selected = false; });
+                    op.el.selected = !yaEstaba;
+                    pintar();
+                    // `cerrar()` es quien lanza `orbith:unidades` si algo cambió.
+                    cerrar();
+                    return;
+                }
                 op.el.selected = !op.el.selected;
                 pintar();
             });

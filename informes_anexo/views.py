@@ -2,8 +2,27 @@
 Vistas del módulo Anexo 14: Estructura Jerárquica y Plantilla Aprobada.
 
 Reporte "en vivo" (sin persistencia): siempre refleja el estado actual de
-UnidadOrganizativa / Departamento / CargoPlantilla. Solo Administradores y
-Observadores pueden verlo/generarlo (Moderadores no tienen acceso).
+UnidadOrganizativa / Departamento / CargoPlantilla.
+
+ALCANCE
+-------
+Lo ven los tres roles, pero no todos ven lo mismo. La regla la decide
+`usuarios.alcance` y se aplica en `_unidades_del_alcance()`, que es el ÚNICO
+punto donde se acota el árbol:
+
+* Administrador, y Observador sin unidades asignadas: la empresa entera.
+* Observador con unidades asignadas, y Moderador: solo sus Unidades
+  Principales, con los departamentos y cargos que cuelgan de ellas.
+
+En ese segundo caso el Anexo 14 sale PARCIAL a propósito: los KPIs se calculan
+sobre el árbol ya acotado (`_calcular_kpis` recorre lo que le llega), así que un
+Moderador nunca ve los totales de la empresa. Las firmas, en cambio, siguen
+siendo las institucionales —Director General y Director de Capital Humano—:
+identifican quién aprueba la plantilla, no quién consulta el informe.
+
+El acotado se hace en el SERVIDOR, no limitando los desplegables: quien edite a
+mano `?padre=` con el id de una unidad ajena recibe la primera de las suyas, no
+la que pidió.
 """
 from datetime import date
 from io import BytesIO
@@ -25,6 +44,7 @@ from configuracion.models import Configuracion
 from contratos.models import CAlta
 from nomencladores.models import NCargo
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
+from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
 NOMBRE_CARGO_DIRECTOR_CH = "Director de Capital Humano"
 NOMBRE_CARGO_DIRECTOR_GENERAL = "Director General"
@@ -76,14 +96,23 @@ def _titulo_director(plantilla, aspirante):
 
 
 class PermisoAnexoMixin(UserPassesTestMixin):
-    """Solo Administradores y Observadores pueden ver/generar el Anexo 14."""
+    """Los tres roles pueden consultar el Anexo 14; cada uno ve su alcance.
+
+    El Moderador antes estaba bloqueado por completo. Se le abre porque el
+    informe es de solo lectura y ahora sale acotado a sus unidades
+    (`_unidades_del_alcance`): lo que veía de más —la plantilla de la empresa
+    entera— es justo lo que el acotado impide.
+
+    Un usuario autenticado sin ningún rol reconocido sigue fuera: no es un caso
+    normal (`CustomUser.clean()` exige un rol), pero si ocurriera no debe colarse
+    por la puerta de un informe.
+    """
 
     def test_func(self):
-        user = self.request.user
-        return bool(getattr(user, "es_admin", False) or getattr(user, "es_observador", False))
+        return ve_toda_la_empresa(self.request.user) or tiene_alcance_acotado(self.request.user)
 
     def handle_no_permission(self):
-        raise PermissionDenied("El Anexo 14 solo está disponible para Administradores y Observadores.")
+        raise PermissionDenied("El Anexo 14 solo está disponible para usuarios con un rol asignado.")
 
 
 def _queryset_aspirantes_cuadro():
@@ -149,18 +178,48 @@ def _resolver_firmante(descripcion_cargo, plantilla_titulo, aspirante_manual_id=
     return resultado
 
 
-def _construir_hijas(unidad_padre, filtros):
+def _unidades_del_alcance(usuario):
+    """Ids de las unidades que este usuario puede ver, o `None` si todas.
+
+    Único punto de alcance del módulo, mismo contrato que
+    `informes.fuentes.unidades_visibles()`: `None` significa «sin restricción» y
+    NO es lo mismo que un conjunto vacío. Un usuario con el alcance acotado y
+    sin ninguna unidad asignada no debe ver ni una fila.
+
+    No hace falta expandir a las subunidades: el formulario de Usuarios guarda
+    ya las hijas junto al padre (`usuarios.forms.expandir_a_subunidades`), y
+    `strorganizativa.signals` mantiene esa relación al día cuando nace o se muda
+    una subunidad.
+    """
+    if ve_toda_la_empresa(usuario):
+        return None
+    if tiene_alcance_acotado(usuario):
+        return set(usuario.unidades.values_list("pk", flat=True))
+    return set()
+
+
+def _construir_hijas(unidad_padre, filtros, en_plantilla=True, permitidas=None):
     """
     Devuelve la lista de Unidades Hijas de `unidad_padre` con sus
     Departamentos y Cargos ya precargados (prefetch anidado, sin N+1),
     aplicando los filtros de búsqueda/categoría/rol sobre los cargos.
     Solo incluye Departamentos que, tras el filtro, quedaron con al menos
     un cargo.
+
+    `en_plantilla` elige de qué lado se construye el árbol: el Anexo 14 lo llama
+    dos veces, una para la plantilla aprobada (el informe de siempre) y otra para
+    los cargos que quedaron fuera de ella, que se listan en una sección aparte
+    con su propio subtotal y NO suman en las cifras oficiales.
+
+    `permitidas` es el alcance del usuario (`_unidades_del_alcance`): `None` no
+    acota nada, y un conjunto deja pasar solo las hijas que estén en él.
     """
     if unidad_padre is None:
         return []
 
-    cargos_qs = CargoPlantilla.objects.filter(activo=True).select_related(
+    cargos_qs = CargoPlantilla.objects.filter(
+        activo=True, en_plantilla=en_plantilla
+    ).select_related(
         "ncargo", "ncargo__grupo_escala", "rol", "nivel_preparacion"
     )
 
@@ -190,6 +249,8 @@ def _construir_hijas(unidad_padre, filtros):
         .order_by("orden_informe", "descripcion")
         .prefetch_related(Prefetch("departamentos", queryset=departamentos_qs, to_attr="departamentos_todos"))
     )
+    if permitidas is not None:
+        hijas = hijas.filter(pk__in=permitidas)
 
     resultado = []
     for hija in hijas:
@@ -252,11 +313,18 @@ def _obtener_datos_reporte(request):
     """
     filtros = _obtener_filtros(request)
 
+    # Alcance del usuario: acota tanto las Unidades Principales del selector
+    # como las hijas del árbol. Se resuelve UNA vez y se pasa hacia abajo, para
+    # no repetir la misma consulta en cada llamada a `_construir_hijas`.
+    permitidas = _unidades_del_alcance(request.user)
+
     padres = (
         UnidadOrganizativa.objects.filter(tipo__es_principal=True, padre__isnull=True)
         .select_related("tipo", "municipio", "municipio__provincia")
         .order_by("orden_informe", "descripcion")
     )
+    if permitidas is not None:
+        padres = padres.filter(pk__in=permitidas)
     padres_lista = list(padres)
 
     padre_actual = None
@@ -274,10 +342,20 @@ def _obtener_datos_reporte(request):
         filtros.get("rol") not in (None, "", "ALL"),
         filtros.get("unidad_hija_id"),
     ))
-    hijas_todas = _construir_hijas(padre_actual, {}) if padre_actual else []
-    hijas = (_construir_hijas(padre_actual, filtros) if (padre_actual and hay_filtros_de_cargo)
-             else hijas_todas)
+    hijas_todas = (_construir_hijas(padre_actual, {}, permitidas=permitidas)
+                   if padre_actual else [])
+    hijas = (_construir_hijas(padre_actual, filtros, permitidas=permitidas)
+             if (padre_actual and hay_filtros_de_cargo) else hijas_todas)
+    # Los KPIs son los del informe oficial: se calculan solo sobre la plantilla
+    # aprobada, nunca sobre la sección de fuera de plantilla.
     kpis = _calcular_kpis(hijas)
+
+    # Sección aparte: mismos filtros y misma estructura (unidad -> departamento),
+    # pero con los cargos que NO están en la plantilla aprobada.
+    hijas_fuera = (_construir_hijas(padre_actual, filtros, en_plantilla=False,
+                                    permitidas=permitidas)
+                   if padre_actual else [])
+    kpis_fuera = _calcular_kpis(hijas_fuera)
 
     director_ch = _resolver_firmante(
         NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano", filtros["director_ch_id"]
@@ -296,6 +374,8 @@ def _obtener_datos_reporte(request):
         "hijas_todas": hijas_todas,
         "hijas": hijas,
         "kpis": kpis,
+        "hijas_fuera_plantilla": hijas_fuera,
+        "kpis_fuera_plantilla": kpis_fuera,
         "categorias_kpi": CATEGORIAS_KPI,
         "etiquetas_categoria": ETIQUETAS_CATEGORIA,
         "opciones_filtro_categoria": OPCIONES_FILTRO_CATEGORIA,

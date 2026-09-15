@@ -2,6 +2,10 @@
     <div class="modal-content">
         <div class="modal-header d-flex align-items-center pb-3 border-bottom mb-3">
             <h5 class="modal-title flex-grow-1" id="cargosModalLabel">Registrar Nuevo Cargo</h5>
+            <div class="form-check form-switch m-0 d-flex align-items-center me-3">
+                {{ form.en_plantilla }}
+                <label class="form-check-label ms-2" for="id_en_plantilla" id="label_en_plantilla" style="padding-top: 2px;">En Plantilla</label>
+            </div>
             <div class="form-check form-switch m-0 d-flex align-items-center">
                 {{ form.activo }}
                 <label class="form-check-label ms-2 text-muted" for="id_activo" style="padding-top: 2px;">Activo</label>
@@ -20,6 +24,14 @@
 
                 {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
 
+                {% if form.en_plantilla.errors %}
+                    <div class="alert alert-danger d-flex align-items-center p-2 mb-3" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <div>{{ form.en_plantilla.errors.0 }}</div>
+                    </div>
+                {% endif %}
+
+
                 {% if form.non_field_errors %}
                     <div class="alert alert-danger d-flex align-items-center p-2 mb-3" role="alert">
                         <i class="fas fa-exclamation-triangle me-2"></i>
@@ -31,13 +43,13 @@
                     </div>
                 {% endif %}
                 
-                {# Unidad y Departamento se pintan desde `unidad_visual`/`dpto_visual`,
+                {% comment %} Unidad y Departamento se pintan desde `unidad_visual`/`dpto_visual`,
                    que la vista rellena tanto en GET como al recargar por error de
                    validación. Antes había además un respaldo a `form.initial.unidad`,
                    redundante (la vista rellena ambos con la misma condición) y frágil:
                    Django resuelve SIEMPRE el argumento de un filtro, así que al abrir
                    el formulario sin `?departamento=` reventaba con
-                   «VariableDoesNotExist: unidad» y la página entera daba error 500. #}
+                   «VariableDoesNotExist: unidad» y la página entera daba error 500. {% endcomment %}
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="visual_unidad">Unidad Organizativa</label>
@@ -151,12 +163,16 @@
         // Pinta cada opción del desplegable:
         //  - tooltip con el Grupo Escala
         //  - gris + "no permitido" si el cargo ya existe en este departamento
+        //    del mismo lado del switch «En Plantilla»
         function formatOpcionCargo(state) {
             if (!state.id) return state.text;
 
             const $opcion = $(state.element);
             const grupo = $opcion.data('grupo') || '';
-            const usado = $opcion.data('usado') === true || $opcion.data('usado') === 'true';
+            // Se lee `disabled` y no `data-usado`: jQuery cachea `.data()` y no
+            // vería el recálculo que hace refrescarCargosDisponibles() al mover
+            // el switch «En Plantilla».
+            const usado = state.element.disabled === true;
 
             const $texto = $('<span></span>').text(state.text);
 
@@ -335,9 +351,81 @@
             });
         }
         
+        // --- 6.b SWITCH «EN PLANTILLA» Y REGLA DE LA PAREJA ---
+        // Un mismo cargo puede repetirse en el departamento SOLO como pareja:
+        // uno dentro de la plantilla aprobada y otro fuera. El servidor pinta en
+        // cada <option> de qué lado ya está usado (data-usado-si / data-usado-no)
+        // y aquí se recalcula qué queda bloqueado cada vez que se mueve el switch.
+        const checkEnPlantilla = document.getElementById('id_en_plantilla');
+
+        function refrescarCargosDisponibles() {
+            const selectNativo = document.getElementById('id_ncargo');
+            if (!selectNativo) return;
+
+            const enPlantilla = !checkEnPlantilla || checkEnPlantilla.checked;
+            const atributoChoque = enPlantilla ? 'usadoSi' : 'usadoNo';
+            let seleccionAnulada = false;
+
+            Array.from(selectNativo.options).forEach(function(opt) {
+                if (!opt.value) return;
+
+                const bloqueado = opt.dataset[atributoChoque] === 'true';
+                opt.disabled = bloqueado;
+
+                if (bloqueado) {
+                    opt.dataset.usado = 'true';
+                    // Si el usuario ya lo tenía elegido, deja de ser válido
+                    if (selectNativo.value === opt.value) {
+                        selectNativo.value = '';
+                        seleccionAnulada = true;
+                    }
+                } else {
+                    delete opt.dataset.usado;
+                }
+            });
+
+            if (seleccionAnulada) {
+                $ncargo.trigger('change');
+                if (window.mostrarToast) {
+                    window.mostrarToast(
+                        enPlantilla
+                            ? 'Ese cargo ya existe dentro de la plantilla aprobada en este departamento.'
+                            : 'Ese cargo ya existe fuera de la plantilla aprobada en este departamento.',
+                        'info'
+                    );
+                }
+            }
+        }
+
+        // Color ámbar en la etiqueta cuando el cargo queda fuera de la plantilla,
+        // el mismo criterio visual que el listado del Gestor de Plantilla.
+        function actualizarEtiquetaEnPlantilla() {
+            const label = document.getElementById('label_en_plantilla');
+            if (!label || !checkEnPlantilla) return;
+
+            if (checkEnPlantilla.checked) {
+                label.style.color = '';
+                label.classList.remove('fw-bold');
+                label.textContent = 'En Plantilla';
+            } else {
+                label.style.color = '#ffab00';
+                label.classList.add('fw-bold');
+                label.textContent = 'Fuera de Plantilla';
+            }
+        }
+
+        if (checkEnPlantilla) {
+            checkEnPlantilla.addEventListener('change', function() {
+                actualizarEtiquetaEnPlantilla();
+                refrescarCargosDisponibles();
+            });
+        }
+
         // --- 7. ARRANQUE INICIAL ---
         actualizarDatosCargo(); // Necesario para edición
         actualizarEstadoActivo(); // Fuerza el color del switch desde el segundo 0
+        actualizarEtiquetaEnPlantilla();
+        refrescarCargosDisponibles();
 
         // --- 8. VALIDACIÓN VISUAL (amarillo = vacío, verde = con dato) ---
         // Mismo criterio que el formulario de contrato, en `validacion_visual.js`.

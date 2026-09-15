@@ -650,6 +650,78 @@
         
         $cargoSelect.on('change', validarCargoCruado);
 
+        // --- CARGO FUERA DE LA PLANTILLA APROBADA ---
+        // Una plaza que no está en la plantilla aprobada no puede sostener un
+        // contrato que ocupe plaza. En cuanto se elige el cargo se apagan esos
+        // tipos; el servidor lo vuelve a validar en CAltaForm.clean().
+        const $tipoContrato = $('#id_tipo');
+
+        function tiposQueOcupanPlaza() {
+            const radar = $tipoContrato.attr('data-ocupa-plaza');
+            try { return radar ? JSON.parse(radar) : []; } catch (e) { return []; }
+        }
+
+        function avisoFueraDePlantilla(mostrar) {
+            let $aviso = $('#aviso_fuera_plantilla');
+            if ($aviso.length === 0) {
+                $aviso = $('<small id="aviso_fuera_plantilla" class="fw-bold d-none mt-1 d-block" style="color: #ffab00;"></small>');
+                $cargoSelect.next('.select2-container').after($aviso);
+            }
+            if (mostrar) {
+                $aviso.html('<i class="fas fa-exclamation-triangle me-1"></i> Este cargo está fuera de la plantilla aprobada, por lo que no admite contratos que ocupen plaza.')
+                      .removeClass('d-none');
+            } else {
+                $aviso.addClass('d-none');
+            }
+        }
+
+        function aplicarReglaFueraDePlantilla() {
+            const $opcion = $cargoSelect.find('option:selected');
+            const fuera = !!$cargoSelect.val() && $opcion.attr('data-en-plantilla') === 'false';
+            const ocupan = tiposQueOcupanPlaza();
+            // El valor se lee ANTES del bucle: al marcar `disabled` sobre la
+            // opción que está seleccionada, el navegador puede dejar de
+            // devolverla en `.val()`, y entonces la comparación fallaba y el
+            // tipo bloqueado se quedaba puesto en pantalla.
+            const tipoElegido = $tipoContrato.val();
+            let anulado = false;
+
+            $tipoContrato.find('option').each(function() {
+                if (!this.value) return;
+                const bloquear = fuera && ocupan.includes(parseInt(this.value));
+                this.disabled = bloquear;
+                if (bloquear && tipoElegido === this.value) anulado = true;
+            });
+
+            if (anulado) $tipoContrato.val('');
+
+            avisoFueraDePlantilla(fuera);
+
+            if (anulado) {
+                $tipoContrato.trigger('change.tipo').trigger('change.plaza');
+                if (window.mostrarToast) {
+                    window.mostrarToast(
+                        'Este cargo está fuera de la plantilla aprobada: se ha quitado el tipo de contrato que ocupa plaza.',
+                        'warning'
+                    );
+                }
+            }
+        }
+
+        $cargoSelect.on('change', aplicarReglaFueraDePlantilla);
+
+        /* Y también cuando HTMX acaba de traer las opciones de cargo.
+           Sin esto la regla solo funcionaba al EDITAR: ahí el formulario ya
+           llega con los cargos cargados. Al CREAR, las opciones entran por la
+           cascada (unidad -> departamento -> cargo) sin disparar ningún
+           `change`, así que el desplegable de Tipo se quedaba sin filtrar. */
+        document.body.addEventListener('htmx:afterSwap', function (evento) {
+            const destino = evento.detail.target ? evento.detail.target.id : '';
+            if (destino === 'id_cargo') aplicarReglaFueraDePlantilla();
+        });
+
+        aplicarReglaFueraDePlantilla();
+
         $form.off('change.cascada').on('change.cascada', '#id_unidad, #id_departamento', function() {
             if ($(this).is('#id_unidad')) {
                 $('#id_departamento').empty().trigger('change.select2');

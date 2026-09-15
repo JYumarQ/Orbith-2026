@@ -958,6 +958,68 @@
     
     $tipoSelect.off('change.plaza').on('change.plaza', actualizarReglaPlaza);
     $cargoSelect.off('change.cruado').on('change.cruado', validarCargoCruado);
+
+    // 6. CARGO FUERA DE LA PLANTILLA APROBADA
+    // Una plaza que no está en la plantilla aprobada no puede sostener un contrato
+    // que ocupe plaza: al elegir ese cargo se apagan esos tipos. El servidor lo
+    // vuelve a validar en CAltaForm.clean().
+    function avisoFueraDePlantilla(mostrar) {
+        let $aviso = $('#aviso_fuera_plantilla');
+        if ($aviso.length === 0) {
+            $aviso = $('<small id="aviso_fuera_plantilla" class="fw-bold d-none mt-1 d-block" style="color: #ffab00;"></small>');
+            $cargoSelect.next('.select2-container').after($aviso);
+        }
+        if (mostrar) {
+            $aviso.html('<i class="fas fa-exclamation-triangle me-1"></i> Este cargo está fuera de la plantilla aprobada, por lo que no admite contratos que ocupen plaza.')
+                  .removeClass('d-none');
+        } else {
+            $aviso.addClass('d-none');
+        }
+    }
+
+    function aplicarReglaFueraDePlantilla() {
+        const atributoRadar = $tipoSelect.attr('data-ocupa-plaza');
+        let ocupan = [];
+        try { ocupan = atributoRadar ? JSON.parse(atributoRadar) : []; } catch (e) { ocupan = []; }
+
+        const $opcion = $cargoSelect.find('option:selected');
+        const fuera = !!$cargoSelect.val() && $opcion.attr('data-en-plantilla') === 'false';
+        // Se lee ANTES del bucle: marcar `disabled` sobre la opción seleccionada
+        // puede hacer que el navegador deje de devolverla en `.val()`.
+        const tipoElegido = $tipoSelect.val();
+        let anulado = false;
+
+        $tipoSelect.find('option').each(function() {
+            if (!this.value) return;
+            const bloquear = fuera && ocupan.includes(parseInt(this.value));
+            this.disabled = bloquear;
+            if (bloquear && tipoElegido === this.value) anulado = true;
+        });
+
+        if (anulado) $tipoSelect.val('');
+
+        avisoFueraDePlantilla(fuera);
+
+        if (anulado) {
+            $tipoSelect.trigger('change.plaza');
+            window.mostrarToast(
+                'Este cargo está fuera de la plantilla aprobada: se ha quitado el tipo de contrato que ocupa plaza.',
+                'warning'
+            );
+        }
+    }
+
+    $cargoSelect.off('change.fueraPlantilla').on('change.fueraPlantilla', aplicarReglaFueraDePlantilla);
+
+    /* Igual que en el formulario de contrato: las opciones de cargo llegan por
+       la cascada HTMX sin disparar `change`, así que hay que reaplicar la regla
+       cuando el swap termina. */
+    document.body.addEventListener('htmx:afterSwap', function (evento) {
+        const destino = evento.detail.target ? evento.detail.target.id : '';
+        if (destino === 'id_cargo') aplicarReglaFueraDePlantilla();
+    });
+
+    aplicarReglaFueraDePlantilla();
     
     // Limpieza en Cascada de Cargo al cambiar Unidad o Dpto
     $('#id_unidad, #id_departamento').off('change.cascada').on('change.cascada', function() {

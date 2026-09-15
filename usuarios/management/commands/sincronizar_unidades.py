@@ -9,7 +9,8 @@ subunidades entran con ella. Dicho al revés, que es como se comprueba aquí:
 
 Ese invariante lo imponen dos piezas del sistema: `usuarios/forms.py`
 (`expandir_a_subunidades`) al guardar un usuario, y `strorganizativa/signals.py`
-cuando nace una subunidad o cambia de padre.
+cuando nace una subunidad o cambia de padre. Vale para los dos roles que usan
+unidades: el Moderador y el Observador acotado (ver `usuarios/alcance.py`).
 
 POR QUÉ HACE FALTA ESTE COMANDO IGUALMENTE
 ------------------------------------------
@@ -18,10 +19,11 @@ lo que entre por fuera del formulario: una importación, el shell, el admin de
 Django o un `set()` directo. Y cuando los datos se descuadran, el fallo es
 SILENCIOSO y caro:
 
-  * el moderador deja de ver a los trabajadores de esa subunidad en Contratos,
-    Informes, Dashboard, Pre-Nómina y Notificaciones;
-  * y no puede declarar su cierre mensual, porque `cierres.permisos.puede_declarar`
-    exige tener la unidad asignada y NIEGA declarar directamente la principal.
+  * el usuario deja de ver a los trabajadores de esa subunidad en Contratos,
+    Informes, Dashboard, Anexo 14, Pre-Nómina y Notificaciones;
+  * y el moderador no puede declarar su cierre mensual, porque
+    `cierres.permisos.puede_declarar` exige tener la unidad asignada y NIEGA
+    declarar directamente la principal.
 
 Nada avisa de ninguna de las dos cosas: simplemente no ve nada.
 
@@ -43,8 +45,8 @@ from usuarios.models import CustomUser
 class Command(BaseCommand):
     help = (
         "Aplica el invariante «quien lleva una Unidad Principal lleva también sus "
-        "subunidades» a los usuarios ya guardados. Use --simular para ver qué "
-        "cambiaría sin tocar nada."
+        "subunidades» a los usuarios ya guardados (Moderadores y Observadores "
+        "acotados). Use --simular para ver qué cambiaría sin tocar nada."
     )
 
     def add_arguments(self, parser):
@@ -54,12 +56,13 @@ class Command(BaseCommand):
             help="Muestra lo que cambiaría y NO escribe nada en la base de datos.",
         )
         parser.add_argument(
-            "--incluir-observadores",
+            "--solo-moderadores",
             action="store_true",
             help=(
-                "Aplica también el invariante a los Observadores. Por defecto solo "
-                "se tocan los Moderadores: el Observador ve toda la empresa por su "
-                "rol, así que sus unidades no deciden nada."
+                "Revisa únicamente a los Moderadores. Por defecto se revisan también "
+                "los Observadores que tengan unidades asignadas, porque desde que el "
+                "alcance del Observador se puede acotar (ver usuarios/alcance.py) sus "
+                "unidades deciden lo mismo que las de un Moderador."
             ),
         )
 
@@ -75,11 +78,16 @@ class Command(BaseCommand):
 
         nombre_de = dict(UnidadOrganizativa.objects.values_list("pk", "descripcion"))
 
-        filtro = {"es_moderador": True}
-        usuarios = list(CustomUser.objects.filter(**filtro).prefetch_related("unidades"))
-        if opciones["incluir_observadores"]:
+        usuarios = list(
+            CustomUser.objects.filter(es_moderador=True).prefetch_related("unidades"))
+        if not opciones["solo_moderadores"]:
+            # Solo los Observadores CON unidades: el que no tiene ninguna ve toda
+            # la empresa por su rol, y añadirle subunidades no cambiaría nada
+            # salvo convertirlo por sorpresa en un observador acotado.
             usuarios += list(
-                CustomUser.objects.filter(es_observador=True).prefetch_related("unidades")
+                CustomUser.objects.filter(es_observador=True, unidades__isnull=False)
+                .distinct()
+                .prefetch_related("unidades")
             )
 
         if not usuarios:

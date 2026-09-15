@@ -58,7 +58,12 @@
      instancia de Select2, y el nuevo llega sin inicializar. `initSelect2` ya
      destruye la instancia previa si la hubiera, así que llamarlo de más es
      inofensivo. */
-  const SELECTS = '#filtro_unidad_trabajadores, #id_calendario_asignar';
+  /* `#filtro_unidad_trabajadores` ya NO está en esta lista: dejó de ser un
+     `<select>` con Select2 y pasó a ser el control de fichas compartido
+     (`base/partials/selector_unidades.html`), el mismo de Informes RRHH, que se
+     inicializa solo desde `selector_unidades.js`. Aplicarle Select2 encima
+     resucitaría el `<select>` oculto que ese control usa como fuente de verdad. */
+  const SELECTS = '#filtro_departamento_trabajadores, #id_calendario_asignar';
 
   function initSelectsCalendario() {
     document.querySelectorAll(SELECTS).forEach(function (select) {

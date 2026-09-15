@@ -11,9 +11,7 @@ una sola implementación de la validación en las tres superficies: modal HTMX,
 panel de administración e importación.
 """
 
-import calendar
 from datetime import date
-from decimal import Decimal
 
 from django import forms
 
@@ -26,10 +24,9 @@ _TEXTO = {'class': 'form-control form-control-sm'}
 _SELECT = {'class': 'form-select form-select-sm'}
 _SWITCH = {'class': 'form-check-input'}
 
-
-def _limites_del_mes(anno, mes):
-    """Primer y último día del mes, para prerrellenar el período de pago."""
-    return date(anno, mes, 1), date(anno, mes, calendar.monthrange(anno, mes)[1])
+# El cálculo de las fechas del período vive en `servicios.limites_del_periodo()`:
+# lo necesitan igual el formulario (para proponerlas) y la vista que refresca el
+# bloque al cambiar de mes, y depende de la quincena, que es cosa del servicio.
 
 
 class NPagoHorasForm(forms.ModelForm):
@@ -151,6 +148,11 @@ class ReportePagoForm(forms.Form):
         (9, 'Septiembre'), (10, 'Octubre'), (11, 'Noviembre'), (12, 'Diciembre'),
     ]
 
+    #: Aspecto de los campos que solo informan. `disabled` (y no un simple
+    #: `readonly`) porque así Django ignora lo que llegue por POST y usa
+    #: siempre el `initial`: es un dato que decide el servidor, no el usuario.
+    _INFORMATIVO = {**_TEXTO, 'tabindex': '-1'}
+
     unidad = forms.ModelChoiceField(
         queryset=None, label='Unidad Organizativa',
         widget=forms.Select(attrs={**_SELECT}))
@@ -174,26 +176,51 @@ class ReportePagoForm(forms.Form):
     # cabecera del documento lo deriva `servicios._fondo_de_referencia()` de la
     # jornada más repetida del reporte. Se mantiene el campo en el modelo porque
     # el Excel oficial imprime ese número en su encabezado.
-    fondo_tarifa = forms.DecimalField(
-        label='Fondo para la tarifa horaria', min_value=Decimal('0.01'),
-        max_digits=6, decimal_places=2,
-        widget=forms.NumberInput(attrs={**_TEXTO, 'step': '0.01'}),
-        help_text='Divisor con el que se obtiene la tarifa horaria a partir del '
-                  'salario. Es una magnitud distinta de las horas del mes.')
+    #
+    # `fondo_tarifa` TAMPOCO se teclea ya. Era un divisor que el usuario nunca
+    # decidía —siempre aceptaba el que se le proponía— y que ya vivía en
+    # Configuración → Parámetros Generales, de donde lo toma ahora
+    # `servicios._fondo_de_tarifa()`. El reporte lo sigue congelando en su
+    # columna: un reporte cerrado debe poder recalcularse igual años después.
+
+    # Solo informa. Es el período de pago declarado en Configuración → Parámetros
+    # Generales, y es lo que decide si este mes admite un reporte o dos.
+    periodo_pago = forms.CharField(
+        label='Período de pago', required=False, disabled=True,
+        widget=forms.TextInput(attrs={**_INFORMATIVO}),
+        help_text='Se define en Configuración → Parámetros Generales.')
     fecha_desde = forms.DateField(
         label='Período de pago — desde',
         widget=forms.DateInput(attrs={**_TEXTO, 'type': 'date'}))
     fecha_hasta = forms.DateField(
         label='Período de pago — hasta',
         widget=forms.DateInput(attrs={**_TEXTO, 'type': 'date'}))
+
+    # Las tres firmas del encabezado del documento. Se recuerdan por usuario
+    # (`PreferenciasUsuario`), así que se escriben una vez y salen ya puestas en
+    # todos los reportes siguientes hasta que quien las usa las cambie.
     hecho_por = forms.CharField(
         label='Hecho por', required=False, max_length=150,
         widget=forms.TextInput(attrs={**_TEXTO}))
+    revisado_por = forms.CharField(
+        label='Revisado por', required=False, max_length=150,
+        widget=forms.TextInput(attrs={**_TEXTO}))
+    aprobado_por = forms.CharField(
+        label='Aprobado por', required=False, max_length=150,
+        widget=forms.TextInput(attrs={**_TEXTO}))
 
-    def __init__(self, *args, usuario=None, **kwargs):
+    def __init__(self, *args, usuario=None, quincena=None, **kwargs):
+        """`quincena` la pasa la vista que refresca el bloque del período.
+
+        Sirve para proponer las fechas correctas (del 1 al 15, del 16 al final o
+        el mes entero). Quién crea de verdad el reporte y con qué quincena lo
+        decide `servicios.crear_reporte()` con la unidad bloqueada; esto es solo
+        lo que se le enseña al usuario mientras rellena el formulario.
+        """
         super().__init__(*args, **kwargs)
+        from . import servicios
         from .filtros import unidades_gestionables
-        from .models import PlantillaReporte
+        from .models import PlantillaReporte, Quincena
         self.fields['unidad'].queryset = unidades_gestionables(usuario)
         self.fields['unidad'].empty_label = '— Seleccione —'
 
@@ -203,28 +230,48 @@ class ReportePagoForm(forms.Form):
             if usuario is not None else PlantillaReporte.objects.none())
         self.fields['plantilla'].empty_label = '— Seleccione —'
 
+        quincenal = servicios.es_pago_quincenal()
+        # `disabled=True` hace que Django tome SIEMPRE el `initial`, también en
+        # un formulario enlazado, así que se asigna fuera del `if not is_bound`.
+        self.initial['periodo_pago'] = 'Quincenal' if quincenal else 'Mensual'
+
         if not self.is_bound:
-            self.initial.setdefault('fondo_tarifa', self._fondo_de_tarifa())
             hoy = date.today()
-            self.initial.setdefault('anno', hoy.year)
-            self.initial.setdefault('mes', hoy.month)
-            primero, ultimo = _limites_del_mes(hoy.year, hoy.month)
-            self.initial.setdefault('fecha_desde', primero)
-            self.initial.setdefault('fecha_hasta', ultimo)
+            anno = self.initial.get('anno') or hoy.year
+            mes = self.initial.get('mes') or hoy.month
+            self.initial.setdefault('anno', anno)
+            self.initial.setdefault('mes', mes)
+
+            # Sin unidad elegida todavía no se sabe qué quincena tocará, así que
+            # se propone la primera: es la que corresponde en el caso normal —un
+            # mes que aún no tiene ningún reporte—.
+            if quincena is None:
+                quincena = Quincena.PRIMERA if quincenal else Quincena.MES_COMPLETO
+            desde, hasta = servicios.limites_del_periodo(anno, mes, quincena)
+            self.initial.setdefault('fecha_desde', desde)
+            self.initial.setdefault('fecha_hasta', hasta)
+
+            for campo, valor in self._firmas_recordadas(usuario).items():
+                self.initial.setdefault(campo, valor)
 
     @staticmethod
-    def _fondo_de_tarifa():
-        """Sugerencia tomada de la configuración global de Orbith.
+    def _firmas_recordadas(usuario):
+        """Los tres nombres del encabezado, tal como los dejó este usuario.
 
-        Es solo el valor inicial: una vez creado el reporte queda congelado en
-        él, así que cambiar la configuración más adelante no altera ningún
-        reporte existente.
+        Se guardan en `PreferenciasUsuario` al crear cada reporte, así que quien
+        prepara la nómina los escribe una vez y ya salen puestos siempre. Si
+        nunca ha escrito el «Hecho por», se propone su propio nombre, que es lo
+        que hacía `servicios.crear_reporte()` antes de existir esta memoria.
         """
-        from configuracion.models import Configuracion
-        configuracion = Configuracion.objects.first()
-        if configuracion and configuracion.fondo_tiempo_calc_tarif:
-            return configuracion.fondo_tiempo_calc_tarif
-        return Decimal('190.60')
+        if usuario is None or not usuario.is_authenticated:
+            return {}
+        preferencias = usuario.obtener_preferencias()
+        propio = (usuario.get_full_name() or '').strip() or usuario.get_username()
+        return {
+            'hecho_por': preferencias.reporte_hecho_por or propio[:150],
+            'revisado_por': preferencias.reporte_revisado_por,
+            'aprobado_por': preferencias.reporte_aprobado_por,
+        }
 
     def clean(self):
         datos = super().clean()

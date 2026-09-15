@@ -31,8 +31,17 @@
                   a la etiqueta que lee un lector de pantalla; por defecto,
                   «unidad». El control sirve para cualquier lista de nombres con
                   padre opcional, no solo para unidades organizativas.
+    unica         `True` para elegir UNA sola. El aspecto es el mismo; lo que
+                  cambia es que marcar una desmarca la anterior y el panel se
+                  cierra solo. Lo usa Pre-Nómina → Asignación de Trabajadores,
+                  donde la pantalla trabaja sobre una unidad cada vez. El
+                  <select> sigue siendo `multiple`: la restricción la impone el
+                  JavaScript, porque un <select> simple obliga al navegador a
+                  dejar siempre una opción marcada y entonces no habría forma
+                  de volver al estado «ninguna».
 {% endcomment %}
-<div class="chip-multiselect {{ clase_extra }}" id="{{ id_caja }}" data-marcador="{{ marcador|default:'Todas las unidades' }}">
+<div class="chip-multiselect {{ clase_extra }}" id="{{ id_caja }}" data-marcador="{{ marcador|default:'Todas las unidades' }}"
+     {% if unica %}data-unica="1"{% endif %}>
     <select class="chip-multiselect-native" name="{{ campo|default:'ueb' }}"
             {% if id_select %}id="{{ id_select }}"{% endif %} multiple hidden>
         {% for u in unidades %}

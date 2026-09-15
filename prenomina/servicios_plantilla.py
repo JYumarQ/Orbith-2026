@@ -306,7 +306,7 @@ def eliminar_plantilla(plantilla, usuario):
     usos = plantilla.reportes.count()
     if usos:
         ejemplos = ' · '.join(
-            f'{r.unidad_descripcion} {r.periodo.etiqueta}'
+            f'{r.unidad_descripcion} {r.etiqueta_periodo}'
             for r in plantilla.reportes.all()[:4])
         raise ErrorDePreNomina(
             f'No se puede eliminar «{plantilla.descripcion}»: ya se ha utilizado '

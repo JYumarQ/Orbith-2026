@@ -75,6 +75,44 @@ def _obtener_cargos(depto):
     return []
 
 
+def _escribir_fila_cargo(ws, fila, cargo, etiquetas_cat):
+    """Escribe un cargo en la fila indicada y devuelve su cantidad aprobada.
+
+    Lo usan las dos secciones de la hoja (plantilla aprobada y fuera de
+    plantilla) para que ambas se pinten exactamente igual.
+    """
+    ncargo = getattr(cargo, "ncargo", None)
+    cat_ocup = getattr(ncargo, "cat_ocupacional", "") if ncargo else ""
+    cat_label = etiquetas_cat.get(cat_ocup, cat_ocup)
+
+    grupo_escala_obj = getattr(ncargo, "grupo_escala", None) if ncargo else None
+    grupo_escala_nivel = getattr(grupo_escala_obj, "nivel", "") if grupo_escala_obj else ""
+
+    cant_aprobada = getattr(cargo, "cant_aprobada", 0) or 0
+
+    row_data = [
+        getattr(ncargo, "descripcion", "") if ncargo else "",
+        cat_label,
+        cant_aprobada,
+        cargo.rol.tipo if getattr(cargo, "rol", None) else "—",
+        cargo.nivel_preparacion.nombre if getattr(cargo, "nivel_preparacion", None) else "",
+        grupo_escala_nivel
+    ]
+
+    for col_idx, val in enumerate(row_data, start=1):
+        cell = ws.cell(row=fila, column=col_idx, value=val)
+        cell.font = Styles.FONT_DATA
+        cell.border = Styles.BORDER_BOTTOM_THIN
+        if col_idx == 1:
+            cell.alignment = Styles.ALIGN_INDENT
+        elif col_idx == 3:
+            cell.alignment = Styles.ALIGN_RIGHT
+        else:
+            cell.alignment = Styles.ALIGN_CENTER
+
+    return cant_aprobada
+
+
 class Anexo14Report(BaseExcelReport):
     title = "ANEXO 14 — ESTRUCTURA JERÁRQUICA Y PLANTILLA APROBADA"
     filename = "Anexo_14_Plantilla.xlsx"
@@ -157,37 +195,7 @@ class Anexo14Report(BaseExcelReport):
 
                 # Cargos filtrados
                 for cargo in cargos:
-                    ncargo = getattr(cargo, "ncargo", None)
-                    cat_ocup = getattr(ncargo, "cat_ocupacional", "") if ncargo else ""
-                    cat_label = etiquetas_cat.get(cat_ocup, cat_ocup)
-                    
-                    # Grupo escala
-                    grupo_escala_obj = getattr(ncargo, "grupo_escala", None) if ncargo else None
-                    grupo_escala_nivel = getattr(grupo_escala_obj, "nivel", "") if grupo_escala_obj else ""
-
-                    cant_aprobada = getattr(cargo, "cant_aprobada", 0) or 0
-                    subtotal_depto += cant_aprobada
-
-                    row_data = [
-                        getattr(ncargo, "descripcion", "") if ncargo else "",
-                        cat_label,
-                        cant_aprobada,
-                        cargo.rol.tipo if getattr(cargo, "rol", None) else "—",
-                        cargo.nivel_preparacion.nombre if getattr(cargo, "nivel_preparacion", None) else "",
-                        grupo_escala_nivel
-                    ]
-
-                    for col_idx, val in enumerate(row_data, start=1):
-                        cell = ws.cell(row=current_row, column=col_idx, value=val)
-                        cell.font = Styles.FONT_DATA
-                        cell.border = Styles.BORDER_BOTTOM_THIN
-                        if col_idx == 1:
-                            cell.alignment = Styles.ALIGN_INDENT
-                        elif col_idx == 3:
-                            cell.alignment = Styles.ALIGN_RIGHT
-                        else:
-                            cell.alignment = Styles.ALIGN_CENTER
-
+                    subtotal_depto += _escribir_fila_cargo(ws, current_row, cargo, etiquetas_cat)
                     data_rows.append(current_row)
                     current_row += 1
 
@@ -212,6 +220,71 @@ class Anexo14Report(BaseExcelReport):
             total_cell.alignment = Styles.ALIGN_RIGHT
             total_cell.border = Styles.BORDER_TOTALS
             current_row += 2
+
+            # --- SECCIÓN INDEPENDIENTE: CARGOS FUERA DE LA PLANTILLA APROBADA ---
+            # Misma estructura (departamento -> cargo) y su propio total. NO se
+            # suma a `total_unidad`: estas plazas existen y pueden tener gente,
+            # pero no forman parte de la plantilla aprobada por el organismo.
+            unidad_fuera = next(
+                (u for u in (datos.get("hijas_fuera_plantilla") or [])
+                 if getattr(u, "pk", None) == getattr(unidad, "pk", None)),
+                None
+            )
+            deptos_fuera = _obtener_departamentos(unidad_fuera) if unidad_fuera else []
+
+            if deptos_fuera:
+                ExcelHelpers.merge_and_style(
+                    ws, 1, current_row, 6, current_row,
+                    "CARGOS FUERA DE LA PLANTILLA APROBADA (no incluidos en el total anterior)",
+                    font=Styles.FONT_HEADER,
+                    fill=Styles.FILL_BRAND_LIGHT,
+                    alignment=Styles.ALIGN_LEFT
+                )
+                current_row += 1
+                total_fuera = 0
+
+                for depto in deptos_fuera:
+                    cargos_fuera = _obtener_cargos(depto)
+                    if not cargos_fuera:
+                        continue
+
+                    depto_desc = getattr(depto, "descripcion", "").upper()
+                    ExcelHelpers.merge_and_style(
+                        ws, 1, current_row, 6, current_row,
+                        f"  ▼ DEPARTAMENTO: {depto_desc}",
+                        font=Styles.FONT_DEPT,
+                        fill=Styles.FILL_BRAND_LIGHT,
+                        alignment=Styles.ALIGN_LEFT
+                    )
+                    current_row += 1
+                    subtotal_fuera = 0
+
+                    for cargo in cargos_fuera:
+                        subtotal_fuera += _escribir_fila_cargo(ws, current_row, cargo, etiquetas_cat)
+                        data_rows.append(current_row)
+                        current_row += 1
+
+                    ws.cell(row=current_row, column=1, value="Subtotal Departamento:").font = Styles.FONT_TOTAL
+                    ws.cell(row=current_row, column=1).alignment = Styles.ALIGN_RIGHT
+
+                    subtotal_cell = ws.cell(row=current_row, column=3, value=subtotal_fuera)
+                    subtotal_cell.font = Styles.FONT_TOTAL
+                    subtotal_cell.alignment = Styles.ALIGN_RIGHT
+
+                    total_fuera += subtotal_fuera
+                    current_row += 2
+
+                ws.cell(
+                    row=current_row, column=1,
+                    value="TOTAL FUERA DE LA PLANTILLA APROBADA:"
+                ).font = Styles.FONT_HEADER
+                ws.cell(row=current_row, column=1).alignment = Styles.ALIGN_RIGHT
+
+                total_fuera_cell = ws.cell(row=current_row, column=3, value=total_fuera)
+                total_fuera_cell.font = Styles.FONT_HEADER
+                total_fuera_cell.alignment = Styles.ALIGN_RIGHT
+                total_fuera_cell.border = Styles.BORDER_TOTALS
+                current_row += 2
 
             # Firmas personalizadas
             dir_ch = datos.get("director_ch") or {}

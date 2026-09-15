@@ -14,7 +14,7 @@
   guardar se reemplaza solo ese `<tr>`.
 {% endcomment %}
 
-{% block title %}{{ reporte.unidad_descripcion }} — {{ reporte.periodo.etiqueta }} | ORBITH{% endblock %}
+{% block title %}{{ reporte.unidad_descripcion }} — {{ reporte.etiqueta_periodo }} | ORBITH{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% estatico 'css/prenomina.css' %}">
@@ -35,7 +35,7 @@
           <p class="pn-vacio__texto">
             No todos los conceptos aparecen en todos los reportes. Marque las
             claves de ausencia y los pagos asociados que RRHH vaya a utilizar en
-            {{ reporte.periodo.etiqueta }}; la selección queda congelada en el
+            {{ reporte.etiqueta_periodo }}; la selección queda congelada en el
             reporte.
           </p>
           {% if puede_editar %}

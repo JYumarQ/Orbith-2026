@@ -23,7 +23,10 @@
                     
 
                     <div class="overflow-hidden">
-                        <h6 class="mb-0 fw-bold {% if not cargo.activo %}text-secondary{% else %}text-dark{% endif %} text-truncate" style="font-size: 0.85rem;">
+                        {% comment %} Ámbar = el cargo existe pero NO está en la plantilla aprobada.
+                           Mismo color que el resto de advertencias del sistema. {% endcomment %}
+                        <h6 class="mb-0 fw-bold {% if not cargo.activo %}text-secondary{% elif not cargo.en_plantilla %}{% else %}text-dark{% endif %} text-truncate"
+                            {% if cargo.en_plantilla %}style="font-size: 0.85rem;"{% else %}style="font-size: 0.85rem; color: #ffab00;" title="Fuera de la plantilla aprobada"{% endif %}>
                             {{ cargo.ncargo.descripcion }}
                         </h6>
                         
@@ -59,6 +62,10 @@
         <div class="text-center py-5">
             {% if q %}
                 <p class="text-muted mb-3">No hay cargos con ese nombre.</p>
+            {% elif filtro_plantilla == 'no' %}
+                <p class="text-muted mb-3">No hay cargos fuera de la plantilla aprobada.</p>
+            {% elif filtro_plantilla == 'si' %}
+                <p class="text-muted mb-3">No hay cargos dentro de la plantilla aprobada.</p>
             {% else %}
                 <p class="text-muted mb-3">No hay cargos definidos.</p>
             {% endif %}

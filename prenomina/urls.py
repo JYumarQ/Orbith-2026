@@ -92,6 +92,10 @@ urlpatterns = [
     path('', views.lista_reportes, name='lista_reportes'),
     path('buscar/', views.buscar_reportes, name='buscar_reportes'),
     path('nuevo/', views.nuevo_reporte, name='nuevo_reporte'),
+    # Bloque del período dentro del modal de alta. Se repinta al cambiar la
+    # unidad, el año o el mes, porque de esos tres depende qué quincena toca y,
+    # con ella, las fechas del período.
+    path('nuevo/periodo/', views.periodo_reporte, name='periodo_reporte'),
     path('cerrar-mes/', views.cerrar_mes, name='cerrar_mes'),
     path('<int:pk>/cerrar/', views.cerrar_reporte, name='cerrar_reporte'),
     path('<int:pk>/reabrir/', views.reabrir_reporte, name='reabrir_reporte'),

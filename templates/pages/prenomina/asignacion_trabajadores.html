@@ -37,10 +37,21 @@
     </div>
   </div>
 
+  {% comment %}
+    `orbith:unidades from:body`: el selector de Unidad Organizativa es el control
+    de fichas compartido, que no es un `<select>` con `change` sino un panel que
+    avisa con ese evento al cerrarse. Burbujea hasta `body`, así que se escucha
+    aquí en vez de dentro de la tarjeta —que se repinta entera en cada
+    intercambio y se llevaría por delante cualquier manejador atado a ella—.
+
+    `hx-include` apunta al contenedor de los filtros y no a un control suelto:
+    htmx incluye todos los campos que haya dentro, así que la recarga por unidad
+    conserva departamento, calendario y búsqueda.
+  {% endcomment %}
   <div id="zona_trabajadores"
        hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
-       hx-trigger="recargarTrabajadores from:body"
-       hx-include="#filtro_unidad_trabajadores"
+       hx-trigger="recargarTrabajadores from:body, orbith:unidades from:body"
+       hx-include="#filtros_trabajadores"
        hx-swap="innerHTML">
     {% include 'pages/prenomina/partials/tarjeta_trabajadores.html' %}
   </div>

@@ -133,8 +133,22 @@ class CargoPlantillaCreateView(RequiereEdicionMixin, SuccessMessageMixin, Create
 
     def form_invalid(self, form):
         # El formulario no es válido: deshacemos el desplazamiento aplicado en post()
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
 class CargoPlantillaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CargoPlantilla
@@ -207,8 +221,22 @@ class CargoPlantillaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Advert
             return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
 
 class CargoPlantillaDeleteView(RequiereEdicionMixin, DeleteView):
@@ -334,8 +362,22 @@ class DepartamentoCreateView(RequiereEdicionMixin, SuccessMessageMixin, CreateVi
 
     def form_invalid(self, form):
         # El formulario no es válido: deshacemos el desplazamiento aplicado en post()
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
     def form_valid(self, form):
         self.object = form.save()
@@ -381,8 +423,22 @@ class DepartamentoUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Adverten
             return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
     def form_valid(self, form):
         self.object = form.save()
@@ -470,8 +526,22 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
 
     def form_invalid(self, form):
         # Formulario inválido: deshacemos el desplazamiento
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
 class UnidadOrganizativaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = UnidadOrganizativa
@@ -536,8 +606,22 @@ class UnidadOrganizativaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Ad
             return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
+        # OJO CON EL ORDEN. `set_rollback(True)` deja la transacción marcada y, a
+        # partir de ese momento, PostgreSQL rechaza CUALQUIER consulta hasta que
+        # se cierre el bloque `atomic`. Pero la respuesta de un formulario
+        # inválido todavía tiene que construir su contexto y renderizar la
+        # plantilla, y eso consulta la base (el panel de advertencias del
+        # registro, `AdvertenciasDelRegistroMixin`). Marcando el rollback antes,
+        # esa consulta reventaba con `TransactionManagementError` y el usuario
+        # recibía un 500 en lugar del formulario con sus mensajes de error.
+        # Por eso se renderiza primero —con la transacción todavía viva— y solo
+        # después se marca el rollback, que es lo que deshace el desplazamiento
+        # de `orden_informe` aplicado en `post()`.
+        respuesta = super().form_invalid(form)
+        if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+            respuesta.render()
         transaction.set_rollback(True)
-        return super().form_invalid(form)
+        return respuesta
 
 class UnidadOrganizativaDeleteView(DeleteView):
     model = UnidadOrganizativa
@@ -701,6 +785,14 @@ def htmx_load_cargos(request, dpto_id):
     if q:
         cargos = cargos.filter(ncargo__descripcion__icontains=q)
 
+    # Filtro «En plantilla / Fuera de plantilla» de la tarjeta de Cargos.
+    # 'todos' (por defecto) no toca el queryset.
+    filtro_plantilla = request.GET.get('plantilla', 'todos')
+    if filtro_plantilla == 'si':
+        cargos = cargos.filter(en_plantilla=True)
+    elif filtro_plantilla == 'no':
+        cargos = cargos.filter(en_plantilla=False)
+
     # Anotaciones para estadísticas
     cargos = cargos.select_related('ncargo', 'rol').annotate(
         count_ind=Count('calta', filter=Q(calta__tipo__ocupa_plaza=True, calta__aspirante__estado='ACTIVO')),
@@ -730,7 +822,8 @@ def htmx_load_cargos(request, dpto_id):
     return render(request, 'pages/plantilla/partials/lista_cargos.html', {
         'cargos': cargos,
         'departamento_seleccionado': dpto,
-        'q': q
+        'q': q,
+        'filtro_plantilla': filtro_plantilla,
     })
 
 

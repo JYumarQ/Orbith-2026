@@ -103,6 +103,10 @@ class SelectCargosConPlazasWidget(forms.Select):
                     option['attrs']['data-designado'] = 'true' if datos.get('designado') else 'false'
                     # 🔥 NUEVO: data-chofer
                     option['attrs']['data-chofer'] = 'true' if datos.get('chofer') else 'false'
+                    # Un cargo fuera de la plantilla aprobada no puede sostener un
+                    # contrato que ocupe plaza: el JS apaga esos tipos al elegirlo.
+                    option['attrs']['data-en-plantilla'] = (
+                        'false' if datos.get('en_plantilla') is False else 'true')
             except Exception:
                 pass
         return option
@@ -437,7 +441,8 @@ class CAltaForm(forms.ModelForm):
                     'grupo': grupo,
                     'funcionario': getattr(c, 'funcionario', False),
                     'designado': getattr(c, 'designado', False),
-                    'chofer': es_chofer
+                    'chofer': es_chofer,
+                    'en_plantilla': getattr(c, 'en_plantilla', True)
                 }
             
             if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):
@@ -595,6 +600,17 @@ class CAltaForm(forms.ModelForm):
                     f'Debe seleccionar un motivo para los contratos de tipo "{tipo_contrato.descripcion}".'
                 )
 
+        # --- 1.c UN CARGO FUERA DE PLANTILLA NO ADMITE CONTRATOS QUE OCUPEN PLAZA ---
+        # El JS ya apaga esos tipos al elegir el cargo, pero el servidor es quien
+        # decide: una plaza que no está en la plantilla aprobada no puede sostener
+        # un contrato oficial.
+        if cargo and tipo_contrato and tipo_contrato.ocupa_plaza and not cargo.en_plantilla:
+            self.add_error(
+                'tipo',
+                f'El cargo "{cargo}" está fuera de la plantilla aprobada, por lo que no '
+                f'admite contratos que ocupen plaza.'
+            )
+
         # --- 2. VALIDACIÓN DE CAPACIDAD (Intacta) ---
         if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
             check_capacity = True
@@ -748,7 +764,8 @@ class MovimientoForm(CAltaForm):
                 mapa[c.pk] = {
                     'aprobadas': c.cant_aprobada, 
                     'ocupadas': c.plazas_fijas,
-                    'grupo': grupo
+                    'grupo': grupo,
+                    'en_plantilla': getattr(c, 'en_plantilla', True)
                 }
             
             if self.instance and self.instance.pk and getattr(self.instance.tipo, 'ocupa_plaza', False):

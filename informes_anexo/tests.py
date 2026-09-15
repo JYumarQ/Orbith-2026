@@ -7,11 +7,21 @@ aquí no se montan, y la vista ya lo tolera devolviendo listas vacías.
 from django.test import TestCase
 from django.urls import reverse
 
+from nomencladores.models import NTipoUnidadOrganizativa
+from strorganizativa.models import UnidadOrganizativa
 from usuarios.models import CustomUser
+
+from .views import _unidades_del_alcance
 
 
 class PermisosAnexo14Tests(TestCase):
-    """El Anexo 14 es solo para Administradores y Observadores (no Moderadores)."""
+    """El Anexo 14 lo consultan los tres roles; cada uno ve su alcance.
+
+    Antes el Moderador recibía un 403. Se le abrió al acotar el informe por
+    unidad: lo que se le negaba era ver la plantilla de la empresa entera, y eso
+    es justo lo que `_unidades_del_alcance()` impide ahora. El informe sigue
+    siendo de solo lectura para todos: no hay ninguna vista de escritura aquí.
+    """
 
     @classmethod
     def setUpTestData(cls):
@@ -37,9 +47,90 @@ class PermisosAnexo14Tests(TestCase):
         self.client.force_login(self.observador)
         self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 200)
 
-    def test_moderador_no_accede(self):
+    def test_moderador_accede(self):
+        """Antes era un 403. Ahora entra, pero acotado a sus unidades: eso lo
+        verifica `AlcanceAnexo14Tests`."""
         self.client.force_login(self.moderador)
-        self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 200)
+
+    def test_un_anonimo_sigue_fuera(self):
+        """Abrir el Anexo 14 a los tres roles no lo abre a quien no ha entrado.
+
+        Al anónimo lo ataja el middleware de sesión ANTES que el mixin, así que
+        la respuesta es una redirección al login (302) y no un 403: es lo
+        correcto —a quien no ha iniciado sesión se le pide que lo haga, no se le
+        dice que no tiene permiso—.
+
+        El caso del usuario AUTENTICADO y sin ningún rol no se puede montar en
+        una prueba: la restricción `exactamente_un_rol` de la base de datos lo
+        rechaza incluso con un `update()` directo. Que exista esa restricción es
+        precisamente lo que hace que ese caso no pueda darse en producción.
+        """
+        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
+        self.assertEqual(respuesta.status_code, 302)
+        self.assertIn('/login', respuesta['Location'])
+
+
+class AlcanceAnexo14Tests(TestCase):
+    """El árbol del Anexo 14 se acota a las unidades asignadas.
+
+    `_unidades_del_alcance()` es el único punto que lo decide, así que se prueba
+    él directamente y además una vez por la URL, para que no quede solo en la
+    teoría: los KPIs se calculan sobre el árbol ya acotado, de modo que un
+    usuario con alcance parcial nunca ve los totales de la empresa.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_principal = NTipoUnidadOrganizativa.objects.create(
+            descripcion='Direccion Anexo', es_principal=True)
+
+        cls.propia = UnidadOrganizativa.objects.create(
+            codigo_interno=911, descripcion='Direccion Propia Anexo',
+            tipo=tipo_principal, grupo_nomina=911)
+        cls.ajena = UnidadOrganizativa.objects.create(
+            codigo_interno=912, descripcion='Direccion Ajena Anexo',
+            tipo=tipo_principal, grupo_nomina=912)
+
+        cls.admin = CustomUser(username='anexo_alcance_admin', es_admin=True, is_active=True)
+        cls.admin.set_password('Clave12345!')
+        cls.admin.save()
+
+        cls.acotado = CustomUser(username='anexo_alcance_obs', es_observador=True, is_active=True)
+        cls.acotado.set_password('Clave12345!')
+        cls.acotado.save()
+        cls.acotado.unidades.add(cls.propia)
+
+        cls.global_ = CustomUser(username='anexo_alcance_obs_global', es_observador=True, is_active=True)
+        cls.global_.set_password('Clave12345!')
+        cls.global_.save()
+
+    def test_sin_unidades_el_observador_no_tiene_restriccion(self):
+        self.assertIsNone(_unidades_del_alcance(self.global_))
+        self.assertIsNone(_unidades_del_alcance(self.admin))
+
+    def test_con_unidades_solo_ve_las_suyas(self):
+        self.assertEqual(_unidades_del_alcance(self.acotado), {self.propia.pk})
+
+    def test_el_selector_de_unidades_no_ofrece_la_ajena(self):
+        self.client.force_login(self.acotado)
+        html = self.client.get(reverse('informes_anexo:anexo14')).content.decode()
+        self.assertIn('Direccion Propia Anexo', html)
+        self.assertNotIn('Direccion Ajena Anexo', html)
+
+    def test_el_administrador_las_sigue_viendo_todas(self):
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse('informes_anexo:anexo14')).content.decode()
+        self.assertIn('Direccion Propia Anexo', html)
+        self.assertIn('Direccion Ajena Anexo', html)
+
+    def test_pedir_una_unidad_ajena_por_la_url_no_la_devuelve(self):
+        """El acotado se hace en el servidor, no limitando el desplegable."""
+        self.client.force_login(self.acotado)
+        respuesta = self.client.get(
+            reverse('informes_anexo:anexo14'), {'padre': self.ajena.pk})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.context['padre_actual'], self.propia)
 
 
 class FirmasHtmxTests(TestCase):

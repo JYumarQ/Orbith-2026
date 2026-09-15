@@ -1,11 +1,16 @@
 {% comment %}
   Tarjeta 3 — Asignación de calendarios a trabajadores.
 
-  El select de Unidad Organizativa ya viene acotado al alcance del usuario
+  El selector de Unidad Organizativa ya viene acotado al alcance del usuario
   (`filtros.unidades_gestionables`): todas para el Administrador, las asignadas
   para el Moderador. Sin unidad elegida no se lista a nadie, porque una empresa
   entera son cientos de filas sobre las que no hay ninguna decisión útil que
-  tomar a la vez.
+  tomar a la vez. Elegir una unidad principal trae a los trabajadores de sus
+  subunidades (`_contexto_trabajadores`).
+
+  Los otros tres filtros —departamento, calendario y buscador— solo acotan lo
+  que ya trajo la unidad, y por eso llegan deshabilitados mientras no haya
+  ninguna elegida: sin unidad no hay nada que filtrar.
 
   La selección es múltiple por checkbox y la asignación se hace en masa. La
   asignación es permanente: se conserva hasta que se cambie, y cada reporte
@@ -39,37 +44,95 @@
     </div>
   </div>
 
+  {% comment %}
+    Barra de filtros. Los cuatro controles viven dentro de `#filtros_trabajadores`
+    y cada uno se incluye a sí mismo y a los demás con `hx-include`, así que los
+    filtros son ACUMULATIVOS: cambiar el departamento no borra lo escrito en el
+    buscador.
+
+    La Unidad Organizativa no lleva `hx-get` propio porque no es un `<select>`
+    visible sino el control de fichas compartido: avisa con `orbith:unidades`,
+    que burbujea hasta `body`, y ahí lo recoge el `hx-trigger` de
+    `#zona_trabajadores` (ver `asignacion_trabajadores.html`).
+  {% endcomment %}
   <div class="card-body border-bottom py-3">
-    <div class="d-flex flex-wrap align-items-end gap-3">
-      <div style="min-width: 280px;">
-        <label class="form-label small fw-bold text-muted mb-1" for="filtro_unidad_trabajadores">
-          Unidad Organizativa
+    <div class="row g-3 align-items-end" id="filtros_trabajadores">
+      <div class="col-12 col-lg-4">
+        <label class="form-label small fw-bold text-muted mb-1">Unidad Organizativa</label>
+        {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidad_trabajadores' campo='unidad' unidades=unidades seleccionadas=unidad_seleccionada marcador='Seleccione una unidad...' clase_extra='chip-multiselect--sm' titulo='unidad' unica=True %}
+      </div>
+
+      <div class="col-12 col-sm-6 col-lg-3">
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_departamento_trabajadores">
+          Departamento
         </label>
-        {% comment %}
-          Mismo Select2 que Unid. Org. en `contrato/add_contrato.html`: búsqueda
-          escribiendo y un solo valor. Lo inicializa `calendario.js::initSelect2`,
-          que lo rehace tras cada intercambio de HTMX —este bloque se repinta
-          entero al cambiar de unidad— y trae el puente que hace que Select2
-          dispare el `hx-get`.
-        {% endcomment %}
-        <select id="filtro_unidad_trabajadores" name="unidad" class="form-select form-select-sm select2"
-                data-placeholder="Seleccione una unidad..."
+        <select id="filtro_departamento_trabajadores" name="departamento"
+                class="form-select form-select-sm select2"
+                data-placeholder="Todos los departamentos"
+                {% if not unidad_actual %}disabled{% endif %}
                 hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
-                hx-target="#zona_trabajadores" hx-swap="innerHTML">
+                hx-target="#zona_trabajadores" hx-swap="innerHTML"
+                hx-include="#filtros_trabajadores">
           <option value=""></option>
-          {% for unidad in unidades %}
-            <option value="{{ unidad.pk }}" {% if unidad_actual == unidad.pk|stringformat:"s" %}selected{% endif %}>
-              {{ unidad.descripcion }}
+          {% for departamento in departamentos %}
+            <option value="{{ departamento.pk }}" {% if departamento_actual == departamento.pk|stringformat:"s" %}selected{% endif %}>
+              {{ departamento.descripcion }}
             </option>
           {% endfor %}
         </select>
       </div>
-      {% if trabajadores %}
-        <small class="text-muted pb-1">
-          {{ trabajadores|length }} trabajador{{ trabajadores|length|pluralize:"es" }} activo{{ trabajadores|length|pluralize:"s" }}
-        </small>
-      {% endif %}
+
+      <div class="col-12 col-sm-6 col-lg-2">
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_calendario_trabajadores">
+          Calendario
+        </label>
+        <select id="filtro_calendario_trabajadores" name="calendario"
+                class="form-select form-select-sm"
+                {% if not unidad_actual %}disabled{% endif %}
+                hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
+                hx-target="#zona_trabajadores" hx-swap="innerHTML"
+                hx-include="#filtros_trabajadores">
+          <option value="">Todos</option>
+          {% comment %} Es el filtro más útil de los tres: son los trabajadores
+             que impedirían crear el reporte del mes. {% endcomment %}
+          <option value="{{ sin_calendario }}" {% if calendario_actual == sin_calendario %}selected{% endif %}>
+            Sin asignar
+          </option>
+          {% for calendario in calendarios_activos %}
+            <option value="{{ calendario.pk }}" {% if calendario_actual == calendario.pk|stringformat:"s" %}selected{% endif %}>
+              {{ calendario.etiqueta }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-12 col-lg-3">
+        {% comment %} Mismo buscador que el listado de contratos: una sola caja
+           que vale para el nombre, el apellido, «nombre + apellido» y el número
+           de expediente. El retardo de 500 ms evita una consulta por tecla. {% endcomment %}
+        <label class="form-label small fw-bold text-muted mb-1" for="filtro_buscar_trabajadores">
+          Buscar
+        </label>
+        <div class="input-group input-group-sm input-group-merge">
+          <span class="input-group-text"><i class="fas fa-search"></i></span>
+          <input type="text" id="filtro_buscar_trabajadores" name="buscar"
+                 class="form-control" autocomplete="off"
+                 placeholder="Nombre, apellidos o expediente..."
+                 value="{{ busqueda }}"
+                 {% if not unidad_actual %}disabled{% endif %}
+                 hx-get="{% url 'prenomina:tarjeta_trabajadores' %}"
+                 hx-trigger="input changed delay:500ms, keyup[key=='Enter']"
+                 hx-target="#zona_trabajadores" hx-swap="innerHTML"
+                 hx-include="#filtros_trabajadores">
+        </div>
+      </div>
     </div>
+
+    {% if trabajadores %}
+      <small class="text-muted d-block mt-2">
+        {{ trabajadores|length }} trabajador{{ trabajadores|length|pluralize:"es" }} activo{{ trabajadores|length|pluralize:"s" }}
+      </small>
+    {% endif %}
   </div>
 
   {% if trabajadores %}
@@ -127,10 +190,15 @@
   {% else %}
     <div class="card-body text-center text-muted py-5">
       <i class="fas fa-users fs-3 d-block mb-2 opacity-50"></i>
-      {% if unidad_actual %}
-        Esta unidad no tiene trabajadores activos.
-      {% else %}
+      {% if not unidad_actual %}
         Seleccione una Unidad Organizativa para ver sus trabajadores.
+      {% elif hay_filtros %}
+        {% comment %} Distinguirlo importa: decir «no tiene trabajadores» con un
+           filtro puesto sería falso y llevaría a buscar el problema donde no
+           está. {% endcomment %}
+        Ningún trabajador de esta unidad coincide con los filtros aplicados.
+      {% else %}
+        Esta unidad no tiene trabajadores activos.
       {% endif %}
     </div>
   {% endif %}

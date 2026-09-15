@@ -26,7 +26,7 @@ class ConfiguracionForm(forms.ModelForm):
             'rama': 'Rama',
             'unidad_presup': 'Sector',
             'moneda_local': 'Moneda Local',
-            'periodo': 'Período',
+            'periodo': 'Período de Pago',
             'fondo_tiempo_calc_tarif': 'Fondo de tiempo para el cálculo',
             'correo': 'Correo',
             'telefono': 'Teléfono',
@@ -57,12 +57,23 @@ class ConfiguracionForm(forms.ModelForm):
             'rama': forms.TextInput(attrs={'class': 'form-control'}),
             'unidad_presup': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'moneda_local': forms.TextInput(attrs={'class': 'form-control'}),
-            'periodo': forms.NumberInput(attrs={'class': 'form-control'}),
+            # Se pinta como toggle Quincenal/Mensual en la plantilla. Los radios
+            # van ocultos por CSS y se recorren a mano (ver parametros_generales.html),
+            # igual que el toggle Empresarial/Presupuestado de `unidad_presup`.
+            'periodo': forms.RadioSelect(),
             'fondo_tiempo_calc_tarif': forms.NumberInput(attrs={'class': 'form-control'}),
             'correo': forms.EmailInput(attrs={'class': 'form-control'}),
             'telefono': forms.TextInput(attrs={'class': 'form-control'}),
             'direccion': forms.TextInput(attrs={'class': 'form-control', 'rows': 3}),
             'logo': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'porcentaje_horas_extras': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            
+
+        }
+        # El toggle solo ofrece Quincenal o Mensual, así que este error únicamente
+        # aparece si se manipula el envío. Aun así se traduce: Django lo emitiría
+        # en inglés porque LANGUAGE_CODE es 'en-us' (ver core/settings.py).
+        error_messages = {
+            'periodo': {
+                'invalid_choice': 'Seleccione un período de pago válido: Quincenal o Mensual.',
+            },
         }

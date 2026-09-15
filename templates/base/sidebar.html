@@ -202,13 +202,15 @@
                 </span>
               </li>
               {% endif %}
-              {% if user.es_admin or user.es_observador %}
+{% comment %} El Anexo 14 lo consultan los tres roles. El Moderador lo tenia oculto
+                 y cerrado con un 403; ahora entra, pero el informe le sale acotado a
+                 sus unidades (informes_anexo/views.py::_unidades_del_alcance), que era
+                 el motivo real de cerrarselo. {% endcomment %}
               <li class="gestor-plantilla-subitem">
                 <a href="{% url 'informes_anexo:anexo14' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14' %}activo{% endif %}">
                   <i class="bx bx-spreadsheet me-1"></i>Anexo 14
                 </a>
               </li>
-              {% endif %}
               <li class="gestor-plantilla-subitem">
                 <span class="gestor-plantilla-sublink" aria-disabled="true">
                   <i class="bx bx-file me-1"></i>Anexo 14A <span class="badge bg-label-secondary">Próximamente</span>

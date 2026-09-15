@@ -48,6 +48,7 @@
         <div class="mb-3">
           <label for="{{ form.unidades.id_for_label }}" class="form-label">Unidades</label>
           {{ form.unidades }}
+          <div id="ayuda_unidades" class="form-text" style="display: none;"></div>
           {% if form.unidades.errors %}
             <div class="text-danger small">{{ form.unidades.errors }}</div>
           {% endif %}
@@ -137,59 +138,50 @@
     // FUNCIÓN GLOBAL PARA HABILITAR/DESHABILITAR UNIDADES
     // ======================================================
     window.toggleUnidades = function() {
-      console.log('[DEBUG] Ejecutando toggleUnidades (Creación)...');
       const $unidades = $('#id_unidades');
+      const $ayuda = $('#ayuda_unidades');
       const isAdmin = $('#id_es_admin').is(':checked');
       const isModerador = $('#id_es_moderador').is(':checked');
       const isObservador = $('#id_es_observador').is(':checked');
 
-      console.log('[DEBUG] Admin:', isAdmin, 'Moderador:', isModerador, 'Observador:', isObservador);
-
-      // Primero, eliminar cualquier atributo disabled del select nativo
+      // Quitar el disabled del select nativo antes de recrear Select2.
       $unidades.removeAttr('disabled');
-
-      // Destruir Select2 si existe
       if ($unidades.hasClass('select2-hidden-accessible')) {
         $unidades.select2('destroy');
       }
 
-      // Determinar estado y recrear Select2
-      if (isAdmin || isObservador) {
-        // Deshabilitado (Admin u Observador)
-        $unidades.prop('disabled', true);
-        $unidades.select2({
-          dropdownParent: $('#crear_usuario'),
-          width: '100%',
-          placeholder: 'Buscar unidades...',
-          allowClear: true,
-          theme: 'bootstrap-5',
-          disabled: true
-        });
-        console.log('[DEBUG] Unidades DESHABILITADAS (Admin u Observador)');
-      } else if (isModerador) {
-        // Habilitado (Moderador)
-        $unidades.prop('disabled', false);
-        $unidades.select2({
-          dropdownParent: $('#crear_usuario'),
-          width: '100%',
-          placeholder: 'Buscar unidades...',
-          allowClear: true,
-          theme: 'bootstrap-5',
-          disabled: false
-        });
-        console.log('[DEBUG] Unidades HABILITADAS (Moderador)');
-      } else {
-        // Deshabilitado (Sin rol)
-        $unidades.prop('disabled', true);
-        $unidades.select2({
-          dropdownParent: $('#crear_usuario'),
-          width: '100%',
-          placeholder: 'Buscar unidades...',
-          allowClear: true,
-          theme: 'bootstrap-5',
-          disabled: true
-        });
-        console.log('[DEBUG] Unidades DESHABILITADAS (Sin rol)');
+      // Una unidad la lleva UN solo moderador, pero puede tener VARIOS
+      // observadores. El servidor apaga las opciones que ya tienen moderador
+      // (marcándolas con data-ocupada); aquí se vuelven a encender cuando el
+      // rol elegido es Observador, para el que no hay choque posible.
+      $unidades.find('option[data-ocupada]').prop('disabled', !isObservador);
+
+      // Las unidades las usan el Moderador y el Observador. El Administrador
+      // no: su alcance es su rol, no una relación en la base de datos.
+      const habilitado = isModerador || isObservador;
+      $unidades.prop('disabled', !habilitado);
+      $unidades.select2({
+        dropdownParent: $('#crear_usuario'),
+        width: '100%',
+        placeholder: 'Buscar unidades...',
+        allowClear: true,
+        theme: 'bootstrap-5',
+        disabled: !habilitado
+      });
+
+      // El significado de "sin unidades" cambia según el rol, y no es
+      // adivinable: para el Observador es toda la empresa, para el Moderador
+      // es nada. Se dice aquí para que el Administrador no tenga que saberlo.
+      if ($ayuda.length) {
+        if (isObservador) {
+          $ayuda.text('Sin unidades, el Observador ve toda la empresa. Si le asigna una o varias, solo verá los informes y las vistas de esas unidades.').show();
+        } else if (isModerador) {
+          $ayuda.text('El Moderador solo ve lo de sus unidades asignadas. Sin ninguna, no verá nada.').show();
+        } else if (isAdmin) {
+          $ayuda.text('El Administrador ve toda la empresa por su rol: no necesita unidades asignadas.').show();
+        } else {
+          $ayuda.hide();
+        }
       }
     };
 

@@ -160,6 +160,10 @@ class CierreCargo(models.Model):
     # --- Cifras de plantilla ---
     cant_aprobada = models.IntegerField(default=0)
     cant_cubierta = models.IntegerField(default=0)
+    # Se congela igual que el resto: un cargo fuera de la plantilla aprobada
+    # existía ese mes y su gente cobró, pero sus plazas NUNCA sumaron en los
+    # totales aprobados. Sin este campo la fotografía no podría reproducirlo.
+    en_plantilla = models.BooleanField(default=True)
     funcionario = models.BooleanField(default=False)
     designado = models.BooleanField(default=False)
     orden_informe = models.PositiveIntegerField(null=True, blank=True)

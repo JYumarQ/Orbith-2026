@@ -409,6 +409,18 @@ class AspiranteUpdateView(AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixi
         form.instance = aspirante
         mensaje = self.mensaje_de_guardado_exitoso(
             f'Datos de "{aspirante.nombre}" actualizados correctamente.')
+
+        # Salvo cuando quien pregunta es una pantalla que NO quiere recargar.
+        # El Gestor de Plantilla mantiene su estado (unidad, departamento y cargo
+        # seleccionados) solo en el navegador: una recarga lo perdería y devolvería
+        # al usuario al listado de aspirantes. Envía la petición por AJAX y se le
+        # responde con JSON para que cierre el modal y refresque sus columnas.
+        # El `messages.success` se omite en esa rama a propósito: no habrá ninguna
+        # página nueva donde consumirlo y quedaría colgado en la sesión.
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            from django.http import JsonResponse
+            return JsonResponse({'form_is_valid': True, 'mensaje': mensaje})
+
         messages.success(self.request, mensaje)
         return super().form_valid(form)
 

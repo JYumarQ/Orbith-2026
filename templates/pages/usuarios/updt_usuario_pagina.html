@@ -13,6 +13,13 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // En la version de pagina completa nadie llamaba a `toggleUnidades` (en el
+  // modal lo hace `list_usuarios.html` al abrirlo), asi que el selector de
+  // Unidades se quedaba en el estado que pinto el servidor. Con el Observador
+  // ya pudiendo tener unidades, eso dejaria apagadas las que lleva otro
+  // moderador, que para el si son asignables.
+  if (typeof window.toggleUnidades === 'function') window.toggleUnidades();
+
   var urlVolver = "{{ next|default:url_por_defecto }}";
   document.querySelectorAll('#editar_usuario_pagina [data-bs-dismiss="modal"]').forEach(function (boton) {
     boton.addEventListener('click', function () {
