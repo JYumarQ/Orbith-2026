@@ -12,7 +12,7 @@ Aprobadas, filtro Rechazadas») y obligaría al usuario a mirar en dos sitios pa
 qué está viendo.
 """
 
-from django.db.models import Q
+from django.db.models import Count, Q
 
 from solicitudes.models import EstadoSolicitud, Solicitud
 from solicitudes.operaciones import opciones_de_tipo
@@ -88,19 +88,27 @@ def opciones_de_filtro(usuario):
     # Un Moderador solo ve sus propias solicitudes, así que filtrar por moderador no le
     # aporta nada; el filtro por unidad tampoco, porque todas serán de las suyas.
     if es_administrador(usuario):
-        from strorganizativa.models import UnidadOrganizativa
-        from usuarios.models import CustomUser
+        # El nombre visible se trae en la MISMA consulta que averigua qué
+        # unidades y qué moderadores aparecen, cruzando la clave foránea. Antes
+        # eran dos pasos por desplegable —una consulta para saber los ids y otra
+        # para leer sus nombres—, es decir cuatro viajes a la base para pintar
+        # dos `<select>` que rara vez cambian.
+        opciones['unidades'] = list(
+            base.exclude(unidad__isnull=True)
+                .values_list('unidad_id', 'unidad__descripcion')
+                .distinct()
+                .order_by('unidad__descripcion'))
 
-        unidades_presentes = base.values_list('unidad', flat=True).distinct()
-        opciones['unidades'] = [
-            (unidad.pk, unidad.descripcion) for unidad in
-            UnidadOrganizativa.objects.filter(pk__in=unidades_presentes).order_by('descripcion')
-        ]
-        moderadores_presentes = base.values_list('solicitante', flat=True).distinct()
-        opciones['moderadores'] = [
-            (persona.pk, persona.get_full_name() or persona.username) for persona in
-            CustomUser.objects.filter(pk__in=moderadores_presentes).order_by('username')
-        ]
+        # `get_full_name()` es `first_name last_name`; se replica aquí para no
+        # tener que instanciar cada CustomUser solo por su nombre.
+        personas = (base.exclude(solicitante__isnull=True)
+                    .values_list('solicitante_id', 'solicitante__first_name',
+                                 'solicitante__last_name', 'solicitante__username')
+                    .distinct())
+        opciones['moderadores'] = sorted(
+            {(pk, f'{nombre} {apellido}'.strip() or usuario_red)
+             for pk, nombre, apellido, usuario_red in personas},
+            key=lambda par: (par[1] or '').lower())
 
     return opciones
 
@@ -178,12 +186,19 @@ def pestanas_con_contadores(usuario):
     por una variable, y crear un filtro de plantilla solo para eso añadiría un archivo y
     un import a cambio de nada.
     """
-    base = solicitudes_visibles(usuario)
+    # Los tres contadores salen de UNA sola consulta con `Count(filter=...)`:
+    # PostgreSQL recorre la tabla una vez y devuelve las tres cifras. Antes era
+    # un `.count()` por pestaña, o sea tres recorridos completos cada vez que se
+    # abría el listado.
+    totales = solicitudes_visibles(usuario).aggregate(**{
+        clave: Count('pk', filter=Q(estado__in=estados))
+        for clave, estados in PESTANAS.items()
+    })
     return [
         {
             'clave': clave,
             'etiqueta': ETIQUETAS_PESTANA[clave],
-            'total': base.filter(estado__in=estados).count(),
+            'total': totales.get(clave) or 0,
         }
-        for clave, estados in PESTANAS.items()
+        for clave in PESTANAS
     ]

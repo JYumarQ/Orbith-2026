@@ -45,6 +45,17 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise comprime los ficheros ESTÁTICOS, pero no el HTML que genera
+    # Django, y aquí las páginas son grandes: el Gestor de Plantilla son 270 KB
+    # y el Dashboard 229 KB, que comprimidos bajan a ~55 KB y ~45 KB (un 80%
+    # menos en CADA navegación). Con conexiones lentas es la diferencia más
+    # grande que se puede conseguir con una sola línea.
+    #
+    # Va después de SecurityMiddleware y antes de WhiteNoise, que es el orden
+    # que documenta Django. Las respuestas ya comprimidas (o demasiado cortas
+    # para que compense) las deja intactas, así que las exportaciones a Excel y
+    # Word no se ven afectadas.
+    'django.middleware.gzip.GZipMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -106,6 +117,17 @@ WSGI_APPLICATION = 'core.wsgi.application'
 
 # Las credenciales viven en `core/.env` (ignorado por git). Antes estaban aquí en
 # texto plano y viajaban en cada commit.
+# `CONN_MAX_AGE` reutiliza la conexión durante un minuto en vez de abrir y
+# cerrar una por CADA petición. Importa especialmente en Windows: allí cada
+# conexión nueva obliga a PostgreSQL a CREAR UN PROCESO que debe reengancharse
+# al segmento de memoria compartida. Es el mecanismo exacto que falla cuando el
+# sistema se queda sin memoria confirmable («could not reattach to shared
+# memory ... error code 1455»).
+#
+# `CONN_HEALTH_CHECKS` es obligatorio si se reutilizan conexiones: comprueba que
+# la conexión guardada sigue viva antes de usarla. Sin esto, tras un reinicio
+# del servicio de PostgreSQL la aplicación seguiría intentando una conexión
+# muerta y devolvería errores hasta que caducara el minuto.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -114,6 +136,8 @@ DATABASES = {
         'PASSWORD': env('DATABASE_PASSWORD'),
         'HOST': env('DATABASE_HOST'),
         'PORT': env('DATABASE_PORT'),
+        'CONN_MAX_AGE': 60,
+        'CONN_HEALTH_CHECKS': True,
     }
 }
 
@@ -245,7 +269,10 @@ else:
     SECURE_SSL_REDIRECT = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
-    # SOLO Postgres en prod (sin duplicados)
+    # SOLO Postgres en prod (sin duplicados). Producción REDEFINE el diccionario
+    # entero, así que `CONN_MAX_AGE` y `CONN_HEALTH_CHECKS` hay que repetirlos
+    # aquí: sin esto, la mejora solo existiría en desarrollo, que es justo donde
+    # menos falta hace. Ver la nota larga en el bloque de arriba.
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -254,6 +281,8 @@ else:
             'PASSWORD': env('DATABASE_PASSWORD'),
             'HOST': env('DATABASE_HOST'),
             'PORT': env('DATABASE_PORT'),
+            'CONN_MAX_AGE': 60,
+            'CONN_HEALTH_CHECKS': True,
         }
     }
 
