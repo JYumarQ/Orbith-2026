@@ -25,3 +25,14 @@ core/.env
 
 # Binario de Cloudflare Tunnel: se descarga, no se versiona.
 cloudflared.exe
+
+# Volcados y respaldos de la base de datos. NUNCA al repositorio: contienen
+# datos personales de los trabajadores (carnet de identidad, direccion,
+# telefono, salario). Una vez commiteados quedan en el historial para siempre,
+# aunque despues se borren, y este repositorio tiene remoto en GitHub.
+# Guardalos fuera del proyecto o en una carpeta ignorada.
+*.dump
+*.sql.gz
+backup_*.json
+*_backup.json
+respaldos/
