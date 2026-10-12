@@ -561,11 +561,25 @@
     gap: 1rem;
   }
   /* Con la barra colapsada (solo iconos, 3rem) no caben lado a lado: se apilan,
-     igual que el resto de la sidebar pasa a mostrar solo iconos centrados. */
+     igual que el resto de la sidebar pasa a mostrar solo iconos centrados.
+     `!important` porque la lista lleva la clase `flex-row` de Bootstrap, que fija
+     la fila con `!important`: sin él esta regla no se aplicaba nunca y la campana
+     se salía por la izquierda. El botón de la campana pierde su relleno (medía
+     58px en una barra de 48px) y el contador se encoge para caber encima. */
   @media (min-width: 1200px) {
+    html.menu-colapsado .menu-inner-bottom { padding-left: 0; padding-right: 0; }
     html.menu-colapsado .menu-inner-bottom #acciones-usuario {
-      flex-direction: column;
-      gap: .5rem;
+      flex-direction: column !important;
+      gap: .35rem;
+    }
+    html.menu-colapsado .menu-inner-bottom #notificacionesDropdown {
+      padding: .4rem .5rem;
+    }
+    html.menu-colapsado .menu-inner-bottom #badge-notificaciones {
+      top: -.15rem !important;
+      right: -.35rem !important;
+      font-size: .6rem;
+      padding: .2em .4em;
     }
   }
   /* Objetivo táctil mínimo recomendado (44px) en pantallas <1200px, igual que
