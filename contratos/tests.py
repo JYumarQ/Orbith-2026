@@ -1452,3 +1452,56 @@ class DatosDeMisionTests(TestCase):
             self.assertIn(campo, campos_alta)
             self.assertIn(campo, campos_cierre)
             self.assertNotIn(campo, campos_baja)
+
+
+class FechaEfectivaDeFirmaTests(TestCase):
+    """Error reportado por la empresa (12-10-2026): al exportar el Contrato de
+    Trabajo o su Modificación, la «Fecha Efectiva de Firma» salía con la fecha de
+    alta. Debe proponer la del último movimiento de nómina del contrato (el alta
+    cuenta como uno), buscado por el enlace y no por el número de expediente."""
+
+    def setUp(self):
+        cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+        self.aspirante = Aspirante.objects.create(nivel_educ='SA',
+            nombre='Trab', papellido='Firma', sapellido='Test',
+            doc_identidad='90010112391', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        self.contrato = CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente='12131', tipo=tipo_contrato,
+            cargo=cargo, fecha_alta=date(2026, 8, 20))
+
+    def _movimiento(self, fecha, expediente='12131', tipo='Movimiento de Nómina'):
+        return TMovimiento.objects.create(
+            aspirante=self.aspirante, contrato=self.contrato, no_expediente=expediente,
+            fecha_efectiva=fecha, cargo_anterior='---', cargo_nuevo='Especialista B',
+            salario_anterior=0, salario_nuevo=4000, tipo_movimiento=tipo)
+
+    def test_sin_movimientos_propone_la_fecha_de_alta(self):
+        self.assertEqual(self.contrato.fecha_efectiva_vigente(), date(2026, 8, 20))
+
+    def test_propone_la_del_ultimo_movimiento(self):
+        self._movimiento(date(2026, 8, 20), tipo='Alta Inicial')
+        self._movimiento(date(2026, 9, 20))
+        self._movimiento(date(2026, 9, 1))
+        self.assertEqual(self.contrato.fecha_efectiva_vigente(), date(2026, 9, 20))
+
+    def test_cuenta_el_movimiento_aunque_su_expediente_este_escrito_distinto(self):
+        # Caso real: el expediente se corrigió después y el movimiento conservó el viejo.
+        self._movimiento(date(2026, 9, 20), expediente='1213')
+        self.assertEqual(self.contrato.fecha_efectiva_vigente(), date(2026, 9, 20))
+
+    def test_nunca_propone_una_fecha_anterior_al_alta(self):
+        self._movimiento(date(2026, 7, 14), tipo='Alta Inicial')
+        self.assertEqual(self.contrato.fecha_efectiva_vigente(), date(2026, 8, 20))
+
+    def test_el_asistente_de_exportacion_la_propone(self):
+        self._movimiento(date(2026, 9, 20), expediente='1213')
+        admin = CustomUser.objects.create_user(username='admin_firma', password='x', es_admin=True)
+        self.client.force_login(admin)
+        respuesta = self.client.get(
+            reverse('exportar_contrato_word', kwargs={'pk': self.contrato.pk}))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.context['form'].initial['fecha_efectiva'], date(2026, 9, 20))

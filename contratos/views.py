@@ -2492,8 +2492,11 @@ class ExportarContratoWordView(FormView):
         if config and config.periodo:
             initial['periodo_pago'] = 'Quincenal' if config.periodo == 15 else 'Mensual'
             
-        if contrato.fecha_alta:
-            initial['fecha_efectiva'] = contrato.fecha_alta
+        # La del último movimiento de nómina del contrato (el alta cuenta como
+        # uno). Es solo la propuesta: RRHH puede cambiarla en el asistente.
+        fecha_efectiva = contrato.fecha_efectiva_vigente()
+        if fecha_efectiva:
+            initial['fecha_efectiva'] = fecha_efectiva
 
         # Extraer textos de nocturnidad
         textos_noc = []

@@ -107,6 +107,10 @@ CHANGELOG = [
             ("corregido", "El Anexo 14 dejaba fuera las unidades que no son "
                         "Principales, como las UEB de Florida, Nuevitas y "
                         "Despacho."),
+            ("corregido", "Al exportar el Contrato de Trabajo o su Modificación, "
+                        "la «Fecha Efectiva de Firma» salía con la fecha de alta. "
+                        "Ahora propone la del último movimiento de nómina del "
+                        "contrato, y se puede cambiar antes de exportar."),
             ("corregido", "Los filtros de Auditoría, Advertencias y Solicitudes "
                         "se cerraban al marcar la primera opción."),
             ("corregido", "Auditoría, Subsanación e Informe Inteligente dejaban "

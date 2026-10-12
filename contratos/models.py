@@ -406,6 +406,22 @@ class CAlta(ContratoBase):
         
         return ultimo_mov.fecha_efectiva if ultimo_mov else self.fecha_alta
 
+    def fecha_efectiva_vigente(self):
+        """Fecha efectiva del último movimiento de nómina de ESTE contrato, contando
+        el alta, que también es un movimiento («Alta Inicial»). Es la «Fecha
+        Efectiva de Firma» que propone el Asistente de Exportación Legal para el
+        Contrato de Trabajo y su Modificación (antes proponía siempre la de alta).
+
+        Busca por el ENLACE del movimiento (`TMovimiento.contrato`), no por el
+        número de expediente como `fecha_ultima_accion`: si el expediente se corrige
+        después de crear un movimiento, el movimiento conserva el número viejo y
+        por expediente dejaría de encontrarse (decisión de RRHH, 12-10-2026).
+        Nunca devuelve una fecha anterior a la de alta del contrato."""
+        ultima = self.trazabilidad.aggregate(ultima=models.Max('fecha_efectiva'))['ultima']
+        if ultima and (not self.fecha_alta or ultima > self.fecha_alta):
+            return ultima
+        return self.fecha_alta
+
     def movimientos_huerfanos_reenganchables(self):
         """Movimientos del histórico que son de este contrato pero quedaron sueltos.
 
