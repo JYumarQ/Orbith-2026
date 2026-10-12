@@ -17,7 +17,8 @@ class ConfiguracionForm(forms.ModelForm):
         fields = (
             'nombre_empresa', 'org_superior', 'reup', 'rama', 'unidad_presup', 'moneda_local', 'periodo',
             'fondo_tiempo_calc_tarif', 'porcentaje_horas_extras', 'correo', 'telefono', 'direccion', 'logo',
-            'provincia_entidad'  # ← AÑADIDO
+            'provincia_entidad',  # ← AÑADIDO
+            'auditoria_borrar_antigua', 'auditoria_anios_conservar',
         )
         labels = {
             'nombre_empresa': 'Nombre de la Empresa',
@@ -33,6 +34,8 @@ class ConfiguracionForm(forms.ModelForm):
             'logo': 'Logo',
             'direccion': 'Dirección',
             'provincia_entidad': 'Provincia Entidad',  # ← AÑADIDO
+            'auditoria_borrar_antigua': 'Borrar la auditoría antigua',
+            'auditoria_anios_conservar': 'Conservar (años)',
         }
         widgets = {
             'nombre_empresa': forms.TextInput(attrs={'class': 'form-control'}),
@@ -67,6 +70,12 @@ class ConfiguracionForm(forms.ModelForm):
             'direccion': forms.TextInput(attrs={'class': 'form-control', 'rows': 3}),
             'logo': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
             'porcentaje_horas_extras': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'auditoria_borrar_antigua': forms.CheckboxInput(attrs={
+                'class': 'form-check-input', 'id': 'id_auditoria_borrar_antigua', 'role': 'switch'}),
+            # Nace deshabilitado; lo enciende el switch (como «País» con «Misión»).
+            'auditoria_anios_conservar': forms.NumberInput(attrs={
+                'class': 'form-control', 'id': 'id_auditoria_anios_conservar',
+                'min': '2', 'max': '99', 'step': '1', 'disabled': 'disabled'}),
 
         }
         # El toggle solo ofrece Quincenal o Mensual, así que este error únicamente
@@ -76,4 +85,27 @@ class ConfiguracionForm(forms.ModelForm):
             'periodo': {
                 'invalid_choice': 'Seleccione un período de pago válido: Quincenal o Mensual.',
             },
+            'auditoria_anios_conservar': {
+                'invalid': 'Los años deben ser un número entero.',
+                'min_value': 'Hay que conservar como mínimo 2 años de auditoría.',
+                'max_value': 'Se pueden conservar como máximo 99 años de auditoría.',
+            },
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Django pinta `min="0"` por ser un entero positivo y pisa el de
+        # `Meta.widgets`; el mínimo real (2 años) es el del validador del modelo.
+        self.fields['auditoria_anios_conservar'].widget.attrs['min'] = '2'
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('auditoria_borrar_antigua'):
+            if not cleaned_data.get('auditoria_anios_conservar') and                     'auditoria_anios_conservar' not in self.errors:
+                self.add_error(
+                    'auditoria_anios_conservar',
+                    'Indique cuántos años de auditoría se conservan (de 2 a 99).')
+        else:
+            # Apagado es «Nunca»: no tiene sentido guardar un plazo.
+            cleaned_data['auditoria_anios_conservar'] = None
+        return cleaned_data

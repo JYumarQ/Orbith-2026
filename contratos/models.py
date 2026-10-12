@@ -8,10 +8,11 @@ from django.db.models.signals import post_delete, post_save
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from nomencladores.models import NTridente, NSalario, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
 from auditoria.models import Base
+from auditoria.registro_automatico import cambios_derivados, sin_auditoria_automatica
 from django.core.exceptions import ValidationError
 from contratos.salarios import calcular_salario
 
@@ -102,11 +103,11 @@ class ContratoBase(Base):
     #?CHOFER
     profesional = models.BooleanField(default=False)
 
-    #?MISION
-    mision = models.BooleanField(default=False, verbose_name="Misión")
-    pais = models.CharField(max_length=100, null=True, blank=True, verbose_name="País")
-    
-    
+    # La Misión (`mision`, `pais`, días e importe) vive solo en `CAlta`: es un
+    # dato del contrato vigente. Estaba aquí y por eso `CBaja` tenía también
+    # esas columnas, que nunca se rellenaban (la baja no las copia).
+
+
     class Meta:
         verbose_name = ("Contrato")
         verbose_name_plural = ("Contratos")
@@ -217,6 +218,22 @@ class CAlta(ContratoBase):
     jubilado_recontratado = models.BooleanField(default=False)
     en_proceso_movimiento = models.BooleanField(default=False, verbose_name="En Proceso de Movimiento")
 
+    #?MISION
+    # País, días e importe solo tienen sentido con `mision` activa: el formulario
+    # los vacía al apagarla. Pueden quedar vacíos (el dato puede llegar después
+    # del alta) y Subsanación los reclama: CTR-014 el país, CTR-021 días e importe.
+    mision = models.BooleanField(default=False, verbose_name="Misión")
+    pais = models.CharField(max_length=100, null=True, blank=True, verbose_name="País")
+    mision_dias = models.PositiveIntegerField(
+        null=True, blank=True,
+        validators=[MaxValueValidator(9999)],
+        verbose_name="Días de misión")
+    mision_importe = models.DecimalField(
+        max_digits=9, decimal_places=2,
+        null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        verbose_name="Importe de misión")
+
     salario_actual = models.DecimalField(
         max_digits=10, decimal_places=2,
         null=True, blank=True, editable=False,
@@ -241,6 +258,26 @@ class CAlta(ContratoBase):
             if condicion and condicion.nocturnidad_id is None:
                 raise ValidationError({
                     campo: f"La condición '{condicion.nombre}' no tiene una nocturnidad configurada."
+                })
+
+        # 3. UN CARGO FUERA DE PLANTILLA NO ADMITE CONTRATOS QUE OCUPEN PLAZA
+        #
+        # La regla ya la comprobaban el formulario (`CAltaForm.clean`) y el JS de
+        # los tres modales, pero ahí no bastaba: el admin de Django usa su propio
+        # formulario, y una importación o un script guardan el modelo directamente.
+        # Por esas puertas entraban justo los contratos que Subsanación (CTR-020)
+        # tiene que reclamar después. Aquí la regla vive donde vive el dato y la
+        # cumple todo el que guarde un CAlta.
+        #
+        # Se comprueba por `_id` para no disparar una consulta cuando no hay cargo
+        # ni tipo, que es el caso de un objeto a medio construir.
+        if self.cargo_id and self.tipo_id:
+            if self.tipo.ocupa_plaza and not self.cargo.en_plantilla:
+                raise ValidationError({
+                    'tipo': (
+                        f'El cargo "{self.cargo}" está fuera de la plantilla aprobada, '
+                        f'por lo que no admite contratos que ocupen plaza.'
+                    )
                 })
     class Meta:
         verbose_name = ("Alta")
@@ -267,14 +304,17 @@ class CAlta(ContratoBase):
         aspirante = Aspirante.objects.filter(doc_identidad = doc_aspirante).first()
         if aspirante:
             aspirante.estado = 'ACTIVO'
-            aspirante.save()
+            # Consecuencia del alta: la Auditoría ya registra la creación del contrato.
+            with cambios_derivados():
+                aspirante.save()
         
     @staticmethod
     def actualizar_plantilla(cargo_id):
         """Recalcula la cantidad cubierta del cargo contando los contratos reales."""
         cargo = CargoPlantilla.objects.filter(pk=cargo_id).first()
         if cargo:
-            cargo.refrescar_conteo_plazas()
+            with cambios_derivados():
+                cargo.refrescar_conteo_plazas()
         
     @staticmethod
     def _buscar_monto_salario(grupo_escala_id, rol_id, tridente_id):
@@ -509,7 +549,9 @@ class CAlta(ContratoBase):
                 try:
                     aspirante_obj = Aspirante.objects.get(pk=self.aspirante.pk)
                     aspirante_obj.estado = 'BAJA'
-                    aspirante_obj.save()
+                    # Consecuencia del borrado del contrato, que es lo que se audita.
+                    with cambios_derivados():
+                        aspirante_obj.save()
                 except Aspirante.DoesNotExist:
                     pass
 
@@ -733,6 +775,9 @@ class TMovimientoAgrupado(TMovimiento):
 # también en los borrados masivos (`QuerySet.delete()`, la acción «Eliminar
 # seleccionados» y la acción agrupada de `TMovimientoAgrupadoAdmin`), que NO pasan por
 # el `.delete()` de una instancia concreta.
+# En pausa del registro automático: todo lo que hace ya se audita a mano aquí
+# mismo, con el motivo de cada cambio (ver `auditoria/registro_automatico.py`).
+@sin_auditoria_automatica()
 def _al_eliminar_movimiento(sender, instance, **kwargs):
     """Audita CADA borrado de TMovimiento y, si deja al trabajador sin ningún
     movimiento de nómina, cierra su ciclo de contratación.

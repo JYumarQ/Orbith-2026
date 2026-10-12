@@ -12,7 +12,8 @@
     
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Resumen Puestos Clave" %}
 
-    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4">
+    {# Cabecera fija y justa en la pantalla (static/css/orbith-tablas.css). #}
+    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4 orb-tabla-card">
         <div class="card-header border-bottom bg-white py-3 d-flex align-items-center flex-wrap gap-3">
             <div class="me-2">
                 <small class="text-muted fw-bold" style="font-size: 11px;"><i class="bx bx-pulse me-1 text-orange-500"></i>Filtros de Análisis Dinámico</small>
@@ -115,8 +116,8 @@
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-moderna w-100 text-start border-collapse mb-0">
+        <div class="orb-tabla-scroll">
+            <table class="table table-moderna w-100 text-start border-collapse mb-0 orb-tabla-fija">
                 <thead>
                     <tr class="bg-slate-50 border-slate-100">
                         <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Cargo u Ocupación</th>

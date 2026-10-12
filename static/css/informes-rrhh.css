@@ -478,3 +478,175 @@
     vertical-align: middle;
     white-space: nowrap;
 }
+
+/* --------------------------------------------------------------------------
+   8. Cabecera de informe, pestañas y botón de descarga
+   --------------------------------------------------------------------------
+   Nacieron dentro del módulo Anexo, en un <style> privado de sus plantillas.
+   Suben aquí al estrenarlas la tercera pantalla (Cierres Mensuales): tres copias
+   de las mismas cuarenta líneas divergen en cuanto alguien toca una, que es
+   justo el problema que este fichero vino a cerrar.
+
+   La cabecera NO es una banda de color. Es una tarjeta blanca con el filo índigo
+   de las tarjetas de cifra: en esta paleta el color señala UN dato —lo que falta,
+   lo cubierto, el total—, y un titular no es un dato. Los fondos macizos que
+   llevaban antes estas cabeceras competían con las cifras que venían debajo.
+   -------------------------------------------------------------------------- */
+
+.inf-lienzo { background-color: #f4f7fb; }
+
+.inf-hero {
+    background: #fff;
+    border-radius: 1rem;
+    border-bottom: 4px solid var(--inf-indigo);
+    padding: 1.1rem 1.35rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.inf-hero h1,
+.inf-hero .inf-hero-titulo {
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.15rem;
+    color: var(--inf-gris-800);
+    font-size: 1.15rem;
+}
+.inf-hero p,
+.inf-hero .inf-hero-nota {
+    color: var(--inf-gris-400);
+    margin-bottom: 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+.inf-hero-icono {
+    width: 44px;
+    height: 44px;
+    border-radius: 0.7rem;
+    background: var(--inf-indigo-tinte);
+    color: var(--inf-indigo);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    flex-shrink: 0;
+}
+
+/* Pestañas: una por hoja del documento. El subrayado índigo marca la activa;
+   un fondo relleno daría a la pestaña más peso visual que a su contenido. */
+.inf-tabs {
+    border-bottom: 1px solid var(--inf-gris-200);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.15rem;
+}
+.inf-tabs .nav-link {
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    padding: 0.6rem 0.95rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--inf-gris-400);
+    white-space: nowrap;
+}
+.inf-tabs .nav-link:hover { color: var(--inf-gris-700); }
+.inf-tabs .nav-link.active {
+    color: var(--inf-indigo);
+    background: transparent;
+    border-bottom-color: var(--inf-indigo);
+}
+
+/* Contador dentro de una pestaña o de un rótulo. Deja comparar sin abrir. */
+.inf-cifra-chip {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.35rem;
+    background: var(--inf-gris-100);
+    color: var(--inf-gris-500);
+    font-size: 11px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+.inf-tabs .nav-link.active .inf-cifra-chip {
+    background: var(--inf-indigo-tinte);
+    color: var(--inf-indigo);
+}
+
+/* Botón de descarga. Verde de Excel y sólido, el mismo de la barra de los siete
+   informes: llevarse el informe es la misma acción en todas las pantallas y no
+   debe parecer otra según dónde se pulse. */
+.inf-btn-excel {
+    background: linear-gradient(135deg, #21a366 0%, #107c41 100%);
+    border: 0;
+    color: #fff;
+    font-weight: 600;
+    border-radius: 0.7rem;
+    padding: 0.5rem 1.05rem;
+    box-shadow: 0 4px 10px rgba(16, 124, 65, 0.25);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.inf-btn-excel:hover {
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(16, 124, 65, 0.35);
+}
+.inf-btn-excel i { color: #fff !important; }
+
+/* --------------------------------------------------------------------------
+   8. INSIGNIA DE ESTADO
+   --------------------------------------------------------------------------
+   El estado de algo que se declara, se cumple o se incumple: el cierre de una
+   unidad, hoy, y lo que venga después. Cuatro tonos y ninguno inventado —son
+   los mismos de la paleta de arriba—:
+
+     ok       esmeralda, «está hecho»
+     espera   azul, «le toca más adelante, no es un problema»
+     aviso    naranja, «esto hay que mirarlo»
+     critico  rojo, «esto se incumplió»
+     neutro   gris, «no hay dato todavía»
+
+   Sustituyen a los `bg-label-*` de Vuexy, que son de otra paleta: en la misma
+   pantalla convivían una tabla de Informes RRHH y unas insignias del tema, y el
+   verde de una no era el verde de la otra.
+
+   Las devuelve el MODELO (`cierres.EstadoCierreUnidad.color_badge` y
+   `cierres.integracion`), no la plantilla: el estado se decide en un sitio y se
+   pinta en varios.
+   -------------------------------------------------------------------------- */
+
+.inf-estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.4rem;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.inf-estado--ok      { background: var(--inf-verde-tinte);   color: var(--inf-verde);   border-color: #a7f3d0; }
+.inf-estado--espera  { background: #eff6ff;                  color: var(--inf-azul);    border-color: #bfdbfe; }
+.inf-estado--aviso   { background: var(--inf-naranja-tinte); color: var(--inf-naranja-oscuro); border-color: #fed7aa; }
+.inf-estado--critico { background: #fef2f2;                  color: #b91c1c;            border-color: #fecaca; }
+.inf-estado--neutro  { background: var(--inf-gris-100);      color: var(--inf-gris-500); border-color: var(--inf-gris-200); }
+
+/* Botón discreto de acción dentro de una tabla o un modal: abrir un historial,
+   ver una fotografía, cerrar un diálogo. Gris frío, para que no compita con la
+   acción principal de la pantalla ni con los botones de exportar. */
+.inf-btn-suave {
+    background: var(--inf-gris-100);
+    border: 1px solid var(--inf-gris-200);
+    color: var(--inf-gris-700);
+    font-weight: 600;
+}
+.inf-btn-suave:hover {
+    background: var(--inf-gris-200);
+    border-color: var(--inf-gris-400);
+    color: var(--inf-gris-900);
+}

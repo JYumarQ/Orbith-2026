@@ -4,6 +4,7 @@
 
 {% block content %}
 {% load static %}
+{% load estaticos %}
 
 <style>
     /* Mismo lenguaje visual que la tabla de Contratos: fila seleccionada resaltada y
@@ -52,8 +53,27 @@
 
 <div class="content-wrapper">
     <div class="container-xxl grow container-p-y">
-        <h4 class="fw-bold py-3 mb-4">
-            <span class="text-muted fw-light">Orbith /</span> Solicitudes
+        <h4 class="fw-bold py-3 mb-4 d-flex align-items-center flex-wrap gap-2">
+            <span><span class="text-muted fw-light">Orbith /</span> Solicitudes</span>
+            {% comment %} Recorridos (static/js/recorrido_solicitudes.js): decidir es del
+               Administrador; seguir las propias, del Moderador. {% endcomment %}
+            {% if user.es_admin or user.es_moderador %}
+            <span class="dropdown" style="font-size: 1rem;">
+                <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoSolicitudes"
+                        data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+                    <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                </button>
+                <ul class="dropdown-menu" style="font-size: .875rem;">
+                    {% if user.es_admin %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_solicitud_decidida:solicitudes">
+                        <i class="bx bx-check-double me-1"></i>Decidir una solicitud</button></li>
+                    {% else %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_solicitud_enviada:solicitudes">
+                        <i class="bx bx-list-check me-1"></i>Seguir mis solicitudes</button></li>
+                    {% endif %}
+                </ul>
+            </span>
+            {% endif %}
         </h4>
 
         {# ---------------- Pestañas: los tres estados que definió RRHH ---------------- #}
@@ -71,7 +91,8 @@
             {% endfor %}
         </ul>
 
-        <div class="card">
+        {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+        <div class="card orb-tabla-card">
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
 
                 {# ---------------- Barra de acciones (se activa al seleccionar fila) ---------------- #}
@@ -114,7 +135,6 @@
                 {# ---------------- Búsqueda ---------------- #}
                 <div id="search_container" class="ms-3 grow" style="max-width: 280px;">
                     <input type="hidden" id="filter_tab" name="tab" value="{{ tab_activa }}">
-                    <input type="hidden" id="filter_per_page" name="per_page" value="{{ current_page_size }}">
 
                     <div class="input-group input-group-merge">
                         <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
@@ -123,15 +143,16 @@
                                hx-get="{% url 'search_solicitudes' %}"
                                hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
                                hx-target="#filter_solicitudes_results"
-                               hx-include="#filter_tab, #filter_per_page, #filter_tipo, #filter_unidad, #filter_moderador, #filter_desde, #filter_hasta">
+                               hx-include="#filter_tab, #filter_tipo, #filter_unidad, #filter_moderador, #filter_desde, #filter_hasta">
                     </div>
                 </div>
 
                 <div class="d-flex ms-auto gap-2">
                     {# ---------------- Filtros ---------------- #}
                     <div class="btn-group">
+                        {# `data-bs-auto-close="outside"`: sin él, elegir un filtro cerraba el panel (mismo arreglo que Contratos y Auditoría). #}
                         <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow"
-                                data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Filtros">
                             <i class="fas fa-filter"></i>
                             {% if hay_filtros %}<span class="badge badge-dot bg-danger"></span>{% endif %}
                         </button>
@@ -201,8 +222,8 @@
                 </div>
             </div>
 
-            <div class="table-responsive text-nowrap">
-                <table class="table table-hover">
+            <div class="orb-tabla-scroll text-nowrap">
+                <table class="table orb-tabla">
                     <thead>
                         <tr>
                             <th>Solicitante</th>
@@ -219,10 +240,8 @@
                 </table>
             </div>
 
-            <div class="card-body pt-0">
-                <div id="table-pagination-footer">
-                    {% include 'pages/solicitudes/partials/pagination.html' %}
-                </div>
+            <div id="table-pagination-footer">
+                {% include 'pages/solicitudes/partials/pie_tabla.html' %}
             </div>
         </div>
     </div>
@@ -430,4 +449,6 @@
     // forma fiable de que uno registrado aquí se ejecute ANTES que el
     // global para suprimirlo, así que no se duplica un handler local.
 </script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_solicitudes.js' %}"></script>
 {% endblock %}

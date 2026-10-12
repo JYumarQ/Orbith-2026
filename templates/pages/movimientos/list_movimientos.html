@@ -3,7 +3,7 @@
 {% block title %}Movimientos de Nómina{% endblock %}
 
 {% block content %}
-{% load static %}
+{% load static estaticos %}
 
 <style>
     /* 1. Estado por DEFECTO: Amarillo (Pendiente) */
@@ -38,12 +38,32 @@
 
 <div class="content-wrapper">
     <div class="container-xxl grow container-p-y">
-        <h4 class="fw-bold py-3 mb-4">
-            <span class="text-muted fw-light">Contratos /</span> Movimientos de Nómina
-        </h4>
+        <h4 class="fw-bold py-3 mb-4 d-flex align-items-center flex-wrap gap-2">
+                <span><span class="text-muted fw-light">Contratos /</span> Movimientos de Nómina</span>
+                {% comment %} Menú de recorridos (static/js/orbith_recorrido.js, `data-recorrido`). {% endcomment %}
+                {% if puede_editar %}
+                <span class="dropdown">
+                    <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoMovimientos"
+                            data-bs-toggle="dropdown" aria-expanded="false"
+                            data-rol="{% if user.es_admin or user.is_superuser %}admin{% elif user.es_moderador %}moderador{% else %}observador{% endif %}"
+                            title="Recorridos guiados de esta pantalla">
+                        <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                    </button>
+                    <ul class="dropdown-menu" style="font-size: .875rem;">
+                        <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_interno:movnomina">
+                            <i class="bx bx-sync me-1"></i>Confirmar un movimiento</button></li>
+                        {% if user.es_moderador and not user.es_admin %}
+                        <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_recibido:movnomina">
+                            <i class="bx bx-transfer me-1"></i>Recibir un contrato de otro moderador</button></li>
+                        {% endif %}
+                    </ul>
+                </span>
+                {% endif %}
+            </h4>
 
-        <div class="card">
-            
+        {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+        <div class="card orb-tabla-card">
+
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <h5 class="mb-0">Solicitudes Pendientes</h5>
 
@@ -63,8 +83,8 @@
                 {% endif %}
             </div>
 
-            <div class="table-responsive text-nowrap">
-                <table class="table table-hover">
+            <div class="orb-tabla-scroll text-nowrap">
+                <table class="table orb-tabla">
                     <thead>
                         <tr>
                             <th style="cursor:pointer;" onclick="ordenarTablaMovimientos(0, 'number')">
@@ -81,10 +101,11 @@
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="table-border-bottom-0">
+                    <tbody class="table-border-bottom-0" id="tablaMovimientosPendientes">
                         {% for c in object_list %}
                         <tr class="cursor-pointer row-pendiente fila-movimiento"
                             onclick="seleccionarFila(this)"
+                    data-pk="{{ c.pk }}"
                             ondblclick="abrirModalHistorico('{% url 'historico_trabajador' c.aspirante.pk %}')"
 
                             data-url-movimiento="{% url 'movimiento_contrato' c.pk %}"
@@ -129,21 +150,7 @@
                 </table>
             </div>
             
-            {% if is_paginated %}
-            <div class="card-footer py-3">
-                <nav aria-label="Page navigation">
-                    <ul class="pagination justify-content-center m-0">
-                        {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
-                        {% endif %}
-                        <li class="page-item disabled"><span class="page-link">Pág {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span></li>
-                        {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
-            {% endif %}
+            {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=page_obj querystring='' nombre='pendientes' %}
         </div>
     </div>
 </div>
@@ -156,6 +163,8 @@
 
 {% block extra_scripts %}
 <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_movimiento.js' %}"></script>
 <script>
     var $ = jQuery.noConflict();
 

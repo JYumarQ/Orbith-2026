@@ -1,0 +1,189 @@
+{% extends 'base/base.html' %}
+{% load static %}
+{% load informe_inteligente_extras %}
+
+{% comment %} Anexo 14-A: el resumen cuantitativo de la Plantilla de Cargos.
+
+   Hermano del Anexo 14 y con su misma piel —comparten la hoja de estilo y el
+   bloque de firmas—, pero enseña otra cosa: aquí no se lista ni un cargo, solo
+   se cuentan plazas por categoría ocupacional.
+
+   Sin unidad elegida sale el RESUMEN DE EMPRESA (una fila por unidad raíz); con
+   una unidad elegida, el 14-A de esa unidad (sus Direcciones, sus Grupos y el
+   Subtotal de cada bloque). Los dos niveles los arma `informes_anexo/anexo14a.py`
+   y llegan aquí como una lista plana de filas, cada una con su `nivel`.
+
+   El formulario conserva el id `formFiltrosAnexo14` a propósito: es el que busca
+   `partials/bloque_firmas.html` por `hx-include` y por el atributo `form=` de sus
+   campos, y ese parcial se comparte con el Anexo 14. {% endcomment %}
+
+{% block title %}Anexo 14A{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
+{% include "pages/informes_anexo/partials/estilos_anexo.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y anx-wrapper inf-lienzo">
+
+    <!-- ===== CABECERA ===== -->
+    <div class="inf-hero d-md-flex justify-content-between align-items-center gap-3 anx-no-print">
+        <div class="d-flex align-items-center gap-3">
+            <span class="inf-hero-icono"><i class="bi bi-calculator-fill"></i></span>
+            <div>
+                <h1 class="h4 mb-0 d-flex align-items-center flex-wrap gap-2"><span>Anexo 14A — Resumen de la Plantilla de Cargos</span>{% include 'pages/informes_anexo/partials/ayuda_recorrido_anexo.html' with anexo='14a' %}</h1>
+                <p>Conteo oficial de plazas aprobadas por categoría ocupacional.</p>
+            </div>
+        </div>
+        {% include "pages/informes_anexo/partials/acciones_export.html" with url_propio='informes_anexo:anexo14a_excel' nombre_propio='Anexo 14A' %}
+    </div>
+
+    <form method="get" id="formFiltrosAnexo14">
+
+        <!-- ===== METADATOS INSTITUCIONALES ===== -->
+        {% comment %} Los mismos datos que encabezan el Excel y salidos del mismo sitio
+           (Parámetros Generales), para que el papel y la pantalla no puedan discrepar. {% endcomment %}
+        <div class="anx-panel">
+            <div class="anx-panel-head">
+                <span><i class="bi bi-bank2 me-1 text-warning"></i>Información institucional y delimitación territorial</span>
+            </div>
+            <div class="p-3">
+                <div class="row g-2">
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-building-fill"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Empresa</span>
+                                <span class="anx-meta-valor">{{ cab_empresa|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-diagram-2-fill"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Organismo</span>
+                                <span class="anx-meta-valor">{{ cab_organismo|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-geo-alt-fill"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Provincia</span>
+                                <span class="anx-meta-valor">{{ cab_provincia|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-pin-map-fill"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Municipio</span>
+                                <span class="anx-meta-valor">{{ cab_municipio|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-upc-scan"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Código REUP</span>
+                                <span class="anx-meta-valor font-monospace">{{ cab_reup|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-4 col-xxl-2">
+                        <div class="anx-meta-card">
+                            <span class="anx-meta-icono"><i class="bi bi-calendar-event-fill"></i></span>
+                            <div>
+                                <span class="anx-meta-label">Generado</span>
+                                <span class="anx-meta-valor">{{ fecha_generacion|date:"d/m/Y" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ===== KPIs ===== -->
+        {% comment %} Las mismas tarjetas de cifra que Puestos Clave (`inf-kpi`): blancas,
+           con la cifra siempre oscura y solo el filo inferior y el icono a color. Que la
+           cifra no cambie de color es lo que deja comparar las seis de un vistazo; antes
+           cada tarjeta llevaba el suyo y la fila se leía como seis avisos distintos.
+
+           La primera va sólida para cerrar la fila con peso, como la cuarta de Puestos
+           Clave. {% endcomment %}
+        <div class="row g-2 my-3">
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="inf-kpi inf-kpi--solida">
+                    <div class="inf-kpi-cabeza">
+                        <span class="inf-kpi-icono"><i class="bx bx-briefcase"></i></span>
+                        <span class="inf-kpi-rotulo">Total</span>
+                    </div>
+                    <div class="inf-kpi-cifra">{{ resumen.total.total }}</div>
+                    <div class="inf-kpi-pie">Plazas aprobadas</div>
+                </div>
+            </div>
+            {% for clave, rotulo, nombre, categorias in columnas_14a %}
+                <div class="col-6 col-md-4 col-xl-2">
+                    <div class="inf-kpi anx-kpi-cat" data-cat="{{ clave }}">
+                        <div class="inf-kpi-cabeza">
+                            <span class="inf-kpi-icono"><i class="bx bx-user"></i></span>
+                            <span class="inf-kpi-rotulo">{{ rotulo }}</span>
+                        </div>
+                        <div class="inf-kpi-cifra">{{ resumen.total|get_item:clave }}</div>
+                        <div class="inf-kpi-pie">{{ nombre }}</div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- ===== SELECTOR, PESTAÑAS Y HOJAS ===== -->
+        {% include "pages/informes_anexo/partials/selector_y_pestanas.html" with url_panel='informes_anexo:anexo14a_panel_unidad' titulo_res='Resumen' %}
+
+        <div class="anx-panel">
+            <div class="tab-content">
+                {% comment %} El Resumen viene con la página: es la hoja por la que se
+                   entra y la que da sentido a las demás. Debajo, sus cargos fuera de
+                   plantilla en su propia tabla, como en el libro. {% endcomment %}
+                <div class="tab-pane fade show active" id="hoja-resumen" role="tabpanel">
+                    <div class="anx-tree-padre">
+                        <span><i class="bx bx-table me-1"></i>Resumen por unidad</span>
+                        <span class="small">Cifras oficiales de la plantilla aprobada</span>
+                    </div>
+                    <div class="orb-tabla-scroll orb-tabla-alto">
+                        {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=resumen.filas total=resumen.total %}
+                    </div>
+
+                    {% if resumen_fuera.total.total %}
+                        <div class="anx-aviso-fuera">
+                            <span><i class="bx bx-error-circle me-1"></i>Cargos fuera de la plantilla aprobada</span>
+                            <span class="small">No suman en el Total de arriba</span>
+                        </div>
+                        <div class="orb-tabla-scroll orb-tabla-alto">
+                            {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=resumen_fuera.filas total=resumen_fuera.total %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% comment %} Las de unidad llegan vacías: HTMX las rellena al pulsarlas. {% endcomment %}
+                {% for u in unidades %}
+                    <div class="tab-pane fade" id="hoja-u{{ u.pk }}" role="tabpanel">
+                        <div class="text-center text-muted py-5">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <div class="small mt-2">Cargando {{ u.descripcion }}…</div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ===== FIRMAS ===== -->
+        {% include "pages/informes_anexo/partials/bloque_firmas.html" %}
+    </form>
+</div>
+{% endblock %}

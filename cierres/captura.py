@@ -128,6 +128,8 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         motivo_descripcion=motivo.descripcion if motivo else '',
         mision=bool(contrato.mision),
         pais=contrato.pais or '',
+        mision_dias=contrato.mision_dias,
+        mision_importe=contrato.mision_importe,
         fecha_alta=contrato.fecha_alta,
         duracion=contrato.duracion,
         salario=contrato.salario_actual,

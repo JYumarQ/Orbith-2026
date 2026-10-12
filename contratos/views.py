@@ -37,7 +37,11 @@ from django.http import HttpResponse, Http404
 from datetime import datetime
 from .forms import ExportarContratoWordForm
 from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
+from auditoria.models import AccionAuditoria
+from auditoria import registro_automatico
+from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
 from .filtros import aplicar_filtros, contratos_visibles
+from .annos_servicio import annos_y_pago
 # Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
 # devuelve None para el Administrador, que sigue guardando directamente.
 from solicitudes.integracion import interceptar
@@ -92,9 +96,9 @@ class ContratoListView(ListView):
         ))
 
     def get_paginate_by(self, queryset):
-        # PROTECCIÓN: Si viene vacío (''), usar 8 por defecto
-        page_size = self.request.GET.get('per_page')
-        return int(page_size) if page_size else 8
+        # Paginación común: las filas por página del usuario (core/paginacion.py).
+        from core.paginacion import filas_por_pagina
+        return filas_por_pagina(self.request)
 
     ordering = ['-fecha_alta']
 
@@ -163,10 +167,6 @@ class ContratoListView(ListView):
         context['filtro_departamento'] = self.request.GET.getlist('departamento')
         context['filtro_cargo'] = self.request.GET.getlist('cargo')
 
-        # LA CLAVE: Enviar la variable al HTML desde la carga inicial
-        page_size = self.request.GET.get('per_page')
-        context['current_page_size'] = str(page_size) if page_size else '8'
-
         # Modal de exportación a Excel filtrada por Unidad Organizativa (ver
         # exportar_contratos_excel): quien ve toda la empresa puede elegir
         # "Todas" o una/varias UO de toda la app; quien tiene el alcance acotado
@@ -185,9 +185,16 @@ class ContratoListView(ListView):
 class MovimientoNominaListView(ListView):
     model = CAlta
     # Usaremos la nueva ruta de plantilla que acordamos
-    template_name = "pages/movimientos/list_movimientos.html" 
-    paginate_by = 8
+    template_name = "pages/movimientos/list_movimientos.html"
     ordering = ['-fecha_alta']
+    # Pie común de las tablas con enlaces (base/partials/tabla_paginacion_enlaces.html),
+    # que usa `?pagina=N`.
+    page_kwarg = 'pagina'
+
+    def get_paginate_by(self, queryset):
+        # Filas por página del usuario, comunes a todas las tablas (core/paginacion.py).
+        from core.paginacion import filas_por_pagina
+        return filas_por_pagina(self.request)
 
     def get_queryset(self):
         # FILTRO CLAVE: Solo mostramos los marcados como "En Proceso"
@@ -320,14 +327,49 @@ def obtener_datos_previos(request):
     # 3. No se encontró nada
     return JsonResponse({'existe': False})
 
+#: Prefijos del buscador de Contratos (ver `core/busqueda.py`). `COD:` es de
+#: Subsanación: aquí no filtra y el buscador avisa (`busqueda_prefijos.js`).
+PREFIJOS_CONTRATOS = ('E', 'N', 'CI', 'CA', 'U')
+
+
+def _aplicar_busqueda_contratos(qs, texto):
+    """Texto libre (expediente, nombre o carnet) y prefijos, sin distinguir acentos."""
+    busqueda = interpretar(texto)
+    qs = qs.alias(_nombre=sin_acentos(Concat(
+        'aspirante__nombre', Value(' '), 'aspirante__papellido', Value(' '),
+        'aspirante__sapellido')))
+
+    for palabra in busqueda.libre.split():
+        qs = qs.filter(
+            Q(no_expediente__icontains=palabra)
+            | Q(_nombre__contains=normalizar(palabra))
+            | Q(aspirante__doc_identidad__icontains=palabra))
+
+    for valor in busqueda.valores('E'):
+        numero = solo_digitos_sin_ceros(valor)
+        qs = (qs.filter(no_expediente__regex=r'^0*%s$' % numero) if numero is not None
+              else qs.filter(no_expediente__iexact=valor.strip()))
+    for valor in busqueda.valores('N'):
+        for palabra in valor.split():
+            qs = qs.filter(_nombre__contains=normalizar(palabra))
+    for valor in busqueda.valores('CI'):
+        qs = qs.filter(aspirante__doc_identidad__startswith=valor.replace(' ', ''))
+    if busqueda.valores('CA'):
+        qs = qs.alias(_cargo=sin_acentos('cargo__ncargo__descripcion'))
+        for valor in busqueda.valores('CA'):
+            qs = qs.filter(_cargo__contains=normalizar(valor))
+    if busqueda.valores('U'):
+        qs = qs.alias(_unidad=sin_acentos(
+            'cargo__departamento__unidad_organizativa__descripcion'))
+        for valor in busqueda.valores('U'):
+            qs = qs.filter(_unidad__contains=normalizar(valor))
+    return qs
+
+
 def search_contratos(request):
     # 1. Obtener parámetros de filtros
     query = request.GET.get('filter_contrato', '').strip()
-    page_num = request.GET.get('page', 1)
-    page_size = request.GET.get('per_page')
-    if not page_size:
-        page_size = '8'
-    
+
     # 2. QuerySet Base con el Grafo Relacional expandido (Corrección N+1),
     # acotado al alcance del usuario (ver contratos/filtros.py::contratos_visibles)
     qs = contratos_visibles(request.user).select_related(
@@ -347,17 +389,7 @@ def search_contratos(request):
 
     # 4. Buscador Inteligente (Concatenación)
     if query:
-        qs = qs.annotate(
-            nombre_completo=Concat(
-                'aspirante__nombre', Value(' '), 
-                'aspirante__papellido', Value(' '), 
-                'aspirante__sapellido'
-            )
-        ).filter(
-            Q(no_expediente__icontains=query) |
-            Q(nombre_completo__icontains=query)|
-            Q(aspirante__doc_identidad__icontains=query)
-        )
+        qs = _aplicar_busqueda_contratos(qs, query)
 
     # 5. ORDENAMIENTO COMPLETO EN EL SERVIDOR (Todas las páginas)
     sort_col = request.GET.get('sort', '')
@@ -397,16 +429,15 @@ def search_contratos(request):
             # lo que suponía una consulta a NSalario por fila del listado completo.
             contratos_list.sort(key=lambda x: x.salario_actual or 0, reverse=reverse_sort)
 
-    # 6. Paginación SOBRE la lista ya ordenada
-    paginator = Paginator(contratos_list, int(page_size))
-    page_obj = paginator.get_page(page_num)
+    # 6. Paginación SOBRE la lista ya ordenada (común: core/paginacion.py)
+    from core.paginacion import paginar
+    page_obj = paginar(request, contratos_list)
 
     return render(request, 'pages/contrato/partials/filter_contratos_list.html', {
-        'object_list': page_obj,  
-        'page_obj': page_obj,     
-        'paginator': paginator,   
-        'search_url': 'search_contrato', 
-        'current_page_size': str(page_size)  
+        'object_list': page_obj,
+        'page_obj': page_obj,
+        'paginator': page_obj.paginator,
+        'search_url': 'search_contrato',
     })
 
 
@@ -448,6 +479,9 @@ def solicitar_movimiento_nomina(request, pk):
             if not es_cancelacion:
                 from progreso.servicios import completar_tarea
                 completar_tarea(request.user, 'primer_movimiento_cedido')
+                from ranking.models import Actividad
+                from ranking.servicios import registrar_actividad
+                registrar_actividad(request.user, Actividad.ENVIO_MOVIMIENTO, detalle=contrato)
 
             return JsonResponse({'success': True, 'message': mensaje})
         except Exception as e:
@@ -945,7 +979,10 @@ class ContratoCreateView(RequiereEdicionMixin, CreateView):
             # Capturador dinámico de errores para el SweetAlert
             error_mensaje = None
             if 'no_expediente' in form.errors:
-                error_mensaje = f"El Número de Expediente ya está en uso por un contrato activo."
+                # El error REAL del campo (duplicado, más de 5 dígitos, letras,
+                # cero...). Antes cualquiera de ellos se anunciaba como "ya está
+                # en uso", lo que despistaba cuando el problema era otro.
+                error_mensaje = form.errors['no_expediente'][0]
             elif 'cargo' in form.errors:
                 error_mensaje = form.errors['cargo'][0]
             elif 'reg_militar' in form.errors:
@@ -1109,7 +1146,15 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
 
 
 
-class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
+class ContratoBajaView(RequiereEdicionMixin, DeleteView):
+    """Da de BAJA un contrato: lo archiva en la lista de Bajas (`CBaja`), con su
+    movimiento de nómina y su evento de Auditoría «Baja». No es borrar un
+    contrato: en Contratos no se elimina nada, solo se da de baja.
+
+    Hereda de `DeleteView` solo por `get_object()`; todo el proceso está en
+    `post()`. La URL conserva su nombre histórico, `del_contrato`, para no tocar
+    las plantillas ni el JavaScript que la usan.
+    """
     model = CAlta
 
     # Solo POST. La baja se pide desde el modal que ya vive en `list_contrato.html`,
@@ -1169,8 +1214,11 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
         # =================================================================
 
         try:
-            # 4. Iniciar Transacción
-            with transaction.atomic():
+            # 4. Iniciar Transacción. El registro automático de Auditoría queda en
+            # pausa: la baja se audita abajo como UN solo evento (la eliminación
+            # del contrato con los datos de la baja), no como los cinco cambios que
+            # hace por dentro (movimiento, CBaja, aspirante, plazas y el borrado).
+            with transaction.atomic(), registro_automatico.sin_auditoria_automatica():
                 # A. SALVAR EL HISTORIAL EXISTENTE
                 TMovimiento.objects.filter(contrato=contrato).update(
                     aspirante=contrato.aspirante,
@@ -1247,7 +1295,23 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
                     contrato.aspirante.save()
 
                 # F. Borrar contrato
+                foto_contrato = registro_automatico.fotografia(contrato)
+                contrato_pk = contrato.pk
                 contrato.delete()
+
+                causa = NCausaAltaBaja.objects.filter(pk=causa_id).first()
+                registro_automatico.registrar(
+                    contrato, AccionAuditoria.BAJA,
+                    object_id=contrato_pk, antes=foto_contrato,
+                    despues={
+                        'Causa de baja': str(causa) if causa else '—',
+                        'Fecha de baja': fecha_baja.strftime('%d/%m/%Y'),
+                        'Fecha del documento': fecha_efectiva.strftime('%d/%m/%Y'),
+                        'Cobro por el sistema de pago': 'Sí' if cobro_sistema else 'No',
+                        'Completar cargo': 'Sí' if completar_cargo_val else 'No',
+                        'Actividad realizada': actividad_manual or '—',
+                        'Observaciones': observaciones_texto or '—',
+                    })
 
                 # G. Refrescar el número oficial en la Base de Datos
                 if cargo_obj:
@@ -1257,9 +1321,10 @@ class ContratoDeleteView(RequiereEdicionMixin, DeleteView):
             pdf_url = reverse('imprimir_movimiento', kwargs={'pk': movimiento_baja.pk})
 
             from progreso.servicios import completar_tarea
-            tarea = completar_tarea(request.user, 'primera_baja')
-            if tarea:
-                messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+            completar_tarea(request.user, 'primera_baja')
+            from ranking.models import Actividad
+            from ranking.servicios import registrar_actividad
+            registrar_actividad(request.user, Actividad.BAJA, detalle=contrato)
 
             return JsonResponse({
                 'success': True,
@@ -1329,7 +1394,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
         return context
     
     # ... (form_valid y form_invalid se quedan igual) ...
+    # Sin registro automático de Auditoría: el movimiento se audita abajo como una
+    # sola modificación del contrato; el TMovimiento que se crea es su documento.
     @transaction.atomic
+    @registro_automatico.sin_auditoria_automatica()
     def form_valid(self, form):
         try:
             # 1. Obtener contrato y fecha nueva
@@ -1454,8 +1522,12 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             )
 
             # PASO 5: ACTUALIZAR CONTRATO
+            antes_auditoria = registro_automatico.fotografia(contrato_previo, con_vacios=True)
             form.instance.en_proceso_movimiento = False
             self.object = form.save()
+            registro_automatico.registrar(
+                self.object, AccionAuditoria.MOVIMIENTO, antes=antes_auditoria,
+                despues=registro_automatico.fotografia(self.object, con_vacios=True))
 
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
@@ -1471,9 +1543,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                     codigo_tarea = 'primer_movimiento_recibido'
 
             from progreso.servicios import completar_tarea
-            tarea = completar_tarea(usuario, codigo_tarea)
-            if tarea:
-                messages.info(self.request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+            completar_tarea(usuario, codigo_tarea)
+            from ranking.models import Actividad
+            from ranking.servicios import registrar_actividad
+            registrar_actividad(usuario, Actividad.MOVIMIENTO, detalle=self.object)
 
             if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
 
@@ -1896,6 +1969,36 @@ def cargar_salario(request):
 
     return render(request, "pages/contrato/partials/cargar_salario.html", context)
 
+
+def cargar_annos_servicio(request):
+    """Años de servicio y su pago, a partir de la F. Alta Entidad del formulario.
+
+    Va aparte de `cargar_salario()` y no mezclado con él porque no comparten NADA:
+    el salario de escala depende del cargo y del tridente, y este importe depende
+    solo de una fecha. Unirlos obligaría a recalcular la escala salarial cada vez
+    que se toca una fecha, y al revés.
+
+    La fecha llega en `hx-vals` leída del DOM y no por `hx-include`, porque el
+    campo `fecha_alta_entidad` nace `disabled` en el formulario y un campo
+    deshabilitado no viaja en el envío: con `hx-include` la primera carga llegaría
+    siempre sin fecha y borraría el valor.
+    """
+    texto = (request.GET.get('fecha_alta_entidad') or '').strip()
+    fecha = None
+    if texto:
+        try:
+            fecha = datetime.strptime(texto, '%Y-%m-%d').date()
+        except ValueError:
+            # Una fecha a medio teclear no es un error: se trata como «todavía no
+            # hay fecha» y los dos campos salen vacíos.
+            fecha = None
+
+    annos, pago = annos_y_pago(fecha)
+    return render(request, "pages/contrato/partials/cargar_annos_servicio.html", {
+        'annos_servicio': annos if fecha else '',
+        'pago_annos_servicio': f'{pago:.2f}' if pago is not None else '',
+    })
+
 # --- AÑADIR AL FINAL DE views.py ---
 
 def cargar_cargos_contrato(request):
@@ -2088,7 +2191,10 @@ def finalizar_contrato_wizard(request, aspirante_id):
        
         
         try:
-            with transaction.atomic():
+            # Sin registro automático de Auditoría: el alta se audita como UNA
+            # creación del contrato al final, ya con los datos del movimiento si lo
+            # hubo (aquí el contrato se guarda dos veces y nace un TMovimiento).
+            with transaction.atomic(), registro_automatico.sin_auditoria_automatica():
                 # 1. CREAR CONTRATO (Siempre se hace)
                 contrato = CAlta(**borrador_db)
                 contrato.aspirante = aspirante
@@ -2202,15 +2308,20 @@ def finalizar_contrato_wizard(request, aspirante_id):
                             'error_popup': mensaje_final,
                         }, status=400)
                 
+                registro_automatico.registrar(
+                    contrato, AccionAuditoria.ALTA,
+                    despues=registro_automatico.fotografia(contrato))
+
                 # 3. LIMPIEZA
                 del request.session['contrato_borrador']
                 if 'aspirante_borrador' in request.session:
                     del request.session['aspirante_borrador']
 
                 from progreso.servicios import completar_tarea
-                tarea = completar_tarea(request.user, 'primera_contratacion')
-                if tarea:
-                    messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+                completar_tarea(request.user, 'primera_contratacion')
+                from ranking.models import Actividad
+                from ranking.servicios import registrar_actividad
+                registrar_actividad(request.user, Actividad.ALTA, detalle=contrato)
 
                 return JsonResponse({
                     'form_is_valid': True,

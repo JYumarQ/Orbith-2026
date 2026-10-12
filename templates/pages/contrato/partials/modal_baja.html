@@ -1,0 +1,286 @@
+{% comment %}
+Formulario de Baja: ÚNICO para toda la aplicación.
+
+Antes había dos copias (Lista de Contratos y Gestor de Plantilla) que se
+fueron separando: la del Gestor no tenía Observaciones, no avisaba de que la
+Fecha de Baja no puede ser anterior al último movimiento, no apagaba
+"Confirmar Baja" mientras faltaran datos, dejaba vacía la Actividad y no
+ofrecía el PDF al terminar. Se dejó solo la de Contratos, que era la completa,
+y vive aquí para que las dos pantallas usen exactamente la misma.
+
+Uso: incluir este parcial y abrirlo con
+
+    window.OrbithBaja.abrir({
+        url, expediente, nombre, actividad, fechaLimite,
+        alTerminar: function () { ...refrescar la pantalla... }
+    });
+
+Necesita `causas_baja` en el contexto. jQuery y SweetAlert solo se usan
+dentro de las funciones, así que este script puede ir antes de que se carguen.
+{% endcomment %}
+<div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-label-danger">
+                <h5 class="modal-title" style="color: #ff3e1d !important;">
+                    <i class="fas fa-user-times me-2"></i>Formulario de Baja
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-3" id="bajaDatosTrabajador">
+                    <div class="col-md-4">
+                        <label class="form-label" for="baja_expediente">No. Expediente</label>
+                        <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label" for="baja_nombre">Trabajador</label>
+                        <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
+                    </div>
+                    <div class="col-md-12 mt-2">
+                        <label class="form-label" for="baja_actividad">Actividad que realizaba</label>
+                        <input type="text" id="baja_actividad" name="actividad_realizada" class="form-control fw-bold text-primary">
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <form id="formBajaContrato">
+                    <input type="hidden" id="baja_contrato_id">
+                    <input type="hidden" id="baja_url_post">
+                    <input type="hidden" id="baja_fecha_limite">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha" name="fecha_baja" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="baja_fecha_efectiva" class="form-label">Fecha de Documento <span class="text-danger">*</span></label>
+                            <input type="date" id="baja_fecha_efectiva" name="fecha_efectiva" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="baja_causa" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Causa de Baja <span class="text-danger">*</span></label>
+                        <select id="baja_causa" name="causa_baja" class="form-select" required>
+                            <option value="">Seleccione una causa...</option>
+                            {% for causa in causas_baja %}
+                                <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="baja_observaciones" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Observaciones</label>
+                        <textarea class="form-control" name="observaciones" id="baja_observaciones" rows="2" placeholder="Detalles adicionales sobre la baja (Opcional)..."></textarea>
+                    </div>
+                    <div class="mb-3 border-top pt-3 mt-3" id="bajaInterruptores">
+                        <div class="form-check form-switch form-switch-lg mb-3">
+                            <input class="form-check-input" type="checkbox" id="switchCobroSistema">
+                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema">
+                                Cobró sistema de pago
+                            </label>
+                        </div>
+                        <div class="form-check form-switch form-switch-lg mb-2">
+                            <input class="form-check-input" type="checkbox" id="switchCompletarCargo" checked>
+                            <label class="form-check-label fw-bold ms-2" for="switchCompletarCargo">
+                                Completar cargo
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarBaja" onclick="validarYConfirmarBaja()">Confirmar Baja</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    // Lo que hay que hacer al terminar una baja con éxito (refrescar la tabla
+    // o las columnas). Lo indica cada pantalla al abrir el formulario.
+    let alTerminar = null;
+
+    function abrir(datos) {
+        datos = datos || {};
+        if (!datos.url) return;
+        alTerminar = typeof datos.alTerminar === 'function' ? datos.alTerminar : null;
+
+        document.getElementById('baja_expediente').value = datos.expediente || '';
+        document.getElementById('baja_nombre').value = datos.nombre || '';
+        document.getElementById('baja_actividad').value = datos.actividad || '';
+        document.getElementById('baja_url_post').value = datos.url;
+        // Fecha del último movimiento del contrato: la Fecha de Baja no puede ser anterior.
+        document.getElementById('baja_fecha_limite').value = datos.fechaLimite || '';
+
+        const hoy = new Date().toISOString().split('T')[0];
+        document.getElementById('baja_fecha').value = hoy;
+        document.getElementById('baja_fecha_efectiva').value = hoy;
+        document.getElementById('baja_causa').value = '';
+        document.getElementById('baja_observaciones').value = '';
+        // Interruptores a su valor inicial en cada baja: antes, en Contratos,
+        // conservaban lo marcado en la baja anterior.
+        document.getElementById('switchCobroSistema').checked = false;
+        document.getElementById('switchCompletarCargo').checked = true;
+
+        $('#modalBajaContrato').modal('show');
+        iniciarValidacionBaja();
+    }
+
+    // =======================================================
+    // MOTOR DE VALIDACIÓN DE BAJAS
+    // =======================================================
+    function iniciarValidacionBaja() {
+        const $form = $('#formBajaContrato');
+        const $btnConfirmar = $('#btnConfirmarBaja');
+
+        const fechaLimiteInput = document.getElementById('baja_fecha_limite');
+        const fechaLimiteStr = fechaLimiteInput ? fechaLimiteInput.value : '';
+        const obligatorios = ['fecha_baja', 'fecha_efectiva', 'causa_baja'];
+
+        function pintarBorde(input, esValido) {
+            /* El color va donde SE VE. «Causa de Baja» es un <select> y Select2
+               lo mantiene oculto detrás de su propia caja, asi que pintar el
+               <select> no se notaba. `OrbithValidacionVisual.objetivo()`
+               devuelve la caja de Select2 cuando la hay, y el propio campo en
+               los demas casos: mismo criterio que el resto de la aplicacion. */
+            let $el = window.OrbithValidacionVisual
+                ? window.OrbithValidacionVisual.objetivo(input)
+                : $(input);
+            if (esValido) {
+                $el.removeClass('border-warning').addClass('border-success');
+                $(input).parent().find('.error-cronologico').remove();
+            } else {
+                $el.removeClass('border-success').addClass('border-warning');
+            }
+
+            const errores = $form.find('.border-warning').length;
+            $btnConfirmar.prop('disabled', errores > 0);
+        }
+
+        $form.off('change input').on('change input', 'input, select', function () {
+            const name = this.name;
+            const valor = $(this).val();
+            let noEstaVacio = valor && valor.trim() !== '';
+
+            // 1. La Fecha de Baja no puede ser anterior al último movimiento.
+            if (name === 'fecha_baja') {
+                if (!noEstaVacio) {
+                    pintarBorde(this, false);
+                } else if (fechaLimiteStr && valor < fechaLimiteStr) {
+                    pintarBorde(this, false);
+                    let $parent = $(this).parent();
+                    if ($parent.find('.error-cronologico').length === 0) {
+                        const fFmt = fechaLimiteStr.split('-').reverse().join('/');
+                        $parent.append(`<small class="text-danger fw-bold error-cronologico mt-1 d-block">Error: No puede ser anterior al ${fFmt}</small>`);
+                    }
+                } else {
+                    pintarBorde(this, true);
+                }
+            }
+            // 2. Fecha de Documento y Causa: solo exigen no estar vacíos.
+            else if (obligatorios.includes(name)) {
+                pintarBorde(this, noEstaVacio);
+            }
+        });
+
+        // Autoevaluar al abrir el modal
+        setTimeout(() => {
+            obligatorios.forEach(name => {
+                const $el = $form.find(`[name="${name}"]`);
+                if ($el.length) $el.trigger('change');
+            });
+        }, 200);
+    }
+
+    function validarYConfirmarBaja() {
+        const form = document.getElementById('formBajaContrato');
+
+        // 1. Validación nativa HTML5
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        // 2. Datos
+        const datos = {
+            'fecha_baja': document.getElementById('baja_fecha').value,
+            'fecha_efectiva': document.getElementById('baja_fecha_efectiva').value,
+            'causa_baja': document.getElementById('baja_causa').value,
+            'cobro_sistema_pago': document.getElementById('switchCobroSistema').checked,
+            'completar_cargo': document.getElementById('switchCompletarCargo').checked,
+            'actividad_realizada': document.getElementById('baja_actividad').value,
+            'observaciones': document.getElementById('baja_observaciones').value,
+            'csrfmiddlewaretoken': '{{ csrf_token }}'
+        };
+        const url = document.getElementById('baja_url_post').value;
+
+        // 3. Confirmación
+        $('#modalBajaContrato').modal('hide');
+
+        Swal.fire({
+            title: '¿Está seguro de dar de baja este contrato?',
+            text: "Esta acción registrará la baja y generará el movimiento de nómina.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#8592a3',
+            confirmButtonText: 'Sí, dar de baja',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                enviarBajaAlBackend(url, datos);
+            } else {
+                $('#modalBajaContrato').modal('show');
+            }
+        });
+    }
+
+    function enviarBajaAlBackend(url, datos) {
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: datos,
+            success: function (response) {
+                Swal.fire({
+                    title: 'Baja procesada',
+                    text: '¿Desea exportar el documento de movimiento de nómina ahora?',
+                    icon: 'success',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-file-pdf me-1"></i> Exportar',
+                    cancelButtonText: 'Cerrar',
+                    customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed && response.pdf_url) {
+                        window.open(response.pdf_url, '_blank');
+                    }
+                    if (alTerminar) alTerminar();
+                });
+            },
+            error: function (xhr) {
+                let mensajeError = 'No se pudo procesar la baja debido a un error de conexión.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    mensajeError = xhr.responseJSON.message;
+                }
+                Swal.fire({
+                    title: 'No se puede procesar',
+                    text: mensajeError,
+                    icon: 'error',
+                    confirmButtonColor: '#696cff'
+                }).then(() => {
+                    $('#modalBajaContrato').modal('show'); // Reabre el modal si hay error
+                });
+            }
+        });
+    }
+
+    window.OrbithBaja = { abrir: abrir };
+    // `onclick="validarYConfirmarBaja()"` del botón del modal.
+    window.validarYConfirmarBaja = validarYConfirmarBaja;
+})();
+</script>

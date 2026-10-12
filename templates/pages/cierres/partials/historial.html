@@ -2,7 +2,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">
-                <i class="fas fa-history me-2 text-primary"></i>
+                <i class="bx bx-history me-2 text-indigo-600"></i>
                 Historial de cierres — {{ unidad.descripcion }}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -11,7 +11,7 @@
         <div class="modal-body">
             {% if cierres %}
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle">
+                    <table class="inf-tabla table-moderna">
                         <thead>
                             <tr>
                                 <th>Período</th>
@@ -26,14 +26,14 @@
                         <tbody>
                             {% for cierre in cierres %}
                                 <tr>
-                                    <td class="fw-semibold">{{ cierre.periodo.etiqueta }}</td>
+                                    <td class="td-nombre">{{ cierre.periodo.etiqueta }}</td>
                                     <td>{{ cierre.fecha_declaracion|date:"d/m/Y H:i" }}</td>
                                     <td>{{ cierre.declarado_por_nombre|default:"—" }}</td>
                                     <td class="text-center">
                                         {% if cierre.en_plazo %}
-                                            <span class="badge bg-label-success">En plazo</span>
+                                            <span class="inf-estado inf-estado--ok">En plazo</span>
                                         {% else %}
-                                            <span class="badge bg-label-danger">Fuera de plazo</span>
+                                            <span class="inf-estado inf-estado--aviso">Fuera de plazo</span>
                                         {% endif %}
                                     </td>
                                     <td class="text-end">
@@ -41,10 +41,10 @@
                                     </td>
                                     <td class="text-end">{{ cierre.total_contratos }}</td>
                                     <td class="text-center">
-                                        <button type="button" class="btn btn-xs btn-label-primary"
+                                        <button type="button" class="btn btn-xs inf-btn-suave"
                                                 onclick="abrirModalCierres('{% url 'detalle_cierre' cierre.pk %}')"
                                                 title="Ver la fotografía">
-                                            <i class="fas fa-camera"></i>
+                                            <i class="bx bx-camera"></i>
                                         </button>
                                     </td>
                                 </tr>
@@ -53,15 +53,15 @@
                     </table>
                 </div>
 
-                <p class="text-muted small mb-0 mt-2">
-                    <i class="fas fa-lock me-1"></i>
+                <p class="text-slate-400 small mb-0 mt-2">
+                    <i class="bx bx-lock-alt me-1"></i>
                     Cada fotografía refleja el estado de la unidad en el momento de
                     declararla. Los cambios posteriores no la modifican.
                 </p>
             {% else %}
                 <div class="text-center py-4">
-                    <i class="fas fa-inbox fs-4 text-muted opacity-25 d-block mb-2"></i>
-                    <p class="text-muted mb-0">
+                    <i class="bx bx-inbox fs-4 text-slate-400 opacity-50 d-block mb-2"></i>
+                    <p class="text-slate-400 mb-0">
                         Esta unidad todavía no ha declarado ningún cierre.
                     </p>
                 </div>
@@ -69,7 +69,7 @@
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <button type="button" class="btn inf-btn-suave" data-bs-dismiss="modal">Cerrar</button>
         </div>
     </div>
 </div>

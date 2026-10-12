@@ -57,10 +57,19 @@
                 {% endif %}
             </td>
             <td class="text-center">
-                <small class="text-muted">{{ u.progreso_completadas_count }}/{{ progreso_total_catalogo }}</small>
+                <small class="text-muted">{{ u.progreso_completadas_count }}/{{ u.progreso_total }}</small>
             </td>
         </tr>
     {% endfor %}
 {% else %}
     <tr><td colspan="8">No hay registros disponibles.</td></tr>
+{% endif %}
+
+{% comment %} Pie común de la tabla, fuera de banda: el `hx-target` del buscador es solo el
+   <tbody>. Solo si la vista paginó (`page_obj`). {% endcomment %}
+{% if page_obj %}
+<div id="table-pagination-footer" hx-swap-oob="true">
+  {% url 'search_usuarios' as url_buscar %}
+  {% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_usuarios_results' incluir='#search' nombre='usuarios' %}
+</div>
 {% endif %}

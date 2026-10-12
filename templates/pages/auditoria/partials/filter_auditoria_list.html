@@ -26,6 +26,23 @@ el módulo es de solo lectura, cada fila abre su propio detalle.
             <span class="badge bg-label-secondary">Cancelación</span>
         {% elif evento.accion == 'DEV' %}
             <span class="badge bg-label-info">Devuelta a espera</span>
+        {# Ciclo del trabajador: tono lleno e icono propio para no confundirlos con Creación, Modificación y Eliminación. #}
+        {% elif evento.accion == 'ALT' %}
+            <span class="badge bg-success"><i class="bx bx-user-plus me-1"></i>Alta</span>
+        {% elif evento.accion == 'MOV' %}
+            <span class="badge bg-info"><i class="bx bx-transfer me-1"></i>Movimiento de nómina</span>
+        {% elif evento.accion == 'BAJ' %}
+            <span class="badge bg-dark"><i class="bx bx-user-minus me-1"></i>Baja</span>
+        {# Accesos: no tocan ningún registro. #}
+        {% elif evento.accion == 'ACC' %}
+            <span class="badge bg-label-secondary"><i class="bx bx-log-in-circle me-1"></i>Inicio de sesión</span>
+        {% elif evento.accion == 'SAL' %}
+            <span class="badge bg-label-secondary"><i class="bx bx-log-out-circle me-1"></i>Cierre de sesión</span>
+        {% elif evento.accion == 'ACF' %}
+            <span class="badge bg-label-warning"><i class="bx bx-error-circle me-1"></i>Intento de acceso fallido</span>
+        {% else %}
+            {# Cualquier acción que se añada en el futuro sale con su nombre, nunca vacía. #}
+            <span class="badge bg-label-secondary">{{ evento.get_accion_display }}</span>
         {% endif %}
     </td>
 
@@ -73,6 +90,6 @@ pie se actualiza aparte con `hx-swap-oob`. Mismo mecanismo que usa Solicitudes.
 {% endcomment %}
 {% if request.META.HTTP_HX_REQUEST %}
 <div id="table-pagination-footer" hx-swap-oob="true">
-    {% include 'pages/auditoria/partials/pagination.html' %}
+    {% include 'pages/auditoria/partials/pie_tabla.html' %}
 </div>
 {% endif %}

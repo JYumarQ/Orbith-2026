@@ -1,0 +1,30 @@
+{% load informe_inteligente_extras %}
+{% comment %} Los cargos de un departamento del Anexo 14.
+
+   Se aísla en un parcial porque el mismo bloque se pinta dos veces en cada
+   pestaña —la plantilla aprobada y lo que quedó fuera de ella— y antes eran dos
+   copias literales de veinte líneas. Dos copias divergen en cuanto alguien toca
+   una: la de «fuera de plantilla» ya llevaba el nombre del cargo en negrita y la
+   otra no, sin que hubiera motivo.
+
+   La insignia de categoría usa las clases GLOBALES `cat-insignia cat-XXX`, que
+   publica `static/css/informes-rrhh.css` a partir de
+   `nomencladores.COLORES_CAT_OCUPACIONAL`. Antes este módulo repetía esos
+   colores por su cuenta (`anx-cat-*`), así que un cargo Técnico salía de un azul
+   en el Anexo y de otro en el resto de la aplicación. {% endcomment %}
+<table class="inf-tabla table-moderna mb-0">
+    <tbody>
+    {% for cargo in cargos %}
+        <tr class="anx-tree-cargo">
+            <td class="td-nombre ps-5">{{ cargo.ncargo.descripcion }}</td>
+            <td class="text-center" style="width:110px;">
+                <span class="cat-insignia cat-{{ cargo.ncargo.cat_ocupacional }}">{{ etiquetas_categoria|get_item:cargo.ncargo.cat_ocupacional }}</span>
+            </td>
+            <td class="td-cifra td-cifra--fuerte" style="width:90px;">{{ cargo.cant_aprobada }}</td>
+            <td class="text-center" style="width:120px;">{{ cargo.rol.tipo|default:"—" }}</td>
+            <td>{{ cargo.nivel_preparacion.nombre|default:"" }}</td>
+            <td class="text-center font-monospace" style="width:90px;">{{ cargo.ncargo.grupo_escala.nivel }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>

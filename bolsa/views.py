@@ -11,6 +11,8 @@ from django.db.models.functions import Concat
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.core.paginator import Paginator
+
+from core.paginacion import paginar
 from nomencladores.models import NProvincia
 
 from django.views.decorators.cache import never_cache
@@ -18,6 +20,7 @@ from django.views.decorators.cache import never_cache
 from .models import Aspirante
 from .forms import AspiranteForm
 from usuarios.decorators import write_required
+from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 # Convierte la eliminación en una solicitud cuando la pide un Moderador; devuelve None
 # para el Administrador, que elimina directamente.
@@ -68,13 +71,11 @@ class AspiranteListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         qs = self.get_queryset()
-        paginator = Paginator(qs, 8) # Por defecto 8
-        page_obj = paginator.get_page(1)
-
+        # Paginación común: las filas por página del usuario (core/paginacion.py).
+        page_obj = paginar(self.request, qs)
 
         context['aspirantes'] = page_obj
         context['page_obj'] = page_obj
-        context['current_page_size'] = '8'
         context['form'] = AspiranteForm(user=self.request.user)
         # Variable para controlar el botón "Nuevo" en el template
         context['es_baja_view'] = False 
@@ -97,6 +98,49 @@ class AspiranteListView(ListView):
         context['provincias'] = NProvincia.objects.all()
         context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
         return context
+
+#: Prefijos de los buscadores (ver `core/busqueda.py`). Un aspirante todavía no
+#: tiene contrato, así que ni expediente ni cargo; una baja sí, en su `CBaja`.
+#: Los demás no filtran y el buscador avisa (`static/js/busqueda_prefijos.js`).
+PREFIJOS_ASPIRANTES = ('N', 'CI', 'U')
+PREFIJOS_BAJAS = ('E', 'N', 'CI', 'CA', 'U')
+
+
+def _aplicar_busqueda(qs, texto, con_baja=False):
+    """Texto libre (nombre o carnet) y prefijos, sin distinguir acentos."""
+    from contratos.models import CBaja
+
+    busqueda = interpretar(texto)
+    qs = qs.alias(_nombre=sin_acentos(
+        Concat('nombre', Value(' '), 'papellido', Value(' '), 'sapellido')))
+
+    for palabra in busqueda.libre.split():
+        qs = qs.filter(Q(doc_identidad__icontains=palabra)
+                       | Q(_nombre__contains=normalizar(palabra)))
+    for valor in busqueda.valores('N'):
+        for palabra in valor.split():
+            qs = qs.filter(_nombre__contains=normalizar(palabra))
+    for valor in busqueda.valores('CI'):
+        qs = qs.filter(doc_identidad__startswith=valor.replace(' ', ''))
+    if busqueda.valores('U'):
+        qs = qs.alias(_unidad=sin_acentos('unidad_organizativa__descripcion'))
+        for valor in busqueda.valores('U'):
+            qs = qs.filter(_unidad__contains=normalizar(valor))
+
+    if con_baja:
+        # Por subconsulta y no por JOIN: quien tiene varias bajas saldría repetido.
+        for valor in busqueda.valores('E'):
+            numero = solo_digitos_sin_ceros(valor)
+            bajas = (CBaja.objects.filter(no_expediente__regex=r'^0*%s$' % numero)
+                     if numero is not None
+                     else CBaja.objects.filter(no_expediente__iexact=valor.strip()))
+            qs = qs.filter(pk__in=bajas.values('aspirante_id'))
+        for valor in busqueda.valores('CA'):
+            bajas = (CBaja.objects.alias(_cargo=sin_acentos('cargo__ncargo__descripcion'))
+                     .filter(_cargo__contains=normalizar(valor)))
+            qs = qs.filter(pk__in=bajas.values('aspirante_id'))
+    return qs
+
 
 @never_cache
 def search_aspirantes(request):
@@ -141,28 +185,15 @@ def search_aspirantes(request):
         qs = qs.filter(grado_cientifico=grado_cientifico)
 
     
-    # Filtro de texto (Buscador Inteligente)
+    # Filtro de texto: libre y con prefijos (ver `_aplicar_busqueda`).
     if query:
-        # Creamos un campo temporal 'nombre_completo' uniendo las partes
-        qs = qs.annotate(
-            nombre_completo=Concat('nombre', Value(' '), 'papellido', Value(' '), 'sapellido')
-        ).filter(
-            # Buscamos en el CI o en el nombre completo armado
-            Q(doc_identidad__icontains=query) |
-            Q(nombre_completo__icontains=query)
-        )
+        qs = _aplicar_busqueda(qs, query)
 
-    # --- INICIO LÓGICA DE PAGINACIÓN ---
-    page_num = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', '8') # Recibe 8 o 10
-    
-    paginator = Paginator(qs, page_size)
-    page_obj = paginator.get_page(page_num)
-        
+    page_obj = paginar(request, qs)
+
     return render(request, 'pages/aspirante/partials/filter_aspirantes_list.html', {
         'aspirantes': page_obj,
         'page_obj': page_obj,
-        'current_page_size': str(page_size),
         'search_url': 'search_aspirantes' # Necesario para que los botones sepan a dónde llamar
     })
 
@@ -178,12 +209,11 @@ class BajaListView(ListView):
         context = super().get_context_data(**kwargs)
 
         qs = self.get_queryset()
-        paginator = Paginator(qs, 8) # Por defecto 8
-        page_obj = paginator.get_page(1)
+        # Paginación común: las filas por página del usuario (core/paginacion.py).
+        page_obj = paginar(self.request, qs)
 
         context['aspirantes'] = page_obj
         context['page_obj'] = page_obj
-        context['current_page_size'] = '8'
 
         context['form'] = AspiranteForm(user=self.request.user)
         # Ocultar botón nuevo
@@ -210,28 +240,22 @@ def search_bajas(request):
 
     
 
-    # Filtro de texto (Buscador Inteligente)
+    # Filtro de texto: libre y con prefijos (ver `_aplicar_busqueda`). Aquí sí
+    # tienen sentido E: y CA:, que salen de la baja (`CBaja`) del trabajador.
     if query:
-        # Creamos un campo temporal 'nombre_completo' uniendo las partes
-        qs = qs.annotate(
-            nombre_completo=Concat('nombre', Value(' '), 'papellido', Value(' '), 'sapellido')
-        ).filter(
-            # Buscamos en el CI o en el nombre completo armado
-            Q(doc_identidad__icontains=query) |
-            Q(nombre_completo__icontains=query)
-        )
-    # --- INICIO LÓGICA DE PAGINACIÓN ---
-    page_num = request.GET.get('page', 1)
-    page_size = request.GET.get('page_size', '8') # Recibe 8 o 10
-    
-    paginator = Paginator(qs, page_size)
-    page_obj = paginator.get_page(page_num)
+        qs = _aplicar_busqueda(qs, query, con_baja=True)
+    page_obj = paginar(request, qs)
 
     return render(request, 'pages/aspirante/partials/filter_aspirantes_list.html', {
         'aspirantes': page_obj,
         'page_obj': page_obj,
-        'current_page_size': str(page_size),
-        'search_url': 'search_aspirantes' # Necesario para que los botones sepan a dónde llamar
+        # La paginación («Ver más», «Ver menos», las flechas) vuelve a llamar a
+        # `search_url`. Ponía 'search_aspirantes' (copiado de arriba) y, tras la
+        # primera búsqueda en Bajas, pasar de página cargaba los Aspirantes.
+        'search_url': 'search_bajas',
+        # Lo mismo que pone `BajaListView`: sin esto, tras buscar, las filas
+        # perdían el resaltado de las bajas sin datos.
+        'es_baja_view': True,
     })
 
 # 5. MODIFICAR: Validación con mensajes específicos
@@ -354,9 +378,10 @@ class AspiranteCreateView(CreateView):
         self.object = aspirante
 
         from progreso.servicios import completar_tarea
-        tarea = completar_tarea(self.request.user, 'primer_aspirante')
-        if tarea:
-            messages.info(self.request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+        completar_tarea(self.request.user, 'primer_aspirante')
+        from ranking.models import Actividad
+        from ranking.servicios import registrar_actividad
+        registrar_actividad(self.request.user, Actividad.ASPIRANTE, detalle=aspirante)
 
         # 4. Cerramos el modal sin recargar página (HTMX)
         if self.request.headers.get('HX-Request'):

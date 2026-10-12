@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" class="light-style layout-menu-fixed" dir="ltr" data-theme="theme-default">
+<html lang="es" class="light-style layout-menu-fixed{% if distincion %} distincion-{{ distincion.metal }}{% endif %}" dir="ltr" data-theme="theme-default">
 <head>
     {% load static %}
     {% load estaticos %}
@@ -27,14 +27,23 @@
     <link rel="stylesheet" href="{% static 'vendor/fonts/boxicons.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/all.min.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/mobile-ux.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/guia-orbith.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/ranking-orbith.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/orbith-tablas.css' %}">
 
     {% block extra_head %}{% endblock %}
 
     <style>
-        /* — ORDEN DE CAPAS (Z-INDEX) — */
+        /* — ORDEN DE CAPAS (Z-INDEX) —
+           Las ventanas (modales) van en los valores del tema, 1089/1090: por
+           encima de la barra superior (1075) y del menú lateral (1080). Estaban
+           forzadas a 1040/1050 y la barra tapaba la franja superior de cualquier
+           ventana: la «X» de cerrar, que el tema dibuja un poco por fuera, no
+           recibía el clic. Los desplegables de Select2 siguen por encima (100050,
+           `orbith-controles.css`) y el recorrido de la Guía también (1095). */
         .swal2-container { z-index: 99999 !important; }
-        .modal-backdrop { z-index: 1040 !important; }
-        .modal { z-index: 1050 !important; }
+        .modal-backdrop { z-index: 1089 !important; }
+        .modal { z-index: 1090 !important; }
         .modal[style*="z-index: 3000"] { z-index: 3000 !important; }
 
         /* — LÓGICA DE SIDEBAR (TU DISEÑO ORIGINAL) — */
@@ -243,7 +252,11 @@
 
     <script src="{% estatico 'js/ui-toasts.js' %}"></script>
     <script src="{% estatico 'js/progreso_guia.js' %}"></script>
+    {# Motor de recorridos y la guía de "Reportar problema", que vive en la ventana común "Acerca de Orbith". #}
+    <script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+    <script src="{% estatico 'js/recorrido_reporte.js' %}"></script>
     <script src="{% static 'vendor/js/htmx.min.js' %}"></script>
+    <script src="{% estatico 'js/orbith_tablas.js' %}"></script>
     <script>
       document.body.addEventListener('htmx:configRequest', function (e) {
         var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');

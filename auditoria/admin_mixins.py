@@ -7,14 +7,35 @@ try/except, igual que el resto de integraciones "silenciosas" del proyecto (ver
 `notificaciones/avisos.py`).
 """
 import logging
+from contextlib import contextmanager
 
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 
+from auditoria.middleware import _user_ctx_var
 from auditoria.models import AccionAuditoria
+from auditoria.registro_automatico import es_auditado
 from auditoria.servicios import registrar as registrar_auditoria
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _como_usuario_de(request):
+    """El usuario de la petición, para el registro automático de Auditoría.
+
+    En una petición real ya lo pone `CurrentUserMiddleware`; esto lo garantiza
+    también cuando el Admin se llama sin pasar por él (pruebas, scripts).
+    """
+    usuario = getattr(request, 'user', None)
+    if usuario is None:
+        yield
+        return
+    token = _user_ctx_var.set(usuario)
+    try:
+        yield
+    finally:
+        _user_ctx_var.reset(token)
 
 
 class AuditoriaAdminMixin:
@@ -24,6 +45,12 @@ class AuditoriaAdminMixin:
 
     def _registrar(self, request, accion, *, instancia=None, content_type=None,
                     object_id=None, descriptor=''):
+        # Los modelos del registro automático ya dejan su evento, y además con el
+        # antes/después de cada campo. Registrarlo también aquí lo duplicaría.
+        modelo = type(instancia) if instancia is not None else (
+            content_type.model_class() if content_type is not None else None)
+        if modelo is not None and es_auditado(modelo):
+            return
         try:
             registrar_auditoria(
                 usuario=request.user, accion=accion, instancia=instancia,
@@ -36,7 +63,8 @@ class AuditoriaAdminMixin:
                 accion, instancia if instancia is not None else object_id)
 
     def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
+        with _como_usuario_de(request):
+            super().save_model(request, obj, form, change)
         self._registrar(
             request, AccionAuditoria.MODIFICAR if change else AccionAuditoria.CREAR,
             instancia=obj)
@@ -44,7 +72,8 @@ class AuditoriaAdminMixin:
     def delete_model(self, request, obj):
         content_type = ContentType.objects.get_for_model(type(obj))
         object_id, descriptor = str(obj.pk), str(obj)[:200]
-        super().delete_model(request, obj)
+        with _como_usuario_de(request):
+            super().delete_model(request, obj)
         self._registrar(
             request, AccionAuditoria.ELIMINAR, content_type=content_type,
             object_id=object_id, descriptor=descriptor)
@@ -52,7 +81,8 @@ class AuditoriaAdminMixin:
     def delete_queryset(self, request, queryset):
         content_type = ContentType.objects.get_for_model(queryset.model)
         congelados = [(str(o.pk), str(o)[:200]) for o in queryset]
-        super().delete_queryset(request, queryset)
+        with _como_usuario_de(request):
+            super().delete_queryset(request, queryset)
         for object_id, descriptor in congelados:
             self._registrar(
                 request, AccionAuditoria.ELIMINAR, content_type=content_type,
@@ -74,7 +104,8 @@ class AuditoriaAdminMixin:
              str(f.instance.pk), str(f.instance)[:200])
             for f in formset.deleted_forms
         ]
-        super().save_formset(request, form, formset, change)
+        with _como_usuario_de(request):
+            super().save_formset(request, form, formset, change)
         for content_type, object_id, descriptor in eliminados:
             self._registrar(
                 request, AccionAuditoria.ELIMINAR, content_type=content_type,
@@ -96,7 +127,9 @@ class AuditoriaSoloEdicionAdminMixin(AuditoriaAdminMixin):
     """
 
     def delete_model(self, request, obj):
-        admin.ModelAdmin.delete_model(self, request, obj)
+        with _como_usuario_de(request):
+            admin.ModelAdmin.delete_model(self, request, obj)
 
     def delete_queryset(self, request, queryset):
-        admin.ModelAdmin.delete_queryset(self, request, queryset)
+        with _como_usuario_de(request):
+            admin.ModelAdmin.delete_queryset(self, request, queryset)

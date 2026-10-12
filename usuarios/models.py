@@ -172,6 +172,19 @@ class PreferenciasUsuario(models.Model):
         default=True,
         verbose_name="Animaciones de la interfaz activas"
     )
+    # Ranking Mensual: los 3 primeros de cada rol ven su distinción (iconos y
+    # foto en oro, plata o bronce) durante el mes siguiente. Pueden apagarla.
+    mostrar_distincion = models.BooleanField(
+        default=True,
+        verbose_name="Mostrar mi distinción del mes"
+    )
+    # Un solo valor para TODAS las tablas paginadas (ver core/paginacion.py). Se
+    # cambia en Configuración o en el pie de cualquier tabla.
+    FILAS_POR_PAGINA = [(10, '10'), (25, '25'), (50, '50'), (100, '100')]
+    filas_por_pagina = models.PositiveSmallIntegerField(
+        default=25, choices=FILAS_POR_PAGINA,
+        verbose_name="Filas por página en las tablas"
+    )
 
     # --- Firmas del Reporte de Pago (Pre-Nómina) ---
     # Los tres nombres que imprime el encabezado del reporte se escriben una vez

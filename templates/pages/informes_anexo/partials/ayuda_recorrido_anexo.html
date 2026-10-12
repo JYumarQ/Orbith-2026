@@ -1,0 +1,29 @@
+{% load estaticos %}
+{% comment %} Botón "?" (qué es este anexo) y menú "¿Cómo funciona?" de los tres anexos.
+   Los textos y los recorridos viven en static/js/recorrido_anexos.js.
+
+   PARÁMETROS
+   ----------
+     anexo   '14', '14a' o '14b'.
+{% endcomment %}
+<span class="d-inline-flex align-items-center gap-2 anx-no-print" style="font-size: 1rem; letter-spacing: normal;">
+    <button type="button" class="btn btn-icon btn-sm btn-label-info rounded-circle" id="btnAyudaAnexo"
+            data-anexo="{{ anexo }}" title="¿Qué es este anexo?" aria-label="¿Qué es este anexo?">
+        <i class="bx bx-question-mark"></i>
+    </button>
+    <span class="dropdown">
+        <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoAnexo"
+                data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+            <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+        </button>
+        <ul class="dropdown-menu" style="font-size: .875rem;">
+            <li><button type="button" class="dropdown-item" data-recorrido="exportar_anexos:anexo{{ anexo }}">
+                <i class="bx bx-spreadsheet me-1"></i>Recorrer el Anexo {{ anexo|upper }} y exportarlo</button></li>
+        </ul>
+    </span>
+</span>
+<style>
+    .anexo-popover { max-width: 380px; font-size: .82rem; }
+</style>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_anexos.js' %}"></script>

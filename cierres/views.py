@@ -25,7 +25,7 @@ from django.views.decorators.http import require_POST
 
 from . import filtros, servicios
 from .constantes import DIA_FIN_VENTANA, DIA_INICIO_VENTANA
-from .models import CierreUnidad
+from .models import CierreUnidad, EstadoUnidad
 from .periodos import en_ventana, periodo_de
 from .permisos import acceso_cierres, es_administrador, solo_admin
 
@@ -61,9 +61,11 @@ def declarar(request, unidad_id):
     from django.contrib import messages
 
     from progreso.servicios import completar_tarea
-    tarea = completar_tarea(request.user, 'primer_cierre_declarado')
-    if tarea:
-        messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+    completar_tarea(request.user, 'primer_cierre_declarado')
+    if cierre.en_plazo:
+        from ranking.models import Actividad
+        from ranking.servicios import registrar_actividad
+        registrar_actividad(request.user, Actividad.CIERRE_EN_PLAZO, detalle=unidad.descripcion)
 
     return _ok(
         f'«{unidad.descripcion}» declarada actualizada para el cierre de '
@@ -92,6 +94,33 @@ def reabrir(request, unidad_id):
 # Pantalla de consulta
 # --------------------------------------------------------------------------
 
+def _resumen_de(filas):
+    """Las cuatro cifras que encabezan la pantalla.
+
+    Se cuentan sobre `filas`, que ya está en memoria y ya viene filtrada: así el
+    resumen dice siempre lo mismo que la tabla de debajo. Contarlo con consultas
+    aparte habría dado, con un filtro puesto, unas cifras que no cuadran con lo
+    que se ve.
+
+    «Nunca declarada» no es un estado más: una unidad sin primera declaración no
+    incumple nada, porque no se le puede reclamar ningún mes anterior. Por eso va
+    en su propia cifra y no suma en las desactualizadas.
+    """
+    resumen = {'total': len(filas), 'actualizadas': 0,
+               'desactualizadas': 0, 'nunca': 0}
+
+    for fila in filas:
+        estado = fila['estado']
+        if not estado or estado.nunca_declarada:
+            resumen['nunca'] += 1
+        elif estado.estado == EstadoUnidad.ACTUALIZADA:
+            resumen['actualizadas'] += 1
+        elif estado.estado == EstadoUnidad.DESACTUALIZADA:
+            resumen['desactualizadas'] += 1
+
+    return resumen
+
+
 def _contexto_lista(request, hoy=None):
     hoy = hoy or date.today()
     unidades, contexto = filtros.filtrar_unidades(request)
@@ -107,6 +136,7 @@ def _contexto_lista(request, hoy=None):
 
     contexto.update({
         'filas': filas,
+        'resumen': _resumen_de(filas),
         'hoy': hoy,
         'ventana_abierta': en_ventana(hoy),
         'dia_inicio': DIA_INICIO_VENTANA,

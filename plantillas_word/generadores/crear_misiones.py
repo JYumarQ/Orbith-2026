@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from docx.enum.text import WD_ALIGN_PARAGRAPH  # noqa: E402
 from docx.shared import Cm  # noqa: E402
 
-from comun import (AZUL, INDIGO, NARANJA, PIZARRA, VERDE, FONDO_GRUPO,  # noqa: E402
+from comun import (AZUL, GRIS, INDIGO, NARANJA, PIZARRA, VERDE, FONDO_GRUPO,  # noqa: E402
                    cabecera_de_tabla, documento_apaisado, escribir,
                    fila_de_control, lista_de_unidades, sombrear, tarjetas,
                    titulo)
@@ -34,10 +34,10 @@ DESTINO = os.path.join(RAIZ, 'informes_economia', 'misiones_template.docx')
 
 # Anchos: el nombre y el cargo se llevan el sitio, que es donde estan los textos
 # largos; el resto son codigos cortos.
-ANCHOS = [Cm(3.0), Cm(7.0), Cm(8.0), Cm(4.0), Cm(1.6), Cm(2.3)]
+ANCHOS = [Cm(2.4), Cm(5.9), Cm(6.8), Cm(3.2), Cm(1.4), Cm(2.0), Cm(1.6), Cm(2.6)]
 COLUMNAS = [('Exp. Laboral', False), ('Nombre y Apellidos', True),
             ('Cargo u Ocupación', True), ('País', False), ('Cat.', False),
-            ('G. Escala', False)]
+            ('G. Escala', False), ('Días', False), ('Importe', False)]
 
 documento = documento_apaisado()
 titulo(documento, 'Personal en Misión Internacional')
@@ -75,7 +75,10 @@ valores = [('{{ t.expediente }}', False, PIZARRA),
            ('{{ t.cargo }}', True, PIZARRA),
            ('{{ t.pais }}', False, AZUL),
            ('{{ t.cat_letra }}', False, PIZARRA),
-           ('{{ t.g_escala }}', False, PIZARRA)]
+           ('{{ t.g_escala }}', False, PIZARRA),
+           # Vacío se escribe como 0, igual que se ve en pantalla.
+           ('{{ t.dias or 0 }}', False, PIZARRA),
+           ('{{ "%.2f"|format(t.importe or 0) }}', False, PIZARRA)]
 for i, (valor, a_la_izquierda, color) in enumerate(valores):
     parrafo = fila_datos.cells[i].paragraphs[0]
     parrafo.alignment = (WD_ALIGN_PARAGRAPH.LEFT if a_la_izquierda
@@ -84,6 +87,12 @@ for i, (valor, a_la_izquierda, color) in enumerate(valores):
 
 fila_de_control(tabla, 5, '{%tr endfor %}')
 fila_de_control(tabla, 6, '{%tr endfor %}')
+
+# Aviso en letra pequeña cuando el documento lleva Días o Importe editados en
+# pantalla sin guardar. Sin ellos el párrafo queda vacío.
+escribir(documento.add_paragraph(),
+         '{% if con_valores_manuales %}{{ nota_valores_manuales }}{% endif %}',
+         8, color=GRIS)
 
 os.makedirs(os.path.dirname(DESTINO), exist_ok=True)
 documento.save(DESTINO)

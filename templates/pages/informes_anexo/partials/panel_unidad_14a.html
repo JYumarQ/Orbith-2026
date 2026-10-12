@@ -1,0 +1,27 @@
+{% comment %} El contenido de UNA pestaña del Anexo 14-A, servido por HTMX.
+
+   El conteo de la unidad: sus Direcciones como rótulo, sus Grupos con las cifras
+   y el Subtotal que cierra cada bloque. Y al final, aparte y con su propio total,
+   los cargos que quedaron fuera de la plantilla aprobada — que NO suman en el
+   Total de arriba. {% endcomment %}
+
+<div class="anx-tree-padre">
+    <div>
+        <span class="anx-meta-label">Unidad Organizativa</span>
+        <h2 class="h6 mb-0 fw-black">{{ unidad.descripcion }}</h2>
+    </div>
+    <span class="small">Cifras oficiales de la plantilla aprobada</span>
+</div>
+<div class="orb-tabla-scroll orb-tabla-alto">
+    {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=filas total=total %}
+</div>
+
+{% if total_fuera.total %}
+    <div class="anx-aviso-fuera">
+        <span><i class="bx bx-error-circle me-1"></i>Cargos fuera de la plantilla aprobada</span>
+        <span class="small">No suman en el Total de arriba</span>
+    </div>
+    <div class="orb-tabla-scroll orb-tabla-alto">
+        {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=filas_fuera total=total_fuera %}
+    </div>
+{% endif %}

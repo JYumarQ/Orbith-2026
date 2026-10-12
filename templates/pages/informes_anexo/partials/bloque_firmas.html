@@ -1,4 +1,12 @@
-{% comment %} Bloque de firmas del Anexo 14.
+{% comment %} Bloque de firmas, compartido por el Anexo 14 y el Anexo 14-A.
+
+   Los dos informes llevan los mismos dos firmantes institucionales —Capital
+   Humano propone, el Director General aprueba—, así que el bloque es uno solo.
+   Lo único que cambia entre ellos viaja por contexto: `url_firmas`, la vista a
+   la que llaman los `<select>`, y `plantilla_acciones`, la botonera de
+   exportación que se reinyecta con la respuesta (el 14 tiene Excel y PDF; el
+   14-A, solo Excel). Los dos usan el mismo id de formulario,
+   `formFiltrosAnexo14`, que es lo que busca `hx-include`.
 
    Se aísla en un parcial para que elegir un firmante se resuelva por HTMX y no
    recargue la página entera: antes cada `<select>` hacía `form.submit()`, lo que
@@ -14,7 +22,7 @@
 
    `hx-swap="outerHTML"` reemplaza este mismo contenedor, así que el `id` debe estar
    en el elemento raíz del parcial. {% endcomment %}
-<div class="anx-panel p-4" style="background:#696cff;" id="bloqueFirmasAnexo14">
+<div class="anx-panel p-4" id="bloqueFirmasAnexo14">
     {% comment %} Firmantes ya elegidos: viajan como `hidden` DENTRO de este bloque para
        que se regeneren en cada intercambio. `form=` los enlaza al formulario de filtros,
        de modo que un envío tradicional (cambiar categoría, unidad…) también los arrastra. {% endcomment %}
@@ -22,22 +30,22 @@
     {% if filtros.director_gral_id %}<input type="hidden" name="director_gral" value="{{ filtros.director_gral_id }}" form="formFiltrosAnexo14">{% endif %}
 
     <div class="text-center mb-3">
-        <span class="text-uppercase small fw-bold" style="color:#a5b4fc;">Firmas y conformidad institucional</span>
+        <span class="anx-firma-rotulo">Firmas y conformidad institucional</span>
     </div>
     <div class="row g-3">
         <div class="col-md-6">
             <div class="anx-firma-card">
                 <span class="anx-firma-icono"><i class="bi bi-person-vcard-fill"></i></span>
                 <div class="flex-grow-1">
-                    <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_ch.titulo }}</div>
+                    <div class="anx-firma-rotulo">{{ director_ch.titulo }}</div>
                     {% if director_ch.aspirante %}
-                        <div class="fw-bold">{{ director_ch.aspirante.nombre }} {{ director_ch.aspirante.papellido }} {{ director_ch.aspirante.sapellido }}</div>
+                        <div class="anx-firma-nombre">{{ director_ch.aspirante.nombre }} {{ director_ch.aspirante.papellido }} {{ director_ch.aspirante.sapellido }}</div>
                     {% else %}
                         {% if not director_ch.cargo_existe %}
-                            <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director de Capital Humano" en el nomenclador.</div>
+                            <div class="small text-orange-500 fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director de Capital Humano" en el nomenclador.</div>
                         {% endif %}
                         <select name="director_ch" form="formFiltrosAnexo14" class="form-select form-select-sm"
-                                hx-get="{% url 'informes_anexo:anexo14' %}"
+                                hx-get="{{ url_firmas }}"
                                 hx-target="#bloqueFirmasAnexo14"
                                 hx-swap="outerHTML"
                                 hx-include="#formFiltrosAnexo14, #bloqueFirmasAnexo14"
@@ -55,15 +63,15 @@
             <div class="anx-firma-card">
                 <span class="anx-firma-icono"><i class="bi bi-person-check-fill"></i></span>
                 <div class="flex-grow-1">
-                    <div class="small fw-bold text-uppercase" style="color:#a5b4fc;">{{ director_gral.titulo }}</div>
+                    <div class="anx-firma-rotulo">{{ director_gral.titulo }}</div>
                     {% if director_gral.aspirante %}
-                        <div class="fw-bold">{{ director_gral.aspirante.nombre }} {{ director_gral.aspirante.papellido }} {{ director_gral.aspirante.sapellido }}</div>
+                        <div class="anx-firma-nombre">{{ director_gral.aspirante.nombre }} {{ director_gral.aspirante.papellido }} {{ director_gral.aspirante.sapellido }}</div>
                     {% else %}
                         {% if not director_gral.cargo_existe %}
-                            <div class="small text-warning mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director General" en el nomenclador.</div>
+                            <div class="small text-orange-500 fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director General" en el nomenclador.</div>
                         {% endif %}
                         <select name="director_gral" form="formFiltrosAnexo14" class="form-select form-select-sm"
-                                hx-get="{% url 'informes_anexo:anexo14' %}"
+                                hx-get="{{ url_firmas }}"
                                 hx-target="#bloqueFirmasAnexo14"
                                 hx-swap="outerHTML"
                                 hx-include="#formFiltrosAnexo14, #bloqueFirmasAnexo14"
@@ -81,4 +89,4 @@
 </div>
 {% comment %} Los enlaces de exportación viven fuera de este bloque, así que se
    actualizan por intercambio fuera de banda en esta misma respuesta. {% endcomment %}
-{% if intercambio_oob %}{% include "pages/informes_anexo/partials/acciones_export.html" %}{% endif %}
+{% if intercambio_oob %}{% include "pages/informes_anexo/partials/acciones_export.html" with url_propio=url_excel_propio nombre_propio=nombre_informe sin_combinado=sin_combinado %}{% endif %}

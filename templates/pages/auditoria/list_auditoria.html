@@ -24,13 +24,13 @@
             <span class="text-muted fw-light">Orbith / Administración /</span> Auditoría
         </h4>
 
-        <div class="card">
+        {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+        <div class="card orb-tabla-card">
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
 
                 {# ---------------- Búsqueda ---------------- #}
+                {# Sin «filas por página» aquí: si la petición no lo trae, se usa el de las preferencias del usuario (core/paginacion.py). #}
                 <div id="search_container" class="grow" style="max-width: 280px;">
-                    <input type="hidden" id="filter_per_page" name="per_page" value="{{ current_page_size }}">
-
                     <div class="input-group input-group-merge">
                         <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
                         <input id="search" type="text" class="form-control border-0 shadow-none"
@@ -38,14 +38,18 @@
                                hx-get="{% url 'auditoria:buscar_eventos' %}"
                                hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
                                hx-target="#filter_eventos_results"
-                               hx-include="#filter_per_page, #filter_usuario, #filter_accion, #filter_unidad, #filter_desde, #filter_hasta">
+                               hx-include="#filter_usuario, #filter_accion, #filter_modulo, #filter_unidad, #filter_desde, #filter_hasta">
                     </div>
                 </div>
 
                 {# ---------------- Filtros ---------------- #}
+                {% comment %} `data-bs-auto-close="outside"`: por defecto un desplegable de Bootstrap se
+                   cierra con CUALQUIER clic, también con los de dentro, así que al elegir un
+                   filtro se cerraba el panel. Mismo arreglo que el filtro de Contratos; la otra
+                   mitad (el clic en la lista de Select2) ya la resuelve `select_unificado.js`. {% endcomment %}
                 <div class="btn-group ms-auto">
                     <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow"
-                            data-bs-toggle="dropdown" aria-expanded="false" title="Filtros">
+                            data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Filtros">
                         <i class="fas fa-filter"></i>
                         {% if hay_filtros %}<span class="badge badge-dot bg-danger"></span>{% endif %}
                     </button>
@@ -79,6 +83,16 @@
                         </div>
 
                         <div class="mb-2">
+                            <label class="small text-muted" for="filter_modulo">Módulo</label>
+                            <select id="filter_modulo" name="modulo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                <option value="">Todos</option>
+                                {% for clave, nombre in opciones_filtro.modulos %}
+                                    <option value="{{ clave }}" {% if clave in modulos_actuales %}selected{% endif %}>{{ nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-2">
                             <label class="small text-muted" for="filter_unidad">Unidad Organizativa</label>
                             <select id="filter_unidad" name="unidad" class="form-select form-select-sm" onchange="triggerSearch()">
                                 <option value="">Todas</option>
@@ -103,8 +117,8 @@
                 </div>
             </div>
 
-            <div class="table-responsive text-nowrap">
-                <table class="table table-hover">
+            <div class="orb-tabla-scroll text-nowrap">
+                <table class="table orb-tabla">
                     <thead>
                         <tr>
                             <th>Fecha</th>
@@ -122,10 +136,8 @@
                 </table>
             </div>
 
-            <div class="card-body pt-0">
-                <div id="table-pagination-footer">
-                    {% include 'pages/auditoria/partials/pagination.html' %}
-                </div>
+            <div id="table-pagination-footer">
+                {% include 'pages/auditoria/partials/pie_tabla.html' %}
             </div>
         </div>
     </div>

@@ -1,0 +1,187 @@
+/*
+ * Ventana "Ranking Mensual Orbith" (templates/pages/ranking/partials/panel_ranking.html).
+ *
+ * Misma línea que la Guía (static/css/guia-orbith.css): colores del tema de
+ * Orbith y su fuente. Los únicos colores propios son los de las medallas.
+ */
+:root {
+  --ranking-oro: #d4a017;
+  --ranking-plata: #8a99ad;
+  --ranking-bronce: #b5651d;
+}
+
+/* --- Resumen --- */
+.ranking-hero {
+  background: linear-gradient(135deg, #696cff 0%, #5a5de8 55%, #4346e3 100%);
+  color: #fff;
+  border-radius: .75rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.ranking-hero-titulo { font-size: 1rem; font-weight: 700; margin: 0; color: #fff; }
+.ranking-hero-sub { font-size: .8rem; color: rgba(255, 255, 255, .85); }
+.ranking-hero-xp { font-size: 1.75rem; font-weight: 800; line-height: 1; color: #fff; }
+.ranking-hero-xp small { font-size: .9rem; font-weight: 600; }
+.ranking-nivel {
+  display: inline-flex;
+  align-items: center;
+  padding: .2rem .65rem;
+  border-radius: 50px;
+  font-size: .75rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, .18);
+  border: 1px solid rgba(255, 255, 255, .3);
+}
+.ranking-barra {
+  height: 10px;
+  background: rgba(255, 255, 255, .22);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ranking-barra-relleno {
+  height: 100%;
+  background: linear-gradient(90deg, #ffffff, #ffe08a);
+  border-radius: 10px;
+  transition: width .6s cubic-bezier(.4, 0, .2, 1);
+}
+
+.ranking-pestanas { flex-wrap: nowrap; }
+.ranking-pestanas .nav-link { font-size: .85rem; padding: .45rem .5rem; white-space: nowrap; }
+/* En el móvil las tres pestañas caben en una línea sin sus iconos. */
+@media (max-width: 575.98px) {
+  .ranking-pestanas .nav-link { font-size: .8rem; padding: .4rem .25rem; }
+  .ranking-pestanas .nav-link .bx { display: none; }
+  .ranking-hero { padding: 1rem; }
+}
+.ranking-subtitulo { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #8592a3; margin-bottom: .5rem; }
+
+/* --- Filas de personas --- */
+.ranking-fila {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .5rem .75rem;
+  border-radius: .5rem;
+}
+.ranking-fila + .ranking-fila { border-top: 1px solid #f0f1f4; }
+.ranking-fila.soy-yo { background: rgba(105, 108, 255, .08); border-top-color: transparent; }
+.ranking-puesto { width: 2rem; text-align: center; font-weight: 700; color: #8592a3; flex-shrink: 0; }
+.ranking-puesto .bx { font-size: 1.5rem; vertical-align: middle; }
+.ranking-oro { color: var(--ranking-oro); }
+.ranking-plata { color: var(--ranking-plata); }
+.ranking-bronce { color: var(--ranking-bronce); }
+.ranking-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.ranking-iniciales {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 700;
+  color: #696cff;
+  background: #e7e7ff;
+}
+.ranking-iniciales.sin-nombre { color: #8592a3; background: #eceef1; font-size: 1.1rem; }
+.ranking-nombre { font-weight: 600; color: #566a7f; }
+.ranking-xp { font-weight: 700; color: #696cff; white-space: nowrap; }
+.ranking-separador { text-align: center; color: #b4bdc6; font-size: 1.25rem; line-height: 1; margin: .25rem 0; }
+
+/* --- Mi detalle --- */
+.ranking-detalle li {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid #f0f1f4;
+  font-size: .875rem;
+}
+.ranking-detalle-icono {
+  width: 30px;
+  height: 30px;
+  border-radius: .5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e7e7ff;
+  color: #696cff;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.ranking-meses { display: flex; gap: 1rem; align-items: flex-end; }
+.ranking-mes { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.ranking-mes-xp { font-size: .75rem; font-weight: 700; color: #566a7f; margin-bottom: .25rem; }
+.ranking-mes-columna { height: 90px; width: 100%; max-width: 48px; display: flex; align-items: flex-end; background: #f5f5f9; border-radius: .4rem; overflow: hidden; }
+.ranking-mes-barra { width: 100%; background: #c3c4ff; border-radius: .4rem .4rem 0 0; }
+.ranking-mes.en-curso .ranking-mes-barra { background: #696cff; }
+.ranking-mes-nombre { font-size: .75rem; font-weight: 600; margin-top: .35rem; color: #566a7f; }
+.ranking-mes-nivel { font-size: .7rem; color: #8592a3; }
+
+
+/*
+ * Página "Estadísticas de uso" (templates/pages/ranking/estadisticas_uso.html)
+ * y su panel lateral.
+ */
+.est-unidades li { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; padding: .35rem 0; }
+.est-unidades li + li { border-top: 1px solid rgba(0, 0, 0, .06); }
+.est-tabla th { font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+.est-tabla td { white-space: nowrap; }
+.est-fila { cursor: pointer; }
+.est-uso .est-grupo { text-align: center; background: #f5f5f9; }
+.est-uso .est-acceso { background: #eef0ff; }
+.est-ordenable { cursor: pointer; user-select: none; }
+/* La columna del nombre queda fija al desplazar las tablas anchas. */
+.est-uso th:first-child,
+.est-uso td:first-child { position: sticky; left: 0; z-index: 1; background: #fff; box-shadow: 1px 0 0 #eceef1; }
+/* Con el estilo común (orbith-tablas.css) la cabecera lleva su color, también en la columna fija. */
+.est-uso.orb-tabla > thead > tr > th:first-child { background: var(--orb-tabla-cabecera); }
+.est-ordenable:hover { color: #696cff; }
+.est-ordenable[data-orden="asc"]::after { content: ' ▲'; }
+.est-ordenable[data-orden="desc"]::after { content: ' ▼'; }
+.est-inactivo { border: 1px solid #eceef1; border-radius: .5rem; padding: .75rem; background: #fafbfc; }
+.est-inactivo:hover { border-color: #c3c4ff; }
+
+.est-panel { width: 480px !important; max-width: 100vw; }
+.est-bloque { border: 1px solid #eceef1; border-radius: .5rem; padding: 1rem; margin-bottom: 1rem; }
+.est-bloque-titulo { font-weight: 700; margin-bottom: .75rem; }
+.est-cifra { background: #f5f5f9; border-radius: .5rem; padding: .5rem .25rem; }
+.est-cifra small { display: block; font-size: .7rem; color: #8592a3; }
+.est-cifra strong { font-size: .95rem; color: #566a7f; }
+.est-mini { font-size: .8rem; }
+.est-lista li { display: flex; justify-content: space-between; gap: .5rem; font-size: .82rem; padding: .2rem 0; border-bottom: 1px dashed #eceef1; }
+.est-calendario { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; font-size: .72rem; }
+.est-cal-cabecera { font-weight: 700; color: #8592a3; }
+.est-cal-dia { border-radius: .3rem; padding: .25rem 0; background: #f5f5f9; color: #b4bdc6; min-height: 1.6rem; }
+.est-cal-dia.trabajo { background: #d6f5c3; color: #3d7a1f; font-weight: 700; }
+.est-cal-dia.sesion { background: #fff1c7; color: #9a6b00; font-weight: 600; }
+.est-leyenda { display: inline-block; width: .7rem; height: .7rem; border-radius: .2rem; vertical-align: middle; margin-right: .2rem; }
+.est-leyenda.trabajo { background: #d6f5c3; }
+.est-leyenda.sesion { background: #fff1c7; }
+.est-ultimas li { display: flex; justify-content: space-between; gap: .5rem; font-size: .8rem; padding: .35rem 0; border-bottom: 1px solid #f0f1f4; min-width: 0; }
+.est-ultimas li > div { min-width: 0; }
+
+/*
+ * Distinción del mes (ganadores del Ranking): `base.html` pone en <html> la
+ * clase distincion-oro / -plata / -bronce (ver core/context_processors.py).
+ * Solo la ve el propio ganador. Se pintan los iconos de las SECCIONES de la
+ * barra lateral (no los sub-ítems), la campana y el aro de su foto.
+ */
+html.distincion-oro { --distincion: var(--ranking-oro); }
+html.distincion-plata { --distincion: var(--ranking-plata); }
+html.distincion-bronce { --distincion: var(--ranking-bronce); }
+
+html[class*="distincion-"] #layout-menu .menu-inner > .menu-item > .menu-link > .menu-icon,
+html[class*="distincion-"] #notificacionesDropdown .fa-bell {
+  color: var(--distincion) !important;
+}
+html[class*="distincion-"] .avatar-usuario {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--distincion);
+}
+/* La medalla bajo el nombre: oculta si el ganador la apagó en Configuración. */
+.distincion-medalla { display: none; font-size: 1.1rem; line-height: 1; margin: .1rem 0; }
+html[class*="distincion-"] .distincion-medalla { display: block; }

@@ -1,0 +1,101 @@
+{% comment %} El aviso que sale al exportar con filtros de cargo puestos.
+
+   Con la búsqueda, la categoría o el rol activos, «exportar» deja de querer decir
+   una sola cosa: puede ser LA PLANTILLA de la unidad, que es el documento oficial,
+   o LO QUE SE ESTÁ VIENDO, que es un recorte. Elegir por el usuario sería adivinar,
+   y equivocarse significa mandar al organismo un documento incompleto sin que nadie
+   lo note. Así que se pregunta.
+
+   El servidor no sabe nada de esto y no hizo falta tocarlo: las dos opciones son la
+   MISMA URL de exportación, una con los parámetros de filtro y otra sin ellos. El
+   sufijo «(filtrado)» del nombre del fichero sale solo, porque lo decide
+   `views._hay_filtros_de_cargo()` sobre lo que llegue en el GET.
+
+   El aviso solo existe en el Anexo 14: el 14-A no tiene filtros de cargo —sus
+   columnas SON las categorías— y ahí el botón descarga directamente.
+
+   La unidad NO se toca en ninguna de las dos opciones: es el alcance del informe,
+   no un filtro dentro de él.
+
+   EL ESCUCHADOR VA SOBRE `document`, NO SOBRE LOS BOTONES
+   -------------------------------------------------------
+   La botonera se reinyecta entera por intercambio fuera de banda cada vez que se
+   resuelve un firmante por HTMX. Unos escuchadores puestos sobre ella morirían en
+   el primer intercambio y el aviso dejaría de salir, sin error y sin aviso.
+   {% endcomment %}
+<div class="modal fade" id="modalFiltrosExport" tabindex="-1"
+     aria-labelledby="modalFiltrosExportTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalFiltrosExportTitulo">
+                    <i class="bx bx-filter-alt me-1 text-warning"></i>Tienes filtros aplicados
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">
+                    Estás viendo la plantilla recortada por los filtros de cargo.
+                    ¿Qué quieres descargar?
+                </p>
+                <div class="d-grid gap-2">
+                    <a href="#" class="btn anx-btn-export anx-btn-export--combinado text-start"
+                       id="exportarCompleta">
+                        <i class="bx bx-check-shield me-1"></i>
+                        <strong>La plantilla completa</strong>
+                        <span class="d-block small opacity-75 ms-4">
+                            El documento oficial, con todos los cargos de las unidades elegidas.
+                        </span>
+                    </a>
+                    <a href="#" class="btn anx-btn-export anx-btn-export--filtrado text-start"
+                       id="exportarFiltrada">
+                        <i class="bx bx-filter-alt me-1"></i>
+                        <strong>Solo lo filtrado</strong>
+                        <span class="d-block small opacity-75 ms-4">
+                            Lo que ves ahora. El nombre del fichero lo dirá con «(filtrado)».
+                        </span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    /* Se engancha UNA vez a `document` y no a los botones. El porqué está en el
+       comentario de Django de arriba. */
+    if (window.__anexoAvisoFiltros) return;
+    window.__anexoAvisoFiltros = true;
+
+    var FILTROS_DE_CARGO = ['q', 'categoria', 'rol'];
+
+    document.addEventListener('click', function (evento) {
+        var boton = evento.target.closest('a.anx-btn-export');
+        if (!boton || boton.dataset.filtrosActivos !== '1') return;
+
+        evento.preventDefault();
+
+        var completa = new URL(boton.href, window.location.origin);
+        FILTROS_DE_CARGO.forEach(function (nombre) {
+            completa.searchParams.delete(nombre);
+        });
+
+        document.getElementById('exportarCompleta').href = completa.toString();
+        document.getElementById('exportarFiltrada').href = boton.href;
+
+        bootstrap.Modal.getOrCreateInstance(
+            document.getElementById('modalFiltrosExport')).show();
+    });
+
+    /* Al pulsar cualquiera de las dos, el modal se cierra: la descarga no navega
+       y sin esto el aviso se quedaría abierto encima de la pantalla. */
+    ['exportarCompleta', 'exportarFiltrada'].forEach(function (id) {
+        document.getElementById(id).addEventListener('click', function () {
+            bootstrap.Modal.getOrCreateInstance(
+                document.getElementById('modalFiltrosExport')).hide();
+        });
+    });
+})();
+</script>

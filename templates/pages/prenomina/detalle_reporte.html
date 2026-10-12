@@ -59,6 +59,7 @@
 
 {% block extra_scripts %}
 <script src="{% estatico 'js/prenomina.js' %}"></script>
+{% comment %} Pre-Nómina está en desarrollo: su recorrido (static/js/recorrido_prenomina.js) está hecho pero oculto, y la tarea de la Guía sale atenuada (TareaGuia.en_desarrollo). Para activarlo: el menú «¿Cómo funciona?» → exportar_prenomina:lista / :reporte y los dos scripts. {% endcomment %}
 <script>
   window.orbith.cablearModalHtmx('modal_generic');
   window.orbith.cablearConfirmacionHtmx();

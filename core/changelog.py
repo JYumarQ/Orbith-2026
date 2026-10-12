@@ -36,6 +36,89 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.2.0",
+        "fecha": "2026-10-12",
+        "titulo": "Anexo 14-B, Ranking Mensual, auditoría completa y tablas a pantalla justa",
+        "cambios": [
+            ("nuevo", "Anexo 14-B «Formación y Desarrollo», con pantalla propia y "
+                    "Excel: una hoja por departamento más las de Adiestrados, "
+                    "Contratados y Fuera de plantilla. Una fila por plaza "
+                    "aprobada, también las vacantes, con el importe mensual y "
+                    "la tarifa horaria, el nivel de preparación, los años de "
+                    "servicio y la CLA y nocturnidad del último reporte de "
+                    "Pre-Nómina cerrado."),
+            ("nuevo", "Anexos 14 y 14-A: una pestaña por unidad que se carga al "
+                    "abrirla, selector de varias unidades a la vez y Excel con "
+                    "portada y resumen. Nuevo botón para bajar el 14 y el 14-A "
+                    "en un solo libro. Si hay filtros puestos, Orbith pregunta "
+                    "si exportar la plantilla completa o solo lo filtrado."),
+            ("nuevo", "Días e Importe de la misión en el contrato. Se pueden "
+                    "completar también desde el informe Misiones "
+                    "Internacionales, con confirmación antes de guardar, "
+                    "aviso si otro usuario cambió el dato a la vez y registro "
+                    "en Auditoría. La regla CTR-021 de Subsanación avisa de las "
+                    "misiones sin días o sin importe."),
+            ("nuevo", "Subsanación: regla CTR-020 para los contratos fijos en "
+                    "cargos fuera de plantilla, y pestaña «Índice de Reglas» "
+                    "que explica qué comprueba cada código y cómo se corrige."),
+            ("nuevo", "Búsqueda con prefijos en Aspirantes, Bajas, Contratos y "
+                    "Subsanación: E: expediente, N: nombre, CI: carnet, CA: "
+                    "cargo, U: unidad y COD: código de regla. Se pueden "
+                    "combinar y los acentos no importan."),
+            ("nuevo", "El formulario de contrato muestra los años de servicio y "
+                    "su importe, calculados al momento desde la F. Alta "
+                    "Entidad y la escala vigente."),
+            ("nuevo", "Auditoría completa: todo lo que se crea, edita o elimina "
+                    "desde los formularios (contratos, aspirantes, estructura y "
+                    "nomencladores) queda registrado con el antes y el después. "
+                    "Antes solo se auditaban las Solicitudes y el panel de "
+                    "administración. Filtro por módulo, y las acciones Alta, "
+                    "Movimiento y Baja tienen color e icono propios."),
+            ("nuevo", "Parámetros Generales: opción para borrar la auditoría "
+                    "más antigua que los años que se elijan. Viene apagada."),
+            ("nuevo", "Guía de Orbith: categoría «Exportar» con ocho tareas que "
+                    "muestran el avance por formato, tarea «Busca con "
+                    "prefijos» y tareas según el rol. Todas las tareas tienen "
+                    "ya su guía visual paso a paso («¿Cómo funciona?»)."),
+            ("nuevo", "Ranking Mensual Orbith, en el menú de la foto: el trabajo "
+                    "de cada día suma XP, con niveles y una clasificación por "
+                    "rol. El día 1 se cierra el mes y llega el resultado a la "
+                    "campana. Los tres primeros de cada rol lucen el mes "
+                    "siguiente una distinción oro, plata o bronce, que se "
+                    "puede ocultar en Configuración."),
+            ("nuevo", "Estadísticas de uso, solo para Administradores: ranking "
+                    "del mes, uso de Orbith por usuario y módulo, usuarios sin "
+                    "actividad y unidades sin cierre en plazo, con botón para "
+                    "enviarles un recordatorio."),
+            ("nuevo", "Todas las tablas comparten estilo: caben justas en la "
+                    "pantalla, con la cabecera fija y la paginación siempre a "
+                    "la vista. Páginas numeradas y «Filas por página» 10, 25, "
+                    "50 o 100, que se recuerda por usuario y se puede elegir "
+                    "en Configuración. Los Informes RRHH y los Anexos fijan "
+                    "también su cabecera al desplazar."),
+            ("mejorado", "Títulos de página más pequeños y más arriba, y sin la "
+                        "barra superior vacía en el escritorio: más espacio "
+                        "para el contenido en todas las pantallas."),
+            ("mejorado", "Un solo formulario de Baja para la Lista de Contratos "
+                        "y el Gestor de Plantilla. El del Gestor no pedía "
+                        "Observaciones ni ofrecía el PDF al terminar."),
+            ("mejorado", "Cierres Mensuales adopta los colores de los Informes "
+                        "RRHH."),
+            ("corregido", "El Anexo 14 dejaba fuera las unidades que no son "
+                        "Principales, como las UEB de Florida, Nuevitas y "
+                        "Despacho."),
+            ("corregido", "Los filtros de Auditoría, Advertencias y Solicitudes "
+                        "se cerraban al marcar la primera opción."),
+            ("corregido", "Auditoría, Subsanación e Informe Inteligente dejaban "
+                        "una franja en blanco encima del título."),
+            ("seguridad", "Los avisos de la campana muestran su texto tal cual: "
+                        "un título o mensaje con código ya no puede ejecutarse "
+                        "en el navegador de quien lo abre."),
+            ("eliminado", "La exportación a PDF del Anexo 14, que no se usaba."),
+        ],
+    },
+
+    {
         "version": "3.1.0",
         "fecha": "2026-09-15",
         "titulo": "Cargos fuera de la plantilla aprobada, y una aplicación más ligera",
@@ -337,32 +420,6 @@ CHANGELOG = [
                         "estaban vacías, ninguna pantalla los usaba y ningún "
                         "contrato tenía jornada asignada. El tiempo de trabajo "
                         "se gestiona ahora desde Pre-Nómina → Calendario."),
-        ],
-    },
-
-    {
-        "version": "2.5.0",
-        "fecha": "2026-08-18",
-        "titulo": "Guía de progreso, permisos granulares y auditoría en admin",
-        "cambios": [
-            ("nuevo", "Guía de Progreso: sistema de tareas guiadas para nuevos "
-                    "usuarios, con seguimiento de pasos completados, "
-                    "instrucciones contextuales y barra de progreso."),
-            ("nuevo", "Permisos granulares en contratos y subsanación para un "
-                    "control más fino de accesos."),
-            ("nuevo", "Mixins de auditoría en el panel de administración para "
-                    "registrar automáticamente quién crea o modifica registros."),
-            ("nuevo", "Campo 'fecha_alta_entidad' en contratos para registrar "
-                    "la fecha real de alta en la entidad."),
-            ("mejorado", "Reestructuración de templates del Dashboard para "
-                        "facilitar su mantenimiento."),
-            ("mejorado", "Recodificación y deduplicación de eventos de "
-                        "notificaciones para evitar duplicados y mejorar "
-                        "el rendimiento."),
-            ("mejorado", "Actualización masiva de vistas, formularios y "
-                        "plantillas en contratos, subsanación y solicitudes."),
-            ("corregido", "Corrección en la gestión de cumpleaños y jubilaciones "
-                        "en el sistema de notificaciones."),
         ],
     },
 ]

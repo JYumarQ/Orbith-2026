@@ -1,0 +1,22 @@
+{% comment %}Una persona del Ranking (`p`, ver `ranking.servicios._persona`).{% endcomment %}
+<li class="ranking-fila{% if p.soy_yo %} soy-yo{% endif %}">
+  <span class="ranking-puesto">
+    {% if p.puesto == 1 %}<i class="bx bxs-medal ranking-oro" title="1º puesto"></i>
+    {% elif p.puesto == 2 %}<i class="bx bxs-medal ranking-plata" title="2º puesto"></i>
+    {% elif p.puesto == 3 %}<i class="bx bxs-medal ranking-bronce" title="3º puesto"></i>
+    {% elif p.puesto %}{{ p.puesto }}º
+    {% else %}—{% endif %}
+  </span>
+  {% if p.avatar %}
+    <img src="{{ p.avatar }}" alt="" class="ranking-avatar" loading="lazy">
+  {% elif p.iniciales %}
+    <span class="ranking-avatar ranking-iniciales">{{ p.iniciales }}</span>
+  {% else %}
+    <span class="ranking-avatar ranking-iniciales sin-nombre"><i class="bx bx-user"></i></span>
+  {% endif %}
+  <span class="flex-grow-1 text-truncate">
+    <span class="ranking-nombre">{{ p.nombre }}{% if p.soy_yo %} <small class="text-primary">(tú)</small>{% endif %}</span>
+    {% if p.nivel %}<small class="d-block text-muted">{{ p.nivel }}</small>{% endif %}
+  </span>
+  <span class="ranking-xp">{{ p.xp }} XP</span>
+</li>

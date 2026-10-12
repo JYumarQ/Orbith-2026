@@ -46,6 +46,12 @@ class AccionAuditoria(models.TextChoices):
     RECHAZAR = 'REC', 'Rechazo'
     CANCELAR = 'CAN', 'Cancelación'
     DEVOLVER_A_ESPERA = 'DEV', 'Devuelta a espera'
+    # El ciclo del trabajador. Tienen acción propia para no confundirse con crear,
+    # editar o borrar un contrato a mano: un movimiento de nómina NO es editar el
+    # contrato, y una baja NO es borrarlo (pasa a la lista de Bajas).
+    ALTA = 'ALT', 'Alta'
+    MOVIMIENTO = 'MOV', 'Movimiento de nómina'
+    BAJA = 'BAJ', 'Baja'
     # Accesos al sistema. No afectan a ningún registro (`content_type` y
     # `object_id` quedan a null): el hecho auditado es la entrada o salida en sí.
     ACCESO = 'ACC', 'Inicio de sesión'
@@ -70,7 +76,8 @@ class EventoAuditoria(models.Model):
     accion = models.CharField(max_length=3, choices=AccionAuditoria.choices)
 
     # Origen del cambio. CharField libre (no choices estrictas) para no requerir
-    # migración cuando se integren otros módulos en fases futuras.
+    # migración cuando se integren otros módulos en fases futuras. Sus nombres
+    # legibles están en `auditoria.registro_automatico.NOMBRES_DE_MODULO`.
     modulo = models.CharField(max_length=30, blank=True, default='solicitudes')
 
     # Registro real afectado. Null en rechazos/cancelaciones de una operación de
@@ -106,6 +113,8 @@ class EventoAuditoria(models.Model):
             models.Index(fields=['accion', 'fecha']),
             models.Index(fields=['usuario', 'fecha']),
             models.Index(fields=['content_type', 'object_id']),
+            # Filtro por módulo de la pantalla de Auditoría.
+            models.Index(fields=['modulo', 'fecha']),
         ]
 
     def __str__(self):

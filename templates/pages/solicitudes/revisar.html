@@ -1,4 +1,5 @@
 {% extends 'base/base.html' %}
+{% load estaticos %}
 
 {% block title %}Revisar solicitud{% endblock %}
 
@@ -14,11 +15,22 @@ que el Moderador no puede tocarla mientras esta pantalla esté abierta. Las tres
 <div class="content-wrapper">
     <div class="container-xxl grow container-p-y">
 
-        <h4 class="fw-bold py-3 mb-1">
+        <h4 class="fw-bold py-3 mb-1 d-flex align-items-center flex-wrap gap-2">
             <span class="text-muted fw-light">
                 <a href="{% url 'list_solicitudes' %}" class="text-muted">Solicitudes</a> /
             </span>
             Revisión
+        
+            <span class="dropdown" style="font-size: 1rem;">
+                <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoSolicitudes"
+                        data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+                    <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                </button>
+                <ul class="dropdown-menu" style="font-size: .875rem;">
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_solicitud_decidida:revisar">
+                        <i class="bx bx-check-double me-1"></i>Decidir esta solicitud</button></li>
+                </ul>
+            </span>
         </h4>
 
         <div class="card mb-4">
@@ -159,4 +171,6 @@ que el Moderador no puede tocarla mientras esta pantalla esté abierta. Las tres
         document.addEventListener('DOMContentLoaded', abrirModalRechazo);
     {% endif %}
 </script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_solicitudes.js' %}"></script>
 {% endblock %}

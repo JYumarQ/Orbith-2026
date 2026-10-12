@@ -1,9 +1,10 @@
 {% comment %} Tabla + paginación de Recordatorios, separada de `tab_recordatorios.html`
    para que `panel_recordatorios` pueda intercambiar SOLO esto vía HTMX al buscar,
    igual que `panel_advertencias` hace con `_tabla.html` en Advertencias. {% endcomment %}
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+{# Estilo común de las tablas: static/css/orbith-tablas.css #}
+<div class="card orb-tabla-card">
+  <div class="orb-tabla-scroll">
+    <table class="table orb-tabla">
       <thead>
         <tr>
           <th>Prioridad</th>
@@ -62,6 +63,5 @@
       </tbody>
     </table>
   </div>
+  {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=recordatorios querystring=querystring_sin_pagina nombre='recordatorios' %}
 </div>
-
-{% include 'base/partials/paginacion_ventana.html' with pagina=recordatorios querystring=querystring_sin_pagina %}

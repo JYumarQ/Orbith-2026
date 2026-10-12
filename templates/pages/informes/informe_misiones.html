@@ -20,15 +20,23 @@
     .rounded-[1.5rem] { border-radius: 1.5rem !important; }
     .table-moderna th { border-bottom: 1px solid #f1f5f9 !important; padding: 0.8rem 0.5rem !important; }
     .table-moderna td { vertical-align: middle !important; padding: 0.4rem 0.5rem !important; }
+    /* Días e Importe editables con doble clic (solo quien puede editar). */
+    .celda-mision.editable { cursor: pointer; }
+    .celda-mision.editable:hover { background-color: #f8fafc; }
+    /* Valor distinto del guardado en la base de datos. */
+    .celda-mision.celda-editada { background-color: #fef3c7 !important; color: #92400e !important; }
+    .celda-mision input { width: 110px; display: inline-block; }
+    .barra-mision { background-color: #fffbeb; border-bottom: 1px solid #fde68a; }
 </style>
 
 <div class="container-xxl flex-grow-1 container-p-y" style="background-color: #F4F7FB;">
-    
+
     {% include 'pages/informes/partials/toolbar_informes.html' with titulo_informe="Misiones Internacionales" %}
 
-    
-    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4">
-        
+
+    {# Cabecera fija y justa en la pantalla (static/css/orbith-tablas.css). #}
+    <div class="card border-0 shadow-sm rounded-[1.5rem] overflow-hidden mb-4 orb-tabla-card">
+
         <div class="card-body bg-slate-50 pt-3 pb-2 border-bottom border-slate-200">
             <div class="row g-3">
                 <div class="col-6 col-lg-3">
@@ -47,7 +55,7 @@
                             <div class="p-1 bg-emerald-50 text-emerald-600 rounded"><i class="bx bx-dollar-circle fs-6"></i></div>
                             <span class="text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 9px;">Importe</span>
                         </div>
-                        <div class="fs-3 fw-black text-slate-800 lh-1" id="card-importe-total">${{ importe_total|floatformat:2 }}</div>
+                        <div class="fs-3 fw-black text-slate-800 lh-1" id="card-importe-total">${{ importe_total|stringformat:'.2f' }}</div>
                     </div>
                 </div>
 
@@ -63,8 +71,30 @@
             </div>
         </div>
 
-        <div class="table-responsive">
-            <table class="table table-moderna w-100 text-start border-collapse mb-0">
+        {% if mision_editable and misiones_por_unidad %}
+        {% comment %}
+          Franja propia de este informe (no va en la barra común de los siete).
+          «Guardar» y «Restablecer» solo se encienden cuando algún valor de la
+          pantalla no coincide con la base de datos.
+        {% endcomment %}
+        <div class="barra-mision d-flex flex-wrap align-items-center gap-2 px-4 py-2" id="barra-mision">
+            <i class="bx bx-edit-alt text-slate-500"></i>
+            <span class="text-slate-600 small" id="texto-cambios-mision">Doble clic en Días o Importe para editarlos.</span>
+            <div class="ms-auto d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-label-secondary" id="btn-restablecer-mision" disabled
+                        title="Devuelve todos los valores editados a los guardados en la base de datos">
+                    <i class="bx bx-reset me-1"></i>Restablecer
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-guardar-mision" disabled
+                        title="Guarda en los contratos los valores editados">
+                    <i class="bx bx-save me-1"></i>Guardar
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="orb-tabla-scroll">
+            <table class="table table-moderna w-100 text-start border-collapse mb-0 orb-tabla-fija">
                 <thead>
                     <tr class="bg-slate-50 border-slate-100">
                         <th class="px-4 py-3 text-slate-400 fw-black text-uppercase tracking-widest" style="font-size: 11px;">Exp. Laboral</th>
@@ -89,19 +119,25 @@
                             </td>
                         </tr>
                         {% for t in unidad.trabajadores %}
-                        <tr>
+                        {% comment %}
+                          `data-original` guarda lo que hay en la base de datos ('' = sin
+                          registrar). La celda pinta 0 cuando está vacía.
+                        {% endcomment %}
+                        <tr class="fila-mision" data-expediente="{{ t.expediente }}" data-nombre="{{ t.nombre }}">
                             <td class="px-4 py-2 font-monospace fw-bold text-slate-500" style="font-size: 13px;">{{ t.expediente }}</td>
                             <td class="px-4 py-2 fw-bold text-slate-700" style="font-size: 13px;">{{ t.nombre }}</td>
                             <td class="px-4 py-2 text-slate-500" style="font-size: 12px;">{{ t.cargo }}</td>
                             <td class="px-3 py-2 text-center fw-bold text-indigo-600" style="font-size: 13px;">{{ t.pais }}</td>
                             <td class="px-3 py-2 text-center"><span class="cat-insignia cat-{{ t.cat_codigo }}">{{ t.cat_letra }}</span></td>
                             <td class="px-3 py-2 text-center font-monospace fw-bold text-slate-500" style="font-size: 14px;">{{ t.g_escala }}</td>
-                            <td class="px-3 py-2 text-center font-monospace text-slate-400" style="font-size: 14px;">{{ t.dias }}</td>
-                            <td class="px-4 py-2 text-end font-monospace fw-bold text-slate-800 celda-importe"
-                                id="importe-{{ t.expediente }}"
-                                data-expediente="{{ t.expediente }}"
-                                data-importe-original="{{ t.importe|floatformat:2 }}"
-                                title="Doble clic para editar el importe (temporal, no se guarda en base de datos)">{{ t.importe|floatformat:2 }}</td>
+                            <td class="px-3 py-2 text-center font-monospace text-slate-700 celda-mision{% if mision_editable %} editable{% endif %}"
+                                style="font-size: 14px;" data-campo="dias"
+                                data-original="{% if t.dias is not None %}{{ t.dias }}{% endif %}"
+                                {% if mision_editable %}title="Doble clic para editar los días"{% endif %}>{{ t.dias|default:0 }}</td>
+                            <td class="px-4 py-2 text-end font-monospace fw-bold text-slate-800 celda-mision{% if mision_editable %} editable{% endif %}"
+                                data-campo="importe"
+                                data-original="{% if t.importe is not None %}{{ t.importe|stringformat:'.2f' }}{% endif %}"
+                                {% if mision_editable %}title="Doble clic para editar el importe"{% endif %}>{{ t.importe|default:0|stringformat:'.2f' }}</td>
                         </tr>
                         {% endfor %}
                     {% empty %}
@@ -114,100 +150,412 @@
 </div>
 
 <script>
-    function ejecutarWord() {
-        window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_misiones_word' %}" + window.location.search;
-    }
-    function ejecutarPDF() {
-        window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_misiones_pdf' %}" + window.location.search;
-    }
-    function ejecutarExcel() {
-        window.mostrarToast('Preparando el libro de Excel…', 'info');
-        window.location.href = "{% url 'exportar_misiones_excel' %}" + window.location.search;
-    }
-</script>
+/*
+ * Misiones Internacionales: Días e Importe editables, Guardar, Restablecer y
+ * exportaciones con lo que se ve en pantalla.
+ *
+ * Cada celda editable guarda en `data-original` el valor de la base de datos
+ * ('' = sin registrar) y en `data-actual` el que se ve. Una celda está
+ * «editada» cuando los dos no coinciden. Las ediciones sin guardar se recuerdan
+ * en sessionStorage hasta que se guardan o se pulsa «Restablecer».
+ */
+(function () {
+    const EDITABLE = {{ mision_editable|yesno:"true,false" }};
+    const CLAVE_ALMACEN = 'orbith_misiones_valores';
+    const URL_GUARDAR = "{% url 'guardar_misiones' %}";
+    const CSRF = '{{ csrf_token }}';
+    const DIAS_MAXIMO = 9999;
+    const IMPORTE_MAXIMO = 9999999.99;
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const PREFIJO = 'mision_importe_';
+    // ---------------------------------------------------------------- valores
+    // Forma canónica de un valor, la misma que usa el servidor para comparar:
+    // días '15', importe '1250.50', vacío ''. Devuelve null si no es válido.
+    function normalizar(campo, texto) {
+        texto = String(texto == null ? '' : texto).trim().replace(',', '.');
+        if (texto === '') return '';
+        if (campo === 'dias') {
+            if (!/^\d+$/.test(texto)) return null;
+            const dias = parseInt(texto, 10);
+            return dias <= DIAS_MAXIMO ? String(dias) : null;
+        }
+        if (!/^\d+(\.\d{1,2})?$/.test(texto)) return null;
+        const importe = parseFloat(texto);
+        return importe <= IMPORTE_MAXIMO ? importe.toFixed(2) : null;
+    }
 
-    function formatearMoneda(valor) {
-        return parseFloat(valor || 0).toFixed(2);
+    function motivoInvalido(campo) {
+        return campo === 'dias'
+            ? 'Los días deben ser un número entero entre 0 y ' + DIAS_MAXIMO + '.'
+            : 'El importe debe ser un número de hasta 7 cifras enteras y 2 decimales, sin negativos.';
+    }
+
+    // Lo que se pinta: vacío se ve como 0.
+    function aPantalla(campo, valor) {
+        if (valor === '') return campo === 'dias' ? '0' : '0.00';
+        return valor;
+    }
+
+    function celdas() {
+        return Array.from(document.querySelectorAll('.celda-mision'));
+    }
+
+    function celdaDe(expediente, campo) {
+        return document.querySelector(
+            '.fila-mision[data-expediente="' + CSS.escape(expediente) + '"] .celda-mision[data-campo="' + campo + '"]');
+    }
+
+    function actual(celda) {
+        return celda.dataset.actual !== undefined ? celda.dataset.actual : celda.dataset.original;
+    }
+
+    function ponerValor(celda, valor) {
+        celda.dataset.actual = valor;
+        celda.textContent = aPantalla(celda.dataset.campo, valor);
+        const editada = valor !== celda.dataset.original;
+        celda.classList.toggle('celda-editada', editada);
+        if (EDITABLE) {
+            const original = aPantalla(celda.dataset.campo, celda.dataset.original);
+            celda.title = editada
+                ? 'Valor en la base de datos: ' + original + (celda.dataset.original === '' ? ' (sin registrar)' : '')
+                : (celda.dataset.campo === 'dias' ? 'Doble clic para editar los días' : 'Doble clic para editar el importe');
+        }
+    }
+
+    // ------------------------------------------------------------ almacenado
+    function leerAlmacen() {
+        try { return JSON.parse(sessionStorage.getItem(CLAVE_ALMACEN) || '{}') || {}; }
+        catch (e) { return {}; }
+    }
+
+    function escribirAlmacen(datos) {
+        try {
+            if (Object.keys(datos).length) sessionStorage.setItem(CLAVE_ALMACEN, JSON.stringify(datos));
+            else sessionStorage.removeItem(CLAVE_ALMACEN);
+        } catch (e) { /* sin almacenamiento: los cambios viven solo en esta página */ }
+    }
+
+    // Guarda en sessionStorage lo editado de las filas visibles. Las ediciones
+    // de trabajadores que ahora no se ven (por el filtro de unidad) se conservan.
+    function recordar() {
+        const datos = leerAlmacen();
+        document.querySelectorAll('.fila-mision').forEach(function (fila) {
+            const exp = fila.dataset.expediente;
+            const dias = fila.querySelector('[data-campo="dias"]');
+            const importe = fila.querySelector('[data-campo="importe"]');
+            if (actual(dias) !== dias.dataset.original || actual(importe) !== importe.dataset.original) {
+                datos[exp] = { dias: actual(dias), importe: actual(importe) };
+            } else {
+                delete datos[exp];
+            }
+        });
+        escribirAlmacen(datos);
+    }
+
+    // Antes había una clave por expediente, solo del importe. Se descartan.
+    function limpiarAlmacenAntiguo() {
+        try {
+            Object.keys(sessionStorage)
+                .filter(function (k) { return k.indexOf('mision_importe_') === 0; })
+                .forEach(function (k) { sessionStorage.removeItem(k); });
+        } catch (e) { /* nada */ }
+    }
+
+    // ------------------------------------------------------------ resumen
+    function filasEditadas() {
+        return Array.from(document.querySelectorAll('.fila-mision')).filter(function (fila) {
+            return fila.querySelector('.celda-editada');
+        }).map(function (fila) {
+            const dias = fila.querySelector('[data-campo="dias"]');
+            const importe = fila.querySelector('[data-campo="importe"]');
+            return {
+                expediente: fila.dataset.expediente,
+                nombre: fila.dataset.nombre,
+                dias: actual(dias),
+                importe: actual(importe),
+                dias_original: dias.dataset.original,
+                importe_original: importe.dataset.original
+            };
+        });
     }
 
     function recalcularTotal() {
         let total = 0;
-        document.querySelectorAll('.celda-importe').forEach(function (celda) {
-            total += parseFloat(celda.textContent.trim()) || 0;
+        document.querySelectorAll('.celda-mision[data-campo="importe"]').forEach(function (celda) {
+            total += parseFloat(actual(celda)) || 0;
         });
-        const cardTotal = document.getElementById('card-importe-total');
-        if (cardTotal) cardTotal.textContent = '$' + formatearMoneda(total);
+        const tarjeta = document.getElementById('card-importe-total');
+        if (tarjeta) tarjeta.textContent = '$' + total.toFixed(2);
     }
 
-    function guardarValor(expediente, valor) {
-        sessionStorage.setItem(PREFIJO + expediente, valor);
+    function refrescar() {
+        recalcularTotal();
+        const editadas = filasEditadas().length;
+        const guardar = document.getElementById('btn-guardar-mision');
+        const restablecer = document.getElementById('btn-restablecer-mision');
+        const texto = document.getElementById('texto-cambios-mision');
+        if (guardar) guardar.disabled = editadas === 0;
+        if (restablecer) restablecer.disabled = editadas === 0 && !Object.keys(leerAlmacen()).length;
+        if (texto) {
+            texto.textContent = editadas === 0
+                ? 'Doble clic en Días o Importe para editarlos.'
+                : (editadas === 1 ? '1 trabajador con valores sin guardar.'
+                                  : editadas + ' trabajadores con valores sin guardar.');
+        }
     }
 
-    function leerValorGuardado(expediente) {
-        return sessionStorage.getItem(PREFIJO + expediente);
-    }
-
-    function activarEdicion(celda) {
-        const expediente = celda.dataset.expediente;
-        const valorActual = celda.textContent.trim();
+    // ------------------------------------------------------------ edición
+    function editar(celda) {
+        if (celda.querySelector('input')) return;
+        const campo = celda.dataset.campo;
+        const anterior = actual(celda);
 
         const input = document.createElement('input');
         input.type = 'number';
-        input.step = '0.01';
         input.min = '0';
-        input.value = valorActual;
-        input.className = 'form-control form-control-sm text-end';
-        input.style.width = '110px';
-        input.style.display = 'inline-block';
+        input.step = campo === 'dias' ? '1' : '0.01';
+        input.max = campo === 'dias' ? String(DIAS_MAXIMO) : String(IMPORTE_MAXIMO);
+        input.value = anterior;
+        input.className = 'form-control form-control-sm ' + (campo === 'dias' ? 'text-center' : 'text-end');
 
         celda.textContent = '';
         celda.appendChild(input);
         input.focus();
         input.select();
 
-        function confirmarEdicion() {
-            const nuevoValor = formatearMoneda(input.value);
-            celda.textContent = nuevoValor;
-            guardarValor(expediente, nuevoValor);
-            recalcularTotal();
+        let terminado = false;
+        function terminar(aceptar) {
+            if (terminado) return;
+            terminado = true;
+            let valor = anterior;
+            if (aceptar) {
+                // Un <input type="number"> con texto no numérico devuelve ''.
+                // Se distingue de «lo dejó vacío» con `validity.badInput`.
+                const normal = input.validity.badInput ? null : normalizar(campo, input.value);
+                if (normal === null) {
+                    window.mostrarToast(motivoInvalido(campo), 'error');
+                } else {
+                    valor = normal;
+                }
+            }
+            ponerValor(celda, valor);
+            recordar();
+            refrescar();
         }
 
-        input.addEventListener('blur', confirmarEdicion);
+        input.addEventListener('blur', function () { terminar(true); });
         input.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                input.blur();
-            }
-            if (e.key === 'Escape') {
-                celda.textContent = valorActual;
-            }
+            if (e.key === 'Enter') { e.preventDefault(); terminar(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); terminar(false); }
         });
     }
 
-    // Doble clic para editar
-    document.querySelectorAll('.celda-importe').forEach(function (celda) {
-        celda.addEventListener('dblclick', function () {
-            activarEdicion(celda);
+    // ------------------------------------------------------------ guardar
+    function escaparHtml(texto) {
+        const div = document.createElement('div');
+        div.textContent = texto;
+        return div.innerHTML;
+    }
+
+    function listaDeCambios(cambios) {
+        const filas = cambios.map(function (c) {
+            return '<tr><td class="text-start">' + escaparHtml(c.nombre) + '</td>'
+                + '<td class="text-center">' + aPantalla('dias', c.dias) + '</td>'
+                + '<td class="text-end">' + aPantalla('importe', c.importe) + '</td></tr>';
+        }).join('');
+        return '<div style="max-height: 300px; overflow-y: auto;">'
+            + '<table class="table table-sm mb-0" style="font-size: 13px;">'
+            + '<thead><tr><th class="text-start">Trabajador</th><th class="text-center">Días</th>'
+            + '<th class="text-end">Importe</th></tr></thead><tbody>' + filas + '</tbody></table></div>';
+    }
+
+    function guardar() {
+        const cambios = filasEditadas();
+        if (!cambios.length) return;
+        Swal.fire({
+            icon: 'question',
+            title: cambios.length === 1 ? 'Guardar 1 trabajador' : 'Guardar ' + cambios.length + ' trabajadores',
+            html: 'Se guardarán en sus contratos estos valores:<br><br>' + listaDeCambios(cambios),
+            showCancelButton: true,
+            confirmButtonText: 'Confirmar',
+            cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+            buttonsStyling: false
+        }).then(function (r) {
+            if (r.isConfirmed) enviar(cambios);
         });
-    });
+    }
 
-    // Al cargar la página: repoblar valores guardados en esta sesión
-    document.querySelectorAll('.celda-importe').forEach(function (celda) {
-        const expediente = celda.dataset.expediente;
-        const guardado = leerValorGuardado(expediente);
-        if (guardado !== null) {
-            celda.textContent = formatearMoneda(guardado);
+    function enviar(cambios) {
+        const boton = document.getElementById('btn-guardar-mision');
+        boton.disabled = true;
+        fetch(URL_GUARDAR, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ cambios: cambios })
+        })
+        .then(function (respuesta) {
+            return respuesta.json().catch(function () { return {}; }).then(function (datos) {
+                return { estado: respuesta.status, datos: datos };
+            });
+        })
+        .then(function (r) {
+            if (r.estado === 200 && r.datos.ok) {
+                Object.keys(r.datos.guardados).forEach(function (exp) {
+                    const valores = r.datos.guardados[exp];
+                    ['dias', 'importe'].forEach(function (campo) {
+                        const celda = celdaDe(exp, campo);
+                        if (!celda) return;
+                        celda.dataset.original = valores[campo];
+                        ponerValor(celda, valores[campo]);
+                    });
+                });
+                recordar();
+                refrescar();
+                const n = Object.keys(r.datos.guardados).length;
+                window.mostrarToast(n === 1 ? 'Se guardaron los datos de 1 trabajador.'
+                                            : 'Se guardaron los datos de ' + n + ' trabajadores.', 'success');
+                return;
+            }
+            // Conflicto: otro usuario cambió algo. La referencia de esos
+            // trabajadores pasa a ser lo que hay ahora en la base de datos; lo
+            // que el usuario escribió se mantiene para que decida.
+            const actuales = (r.datos && r.datos.actuales) || {};
+            Object.keys(actuales).forEach(function (exp) {
+                ['dias', 'importe'].forEach(function (campo) {
+                    const celda = celdaDe(exp, campo);
+                    if (!celda) return;
+                    celda.dataset.original = actuales[exp][campo];
+                    ponerValor(celda, actual(celda));
+                });
+            });
+            recordar();
+            refrescar();
+            const errores = (r.datos && r.datos.errores) || [];
+            Swal.fire({
+                icon: 'error',
+                title: (r.datos && (r.datos.mensaje || r.datos.message)) || 'No se pudo guardar.',
+                html: errores.length
+                    ? '<ul class="text-start mb-0">' + errores.map(function (e) {
+                        return '<li>' + escaparHtml(e) + '</li>'; }).join('') + '</ul>'
+                    : '',
+                confirmButtonText: 'Entendido',
+                customClass: { confirmButton: 'btn btn-primary' },
+                buttonsStyling: false
+            });
+        })
+        .catch(function () {
+            refrescar();
+            window.mostrarToast('No se pudo conectar con el servidor. Los cambios siguen sin guardar.', 'error');
+        });
+    }
+
+    function restablecer() {
+        celdas().forEach(function (celda) { ponerValor(celda, celda.dataset.original); });
+        escribirAlmacen({});
+        refrescar();
+        window.mostrarToast('Se restablecieron los valores de la base de datos.', 'info');
+    }
+
+    // ------------------------------------------------------------ exportar
+    // La barra común llama a ejecutarPDF/Word/Excel. Sin ediciones se exporta
+    // como siempre (GET); con ediciones se pregunta qué datos llevar.
+    const URLS = {
+        pdf: "{% url 'exportar_misiones_pdf' %}",
+        word: "{% url 'exportar_misiones_word' %}",
+        excel: "{% url 'exportar_misiones_excel' %}"
+    };
+    const PREPARANDO = {
+        pdf: 'Preparando documento…', word: 'Preparando documento…',
+        excel: 'Preparando el libro de Excel…'
+    };
+
+    function exportarDesdeBD(tipo) {
+        window.mostrarToast(PREPARANDO[tipo], 'info');
+        window.location.href = URLS[tipo] + window.location.search;
+    }
+
+    function exportarConPantalla(tipo, cambios) {
+        const valores = {};
+        cambios.forEach(function (c) { valores[c.expediente] = { dias: c.dias, importe: c.importe }; });
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        // Los filtros siguen en la URL, igual que en la exportación normal.
+        form.action = URLS[tipo] + window.location.search;
+        form.style.display = 'none';
+        [['csrfmiddlewaretoken', CSRF], ['valores', JSON.stringify(valores)]].forEach(function (par) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = par[0];
+            input.value = par[1];
+            form.appendChild(input);
+        });
+        window.mostrarToast(PREPARANDO[tipo], 'info');
+        document.body.appendChild(form);
+        form.submit();
+        form.remove();
+    }
+
+    function exportar(tipo) {
+        const cambios = EDITABLE ? filasEditadas() : [];
+        if (!cambios.length) return exportarDesdeBD(tipo);
+        Swal.fire({
+            icon: 'warning',
+            title: 'Hay valores sin guardar',
+            html: 'El archivo llevará datos de Días o Importe que <b>no coinciden con la base de datos</b>.'
+                + '<br><br>¿Con qué datos quiere exportar?',
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'Con los datos modificados',
+            denyButtonText: 'Según la base de datos',
+            cancelButtonText: 'Cancelar',
+            customClass: { confirmButton: 'btn btn-warning me-2',
+                           denyButton: 'btn btn-label-info me-2',
+                           cancelButton: 'btn btn-label-secondary' },
+            buttonsStyling: false
+        }).then(function (r) {
+            if (r.isConfirmed) exportarConPantalla(tipo, cambios);
+            else if (r.isDenied) exportarDesdeBD(tipo);
+        });
+    }
+
+    window.ejecutarPDF = function () { exportar('pdf'); };
+    window.ejecutarWord = function () { exportar('word'); };
+    window.ejecutarExcel = function () { exportar('excel'); };
+
+    // ------------------------------------------------------------ arranque
+    document.addEventListener('DOMContentLoaded', function () {
+        limpiarAlmacenAntiguo();
+        celdas().forEach(function (celda) { celda.dataset.actual = celda.dataset.original; });
+
+        if (EDITABLE) {
+            // Se recuperan las ediciones sin guardar de esta sesión. Si alguna ya
+            // coincide con la base de datos (otro la guardó igual), deja de contar.
+            const datos = leerAlmacen();
+            Object.keys(datos).forEach(function (exp) {
+                ['dias', 'importe'].forEach(function (campo) {
+                    const celda = celdaDe(exp, campo);
+                    const valor = normalizar(campo, (datos[exp] || {})[campo]);
+                    if (celda && valor !== null) ponerValor(celda, valor);
+                });
+            });
+            recordar();
+
+            celdas().forEach(function (celda) {
+                celda.addEventListener('dblclick', function () { editar(celda); });
+            });
+            const btnGuardar = document.getElementById('btn-guardar-mision');
+            const btnRestablecer = document.getElementById('btn-restablecer-mision');
+            if (btnGuardar) btnGuardar.addEventListener('click', guardar);
+            if (btnRestablecer) btnRestablecer.addEventListener('click', restablecer);
         }
+        refrescar();
     });
-
-    recalcularTotal();
-});
+})();
 </script>
 
 {% endblock %}

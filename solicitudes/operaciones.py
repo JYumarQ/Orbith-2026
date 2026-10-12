@@ -458,7 +458,13 @@ OPERACIONES = {
         # reclama contrato por contrato (CTR-016/CTR-017). Obligarle a pedir aprobación
         # para cada corrección convertía un saneamiento masivo en una cola de solicitudes
         # sin ningún criterio que el Administrador pudiera aportar.
-        'campos_libres': ('motivo', 'reg_militar', 'fecha_alta_entidad'),
+        #
+        # `mision_dias` y `mision_importe` se añadieron en 2026-10 por la misma razón:
+        # el Moderador los mantiene al día —también desde el informe de Misiones
+        # Internacionales— y no tocan nómina ni estructura. Activar o desactivar la
+        # propia `mision`, o cambiar el `pais`, sigue pasando por el Administrador.
+        'campos_libres': ('motivo', 'reg_militar', 'fecha_alta_entidad',
+                          'mision_dias', 'mision_importe'),
         # Todos estos nacen deshabilitados en `CAltaForm.Meta.widgets` y un JavaScript
         # propio los habilita según otra elección del formulario: `motivo` si el tipo de
         # contrato lo exige, `duracion` si el tipo no es indeterminado, `c_formal_res`/
@@ -480,7 +486,7 @@ OPERACIONES = {
         'campos_condicionales': (
             'motivo', 'duracion', 'c_formal_res', 'funcionario_res', 'designado_res',
             'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais',
-            'fecha_alta_entidad',
+            'mision_dias', 'mision_importe', 'fecha_alta_entidad',
         ),
         # Ver el bloque «Campos calculados desde el Cargo» más arriba: `rol` y
         # `grupo_escala` los deriva el Cargo (por su NCargo); `funcionario`/`designado`

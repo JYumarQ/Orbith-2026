@@ -1,0 +1,153 @@
+/*
+ * Estilo común de las tablas de Orbith (decidido con RRHH el 08-10-2026).
+ *
+ * Estructura de una tabla:
+ *
+ *   <div class="card orb-tabla-card">
+ *     <div class="card-header">…buscador, filtros y botones…</div>
+ *     <div class="orb-tabla-scroll">
+ *       <table class="table orb-tabla">…</table>
+ *     </div>
+ *     <div id="…-footer">{% include 'base/partials/tabla_paginacion.html' %}</div>
+ *   </div>
+ *
+ * - «Justa en la pantalla»: la tarjeta mide como mucho lo que queda de pantalla
+ *   debajo del título (lo calcula static/js/orbith_tablas.js), así que la
+ *   página no se desplaza y la tabla lo hace DENTRO de la tarjeta: la barra de
+ *   botones y la cabecera quedan siempre arriba, y la barra horizontal y la
+ *   paginación siempre abajo, a la vista. Una tabla corta mide lo suyo.
+ * - Compacta, con rayado suave para no perder la fila en las tablas anchas.
+ */
+:root {
+  /* Solo de reserva, si no se ejecuta orbith_tablas.js (que calcula el alto
+     exacto): lo que ocupan aproximadamente el título y los márgenes. */
+  --orb-tabla-margen: 6rem;
+  --orb-tabla-cabecera: #f8f9fb;
+  --orb-tabla-raya: rgba(67, 89, 113, .028);
+  --orb-tabla-hover: rgba(105, 108, 255, .06);
+}
+
+.orb-tabla-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--orb-tabla-margen));
+  /* Sin alto mínimo: con pocas filas la tarjeta mide lo suyo. */
+}
+/* Todo lo que no es la tabla (barra de botones, cifras de un informe, pie)
+   conserva su alto; lo que se encoge es solo la zona desplazable. */
+.orb-tabla-card > :not(.orb-tabla-scroll):not(.tab-content) { flex-shrink: 0; }
+
+/* Tarjeta con pestañas y una tabla en cada una (Altas y Bajas): la pestaña
+   activa ocupa el alto que queda y su tabla se desplaza dentro. */
+.orb-tabla-card > .tab-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.orb-tabla-card > .tab-content > .tab-pane.active { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+.orb-tabla-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  /* Barra de desplazamiento visible y fácil de coger. */
+  scrollbar-width: thin;
+  scrollbar-color: #c3c9d1 transparent;
+}
+.orb-tabla-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.orb-tabla-scroll::-webkit-scrollbar-thumb { background: #c3c9d1; border-radius: 10px; border: 2px solid #fff; }
+.orb-tabla-scroll::-webkit-scrollbar-thumb:hover { background: #a1acb8; }
+
+/* --- La tabla --- */
+.orb-tabla { margin-bottom: 0; }
+/* Se fija la cabecera ENTERA (no cada celda): así sirve también para las de dos
+   filas de los informes (grupos de columnas), que si no se montarían una encima
+   de la otra. */
+.orb-tabla > thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.orb-tabla > thead > tr > th {
+  background: var(--orb-tabla-cabecera);
+  box-shadow: inset 0 -1px 0 #e4e6e8;
+  border-bottom: 0;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-top: .65rem;
+  padding-bottom: .65rem;
+}
+.orb-tabla > tbody > tr > td {
+  padding-top: .45rem;
+  padding-bottom: .45rem;
+  vertical-align: middle;
+}
+/* Rayado y realce con un VELO (sombra interior), no con background-color: así
+   se respetan las filas que ya tienen su propio color (el amarillo de un contrato
+   en Mov. Nómina, el rojo de una baja sin datos, la fila seleccionada…), igual
+   que hace Bootstrap con `.table-striped`. */
+.orb-tabla > tbody > tr:nth-child(even) > td { box-shadow: inset 0 0 0 9999px var(--orb-tabla-raya); }
+.orb-tabla > tbody > tr:hover > td { box-shadow: inset 0 0 0 9999px var(--orb-tabla-hover); }
+
+/* --- Informes RRHH y Anexos: solo la cabecera fija ---
+   Sus tablas tienen su propio diseño (cabeceras de dos filas con colores por
+   grupo), así que aquí NO se cambia su aspecto: solo se fija la cabecera. El
+   fondo blanco de reserva va con :where() (especificidad cero), para que gane
+   cualquier color que el informe ya ponga a sus celdas de cabecera. */
+.orb-tabla-fija { margin-bottom: 0; }
+.orb-tabla-fija > thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Debajo de los colores de grupo, que pueden ser semitransparentes: sin esto
+     se verían las filas a través de la cabecera al desplazar. */
+  background-color: #fff;
+}
+:where(.orb-tabla-fija > thead > tr > th) { background-color: #fff; }
+
+/* Tablas de una página con más cosas debajo (los Anexos, con su bloque de
+   firmas), donde la tarjeta no puede medir justo la pantalla: alto máximo fijo,
+   con la cabecera y la barra horizontal dentro, siempre a mano.
+   Uso: <div class="orb-tabla-scroll orb-tabla-alto"><table class="… orb-tabla-fija"> */
+.orb-tabla-alto,
+.orb-tabla-sin-encaje .orb-tabla-scroll { max-height: 70vh; }
+/* La pone orbith_tablas.js cuando a la tarjeta no le cabe una altura razonable. */
+.orb-tabla-card.orb-tabla-sin-encaje { max-height: none; }
+
+/* --- Pie: total, filas por página y páginas --- */
+.orb-tabla-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1.25rem;
+  padding: .65rem 1.25rem;
+  border-top: 1px solid #eceef1;
+}
+.orb-tabla-total { margin-right: auto; }
+.orb-tabla-filas { display: flex; align-items: center; gap: .5rem; }
+.orb-tabla-filas .orb-filas { width: auto; padding-right: 2rem; }
+.orb-paginacion .page-link { min-width: 2rem; text-align: center; }
+.orb-paginacion .page-item.disabled .page-link { opacity: .45; }
+
+/* En el móvil el pie se apila. */
+@media (max-width: 575.98px) {
+  .orb-tabla-pie { justify-content: center; padding: .6rem .75rem; }
+  .orb-tabla-total { margin-right: 0; width: 100%; text-align: center; }
+}
+
+/*
+ * Títulos de página («Orbith / Administración / Auditoría») más pequeños y más
+ * arriba, en TODAS las páginas, para dejar más alto a las tablas (decisión de
+ * RRHH, 08-10-2026). Las clases de Bootstrap `py-3 mb-4` llevan !important, así
+ * que estas también.
+ */
+.container-p-y h4.fw-bold.py-3 {
+  font-size: 1.05rem;
+  padding-top: .15rem !important;
+  padding-bottom: .15rem !important;
+  margin-bottom: .75rem !important;
+}
+/* En el escritorio no hay barra superior: menos margen encima del título. En
+   el móvil manda la regla de navbar.html, que reserva sitio al botón de menú. */
+@media (min-width: 1200px) {
+  .content-wrapper > .container-p-y:not([class^="pt-"]):not([class*=" pt-"]) { padding-top: 1rem !important; }
+}

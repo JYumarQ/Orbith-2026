@@ -37,6 +37,7 @@ def orbith(request):
         # Valores por defecto: coinciden con los del modelo PreferenciasUsuario.
         'pref_sidebar_colapsada': False,
         'pref_animaciones_activas': True,
+        'pref_filas_por_pagina': 25,
     }
 
     usuario = getattr(request, 'user', None)
@@ -45,6 +46,8 @@ def orbith(request):
         if preferencias is not None:
             contexto['pref_sidebar_colapsada'] = preferencias.sidebar_colapsada
             contexto['pref_animaciones_activas'] = preferencias.animaciones_activas
+            contexto['pref_filas_por_pagina'] = preferencias.filas_por_pagina
+        contexto.update(_distincion_ranking(usuario, preferencias))
         contexto['advertencias_pendientes'] = _contar_advertencias_pendientes(usuario)
         contexto['solicitudes_pendientes'] = _contar_solicitudes_pendientes(usuario)
         contexto.update(_progreso_guia(usuario))
@@ -52,31 +55,52 @@ def orbith(request):
     return contexto
 
 
+def _distincion_ranking(usuario, preferencias):
+    """Distinción del Ranking Mensual (oro, plata o bronce) que el usuario luce
+    este mes, para pintar los iconos de la barra lateral, la campana y su foto.
+
+    - `distincion_ranking`: la que tiene, se muestre o no (Configuración la usa
+      para decir "Este mes no tienes distinción").
+    - `distincion`: la que se pinta; None si no la tiene o la apagó.
+
+    Una sola consulta indexada (ver `ranking.servicios.distincion_de`). Nunca
+    rompe la página: si falla, simplemente no hay distinción.
+    """
+    try:
+        from ranking.servicios import distincion_de
+        distincion = distincion_de(usuario)
+    except Exception:
+        distincion = None
+    mostrar = preferencias.mostrar_distincion if preferencias is not None else True
+    return {
+        'distincion_ranking': distincion,
+        'distincion': distincion if mostrar else None,
+        'pref_mostrar_distincion': mostrar,
+    }
+
+
 def _progreso_guia(usuario):
     """Progreso del usuario en la Guía de Orbith, para el badge/resumen del
-    navbar y del modal de perfil. Dos consultas por petición autenticada,
-    ambas baratas: `TareaGuia` es una tabla de una docena de filas y el
+    navbar y del modal de perfil. Cuatro consultas por petición autenticada,
+    todas baratas: `TareaGuia` es una tabla de una veintena de filas y el
     filtro por `usuario` en `TareaGuiaUsuario` está indexado (es la columna
     líder de su UniqueConstraint). No se cachea: el proyecto no tiene CACHES
     configurado (ver subsanacion/models.py, que por eso usa una restricción
     de base de datos en vez de un lock de aplicación) y estas tablas son
     demasiado pequeñas para justificar esa complejidad.
+
+    Los números salen de `progreso.servicios.resumen_progreso`, la misma
+    función que usa el panel de la Guía, para que solo cuenten las tareas
+    del rol del usuario.
     """
-    from django.db.models import Count, Q
+    from progreso.servicios import resumen_progreso
 
-    from progreso.models import TareaGuia, TareaGuiaUsuario
-
-    total = TareaGuia.objects.filter(activo=True).count()
-    agregados = TareaGuiaUsuario.objects.filter(usuario=usuario).aggregate(
-        completadas=Count('id'),
-        sin_ver=Count('id', filter=Q(visto=False)),
-    )
-    completadas = agregados['completadas'] or 0
+    resumen = resumen_progreso(usuario)
     return {
-        'progreso_total': total,
-        'progreso_completadas': completadas,
-        'progreso_sin_ver': agregados['sin_ver'] or 0,
-        'progreso_porcentaje': round(100 * completadas / total) if total else 0,
+        'progreso_total': resumen['total'],
+        'progreso_completadas': resumen['completadas'],
+        'progreso_sin_ver': resumen['sin_ver'],
+        'progreso_porcentaje': resumen['porcentaje'],
     }
 
 

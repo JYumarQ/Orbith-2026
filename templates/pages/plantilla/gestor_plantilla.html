@@ -1,5 +1,5 @@
 {% extends 'base/base.html' %}
-{% load static %}
+{% load static estaticos %}
 
 {% block content %}
 <style>
@@ -174,8 +174,46 @@
 <div class="container-fluid h-100 p-0 d-flex flex-column">
     
     <div class="bg-white border-bottom py-2 px-4 d-flex justify-content-between align-items-center shadow-sm" style="flex-shrink: 0; height: 60px;">
-        <div>
+        <div class="d-flex align-items-center gap-2">
             <h5 class="mb-0 fw-bold text-primary">Gestor de Plantilla</h5>
+            {% comment %} Recorrido visual (static/js/recorrido_gestor.js). `data-rol`
+               decide qué pasos se enseñan: cada rol solo ve los botones que tiene. {% endcomment %}
+            <span class="dropdown">
+                <button type="button" class="btn btn-sm btn-label-info py-1 dropdown-toggle" id="btnRecorridoGestor"
+                        data-bs-toggle="dropdown" aria-expanded="false"
+                        data-rol="{% if user.es_admin or user.is_superuser %}admin{% elif user.es_moderador %}moderador{% else %}observador{% endif %}"
+                        title="Recorridos guiados de esta pantalla">
+                    <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                </button>
+                <ul class="dropdown-menu" style="font-size: .875rem;">
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_exploracion_plantilla">
+                        <i class="bx bx-sitemap me-1"></i>Recorrer el Gestor</button></li>
+                    {% if puede_editar %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_contratacion:gestor">
+                        <i class="bx bx-file me-1"></i>Contratar desde el Gestor</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_interno:gestor">
+                        <i class="bx bx-sync me-1"></i>Movimiento de nómina desde el Gestor</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_baja:gestor">
+                        <i class="bx bx-user-minus me-1"></i>Dar de baja desde el Gestor</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_cierre_declarado:gestor">
+                        <i class="bx bx-calendar-check me-1"></i>Declarar el cierre mensual</button></li>
+                    {% if user.es_moderador and not user.es_admin %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_solicitud_enviada:gestor">
+                        <i class="bx bx-paper-plane me-1"></i>Enviar una solicitud de cambio</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_cedido:gestor">
+                        <i class="bx bx-transfer me-1"></i>Ceder un contrato a otro moderador</button></li>
+                    {% endif %}
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header py-1">Exportar</h6></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_contrato_modificacion:gestor">
+                        <i class="bx bx-file-blank me-1"></i>Contrato de Trabajo y Modificación</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_movimiento_nomina:gestor">
+                        <i class="bx bx-export me-1"></i>Movimiento de nómina (Word)</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_historico_trabajador:gestor">
+                        <i class="bx bx-history me-1"></i>Histórico del trabajador (PDF)</button></li>
+                </ul>
+            </span>
         </div>
         <div id="loading-spinner" class="htmx-indicator text-primary">
             <div class="spinner-border spinner-border-sm" role="status"></div>
@@ -186,7 +224,7 @@
     <div class="row g-3 px-3 py-3 dashboard-container m-0">
         
         <div class="col-md-6 h-50">
-            <div class="card-panel bg-white rounded">
+            <div class="card-panel bg-white rounded" id="col-panel-unit">
                 <div class="card-header-dense">
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none" 
                         onclick="sortColumn('unit', 'alpha', this)" title="Ordenar alfabéticamente">
@@ -235,7 +273,7 @@
                         </div>
                         {% if user.es_admin %}
                         <div class="vr mx-1 opacity-25"></div>
-                        <button class="btn btn-xs btn-primary px-2" onclick="abrir_modal_creacion('{% url 'add_uniorg' %}')" title="Añadir Unidad"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-xs btn-primary px-2" id="btn-create-unit" onclick="abrir_modal_creacion('{% url 'add_uniorg' %}')" title="Añadir Unidad"><i class="fas fa-plus"></i></button>
                         {% endif %}
                     </div>
                 </div>
@@ -257,7 +295,7 @@
         </div>
 
         <div class="col-md-6 h-50">
-            <div class="card-panel bg-white rounded">
+            <div class="card-panel bg-white rounded" id="col-panel-dept">
                 <div class="card-header-dense">
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                         onclick="sortColumn('dept', 'alpha', this)" title="Ordenar alfabéticamente">
@@ -297,7 +335,7 @@
         </div>
 
         <div class="col-md-6 h-50">
-            <div class="card-panel bg-white rounded">
+            <div class="card-panel bg-white rounded" id="col-panel-cargo">
                 <div class="card-header-dense">
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                         onclick="sortColumn('cargo', 'alpha', this)" title="Ordenar por Nombre">
@@ -351,7 +389,7 @@
         </div>
 
         <div class="col-md-6 h-50">
-            <div class="card-panel bg-white rounded">
+            <div class="card-panel bg-white rounded" id="col-panel-contrato">
                 <div class="card-header-dense">
                     <div class="d-flex align-items-center gap-2 cursor-pointer user-select-none"
                          onclick="sortColumn('contrato', 'alpha', this)" title="Ordenar alfabéticamente">
@@ -362,6 +400,11 @@
                     
                     <div class="d-flex align-items-center gap-1">
                         <div id="toolbar-contrato" class="btn-group btn-group-sm toolbar-disabled">
+                            {% comment %} Mismo criterio que las otras tres columnas: al Observador
+                               se le retiran los botones que escriben (ver la nota de `toolbar-unit`).
+                               Solo conserva «Exportar Contrato», que es de consulta. `selectContrato`
+                               comprueba que cada botón exista antes de tocarlo. {% endcomment %}
+                            {% if puede_editar %}
                             <button class="btn btn-xs btn-outline-secondary border-0" id="btn-edit-contrato" 
                                     onclick="abrir_modal_edicion(this.dataset.url)" title="Editar Contrato">
                                 <i class="fas fa-file-signature text-primary"></i>
@@ -374,15 +417,19 @@
                                 onclick="confirmarSolicitudMovimiento()" title="Enviar a Mov. Nómina">
                                 <i class="fas fa-sync-alt text-warning"></i>
                             </button>
+                            {% endif %}
                             <a class="btn btn-xs btn-outline-secondary border-0" id="btn-pdf" href="#" target="_blank" title="Exportar Contrato">
                                 <i class="fas fa-file-pdf text-secondary"></i>
                             </a>
+                            {% if puede_editar %}
                             <button type="button" class="btn btn-xs btn-outline-secondary border-0" id="btn-baja" 
                                 onclick="abrirModalBaja()" title="Dar de Baja">
                                 <i class="fas fa-user-minus text-danger"></i>
                             </button>
+                            {% endif %}
                         </div>
 
+                        {% if puede_editar %}
                         <div class="vr mx-1 opacity-25"></div>
                         {% comment %} Abre el modal de aspirantes llevándose el cargo que
                            se está mirando, para que el formulario llegue con la plaza
@@ -392,6 +439,7 @@
                         <button type="button" class="btn btn-xs btn-primary px-2" id="btn-add-personal" title="Contratar">
                             <i class="fas fa-plus"></i>
                         </button>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -433,75 +481,8 @@
 
 <div class="modal fade" id="modal_generic" role="dialog"></div>
 
-<div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-label-danger">
-                <h5 class="modal-title" style="color: #ff3e1d !important;">
-                    <i class="fas fa-user-times me-2"></i>Formulario de Baja
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label" for="baja_expediente">No. Expediente</label> 
-                        <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
-                    </div>
-                    <div class="col-md-8">
-                        <label class="form-label" for="baja_nombre">Trabajador</label> 
-                        <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
-                    </div>
-                    <div class="col-md-12 mt-2">
-                        <label class="form-label" for="baja_actividad">Actividad que realizaba</label> 
-                        <input type="text" id="baja_actividad" name="actividad_realizada" class="form-control fw-bold text-primary">
-                    </div>
-                </div>
-                <hr class="my-3">
-                <form id="formBajaContrato">
-                    <input type="hidden" id="baja_url_post">    
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
-                            <input type="date" id="baja_fecha" name="fecha_baja" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="baja_fecha_efectiva" class="form-label">Fecha de Documento <span class="text-danger">*</span></label>
-                            <input type="date" id="baja_fecha_efectiva" name="fecha_efectiva" class="form-control">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="baja_causa" class="form-label">Causa de Baja <span class="text-danger">*</span></label>
-                        <select id="baja_causa" name="causa_baja" class="form-select">
-                            <option value="">Seleccione una causa...</option>
-                            {% for causa in causas_baja %}
-                                <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3 border-top pt-3 mt-3">
-                        <div class="form-check form-switch form-switch-lg mb-3">
-                            <input class="form-check-input" type="checkbox" id="switchCobroSistema">
-                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema">
-                                Cobró sistema de pago
-                            </label>
-                        </div>
-                        <div class="form-check form-switch form-switch-lg mb-2">
-                            <input class="form-check-input" type="checkbox" id="switchCompletarCargo" checked>
-                            <label class="form-check-label fw-bold ms-2" for="switchCompletarCargo">
-                                Completar cargo
-                            </label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="validarYConfirmarBaja()">Confirmar Baja</button>
-            </div>
-        </div>
-    </div>
-</div>
+{# Formulario de Baja compartido con la Lista de Contratos. #}
+{% include 'pages/contrato/partials/modal_baja.html' %}
 
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
 
@@ -509,6 +490,14 @@
 
 {% block extra_scripts %}
 <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_gestor.js' %}"></script>
+<script src="{% estatico 'js/recorrido_contratacion.js' %}"></script>
+<script src="{% estatico 'js/recorrido_movimiento.js' %}"></script>
+<script src="{% estatico 'js/recorrido_baja.js' %}"></script>
+<script src="{% estatico 'js/recorrido_exportar_contratos.js' %}"></script>
+<script src="{% estatico 'js/recorrido_cierre.js' %}"></script>
+<script src="{% estatico 'js/recorrido_solicitudes.js' %}"></script>
 <script>
     // 1. VARIABLES DE ESTADO (CRUCIALES PARA QUE NO DE ERROR)
     let selectedUnitId = null;
@@ -1100,71 +1089,22 @@
         });
     }
 
+    // El Formulario de Baja vive en `contrato/partials/modal_baja.html`, el
+    // mismo que usa la Lista de Contratos. La copia que había aquí estaba
+    // incompleta (sin Observaciones, sin aviso de fecha, sin PDF) y se quitó.
     window.abrirModalBaja = function() {
         const btn = document.getElementById('btn-baja');
-        const url = btn.dataset.url;
-        if (!url) return;
-
-        document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
-        document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
-        document.getElementById('baja_url_post').value = url;
-        
-        // Limpiamos los nuevos campos para evitar datos viejos pegados
-        document.getElementById('baja_actividad').value = ""; 
-        document.getElementById('switchCobroSistema').checked = false;
-        document.getElementById('switchCompletarCargo').checked = true;
-
-        const hoy = new Date().toISOString().split('T')[0];
-        document.getElementById('baja_fecha').value = hoy;
-        document.getElementById('baja_fecha_efectiva').value = hoy;
-        document.getElementById('baja_causa').value = "";
-        
-        $('#modalBajaContrato').modal('show');
-    }
-
-    window.validarYConfirmarBaja = function() {
-        const fecha = document.getElementById('baja_fecha').value;
-        const fechaEfectiva = document.getElementById('baja_fecha_efectiva').value;
-        const causa = document.getElementById('baja_causa').value;
-        const url = document.getElementById('baja_url_post').value;
-        
-        // Capturamos los nuevos campos
-        const cobroSistema = document.getElementById('switchCobroSistema').checked;
-        const completarCargo = document.getElementById('switchCompletarCargo').checked;
-        const actividadRealizada = document.getElementById('baja_actividad').value;
-
-        if (!fecha || !causa || !fechaEfectiva) return window.mostrarToast('Campos incompletos: seleccione fechas y causa.', 'warning');
-
-        $('#modalBajaContrato').modal('hide');
-        Swal.fire({
-            title: '¿Está seguro?', text: "Se registrará la baja en el sistema.", icon: 'warning',
-            showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#8592a3',
-            confirmButtonText: 'Sí, dar de baja', cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                $.ajax({
-                    url: url, type: 'POST',
-                    data: { 
-                        'fecha_baja': fecha, 
-                        'fecha_efectiva': fechaEfectiva,
-                        'causa_baja': causa, 
-                        'cobro_sistema_pago': cobroSistema,
-                        'completar_cargo': completarCargo,
-                        'actividad_realizada': actividadRealizada,
-                        'csrfmiddlewaretoken': '{{ csrf_token }}' 
-                    },
-                    success: function() {
-                        window.mostrarToast('Baja procesada.', 'success');
-                        // MODIFICADO: Disparamos AMBOS eventos
-                        document.body.dispatchEvent(new Event('updateCargoList'));
-                        document.body.dispatchEvent(new Event('updateContratoList'));
-                    },
-                    error: function(xhr) {
-                        let msg = xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Error de conexión.';
-                        window.mostrarToast(msg, 'error');
-                    }
-                });
-            } else $('#modalBajaContrato').modal('show');
+        const item = document.querySelector('#col-contratos .active-contrato');
+        window.OrbithBaja.abrir({
+            url: btn.dataset.url,
+            expediente: btn.dataset.expediente,
+            nombre: btn.dataset.nombre,
+            actividad: item ? item.dataset.cargo : '',
+            fechaLimite: item ? item.dataset.fechaLimite : '',
+            alTerminar: function () {
+                document.body.dispatchEvent(new Event('updateCargoList'));
+                document.body.dispatchEvent(new Event('updateContratoList'));
+            },
         });
     }
 </script>

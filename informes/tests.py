@@ -10,7 +10,9 @@ que no cerró el mes **queda fuera del total y se avisa**, nunca se rellena con
 datos actuales.
 """
 
+import json
 from datetime import date
+from decimal import Decimal
 
 from django.contrib.admin.sites import AdminSite
 from django.test import RequestFactory, TestCase
@@ -21,6 +23,7 @@ from cierres import servicios as servicios_cierres
 from contratos.models import CAlta
 from informes import altas_bajas as altas_bajas_modulo
 from informes import fuentes
+from informes import misiones
 from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
                                   NTipoContrato, NTipoUnidadOrganizativa)
 from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
@@ -1526,3 +1529,243 @@ class ExportacionesAExcel(BaseInformes):
         # Y sin el nivel de unidad, el contrato sube un escalón.
         profundidad = {papel: nivel for papel, nivel, _ in sin_unidad}
         self.assertEqual(profundidad['dato'], 2)
+
+
+class MisionesDiasEImporte(BaseInformes):
+    """Días e Importe de la Misión: salen del contrato, se editan y guardan
+    desde el informe (con permisos, concurrencia y auditoría) y las
+    exportaciones pueden llevar lo que se ve en pantalla."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        CAlta.objects.filter(pk=cls.contrato.pk).update(
+            mision=True, pais='Venezuela', mision_dias=30,
+            mision_importe=Decimal('1250.50'))
+        aspirante_norte = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Luis', papellido='Díaz', sapellido='Mora',
+            doc_identidad='85010112399', estado='ACTIVO', sexo='M', raza='BL',
+            unidad_organizativa=cls.otra_unidad,
+            provincia=cls.provincia, municipio=cls.municipio)
+        # Sin días ni importe registrados: cuentan como 0.
+        cls.contrato_norte = CAlta.objects.create(
+            aspirante=aspirante_norte, no_expediente='00200', tipo=cls.tipo_contrato,
+            cargo=cls.cargo_norte, fecha_alta=date(2026, 1, 15),
+            mision=True, pais='Bolivia')
+
+    def trabajadores(self, respuesta):
+        return {t['expediente']: t
+                for u in respuesta.context['misiones_por_unidad']
+                for t in u['trabajadores']}
+
+    def guardar(self, cambios):
+        return self.client.post(
+            reverse('guardar_misiones'), data=json.dumps({'cambios': cambios}),
+            content_type='application/json', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def cambio(self, contrato, dias, importe, dias_original=None, importe_original=None):
+        contrato.refresh_from_db()
+        return {
+            'expediente': contrato.no_expediente, 'nombre': 'x',
+            'dias': dias, 'importe': importe,
+            'dias_original': (misiones.texto_dias(contrato.mision_dias)
+                              if dias_original is None else dias_original),
+            'importe_original': (misiones.texto_importe(contrato.mision_importe)
+                                 if importe_original is None else importe_original),
+        }
+
+    # --- Pantalla ----------------------------------------------------------
+
+    def test_dias_e_importe_salen_del_contrato(self):
+        respuesta = self.client.get(reverse('informe_misiones'))
+        filas = self.trabajadores(respuesta)
+        self.assertEqual(filas['00100']['dias'], 30)
+        self.assertEqual(filas['00100']['importe'], Decimal('1250.50'))
+        self.assertIsNone(filas['00200']['dias'])
+        # El vacío cuenta como 0 en el total.
+        self.assertEqual(respuesta.context['importe_total'], Decimal('1250.50'))
+        self.assertTrue(respuesta.context['mision_editable'])
+        self.assertContains(respuesta, 'id="btn-guardar-mision"')
+
+    def test_el_observador_solo_consulta(self):
+        observador = CustomUser.objects.create_user(
+            username='obs_misiones', password='x', es_observador=True)
+        self.client.force_login(observador)
+        respuesta = self.client.get(reverse('informe_misiones'))
+        self.assertFalse(respuesta.context['mision_editable'])
+        self.assertNotContains(respuesta, 'id="btn-guardar-mision"')
+        self.assertEqual(self.guardar([self.cambio(self.contrato, '1', '1')]).status_code, 403)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.mision_dias, 30)
+
+    def test_un_cierre_no_se_edita_y_trae_sus_datos(self):
+        servicios_cierres.declarar_actualizada(self.unidad, self.admin, hoy=EN_VENTANA)
+        servicios_cierres.declarar_actualizada(self.otra_unidad, self.admin, hoy=EN_VENTANA)
+        CAlta.objects.filter(pk=self.contrato.pk).update(mision_dias=99)
+
+        respuesta = self.client.get(reverse('informe_misiones'),
+                                    {'fuente': 'cierre', 'periodo': '2026-08'})
+        self.assertTrue(respuesta.context['es_historico'])
+        self.assertFalse(respuesta.context['mision_editable'])
+        self.assertEqual(self.trabajadores(respuesta)['00100']['dias'], 30)
+
+    # --- Guardar -----------------------------------------------------------
+
+    def test_el_admin_guarda_varios_y_queda_auditado(self):
+        from auditoria.models import EventoAuditoria
+
+        respuesta = self.guardar([
+            self.cambio(self.contrato, '45', '2000'),
+            self.cambio(self.contrato_norte, '10', '300.5'),
+        ])
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.json()['guardados']['00200'],
+                         {'dias': '10', 'importe': '300.50'})
+
+        self.contrato.refresh_from_db()
+        self.contrato_norte.refresh_from_db()
+        self.assertEqual(self.contrato.mision_dias, 45)
+        self.assertEqual(self.contrato.mision_importe, Decimal('2000.00'))
+        self.assertEqual(self.contrato_norte.mision_importe, Decimal('300.50'))
+        self.assertEqual(self.contrato.updated_by, self.admin)
+
+        evento = EventoAuditoria.objects.get(object_id=str(self.contrato.pk), accion='UPD')
+        self.assertEqual(evento.accion, 'UPD')
+        self.assertEqual(evento.usuario, self.admin)
+        self.assertEqual(evento.datos_antes,
+                         {'mision_dias': 30, 'mision_importe': '1250.50'})
+        self.assertEqual(evento.datos_despues,
+                         {'mision_dias': 45, 'mision_importe': '2000.00'})
+        self.assertIn('Días 30 → 45', evento.descriptor)
+        # Uno por contrato (el inicio de sesión del test también se audita).
+        self.assertEqual(EventoAuditoria.objects.filter(accion='UPD').count(), 2)
+
+    def test_vaciar_una_celda_guarda_vacio(self):
+        respuesta = self.guardar([self.cambio(self.contrato, '', '1250.50')])
+        self.assertEqual(respuesta.status_code, 200)
+        self.contrato.refresh_from_db()
+        self.assertIsNone(self.contrato.mision_dias)
+
+    def test_de_vacio_a_cero_es_un_cambio(self):
+        self.assertEqual(self.guardar([self.cambio(self.contrato_norte, '0', '0')]).status_code, 200)
+        self.contrato_norte.refresh_from_db()
+        self.assertEqual(self.contrato_norte.mision_dias, 0)
+        self.assertEqual(self.contrato_norte.mision_importe, Decimal('0.00'))
+
+    def test_si_otro_usuario_lo_cambio_no_se_guarda_nada(self):
+        cambios = [self.cambio(self.contrato, '45', '2000'),
+                   self.cambio(self.contrato_norte, '10', '300')]
+        # Mientras tanto, alguien guarda otro valor en el primero.
+        CAlta.objects.filter(pk=self.contrato.pk).update(mision_dias=31)
+
+        respuesta = self.guardar(cambios)
+        self.assertEqual(respuesta.status_code, 409)
+        datos = respuesta.json()
+        self.assertEqual(datos['actuales']['00100']['dias'], '31')
+        self.assertIn('otro usuario', datos['errores'][0])
+
+        self.contrato_norte.refresh_from_db()
+        self.assertIsNone(self.contrato_norte.mision_dias)  # todo o nada
+
+    def test_valores_invalidos_se_rechazan_en_espanol(self):
+        for dias, importe, texto in (('10000', '1', 'como máximo 9999'),
+                                     ('-1', '1', 'negativos'),
+                                     ('1', '12345678', '7 cifras enteras'),
+                                     ('1', '1.234', '2 decimales'),
+                                     ('abc', '1', 'número entero')):
+            respuesta = self.guardar([self.cambio(self.contrato, dias, importe)])
+            self.assertEqual(respuesta.status_code, 409)
+            self.assertIn(texto, respuesta.json()['errores'][0])
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.mision_dias, 30)
+
+    def test_un_contrato_sin_mision_no_se_toca(self):
+        CAlta.objects.filter(pk=self.contrato_norte.pk).update(mision=False)
+        respuesta = self.guardar([self.cambio(self.contrato_norte, '5', '5')])
+        self.assertEqual(respuesta.status_code, 409)
+        self.assertIn('ya no está en misión', respuesta.json()['errores'][0])
+
+    def test_el_moderador_guarda_directo_solo_en_sus_unidades(self):
+        from solicitudes.models import Solicitud
+
+        moderador = CustomUser.objects.create_user(
+            username='mod_misiones', password='x', es_moderador=True)
+        moderador.unidades.add(self.unidad)
+        self.client.force_login(moderador)
+
+        fuera = self.guardar([self.cambio(self.contrato_norte, '5', '5')])
+        self.assertEqual(fuera.status_code, 409)
+        self.assertIn('fuera de su Unidad Organizativa', fuera.json()['errores'][0])
+
+        dentro = self.guardar([self.cambio(self.contrato, '12', '99')])
+        self.assertEqual(dentro.status_code, 200)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.mision_dias, 12)
+        self.assertFalse(Solicitud.objects.exists())
+
+    # --- Exportaciones -----------------------------------------------------
+
+    def exportar(self, nombre, valores=None):
+        if valores is None:
+            return self.client.get(reverse(nombre))
+        return self.client.post(reverse(nombre), {'valores': json.dumps(valores)})
+
+    def libro(self, respuesta):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        return load_workbook(BytesIO(respuesta.content))
+
+    def textos(self, hoja):
+        return [c.value for fila in hoja.iter_rows() for c in fila if c.value is not None]
+
+    def test_excel_por_get_lleva_la_base_de_datos_sin_nota(self):
+        libro = self.libro(self.exportar('exportar_misiones_excel'))
+        textos = self.textos(libro['Misiones'])
+        self.assertIn('Días', textos)
+        self.assertIn(Decimal('1250.50'), [Decimal(str(v)) for v in textos
+                                            if isinstance(v, (int, float, Decimal))])
+        self.assertNotIn(misiones.NOTA_VALORES_MANUALES, textos)
+
+    def test_excel_con_valores_de_pantalla_lleva_la_nota(self):
+        respuesta = self.exportar('exportar_misiones_excel',
+                                  {'00100': {'dias': '7', 'importe': '10.25'}})
+        textos = self.textos(self.libro(respuesta)['Misiones'])
+        self.assertIn(misiones.NOTA_VALORES_MANUALES, textos)
+        numeros = [Decimal(str(v)) for v in textos if isinstance(v, (int, float, Decimal))]
+        self.assertIn(Decimal('10.25'), numeros)
+        self.assertNotIn(Decimal('1250.50'), numeros)
+        # Exportar no guarda nada.
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.mision_dias, 30)
+
+    def test_valores_iguales_a_la_base_de_datos_no_llevan_nota(self):
+        respuesta = self.exportar('exportar_misiones_excel',
+                                  {'00100': {'dias': '30', 'importe': '1250.50'}})
+        self.assertNotIn(misiones.NOTA_VALORES_MANUALES,
+                         self.textos(self.libro(respuesta)['Misiones']))
+
+    def test_word_y_pdf_aceptan_los_valores_de_pantalla(self):
+        import re
+        import zipfile
+        from io import BytesIO
+
+        valores = {'00100': {'dias': '7', 'importe': '10.25'}}
+        word = self.exportar('exportar_misiones_word', valores)
+        self.assertEqual(word.status_code, 200)
+        xml = zipfile.ZipFile(BytesIO(word.content)).read('word/document.xml').decode()
+        texto = re.sub(r'<[^>]+>', '', xml)
+        self.assertIn(misiones.NOTA_VALORES_MANUALES, texto)
+        self.assertIn('10.25', texto)
+
+        pdf = self.exportar('exportar_misiones_pdf', valores)
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+
+    def test_un_cierre_ignora_los_valores_de_pantalla(self):
+        servicios_cierres.declarar_actualizada(self.unidad, self.admin, hoy=EN_VENTANA)
+        respuesta = self.client.post(
+            reverse('exportar_misiones_excel') + '?fuente=cierre&periodo=2026-08',
+            {'valores': json.dumps({'00100': {'dias': '7', 'importe': '10.25'}})})
+        self.assertNotIn(misiones.NOTA_VALORES_MANUALES,
+                         self.textos(self.libro(respuesta)['Misiones']))

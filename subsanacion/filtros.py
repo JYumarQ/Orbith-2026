@@ -5,7 +5,13 @@ la Fase 2 usen exactamente la MISMA función: es la única forma de garantizar q
 que el usuario exporta es lo que está viendo en pantalla.
 """
 
-from django.db.models import Q
+import re
+
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import CharField, Q, TextField
+from django.db.models.functions import Cast
+
+from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
 
 from .constantes import CLAVES_MODULOS, ETIQUETA_CRITICIDAD, MODULO_EXTRAS
 from .models import Hallazgo
@@ -92,27 +98,7 @@ def filtrar_hallazgos(request):
         consulta = consulta.exclude(modulo=MODULO_EXTRAS)
 
     if busqueda:
-        # La búsqueda NO puede hacer JOIN al registro original (el listado no resuelve
-        # la GenericForeignKey), así que se busca sobre los campos denormalizados. Por
-        # eso cada regla tiene la obligación de escribir el nombre, el carnet y el
-        # expediente en el título: es lo que hace encontrable el hallazgo.
-        # `datos__icontains` funciona porque PostgreSQL puede convertir el JSONB a texto.
-        #
-        # El título lo arma `formato.py::referencia_trabajador()` como «Apellidos,
-        # Nombre (doc)» — apellidos primero. Un solo `icontains` con la frase completa
-        # exige que el usuario la escriba EN ESE ORDEN EXACTO; si busca «Nombre
-        # Apellido» (el orden natural en que la gente escribe un nombre) no encuentra
-        # nada aunque el hallazgo exista. Se busca palabra por palabra en su lugar:
-        # cada palabra escrita tiene que aparecer en ALGUNO de los campos (da igual en
-        # cuál ni en qué orden), y se exigen TODAS las palabras (un `.filter()` por
-        # palabra, que Django encadena con AND). Así «Fvdb Fdbfdb» y «Fdbfdb Fvdb»
-        # encuentran el mismo hallazgo.
-        for palabra in busqueda.split():
-            consulta = consulta.filter(
-                Q(titulo__icontains=palabra)
-                | Q(detalle__icontains=palabra)
-                | Q(datos__icontains=palabra)
-                | Q(codigo_regla__icontains=palabra))
+        consulta = aplicar_busqueda(consulta, busqueda)
 
     filtros = {
         'q': busqueda,
@@ -129,9 +115,11 @@ def filtrar_hallazgos(request):
 
 
 def querystring_sin_pagina(request):
-    """La querystring actual sin `pagina`, para construir los enlaces de paginación."""
+    """La querystring actual sin `pagina` (ni `filas`, que lo pone el pie común de la
+    tabla), para construir los enlaces de paginación."""
     parametros = request.GET.copy()
     parametros.pop('pagina', None)
+    parametros.pop('filas', None)
     codificada = parametros.urlencode()
     return f'&{codificada}' if codificada else ''
 
@@ -145,3 +133,100 @@ def querystring_completa(request):
     parametros = request.GET.copy()
     parametros.pop('pagina', None)
     return parametros.urlencode()
+
+
+# ---------------------------------------------------------------------------
+# Búsqueda (texto libre y prefijos, ver `core/busqueda.py`)
+# ---------------------------------------------------------------------------
+
+#: Prefijos que entiende Subsanación. Son todos los que existen.
+PREFIJOS_SUBSANACION = ('E', 'N', 'CI', 'CA', 'U', 'COD')
+
+
+def _por_cargo(valor):
+    """Hallazgos cuyo registro afectado ocupa (o es) un cargo que contiene `valor`.
+
+    El cargo no está en el título del hallazgo, así que se busca en el registro
+    real: el contrato, el contrato del aspirante, la baja o el cargo de plantilla.
+    Son subconsultas que solo se ejecutan cuando se usa `CA:`. Un hallazgo de
+    Configuración o de Usuarios no tiene cargo y no aparece.
+    """
+    from bolsa.models import Aspirante
+    from contratos.models import CAlta, CBaja
+    from strorganizativa.models import CargoPlantilla
+
+    texto = normalizar(valor)
+
+    def ids(consulta, campo_cargo, campo_id='pk'):
+        return (consulta.alias(_cargo=sin_acentos(campo_cargo))
+                .filter(_cargo__contains=texto)
+                .annotate(_id=Cast(campo_id, CharField())).values('_id'))
+
+    tipos = ContentType.objects.get_for_models(CAlta, CBaja, Aspirante, CargoPlantilla)
+    return (
+        Q(content_type=tipos[CAlta],
+          object_id__in=ids(CAlta.objects, 'cargo__ncargo__descripcion'))
+        | Q(content_type=tipos[CBaja],
+            object_id__in=ids(CBaja.objects, 'cargo__ncargo__descripcion'))
+        | Q(content_type=tipos[Aspirante],
+            object_id__in=ids(CAlta.objects, 'cargo__ncargo__descripcion', 'aspirante_id'))
+        | Q(content_type=tipos[CargoPlantilla],
+            object_id__in=ids(CargoPlantilla.objects, 'ncargo__descripcion'))
+    )
+
+
+def aplicar_busqueda(consulta, texto):
+    """Filtra los hallazgos por lo escrito en el buscador.
+
+    La búsqueda NO hace JOIN al registro original (el listado no resuelve la
+    GenericForeignKey): se busca sobre los campos denormalizados. Por eso cada regla
+    escribe en el título el nombre, el carnet y el expediente con un formato fijo
+    (`formato.py`): «Apellidos, Nombre (carnet) · Expediente 00158 · …». Los
+    prefijos se apoyan en ese formato para buscar en el trozo exacto del título.
+    """
+    busqueda = interpretar(texto)
+    consulta = consulta.alias(_titulo=sin_acentos('titulo'))
+
+    # Texto libre: palabra por palabra, cada una en ALGUNO de los campos y todas a
+    # la vez. Así «Nombre Apellido» y «Apellido Nombre» encuentran lo mismo, aunque
+    # el título ponga los apellidos primero.
+    if busqueda.libre:
+        consulta = consulta.alias(
+            _detalle=sin_acentos('detalle'),
+            _datos=sin_acentos(Cast('datos', TextField())))
+        for palabra in busqueda.libre.split():
+            normal = normalizar(palabra)
+            consulta = consulta.filter(
+                Q(_titulo__contains=normal) | Q(_detalle__contains=normal)
+                | Q(_datos__contains=normal) | Q(codigo_regla__icontains=palabra))
+
+    for valor in busqueda.valores('E'):
+        numero = solo_digitos_sin_ceros(valor)
+        if numero is not None:
+            # «Expediente 0*158» y que no siga otra cifra: E:158 no es el 1580.
+            consulta = consulta.filter(
+                _titulo__regex=r'expediente 0*%s(\D|$)' % numero)
+        else:
+            consulta = consulta.filter(_titulo__contains='expediente ' + normalizar(valor))
+
+    for valor in busqueda.valores('CI'):
+        consulta = consulta.filter(titulo__contains='(' + valor.replace(' ', ''))
+
+    for valor in busqueda.valores('N'):
+        # Solo en el trozo del nombre: lo que va antes del carnet o del primer «·».
+        for palabra in valor.split():
+            consulta = consulta.filter(
+                _titulo__regex=r'^[^(·]*' + re.escape(normalizar(palabra)))
+
+    for valor in busqueda.valores('CA'):
+        consulta = consulta.filter(_por_cargo(valor))
+
+    if busqueda.valores('U'):
+        consulta = consulta.alias(_unidad=sin_acentos('unidad_organizativa__descripcion'))
+        for valor in busqueda.valores('U'):
+            consulta = consulta.filter(_unidad__contains=normalizar(valor))
+
+    for valor in busqueda.valores('COD'):
+        consulta = consulta.filter(codigo_regla__istartswith=valor.replace(' ', ''))
+
+    return consulta

@@ -521,8 +521,25 @@
                 </div>
             </div>
 
+            {% comment %} Recorridos guiados de esta pantalla (ver static/js/recorrido_informe.js).
+               Es para los tres roles: el Observador también genera informes. {% endcomment %}
+            <span class="dropdown">
+                <button type="button" class="btn ii-btn-favoritos btn-sm dropdown-toggle d-flex align-items-center gap-2"
+                        id="btnRecorridoInforme" data-bs-toggle="dropdown" aria-expanded="false"
+                        title="Recorridos guiados de esta pantalla">
+                    <i class="bx bx-help-circle"></i><span>¿Cómo funciona?</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" style="font-size: .875rem;">
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_informe_generado:informe">
+                        <i class="bx bx-bar-chart-alt-2 me-1"></i>Generar un informe</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_informe_inteligente:informe">
+                        <i class="bx bx-download me-1"></i>Exportar a PDF, Word o Excel</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_informe_favorito:informe">
+                        <i class="bx bx-star me-1"></i>Guardar como favorito</button></li>
+                </ul>
+            </span>
             <button type="button" class="btn ii-btn-favoritos btn-sm d-flex align-items-center gap-2"
-                    data-bs-toggle="offcanvas" data-bs-target="#panelFavoritos">
+                    id="btnPanelFavoritos" data-bs-toggle="offcanvas" data-bs-target="#panelFavoritos">
                 <i class="bi bi-folder-symlink-fill"></i>
                 <span>Mis favoritos e historial</span>
                 <span class="badge rounded-pill bg-warning text-dark">{{ favoritos|length }}</span>
@@ -630,7 +647,7 @@
     </div>
 
     <!-- ===== 2. FILTROS ===== -->
-    <div class="ii-panel">
+    <div class="ii-panel" id="bloqueFiltrosII">
         <div class="ii-panel-head" data-bs-toggle="collapse" data-bs-target="#panelFiltros" aria-expanded="true">
             <span class="ii-panel-title">
                 <span class="ii-icono-chip ii-color-azul"><i class="bi bi-funnel-fill"></i></span>
@@ -659,7 +676,7 @@
     </div>
 
     <!-- ===== 3. ORDENAR ===== -->
-    <div class="ii-panel">
+    <div class="ii-panel" id="bloqueOrdenII">
         <div class="ii-panel-head collapsed" data-bs-toggle="collapse" data-bs-target="#panelOrden" aria-expanded="false">
             <span class="ii-panel-title">
                 <span class="ii-icono-chip ii-color-esmeralda"><i class="bi bi-sort-alpha-down"></i></span>
@@ -835,7 +852,7 @@
         </div>
 
         {% if ultimo_informe %}
-        <div class="p-3 bg-light">
+        <div class="p-3 bg-light" id="bloqueUltimoInforme">
             <h6 class="text-uppercase fw-bold text-muted small mb-3">
                 <i class="bi bi-clock-history me-1"></i>Último informe generado
             </h6>
@@ -983,4 +1000,7 @@
     };
 </script>
 <script src="{% estatico 'js/informe_inteligente.js' %}"></script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_exportar.js' %}"></script>
+<script src="{% estatico 'js/recorrido_informe.js' %}"></script>
 {% endblock %}

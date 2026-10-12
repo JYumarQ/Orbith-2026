@@ -9,8 +9,9 @@ urlpatterns = [
     # contratos/urls.py
     path('add_contrato/<str:aspirante_id>/', login_required(views.ContratoCreateView.as_view()), name='add_contrato'),
     path('updt_contrato/<str:pk>/', login_required(views.ContratoUpdateView.as_view()), name='updt_contrato'),
-    path('del_contrato/<str:pk>/', login_required(views.ContratoDeleteView.as_view()), name='del_contrato'),
+    path('del_contrato/<str:pk>/', login_required(views.ContratoBajaView.as_view()), name='del_contrato'),
     path('cargar_salarios/', login_required(views.cargar_salario), name='cargar_salarios'),
+    path('cargar_annos_servicio/', login_required(views.cargar_annos_servicio), name='cargar_annos_servicio'),
     path('search_contrato/', login_required(views.search_contratos), name='search_contrato'),
     
     #?REPORTES

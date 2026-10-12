@@ -1,26 +1,34 @@
+{% comment %} Las filas del listado de Cierres. Fragmento HTMX: lo devuelve tal cual
+   `cierres.views.buscar` cuando se escribe en el buscador o se cambia el filtro.
+
+   Usa las celdas de `inf-tabla` —`td-nombre` para el texto, `td-cifra` para lo que
+   se compara en columna— y las insignias de estado siguen saliendo de
+   `CierreUnidad.color_badge`, que es el modelo quien las decide: repetir aquí el
+   `{% templatetag openblock %} if {% templatetag closeblock %}` del estado era
+   exactamente lo que esa propiedad vino a evitar. {% endcomment %}
 {% for fila in filas %}
     <tr>
-        <td>
+        <td class="td-nombre">
             <div class="d-flex align-items-center">
                 {% if fila.unidad.padre_id %}
-                    <i class="fas fa-level-up-alt fa-rotate-90 text-muted me-2" title="Subunidad"></i>
+                    <i class="bx bx-subdirectory-right text-slate-400 me-2" title="Subunidad"></i>
                 {% else %}
-                    <i class="fas fa-building text-primary me-2"></i>
+                    <i class="bx bx-buildings text-indigo-600 me-2"></i>
                 {% endif %}
                 <div>
-                    <span class="fw-semibold">{{ fila.unidad.descripcion }}</span>
-                    <small class="d-block text-muted">{{ fila.unidad.tipo.descripcion }}</small>
+                    <span>{{ fila.unidad.descripcion }}</span>
+                    <small class="d-block text-slate-400 fw-normal">{{ fila.unidad.tipo.descripcion }}</small>
                 </div>
             </div>
         </td>
 
-        <td>
+        <td class="text-center">
             {% if fila.estado and not fila.estado.nunca_declarada %}
                 <span class="badge {{ fila.estado.color_badge }}">
                     {{ fila.estado.get_estado_display }}
                 </span>
                 {% if fila.estado.meses_pendientes > 1 %}
-                    <small class="d-block text-danger mt-1">
+                    <small class="d-block text-orange-500 fw-bold mt-1">
                         Arrastra {{ fila.estado.meses_pendientes }} meses
                     </small>
                 {% endif %}
@@ -28,31 +36,31 @@
                 {% comment %} Sin primera declaración no hay incumplimiento: no se le
                    puede reclamar ningún mes anterior (regla 4).
                 {% endcomment %}
-                <span class="badge bg-label-secondary">Nunca declarada</span>
+                <span class="inf-estado inf-estado--neutro">Nunca declarada</span>
             {% endif %}
         </td>
 
-        <td>
+        <td class="text-center">
             {% if fila.ultimo_cierre %}
-                <span class="fw-semibold">{{ fila.ultimo_cierre.periodo.etiqueta }}</span>
-                <small class="d-block text-muted">
+                <span class="fw-bold text-slate-700">{{ fila.ultimo_cierre.periodo.etiqueta }}</span>
+                <small class="d-block text-slate-400">
                     {{ fila.ultimo_cierre.fecha_declaracion|date:"d/m/Y" }} ·
                     {% if fila.ultimo_cierre.en_plazo %}
-                        <span class="text-success">En plazo</span>
+                        <span class="text-emerald-600 fw-bold">En plazo</span>
                     {% else %}
-                        <span class="text-danger">Fuera de plazo</span>
+                        <span class="text-orange-500 fw-bold">Fuera de plazo</span>
                     {% endif %}
                 </small>
             {% else %}
-                <span class="text-muted">—</span>
+                <span class="text-slate-400">—</span>
             {% endif %}
         </td>
 
-        <td>
+        <td class="text-center">
             {% if fila.calculo.periodo_pendiente %}
-                <span class="text-dark">{{ fila.calculo.periodo_pendiente.etiqueta }}</span>
+                <span class="fw-bold text-slate-700">{{ fila.calculo.periodo_pendiente.etiqueta }}</span>
             {% else %}
-                <span class="text-muted">—</span>
+                <span class="text-slate-400">—</span>
             {% endif %}
         </td>
 
@@ -61,25 +69,22 @@
                desde el Gestor de Plantilla, sobre la fila de la unidad, junto al
                resto de acciones de su toolbar.
             {% endcomment %}
-            <button type="button" class="btn btn-sm btn-label-secondary"
+            <button type="button" class="btn btn-sm inf-btn-suave"
                     onclick="abrirModalCierres('{% url 'historial_cierres' fila.unidad.pk %}')"
                     title="Historial de cierres">
-                <i class="fas fa-history me-1"></i> Historial
+                <i class="bx bx-history me-1"></i> Historial
             </button>
         </td>
     </tr>
 {% empty %}
-    <tr>
-        <td colspan="5" class="text-center py-4">
-            <i class="fas fa-search fs-4 text-muted mb-2 opacity-25 d-block"></i>
-            <p class="text-muted small m-0">
-                {% if hay_filtros %}
-                    Sin resultados para el filtro aplicado.
-                {% else %}
-                    No tiene Unidades Organizativas asignadas.
-                {% endif %}
-            </p>
+    <tr class="fila-vacia">
+        <td colspan="5">
+            <i class="bx bx-search-alt fs-4 d-block mb-2 opacity-50"></i>
+            {% if hay_filtros %}
+                Sin resultados para el filtro aplicado.
+            {% else %}
+                No tiene Unidades Organizativas asignadas.
+            {% endif %}
         </td>
     </tr>
 {% endfor %}
-

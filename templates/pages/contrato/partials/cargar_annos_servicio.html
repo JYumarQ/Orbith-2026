@@ -1,0 +1,19 @@
+{% comment %}
+  Los dos campos derivados de la F. Alta Entidad. Los pinta `cargar_annos_servicio()`.
+
+  El que va dentro del destino (`#pago_annos_servicio`) es el importe, porque vive
+  en la pestaña Salario junto a las otras tres cifras. Los «Años Servicio» de la
+  pestaña Plantilla viajan como intercambio fuera de banda (`hx-swap-oob`): es el
+  mismo cálculo y una sola petición debe dejar las dos pestañas coherentes.
+
+  Ninguno de los dos lleva `name`: son solo lectura y NO se guardan en `CAlta`.
+  El motivo está explicado en `contratos/annos_servicio.py`.
+{% endcomment %}
+<label for="pagoAnnosServicio">Pago Años de Servicio</label>
+<input class="form-control" id="pagoAnnosServicio" readonly
+       value="{{ pago_annos_servicio }}" placeholder="---"
+       title="Cuantía de la Escala de Años de Servicio que corresponde a los años cumplidos en la entidad">
+
+<input type="text" id="id_annos_servicio" class="form-control bg-light text-center px-1"
+       readonly placeholder="---" value="{{ annos_servicio }}" hx-swap-oob="true"
+       title="Años completos cumplidos en la entidad, según la F. Alta Entidad">

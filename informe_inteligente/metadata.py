@@ -577,6 +577,22 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": True,
             "sensible": False,
         },
+        "mision_dias": {
+            "label": "Días de Misión",
+            "ruta_orm": "mision_dias",
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "mision_importe": {
+            "label": "Importe de Misión",
+            "ruta_orm": "mision_importe",
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
         "funcionario_res": {
             "label": "No. Res. Funcionario",
             "ruta_orm": "funcionario_res",
@@ -712,6 +728,8 @@ def _campos_cbaja():
         "fecha_vence_lic", "fecha_vence_recal", "fecha_vence_seg",
         "jubilado_recontratado", "salario",
         "c_formal", "funcionario_res", "designado_res", "c_formal_res",
+        # La Misión es un dato del contrato vigente: no existe en `CBaja`.
+        "mision", "pais", "mision_dias", "mision_importe",
     }
     campos = {key: valor for key, valor in base.items() if key not in solo_calta}
 
@@ -1436,6 +1454,8 @@ _RUTAS_HISTORICAS_CONTRATO = {
     "contrato_determinado": "requiere_motivo",
     "mision": "mision",
     "pais": "pais",
+    "mision_dias": "mision_dias",
+    "mision_importe": "mision_importe",
     "funcionario_res": "funcionario_res",
     "designado_res": "designado_res",
     "c_formal": "c_formal",

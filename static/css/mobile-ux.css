@@ -79,7 +79,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 1030; /* por debajo de .modal-backdrop (1040) y .modal (1050) */
+    z-index: 1030; /* por debajo de .modal-backdrop (1089) y .modal (1090), ver base.html */
     margin: 0;
     display: flex;
     justify-content: center;

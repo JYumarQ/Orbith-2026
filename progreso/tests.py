@@ -6,9 +6,9 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from .middleware import DeteccionExportacionMiddleware
-from .models import TareaGuia, TareaGuiaUsuario
+from .models import TareaGuia, TareaGuiaParte, TareaGuiaUsuario
 from .receptores import al_finalizar_analisis, al_revisar_hallazgo
-from .servicios import completar_tarea
+from .servicios import abrir_logros, cerrar_logros, completar_parte, completar_tarea
 
 CustomUser = get_user_model()
 
@@ -141,45 +141,117 @@ class ReceptoresDefensivosTests(TareaGuiaAisladaTestCase):
         self.assertFalse(TareaGuiaUsuario.objects.exists())
 
 
+PDF = 'application/pdf'
+WORD = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+EXCEL = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+
 class MiddlewareExportacionTests(TareaGuiaAisladaTestCase):
+    """Categoría "Exportar": cada descarga cuenta para la tarea de SU sección,
+    reconocida por la ruta de la vista, y no por el formato a secas."""
+
     def setUp(self):
         super().setUp()
         self.usuario = crear_usuario()
         self.factory = RequestFactory()
-        TareaGuia.objects.create(
-            codigo='primera_exportacion_pdf', titulo='Exportar PDF', categoria=TareaGuia.Categoria.EXPLORAR,
-        )
+        crear = TareaGuia.objects.create
+        crear(codigo='exportar_informe_inteligente', titulo='II', categoria=TareaGuia.Categoria.EXPORTAR,
+              partes='pdf,word,excel')
+        crear(codigo='exportar_informes_rrhh', titulo='RRHH', categoria=TareaGuia.Categoria.EXPORTAR,
+              partes='pdf,word,excel')
+        crear(codigo='exportar_contrato_modificacion', titulo='Contrato', categoria=TareaGuia.Categoria.EXPORTAR,
+              partes='creacion,modificacion')
+        crear(codigo='exportar_historico_trabajador', titulo='Histórico', categoria=TareaGuia.Categoria.EXPORTAR)
+        crear(codigo='exportar_anexos', titulo='Anexos', categoria=TareaGuia.Categoria.EXPORTAR,
+              partes='14,14a,14b')
 
-    def _procesar(self, response):
-        from django.contrib.messages.storage.fallback import FallbackStorage
+    def _procesar(self, ruta, content_type, metodo='get', datos=None, estado=200):
+        from django.urls import resolve
 
+        response = HttpResponse(content_type=content_type, status=estado)
+        response['Content-Disposition'] = 'attachment; filename="documento"'
         middleware = DeteccionExportacionMiddleware(get_response=lambda request: response)
-        request = self.factory.get('/cualquier-url/')
+        request = getattr(self.factory, metodo)(ruta, datos or {})
         request.user = self.usuario
-        # En un request real, MessageMiddleware ya deja `_messages` listo antes
-        # de llegar aquí (ver core/settings.py: este middleware va después).
-        # RequestFactory no pasa por ese middleware, así que se simula a mano.
-        request.session = self.client.session
-        request._messages = FallbackStorage(request)
+        request.resolver_match = resolve(ruta)
         return middleware(request)
 
-    def test_detecta_pdf_por_content_type(self):
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="informe.pdf"'
-        self._procesar(response)
-        self.assertTrue(TareaGuiaUsuario.objects.filter(
-            usuario=self.usuario, tarea__codigo='primera_exportacion_pdf').exists())
+    def _partes(self, codigo):
+        return set(TareaGuiaParte.objects.filter(usuario=self.usuario, tarea__codigo=codigo)
+                   .values_list('parte', flat=True))
 
-    def test_ignora_respuestas_html_normales(self):
-        response = HttpResponse(content_type='text/html')
-        self._procesar(response)
-        self.assertFalse(TareaGuiaUsuario.objects.exists())
+    def _completada(self, codigo):
+        return TareaGuiaUsuario.objects.filter(usuario=self.usuario, tarea__codigo=codigo).exists()
 
-    def test_ignora_content_type_pdf_sin_attachment(self):
-        # Una vista que sirva un PDF "inline" (no descarga) no debe contar.
-        response = HttpResponse(content_type='application/pdf')
-        self._procesar(response)
-        self.assertFalse(TareaGuiaUsuario.objects.exists())
+    def test_informes_rrhh_cuenta_por_formato_y_completa_con_los_tres(self):
+        self._procesar('/informes/economia/exportar-pdf/', PDF)
+        self._procesar('/informes/misiones/exportar-word/', WORD)
+        self.assertEqual(self._partes('exportar_informes_rrhh'), {'pdf', 'word'})
+        self.assertFalse(self._completada('exportar_informes_rrhh'))
+        self._procesar('/informes/altas-bajas/exportar-excel/', EXCEL)
+        self.assertTrue(self._completada('exportar_informes_rrhh'))
+
+    def test_un_pdf_de_rrhh_no_cuenta_para_el_informe_inteligente(self):
+        self._procesar('/informes/economia/exportar-pdf/', PDF)
+        self.assertEqual(self._partes('exportar_informe_inteligente'), set())
+
+    def test_informe_inteligente(self):
+        self._procesar('/informe-inteligente/exportar-excel/', EXCEL, metodo='post')
+        self.assertEqual(self._partes('exportar_informe_inteligente'), {'excel'})
+
+    def test_contrato_y_modificacion_segun_el_tipo_de_documento(self):
+        self._procesar('/contrato/exportar_contrato/1/', WORD, metodo='post', datos={'tipo_documento': 'modificacion'})
+        self.assertEqual(self._partes('exportar_contrato_modificacion'), {'modificacion'})
+        self._procesar('/contrato/exportar_contrato/1/', WORD, metodo='post', datos={'tipo_documento': 'creacion'})
+        self.assertTrue(self._completada('exportar_contrato_modificacion'))
+
+    def test_el_libro_combinado_cuenta_para_el_14_y_el_14a(self):
+        self._procesar('/informes-anexo/anexo/excel/combinado/', EXCEL)
+        self.assertEqual(self._partes('exportar_anexos'), {'14', '14a'})
+
+    def test_tarea_sin_partes_se_completa_con_una_descarga_inline(self):
+        # "Exportar Todo" abre el PDF en otra pestaña (inline): cuenta igual.
+        self._procesar('/contrato/exportar/historico/pdf/1/', PDF)
+        self.assertTrue(self._completada('exportar_historico_trabajador'))
+
+    def test_ignora_html_y_respuestas_con_error(self):
+        self._procesar('/informes/economia/exportar-pdf/', 'text/html')
+        self._procesar('/informes/economia/exportar-word/', WORD, estado=500)
+        self.assertEqual(self._partes('exportar_informes_rrhh'), set())
+
+
+class CompletarParteTests(TareaGuiaAisladaTestCase):
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario()
+        TareaGuia.objects.create(codigo='con_partes', titulo='Con partes', categoria=TareaGuia.Categoria.EXPORTAR,
+                                 partes='pdf,word,excel')
+
+    def test_parte_repetida_o_desconocida_no_cuenta(self):
+        self.assertTrue(completar_parte(self.usuario, 'con_partes', 'pdf'))
+        self.assertFalse(completar_parte(self.usuario, 'con_partes', 'pdf'))
+        self.assertFalse(completar_parte(self.usuario, 'con_partes', 'zip'))
+        self.assertEqual(TareaGuiaParte.objects.count(), 1)
+
+    def test_avisa_del_avance_y_del_logro_al_completar(self):
+        token = abrir_logros(self.usuario)
+        completar_parte(self.usuario, 'con_partes', 'pdf')
+        completar_parte(self.usuario, 'con_partes', 'word')
+        completar_parte(self.usuario, 'con_partes', 'excel')
+        logros = cerrar_logros(token)
+        tipos = [l['tipo'] for l in logros]
+        self.assertEqual(tipos[:2], ['avance', 'avance'])
+        self.assertIn('tarea', tipos)
+        self.assertEqual(logros[1]['texto'], 'Con partes: 2 de 3')
+
+    def test_panel_y_endpoint_muestran_el_avance(self):
+        completar_parte(self.usuario, 'con_partes', 'word')
+        self.client.force_login(self.usuario)
+        panel = self.client.get(reverse('progreso_panel'))
+        self.assertContains(panel, '1 de 3')
+        datos = self.client.get(reverse('progreso_partes_tarea', args=['con_partes'])).json()
+        self.assertEqual([p['hecha'] for p in datos['partes']], [False, True, False])
+        self.assertFalse(datos['completada'])
 
 
 class ContextoGlobalTests(TareaGuiaAisladaTestCase):
@@ -421,3 +493,293 @@ class AuditoriaAdminTests(TareaGuiaAisladaTestCase):
         evento = EventoAuditoria.objects.filter(
             object_id=str(tarea.pk), accion='UPD').latest('fecha')
         self.assertEqual(evento.usuario_id, self.admin.pk)
+
+
+class TareasPorRolTests(TareaGuiaAisladaTestCase):
+    """Cada rol ve, cuenta y completa solo sus tareas. Antes un Observador veía
+    «Crea tu primer Aspirante» y nunca podía llegar al 100 %."""
+
+    def setUp(self):
+        super().setUp()
+        self.admin = crear_usuario(username='admin_rol', es_moderador=False, es_admin=True)
+        self.moderador = crear_usuario(username='moderador_rol')
+        self.observador = crear_usuario(username='observador_rol', es_moderador=False, es_observador=True)
+        self.comun = TareaGuia.objects.create(
+            codigo='tarea_comun', titulo='Para todos', categoria=TareaGuia.Categoria.EXPLORAR)
+        self.solo_admin = TareaGuia.objects.create(
+            codigo='tarea_admin', titulo='Solo admin', categoria=TareaGuia.Categoria.DOMINAR,
+            para_moderador=False, para_observador=False)
+        self.edicion = TareaGuia.objects.create(
+            codigo='tarea_edicion', titulo='Admin y moderador', categoria=TareaGuia.Categoria.PRIMEROS_PASOS,
+            para_observador=False)
+
+    def test_tareas_visibles_segun_rol(self):
+        from .servicios import tareas_visibles
+
+        self.assertEqual(set(tareas_visibles(self.admin)), {self.comun, self.solo_admin, self.edicion})
+        self.assertEqual(set(tareas_visibles(self.moderador)), {self.comun, self.edicion})
+        self.assertEqual(set(tareas_visibles(self.observador)), {self.comun})
+
+    def test_no_completa_una_tarea_de_otro_rol(self):
+        self.assertIsNone(completar_tarea(self.observador, 'tarea_edicion'))
+        self.assertFalse(TareaGuiaUsuario.objects.filter(usuario=self.observador).exists())
+
+    def test_panel_del_observador_no_muestra_tareas_de_edicion(self):
+        self.client.force_login(self.observador)
+        respuesta = self.client.get(reverse('progreso_panel'))
+
+        self.assertContains(respuesta, 'Para todos')
+        self.assertNotContains(respuesta, 'Admin y moderador')
+        self.assertNotContains(respuesta, 'Solo admin')
+        self.assertContains(respuesta, '0 de 1 completadas')
+
+    def test_modo_guiado_de_otro_rol_devuelve_404(self):
+        self.client.force_login(self.observador)
+        respuesta = self.client.get(reverse('progreso_tarea_guiada', args=['tarea_admin']))
+        self.assertEqual(respuesta.status_code, 404)
+
+    def test_contador_ignora_tareas_completadas_que_ya_no_cuentan(self):
+        """Una tarea completada que luego se desactiva no debe seguir sumando:
+        antes el contador podía decir «2/1»."""
+        completar_tarea(self.moderador, 'tarea_comun')
+        completar_tarea(self.moderador, 'tarea_edicion')
+        self.edicion.activo = False
+        self.edicion.save()
+
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('dashboard'))
+
+        self.assertEqual(respuesta.context['progreso_total'], 1)
+        self.assertEqual(respuesta.context['progreso_completadas'], 1)
+        self.assertEqual(respuesta.context['progreso_porcentaje'], 100)
+
+    def test_anotar_progreso_usa_el_total_de_cada_rol(self):
+        from .servicios import anotar_progreso
+
+        completar_tarea(self.admin, 'tarea_admin')
+        completar_tarea(self.observador, 'tarea_comun')
+
+        usuarios = {u.username: u for u in anotar_progreso(
+            CustomUser.objects.filter(pk__in=[self.admin.pk, self.moderador.pk, self.observador.pk]))}
+
+        self.assertEqual((usuarios['admin_rol'].progreso_completadas_count, usuarios['admin_rol'].progreso_total), (1, 3))
+        self.assertEqual((usuarios['moderador_rol'].progreso_completadas_count, usuarios['moderador_rol'].progreso_total), (0, 2))
+        self.assertEqual((usuarios['observador_rol'].progreso_completadas_count, usuarios['observador_rol'].progreso_total), (1, 1))
+
+
+class InstrumentacionTareasNuevasTests(TareaGuiaAisladaTestCase):
+    """Las acciones reales de los módulos que se incorporaron a la Guía
+    completan su tarea."""
+
+    def setUp(self):
+        super().setUp()
+        self.observador = crear_usuario(username='observador_inst', es_moderador=False, es_observador=True)
+        for codigo in ('primer_reporte_problema', 'primer_informe_rrhh'):
+            TareaGuia.objects.create(codigo=codigo, titulo=codigo, categoria=TareaGuia.Categoria.EXPLORAR)
+
+    def test_enviar_un_reporte_completa_primer_reporte_problema(self):
+        self.client.force_login(self.observador)
+        respuesta = self.client.post(reverse('soporte:crear_reporte'), {'mensaje': 'La tabla no carga.'})
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(TareaGuiaUsuario.objects.filter(
+            usuario=self.observador, tarea__codigo='primer_reporte_problema').exists())
+
+    def test_reporte_invalido_no_completa_la_tarea(self):
+        self.client.force_login(self.observador)
+        self.client.post(reverse('soporte:crear_reporte'), {'mensaje': ''})
+
+        self.assertFalse(TareaGuiaUsuario.objects.filter(usuario=self.observador).exists())
+
+    def test_abrir_un_informe_rrhh_completa_primer_informe_rrhh(self):
+        self.client.force_login(self.observador)
+        respuesta = self.client.get(reverse('informe_economia'))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTrue(TareaGuiaUsuario.objects.filter(
+            usuario=self.observador, tarea__codigo='primer_informe_rrhh').exists())
+
+
+class LogrosGuiaTests(TareaGuiaAisladaTestCase):
+    """Cada tarea nueva es un logro que llega al navegador al momento, en la
+    cookie `orbith_logros`, aunque la respuesta sea un JSON o una descarga."""
+
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario(username='usuario_logros')
+        TareaGuia.objects.create(codigo='l1', titulo='Primera', categoria=TareaGuia.Categoria.PRIMEROS_PASOS)
+        TareaGuia.objects.create(codigo='l2', titulo='Segunda', categoria=TareaGuia.Categoria.PRIMEROS_PASOS)
+        TareaGuia.objects.create(codigo='l3', titulo='Tercera', categoria=TareaGuia.Categoria.EXPLORAR)
+
+    def _completar(self, codigo):
+        from .servicios import abrir_logros, cerrar_logros
+
+        token = abrir_logros(self.usuario)
+        completar_tarea(self.usuario, codigo)
+        return cerrar_logros(token)
+
+    def test_completar_una_tarea_genera_su_logro_con_el_progreso(self):
+        logros = self._completar('l1')
+
+        self.assertEqual([l['id'] for l in logros], ['tarea:l1'])
+        self.assertEqual(logros[0]['texto'], 'Primera')
+        self.assertEqual((logros[0]['completadas'], logros[0]['total']), (1, 3))
+
+    def test_repetir_la_tarea_no_genera_otro_logro(self):
+        self._completar('l1')
+        self.assertEqual(self._completar('l1'), [])
+
+    def test_cerrar_una_categoria_da_un_logro_especial(self):
+        self._completar('l1')
+        logros = self._completar('l2')
+
+        self.assertEqual([l['id'] for l in logros], ['tarea:l2', 'categoria:PRI'])
+        self.assertIn('Primeros pasos', logros[1]['titulo'])
+
+    def test_completar_toda_la_guia_da_el_logro_final(self):
+        self._completar('l1')
+        self._completar('l2')
+        logros = self._completar('l3')
+
+        self.assertEqual([l['id'] for l in logros], ['tarea:l3', 'categoria:EXP', 'total'])
+
+    def test_sin_peticion_en_curso_no_falla(self):
+        """Un receptor de señal fuera de una petición (comando, tarea
+        programada) completa la tarea igual, sin logro que entregar."""
+        self.assertEqual(completar_tarea(self.usuario, 'l1').codigo, 'l1')
+
+    def test_la_cookie_llega_con_una_respuesta_json(self):
+        import json
+        from urllib.parse import unquote
+
+        TareaGuia.objects.create(codigo='primer_reporte_problema', titulo='Reporta',
+                                 categoria=TareaGuia.Categoria.EXPLORAR)
+        self.client.force_login(self.usuario)
+        respuesta = self.client.post(reverse('soporte:crear_reporte'),
+                                     {'mensaje': 'La tabla de contratos no carga.'})
+
+        cookie = respuesta.cookies.get("orbith_logros")
+        self.assertIsNotNone(cookie)
+        self.assertFalse(cookie['httponly'])
+        logros = json.loads(unquote(cookie.value))
+        self.assertEqual(logros[0]['id'], 'tarea:primer_reporte_problema')
+
+    def test_sin_logro_no_se_envia_cookie(self):
+        self.client.force_login(self.usuario)
+        respuesta = self.client.get(reverse('dashboard'))
+        self.assertNotIn('orbith_logros', respuesta.cookies)
+
+
+class AccesosTareaTests(TareaGuiaAisladaTestCase):
+    """Una tarea con varias formas de hacerse (la contratación) muestra en el
+    panel un botón por cada acceso, cada uno con su recorrido."""
+
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario(username='usuario_accesos')
+        self.tarea = TareaGuia.objects.create(
+            codigo='tarea_accesos', titulo='Con accesos', categoria=TareaGuia.Categoria.PRIMEROS_PASOS,
+            instrucciones='Un paso', url_relacionada='/unica/',
+            accesos='Desde A | /a/ | tarea_accesos:a\nlínea mal escrita\nDesde B | /b/ | tarea_accesos:b',
+        )
+
+    def test_lista_accesos_ignora_lineas_mal_escritas(self):
+        self.assertEqual(
+            [a['recorrido'] for a in self.tarea.lista_accesos],
+            ['tarea_accesos:a', 'tarea_accesos:b'],
+        )
+
+    def test_panel_muestra_un_boton_por_acceso_en_vez_del_ir_a(self):
+        self.client.force_login(self.usuario)
+        respuesta = self.client.get(reverse('progreso_panel'))
+
+        self.assertContains(respuesta, 'Desde A')
+        self.assertContains(respuesta, "orbithIniciarGuia('tarea_accesos:b')")
+        self.assertNotContains(respuesta, 'href="/unica/"')
+
+
+class PanelMedallasYFiltrosTests(TareaGuiaAisladaTestCase):
+    """La cabecera enciende la medalla de una categoría solo cuando el usuario
+    completó todas SUS tareas de esa categoría, y los filtros cuentan bien."""
+
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario(username='usuario_medallas')
+        TareaGuia.objects.create(codigo='m1', titulo='Uno', categoria=TareaGuia.Categoria.PRIMEROS_PASOS)
+        TareaGuia.objects.create(codigo='m2', titulo='Dos', categoria=TareaGuia.Categoria.EXPLORAR)
+        TareaGuia.objects.create(codigo='m3', titulo='Tres', categoria=TareaGuia.Categoria.EXPLORAR)
+
+    def test_medalla_de_categoria_y_contadores(self):
+        completar_tarea(self.usuario, 'm1')
+        completar_tarea(self.usuario, 'm2')
+        self.client.force_login(self.usuario)
+
+        respuesta = self.client.get(reverse('progreso_panel'))
+        grupos = {g['etiqueta']: g['completa'] for g in respuesta.context['grupos']}
+
+        self.assertTrue(grupos['Primeros pasos'])
+        self.assertFalse(grupos['Explorar Orbith'])
+        self.assertEqual(respuesta.context['pendientes'], 1)
+        self.assertContains(respuesta, 'Pendientes (1)')
+        self.assertContains(respuesta, 'Completadas (2)')
+        # El trofeo del 100 % sigue apagado.
+        self.assertContains(respuesta, 'Completa toda la Guía')
+
+
+class TareaEnDesarrolloTests(TareaGuiaAisladaTestCase):
+    """Una tarea de un módulo en construcción se ve atenuada en el panel, pero
+    no cuenta para el avance ni se puede completar."""
+
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario()
+        TareaGuia.objects.create(codigo='normal', titulo='Normal', categoria=TareaGuia.Categoria.EXPORTAR)
+        TareaGuia.objects.create(codigo='en_obras', titulo='Tarea en obras', categoria=TareaGuia.Categoria.EXPORTAR,
+                                 en_desarrollo=True)
+
+    def test_no_cuenta_ni_se_completa(self):
+        self.assertIsNone(completar_tarea(self.usuario, 'en_obras'))
+        completar_tarea(self.usuario, 'normal')
+        from .servicios import resumen_progreso
+        resumen = resumen_progreso(self.usuario)
+        self.assertEqual((resumen['completadas'], resumen['total']), (1, 1))
+
+    def test_el_panel_la_muestra_atenuada(self):
+        self.client.force_login(self.usuario)
+        respuesta = self.client.get(reverse('progreso_panel'))
+        self.assertContains(respuesta, 'Tarea en obras')
+        self.assertContains(respuesta, 'En desarrollo')
+        self.assertContains(respuesta, 'data-guia-estado="desarrollo"')
+        self.assertContains(respuesta, '0 de 1 completadas')
+
+
+class BusquedaConPrefijosTests(TareaGuiaAisladaTestCase):
+    """Tarea "Busca con prefijos": cuenta un prefijo que la pantalla entiende."""
+
+    def setUp(self):
+        super().setUp()
+        self.usuario = crear_usuario()
+        self.factory = RequestFactory()
+        TareaGuia.objects.create(codigo='primera_busqueda_prefijos', titulo='Busca con prefijos',
+                                 categoria=TareaGuia.Categoria.EXPLORAR)
+
+    def _buscar(self, ruta, parametros):
+        from django.urls import resolve
+
+        middleware = DeteccionExportacionMiddleware(get_response=lambda request: HttpResponse('ok'))
+        request = self.factory.get(ruta, parametros)
+        request.user = self.usuario
+        request.resolver_match = resolve(ruta)
+        middleware(request)
+        return TareaGuiaUsuario.objects.filter(usuario=self.usuario,
+                                               tarea__codigo='primera_busqueda_prefijos').exists()
+
+    def test_cuenta_un_prefijo_valido(self):
+        self.assertTrue(self._buscar('/contrato/search_contrato/', {'filter_contrato': 'N:Juan'}))
+
+    def test_no_cuenta_sin_prefijo_ni_con_uno_que_la_pantalla_no_entiende(self):
+        self.assertFalse(self._buscar('/contrato/search_contrato/', {'filter_contrato': 'Juan'}))
+        # COD: es de Subsanación: en Contratos no filtra.
+        self.assertFalse(self._buscar('/contrato/search_contrato/', {'filter_contrato': 'COD:CTR'}))
+        # E: no vale en Aspirantes (un aspirante no tiene expediente).
+        self.assertFalse(self._buscar('/bolsa/search_aspirante/', {'filter_aspirante': 'E:8855'}))

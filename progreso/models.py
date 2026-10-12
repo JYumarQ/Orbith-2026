@@ -14,6 +14,8 @@ class TareaGuia(models.Model):
     class Categoria(models.TextChoices):
         PRIMEROS_PASOS = 'PRI', 'Primeros pasos'
         EXPLORAR = 'EXP', 'Explorar Orbith'
+        # Entre Explorar y Dominar: el orden de aquí es el del panel.
+        EXPORTAR = 'EXR', 'Exportar'
         DOMINAR = 'DOM', 'Dominar Orbith'
 
     codigo = models.SlugField(unique=True, verbose_name='Código')
@@ -36,6 +38,41 @@ class TareaGuia(models.Model):
         verbose_name='Instrucciones (un paso por línea)',
     )
 
+    # Varias formas de llegar a la misma tarea (la contratación se hace desde
+    # Aspirantes, desde el Gestor o desde Contratos). Una línea por acceso:
+    #     Etiqueta | /url/ | clave del recorrido
+    # Si está vacío, el panel muestra el único botón "Ir a X" de
+    # `url_relacionada`, como siempre. La clave es la de
+    # `window.OrbithRecorridos` en la pantalla de destino.
+    accesos = models.TextField(
+        blank=True, default='',
+        verbose_name='Accesos (uno por línea: Etiqueta | /url/ | recorrido)',
+    )
+
+    # Qué roles ven la tarea. Un Observador no puede crear aspirantes ni
+    # contratar, así que si viera esas tareas nunca podría llegar al 100 %.
+    # Tres casillas en vez de una lista de roles en texto: es lo más fácil de
+    # marcar desde el Admin y de filtrar con el ORM. Ver
+    # `progreso/servicios.py::tareas_visibles`.
+    para_admin = models.BooleanField(default=True, verbose_name='Visible para Administrador')
+    para_moderador = models.BooleanField(default=True, verbose_name='Visible para Moderador')
+    para_observador = models.BooleanField(default=True, verbose_name='Visible para Observador')
+
+    # Tareas con avance ("Exporta un Informe RRHH" pide PDF, Word y Excel): las
+    # claves de cada parte, separadas por comas. La tarea se completa al hacer
+    # todas (ver `progreso/servicios.py::completar_parte`). Vacío = una sola acción.
+    partes = models.CharField(
+        max_length=100, blank=True, default='',
+        verbose_name='Partes (claves separadas por comas)',
+    )
+
+    # Tarea de un módulo que aún se está construyendo (por ejemplo, Pre-Nómina):
+    # el panel la enseña atenuada con "En desarrollo", pero no cuenta para el
+    # avance ni se puede completar. Distinto de `activo=False`, que la esconde.
+    en_desarrollo = models.BooleanField(
+        default=False, verbose_name='En desarrollo (se ve atenuada y no cuenta)',
+    )
+
     activo = models.BooleanField(default=True, verbose_name='Activo')
     orden = models.PositiveSmallIntegerField(default=0, verbose_name='Orden')
 
@@ -46,6 +83,22 @@ class TareaGuia(models.Model):
 
     def __str__(self):
         return self.titulo
+
+    @property
+    def lista_accesos(self):
+        """Accesos de `accesos` como diccionarios {etiqueta, url, recorrido}.
+        Las líneas mal escritas (sin sus tres partes) se ignoran."""
+        resultado = []
+        for linea in self.accesos.splitlines():
+            partes = [p.strip() for p in linea.split('|')]
+            if len(partes) == 3 and all(partes):
+                resultado.append({'etiqueta': partes[0], 'url': partes[1], 'recorrido': partes[2]})
+        return resultado
+
+    @property
+    def lista_partes(self):
+        """Claves de `partes` como lista, sin vacíos ni espacios."""
+        return [p.strip() for p in self.partes.split(',') if p.strip()]
 
     @property
     def pasos(self):
@@ -82,3 +135,29 @@ class TareaGuiaUsuario(models.Model):
 
     def __str__(self):
         return f'{self.usuario} · {self.tarea}'
+
+
+class TareaGuiaParte(models.Model):
+    """Una parte hecha de una tarea con avance (por ejemplo, el PDF de
+    "Exporta un Informe RRHH"). Cuando el usuario tiene todas las partes de la
+    tarea, se completa la tarea en `TareaGuiaUsuario`."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='partes_guia',
+        verbose_name='Usuario',
+    )
+    tarea = models.ForeignKey(TareaGuia, on_delete=models.CASCADE, verbose_name='Tarea')
+    parte = models.CharField(max_length=30, verbose_name='Parte')
+    fecha = models.DateTimeField(auto_now_add=True, verbose_name='Fecha')
+
+    class Meta:
+        verbose_name = 'Parte de tarea hecha'
+        verbose_name_plural = 'Partes de tareas hechas'
+        constraints = [
+            models.UniqueConstraint(fields=['usuario', 'tarea', 'parte'], name='progreso_parte_una_vez'),
+        ]
+
+    def __str__(self):
+        return f'{self.usuario} · {self.tarea} · {self.parte}'

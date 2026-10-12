@@ -10,6 +10,7 @@ urlpatterns = [
     # Paneles (fragmentos HTMX de las pestañas)
     path('panel/dashboard/', views.panel_dashboard, name='panel_dashboard'),
     path('panel/hallazgos/', views.panel_hallazgos, name='panel_hallazgos'),
+    path('panel/reglas/', views.panel_reglas, name='panel_reglas'),
     path('panel/revisiones/', views.panel_revisiones, name='panel_revisiones'),
     path('panel/estadisticas/', views.panel_estadisticas, name='panel_estadisticas'),
     path('panel/analisis/', views.panel_analisis, name='panel_analisis'),

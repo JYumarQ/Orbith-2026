@@ -3,7 +3,7 @@
 {% block title %}Contratos{% endblock %}
 
 {% block content %}
-{% load static %}
+{% load static estaticos %}
 
 <style>
     /* Estilos visuales */
@@ -96,9 +96,50 @@
 
 <div class="content-wrapper">
     <div class="container-xxl grow container-p-y">
-        <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Contratos /</span> Lista de Contratos</h4>
+        <h4 class="fw-bold py-3 mb-4 d-flex align-items-center flex-wrap gap-2">
+            <span><span class="text-muted fw-light">Contratos /</span> Lista de Contratos</span>
+            {% comment %} Menú de recorridos (static/js/orbith_recorrido.js, `data-recorrido`).
+               Lo ven los tres roles: los de edición solo quien puede editar, y los de
+               Exportar todos, porque el Observador también exporta. {% endcomment %}
+            <span class="dropdown">
+                <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoContratos"
+                        data-bs-toggle="dropdown" aria-expanded="false"
+                        data-rol="{% if user.es_admin or user.is_superuser %}admin{% elif user.es_moderador %}moderador{% else %}observador{% endif %}"
+                        title="Recorridos guiados de esta pantalla">
+                    <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                </button>
+                <ul class="dropdown-menu" style="font-size: .875rem;">
+                    {% if puede_editar %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_contratacion:contratos">
+                        <i class="bx bx-file me-1"></i>Contratar a un aspirante</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_interno:contratos">
+                        <i class="bx bx-sync me-1"></i>Hacer un movimiento de nómina</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_baja:contratos">
+                        <i class="bx bx-user-minus me-1"></i>Dar de baja a un trabajador</button></li>
+                    {# Ceder un contrato es cosa del Moderador: el Administrador lleva todas las unidades. #}
+                    {% if user.es_moderador and not user.es_admin %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primer_movimiento_cedido:contratos">
+                        <i class="bx bx-transfer me-1"></i>Ceder un contrato a otro moderador</button></li>
+                    {% endif %}
+                    {% endif %}
+                    <li><button type="button" class="dropdown-item" data-recorrido="primera_busqueda_prefijos:contratos">
+                        <i class="bx bx-search-alt me-1"></i>Buscar con prefijos</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header py-1">Exportar</h6></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_lista_contratos:contratos">
+                        <i class="bx bx-spreadsheet me-1"></i>Lista de contratos a Excel</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_contrato_modificacion:contratos">
+                        <i class="bx bx-file-blank me-1"></i>Contrato de Trabajo y Modificación</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_movimiento_nomina:contratos">
+                        <i class="bx bx-export me-1"></i>Movimiento de nómina (Word)</button></li>
+                    <li><button type="button" class="dropdown-item" data-recorrido="exportar_historico_trabajador:contratos">
+                        <i class="bx bx-history me-1"></i>Histórico del trabajador (PDF)</button></li>
+                </ul>
+            </span>
+        </h4>
 
-        <div class="card">
+        {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+        <div class="card orb-tabla-card">
             
             <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                 
@@ -130,7 +171,6 @@
                 </div>
 
                 <div id="search_container" class="ms-3 grow" style="max-width: 300px;">
-                    <input type="hidden" id="filter_per_page" name="per_page" value="8">
                     <input type="hidden" id="hidden_sort" name="sort" value="">
                     <input type="hidden" id="hidden_order" name="order" value="asc">
                     
@@ -138,11 +178,12 @@
                         <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
                         <input id="search" type="text" class="form-control border-0 shadow-none" 
                             placeholder="Buscar..." 
+                            data-prefijos="E,N,CI,CA,U" data-pantalla="Contratos"
                             name="filter_contrato"
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_per_page, #hidden_sort, #hidden_order">
+                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -304,8 +345,8 @@
                 </div>
             </div>
 
-            <div class="table-responsive text-nowrap">
-                <table class="table table-hover">
+            <div class="orb-tabla-scroll text-nowrap">
+                <table class="table orb-tabla">
                     <thead>
                         <tr>
                             <th class="cursor-pointer user-select-none" onclick="triggerBackendSort('expediente', this)">
@@ -341,10 +382,8 @@
                 </table>
             </div>
             
-            <div class="px-4 pb-3 border-top d-flex justify-content-end align-items-center pt-3">
-                <div id="table-pagination-footer" class="m-0 w-100">
-                    {% include 'pages/contrato/partials/pagination.html' %}
-                </div>
+            <div id="table-pagination-footer">
+                {% include 'pages/contrato/partials/pie_tabla.html' %}
             </div>
 
         </div> 
@@ -398,86 +437,8 @@
     </div>
 </div>
 
-<div class="modal fade" id="modalBajaContrato" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-label-danger">
-                <h5 class="modal-title" style="color: #ff3e1d !important;">
-                    <i class="fas fa-user-times me-2"></i>Formulario de Baja
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <label class="form-label" for="baja_expediente">No. Expediente</label> 
-                        <input type="text" id="baja_expediente" class="form-control" readonly style="background-color: #f5f5f9;">
-                    </div>
-                    <div class="col-md-8">
-                        <label class="form-label" for="baja_nombre">Trabajador</label> 
-                        <input type="text" id="baja_nombre" class="form-control" readonly style="background-color: #f5f5f9;">
-                    </div>
-                    <div class="col-md-12 mt-2">
-                        <label class="form-label" for="baja_actividad">Actividad que realizaba</label> 
-                        <input type="text" id="baja_actividad" name="actividad_realizada" class="form-control fw-bold text-primary">
-                    </div>
-                </div>
-
-                <hr class="my-3">
-
-                <form id="formBajaContrato">
-                    <input type="hidden" id="baja_contrato_id"> 
-                    <input type="hidden" id="baja_url_post">   
-                    <input type="hidden" id="baja_fecha_limite"> 
-                    
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="baja_fecha" class="form-label">Fecha de Baja <span class="text-danger">*</span></label>
-                            <input type="date" id="baja_fecha" name="fecha_baja" class="form-control" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="baja_fecha_efectiva" class="form-label">Fecha de Documento <span class="text-danger">*</span></label>
-                            <input type="date" id="baja_fecha_efectiva" name="fecha_efectiva" class="form-control" required>
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="baja_causa" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Causa de Baja <span class="text-danger">*</span></label>
-                        <select id="baja_causa" name="causa_baja" class="form-select" required>
-                            <option value="">Seleccione una causa...</option>
-                            {% for causa in causas_baja %}
-                                <option value="{{ causa.id }}">{{ causa.descripcion }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="baja_observaciones" class="form-label" style="font-size: 0.75rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Observaciones</label>
-                        <textarea class="form-control" name="observaciones" id="baja_observaciones" rows="2" placeholder="Detalles adicionales sobre la baja (Opcional)..."></textarea>
-                    </div>
-                    <div class="mb-3 border-top pt-3 mt-3">
-                        <div class="form-check form-switch form-switch-lg mb-3">
-                            <input class="form-check-input" type="checkbox" id="switchCobroSistema">
-                            <label class="form-check-label fw-bold ms-2" for="switchCobroSistema">
-                                Cobró sistema de pago
-                            </label>
-                        </div>
-                        <div class="form-check form-switch form-switch-lg mb-2">
-                            <input class="form-check-input" type="checkbox" id="switchCompletarCargo" checked>
-                            <label class="form-check-label fw-bold ms-2" for="switchCompletarCargo">
-                                Completar cargo
-                            </label>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" onclick="validarYConfirmarBaja()">Confirmar Baja</button>
-            </div>
-        </div>
-    </div>
-</div>
+{# Formulario de Baja compartido con el Gestor de Plantilla. #}
+{% include 'pages/contrato/partials/modal_baja.html' %}
 
 
 
@@ -487,6 +448,12 @@
 {% endblock %} 
 {% block extra_scripts %}
 <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_contratacion.js' %}"></script>
+<script src="{% estatico 'js/recorrido_movimiento.js' %}"></script>
+<script src="{% estatico 'js/recorrido_baja.js' %}"></script>
+<script src="{% estatico 'js/recorrido_exportar_contratos.js' %}"></script>
+<script src="{% estatico 'js/recorrido_busqueda.js' %}"></script>
 <script>
     var $ = jQuery.noConflict();
     
@@ -688,193 +655,18 @@
         htmx.trigger(searchInput, 'searchFilters');
     }
 
+    // El Formulario de Baja vive en `partials/modal_baja.html` (compartido con
+    // el Gestor de Plantilla). Aquí solo se le pasan los datos de la fila.
     function abrirModalBaja() {
         const btn = document.getElementById('btn-baja');
-        const url = btn.dataset.url;
-        if (!url) return; 
-
-        document.getElementById('baja_expediente').value = btn.dataset.expediente || '';
-        document.getElementById('baja_nombre').value = btn.dataset.nombre || '';
-        document.getElementById('baja_actividad').value = btn.dataset.cargo || '';
-        document.getElementById('baja_url_post').value = url;
-
-        // ========================================================
-        // LA SOLUCIÓN: Leer la fecha directamente de la fila activa
-        // ========================================================
-        const filaSeleccionada = document.querySelector('.fila-contrato.table-active-row');
-        const fechaLimiteReal = filaSeleccionada ? filaSeleccionada.getAttribute('data-fecha-limite') : '';
-        
-        const fechaLimiteInput = document.getElementById('baja_fecha_limite');
-        if (fechaLimiteInput) {
-            fechaLimiteInput.value = fechaLimiteReal;
-        }
-        // ========================================================
-
-        const hoy = new Date().toISOString().split('T')[0];
-        document.getElementById('baja_fecha').value = hoy; 
-        document.getElementById('baja_fecha_efectiva').value = hoy;
-        document.getElementById('baja_causa').value = "";
-
-        if(document.getElementById('baja_observaciones')) document.getElementById('baja_observaciones').value = "";
-
-        $('#modalBajaContrato').modal('show');
-        iniciarValidacionBaja();
-    }
-
-    // =======================================================
-    // MOTOR DE VALIDACIÓN DE BAJAS (CORREGIDO)
-    // =======================================================
-    function iniciarValidacionBaja() {
-        const $form = $('#formBajaContrato');
-        const $btnConfirmar = $('.btn-danger[onclick="validarYConfirmarBaja()"]');
-        
-        const fechaLimiteInput = document.getElementById('baja_fecha_limite');
-        const fechaLimiteStr = fechaLimiteInput ? fechaLimiteInput.value : '';
-        const obligatorios = ['fecha_baja', 'fecha_efectiva', 'causa_baja'];
-
-        function pintarBorde(input, esValido) {
-            /* El color va donde SE VE. «Causa de Baja» es un <select> y Select2
-               lo mantiene oculto detrás de su propia caja, asi que pintar el
-               <select> no se notaba: el unico campo obligatorio del formulario
-               que nunca se ponia amarillo. `OrbithValidacionVisual.objetivo()`
-               devuelve la caja de Select2 cuando la hay, y el propio campo en
-               los demas casos: mismo criterio que el resto de la aplicacion. */
-            let $el = window.OrbithValidacionVisual
-                ? window.OrbithValidacionVisual.objetivo(input)
-                : $(input);
-            if (esValido) {
-                $el.removeClass('border-warning').addClass('border-success');
-                $(input).parent().find('.error-cronologico').remove();
-            } else {
-                $el.removeClass('border-success').addClass('border-warning');
-            }
-            
-            const errores = $form.find('.border-warning').length;
-            $btnConfirmar.prop('disabled', errores > 0);
-        }
-
-        $form.off('change input').on('change input', 'input, select', function() {
-            const name = this.name;
-            const valor = $(this).val();
-            let noEstaVacio = valor && valor.trim() !== '';
-
-            // 1. LÓGICA ESTRICTA: ¡SOLO PARA LA FECHA DE BAJA!
-            if (name === 'fecha_baja') {
-                if (!noEstaVacio) {
-                    pintarBorde(this, false);
-                } else if (fechaLimiteStr && valor < fechaLimiteStr) {
-                    pintarBorde(this, false);
-                    let $parent = $(this).parent();
-                    if ($parent.find('.error-cronologico').length === 0) {
-                        const fFmt = fechaLimiteStr.split('-').reverse().join('/');
-                        $parent.append(`<small class="text-danger fw-bold error-cronologico mt-1 d-block">Error: No puede ser anterior al ${fFmt}</small>`);
-                    }
-                } else {
-                    pintarBorde(this, true);
-                }
-            } 
-            // 2. LÓGICA NORMAL: Fecha de Documento y Causa (Solo exigen no estar vacíos)
-            else if (obligatorios.includes(name)) {
-                pintarBorde(this, noEstaVacio);
-            }
-        });
-
-        // Autoevaluar al abrir el modal
-        setTimeout(() => {
-            obligatorios.forEach(name => {
-                const $el = $form.find(`[name="${name}"]`);
-                if ($el.length) $el.trigger('change');
-            });
-        }, 200);
-    }
-
-    function validarYConfirmarBaja() {
-        const form = document.getElementById('formBajaContrato');
-        
-        // 1. DISPARAR VALIDACIÓN NATIVA HTML5
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return;
-        }
-
-        // 2. CAPTURAR DATOS
-        const fechaBaja = document.getElementById('baja_fecha').value;
-        const fechaEfectiva = document.getElementById('baja_fecha_efectiva').value;
-        const causa = document.getElementById('baja_causa').value;
-        const url = document.getElementById('baja_url_post').value;
-        const cobroSistema = document.getElementById('switchCobroSistema').checked;
-        const completarCargo = document.getElementById('switchCompletarCargo').checked; 
-        const actividadRealizada = document.getElementById('baja_actividad').value; 
-        const observaciones = document.getElementById('baja_observaciones').value; // <--- CAPTURADO
-
-        // 3. SWEETALERT DE CONFIRMACIÓN
-        $('#modalBajaContrato').modal('hide'); 
-
-        Swal.fire({
-            title: '¿Está seguro de dar de baja este contrato?',
-            text: "Esta acción registrará la baja y generará el movimiento de nómina.",
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            cancelButtonColor: '#8592a3',
-            confirmButtonText: 'Sí, dar de baja',
-            cancelButtonText: 'Cancelar'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // AQUÍ ES DONDE VA: Pasamos todas las variables, incluyendo 'observaciones'
-                enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema, completarCargo, actividadRealizada, observaciones);
-            } else {
-                $('#modalBajaContrato').modal('show');
-            }
-        });
-    }
-
-    // 1. Añadimos 'observaciones' a los parámetros que recibe la función
-    function enviarBajaAlBackend(url, fechaBaja, fechaEfectiva, causa, cobroSistema, completarCargo, actividadRealizada, observaciones) {
-        $.ajax({
-            url: url,
-            type: 'POST',
-            data: {
-                'fecha_baja': fechaBaja,
-                'fecha_efectiva': fechaEfectiva, 
-                'causa_baja': causa,
-                'cobro_sistema_pago': cobroSistema, 
-                'completar_cargo': completarCargo, 
-                'actividad_realizada': actividadRealizada,
-                'observaciones': observaciones, // <--- 2. LO METEMOS EN EL PAQUETE AJAX QUE VA A PYTHON
-                'csrfmiddlewaretoken': '{{ csrf_token }}' 
-            },
-            success: function(response) {
-                Swal.fire({
-                    title: 'Baja procesada',
-                    text: '¿Desea exportar el documento de movimiento de nómina ahora?',
-                    icon: 'success',
-                    showCancelButton: true,
-                    confirmButtonText: '<i class="fas fa-file-pdf me-1"></i> Exportar',
-                    cancelButtonText: 'Cerrar',
-                    customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
-                    buttonsStyling: false
-                }).then((result) => {
-                    if (result.isConfirmed && response.pdf_url) {
-                        window.open(response.pdf_url, '_blank');
-                    }
-                    triggerSearch(); // Refrescar tabla
-                });
-            },
-            error: function(xhr) {
-                let mensajeError = 'No se pudo procesar la baja debido a un error de conexión.';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    mensajeError = xhr.responseJSON.message;
-                }
-                Swal.fire({
-                    title: 'No se puede procesar',
-                    text: mensajeError,
-                    icon: 'error',
-                    confirmButtonColor: '#696cff'
-                }).then(() => {
-                    $('#modalBajaContrato').modal('show'); // Reabre el modal si hay error
-                });
-            }
+        const fila = document.querySelector('.fila-contrato.table-active-row');
+        window.OrbithBaja.abrir({
+            url: btn.dataset.url,
+            expediente: btn.dataset.expediente,
+            nombre: btn.dataset.nombre,
+            actividad: btn.dataset.cargo,
+            fechaLimite: fila ? fila.getAttribute('data-fecha-limite') : '',
+            alTerminar: triggerSearch,
         });
     }
 

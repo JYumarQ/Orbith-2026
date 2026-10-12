@@ -4,7 +4,7 @@ Contenido del modal de detalle. Los datos ya están congelados y serializados (v
 Campo/Antes/Después sin ningún campo oculto u ofuscado.
 {% endcomment %}
 
-<div class="modal-dialog modal-lg">
+<div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">{{ evento.get_accion_display }} — {{ evento.descriptor|default:"—" }}</h5>
@@ -19,6 +19,10 @@ Campo/Antes/Después sin ningún campo oculto u ofuscado.
                 <div class="col-sm-6">
                     <small class="text-muted d-block">Fecha</small>
                     {{ evento.fecha|date:'d/m/Y H:i' }}
+                </div>
+                <div class="col-sm-6">
+                    <small class="text-muted d-block">Módulo</small>
+                    {{ modulo }}
                 </div>
                 <div class="col-sm-6">
                     <small class="text-muted d-block">Unidad Organizativa</small>

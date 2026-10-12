@@ -358,9 +358,13 @@ def generar_vista_previa(request):
         }
 
         from progreso.servicios import completar_tarea
-        tarea = completar_tarea(request.user, 'primer_informe_generado')
-        if tarea:
-            messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+        completar_tarea(request.user, 'primer_informe_generado')
+        # Cambiar de página no es generar otro informe.
+        if str(pagina_num) == '1':
+            from ranking.models import Actividad
+            from ranking.servicios import registrar_actividad
+            registrar_actividad(request.user, Actividad.INFORME,
+                                detalle=f'Informe Inteligente: {datos["modelo_raiz"]}')
 
         return render(request, "pages/informe_inteligente/partials/resultados.html", context)
 
@@ -678,9 +682,7 @@ def guardar_favorito(request):
     InformeFavorito.objects.create(usuario=request.user, informe=informe)
 
     from progreso.servicios import completar_tarea
-    tarea = completar_tarea(request.user, 'primer_informe_favorito')
-    if tarea:
-        messages.info(request, f"🧭 Nuevo en tu Guía de Orbith: {tarea.titulo}")
+    completar_tarea(request.user, 'primer_informe_favorito')
 
     return JsonResponse({"ok": True, "informe_id": informe.id, "nombre": informe.nombre})
 

@@ -40,6 +40,9 @@ CAMPOS_FECHA_CONTRATO = (
     'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg',
 )
 
+#: Datos que solo existen con el switch Misión activo: `clean()` los vacía al apagarlo.
+CAMPOS_DE_MISION = ('pais', 'mision_dias', 'mision_importe')
+
 #: Valor del atributo `min` de los `<input type="date">`, derivado de la constante para
 #: que navegador y servidor no puedan quedar desalineados.
 FECHA_MINIMA_HTML = f'{ANO_MINIMO_FECHAS}-01-01'
@@ -203,7 +206,8 @@ class CAltaForm(forms.ModelForm):
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
             'maestria', 'doctorado', 'cnci', 'instructor',
             'instructor_nomenclador', 'cnci_nomenclador', 'jubilado_recontratado',
-            'mision', 'pais', 'cla', 'nocturnidad_1', 'nocturnidad_2'
+            'mision', 'pais', 'mision_dias', 'mision_importe',
+            'cla', 'nocturnidad_1', 'nocturnidad_2'
         )
         labels = {
             'no_expediente': 'Exp. Laboral', 
@@ -231,10 +235,35 @@ class CAltaForm(forms.ModelForm):
             'cnci_nomenclador': 'CNCI',
             'jubilado_recontratado': 'Jubilado Recontratado',
             'mision': 'Misión',
-            'pais': 'País'
+            'pais': 'País',
+            'mision_dias': 'Días',
+            'mision_importe': 'Importe',
+        }
+        # Mensajes en español: con LANGUAGE_CODE = 'en-us', los de Django por
+        # defecto salían en inglés ("Ensure this value has at most 5
+        # characters"). La vista los enseña tal cual en el aviso al guardar.
+        error_messages = {
+            'no_expediente': {
+                'max_length': 'El expediente admite como máximo %(limit_value)d dígitos.',
+                'unique': 'Ese número de expediente ya lo tiene otro contrato.',
+            },
+            'mision_dias': {
+                'invalid': 'Los días de misión deben ser un número entero.',
+                'min_value': 'Los días de misión no pueden ser negativos.',
+                'max_value': 'Los días de misión admiten como máximo 9999.',
+            },
+            'mision_importe': {
+                'invalid': 'El importe de misión debe ser un número.',
+                'min_value': 'El importe de misión no puede ser negativo.',
+                'max_digits': 'El importe de misión admite como máximo 7 cifras enteras y 2 decimales.',
+                'max_whole_digits': 'El importe de misión admite como máximo 7 cifras enteras.',
+                'max_decimal_places': 'El importe de misión admite como máximo 2 decimales.',
+            },
         }
         widgets = {
-            'no_expediente': forms.TextInput(attrs={'class':'form-control'}), 
+            # `inputmode` abre el teclado numérico en el móvil; el límite de
+            # 5 caracteres (`maxlength`) lo pone Django desde el modelo.
+            'no_expediente': forms.TextInput(attrs={'class':'form-control', 'inputmode': 'numeric'}), 
             'tipo': forms.Select(attrs={'class':'form-select'}),
             'motivo': forms.Select(attrs={'class':'form-select', 'id': 'id_motivo', 'disabled': 'disabled'}),
             'fecha_alta': forms.DateInput(attrs={'type':'date', 'class':'form-control', 'disabled': 'disabled', 'min': FECHA_MINIMA_HTML}),
@@ -291,7 +320,14 @@ class CAltaForm(forms.ModelForm):
             'cnci_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_cnci_nomenclador'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
             'mision': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mision'}),
-            'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'})
+            'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'}),
+            # Nacen deshabilitados, igual que `pais`: los activa el switch Misión.
+            'mision_dias': forms.NumberInput(attrs={
+                'class': 'form-control', 'id': 'id_mision_dias', 'disabled': 'disabled',
+                'min': '0', 'max': '9999', 'step': '1', 'inputmode': 'numeric'}),
+            'mision_importe': forms.NumberInput(attrs={
+                'class': 'form-control', 'id': 'id_mision_importe', 'disabled': 'disabled',
+                'min': '0', 'max': '9999999.99', 'step': '0.01', 'inputmode': 'decimal'}),
         }
         
     def __init__(self, *args, user=None, aspirante=None, **kwargs):
@@ -635,6 +671,15 @@ class CAltaForm(forms.ModelForm):
 
         # --- 4. NINGUNA FECHA DEL CONTRATO ANTERIOR AL AÑO 1900 ---
         self._validar_ano_minimo(cleaned_data)
+
+        # --- 5. SIN MISIÓN NO HAY PAÍS, DÍAS NI IMPORTE ---
+        # Hasta ahora `pais` se vaciaba solo porque el navegador no envía un
+        # campo deshabilitado. Aquí lo decide el servidor, para todos los datos
+        # de la misión y venga el envío de donde venga.
+        if 'mision' in self.fields and not cleaned_data.get('mision'):
+            for nombre in CAMPOS_DE_MISION:
+                if nombre in self.fields:
+                    cleaned_data[nombre] = None
 
         return cleaned_data
 

@@ -74,16 +74,43 @@
 
 </style>
 
-{% load static %}
+{% load static estaticos %}
 
   <div class="content-wrapper">
     <div class="container-xxl grow container-p-y">
-      <h4 class="fw-bold py-3 mb-4">
-    <span class="text-muted fw-light">Plantilla /</span> 
-    {% if titulo_pagina %}{{ titulo_pagina }}{% else %}Aspirantes{% endif %}</h4>
+      <h4 class="fw-bold py-3 mb-4 d-flex align-items-center flex-wrap gap-2">
+    <span><span class="text-muted fw-light">Plantilla /</span> 
+    {% if titulo_pagina %}{{ titulo_pagina }}{% else %}Aspirantes{% endif %}</span>
+    {% comment %} Recorrido visual (static/js/recorrido_aspirante.js). No en Bajas, que
+       comparte esta plantilla pero no es donde se dan de alta aspirantes. {% endcomment %}
+    {% comment %} Menú de recorridos: cada opción lanza el suyo con `data-recorrido`
+       (ver static/js/orbith_recorrido.js). Contratar solo para quien puede editar.
+       En Bajas solo está el de buscar con prefijos (static/js/recorrido_busqueda.js). {% endcomment %}
+    <span class="dropdown">
+        <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoAspirantes"
+                data-bs-toggle="dropdown" aria-expanded="false"
+                data-rol="{% if user.es_admin or user.is_superuser %}admin{% elif user.es_moderador %}moderador{% else %}observador{% endif %}"
+                title="Recorridos guiados de esta pantalla">
+            <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+        </button>
+        <ul class="dropdown-menu" style="font-size: .875rem;">
+            {% if not es_baja_view %}
+            <li><button type="button" class="dropdown-item" data-recorrido="primer_aspirante">
+                <i class="bx bx-user-plus me-1"></i>Crear un aspirante</button></li>
+            {% if puede_editar %}
+            <li><button type="button" class="dropdown-item" data-recorrido="primera_contratacion:aspirantes">
+                <i class="bx bx-file me-1"></i>Contratar a un aspirante</button></li>
+            {% endif %}
+            {% endif %}
+            <li><button type="button" class="dropdown-item" data-recorrido="primera_busqueda_prefijos:{% if es_baja_view %}bajas{% else %}aspirantes{% endif %}">
+                <i class="bx bx-search-alt me-1"></i>Buscar con prefijos</button></li>
+        </ul>
+    </span>
+    </h4>
 
 
-      <div class="card">
+      {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+      <div class="card orb-tabla-card" id="tablaAspirantesCard">
         
         <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             
@@ -120,6 +147,7 @@
                     <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
                     <input id="search" type="text" class="form-control border-0 shadow-none" 
                        placeholder="Buscar..." 
+                       {% if es_baja_view %}data-prefijos="E,N,CI,CA,U" data-pantalla="Bajas"{% else %}data-prefijos="N,CI,U" data-pantalla="Aspirantes"{% endif %}
                        name="filter_aspirante"
                        hx-get="{% url search_url %}" 
                        hx-trigger="input changed delay:500ms, keyup[key=='Enter'], refreshTable from:body" 
@@ -130,7 +158,7 @@
 
             <div class="d-flex ms-auto">
               <div class="btn-group me-2">
-                <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" data-bs-toggle="dropdown" aria-expanded="false" title="Más filtros">
+                <button type="button" class="btn btn-outline-secondary btn-icon dropdown-toggle hide-arrow" id="btnMasFiltrosAspirantes" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Más filtros">
                     <i class="fas fa-filter"></i>
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
@@ -217,7 +245,7 @@
                 {% comment %} Los paréntesis implícitos de Django hacían `(not es_baja_view and es_admin) or es_moderador`,
                    así que un Moderador veía «Nuevo» también en la pantalla de Bajas. {% endcomment %}
                 {% if not es_baja_view and puede_editar %}
-                <button type="button" class="btn btn-primary"
+                <button type="button" class="btn btn-primary" id="btnNuevoAspirante"
                         data-url="{% url 'add_aspir' %}"
                         onclick="abrir_modal_creacion(this.dataset.url)">
                     <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nuevo</span>
@@ -226,8 +254,8 @@
             </div>
         </div>
 
-        <div class="table-responsive text-nowrap">
-          <table class="table table-hover">
+        <div class="orb-tabla-scroll text-nowrap">
+          <table class="table orb-tabla">
             <thead>
                 <tr>
                     <th style="cursor:pointer;" onclick="ordenarTablaAspirantes(0, 'ci')">
@@ -253,8 +281,8 @@
           </table>
         </div> 
         
-        <div id="table-pagination-footer" class="px-4 pb-3 border-top">
-            {% include 'pages/aspirante/partials/pagination.html' %}
+        <div id="table-pagination-footer">
+            {% include 'pages/aspirante/partials/pie_tabla.html' %}
         </div>
 
     </div> 
@@ -272,6 +300,12 @@
    arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
 {% block extra_scripts %}
   <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
+  {% if not es_baja_view %}
+  <script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+  <script src="{% estatico 'js/recorrido_aspirante.js' %}"></script>
+  <script src="{% estatico 'js/recorrido_busqueda.js' %}"></script>
+  <script src="{% estatico 'js/recorrido_contratacion.js' %}"></script>
+  {% endif %}
   <script type="text/javascript">
     var $ = jQuery.noConflict();
     

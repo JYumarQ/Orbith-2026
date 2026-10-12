@@ -1,0 +1,308 @@
+{% comment %} Hoja de estilo compartida por el Anexo 14 y el Anexo 14-A.
+
+   Vivía dentro de `anexo14.html`. Se saca a un parcial cuando nace el 14-A porque
+   los dos informes son el mismo documento a dos niveles de detalle y tienen que
+   verse igual: con la hoja duplicada, cualquier retoque en uno dejaría al otro
+   desparejado sin que nadie lo notara hasta imprimirlos juntos.
+
+   LA PALETA NO ESTÁ AQUÍ
+   ----------------------
+   Todos los colores salen de las variables `--inf-*` de
+   `static/css/informes-rrhh.css`, que carga `base.html` para toda la aplicación.
+   Aquí no hay ni un código de color escrito a mano, y es deliberado: esa hoja es
+   la paleta de los Informes de RRHH —índigo para lo principal, naranja para lo
+   que falta, esmeralda para lo cubierto y una escala fría de grises—, y los
+   Anexos son informes como los demás. Si mañana cambia el índigo de la empresa,
+   cambia en un sitio y cambian los ocho informes.
+
+   El morado de Vuexy (#696cff, #9333ea, #4346e3) que vestía antes este módulo ya
+   no está: la paleta de Informes no lo tiene. Y las barras de color macizo que lo
+   llevaban tampoco vuelven con otro tono —en esta paleta una cabecera es texto
+   índigo sobre blanco, y el único fondo oscuro es la fila de totales—. {% endcomment %}
+<style>
+    /* ===== BASE ===== */
+    /* Mismo fondo que Puestos Clave: las tarjetas blancas necesitan un lienzo
+       ligeramente frío para despegarse; sobre blanco puro desaparecen. */
+    /* El fondo lo pone `.inf-lienzo`, de la hoja de la paleta. */
+    .anx-wrapper { font-size: .925rem; }
+
+    /* ===== PANELES ===== */
+    .anx-panel {
+        background: #fff;
+        border: 0;
+        border-radius: 1rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
+        margin-bottom: 1.25rem;
+        overflow: hidden;
+    }
+    /* `overflow: hidden` redondea las esquinas de las tablas que van dentro del
+       panel... y también recortaba el desplegable del selector de Unidades, que
+       es absoluto y cae fuera de la tarjeta: el panel se abría y no se veía nada.
+       Se levanta solo en la tarjeta que lo contiene, que no lleva tabla y por
+       tanto no necesita el recorte. Mismo apaño y mismo motivo que
+       `.ii-panel--desbordable` en Informe Inteligente. */
+    .anx-panel--desbordable { overflow: visible; }
+
+    .anx-panel-head {
+        padding: .9rem 1.25rem;
+        display: flex; justify-content: space-between; align-items: center; gap: .75rem;
+        background: #fff;
+        border-bottom: 1px solid var(--inf-gris-200);
+        font-weight: 700; font-size: .8rem;
+        color: var(--inf-indigo);
+    }
+
+    /* ===== TARJETAS DE IDENTIFICACIÓN ===== */
+    /* Seis datos institucionales en fila. Fondo gris frío y un icono índigo:
+       son CONTEXTO, no cifras, y no deben competir con los KPI de abajo. Antes
+       cada una llevaba su propio color de fondo —seis tintes distintos en una
+       fila— y el ojo las leía como si cada una dijera algo diferente. */
+    .anx-meta-card {
+        border-radius: .75rem;
+        padding: .7rem .9rem;
+        display: flex; align-items: center; gap: .7rem;
+        height: 100%;
+        background: var(--inf-gris-50);
+        border: 1px solid var(--inf-gris-100);
+    }
+    .anx-meta-icono {
+        width: 36px; height: 36px; border-radius: .55rem;
+        background: var(--inf-indigo-tinte);
+        color: var(--inf-indigo);
+        display: inline-flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        font-size: 1rem;
+    }
+    .anx-meta-label {
+        display: block; font-size: 9px; font-weight: 900;
+        text-transform: uppercase; letter-spacing: .06em;
+        color: var(--inf-gris-400);
+        line-height: 1.25;
+    }
+    /* El valor PARTE en varias lineas en vez de truncarse. Con seis tarjetas en
+       fila no cabe «Empresa Electrica Camaguey» de una vez, y «Empre...» no es un
+       dato: es un dato escondido. */
+    .anx-meta-valor {
+        display: block; font-size: .8rem; font-weight: 800;
+        color: var(--inf-gris-800);
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    /* Los rotulos de categoria del Anexo son largos —«Administrativos (A)»— y
+       `inf-kpi-rotulo` los corta con puntos suspensivos. Aqui se les deja partir
+       en dos lineas. La regla se acota al modulo: en los siete informes de RRHH
+       los rotulos son cortos y alli el recorte nunca llega a activarse. */
+    .anx-wrapper .inf-kpi-rotulo {
+        white-space: normal;
+        line-height: 1.15;
+        letter-spacing: .05em;
+    }
+
+    /* ===== REJILLA DE 7 COLUMNAS EN ESCRITORIO ===== */
+    @media (min-width: 1200px) {
+        .row-cols-xl-7 > * { flex: 0 0 auto; width: 14.2857142857%; }
+    }
+
+    /* ===== ÁRBOL DEL ANEXO 14 ===== */
+    /* Las tres bandas eran moradas. Ahora la unidad es una cabecera blanca con
+       el nombre en índigo, y los dos niveles de dentro se distinguen por tintes
+       fríos cada vez más suaves, no por color. */
+    .anx-tree-padre {
+        background: #fff;
+        color: var(--inf-indigo);
+        padding: .9rem 1.25rem;
+        border-bottom: 1px solid var(--inf-gris-200);
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: .5rem;
+        font-weight: 700;
+    }
+    .anx-tree-padre .small { color: var(--inf-gris-400); font-weight: 700; }
+    .anx-tree-depto {
+        background: var(--inf-indigo-tinte);
+        padding: .5rem 1.25rem .5rem 2.4rem;
+        border-bottom: 1px solid var(--inf-gris-200);
+        font-weight: 900; font-size: 11px;
+        color: var(--inf-indigo-oscuro);
+        text-transform: uppercase; letter-spacing: .1em;
+    }
+    .anx-tree-cargo td { vertical-align: middle; }
+    .anx-tree-cargo.oculto { display: none; }
+
+    /* Rótulo de la sección de cargos fuera de la plantilla aprobada. Naranja,
+       que en esta paleta es el color de «esto hay que mirarlo». */
+    .anx-aviso-fuera {
+        background: var(--inf-naranja-tinte);
+        color: var(--inf-naranja-oscuro);
+        border-bottom: 1px solid #fed7aa;
+        padding: .9rem 1.25rem;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: .5rem;
+        font-weight: 700;
+    }
+    .anx-aviso-fuera .small { color: var(--inf-naranja); font-weight: 700; }
+
+    /* ===== INSIGNIAS DE CATEGORÍA ===== */
+    /* Los colores por categoría ocupacional NO se definen aquí: son globales y
+       viven en `nomencladores.COLORES_CAT_OCUPACIONAL`, de donde los toman
+       también los gráficos. `informes-rrhh.css` los publica como `.cat-CDI`,
+       `.cat-TEC`… y una prueba vigila que los dos sitios no se separen. Este
+       módulo usa esas clases y no repite ni un código. */
+
+    /* ===== FIRMAS ===== */
+    /* Eran dos tarjetas de fondo morado macizo. Ahora son blancas con el filo
+       índigo de las tarjetas de cifra: una firma es un dato de identificación,
+       no una alerta, y no tiene por qué gritar más que el propio informe. */
+    .anx-firma-card {
+        background: #fff;
+        border: 1px solid var(--inf-gris-200);
+        border-bottom: 4px solid var(--inf-indigo);
+        border-radius: .75rem;
+        padding: 1rem;
+        display: flex; align-items: center; gap: 1rem;
+        height: 100%;
+    }
+    .anx-firma-icono {
+        width: 44px; height: 44px; border-radius: .6rem;
+        background: var(--inf-indigo-tinte);
+        color: var(--inf-indigo);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: 1.2rem; flex-shrink: 0;
+    }
+    .anx-firma-rotulo {
+        font-size: 9px; font-weight: 900;
+        text-transform: uppercase; letter-spacing: .1em;
+        color: var(--inf-gris-400);
+    }
+    .anx-firma-nombre {
+        font-weight: 800; color: var(--inf-gris-800); font-size: .9rem;
+    }
+
+    /* ===== COLOR POR CATEGORÍA OCUPACIONAL =====
+       La FUENTE de estos colores es `nomencladores.COLORES_CAT_OCUPACIONAL`, y
+       `informes-rrhh.css` los publica como las variables `--cat-*`. Aquí no se
+       repite ni un código: solo se dice qué variable le toca a cada columna del
+       14-A, que se identifica por su clave.
+
+       Importa que sean ESTOS y no unos cualesquiera: un cargo Técnico sale del
+       mismo turquesa en su insignia del Anexo 14, en la tarjeta de cifra del
+       14-A y en las barras del Dashboard. Antes estas tarjetas usaban los
+       modificadores genéricos de `inf-kpi` (azul, verde, naranja) y una misma
+       categoría cambiaba de color según la pantalla. */
+    .anx-kpi-cat[data-cat="cuadros"]         { --anx-cat: var(--cat-cua); }
+    .anx-kpi-cat[data-cat="tecnicos"]        { --anx-cat: var(--cat-tec); }
+    .anx-kpi-cat[data-cat="administrativos"] { --anx-cat: var(--cat-adm); }
+    .anx-kpi-cat[data-cat="servicio"]        { --anx-cat: var(--cat-ser); }
+    .anx-kpi-cat[data-cat="obreros"]         { --anx-cat: var(--cat-ope); }
+
+    .anx-kpi-cat { border-bottom-color: var(--anx-cat); }
+    .anx-kpi-cat .inf-kpi-icono {
+        /* El fondo se declara dos veces a propósito: el primero es el respaldo
+           para un navegador sin `color-mix`, que se quedaría sin tinte. */
+        background: var(--inf-gris-100);
+        background: color-mix(in srgb, var(--anx-cat) 14%, transparent);
+        color: var(--anx-cat);
+    }
+    .anx-kpi-cat .inf-kpi-rotulo { color: var(--anx-cat); }
+
+    /* La cabecera de la tabla del 14-A, con la letra de cada columna en el color
+       de su categoría: es lo que une la tabla con las tarjetas de arriba. */
+    .anx-th-cat[data-cat="cuadros"]         { color: var(--cat-cua) !important; }
+    .anx-th-cat[data-cat="tecnicos"]        { color: var(--cat-tec) !important; }
+    .anx-th-cat[data-cat="administrativos"] { color: var(--cat-adm) !important; }
+    .anx-th-cat[data-cat="servicio"]        { color: var(--cat-ser) !important; }
+    .anx-th-cat[data-cat="obreros"]         { color: var(--cat-ope) !important; }
+
+    /* ===== NIVELES DE FILA DEL ANEXO 14-A ===== */
+    /* La tabla es `inf-tabla`, la misma de Puestos Clave y Altas y Bajas. Aquí
+       solo se añade lo que esa tabla no tiene: los tres niveles de fila propios
+       del 14-A —el rótulo de la Dirección, el Grupo y el Subtotal que cierra el
+       bloque—. Se distinguen por tinte y sangría, no por colores distintos: son
+       el mismo dato a tres alturas. */
+    .anx-f-bloque td {
+        background: var(--inf-indigo-tinte);
+        color: var(--inf-indigo-oscuro);
+        font-weight: 900;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .1em;
+    }
+    .anx-f-detalle .td-nombre { padding-left: 2rem !important; font-weight: 600; }
+    .anx-f-subtotal td {
+        background: var(--inf-gris-50);
+        border-top: 1px solid var(--inf-gris-200);
+        font-weight: 800;
+        color: var(--inf-gris-700);
+    }
+    .anx-f-subtotal .td-nombre { padding-left: 1.2rem !important; }
+    .anx-f-subtotal .td-cifra { color: var(--inf-gris-700); font-weight: 800; }
+
+    @media print {
+        .anx-no-print { display: none !important; }
+        /* En papel no hay pestañas: se imprimen todas las hojas seguidas. Sin
+           esto, el PDF del navegador saldría con una sola unidad, la que
+           estuviera abierta al pulsar imprimir. */
+        .tab-content > .tab-pane { display: block !important; opacity: 1 !important; }
+    }
+</style>
+
+<style>
+    /* ===== LOS DOS BOTONES DE EXPORTACIÓN =====
+       Se distinguen a simple vista, no solo por el texto: bajan dos documentos
+       distintos y confundirlos significa entregar al organismo uno incompleto.
+       El propio es el verde de Excel, sólido, como en los siete informes de RRHH;
+       el combinado va en índigo, el color principal de la paleta, porque es el
+       fichero «bueno», el que imita al original. */
+    .anx-btn-export {
+        border: 0;
+        color: #fff;
+        font-weight: 600;
+        border-radius: .7rem;
+        padding: .5rem 1.05rem;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .anx-btn-export:hover { color: #fff; transform: translateY(-2px); }
+    .anx-btn-export i { color: #fff !important; font-size: 1.05rem; }
+
+    .anx-btn-export--propio {
+        background: linear-gradient(135deg, #21a366 0%, #107c41 100%);
+        box-shadow: 0 4px 10px rgba(16, 124, 65, .25);
+    }
+    .anx-btn-export--propio:hover { box-shadow: 0 6px 15px rgba(16, 124, 65, .35); }
+
+    .anx-btn-export--combinado {
+        background: linear-gradient(135deg, var(--inf-indigo-claro) 0%, var(--inf-indigo) 100%);
+        box-shadow: 0 4px 10px rgba(79, 70, 229, .25);
+    }
+    .anx-btn-export--combinado:hover { box-shadow: 0 6px 15px rgba(79, 70, 229, .35); }
+</style>
+
+<style>
+    /* La opción «Solo lo filtrado» del aviso. Naranja, que en esta paleta es el
+       color de «mira esto antes de seguir»: no es el documento oficial, es un
+       recorte, y el color lo dice antes que el texto. */
+    .anx-btn-export--filtrado {
+        background: linear-gradient(135deg, #fb923c 0%, var(--inf-naranja) 100%);
+        box-shadow: 0 4px 10px rgba(234, 88, 12, .25);
+    }
+    .anx-btn-export--filtrado:hover { box-shadow: 0 6px 15px rgba(234, 88, 12, .35); }
+
+    /* Dentro del aviso los botones son bloques de dos líneas, no píldoras. */
+    #modalFiltrosExport .anx-btn-export { padding: .75rem 1rem; }
+</style>
+
+<style>
+    /* La fila de una plaza VACANTE en el Anexo 14-B. Apagada, no roja: una
+       vacante no es un error, es una plaza que espera a alguien. */
+    .anx-f-vacante td { background: var(--inf-gris-50); color: var(--inf-gris-400); }
+    .anx-f-vacante .td-nombre { font-weight: 600; color: var(--inf-gris-500); }
+    .anx-vacante {
+        font-style: italic;
+        letter-spacing: .02em;
+        color: var(--inf-gris-400) !important;
+    }
+    /* Diecisiete columnas no caben en una pantalla: la tabla se desplaza dentro
+       de su caja y nunca empuja el ancho de la página. */
+    .anx-14b { min-width: 1400px; font-size: .82rem; }
+    .anx-14b th { white-space: nowrap; }
+</style>

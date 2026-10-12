@@ -17,7 +17,6 @@ from .forms import RecordatorioManualForm
 from .models import Notificacion
 from .recordatorios import generar_recordatorios
 
-NOTIFICACIONES_POR_PAGINA = 20
 
 
 def _notificaciones_visibles(usuario):
@@ -31,9 +30,15 @@ def _notificaciones_visibles(usuario):
     dirigido a él directamente, igual que un moderador — un admin sin unidades
     asignadas (el caso más común: administra todo, no una unidad concreta) podía no
     ver notificaciones que su rol sugiere que debería poder ver.
+
+    Excepción: los avisos del Ranking Mensual (`ranking.avisos.CODIGO_AVISO`) son
+    personales. El Administrador solo ve los suyos: si viera los de todos, al
+    abrirlos se marcarían como leídos para su dueño sin que este los viera.
     """
     if usuario.es_admin:
-        return Notificacion.objects.all()
+        from ranking.avisos import CODIGO_AVISO
+        return Notificacion.objects.exclude(
+            Q(codigo_regla=CODIGO_AVISO) & ~Q(destinatario=usuario))
     unidades_usuario = usuario.unidades.all()
     return Notificacion.objects.filter(
         Q(unidad__in=unidades_usuario) | Q(destinatario=usuario))
@@ -58,6 +63,8 @@ def _serializar(n):
         'tipo': n.tipo,
         'severidad': n.severidad,
         'estado': n.estado,
+        # La campana abre la ventana del Ranking con los avisos de cierre de mes.
+        'codigo_regla': n.codigo_regla,
     }
 
 
@@ -72,7 +79,16 @@ def ultimas_notificaciones(request):
     # Sin `.order_by()` explícito: se respeta `Meta.ordering` del modelo
     # (`['severidad', '-fecha_creado']`), para que una alerta crítica no quede tapada
     # por un evento reciente sin gravedad.
-    notificaciones = _notificaciones_del_usuario(request.user)[:5]
+    # Excepción: los avisos del Ranking Mensual van primero. Llegan una vez al mes y,
+    # sin esto, quedarían detrás de cualquier advertencia (hay usuarios con cientos)
+    # y no se verían nunca en la campana.
+    from django.db.models import Case, IntegerField, Value, When
+
+    from ranking.avisos import CODIGO_AVISO
+    notificaciones = (_notificaciones_del_usuario(request.user)
+                      .annotate(_ranking_primero=Case(When(codigo_regla=CODIGO_AVISO, then=Value(0)),
+                                                      default=Value(1), output_field=IntegerField()))
+                      .order_by('_ranking_primero', *Notificacion._meta.ordering)[:5])
     data = [_serializar(n) for n in notificaciones]
     return JsonResponse({'notificaciones': data})
 
@@ -128,9 +144,11 @@ def _querystring_sin_pagina(request):
     """La querystring actual (pestaña + filtros) sin `pagina`, para que los enlaces de
     paginación no pierdan el resto del contexto. Mismo patrón (y mismo formato, con
     "&" inicial) que `subsanacion/filtros.py::querystring_sin_pagina`, consumido por
-    `base/partials/paginacion_ventana.html` como `?pagina=N{{ querystring }}`."""
+    `base/partials/tabla_paginacion_enlaces.html` como `?pagina=N…{{ querystring }}`."""
     parametros = request.GET.copy()
     parametros.pop('pagina', None)
+    # `filas` lo añade el pie común de la tabla (base/partials/tabla_paginacion_enlaces.html).
+    parametros.pop('filas', None)
     codificada = parametros.urlencode()
     return f'&{codificada}' if codificada else ''
 
@@ -140,7 +158,9 @@ def _paginar_con_enlaces(request, queryset, origen_label):
     queryset completo, para no pagar un reverse() de más por fila que no se muestra).
     Reutilizado por ambas pestañas: la única diferencia real entre ellas es el
     queryset de partida, no cómo se pagina/enlaza."""
-    pagina = Paginator(queryset, NOTIFICACIONES_POR_PAGINA).get_page(request.GET.get('pagina'))
+    # Filas por página del usuario, comunes a todas las tablas (core/paginacion.py).
+    from core.paginacion import filas_por_pagina
+    pagina = Paginator(queryset, filas_por_pagina(request)).get_page(request.GET.get('pagina'))
     for notificacion in pagina:
         _con_enlace(notificacion, next_url=request.get_full_path(), origen_label=origen_label,
                     usuario=request.user)
@@ -452,6 +472,11 @@ def recordatorio_crear(request):
         for destinatario in destinatarios
     ])
     messages.success(request, 'Recordatorio creado y repartido correctamente.')
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primer_recordatorio_creado')
+    from ranking.models import Actividad
+    from ranking.servicios import registrar_actividad
+    registrar_actividad(request.user, Actividad.RECORDATORIO_CREADO, detalle=form.cleaned_data['titulo'])
     return redirect(f"{reverse('lista_notificaciones')}?tab=recordatorios&sub=administracion")
 
 
@@ -468,6 +493,14 @@ def recordatorio_completar(request, pk):
     recordatorio.estado = Notificacion.Estado.RESUELTA
     recordatorio.fecha_resolucion = timezone.now()
     recordatorio.save(update_fields=['estado', 'fecha_resolucion'])
+
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primer_recordatorio_completado')
+    # XP solo si se completa a tiempo (sin fecha objetivo, no hay plazo que incumplir).
+    if recordatorio.fecha_objetivo is None or timezone.localdate() <= recordatorio.fecha_objetivo:
+        from ranking.models import Actividad
+        from ranking.servicios import registrar_actividad
+        registrar_actividad(request.user, Actividad.RECORDATORIO_COMPLETADO, detalle=recordatorio.titulo)
 
     if request.headers.get('HX-Request'):
         return HttpResponse(status=204, headers={'HX-Trigger': 'recordatorioCompletado'})

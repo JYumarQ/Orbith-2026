@@ -127,6 +127,9 @@ class FilaContrato:
     # plantilla aprobada y otro fuera). Sin este dato, los trabajadores del cargo
     # de fuera se sumarían a la fila del de dentro.
     en_plantilla: bool = True
+    # Datos de la misión. `None` = sin registrar, que no es lo mismo que 0.
+    mision_dias: object = None
+    mision_importe: object = None
 
     @property
     def es_mujer(self):
@@ -423,6 +426,8 @@ def fuente_actual(unidades_ids=None):
             motivo_descripcion=contrato.motivo.descripcion if contrato.motivo else '',
             mision=bool(contrato.mision),
             pais=contrato.pais or '',
+            mision_dias=contrato.mision_dias,
+            mision_importe=contrato.mision_importe,
             fecha_alta=contrato.fecha_alta,
             duracion=contrato.duracion,
             salario=contrato.salario_actual,
@@ -538,6 +543,8 @@ def fuente_de_cierre(periodo, unidades_ids=None):
             motivo_descripcion=fila.motivo_descripcion,
             mision=fila.mision,
             pais=fila.pais,
+            mision_dias=fila.mision_dias,
+            mision_importe=fila.mision_importe,
             fecha_alta=fila.fecha_alta,
             duracion=fila.duracion,
             salario=fila.salario,

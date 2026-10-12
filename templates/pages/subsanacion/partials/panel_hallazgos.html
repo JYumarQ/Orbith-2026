@@ -24,7 +24,8 @@
             <span class="input-group-text"><i class="bi bi-search"></i></span>
             <input type="search" class="form-control" id="buscadorHallazgos" name="q"
                    value="{{ filtros.q }}"
-                   placeholder="Nombre, carnet, expediente, cargo, código de regla…">
+                   data-prefijos="E,N,CI,CA,U,COD" data-pantalla="Subsanación"
+                   placeholder="Nombre, carnet… o con prefijos: E:8855, N:Juan, COD:CTR">
           </div>
         </div>
 
@@ -103,10 +104,11 @@
   </div>
 </form>
 
-<div class="sub-panel">
+{# Estilo común de las tablas: static/css/orbith-tablas.css #}
+<div class="sub-panel orb-tabla-card">
   {% if hallazgos %}
-    <div class="table-responsive">
-      <table class="table table-hover sub-table mb-0 align-middle">
+    <div class="orb-tabla-scroll">
+      <table class="table sub-table orb-tabla align-middle">
         <thead>
           <tr>
             <th>Gravedad</th>
@@ -164,47 +166,10 @@
       </table>
     </div>
 
-    {% if pagina.paginator.num_pages > 1 %}
-      <div class="d-flex justify-content-between align-items-center p-3 border-top">
-        <small class="text-muted">
-          Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
-          · {{ total_resultados }} hallazgo{{ total_resultados|pluralize }}
-        </small>
-        <nav>
-          <ul class="pagination pagination-sm mb-0">
-            <li class="page-item {% if not pagina.has_previous %}disabled{% endif %}">
-              <button class="page-link"
-                      {% if pagina.has_previous %}
-                        hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.previous_page_number }}{{ querystring }}"
-                        hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true"
-                      {% endif %}>
-                <i class="bi bi-chevron-left"></i>
-              </button>
-            </li>
-            {% for numero in pagina.paginator.page_range %}
-              {% if numero == pagina.number %}
-                <li class="page-item active"><span class="page-link">{{ numero }}</span></li>
-              {% elif numero >= pagina.number|add:"-2" and numero <= pagina.number|add:"2" %}
-                <li class="page-item">
-                  <button class="page-link"
-                          hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ numero }}{{ querystring }}"
-                          hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true">{{ numero }}</button>
-                </li>
-              {% endif %}
-            {% endfor %}
-            <li class="page-item {% if not pagina.has_next %}disabled{% endif %}">
-              <button class="page-link"
-                      {% if pagina.has_next %}
-                        hx-get="{% url 'subsanacion:panel_hallazgos' %}?pagina={{ pagina.next_page_number }}{{ querystring }}"
-                        hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true"
-                      {% endif %}>
-                <i class="bi bi-chevron-right"></i>
-              </button>
-            </li>
-          </ul>
-        </nav>
-      </div>
-    {% endif %}
+    {% comment %} Pie común de las tablas (base/partials/tabla_paginacion.html): recarga el
+       panel entero y actualiza la dirección, como antes. {% endcomment %}
+    {% url 'subsanacion:panel_hallazgos' as url_panel %}
+    {% include 'base/partials/tabla_paginacion.html' with page_obj=pagina url=url_panel objetivo='#paneHallazgos' parametro='pagina' querystring=querystring push=True nombre='hallazgos' %}
 
   {% else %}
     <div class="sub-vacio">

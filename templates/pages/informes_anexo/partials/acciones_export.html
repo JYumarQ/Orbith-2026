@@ -1,20 +1,60 @@
-{% comment %} Botonera de exportación.
+{% comment %} Botonera de exportación. La comparten el Anexo 14 y el 14-A.
 
-   Vive en su propio parcial porque los enlaces de Excel/PDF arrastran los filtros
-   vigentes en `request.GET`: al elegir un firmante por HTMX (sin recargar la página)
-   estos href quedarían apuntando a la selección anterior. El parcial se reenvía en la
-   misma respuesta HTMX con `hx-swap-oob` para mantenerlos en sintonía.
+   DOS BOTONES, Y SE DISTINGUEN A SIMPLE VISTA
+   -------------------------------------------
+   El de la izquierda baja SOLO el informe en el que estás; el de la derecha baja
+   los dos juntos, como el fichero que entregó Capital Humano. Se diferencian por
+   color y por icono, no solo por el texto: son dos descargas distintas y confundirlas
+   significa mandar al organismo un documento incompleto.
 
-   `intercambio_oob` lo activa solo la respuesta HTMX; en el render normal de la
-   página se omite para no duplicar el contenedor. {% endcomment %}
+   Los dos arrastran los filtros vigentes en `request.GET` —la unidades elegidas y
+   los firmantes—, así que al resolver un firmante por HTMX el parcial se reenvía
+   con `hx-swap-oob` para que no queden apuntando a la selección anterior.
+
+   No hay botón de PDF: el Anexo 14 lo tenía y se retiró.
+
+   PARÁMETROS
+   ----------
+     url_propio    Ruta del libro de ESTE informe.
+     nombre_propio Cómo se llama en el botón («Anexo 14» o «Anexo 14A»).
+{% endcomment %}
 <div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-md-0"
      id="accionesExportAnexo14"{% if intercambio_oob %} hx-swap-oob="true"{% endif %}>
-    <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
-       href="{% url 'informes_anexo:anexo14_excel' %}?{{ request.GET.urlencode }}">
-        <i class="bi bi-file-earmark-excel-fill text-success"></i> Exportar Excel
+
+    <a class="btn anx-btn-export anx-btn-export--propio btn-sm d-inline-flex align-items-center gap-2"
+       href="{% url url_propio %}?{{ request.GET.urlencode }}"
+       data-filtros-activos="{% if hay_filtros_activos %}1{% else %}0{% endif %}"
+       data-bs-toggle="tooltip" data-bs-placement="bottom"
+       title="Descarga solo el {{ nombre_propio }}: portada, resumen y una hoja por unidad.">
+        <i class="bx bx-file"></i>
+        <span>Solo {{ nombre_propio }}</span>
     </a>
-    <a class="btn anx-btn-accion btn-sm d-flex align-items-center gap-2"
-       href="{% url 'informes_anexo:anexo14_pdf' %}?{{ request.GET.urlencode }}">
-        <i class="bi bi-file-earmark-pdf-fill text-danger"></i> Exportar PDF
+
+    {% comment %} El combinado solo existe para el 14 y el 14-A. El 14-B va en libro
+       aparte por decisión expresa, así que su pantalla no ofrece este botón. {% endcomment %}
+    {% if not sin_combinado %}
+    <a class="btn anx-btn-export anx-btn-export--combinado btn-sm d-inline-flex align-items-center gap-2"
+       href="{% url 'informes_anexo:anexo_excel_combinado' %}?{{ request.GET.urlencode }}"
+       data-filtros-activos="{% if hay_filtros_activos %}1{% else %}0{% endif %}"
+       data-bs-toggle="tooltip" data-bs-placement="bottom"
+       title="Descarga el Anexo 14 y el 14A en un mismo libro, con las dos hojas de cada unidad. Es el fichero que se entrega al organismo.">
+        <i class="bx bx-layer"></i>
+        <span>Anexo 14 y 14A</span>
     </a>
+    {% endif %}
 </div>
+
+<script>
+    /* Los tooltips de Bootstrap no se activan solos. Se re-inicializan en cada
+       intercambio HTMX porque el parcial se vuelve a pintar entero y los de antes
+       se quedan huérfanos. */
+    (function () {
+        var botones = document.querySelectorAll('#accionesExportAnexo14 [data-bs-toggle="tooltip"]');
+        if (!window.bootstrap) return;
+        botones.forEach(function (boton) {
+            var previo = bootstrap.Tooltip.getInstance(boton);
+            if (previo) previo.dispose();
+            new bootstrap.Tooltip(boton);
+        });
+    })();
+</script>

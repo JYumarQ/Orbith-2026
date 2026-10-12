@@ -1,8 +1,10 @@
 # 1. Librerías Estándar de Python
+import json
 import os
 import calendar
 import re
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 # 2. Librerías y Módulos de Django
 from django.conf import settings
@@ -28,8 +30,9 @@ from nomencladores.models import (NTipoFamilia, NFamiliaCargo, NCargo,
                                   color_de_categoria)
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import UnidadOrganizativa
-from usuarios.mixins import RequiereEdicionMixin
+from usuarios.mixins import RequiereEdicionMixin, puede_editar
 from . import altas_bajas
+from . import misiones
 from . import excel
 from . import fuentes
 from .models import PlanMensualRegistro
@@ -160,8 +163,25 @@ def _cabecera_documento(request):
     }
 
 
+class GuiaInformeRRHHMixin:
+    """Marca la tarea `primer_informe_rrhh` de la Guía de Orbith al consultar
+    cualquiera de los siete Informes RRHH. Va en `get()` y no en cada
+    `get_context_data()` para tocar una sola línea por informe."""
+
+    def get(self, request, *args, **kwargs):
+        from progreso.servicios import completar_tarea
+        completar_tarea(request.user, 'primer_informe_rrhh')
+        # Solo al abrir el informe: los filtros (HTMX) no son otra consulta.
+        if not request.htmx:
+            from ranking.models import Actividad
+            from ranking.servicios import registrar_actividad
+            registrar_actividad(request.user, Actividad.INFORME,
+                                detalle=f'Informe RRHH: {request.resolver_match.url_name}')
+        return super().get(request, *args, **kwargs)
+
+
 # Create your views here.
-class InformeEconomiaView(TemplateView):
+class InformeEconomiaView(GuiaInformeRRHHMixin, TemplateView):
 
     def get_template_names(self):
         if self.request.htmx:
@@ -330,7 +350,7 @@ class ExportarConsolidadoPDFView(InformeEconomiaView):
         return response
     
 
-class InformeTrabajadoresUEBView(TemplateView):
+class InformeTrabajadoresUEBView(GuiaInformeRRHHMixin, TemplateView):
     template_name = "pages/informes/informe_ueb.html"
     
     def get_context_data(self, **kwargs):
@@ -512,7 +532,7 @@ def _agrupacion_elegida(request, clave, por_defecto=AGRUPACION_POR_DEFECTO):
     return request.session.get(clave, por_defecto)
 
 
-class InformePuestosClaveView(TemplateView):
+class InformePuestosClaveView(GuiaInformeRRHHMixin, TemplateView):
     template_name = 'pages/informes/informe_puestos_clave.html'
 
     def _resumen_de_ncargo(self, fuente, ncargo_id, nombre_alternativo='',
@@ -943,7 +963,7 @@ class ExportarPuestosClavePDFView(InformePuestosClaveView):
     
 
 #Nuevo Informe:
-class InformeMisionesView(TemplateView):
+class InformeMisionesView(GuiaInformeRRHHMixin, TemplateView):
     template_name = "pages/informes/informe_misiones.html"
     
     def get_context_data(self, **kwargs):
@@ -962,7 +982,6 @@ class InformeMisionesView(TemplateView):
 
         # 2. Variables de conteo
         total_misiones = len(contratos)
-        importe_total = 0.00  # Queda en 0 hasta que la empresa lo defina
 
         desglose = {
             'Obreros': 0,
@@ -1004,7 +1023,9 @@ class InformeMisionesView(TemplateView):
                 # Cuadro Ejecutivo serian indistinguibles de «C» de nada.
                 'cat_codigo': cat_sigla,
                 'g_escala': c.grupo_escala_nivel or "-",
-                'pais': c.pais, 'dias': 0, 'importe': 0.00
+                # Del contrato (o de la fotografía del cierre). `None` es «sin
+                # registrar»: se pinta como 0, pero no es lo mismo que 0.
+                'pais': c.pais, 'dias': c.mision_dias, 'importe': c.mision_importe,
             })
 
         # Ordenamos las llaves según el mapa de orden y reconstruimos
@@ -1021,8 +1042,22 @@ class InformeMisionesView(TemplateView):
             for nombre in sorted_keys
         ]
 
+        # Una exportación puede llegar con los valores que el usuario retocó en
+        # pantalla (ver `ExportarMisionesMixin`). Solo en tiempo real: un cierre
+        # es una fotografía y no se edita.
+        valores = getattr(self, 'valores_manuales', None)
+        context['con_valores_manuales'] = bool(
+            valores and not context.get('es_historico')
+            and misiones.aplicar_valores_manuales(misiones_por_unidad, valores))
+        context['nota_valores_manuales'] = misiones.NOTA_VALORES_MANUALES
+
+        # Doble clic, «Guardar» y «Restablecer»: quien puede editar, y solo con
+        # los datos de hoy.
+        context['mision_editable'] = (
+            puede_editar(self.request.user) and not context.get('es_historico'))
+
         context['total_misiones'] = total_misiones
-        context['importe_total'] = importe_total
+        context['importe_total'] = misiones.importe_total(misiones_por_unidad)
         context['desglose'] = desglose
         context['misiones_por_unidad'] = misiones_por_unidad
         context['paises'] = len({c.pais for c in contratos if c.pais})
@@ -1031,7 +1066,48 @@ class InformeMisionesView(TemplateView):
         context.update(_cabecera_documento(self.request))
         return context
     
-class ExportarMisionesWordView(InformeMisionesView):
+class ExportarMisionesMixin:
+    """Las exportaciones de Misiones aceptan también POST con los valores de la
+    pantalla.
+
+    Por GET (como siempre) el documento sale con lo que hay en la base de datos.
+    Por POST lleva en `valores` los Días e Importe que el usuario editó sin
+    guardar, y el documento sale con ellos y una nota al pie. Los filtros
+    siguen viajando en la URL, así que el resto del informe no cambia.
+    """
+
+    def post(self, request, *args, **kwargs):
+        try:
+            datos = json.loads(request.POST.get('valores') or '{}')
+        except ValueError:
+            datos = {}
+        self.valores_manuales = misiones.leer_valores_manuales(datos)
+        return self.get(request, *args, **kwargs)
+
+
+class GuardarMisionesView(RequiereEdicionMixin, View):
+    """«Guardar» del informe: escribe Días e Importe en los contratos.
+
+    Todo o nada; los motivos de un rechazo vuelven en `errores`, uno por
+    trabajador. La lógica vive en `informes/misiones.py::guardar_cambios`.
+    """
+
+    def post(self, request, *args, **kwargs):
+        try:
+            datos = json.loads(request.body or b'{}')
+        except ValueError:
+            return JsonResponse(
+                {'ok': False, 'mensaje': 'La petición no es válida.'}, status=400)
+        try:
+            guardados = misiones.guardar_cambios(request.user, datos.get('cambios'))
+        except misiones.ErrorDeGuardado as error:
+            return JsonResponse({'ok': False, 'mensaje': str(error),
+                                 'errores': error.errores,
+                                 'actuales': error.actuales}, status=409)
+        return JsonResponse({'ok': True, 'guardados': guardados})
+
+
+class ExportarMisionesWordView(ExportarMisionesMixin, InformeMisionesView):
     """Misiones Internacionales en Word."""
 
     def get(self, request, *args, **kwargs):
@@ -1054,7 +1130,7 @@ class ExportarMisionesWordView(InformeMisionesView):
             return HttpResponse(f'Error al generar el Word: {str(e)}', status=500)
 
 
-class ExportarMisionesPDFView(InformeMisionesView):
+class ExportarMisionesPDFView(ExportarMisionesMixin, InformeMisionesView):
     """Misiones Internacionales en PDF."""
 
     def get(self, request, *args, **kwargs):
@@ -1070,7 +1146,7 @@ class ExportarMisionesPDFView(InformeMisionesView):
         return response
 
 
-class RegistroDiarioView(TemplateView):
+class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
     template_name = "pages/informes/registro_diario.html"
 
     def get_context_data(self, **kwargs):
@@ -1283,7 +1359,7 @@ class GuardarPlanDiarioView(RequiereEdicionMixin, View):
 CLAVE_AGRUPACION_MOTIVOS = 'motivos_agrupacion'
 
 
-class InformeMotivosContratoView(TemplateView):
+class InformeMotivosContratoView(GuiaInformeRRHHMixin, TemplateView):
     template_name = "pages/informes/informe_motivos_contrato.html"
 
     def get_context_data(self, **kwargs):
@@ -1494,7 +1570,7 @@ class ExportarMotivosPDFView(InformeMotivosContratoView):
 # INFORME: ALTAS Y BAJAS DEL MES (modelo de la UNE)
 # ---------------------------------------------------------------------------
 
-class InformeAltasBajasView(TemplateView):
+class InformeAltasBajasView(GuiaInformeRRHHMixin, TemplateView):
     """Quien entro y quien salio en un mes, en el formato que pide la UNE.
 
     Es el unico informe de RRHH que NO lee de `fuentes.FuenteDatos`. Los otros
@@ -1846,11 +1922,12 @@ class ExportarPuestosClaveExcelView(InformePuestosClaveView):
         return planas, niveles
 
 
-class ExportarMisionesExcelView(InformeMisionesView):
+class ExportarMisionesExcelView(ExportarMisionesMixin, InformeMisionesView):
     """Misiones Internacionales en Excel, plano y por unidad."""
 
     COLUMNAS = ('Expediente', 'Nombre y Apellidos', 'Cargo', 'Cat. Ocup.',
-                'Grupo Escala', 'País')
+                'Grupo Escala', 'País', 'Días', 'Importe')
+    FORMATO_IMPORTE = '#,##0.00'
 
     def get(self, request, *args, **kwargs):
         context = self.get_context_data(**kwargs)
@@ -1858,37 +1935,60 @@ class ExportarMisionesExcelView(InformeMisionesView):
 
         cifras = [
             ('Total en misión', context['total_misiones'], 'Trabajadores en el exterior'),
+            ('Importe', context['importe_total'], 'Suma de los importes de misión'),
             ('Países', context['paises'], 'Destinos distintos'),
             ('Unidades', context['unidades_con_mision'], 'Con personal en misión'),
         ] + [(nombre, valor, 'Por categoría ocupacional')
              for nombre, valor in desglose.items()]
 
         libro = excel.LibroDeInforme(context, 'Misiones Internacionales')
-        libro.portada(cifras[:3])
-        libro.resumen(cifras)
+        libro.portada([cifras[0], cifras[2], cifras[3]])
+        resumen = libro.resumen(cifras)
+        resumen.cell(row=6, column=3).number_format = self.FORMATO_IMPORTE
 
         planas, niveles, categorias = [], [], []
         for unidad in context['misiones_por_unidad']:
             niveles.append(('unidad', 0, ['%s (%d en misión)'
                                           % (unidad['nombre'], unidad['total'])]
-                            + [''] * (len(self.COLUMNAS) - 1)))
+                            + [''] * (len(self.COLUMNAS) - 2)))
             for t in unidad['trabajadores']:
+                # Vacío se exporta como 0, igual que se ve en pantalla.
                 fila = [t['expediente'], t['nombre'], t['cargo'],
-                        t['cat_letra'], t['g_escala'], t['pais']]
+                        t['cat_letra'], t['g_escala'], t['pais'],
+                        t['dias'] or 0, t['importe'] or Decimal('0')]
                 planas.append([unidad['nombre']] + fila)
-                niveles.append(('dato', 1, [fila[1]] + fila[2:] + ['']))
+                niveles.append(('dato', 1, [fila[1]] + fila[2:]))
                 categorias.append(t['cat_codigo'])
 
-        libro.datos('Misiones',
-                    ('Dirección / Área o UEB',) + self.COLUMNAS,
-                    planas, anchos=[30, 12, 34, 40, 11, 14, 20],
-                    centradas=(2, 5, 6), col_categoria=5,
-                    categorias=categorias)
-        libro.por_niveles('Por unidad',
-                          ('Unidad / Trabajador',) + self.COLUMNAS[2:] + ('',),
-                          niveles, anchos=[40, 40, 11, 14, 20, 12],
-                          centradas=(3, 4))
+        total = (['Total'] + [''] * (len(self.COLUMNAS) - 1)
+                 + [context['importe_total']])
+        hoja_plana = libro.datos(
+            'Misiones', ('Dirección / Área o UEB',) + self.COLUMNAS,
+            planas, anchos=[30, 12, 34, 40, 11, 14, 20, 9, 14],
+            centradas=(2, 5, 6, 8), col_categoria=5,
+            categorias=categorias, total=total)
+        hoja_niveles = libro.por_niveles(
+            'Por unidad', ('Unidad / Trabajador',) + self.COLUMNAS[2:],
+            niveles, anchos=[40, 40, 11, 14, 20, 9, 14],
+            centradas=(3, 4, 6))
+
+        self._formato_importe(hoja_plana, columna=9)
+        self._formato_importe(hoja_niveles, columna=7)
+        if context['con_valores_manuales']:
+            for hoja in (resumen, hoja_plana, hoja_niveles):
+                self._nota_valores_manuales(hoja, context['nota_valores_manuales'])
         return _libro_a_respuesta(libro, context, 'Misiones')
+
+    def _formato_importe(self, hoja, columna):
+        for fila in range(5, hoja.max_row + 1):
+            hoja.cell(row=fila, column=columna).number_format = self.FORMATO_IMPORTE
+
+    @staticmethod
+    def _nota_valores_manuales(hoja, texto):
+        """Debajo del pie, en la misma letra pequeña."""
+        celda = hoja.cell(row=hoja.max_row + 1, column=1)
+        celda.value = texto
+        celda.font = excel.FUENTE_PIE
 
 
 class ExportarRegistroDiarioExcelView(RegistroDiarioView):

@@ -1,0 +1,68 @@
+{% load paginacion %}
+{% comment %}
+Pie común de las tablas que pasan de página con ENLACES (`?pagina=N`) en vez de
+HTMX, como Notificaciones. Mismo aspecto que base/partials/tabla_paginacion.html.
+
+    {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=<Page> querystring=<"&tab=…" o ""> nombre='notificaciones' %}
+
+- `querystring`: el resto de la pestaña y los filtros, con "&" inicial y SIN
+  `pagina` (ver `notificaciones.views._querystring_sin_pagina`).
+
+El selector «Filas por página» recarga en la página 1 con `filas` (y
+static/js/orbith_tablas.js lo guarda en las preferencias del usuario).
+{% endcomment %}
+{% paginas_visibles pagina as paginas %}
+{% opciones_filas as opciones %}
+<div class="orb-tabla-pie">
+  <small class="text-muted orb-tabla-total">
+    {% if pagina.paginator.count %}
+      <b>{{ pagina.start_index }}</b>–<b>{{ pagina.end_index }}</b> de <b>{{ pagina.paginator.count }}</b> {{ nombre }}
+    {% else %}
+      0 {{ nombre }}
+    {% endif %}
+  </small>
+
+  <div class="orb-tabla-filas">
+    <label class="small text-muted mb-0" for="orbFilas{{ nombre|slugify }}">Filas por página</label>
+    <select id="orbFilas{{ nombre|slugify }}" class="form-select form-select-sm orb-filas" data-sin-select2
+            data-navegar="?pagina=1{{ querystring }}">
+      {% for opcion in opciones %}
+        <option value="{{ opcion }}"{% if opcion == pagina.paginator.per_page %} selected{% endif %}>{{ opcion }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% if pagina.paginator.num_pages > 1 %}
+  <nav aria-label="Páginas">
+    <ul class="pagination pagination-sm mb-0 orb-paginacion">
+      {% with filas=pagina.paginator.per_page %}
+      <li class="page-item{% if not pagina.has_previous %} disabled{% endif %}">
+        <a class="page-link" title="Primera página" aria-label="Primera página"
+           {% if pagina.has_previous %}href="?pagina=1&filas={{ filas }}{{ querystring }}"{% else %}aria-disabled="true"{% endif %}><i class="bx bx-chevrons-left"></i></a>
+      </li>
+      <li class="page-item{% if not pagina.has_previous %} disabled{% endif %}">
+        <a class="page-link" title="Anterior" aria-label="Anterior"
+           {% if pagina.has_previous %}href="?pagina={{ pagina.previous_page_number }}&filas={{ filas }}{{ querystring }}"{% else %}aria-disabled="true"{% endif %}><i class="bx bx-chevron-left"></i></a>
+      </li>
+      {% for numero in paginas %}
+        {% if numero is None %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% elif numero == pagina.number %}
+          <li class="page-item active" aria-current="page"><span class="page-link">{{ numero }}</span></li>
+        {% else %}
+          <li class="page-item"><a class="page-link" href="?pagina={{ numero }}&filas={{ filas }}{{ querystring }}">{{ numero }}</a></li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item{% if not pagina.has_next %} disabled{% endif %}">
+        <a class="page-link" title="Siguiente" aria-label="Siguiente"
+           {% if pagina.has_next %}href="?pagina={{ pagina.next_page_number }}&filas={{ filas }}{{ querystring }}"{% else %}aria-disabled="true"{% endif %}><i class="bx bx-chevron-right"></i></a>
+      </li>
+      <li class="page-item{% if not pagina.has_next %} disabled{% endif %}">
+        <a class="page-link" title="Última página" aria-label="Última página"
+           {% if pagina.has_next %}href="?pagina={{ pagina.paginator.num_pages }}&filas={{ filas }}{{ querystring }}"{% else %}aria-disabled="true"{% endif %}><i class="bx bx-chevrons-right"></i></a>
+      </li>
+      {% endwith %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>

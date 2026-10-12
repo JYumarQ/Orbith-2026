@@ -4,13 +4,8 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
-from .models import TareaGuia, TareaGuiaUsuario
-
-ETIQUETAS_CATEGORIA = {
-    TareaGuia.Categoria.PRIMEROS_PASOS: ('🎓', 'Primeros pasos'),
-    TareaGuia.Categoria.EXPLORAR: ('🔎', 'Explorar Orbith'),
-    TareaGuia.Categoria.DOMINAR: ('🧩', 'Dominar Orbith'),
-}
+from .models import TareaGuia, TareaGuiaParte, TareaGuiaUsuario
+from .servicios import ETIQUETAS_CATEGORIA, partes_de, resumen_progreso, tareas_en_desarrollo, tareas_visibles
 
 
 @login_required
@@ -26,27 +21,53 @@ def panel_guia(request):
     caché con el estado de OTRO momento o de otro usuario en una sesión
     compartida del mismo navegador.
     """
-    tareas = TareaGuia.objects.filter(activo=True)
+    # Solo las tareas de su rol: un Observador no ve "Crea tu primer Aspirante".
+    tareas = tareas_visibles(request.user)
     completadas = set(
         TareaGuiaUsuario.objects.filter(usuario=request.user).values_list('tarea_id', flat=True)
     )
 
+    # Partes hechas de las tareas con avance, en una sola consulta.
+    partes_hechas = {}
+    for tarea_id, parte in TareaGuiaParte.objects.filter(usuario=request.user).values_list('tarea_id', 'parte'):
+        partes_hechas.setdefault(tarea_id, set()).add(parte)
+
+    # Las de módulos en construcción se intercalan en su sitio, atenuadas.
+    en_desarrollo = list(tareas_en_desarrollo(request.user))
+    todas = sorted(list(tareas) + en_desarrollo, key=lambda t: (t.orden, t.id))
+
     grupos = {}
-    for tarea in tareas:
+    for tarea in todas:
         icono, etiqueta = ETIQUETAS_CATEGORIA.get(tarea.categoria, ('', tarea.categoria))
         grupo = grupos.setdefault(tarea.categoria, {'icono': icono, 'etiqueta': etiqueta, 'tareas': []})
-        grupo['tareas'].append({'tarea': tarea, 'completada': tarea.id in completadas})
+        if tarea.en_desarrollo:
+            grupo['tareas'].append({'tarea': tarea, 'completada': False, 'en_desarrollo': True})
+            continue
+        item = {'tarea': tarea, 'completada': tarea.id in completadas}
+        if tarea.lista_partes:
+            item['partes'] = partes_de(request.user, tarea, partes_hechas.get(tarea.id, set()))
+            item['partes_hechas'] = sum(1 for p in item['partes'] if p['hecha'])
+        grupo['tareas'].append(item)
 
     # Orden fijo de categorías (no el de aparición en la BD).
     orden_categorias = [c for c, _ in TareaGuia.Categoria.choices]
     grupos_ordenados = [grupos[c] for c in orden_categorias if c in grupos]
+    # Una categoría está completa (su medalla se enciende) cuando el usuario
+    # tiene hechas todas SUS tareas de esa categoría.
+    # Las "en desarrollo" no cuentan.
+    for grupo in grupos_ordenados:
+        normales = [item for item in grupo['tareas'] if not item.get('en_desarrollo')]
+        grupo['completa'] = bool(normales) and all(item['completada'] for item in normales)
 
-    total = tareas.count()
+    # Mismos números que el badge del navbar (`core/context_processors.py`):
+    # salen de la misma función para que no puedan contradecirse.
+    resumen = resumen_progreso(request.user)
     contexto = {
         'grupos': grupos_ordenados,
-        'total': total,
-        'completadas': len(completadas),
-        'porcentaje': round(100 * len(completadas) / total) if total else 0,
+        'total': resumen['total'],
+        'completadas': resumen['completadas'],
+        'pendientes': resumen['total'] - resumen['completadas'],
+        'porcentaje': resumen['porcentaje'],
     }
     return render(request, 'pages/progreso/partials/panel_guia.html', contexto)
 
@@ -81,7 +102,7 @@ def tarea_guiada(request, codigo):
     haría que el widget nunca aparezca (o se cierre solo con un aviso de
     "completado" que en realidad no ocurrió).
     """
-    tarea = get_object_or_404(TareaGuia, codigo=codigo, activo=True)
+    tarea = get_object_or_404(tareas_visibles(request.user), codigo=codigo)
     completada = TareaGuiaUsuario.objects.filter(usuario=request.user, tarea=tarea).exists()
     return JsonResponse({
         'codigo': tarea.codigo,
@@ -89,3 +110,13 @@ def tarea_guiada(request, codigo):
         'pasos': tarea.pasos,
         'completada': completada,
     })
+
+
+@login_required
+@never_cache
+def partes_tarea(request, codigo):
+    """Qué partes de una tarea con avance tiene hechas el usuario. Lo usan los
+    recorridos de exportar para marcar los formatos ya hechos (✔ PDF)."""
+    tarea = get_object_or_404(tareas_visibles(request.user), codigo=codigo)
+    completada = TareaGuiaUsuario.objects.filter(usuario=request.user, tarea=tarea).exists()
+    return JsonResponse({'partes': partes_de(request.user, tarea), 'completada': completada})

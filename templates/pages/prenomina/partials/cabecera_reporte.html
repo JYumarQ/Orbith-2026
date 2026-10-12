@@ -33,12 +33,12 @@
         Exportar es una lectura: lo puede hacer cualquiera que vea el reporte,
         incluido el Observador. Importar es escritura y va con el resto.
       {% endcomment %}
-      <a href="{% url 'prenomina:exportar_reporte' reporte.pk %}"
+      <a href="{% url 'prenomina:exportar_reporte' reporte.pk %}" id="btnExportarReporte"
          class="btn btn-sm btn-outline-secondary">
         <i class="fas fa-file-excel me-1"></i>Exportar
       </a>
       {% if puede_editar %}
-        <button type="button" class="btn btn-sm btn-outline-secondary"
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnImportarReporte"
                 hx-get="{% url 'prenomina:importar_reporte' reporte.pk %}"
                 hx-target="#modal_generic" hx-swap="innerHTML">
           <i class="fas fa-file-import me-1"></i>Importar

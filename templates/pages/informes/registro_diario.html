@@ -523,7 +523,8 @@
                 document.getElementById('val-deducciones-fem').textContent = window.formatNum(deducciones_fem);
             }
 
-            // 2. Calcular el Promedio (Total Físicos - Deducciones). Misiones y Obligaciones NO se restan.
+            // 2. Calcular el Promedio (Total Físicos - Deducciones). Las Obligaciones
+            //    SÍ se restan (van dentro de las deducciones); las Misiones NO.
             var real = total - deducciones;
             var real_fem = total_fem - deducciones_fem;
 
@@ -566,6 +567,10 @@
 
     
 
+    // Los dos gráficos muestran la plantilla FÍSICA (por categoría y por sexo),
+    // no el Promedio: las deducciones se escriben como un total, sin saber a qué
+    // categoría pertenecen. Cuando vengan del contrato o de la Pre-Nómina (una por
+    // trabajador), se podrá ofrecer un selector "Físicos / Promedio".
     window.actualizarGraficos = function(datosCat, totalMujeres, totalHombres) {
 
         if (typeof Chart === 'undefined') return;
@@ -702,6 +707,11 @@
     };
 
     // --- MOTOR DE DEDUCCIONES MANUALES ---
+    // TEMPORAL. Obligaciones Estatales y Sociales, Subsidios, Licencia de
+    // Maternidad y Licencia sin Sueldo dejarán de escribirse a mano: vendrán de
+    // los datos del contrato del trabajador o de su Pre-Nómina, y estos campos
+    // pasarán a ser de solo lectura. Hasta entonces se guardan en el navegador
+    // (localStorage), por eso no los ve otro usuario ni otro ordenador.
     window.guardarDeduccionesLocales = function() {
         var datos = {
             obl: document.getElementById('val-obligaciones').value,

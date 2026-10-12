@@ -1334,3 +1334,121 @@ class ContextoFiltrosEstructuraTests(TestCase):
         respuesta = self.client.get(reverse('list_contrato'))
         self.assertEqual(
             [u.pk for u in respuesta.context['unidades_filtro']], [self.taller.pk])
+
+
+class MensajesExpedienteTests(TestCase):
+    """Cada error del Exp. Laboral tiene su propio mensaje, en español. Antes
+    la vista anunciaba cualquiera de ellos como "ya está en uso por un
+    contrato activo", y el error real (por ejemplo, más de 5 dígitos) salía
+    en inglés."""
+
+    def setUp(self):
+        self.usuario = CustomUser.objects.create_user(
+            username='admin_expediente', password='ClaveSegura123', es_admin=True)
+
+    def _error(self, valor):
+        form = CAltaForm(data={'no_expediente': valor}, user=self.usuario)
+        form.is_valid()
+        return form.errors['no_expediente'][0]
+
+    def test_mas_de_cinco_digitos(self):
+        self.assertEqual(self._error('123456'), 'El expediente admite como máximo 5 dígitos.')
+
+    def test_solo_numeros(self):
+        self.assertEqual(self._error('abc'), 'El expediente solo puede contener números.')
+
+    def test_el_campo_limita_a_cinco_caracteres(self):
+        self.assertIn('maxlength="5"', str(CAltaForm(user=self.usuario)['no_expediente']))
+
+
+class DatosDeMisionTests(TestCase):
+    """Días e Importe de la Misión: solo en `CAlta`, validados en español y
+    vaciados junto con el País cuando el switch Misión está apagado."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.tipo_contrato = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=False, requiere_motivo=False)
+
+    def _formulario(self, **datos):
+        datos.setdefault('tipo', str(self.tipo_contrato.pk))
+        form = CAltaForm(data=datos)
+        form.is_valid()
+        return form
+
+    def test_la_mision_solo_existe_en_calta(self):
+        nombres_calta = {f.name for f in CAlta._meta.get_fields()}
+        nombres_cbaja = {f.name for f in CBaja._meta.get_fields()}
+        for campo in ('mision', 'pais', 'mision_dias', 'mision_importe'):
+            self.assertIn(campo, nombres_calta)
+            self.assertNotIn(campo, nombres_cbaja)
+
+    def test_con_mision_conserva_pais_dias_e_importe(self):
+        form = self._formulario(mision='on', pais='Venezuela',
+                                mision_dias='30', mision_importe='1250.50')
+        self.assertNotIn('mision_dias', form.errors)
+        self.assertNotIn('mision_importe', form.errors)
+        self.assertEqual(form.cleaned_data['pais'], 'Venezuela')
+        self.assertEqual(form.cleaned_data['mision_dias'], 30)
+        self.assertEqual(form.cleaned_data['mision_importe'], Decimal('1250.50'))
+
+    def test_sin_mision_se_vacian_pais_dias_e_importe(self):
+        # Aunque el envío los traiga (p. ej. una petición manipulada).
+        form = self._formulario(pais='Venezuela', mision_dias='30', mision_importe='10')
+        self.assertIsNone(form.cleaned_data['pais'])
+        self.assertIsNone(form.cleaned_data['mision_dias'])
+        self.assertIsNone(form.cleaned_data['mision_importe'])
+
+    def test_dias_e_importe_pueden_quedar_vacios(self):
+        form = self._formulario(mision='on', pais='Bolivia')
+        self.assertNotIn('mision_dias', form.errors)
+        self.assertNotIn('mision_importe', form.errors)
+        self.assertIsNone(form.cleaned_data['mision_dias'])
+
+    def test_el_cero_es_un_valor_valido(self):
+        form = self._formulario(mision='on', mision_dias='0', mision_importe='0')
+        self.assertNotIn('mision_dias', form.errors)
+        self.assertNotIn('mision_importe', form.errors)
+
+    def test_limites_con_mensajes_en_espanol(self):
+        form = self._formulario(mision='on', mision_dias='10000', mision_importe='-1')
+        self.assertEqual(form.errors['mision_dias'],
+                         ['Los días de misión admiten como máximo 9999.'])
+        self.assertEqual(form.errors['mision_importe'],
+                         ['El importe de misión no puede ser negativo.'])
+
+        form = self._formulario(mision='on', mision_dias='-3', mision_importe='12345678')
+        self.assertEqual(form.errors['mision_dias'],
+                         ['Los días de misión no pueden ser negativos.'])
+        self.assertIn('7 cifras enteras', form.errors['mision_importe'][0])
+
+    def test_el_importe_admite_siete_cifras_enteras(self):
+        form = self._formulario(mision='on', mision_importe='9999999.99')
+        self.assertNotIn('mision_importe', form.errors)
+
+    def test_los_widgets_nacen_deshabilitados_como_el_pais(self):
+        form = CAltaForm()
+        for campo in ('pais', 'mision_dias', 'mision_importe'):
+            self.assertEqual(form.fields[campo].widget.attrs.get('disabled'), 'disabled')
+        self.assertEqual(form.fields['mision_dias'].label, 'Días')
+        self.assertEqual(form.fields['mision_importe'].label, 'Importe')
+
+    def test_el_moderador_puede_guardarlos_directo(self):
+        from solicitudes.operaciones import definicion_de
+        definicion = definicion_de('contrato_upd')
+        for campo in ('mision_dias', 'mision_importe'):
+            self.assertIn(campo, definicion['campos_libres'])
+            self.assertIn(campo, definicion['campos_condicionales'])
+        # Activar la misión o cambiar el país sigue necesitando aprobación.
+        self.assertNotIn('mision', definicion['campos_libres'])
+        self.assertNotIn('pais', definicion['campos_libres'])
+
+    def test_informe_inteligente_los_ofrece_solo_en_contratos_vigentes(self):
+        from informe_inteligente import metadata
+        campos_alta = metadata._campos_calta()
+        campos_baja = metadata._campos_cbaja()
+        campos_cierre = metadata._campos_historico_contrato()
+        for campo in ('mision', 'pais', 'mision_dias', 'mision_importe'):
+            self.assertIn(campo, campos_alta)
+            self.assertIn(campo, campos_cierre)
+            self.assertNotIn(campo, campos_baja)

@@ -89,6 +89,6 @@ pie se actualiza aparte con `hx-swap-oob`. Mismo mecanismo que usa la tabla de C
 {% endcomment %}
 {% if request.META.HTTP_HX_REQUEST %}
 <div id="table-pagination-footer" hx-swap-oob="true">
-    {% include 'pages/solicitudes/partials/pagination.html' %}
+    {% include 'pages/solicitudes/partials/pie_tabla.html' %}
 </div>
 {% endif %}

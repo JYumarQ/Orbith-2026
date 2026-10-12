@@ -51,7 +51,7 @@
 
                     <div class="row g-0 h-100">
                         
-                        <div class="col-md-6 bg-body-tertiary p-4 border-end d-flex flex-column" style="min-height: 550px;">
+                        <div class="col-md-6 bg-body-tertiary p-4 border-end d-flex flex-column" style="min-height: 550px;" id="movColumnaActual">
                             <h6 class="text-dark fw-bold mb-3 small" style="font-size: 0.8rem;">
                                 <i class="fas fa-history me-1"></i> Situación {% if is_readonly %}Anterior{% else %}Actual{% endif %}
                             </h6>
@@ -253,7 +253,7 @@
                             </div> {% endif %}
                         </div>
 
-                        <div class="col-md-6 p-4 bg-white d-flex flex-column">
+                        <div class="col-md-6 p-4 bg-white d-flex flex-column" id="movColumnaNueva">
                             <h6 class="{% if is_readonly %}text-secondary{% else %}text-primary{% endif %} fw-bold mb-4 small" style="font-size: 0.8rem;">
                                 <i class="fas fa-edit me-1"></i> {% if is_readonly %}Nueva Propuesta (Aprobada){% else %}Nueva Propuesta{% endif %}
                             </h6>
@@ -404,7 +404,7 @@
                             </div>
 
                             <div class="row mt-auto pt-3">
-                                <div class="col-12">
+                                <div class="col-12" id="movNuevoSalario">
                                     <label class="fw-bold text-success mb-1 small text-uppercase">
                                         <i class="fas fa-wallet me-1"></i> Nuevo Salario
                                     </label>

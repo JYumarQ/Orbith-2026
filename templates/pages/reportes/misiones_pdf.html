@@ -62,18 +62,20 @@
     <table class="data-table" repeat="1">
         <thead>
             <tr>
-                <th class="th-main th-main-dark" style="width: 12%;">Exp. Laboral</th>
-                <th class="th-main th-main-dark" style="width: 26%;">Nombre y Apellidos</th>
-                <th class="th-main th-main-dark" style="width: 30%;">Cargo u Ocupación</th>
-                <th class="th-main th-main-blue" style="width: 14%;">País</th>
-                <th class="th-main th-main-blue" style="width: 8%;">Cat.</th>
-                <th class="th-main th-main-blue" style="width: 10%;">G. Escala</th>
+                <th class="th-main th-main-dark" style="width: 10%;">Exp. Laboral</th>
+                <th class="th-main th-main-dark" style="width: 22%;">Nombre y Apellidos</th>
+                <th class="th-main th-main-dark" style="width: 26%;">Cargo u Ocupación</th>
+                <th class="th-main th-main-blue" style="width: 12%;">País</th>
+                <th class="th-main th-main-blue" style="width: 6%;">Cat.</th>
+                <th class="th-main th-main-blue" style="width: 8%;">G. Escala</th>
+                <th class="th-main th-main-blue" style="width: 6%;">Días</th>
+                <th class="th-main th-main-blue" style="width: 10%;">Importe</th>
             </tr>
         </thead>
         <tbody>
             {% for unidad in misiones_por_unidad %}
                 <tr class="row-unidad">
-                    <td colspan="6">{{ unidad.nombre|upper }} &mdash; {{ unidad.total }} en misión</td>
+                    <td colspan="8">{{ unidad.nombre|upper }} &mdash; {{ unidad.total }} en misión</td>
                 </tr>
                 {% for t in unidad.trabajadores %}
                 <tr class="row-cargo">
@@ -83,11 +85,18 @@
                     <td class="bold" style="color: #1e3a8a;">{{ t.pais }}</td>
                     <td class="bold">{{ t.cat_letra }}</td>
                     <td class="bold">{{ t.g_escala }}</td>
+                    {% comment %} Vacío se imprime como 0, igual que en pantalla. {% endcomment %}
+                    <td class="bold">{{ t.dias|default:0 }}</td>
+                    <td class="bold" style="text-align: right;">{{ t.importe|default:0|floatformat:2 }}</td>
                 </tr>
                 {% endfor %}
             {% empty %}
-                <tr class="row-cargo"><td colspan="6">No hay personal en misión internacional.</td></tr>
+                <tr class="row-cargo"><td colspan="8">No hay personal en misión internacional.</td></tr>
             {% endfor %}
         </tbody>
     </table>
+
+    {% if con_valores_manuales %}
+        <p style="font-size: 7pt; color: #64748b; font-style: italic; margin-top: 8px;">{{ nota_valores_manuales }}</p>
+    {% endif %}
 {% endblock %}

@@ -1,68 +1,132 @@
 {% comment %}
 Contenido del modal "Guía de Orbith", cargado bajo demanda (fetch) desde
 templates/base/partials/modales_usuario.html al abrir el modal.
+
+Estilos en static/css/guia-orbith.css. Los filtros (Todas / Pendientes /
+Completadas) los atiende static/js/progreso_guia.js: este HTML se inyecta con
+innerHTML, así que un <script> aquí dentro no llegaría a ejecutarse.
 {% endcomment %}
 
-<div class="mb-3">
-  <div class="d-flex justify-content-between align-items-center mb-1">
-    <span class="fw-semibold" style="font-size: .875rem;">
-      {{ completadas }}/{{ total }} completado
+{# --- Cabecera: avance y medallas --- #}
+<div class="guia-hero">
+  <div class="d-flex justify-content-between align-items-start gap-3">
+    <h6 class="guia-hero-titulo">Tu avance en la Guía</h6>
+    <div class="text-end flex-shrink-0">
+      <span class="guia-hero-porcentaje d-block">{{ porcentaje }}%</span>
+      <span class="guia-hero-sub">{{ completadas }} de {{ total }} completadas</span>
+    </div>
+  </div>
+  {# Fuera de la fila del título: en el móvil, al lado del porcentaje quedaba en una columna estrechísima. #}
+  <p class="guia-hero-sub mt-1 mb-3">Reconoce las primeras veces que trabajas con cada parte de Orbith, siempre sobre información real.</p>
+  <div class="guia-barra" role="progressbar" aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100"
+       aria-label="Avance en la Guía de Orbith">
+    <div class="guia-barra-relleno" style="width: {{ porcentaje }}%;"></div>
+  </div>
+
+  {% if grupos %}
+  <div class="guia-medallas">
+    {% for grupo in grupos %}
+      <span class="guia-medalla{% if grupo.completa %} conseguida{% endif %}"
+            title="{% if grupo.completa %}Conseguida: completaste {{ grupo.etiqueta }}{% else %}Completa todas las tareas de {{ grupo.etiqueta }}{% endif %}">
+        <span class="guia-medalla-icono">{{ grupo.icono }}</span>{{ grupo.etiqueta }}
+      </span>
+    {% endfor %}
+    <span class="guia-medalla{% if total and completadas == total %} conseguida{% endif %}"
+          title="{% if total and completadas == total %}Conseguido: completaste toda la Guía{% else %}Completa toda la Guía{% endif %}">
+      <span class="guia-medalla-icono">🏆</span>Dominas Orbith
     </span>
-    <span class="text-muted" style="font-size: .8125rem;">{{ porcentaje }}%</span>
   </div>
-  <div class="progress" style="height: 6px;">
-    <div class="progress-bar bg-info" role="progressbar" style="width: {{ porcentaje }}%;"
-         aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100"></div>
-  </div>
+  {% endif %}
 </div>
 
-<p class="text-muted small mb-4">
-  Reconoce las primeras veces que trabajas con cada parte de Orbith, siempre
-  sobre información real — todavía no has descubierto algunas de estas partes.
-</p>
+{% if grupos %}
+{# --- Filtros rápidos --- #}
+<div class="guia-filtros" role="group" aria-label="Filtrar tareas">
+  <button type="button" class="guia-filtro activo" data-guia-filtro="todas" aria-pressed="true">Todas ({{ total }})</button>
+  <button type="button" class="guia-filtro" data-guia-filtro="pendiente" aria-pressed="false">Pendientes ({{ pendientes }})</button>
+  <button type="button" class="guia-filtro" data-guia-filtro="completada" aria-pressed="false">Completadas ({{ completadas }})</button>
+</div>
+{% endif %}
 
+{# --- Tareas por categoría --- #}
 {% for grupo in grupos %}
-  <h6 class="fw-bold text-uppercase text-muted mb-2" style="font-size: .7rem;">
-    {{ grupo.icono }} {{ grupo.etiqueta }}
-  </h6>
-  <ul class="list-unstyled mb-4">
+  <div class="guia-bloque">
+    <div class="guia-grupo">{{ grupo.icono }} {{ grupo.etiqueta }}</div>
     {% for item in grupo.tareas %}
-      <li class="mb-2 {% if not item.completada %}opacity-75{% endif %}">
-        <div class="d-flex align-items-start gap-2">
-          <i class="bx {% if item.completada %}bx-check-circle text-success{% else %}bx-circle text-muted{% endif %} mt-1"></i>
+      <div class="guia-tarea{% if item.completada %} completada{% endif %}{% if item.en_desarrollo %} en-desarrollo{% endif %}"
+           data-guia-estado="{% if item.en_desarrollo %}desarrollo{% elif item.completada %}completada{% else %}pendiente{% endif %}">
+        <div class="p-3 d-flex align-items-start gap-3">
+          <div class="guia-tarea-icono {% if item.completada %}hecha{% else %}pendiente{% endif %}">
+            <i class="bx {% if item.completada %}bx-check{% else %}bx-target-lock{% endif %}"></i>
+          </div>
           <div class="flex-grow-1">
-            <span style="font-size: .875rem;" class="{% if item.completada %}fw-semibold{% endif %}">
-              {{ item.tarea.titulo }}
-            </span>
-            <small class="text-muted d-block">{{ item.tarea.descripcion }}</small>
-
-            {% if item.tarea.pasos %}
-              <button type="button" class="btn btn-link btn-sm p-0 mt-1" style="font-size: .75rem;"
-                      data-bs-toggle="collapse" data-bs-target="#comoSeHace{{ item.tarea.id }}">
-                <i class="bx bx-help-circle me-1"></i>¿Cómo se hace?
-              </button>
-
-              <div class="collapse mt-2" id="comoSeHace{{ item.tarea.id }}">
-                <div class="bg-light rounded p-2 ps-3" style="font-size: .8125rem;">
-                  <ol class="mb-2 ps-3">
-                    {% for paso in item.tarea.pasos %}
-                      <li class="mb-1">{{ paso }}</li>
-                    {% endfor %}
-                  </ol>
-                  {% if item.tarea.url_relacionada %}
-                    <a href="{{ item.tarea.url_relacionada }}" class="btn btn-sm btn-outline-info"
-                       onclick="window.orbithIniciarGuia && window.orbithIniciarGuia('{{ item.tarea.codigo }}')">
-                      Ir a {{ item.tarea.modulo|default:"la sección" }} <i class="bx bx-right-arrow-alt"></i>
-                    </a>
-                  {% endif %}
-                </div>
+            <div class="d-flex align-items-start justify-content-between gap-2">
+              <span class="guia-tarea-titulo">{{ item.tarea.titulo }}</span>
+              {% if item.en_desarrollo %}
+                {# Módulo en construcción: se ve, pero no cuenta ni se puede hacer todavía. #}
+                <span class="guia-en-desarrollo"><i class="bx bx-wrench me-1"></i>En desarrollo</span>
+              {% elif item.completada %}
+                <span class="guia-logrado"><i class="bx bx-check-circle me-1"></i>Logrado</span>
+              {% endif %}
+            </div>
+            <div class="guia-tarea-desc">{{ item.tarea.descripcion }}</div>
+            {% if item.partes %}
+              {# Tarea con avance: qué partes lleva hechas (PDF, Word, Excel...). #}
+              <div class="guia-partes" aria-label="Avance: {{ item.partes_hechas }} de {{ item.partes|length }}">
+                <span class="guia-partes-cuenta">{{ item.partes_hechas }} de {{ item.partes|length }}</span>
+                {% for parte in item.partes %}
+                  <span class="guia-parte{% if parte.hecha %} hecha{% endif %}">
+                    <i class="bx {% if parte.hecha %}bx-check{% else %}bx-radio-circle{% endif %}"></i>{{ parte.etiqueta }}
+                  </span>
+                {% endfor %}
               </div>
+            {% endif %}
+
+            {% if item.tarea.pasos and not item.en_desarrollo %}
+              <button type="button" class="btn btn-link btn-sm p-0 mt-1 text-decoration-none guia-como"
+                      data-bs-toggle="collapse" data-bs-target="#comoSeHace{{ item.tarea.id }}"
+                      aria-expanded="false" aria-controls="comoSeHace{{ item.tarea.id }}">
+                <i class="bx bx-bulb me-1"></i>¿Cómo se hace? <i class="bx bx-chevron-down"></i>
+              </button>
             {% endif %}
           </div>
         </div>
-      </li>
+
+        {% if item.tarea.pasos and not item.en_desarrollo %}
+          <div class="collapse" id="comoSeHace{{ item.tarea.id }}">
+            <div class="guia-pasos">
+              <ol>
+                {% for paso in item.tarea.pasos %}
+                  <li>{{ paso }}</li>
+                {% endfor %}
+              </ol>
+              {% if item.tarea.lista_accesos %}
+                {# Varias formas de hacer la tarea: un botón por cada una, cada uno con su recorrido. #}
+                <div class="d-flex flex-wrap gap-2">
+                  {% for acceso in item.tarea.lista_accesos %}
+                    <a href="{{ acceso.url }}" class="btn btn-sm btn-primary"
+                       onclick="window.orbithIniciarGuia && window.orbithIniciarGuia('{{ acceso.recorrido|escapejs }}')">
+                      {{ acceso.etiqueta }} <i class="bx bx-right-arrow-alt"></i>
+                    </a>
+                  {% endfor %}
+                </div>
+              {% elif item.tarea.url_relacionada %}
+                <a href="{{ item.tarea.url_relacionada }}" class="btn btn-sm btn-primary"
+                   onclick="window.orbithIniciarGuia && window.orbithIniciarGuia('{{ item.tarea.codigo }}')">
+                  Ir a {{ item.tarea.modulo|default:"la sección" }} <i class="bx bx-right-arrow-alt"></i>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
     {% endfor %}
-  </ul>
+  </div>
 {% empty %}
-  <p class="text-center text-muted mb-0">Todavía no hay tareas configuradas en la Guía.</p>
+  <p class="guia-vacio">Todavía no hay tareas configuradas en la Guía.</p>
 {% endfor %}
+
+{% if grupos %}
+  <p class="guia-vacio d-none" data-guia-vacio="pendiente">No te quedan tareas pendientes. ¡Enhorabuena!</p>
+  <p class="guia-vacio d-none" data-guia-vacio="completada">Todavía no has completado ninguna tarea. ¡Empieza por la primera!</p>
+{% endif %}

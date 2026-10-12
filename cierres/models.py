@@ -270,6 +270,10 @@ class CierreContrato(models.Model):
     # --- Datos del propio contrato ---
     mision = models.BooleanField(default=False)
     pais = models.CharField(max_length=100, blank=True)
+    # Nulos, como en el contrato: vacío no es lo mismo que 0. Los cierres
+    # tomados antes de existir estos campos los tienen vacíos.
+    mision_dias = models.PositiveIntegerField(null=True, blank=True)
+    mision_importe = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)
     fecha_alta = models.DateField(null=True, blank=True)
     duracion = models.IntegerField(null=True, blank=True)
     salario = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -390,13 +394,19 @@ class EstadoCierreUnidad(Base):
 
     @property
     def color_badge(self):
-        """Clase de Bootstrap para el badge. La decide el modelo para no repetir
-        el mismo `{% if %}` en cada plantilla que muestre el estado."""
+        """Clase de la insignia de estado. La decide el modelo para no repetir
+        el mismo `{% if %}` en cada plantilla que muestre el estado.
+
+        Son las clases `inf-estado--*` de `static/css/informes-rrhh.css`, la
+        paleta de los Informes de RRHH. Antes devolvía los `bg-label-*` de
+        Vuexy, que son de otra paleta: en la misma pantalla convivían una tabla
+        de Informes y unas insignias del tema, y el verde de una no era el verde
+        de la otra."""
         return {
-            EstadoUnidad.ACTUALIZADA: 'bg-label-success',
-            EstadoUnidad.PENDIENTE: 'bg-label-warning',
-            EstadoUnidad.DESACTUALIZADA: 'bg-label-danger',
-        }.get(self.estado, 'bg-label-secondary')
+            EstadoUnidad.ACTUALIZADA: 'inf-estado inf-estado--ok',
+            EstadoUnidad.PENDIENTE: 'inf-estado inf-estado--aviso',
+            EstadoUnidad.DESACTUALIZADA: 'inf-estado inf-estado--critico',
+        }.get(self.estado, 'inf-estado inf-estado--neutro')
 
     @property
     def color_punto(self):

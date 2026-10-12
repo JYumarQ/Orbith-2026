@@ -10,8 +10,13 @@ de mover los iconos). Ese modo "flotante" es el que obliga a reservar espacio
 para el botón, por eso la condición aparece dos veces: en el estilo del <nav> y
 en el bloque <style>. En ≥1200px la barra queda vacía (sin hamburguesa ni
 iconos), así que no hace falta reservar nada ahí.
+
+Se compara el nombre COMPLETO de la ruta (`view_name`, p. ej. `auditoria:index`) y no
+el corto: antes se miraba `url_name` y se exceptuaba también «index», así que las
+portadas de Auditoría, Subsanación e Informe Inteligente (todas `…:index`) dejaban la
+barra en el flujo y perdían 62 px de alto en blanco encima del título.
 {% endcomment %}
-{% with route_name=request.resolver_match.url_name %}
+{% with route_name=request.resolver_match.view_name %}
   <nav
     class="layout-navbar container-xxl navbar navbar-expand-xl navbar-detached align-items-center"
     id="layout-navbar"
@@ -21,7 +26,7 @@ iconos), así que no hace falta reservar nada ahí.
       backdrop-filter: none !important;
       color: #566a7f !important;
 
-      {% if route_name != 'dashboard' and route_name != 'index' %}
+      {% if route_name != 'dashboard' %}
          position: absolute;
          top: 0;
          left: 0;
@@ -37,7 +42,14 @@ iconos), así que no hace falta reservar nada ahí.
       #layout-navbar .navbar-nav { pointer-events: auto; }
       #layout-navbar a { color: inherit !important; } /* Asegura color gris */
 
-      {% if route_name != 'dashboard' and route_name != 'index' %}
+      /* En ≥1200px la barra no contiene nada (la hamburguesa es d-xl-none): se
+         oculta para no dejar una franja en blanco arriba —en el Dashboard, que la
+         tiene en el flujo, eran unos 60 px—. En móvil y tableta sigue igual. */
+      @media (min-width: 1200px) {
+        #layout-navbar { display: none !important; }
+      }
+
+      {% if route_name != 'dashboard' %}
       /* Solo queda el botón de hamburguesa (<1200px, d-xl-none) flotando sobre el
          contenido, así que hay que reservarle sitio arriba: sin esto, en móvil el
          título de la página queda justo debajo. En ≥1200px la barra está vacía
@@ -109,6 +121,14 @@ iconos), así que no hace falta reservar nada ahí.
     // (10=Crítica … 50=Informativa). `null` (los EVENTO) no colorea nada especial.
     const COLOR_POR_SEVERIDAD = {10: 'danger', 20: 'warning', 30: 'info', 40: 'secondary', 50: 'light'};
 
+    // Los textos de los avisos pueden llevar nombres de trabajadores o lo que
+    // escribió un usuario: se escapan para que nunca se interpreten como HTML.
+    function escaparHtml(texto) {
+      const div = document.createElement('div');
+      div.textContent = texto == null ? '' : String(texto);
+      return div.innerHTML;
+    }
+
     function marcadorDeNotificacion(n) {
       const partes = [];
       if (n.severidad != null && COLOR_POR_SEVERIDAD[n.severidad]) {
@@ -174,9 +194,9 @@ iconos), así que no hace falta reservar nada ahí.
           a.innerHTML = `
             <div class="grow">
               ${marcadorDeNotificacion(n)}
-              <strong class="text-truncate d-block">${n.titulo}</strong>
-              <small class="text-muted">${n.fecha}</small>
-              <p class="mb-0 text-truncate" style="max-width: 280px;">${n.mensaje}</p>
+              <strong class="text-truncate d-block">${escaparHtml(n.titulo)}</strong>
+              <small class="text-muted">${escaparHtml(n.fecha)}</small>
+              <p class="mb-0 text-truncate" style="max-width: 280px;">${escaparHtml(n.mensaje)}</p>
             </div>
           `;
           // Clic en la notificación: la marca como leída y la quita del dropdown
@@ -187,6 +207,10 @@ iconos), así que no hace falta reservar nada ahí.
             a.remove();
             if (!listaNotificaciones.children.length) {
               listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
+            }
+            // Avisos de cierre del Ranking Mensual: abren su ventana en «Ganadores».
+            if (n.codigo_regla === 'RANKING' && window.orbithAbrirRanking) {
+              window.orbithAbrirRanking('ganadores');
             }
           });
           listaNotificaciones.appendChild(a);

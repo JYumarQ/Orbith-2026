@@ -1,0 +1,112 @@
+{% comment %}
+Panel lateral de "Estadísticas de uso" (`ranking.estadisticas.detalle_usuario()`).
+Dos bloques separados: "XP del mes" (con topes) y "Uso del mes" (sin topes).
+{% endcomment %}
+{% with p=d.persona %}
+<div class="d-flex align-items-center gap-3 mb-3">
+  {% include 'pages/ranking/partials/persona_tabla.html' %}
+</div>
+<p class="small text-muted mb-3">{{ d.rol_etiqueta }} · {{ d.mes_etiqueta }}</p>
+{% endwith %}
+
+{# --- XP del mes --- #}
+<div class="est-bloque">
+  <h6 class="est-bloque-titulo"><i class="bx bx-trophy text-warning me-1"></i>XP del mes</h6>
+  <div class="row g-2 text-center mb-3">
+    <div class="col-4"><div class="est-cifra"><small>XP</small><strong>{{ d.xp }}</strong></div></div>
+    <div class="col-4"><div class="est-cifra"><small>Nivel</small><strong>{{ d.progreso.nivel|default:"—" }}</strong></div></div>
+    <div class="col-4"><div class="est-cifra"><small>Puesto</small><strong>{% if d.puesto %}{{ d.puesto }}º de {{ d.participantes }}{% else %}—{% endif %}</strong></div></div>
+  </div>
+  {% if d.desglose_xp %}
+    <table class="table table-sm align-middle mb-3 est-mini">
+      <thead><tr><th>Actividad</th><th class="text-center">Veces</th><th class="text-end">XP</th></tr></thead>
+      <tbody>
+        {% for a in d.desglose_xp %}
+          <tr>
+            <td><i class="bx {{ a.icono }} text-primary me-1"></i>{{ a.etiqueta }}
+              {% if a.tope %}<span class="badge bg-label-warning ms-1" title="Algún día pasó del tope diario: lo de más no dio XP">tope</span>{% endif %}</td>
+            <td class="text-center">{{ a.veces }}</td>
+            <td class="text-end fw-semibold">{{ a.xp }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="small text-muted">Sin XP en este mes.</p>
+  {% endif %}
+  <small class="text-muted d-block mb-1">Últimos 3 meses</small>
+  <div class="ranking-meses">
+    {% for m in d.evolucion %}
+      <div class="ranking-mes{% if m.actual %} en-curso{% endif %}">
+        <span class="ranking-mes-xp">{{ m.xp }} XP</span>
+        <div class="ranking-mes-columna"><div class="ranking-mes-barra" style="height: {{ m.porcentaje }}%;"></div></div>
+        <span class="ranking-mes-nombre">{{ m.etiqueta }}</span>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+{# --- Uso del mes --- #}
+<div class="est-bloque">
+  <h6 class="est-bloque-titulo"><i class="bx bx-data text-primary me-1"></i>Uso del mes</h6>
+
+  <ul class="list-unstyled est-lista mb-3">
+    {% for a in d.actividades_uso %}
+      <li><span>{{ a.etiqueta }}</span><strong{% if not a.veces %} class="text-muted"{% endif %}>{{ a.veces }}</strong></li>
+    {% endfor %}
+  </ul>
+
+  {% if d.puede_editar %}
+    <div class="row g-3 mb-3">
+      <div class="col-6">
+        <small class="text-muted d-block mb-1">Ediciones</small>
+        <ul class="list-unstyled est-lista mb-0">
+          {% for e in d.ediciones %}<li><span>{{ e.etiqueta }}</span><strong>{{ e.veces }}</strong></li>
+          {% empty %}<li class="text-muted">Ninguna</li>{% endfor %}
+        </ul>
+      </div>
+      <div class="col-6">
+        <small class="text-muted d-block mb-1">Eliminaciones</small>
+        <ul class="list-unstyled est-lista mb-0">
+          {% for e in d.eliminaciones %}<li><span>{{ e.etiqueta }}</span><strong>{{ e.veces }}</strong></li>
+          {% empty %}<li class="text-muted">Ninguna</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+  <small class="text-muted d-block mb-1">Descargas</small>
+  <div class="row g-2 text-center mb-3">
+    {% for f in d.descargas %}
+      <div class="col-4"><div class="est-cifra"><small>{{ f.etiqueta }}</small><strong>{{ f.veces }}</strong></div></div>
+    {% endfor %}
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <small class="text-muted">Calendario · {{ d.sesiones }} sesión(es) en {{ d.dias_sesion }} día(s)</small>
+    <span class="small">
+      <span class="est-leyenda trabajo"></span>Trabajó
+      <span class="est-leyenda sesion ms-2"></span>Solo entró
+    </span>
+  </div>
+  <div class="est-calendario mb-3">
+    {% for nombre in "LMXJVSD" %}<span class="est-cal-cabecera">{{ nombre }}</span>{% endfor %}
+    {% for c in d.calendario %}
+      <span class="est-cal-dia {{ c.clase }}">{{ c.dia|default:"" }}</span>
+    {% endfor %}
+  </div>
+
+  <small class="text-muted d-block mb-1">Últimas acciones</small>
+  {% if d.ultimas %}
+    <ul class="list-unstyled est-ultimas mb-0">
+      {% for u in d.ultimas %}
+        <li>
+          <div><strong>{{ u.tipo }}</strong>{% if u.texto %}<span class="d-block text-muted text-truncate">{{ u.texto }}</span>{% endif %}</div>
+          <small class="text-muted text-nowrap">{{ u.fecha|date:"d/m H:i" }}</small>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="small text-muted mb-0">Sin acciones en este mes.</p>
+  {% endif %}
+</div>

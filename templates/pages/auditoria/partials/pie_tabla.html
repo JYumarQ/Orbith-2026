@@ -1,0 +1,6 @@
+{% comment %}
+Pie de la tabla de Auditoría: el común de Orbith con los filtros de esta pantalla,
+para que paginar no pierda la búsqueda ni los filtros activos.
+{% endcomment %}
+{% url 'auditoria:buscar_eventos' as url_buscar %}
+{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_eventos_results' incluir='#search, #filter_usuario, #filter_accion, #filter_modulo, #filter_unidad, #filter_desde, #filter_hasta' nombre='eventos' %}

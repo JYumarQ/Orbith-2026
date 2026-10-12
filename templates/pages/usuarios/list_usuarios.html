@@ -43,7 +43,8 @@
     <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Usuarios /</span> Lista de Usuarios</h4>
 
     <!-- Hoverable Table rows -->
-    <div class="card">
+    {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+    <div class="card orb-tabla-card">
       <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
 
         <!-- Barra de acciones (se habilita al seleccionar una fila) -->
@@ -130,8 +131,8 @@
         </div>
 
       </div>
-      <div class="table-responsive text-nowrap">
-        <table class="table table-hover">
+      <div class="orb-tabla-scroll text-nowrap">
+        <table class="table orb-tabla">
           <thead>
             <tr>
               <th class="text-center">No. Exp.</th>
@@ -149,6 +150,8 @@
           </tbody>
         </table>
       </div>
+      {# Lo rellena la primera búsqueda (hx-trigger="load" del buscador) fuera de banda. #}
+      <div id="table-pagination-footer"></div>
     </div>
     <!--/ Hoverable Table rows -->
 

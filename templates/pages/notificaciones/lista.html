@@ -9,8 +9,27 @@
 
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
     <div>
-      <h4 class="fw-bold mb-0">
-        <i class="bx bx-bell me-2 text-primary"></i>Notificaciones
+      <h4 class="fw-bold mb-0 d-flex align-items-center flex-wrap gap-2">
+        <span><i class="bx bx-bell me-2 text-primary"></i>Notificaciones</span>
+        {% comment %} Recorridos de Recordatorios (static/js/recorrido_recordatorios.js):
+           completar es del Moderador y crear, del Administrador. {% endcomment %}
+        {% if user.es_admin or user.es_moderador %}
+        <span class="dropdown" style="font-size: 1rem;">
+          <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoNotificaciones"
+                  data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+            <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+          </button>
+          <ul class="dropdown-menu" style="font-size: .875rem;">
+            {% if user.es_admin %}
+            <li><button type="button" class="dropdown-item" data-recorrido="primer_recordatorio_creado:notificaciones">
+              <i class="bx bx-calendar-plus me-1"></i>Crear un recordatorio</button></li>
+            {% else %}
+            <li><button type="button" class="dropdown-item" data-recorrido="primer_recordatorio_completado:notificaciones">
+              <i class="bx bx-calendar-check me-1"></i>Completar un recordatorio</button></li>
+            {% endif %}
+          </ul>
+        </span>
+        {% endif %}
       </h4>
       <small class="text-muted">
         Eventos informativos y advertencias de integridad, separados por pestaña.
@@ -62,6 +81,8 @@
 </div>
 
 <script src="{% estatico 'js/notificaciones.js' %}"></script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_recordatorios.js' %}"></script>
 <script>
 (function () {
   function obtenerCookie(nombre) {

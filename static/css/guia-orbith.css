@@ -1,0 +1,206 @@
+/*
+ * Ventana "Guía de Orbith" (templates/pages/progreso/partials/panel_guia.html).
+ *
+ * Usa los colores del tema de Orbith (--bs-primary #696cff, --bs-success...)
+ * y su misma fuente: nada de tipografías ni paletas nuevas.
+ */
+
+/* --- Cabecera con el avance --- */
+.guia-hero {
+  background: linear-gradient(135deg, #696cff 0%, #5a5de8 55%, #4346e3 100%);
+  color: #fff;
+  border-radius: .75rem;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.guia-hero::before {
+  /* Halo suave en la esquina: solo decoración, no estorba al clic. */
+  content: '';
+  position: absolute;
+  top: -60%;
+  right: -15%;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(255, 255, 255, .18) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.guia-hero-titulo { font-size: 1rem; font-weight: 700; margin: 0; color: #fff; }
+.guia-hero-sub { font-size: .8rem; color: rgba(255, 255, 255, .8); }
+.guia-hero-porcentaje { font-size: 1.75rem; font-weight: 800; line-height: 1; color: #fff; }
+
+.guia-barra {
+  height: 10px;
+  background: rgba(255, 255, 255, .22);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.guia-barra-relleno {
+  height: 100%;
+  background: linear-gradient(90deg, #ffffff, #c7f7a8);
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(255, 255, 255, .6);
+  transition: width .6s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* Medallas: una por categoría y el trofeo del 100 %. Apagadas hasta conseguirlas. */
+.guia-medallas { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.guia-medalla {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .3rem .7rem;
+  border-radius: 50px;
+  font-size: .75rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .2);
+  color: rgba(255, 255, 255, .65);
+}
+.guia-medalla .guia-medalla-icono { filter: grayscale(1); opacity: .55; }
+.guia-medalla.conseguida {
+  background: rgba(255, 255, 255, .95);
+  border-color: #fff;
+  color: #4346e3;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
+}
+.guia-medalla.conseguida .guia-medalla-icono { filter: none; opacity: 1; }
+
+/* --- Filtros rápidos --- */
+.guia-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: .35rem;
+  background: var(--bs-body-bg, #f5f5f9);
+  border-radius: .6rem;
+  margin-bottom: 1rem;
+}
+.guia-filtro {
+  border: 0;
+  background: transparent;
+  padding: .4rem .9rem;
+  border-radius: .5rem;
+  font-size: .8125rem;
+  font-weight: 600;
+  color: #8592a3;
+  transition: background-color .15s ease, color .15s ease;
+}
+.guia-filtro:hover { background: rgba(105, 108, 255, .08); color: #566a7f; }
+.guia-filtro.activo {
+  background: #fff;
+  color: var(--bs-primary, #696cff);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .06);
+}
+
+/* --- Grupos y tarjetas de tareas --- */
+.guia-grupo {
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #a1acb8;
+  margin: 1.1rem 0 .6rem;
+}
+.guia-grupo:first-child { margin-top: 0; }
+
+.guia-tarea {
+  background: #fff;
+  border: 1px solid #e7e7ff;
+  border-radius: .85rem;
+  margin-bottom: .6rem;
+  overflow: hidden;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.guia-tarea:hover {
+  border-color: #c9caff;
+  box-shadow: 0 6px 16px -8px rgba(67, 89, 113, .25);
+  transform: translateY(-1px);
+}
+.guia-tarea.completada { background: #f8f9fb; border-color: #eceef1; }
+.guia-tarea.completada .guia-tarea-titulo { color: #8592a3; }
+/* Tarea de un módulo en construcción: se ve, pero no cuenta. */
+.guia-tarea.en-desarrollo { opacity: .55; background: #f8f9fb; }
+.guia-tarea.en-desarrollo:hover { transform: none; }
+.guia-en-desarrollo {
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .2rem .6rem;
+  border-radius: 50px;
+  color: #8592a3;
+  background: #eceef1;
+  border: 1px solid #dbdade;
+  white-space: nowrap;
+}
+
+.guia-tarea-icono {
+  width: 38px;
+  height: 38px;
+  border-radius: .7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.guia-tarea-icono.pendiente { background: rgba(105, 108, 255, .12); color: var(--bs-primary, #696cff); }
+.guia-tarea-icono.hecha { background: rgba(113, 221, 55, .16); color: #56ca00; }
+
+.guia-tarea-titulo { font-size: .9rem; font-weight: 700; color: #566a7f; }
+.guia-tarea-desc { font-size: .8rem; color: #8592a3; line-height: 1.45; }
+
+/* Avance de las tareas con partes ("1 de 3": PDF, Word, Excel). */
+.guia-partes { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .35rem; }
+.guia-partes-cuenta { font-size: .7rem; font-weight: 700; color: #566a7f; margin-right: .15rem; }
+.guia-parte {
+  font-size: .7rem;
+  font-weight: 600;
+  padding: .1rem .5rem;
+  border-radius: 50px;
+  color: #8592a3;
+  background: #f1f2f4;
+  border: 1px solid #e4e6e8;
+  display: inline-flex;
+  align-items: center;
+  gap: .15rem;
+}
+.guia-parte.hecha { color: #56ca00; background: rgba(113, 221, 55, .14); border-color: rgba(113, 221, 55, .35); }
+.guia-logrado {
+  font-size: .7rem;
+  font-weight: 700;
+  padding: .2rem .6rem;
+  border-radius: 50px;
+  color: #56ca00;
+  background: rgba(113, 221, 55, .14);
+  border: 1px solid rgba(113, 221, 55, .35);
+  white-space: nowrap;
+}
+.guia-como {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--bs-primary, #696cff);
+}
+.guia-pasos {
+  background: #f8f9fb;
+  border-top: 1px dashed #dbdade;
+  padding: .85rem 1rem;
+  font-size: .8125rem;
+  color: #697a8d;
+}
+.guia-pasos ol { padding-left: 1.2rem; margin-bottom: .75rem; }
+.guia-pasos li { margin-bottom: .3rem; }
+
+.guia-vacio { text-align: center; color: #a1acb8; font-size: .85rem; padding: 1.5rem 0; }
+
+@media (max-width: 575.98px) {
+  .guia-hero { padding: 1rem; }
+  .guia-hero-porcentaje { font-size: 1.5rem; }
+  .guia-filtro { padding: .35rem .6rem; font-size: .75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guia-tarea, .guia-barra-relleno { transition: none; }
+  .guia-tarea:hover { transform: none; }
+}

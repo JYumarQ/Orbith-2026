@@ -90,7 +90,18 @@
                                     {{ form.fecha_alta_entidad.label }}
                                     {{ form.fecha_alta_entidad }}
                                 </div>
-                                <div class="col-md-4">
+                                {% comment %} Años Servicio y D. de Contrato caben en col-md-2:
+                                   uno muestra dos dígitos y el otro tres como mucho. El ancho
+                                   sobrante se lo quedan las dos fechas, que son las que lo
+                                   necesitan para no partir el selector del navegador. {% endcomment %}
+                                <div class="col-md-2">
+                                    Años Servicio
+                                    <input type="text" id="id_annos_servicio"
+                                           class="form-control bg-light text-center px-1"
+                                           readonly placeholder="---"
+                                           title="Años completos cumplidos en la entidad, según la F. Alta Entidad">
+                                </div>
+                                <div class="col-md-2">
                                     {{ form.duracion.label }}
                                     {{ form.duracion }}
                                 </div>
@@ -113,7 +124,8 @@
                                 </div>
 
                                 <!--CALIFICACIONES-->
-                                <div class="col-md-4">
+                                {# Los id="bloque…" los usa el recorrido visual (static/js/recorrido_contratacion.js). #}
+                                <div class="col-md-4" id="bloqueCFormal">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.c_formal }}
                                         <label class="form-check-label" for="id_c_formal">
@@ -125,7 +137,7 @@
                                     </div>
                                 </div>
 
-                                <div class="col-md-4">
+                                <div class="col-md-4" id="bloqueFuncionario">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.funcionario }}
                                         <label class="form-check-label" for="id_funcionario">
@@ -137,7 +149,7 @@
                                     </div>
                                 </div>
                                 
-                                <div class="col-md-4">
+                                <div class="col-md-4" id="bloqueDesignado">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.designado }}
                                         <label class="form-check-label" for="id_designado">
@@ -150,7 +162,7 @@
                                 </div>
                                 
                                 <!--CHOFER-->
-                                <div class="col-md-12">
+                                <div class="col-md-12" id="bloqueChoferJubilado">
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="form-check form-switch mb-2">
@@ -184,7 +196,7 @@
                                     {{ form.fecha_vence_seg }}
                                 </div>
 
-                                <div class="col-md-12">
+                                <div class="col-md-12" id="bloqueMision">
                                     <div class="row">
                                         <div class="col-md-4">
                                             <div class="form-check form-switch mb-2 mt-4">
@@ -194,9 +206,17 @@
                                                 </label>
                                             </div>
                                         </div>
-                                        <div class="col-md-8">
-                                            {{ form.pais.label }}  
+                                        <div class="col-md-4">
+                                            {{ form.pais.label }}
                                             {{ form.pais }}
+                                        </div>
+                                        <div class="col-md-2">
+                                            {{ form.mision_dias.label }}
+                                            {{ form.mision_dias }}
+                                        </div>
+                                        <div class="col-md-2">
+                                            {{ form.mision_importe.label }}
+                                            {{ form.mision_importe }}
                                         </div>
                                     </div>
                                 </div>
@@ -237,29 +257,60 @@
                                     {{ form.tridente }}
                                 </div>
 
+                                {% comment %} Cuatro cifras en la misma caja, pero con DOS orígenes
+                                   distintos: las tres primeras dependen del cargo y del tridente
+                                   y las repinta `cargar_salarios`; el Pago Años de Servicio
+                                   depende solo de la F. Alta Entidad.
+
+                                   Por eso `#resultados_salariales` (el destino de HTMX, que se
+                                   vacía entero en cada intercambio) envuelve SOLO a las tres, y
+                                   el cuarto campo queda fuera de él aunque dentro del mismo
+                                   recuadro. El 9 + 3 de fuera con el 4 + 4 + 4 de dentro deja las
+                                   cuatro columnas del mismo ancho. {% endcomment %}
                                 <div class="col-12">
-                                    <div class="row g-3 mt-2 p-3 border rounded bg-light" id="resultados_salariales">
-                                        <div class="col-md-4">
-                                            <label for="salarioEscala" class="fw-bold text-primary">Salario Escala</label>
-                                            <input class="form-control fw-bold" id="salarioEscala" name="salarioEscala" readonly value="{{ initial_salario_escala }}">
+                                    <div class="row g-3 mt-2 p-3 border rounded bg-light" id="bloqueCalculosSalario">
+                                        <div class="col-md-9">
+                                            <div class="row g-3" id="resultados_salariales">
+                                                <div class="col-md-4">
+                                                    <label for="salarioEscala" class="fw-bold text-primary">Salario Escala</label>
+                                                    <input class="form-control fw-bold" id="salarioEscala" name="salarioEscala" readonly value="{{ initial_salario_escala }}">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="tarifaHoraria">Tarifa Horaria</label>
+                                                    <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ initial_tarifa_horaria }}">
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="tarifaExtras">Tarifa Horas Extras</label>
+                                                    <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ initial_tarifa_extras }}">
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <label for="tarifaHoraria">Tarifa Horaria</label>
-                                            <input class="form-control" id="tarifaHoraria" name="tarifaHoraria" readonly value="{{ initial_tarifa_horaria }}">
-                                        </div>
-                                        <div class="col-md-4">
-                                            <label for="tarifaExtras">Tarifa Horas Extras</label>
-                                            <input class="form-control" id="tarifaExtras" name="tarifaExtras" readonly value="{{ initial_tarifa_extras }}">
+                                        <div class="col-md-3" id="pago_annos_servicio">
+                                            <label for="pagoAnnosServicio">Pago Años de Servicio</label>
+                                            <input class="form-control" id="pagoAnnosServicio" readonly placeholder="---">
                                         </div>
                                     </div>
-                                </div> 
-                                
+                                </div>
+
                                 <div id="disparador-salarios"
                                     hx-get="{% url 'cargar_salarios' %}"
                                     hx-trigger="load, actualizarSalarios"
                                     hx-target="#resultados_salariales"
                                     hx-swap="innerHTML"
                                     hx-include="#contratoForm"
+                                    style="display: none;">
+                                </div>
+
+                                {% comment %} La fecha se lee del DOM con `hx-vals` y no con
+                                   `hx-include`: `fecha_alta_entidad` nace `disabled` y un campo
+                                   deshabilitado no viaja en el envío, así que la primera carga
+                                   llegaría sin fecha. {% endcomment %}
+                                <div id="disparador-annos"
+                                    hx-get="{% url 'cargar_annos_servicio' %}"
+                                    hx-trigger="load, actualizarAnnos"
+                                    hx-target="#pago_annos_servicio"
+                                    hx-swap="innerHTML"
+                                    hx-vals='js:{fecha_alta_entidad: (document.getElementById("id_fecha_alta_entidad") || {}).value || ""}'
                                     style="display: none;">
                                 </div>
 
@@ -307,7 +358,7 @@
                                 <!-- CONDICIONES LABORALES ANORMALES Y NOCTURNIDADES -->
                                 <!-- (Movido correctamente a la pestaña de Salario) -->
                                 <div class="col-12 mt-3">
-                                    <div class="row g-3 p-3 bg-slate-50 rounded-3 border">
+                                    <div class="row g-3 p-3 bg-slate-50 rounded-3 border" id="bloqueCondicionesLaborales">
                                         
                                         <div class="col-md-4">
                                             <label class="form-label text-slate-700 fw-bold" for="id_cla">CLA</label>
@@ -383,7 +434,7 @@
 
         $form.off('change.switches').on('change.switches', '#id_c_formal, #id_mision', function() {
             if (this.id === 'id_c_formal') toggleCampo($(this), $('#id_c_formal_res'));
-            if (this.id === 'id_mision') toggleCampo($(this), $('#id_pais'));
+            if (this.id === 'id_mision') toggleCampo($(this), $('#id_pais, #id_mision_dias, #id_mision_importe'));
         });
 
         
@@ -791,6 +842,13 @@
             $('#id_fecha_alta_entidad')
                 .attr('max', $(this).val() || '')
                 .trigger('change.val');
+        });
+
+        // 5.c Los Años de Servicio y su pago se recalculan en el servidor cada vez
+        //     que cambia la fecha: la cuantía sale del nomenclador Escala de Años
+        //     de Servicio y no se puede deducir en el navegador.
+        $('#id_fecha_alta_entidad').off('change.annos').on('change.annos', function() {
+            if (window.htmx) htmx.trigger('#disparador-annos', 'actualizarAnnos');
         });
 
         // Fechas del contrato con año mínimo. Espejo de `CAMPOS_FECHA_CONTRATO` y

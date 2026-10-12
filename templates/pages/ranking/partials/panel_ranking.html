@@ -1,0 +1,144 @@
+{% comment %}
+Contenido de la ventana "Ranking Mensual Orbith", cargado bajo demanda (fetch)
+desde templates/base/partials/modales_usuario.html al abrirla. Datos:
+`ranking.servicios.datos_ventana()`. Estilos: static/css/ranking-orbith.css.
+
+Las pestañas son las de Bootstrap (data-bs-toggle): funcionan aunque este HTML
+llegue por innerHTML, porque Bootstrap las atiende por delegación.
+Nunca se muestra el nombre de usuario de nadie: solo `nombre` (ver
+`ranking.servicios.nombre_publico`).
+{% endcomment %}
+
+{% if not datos %}
+  <p class="text-center text-muted py-4 mb-0">Tu cuenta no tiene un rol asignado, así que no participa en el Ranking.</p>
+{% else %}
+
+{# --- Resumen: siempre visible --- #}
+<div class="ranking-hero">
+  <div class="d-flex justify-content-between align-items-start gap-3">
+    <div>
+      <h6 class="ranking-hero-titulo">{{ datos.mes_etiqueta }}</h6>
+      <span class="ranking-hero-sub">Ranking de {{ datos.rol_etiqueta }}es · mes en curso</span>
+    </div>
+    <div class="text-end flex-shrink-0">
+      <span class="ranking-hero-xp d-block">{{ datos.xp }} <small>XP</small></span>
+      <span class="ranking-hero-sub">
+        {% if datos.puesto %}{{ datos.puesto }}º de {{ datos.participantes }}{% else %}Aún sin puesto{% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-3 mb-1">
+    <span class="ranking-nivel"><i class="bx bxs-star me-1"></i>{{ datos.progreso.nivel }}</span>
+    <span class="ranking-hero-sub">
+      {% if datos.progreso.siguiente %}
+        Te faltan <strong>{{ datos.progreso.faltan }} XP</strong> para {{ datos.progreso.siguiente }}
+      {% else %}
+        ¡Nivel máximo del mes!
+      {% endif %}
+    </span>
+  </div>
+  <div class="ranking-barra" role="progressbar" aria-valuenow="{{ datos.progreso.porcentaje }}"
+       aria-valuemin="0" aria-valuemax="100" aria-label="Avance hasta el siguiente nivel">
+    <div class="ranking-barra-relleno" style="width: {{ datos.progreso.porcentaje }}%;"></div>
+  </div>
+</div>
+
+{# --- Pestañas --- #}
+<ul class="nav nav-pills nav-fill ranking-pestanas mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rankingTabTop" type="button" role="tab">
+      <i class="bx bx-trophy me-1"></i>Ranking
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#rankingTabDetalle" type="button" role="tab">
+      <i class="bx bx-user me-1"></i>Mi detalle
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#rankingTabGanadores" data-ranking-pestana="ganadores" type="button" role="tab">
+      <i class="bx bx-medal me-1"></i>Ganadores
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content p-0">
+
+  {# --- Ranking: top 10 de su rol --- #}
+  <div class="tab-pane fade show active" id="rankingTabTop" role="tabpanel">
+    {% if datos.top %}
+      <ul class="list-unstyled mb-0 ranking-lista">
+        {% for p in datos.top %}
+          {% include 'pages/ranking/partials/fila_persona.html' %}
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-center text-muted small py-3 mb-0">Todavía nadie ha sumado XP este mes. ¡Tu primera actividad te pone en cabeza!</p>
+    {% endif %}
+
+    {% if datos.fuera_del_top %}
+      {% with p=datos.fuera_del_top %}
+        <div class="ranking-separador" aria-hidden="true"><i class="bx bx-dots-horizontal-rounded"></i></div>
+        <ul class="list-unstyled mb-1 ranking-lista">
+          {% include 'pages/ranking/partials/fila_persona.html' %}
+        </ul>
+        <p class="text-center small text-muted mb-0">
+          {% if datos.top|length >= 10 %}
+            Te faltan <strong>{{ p.faltan_top }} XP</strong> para entrar en el top 10.
+          {% else %}
+            Con tu primera actividad del mes entras en el top 10.
+          {% endif %}
+        </p>
+      {% endwith %}
+    {% endif %}
+  </div>
+
+  {# --- Mi detalle: XP ganado por actividad y últimos 3 meses --- #}
+  <div class="tab-pane fade" id="rankingTabDetalle" role="tabpanel">
+    <h6 class="ranking-subtitulo">Tus XP de este mes</h6>
+    {% if datos.detalle %}
+      <ul class="list-unstyled mb-4 ranking-detalle">
+        {% for d in datos.detalle %}
+          <li>
+            <span class="ranking-detalle-icono"><i class="bx {{ d.icono }}"></i></span>
+            <span class="flex-grow-1">{{ d.etiqueta }}</span>
+            <span class="fw-semibold">{{ d.xp }} XP</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted small mb-4">Aún no has sumado XP este mes.</p>
+    {% endif %}
+
+    <h6 class="ranking-subtitulo">Tus últimos 3 meses</h6>
+    <div class="ranking-meses">
+      {% for m in datos.meses %}
+        <div class="ranking-mes{% if m.en_curso %} en-curso{% endif %}">
+          <span class="ranking-mes-xp">{{ m.xp }} XP</span>
+          <div class="ranking-mes-columna"><div class="ranking-mes-barra" style="height: {{ m.porcentaje }}%;"></div></div>
+          <span class="ranking-mes-nombre">{{ m.etiqueta }}</span>
+          <span class="ranking-mes-nivel">{{ m.nivel }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# --- Ganadores de los meses anteriores (solo de su rol) --- #}
+  <div class="tab-pane fade" id="rankingTabGanadores" role="tabpanel">
+    {% for grupo in datos.ganadores %}
+      <h6 class="ranking-subtitulo">{{ grupo.etiqueta }}</h6>
+      <ul class="list-unstyled mb-3 ranking-lista">
+        {% for p in grupo.personas %}
+          {% include 'pages/ranking/partials/fila_persona.html' %}
+        {% endfor %}
+      </ul>
+    {% empty %}
+      <p class="text-center text-muted small py-3 mb-0">
+        Aún no hay ganadores. Cada mes se cierra el día 1 y sus tres primeros puestos reciben su medalla.
+      </p>
+    {% endfor %}
+  </div>
+
+</div>
+{% endif %}

@@ -16,6 +16,13 @@ from solicitudes.tests import BaseSolicitudes
 from usuarios.models import CustomUser
 
 
+def eventos_de_solicitudes():
+    """Solo lo que escribe Solicitudes. Desde que existe el registro automático
+    (`auditoria/registro_automatico.py`), preparar los datos de la prueba también
+    deja eventos de creación, que aquí no son lo que se comprueba."""
+    return EventoAuditoria.objects.filter(modulo='solicitudes')
+
+
 class RegistroAlAprobar(BaseSolicitudes):
 
     def test_registra_lo_que_realmente_aprobo_el_administrador(self):
@@ -26,7 +33,7 @@ class RegistroAlAprobar(BaseSolicitudes):
 
         servicios.aprobar(solicitud, self.admin, self._datos_ncargo(salario_basico=5500))
 
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.assertEqual(evento.accion, AccionAuditoria.MODIFICAR)
         self.assertEqual(evento.usuario, self.admin)
         self.assertEqual(evento.solicitud, solicitud)
@@ -58,7 +65,7 @@ class RegistroAlAprobar(BaseSolicitudes):
         from nomencladores.models import NCargo
         nuevo = NCargo.objects.get(descripcion='Analista A')
 
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.assertEqual(evento.accion, AccionAuditoria.CREAR)
         self.assertEqual(evento.object_id, str(nuevo.pk))
         self.assertEqual(evento.datos_antes, {})
@@ -81,7 +88,7 @@ class RegistroAlAprobar(BaseSolicitudes):
         servicios.iniciar_revision(solicitud, self.admin)
         servicios.aprobar(solicitud, self.admin)
 
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.assertEqual(evento.accion, AccionAuditoria.ELIMINAR)
         self.assertEqual(evento.datos_despues, {})
         self.assertTrue(evento.datos_antes)
@@ -97,7 +104,7 @@ class RegistroDeDecisionesSinEfecto(BaseSolicitudes):
 
         servicios.rechazar(solicitud, self.admin, 'No procede este trimestre.')
 
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.assertEqual(evento.accion, AccionAuditoria.RECHAZAR)
         self.assertEqual(evento.datos_antes, {})
         self.assertEqual(evento.datos_despues, {})
@@ -109,7 +116,7 @@ class RegistroDeDecisionesSinEfecto(BaseSolicitudes):
 
         servicios.cancelar_revision(solicitud, self.admin)
 
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.assertEqual(evento.accion, AccionAuditoria.CANCELAR)
 
     def test_devolver_a_espera_registra_evento(self):
@@ -119,7 +126,7 @@ class RegistroDeDecisionesSinEfecto(BaseSolicitudes):
 
         servicios.devolver_a_espera(solicitud, self.admin)
 
-        eventos = list(EventoAuditoria.objects.order_by('id').values_list('accion', flat=True))
+        eventos = list(eventos_de_solicitudes().order_by('id').values_list('accion', flat=True))
         self.assertEqual(eventos, [AccionAuditoria.RECHAZAR, AccionAuditoria.DEVOLVER_A_ESPERA])
 
     def test_crear_y_actualizar_propuesta_no_registran_nada(self):
@@ -128,7 +135,7 @@ class RegistroDeDecisionesSinEfecto(BaseSolicitudes):
         servicios.actualizar_propuesta(
             solicitud, self.moderador, self._form_ncargo(salario_basico=8888))
 
-        self.assertEqual(EventoAuditoria.objects.count(), 0)
+        self.assertEqual(eventos_de_solicitudes().count(), 0)
 
 
 class AccesoAlModulo(BaseSolicitudes):
@@ -165,7 +172,7 @@ class AccesoAlModulo(BaseSolicitudes):
         solicitud = self._solicitud_de_edicion(salario_basico=9999)
         servicios.iniciar_revision(solicitud, self.admin)
         servicios.aprobar(solicitud, self.admin, self._datos_ncargo(salario_basico=5500))
-        evento = EventoAuditoria.objects.get()
+        evento = eventos_de_solicitudes().get()
         self.client.force_login(self.admin)
 
         respuesta = self.client.get(f'/auditoria/{evento.pk}/detalle/')

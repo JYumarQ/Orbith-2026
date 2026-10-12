@@ -33,6 +33,7 @@ urlpatterns = [
     path('misiones/exportar-word/', views.ExportarMisionesWordView.as_view(), name='exportar_misiones_word'),
     path('misiones/exportar-pdf/', views.ExportarMisionesPDFView.as_view(), name='exportar_misiones_pdf'),
     path('misiones/exportar-excel/', views.ExportarMisionesExcelView.as_view(), name='exportar_misiones_excel'),
+    path('misiones/guardar/', views.GuardarMisionesView.as_view(), name='guardar_misiones'),
 
     # ---------------------------------------------------------
     # 5. INFORMES: PLAN MENSUAL DE TRABAJO (REGISTRO DIARIO)

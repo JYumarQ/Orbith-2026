@@ -100,7 +100,7 @@
     const pos = posicionInicial();
     widget.style.cssText =
       'position:fixed;top:' + pos.top + 'px;left:' + pos.left + 'px;' +
-      'width:' + ANCHO_WIDGET + 'px;max-width:calc(100vw - ' + (MARGEN * 2) + 'px);z-index:1080;';
+      'width:' + ANCHO_WIDGET + 'px;max-width:calc(100vw - ' + (MARGEN * 2) + 'px);z-index:1093;';
     document.body.appendChild(widget);
     return widget;
   }
@@ -191,11 +191,213 @@
     habilitarArrastre(widget);
   }
 
+  // ------------------------------------------------------------------
+  // Logros de la Guía
+  //
+  // El servidor deja los logros recién conseguidos en la cookie
+  // `orbith_logros` (ver `progreso.middleware.LogrosGuiaMiddleware`). Llega
+  // con cualquier respuesta —una página, un fragmento HTMX, un JSON o una
+  // descarga—, así que basta con mirarla al cargar y una vez por segundo:
+  // leer una cookie no hace ninguna petición y no pesa nada.
+  //
+  // Se muestran con el mismo toast de SweetAlert que `window.mostrarToast`
+  // (esquina superior derecha, fondo blanco), uno detrás de otro.
+  // ------------------------------------------------------------------
+  const COOKIE_LOGROS = 'orbith_logros';
+  const CLAVE_LOGROS_MOSTRADOS = 'orbith_logros_mostrados';
+  const colaLogros = [];
+  let mostrandoLogro = false;
+
+  function escapar(texto) {
+    const div = document.createElement('div');
+    div.textContent = texto == null ? '' : String(texto);
+    return div.innerHTML;
+  }
+
+  function idsMostrados() {
+    try {
+      return JSON.parse(sessionStorage.getItem(CLAVE_LOGROS_MOSTRADOS)) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function recordarMostrado(id) {
+    try {
+      const ids = idsMostrados();
+      ids.push(id);
+      sessionStorage.setItem(CLAVE_LOGROS_MOSTRADOS, JSON.stringify(ids.slice(-50)));
+    } catch (e) {
+      // Sin sessionStorage, como mucho un logro se vería dos veces.
+    }
+  }
+
+  function leerCookieLogros() {
+    const par = document.cookie.split('; ').find(function (c) {
+      return c.indexOf(COOKIE_LOGROS + '=') === 0;
+    });
+    if (!par) return [];
+    // Se borra antes de procesarla para no mostrarla dos veces.
+    document.cookie = COOKIE_LOGROS + '=; Max-Age=0; path=/; SameSite=Lax';
+    try {
+      const logros = JSON.parse(decodeURIComponent(par.slice(COOKIE_LOGROS.length + 1)));
+      return Array.isArray(logros) ? logros : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function abrirPanelGuia() {
+    const modal = document.getElementById('modalGuiaOrbith');
+    if (modal && window.bootstrap) bootstrap.Modal.getOrCreateInstance(modal).show();
+  }
+
+  function mostrarSiguienteLogro() {
+    if (mostrandoLogro || !colaLogros.length || typeof Swal === 'undefined') return;
+    // SweetAlert solo muestra una ventana a la vez: si está saliendo otro
+    // aviso (por ejemplo "Aspirante creado correctamente"), el logro espera a
+    // que termine en vez de cortarlo.
+    if (Swal.isVisible() && !document.querySelector('.swal2-popup.swal2-hide')) {
+      setTimeout(mostrarSiguienteLogro, 500);
+      return;
+    }
+    mostrandoLogro = true;
+    const logro = colaLogros.shift();
+    const total = Number(logro.total) || 0;
+    const hechas = Number(logro.completadas) || 0;
+    const porcentaje = total ? Math.round(100 * hechas / total) : 0;
+
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: escapar(logro.titulo),
+      html:
+        '<div class="text-start" style="font-size:.8125rem;">' +
+        '  <div class="fw-semibold mb-1">' + escapar(logro.texto) + '</div>' +
+        (total ?
+        '  <div class="progress mb-1" style="height:5px;"><div class="progress-bar bg-info" style="width:' + porcentaje + '%;"></div></div>' +
+        '  <div class="d-flex justify-content-between align-items-center">' +
+        '    <small class="text-muted">' + hechas + ' de ' + total + ' en tu Guía</small>' +
+        '    <a href="#" class="small fw-semibold orbith-ver-guia">Ver mi Guía</a>' +
+        '  </div>' : '') +
+        '</div>',
+      showConfirmButton: false,
+      // `avance`: una parte de una tarea ("✔ PDF — 1 de 3"), aviso breve.
+      timer: logro.tipo === 'avance' ? 3500 : (logro.tipo === 'tarea' ? 5000 : 7000),
+      timerProgressBar: true,
+      background: '#fff',
+      color: '#697a8d',
+      customClass: { popup: 'border shadow-lg' },
+      didOpen: function (toast) {
+        toast.addEventListener('mouseenter', Swal.stopTimer);
+        toast.addEventListener('mouseleave', Swal.resumeTimer);
+        const enlace = toast.querySelector('.orbith-ver-guia');
+        if (enlace) {
+          enlace.addEventListener('click', function (e) {
+            e.preventDefault();
+            Swal.close();
+            abrirPanelGuia();
+          });
+        }
+      },
+      // `didDestroy` y no `didClose`: también se ejecuta si otro aviso
+      // reemplaza a este antes de tiempo, y así la cola nunca se queda parada.
+      didDestroy: function () {
+        mostrandoLogro = false;
+        setTimeout(mostrarSiguienteLogro, 300);
+      },
+    });
+  }
+
+  function revisarLogros() {
+    const nuevos = leerCookieLogros();
+    if (!nuevos.length) return;
+    const ya = idsMostrados();
+    nuevos.forEach(function (logro) {
+      if (!logro || !logro.id || ya.indexOf(logro.id) !== -1) return;
+      recordarMostrado(logro.id);
+      ya.push(logro.id);
+      colaLogros.push(logro);
+    });
+    mostrarSiguienteLogro();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    revisarLogros();
+    setInterval(revisarLogros, 1000);
+  });
+
+  // ------------------------------------------------------------------
+  // Filtros del panel de la Guía (Todas / Pendientes / Completadas)
+  //
+  // El panel llega por fetch y se inyecta con innerHTML, así que sus
+  // botones se atienden aquí con delegación. El filtro elegido se recuerda
+  // en localStorage para la próxima vez que se abra la Guía.
+  // ------------------------------------------------------------------
+  const CLAVE_FILTRO = 'orbith_guia_filtro';
+
+  function aplicarFiltroGuia(contenedor, filtro) {
+    if (!contenedor || !contenedor.querySelector('[data-guia-filtro]')) return;
+    if (['todas', 'pendiente', 'completada'].indexOf(filtro) === -1) filtro = 'todas';
+
+    contenedor.querySelectorAll('[data-guia-filtro]').forEach(function (boton) {
+      const activo = boton.dataset.guiaFiltro === filtro;
+      boton.classList.toggle('activo', activo);
+      boton.setAttribute('aria-pressed', activo ? 'true' : 'false');
+    });
+
+    let visibles = 0;
+    contenedor.querySelectorAll('.guia-tarea').forEach(function (tarea) {
+      const mostrar = filtro === 'todas' || tarea.dataset.guiaEstado === filtro;
+      tarea.classList.toggle('d-none', !mostrar);
+      if (mostrar) visibles += 1;
+    });
+    // Un grupo sin tareas visibles se oculta entero (no deja su título solo).
+    contenedor.querySelectorAll('.guia-bloque').forEach(function (bloque) {
+      bloque.classList.toggle('d-none', !bloque.querySelector('.guia-tarea:not(.d-none)'));
+    });
+    contenedor.querySelectorAll('[data-guia-vacio]').forEach(function (aviso) {
+      aviso.classList.toggle('d-none', !(visibles === 0 && aviso.dataset.guiaVacio === filtro));
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    const boton = e.target.closest && e.target.closest('[data-guia-filtro]');
+    if (!boton) return;
+    try { localStorage.setItem(CLAVE_FILTRO, boton.dataset.guiaFiltro); } catch (err) { /* no crítico */ }
+    aplicarFiltroGuia(boton.closest('#contenidoGuiaOrbith') || document, boton.dataset.guiaFiltro);
+  });
+
+  // La llama modales_usuario.html justo después de pintar el panel.
+  window.orbithGuiaPanelCargado = function (contenedor) {
+    let filtro = 'todas';
+    try { filtro = localStorage.getItem(CLAVE_FILTRO) || 'todas'; } catch (err) { /* no crítico */ }
+    aplicarFiltroGuia(contenedor, filtro);
+  };
+
   document.addEventListener('DOMContentLoaded', function () {
     const estado = leerEstado();
     if (!estado || !estado.codigo) return;
 
-    fetch('/progreso/tarea/' + encodeURIComponent(estado.codigo) + '/', {
+    // Si esta pantalla tiene un recorrido visual para la tarea (por ejemplo,
+    // el Gestor de Plantilla, ver `recorrido_gestor.js`), se usa ese en vez de
+    // la tarjeta de texto. El estado se borra: el recorrido es de una sola
+    // vez y se repite con el botón "¿Cómo funciona?" de la propia pantalla.
+    const recorridos = window.OrbithRecorridos || {};
+    if (typeof recorridos[estado.codigo] === 'function') {
+      cerrarGuia();
+      // Por `lanzar`: las guías que cambian datos reales piden confirmación
+      // antes (salvo si ya se aceptó al empezar, en un tramo anterior).
+      if (window.OrbithRecorrido && window.OrbithRecorrido.lanzar) window.OrbithRecorrido.lanzar(estado.codigo);
+      else recorridos[estado.codigo]();
+      return;
+    }
+
+    // Una clave con acceso concreto ("primera_contratacion:gestor") usa los
+    // pasos escritos de su tarea si la pantalla no tiene ese recorrido.
+    const codigoTarea = String(estado.codigo).split(':')[0];
+    fetch('/progreso/tarea/' + encodeURIComponent(codigoTarea) + '/', {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       cache: 'no-store',
     })

@@ -42,13 +42,13 @@
 {% empty %}
 <tr>
     <td colspan="5" class="text-center p-4">
-        <span class="text-muted">No se encontraron aspirantes.</span>
+        <span class="text-muted">No se encontraron {% if es_baja_view %}bajas{% else %}aspirantes{% endif %}.</span>
     </td>
 </tr>
 {% endfor %}
 
 {% if request.headers.HX_Request %}
     <div hx-swap-oob="innerHTML:#table-pagination-footer">
-        {% include 'pages/aspirante/partials/pagination.html' %}
+        {% include 'pages/aspirante/partials/pie_tabla.html' %}
     </div>
 {% endif %}

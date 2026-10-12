@@ -2021,3 +2021,68 @@ class RepartoDeUnidadesTests(TestCase):
         call_command('sincronizar_unidades', stdout=StringIO())
 
         self.assertEqual(self.faltan_subunidades(), set())
+
+
+class MisionSinDiasOImporteTests(TestCase):
+    """CTR-021: el 0 se reclama igual que el vacío."""
+
+    def _evaluar(self, **campos):
+        from types import SimpleNamespace
+
+        from .reglas.contratos import MisionSinDiasOImporte
+
+        datos = {'pk': 1, 'mision': True, 'mision_dias': 30,
+                 'mision_importe': Decimal('100.00')}
+        datos.update(campos)
+        return MisionSinDiasOImporte().evaluar_instancia(SimpleNamespace(**datos))
+
+    def test_completa_no_genera_hallazgo(self):
+        self.assertIsNone(self._evaluar())
+
+    def test_sin_mision_no_genera_hallazgo(self):
+        self.assertIsNone(self._evaluar(mision=False, mision_dias=None, mision_importe=None))
+
+    def test_faltan_los_dias(self):
+        for valor in (None, 0):
+            hallazgo, = self._evaluar(mision_dias=valor)
+            self.assertEqual(hallazgo.datos['faltantes'], ['mision_dias'])
+            self.assertEqual(hallazgo.campo_formulario, 'mision_dias')
+            self.assertIn('días', hallazgo.detalle)
+
+    def test_falta_el_importe(self):
+        for valor in (None, Decimal('0.00')):
+            hallazgo, = self._evaluar(mision_importe=valor)
+            self.assertEqual(hallazgo.datos['faltantes'], ['mision_importe'])
+
+    def test_faltan_los_dos_en_un_solo_hallazgo(self):
+        hallazgo, = self._evaluar(mision_dias=0, mision_importe=None)
+        self.assertEqual(hallazgo.datos['faltantes'], ['mision_dias', 'mision_importe'])
+        self.assertEqual(hallazgo.titulo, 'Misión sin días ni importe')
+
+    def test_el_barrido_encuentra_vacios_y_ceros(self):
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import NMunicipio, NProvincia
+
+        from .reglas.contratos import MisionSinDiasOImporte
+
+        provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
+
+        def contrato(expediente, **campos):
+            aspirante = Aspirante.objects.create(
+                nivel_educ='SA', nombre='Trab', papellido='Mision', sapellido=expediente,
+                doc_identidad='900101' + expediente, estado='ACTIVO', sexo='M', raza='BL',
+                provincia=provincia, municipio=municipio)
+            return CAlta.objects.create(aspirante=aspirante, no_expediente=expediente, **campos)
+
+        completo = contrato('00001', mision=True, mision_dias=10, mision_importe=Decimal('5'))
+        vacio = contrato('00002', mision=True)
+        con_cero = contrato('00003', mision=True, mision_dias=0, mision_importe=Decimal('5'))
+        sin_mision = contrato('00004', mision=False)
+
+        encontrados = {h.object_id for h in MisionSinDiasOImporte().ejecutar(None)}
+
+        self.assertEqual(encontrados, {str(vacio.pk), str(con_cero.pk)})
+        self.assertNotIn(str(completo.pk), encontrados)
+        self.assertNotIn(str(sin_mision.pk), encontrados)

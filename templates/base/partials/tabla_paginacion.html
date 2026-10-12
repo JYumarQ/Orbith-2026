@@ -1,0 +1,87 @@
+{% load paginacion %}
+{% comment %}
+Pie común de las tablas paginadas de Orbith (ver core/paginacion.py y
+static/css/orbith-tablas.css). Se incluye con:
+
+    {% include 'base/partials/tabla_paginacion.html' with url=<url de búsqueda> objetivo='#tbody' incluir='#search, #filtro…' nombre='eventos' %}
+
+- `url`: la vista que devuelve el cuerpo de la tabla (la misma del buscador).
+- `objetivo`: el `hx-target` (el <tbody>).
+- `incluir`: los mismos filtros que el buscador, para no perderlos al paginar.
+- `nombre`: qué se cuenta («eventos», «contratos»…).
+- Opcionales, para paneles que paginan de otra forma (Subsanación):
+  `parametro` (nombre del número de página, «page» por defecto), `querystring`
+  (resto de filtros ya codificados, con «&» inicial y sin página ni filas) y
+  `push` (si se pone, actualiza la dirección del navegador: `hx-push-url`).
+
+Los botones mandan `filas` explícitamente. El selector «Filas por página» manda
+el valor nuevo y static/js/orbith_tablas.js lo guarda en las preferencias del
+usuario, para TODAS las tablas.
+{% endcomment %}
+{% paginas_visibles page_obj as paginas %}
+{% firstof parametro 'page' as param %}
+{% opciones_filas as opciones %}
+<div class="orb-tabla-pie">
+  <small class="text-muted orb-tabla-total">
+    {% if page_obj.paginator.count %}
+      <b>{{ page_obj.start_index }}</b>–<b>{{ page_obj.end_index }}</b> de <b>{{ page_obj.paginator.count }}</b> {{ nombre }}
+    {% else %}
+      0 {{ nombre }}
+    {% endif %}
+  </small>
+
+  <div class="orb-tabla-filas">
+    <label class="small text-muted mb-0" for="orbFilas{{ nombre|slugify }}">Filas por página</label>
+    <select id="orbFilas{{ nombre|slugify }}" name="filas" class="form-select form-select-sm orb-filas" data-sin-select2
+            hx-get="{{ url }}?{{ param }}=1{{ querystring }}" hx-trigger="change"{% if push %} hx-push-url="true"{% endif %} {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}">
+      {% for opcion in opciones %}
+        <option value="{{ opcion }}"{% if opcion == page_obj.paginator.per_page %} selected{% endif %}>{{ opcion }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav aria-label="Páginas">
+    <ul class="pagination pagination-sm mb-0 orb-paginacion">
+      {% with filas=page_obj.paginator.per_page %}
+      <li class="page-item{% if not page_obj.has_previous %} disabled{% endif %}">
+        <button type="button" class="page-link" title="Primera página" aria-label="Primera página"
+                {% if page_obj.has_previous %}hx-get="{{ url }}?{{ param }}=1&filas={{ filas }}{{ querystring }}" {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}"{% if push %} hx-push-url="true"{% endif %}{% else %}disabled{% endif %}>
+          <i class="bx bx-chevrons-left"></i>
+        </button>
+      </li>
+      <li class="page-item{% if not page_obj.has_previous %} disabled{% endif %}">
+        <button type="button" class="page-link" title="Anterior" aria-label="Anterior"
+                {% if page_obj.has_previous %}hx-get="{{ url }}?{{ param }}={{ page_obj.previous_page_number }}&filas={{ filas }}{{ querystring }}" {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}"{% if push %} hx-push-url="true"{% endif %}{% else %}disabled{% endif %}>
+          <i class="bx bx-chevron-left"></i>
+        </button>
+      </li>
+      {% for numero in paginas %}
+        {% if numero is None %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+        {% elif numero == page_obj.number %}
+          <li class="page-item active" aria-current="page"><span class="page-link">{{ numero }}</span></li>
+        {% else %}
+          <li class="page-item">
+            <button type="button" class="page-link"
+                    hx-get="{{ url }}?{{ param }}={{ numero }}&filas={{ filas }}{{ querystring }}" {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}"{% if push %} hx-push-url="true"{% endif %}>{{ numero }}</button>
+          </li>
+        {% endif %}
+      {% endfor %}
+      <li class="page-item{% if not page_obj.has_next %} disabled{% endif %}">
+        <button type="button" class="page-link" title="Siguiente" aria-label="Siguiente"
+                {% if page_obj.has_next %}hx-get="{{ url }}?{{ param }}={{ page_obj.next_page_number }}&filas={{ filas }}{{ querystring }}" {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}"{% if push %} hx-push-url="true"{% endif %}{% else %}disabled{% endif %}>
+          <i class="bx bx-chevron-right"></i>
+        </button>
+      </li>
+      <li class="page-item{% if not page_obj.has_next %} disabled{% endif %}">
+        <button type="button" class="page-link" title="Última página" aria-label="Última página"
+                {% if page_obj.has_next %}hx-get="{{ url }}?{{ param }}={{ page_obj.paginator.num_pages }}&filas={{ filas }}{{ querystring }}" {% if incluir %}hx-include="{{ incluir }}"{% endif %} hx-target="{{ objetivo }}"{% if push %} hx-push-url="true"{% endif %}{% else %}disabled{% endif %}>
+          <i class="bx bx-chevrons-right"></i>
+        </button>
+      </li>
+      {% endwith %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>

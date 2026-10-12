@@ -105,8 +105,13 @@ def actualizar_salario(request):
             return JsonResponse({"error": "Datos incompletos."}, status=400)
 
         salario = NSalario.objects.get(id=salario_id)
+        # Auditoría: un evento por grupo con la escala completa, igual que las
+        # vistas de edición de la escala (ver `nomencladores/views.py`).
+        from nomencladores.views import _auditar_escala, _escala_legible
+        antes = _escala_legible(salario.grupo_escala)
         salario.monto = nuevo_monto
         salario.save()
+        _auditar_escala(salario.grupo_escala, antes)
 
         # Devolver la URL con el parámetro de pestaña activa
         return JsonResponse({

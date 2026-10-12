@@ -1,6 +1,6 @@
 from decimal import Decimal
 from django.db import models
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from auditoria.models import Base
 from nomencladores.models import NProvincia
 
@@ -63,6 +63,18 @@ class Configuracion(Base):
     # No usar para nada más: solo bloquea el acceso de usuarios normales (ver
     # usuarios.middleware.ControlAccesoMiddleware y CustomAuthenticationForm).
     modo_mantenimiento = models.BooleanField(default=False, verbose_name="Modo de mantenimiento")
+
+    #?AUDITORÍA
+    # Cuánto se conserva el historial de Auditoría. Apagado (el valor inicial)
+    # significa «Nunca»: no se borra nada. Encendido, al abrir la pantalla de
+    # Auditoría se eliminan los eventos más antiguos que `auditoria_anios_conservar`
+    # (ver `auditoria/limpieza.py`). El mínimo de 2 años lo decidió RRHH.
+    auditoria_borrar_antigua = models.BooleanField(
+        default=False, verbose_name="Borrar la auditoría antigua")
+    auditoria_anios_conservar = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(2), MaxValueValidator(99)],
+        verbose_name="Años de auditoría a conservar")
 
     class Meta:
         verbose_name = ("Configuracion")

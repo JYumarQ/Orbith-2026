@@ -2,7 +2,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h5 class="modal-title">
-                <i class="fas fa-camera me-2 text-primary"></i>
+                <i class="bx bx-camera me-2 text-indigo-600"></i>
                 {{ cierre.unidad_descripcion }} — {{ cierre.periodo.etiqueta }}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
@@ -11,56 +11,64 @@
         <div class="modal-body">
 
             <div class="row g-3 mb-4">
-                <div class="col-md-3">
-                    <div class="card bg-label-primary h-100">
-                        <div class="card-body py-2 px-3">
-                            <small class="d-block text-muted">Plazas aprobadas</small>
-                            <h5 class="mb-0 fw-bold">{{ cierre.total_plazas_aprobadas }}</h5>
+                <div class="col-6 col-md-3">
+                    <div class="inf-kpi inf-kpi--solida">
+                        <div class="inf-kpi-cabeza">
+                            <span class="inf-kpi-icono"><i class="bx bx-briefcase"></i></span>
+                            <span class="inf-kpi-rotulo">Aprobadas</span>
                         </div>
+                        <div class="inf-kpi-cifra">{{ cierre.total_plazas_aprobadas }}</div>
+                        <div class="inf-kpi-pie">Plazas de plantilla</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-label-success h-100">
-                        <div class="card-body py-2 px-3">
-                            <small class="d-block text-muted">Cubiertas</small>
-                            <h5 class="mb-0 fw-bold">{{ cierre.total_plazas_cubiertas }}</h5>
+                <div class="col-6 col-md-3">
+                    <div class="inf-kpi inf-kpi--verde">
+                        <div class="inf-kpi-cabeza">
+                            <span class="inf-kpi-icono"><i class="bx bx-user-check"></i></span>
+                            <span class="inf-kpi-rotulo">Cubiertas</span>
                         </div>
+                        <div class="inf-kpi-cifra">{{ cierre.total_plazas_cubiertas }}</div>
+                        <div class="inf-kpi-pie">Con ocupante</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-label-warning h-100">
-                        <div class="card-body py-2 px-3">
-                            <small class="d-block text-muted">Vacantes</small>
-                            <h5 class="mb-0 fw-bold">{{ cierre.plazas_vacantes }}</h5>
+                <div class="col-6 col-md-3">
+                    <div class="inf-kpi inf-kpi--naranja">
+                        <div class="inf-kpi-cabeza">
+                            <span class="inf-kpi-icono"><i class="bx bx-user-x"></i></span>
+                            <span class="inf-kpi-rotulo">Vacantes</span>
                         </div>
+                        <div class="inf-kpi-cifra">{{ cierre.plazas_vacantes }}</div>
+                        <div class="inf-kpi-pie">Sin cubrir</div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card bg-label-info h-100">
-                        <div class="card-body py-2 px-3">
-                            <small class="d-block text-muted">Trabajadores</small>
-                            <h5 class="mb-0 fw-bold">{{ total_contratos }}</h5>
+                <div class="col-6 col-md-3">
+                    <div class="inf-kpi inf-kpi--azul">
+                        <div class="inf-kpi-cabeza">
+                            <span class="inf-kpi-icono"><i class="bx bx-group"></i></span>
+                            <span class="inf-kpi-rotulo">Trabajadores</span>
                         </div>
+                        <div class="inf-kpi-cifra">{{ total_contratos }}</div>
+                        <div class="inf-kpi-pie">Contratos vigentes</div>
                     </div>
                 </div>
             </div>
 
-            <p class="small text-muted">
+            <p class="small text-slate-400">
                 Declarado por <strong>{{ cierre.declarado_por_nombre|default:"—" }}</strong>
                 el {{ cierre.fecha_declaracion|date:"d/m/Y H:i" }} —
                 {% if cierre.en_plazo %}
-                    <span class="text-success">en plazo</span>
+                    <span class="text-emerald-600 fw-bold">en plazo</span>
                 {% else %}
-                    <span class="text-danger">fuera de plazo</span>
+                    <span class="text-orange-500 fw-bold">fuera de plazo</span>
                 {% endif %}
             </p>
 
             {% for departamento, cargos in departamentos %}
-                <h6 class="fw-bold mt-3 mb-2">
-                    <i class="fas fa-sitemap text-muted me-1"></i>{{ departamento }}
+                <h6 class="fw-black text-slate-700 mt-3 mb-2">
+                    <i class="bx bx-sitemap text-indigo-600 me-1"></i>{{ departamento }}
                 </h6>
                 <div class="table-responsive mb-3">
-                    <table class="table table-sm table-bordered mb-0">
+                    <table class="inf-tabla table-moderna mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th>Cargo</th>
@@ -77,7 +85,7 @@
                                     <td>
                                         {{ cargo.ncargo_descripcion }}
                                         {% if cargo.puesto_clave %}
-                                            <i class="fas fa-star text-warning ms-1" title="Puesto clave"></i>
+                                            <i class="bx bxs-star text-orange-500 ms-1" title="Puesto clave"></i>
                                         {% endif %}
                                     </td>
                                     <td class="text-center">{{ cargo.cat_ocupacional|default:"—" }}</td>
@@ -98,7 +106,7 @@
         </div>
 
         <div class="modal-footer">
-            <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <button type="button" class="btn inf-btn-suave" data-bs-dismiss="modal">Cerrar</button>
         </div>
     </div>
 </div>

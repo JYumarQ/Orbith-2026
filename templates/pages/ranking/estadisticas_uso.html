@@ -1,0 +1,330 @@
+{% extends 'base/base.html' %}
+{% comment %}
+"Estadísticas de uso" (Administración). Datos: `ranking.estadisticas.datos_pagina()`.
+Dos secciones que no se mezclan: "Ranking del mes" (XP, con topes) y "Uso de
+Orbith" (todo lo que hizo cada usuario, sin topes). El panel lateral de cada
+usuario se pide con HTMX a `ranking_detalle_usuario`.
+Nunca se muestra el nombre de usuario de nadie (ver `ranking.servicios.nombre_publico`).
+{% endcomment %}
+
+{% block title %}Estadísticas de uso{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+  <div class="container-xxl grow container-p-y">
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3 py-3 mb-2">
+      <h4 class="fw-bold py-3 mb-0">
+        <span class="text-muted fw-light">Orbith / Administración /</span> Estadísticas de uso
+      </h4>
+      <form method="get" class="d-flex align-items-center gap-2">
+        <label for="selectorMes" class="small text-muted mb-0"><i class="bx bx-calendar me-1"></i>Mes</label>
+        <select id="selectorMes" name="mes" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+          {% for m in meses %}
+            <option value="{{ m.clave }}"{% if m.clave == mes.clave %} selected{% endif %}>
+              {{ m.etiqueta }}{% if m.en_curso %} (en curso){% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    {% comment %} Pestañas por contenido, como Parámetros Generales. Dentro de Ranking y de
+       Uso, un selector de rol: así se ve UNA tabla cada vez, justa en la pantalla
+       (static/css/orbith-tablas.css). La pestaña y el rol elegidos se recuerdan en el
+       navegador (script de abajo). {% endcomment %}
+    <ul class="nav nav-pills mb-3 nav-fill" role="tablist" id="estPestanas">
+      <li class="nav-item">
+        <button type="button" class="nav-link active" role="tab" data-bs-toggle="tab" data-bs-target="#est-ranking" data-est-pestana="ranking">
+          <i class="bx bx-trophy me-1"></i>Ranking del mes
+        </button>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#est-uso" data-est-pestana="uso">
+          <i class="bx bx-data me-1"></i>Uso de Orbith
+        </button>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#est-inactivos" data-est-pestana="inactivos">
+          <i class="bx bx-user-x me-1"></i>Sin actividad
+          {% if sin_actividad %}<span class="badge rounded-pill bg-label-secondary ms-1">{{ sin_actividad|length }}</span>{% endif %}
+        </button>
+      </li>
+      <li class="nav-item">
+        <button type="button" class="nav-link" role="tab" data-bs-toggle="tab" data-bs-target="#est-cierres" data-est-pestana="cierres">
+          <i class="bx bx-lock-alt me-1"></i>Cierres
+          {% if unidades %}<span class="badge rounded-pill bg-danger ms-1" title="Unidades sin cierre en plazo">{{ unidades|length }}</span>{% endif %}
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content p-0 bg-transparent shadow-none">
+
+      {# ===================== Ranking del mes (XP) ===================== #}
+      <div class="tab-pane fade show active" id="est-ranking" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <small class="text-muted"><i class="bx bx-info-circle me-1"></i>XP con los topes diarios. Pulsa un usuario para ver su detalle.</small>
+          {% include 'pages/ranking/partials/selector_rol.html' with grupo='ranking' %}
+        </div>
+        <div class="tab-content p-0 bg-transparent shadow-none">
+          {% for s in secciones %}
+            <div class="tab-pane fade{% if s.rol == 'M' %} show active{% endif %}" id="est-ranking-{{ s.rol }}" role="tabpanel">
+              <div class="card orb-tabla-card">
+                <div class="orb-tabla-scroll">
+                  <table class="table orb-tabla align-middle est-tabla">
+                    <thead>
+                      <tr><th class="text-center" style="width: 70px;">Puesto</th><th>Usuario</th><th>Nivel</th><th class="text-end">XP</th></tr>
+                    </thead>
+                    <tbody>
+                      {% for p in s.ranking %}
+                        <tr class="est-fila" data-usuario="{{ p.pk }}">
+                          <td class="text-center">
+                            {% if p.xp and p.puesto == 1 %}<i class="bx bxs-medal ranking-oro fs-4" title="1º puesto"></i>
+                            {% elif p.xp and p.puesto == 2 %}<i class="bx bxs-medal ranking-plata fs-4" title="2º puesto"></i>
+                            {% elif p.xp and p.puesto == 3 %}<i class="bx bxs-medal ranking-bronce fs-4" title="3º puesto"></i>
+                            {% elif p.xp %}{{ p.puesto }}º{% else %}—{% endif %}
+                          </td>
+                          <td>{% include 'pages/ranking/partials/persona_tabla.html' %}</td>
+                          <td><span class="badge bg-label-primary">{{ p.nivel }}</span></td>
+                          <td class="text-end fw-bold text-primary">{{ p.xp }} XP</td>
+                        </tr>
+                      {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-3">No hay usuarios activos con este rol.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# ===================== Uso de Orbith ===================== #}
+      <div class="tab-pane fade" id="est-uso" role="tabpanel">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+          <div class="input-group input-group-sm input-group-merge" style="max-width: 260px;">
+            <span class="input-group-text"><i class="bx bx-search"></i></span>
+            <input type="search" id="buscarUso" class="form-control" placeholder="Buscar por nombre..." aria-label="Buscar por nombre">
+          </div>
+          {% include 'pages/ranking/partials/selector_rol.html' with grupo='uso' %}
+        </div>
+        <p class="small text-muted mb-3">
+          <i class="bx bx-info-circle me-1"></i>El uso cuenta todo lo realizado en el mes, aunque supere el límite diario de XP.
+          Pulsa el encabezado de una columna para ordenar.
+        </p>
+        <div class="tab-content p-0 bg-transparent shadow-none">
+          {% for s in secciones %}
+            <div class="tab-pane fade{% if s.rol == 'M' %} show active{% endif %}" id="est-uso-{{ s.rol }}" role="tabpanel">
+              <div class="card orb-tabla-card">
+                <div class="orb-tabla-scroll">
+                  <table class="table orb-tabla align-middle est-tabla est-uso text-center">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="text-start est-ordenable" data-columna="0">Usuario</th>
+                        <th colspan="{{ s.columnas|length }}" class="est-grupo">Trabajo</th>
+                        <th colspan="2" class="est-grupo est-acceso">Acceso</th>
+                      </tr>
+                      <tr>
+                        {% for c in s.columnas %}<th class="est-ordenable" data-columna="{{ forloop.counter }}">{{ c }}</th>{% endfor %}
+                        <th class="est-ordenable est-acceso" data-columna="{{ s.columnas|length|add:1 }}">Sesiones</th>
+                        <th class="est-ordenable est-acceso" data-columna="{{ s.columnas|length|add:2 }}">Días con sesión</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for p in s.uso %}
+                        <tr class="est-fila" data-usuario="{{ p.pk }}" data-nombre="{{ p.nombre|lower }}">
+                          <td class="text-start" data-valor="{{ p.nombre|lower }}">{% include 'pages/ranking/partials/persona_tabla.html' %}</td>
+                          {% for valor in p.trabajo %}<td data-valor="{{ valor }}"{% if not valor %} class="text-muted"{% endif %}>{{ valor }}</td>{% endfor %}
+                          <td class="est-acceso" data-valor="{{ p.sesiones }}">{{ p.sesiones }}</td>
+                          <td class="est-acceso" data-valor="{{ p.dias_sesion }}">{{ p.dias_sesion }}</td>
+                        </tr>
+                      {% empty %}
+                        <tr><td colspan="{{ s.columnas|length|add:3 }}" class="text-center text-muted py-3">No hay usuarios activos con este rol.</td></tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# ===================== Sin actividad ===================== #}
+      <div class="tab-pane fade" id="est-inactivos" role="tabpanel">
+        <div class="card">
+          <div class="card-body">
+            <p class="small text-muted">Usuarios que no hicieron ninguna actividad de trabajo en {{ mes.etiqueta }}.</p>
+            {% if sin_actividad %}
+              <div class="row g-3">
+                {% for p in sin_actividad %}
+                  <div class="col-12 col-md-6 col-xl-3">
+                    <div class="est-inactivo est-fila h-100" data-usuario="{{ p.pk }}">
+                      {% include 'pages/ranking/partials/persona_tabla.html' %}
+                      <small class="d-block text-muted mt-2">{{ p.rol }}</small>
+                      {% if p.entro %}
+                        <span class="badge bg-label-warning mt-2"><i class="bx bx-log-in me-1"></i>Entró, pero no trabajó</span>
+                      {% else %}
+                        <span class="badge bg-label-danger mt-2"><i class="bx bx-x-circle me-1"></i>No entró en el mes</span>
+                      {% endif %}
+                      <small class="d-block text-muted mt-1">
+                        Último acceso: {% if p.ultimo_acceso %}{{ p.ultimo_acceso|date:"d/m/Y H:i" }}{% else %}nunca{% endif %}
+                      </small>
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-muted mb-0">Todos los usuarios trabajaron en Orbith este mes.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {# ===================== Cierres ===================== #}
+      <div class="tab-pane fade" id="est-cierres" role="tabpanel">
+        <div class="card">
+          <div class="card-body">
+            {% if unidades %}
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <i class="bx bx-error-circle fs-4 text-warning"></i>
+                <strong>Unidades sin cierre en plazo en {{ mes.etiqueta }}</strong>
+              </div>
+              <ul class="list-unstyled mb-0 est-unidades">
+                {% for u in unidades %}
+                  <li>
+                    <span><strong>{{ u.unidad.descripcion }}</strong> · {{ u.estado }}</span>
+                    {% if u.puede_recordar %}
+                      <form method="post" action="{% url 'ranking_recordar_cierre' u.unidad.pk %}" class="est-form-recordar"
+                            data-unidad="{{ u.unidad.descripcion }}">
+                        {% csrf_token %}
+                        <input type="hidden" name="mes" value="{{ mes.clave }}">
+                        <button type="submit" class="btn btn-sm btn-outline-dark"><i class="bx bx-bell me-1"></i>Enviar recordatorio</button>
+                      </form>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            {% elif mes.en_curso %}
+              <p class="text-muted mb-0"><i class="bx bx-check-circle text-success me-1"></i>
+                Ninguna unidad incumplió el plazo de {{ mes.etiqueta }}. Las del mes en curso se revisan cuando termina el plazo de declaración.</p>
+            {% else %}
+              <p class="text-muted mb-0"><i class="bx bx-check-circle text-success me-1"></i>
+                Todas las unidades declararon el cierre de {{ mes.etiqueta }} en plazo.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# --- Panel lateral del usuario --- #}
+<div class="offcanvas offcanvas-end est-panel" tabindex="-1" id="panelUsuario" aria-labelledby="panelUsuarioTitulo">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title" id="panelUsuarioTitulo">Detalle del usuario</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+  </div>
+  <div class="offcanvas-body" id="panelUsuarioCuerpo"></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const urlDetalle = "{% url 'ranking_detalle_usuario' 0 %}";
+  const mes = "{{ mes.clave }}";
+  const panel = document.getElementById('panelUsuario');
+  const cuerpo = document.getElementById('panelUsuarioCuerpo');
+
+  // Clic en cualquier usuario (ranking, uso o sin actividad): abre su panel.
+  document.addEventListener('click', function (e) {
+    const fila = e.target.closest('.est-fila');
+    if (!fila || e.target.closest('form, a, button')) return;
+    cuerpo.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm me-2"></div>Cargando...</div>';
+    bootstrap.Offcanvas.getOrCreateInstance(panel).show();
+    const url = urlDetalle.replace('/0/', '/' + fila.dataset.usuario + '/') + '?mes=' + encodeURIComponent(mes);
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) { cuerpo.innerHTML = html; })
+      .catch(function () { cuerpo.innerHTML = '<p class="text-center text-muted">No se pudo cargar el detalle.</p>'; });
+  });
+
+  // Ordenar las tablas de uso por la columna pulsada (números o nombre).
+  document.querySelectorAll('.est-uso .est-ordenable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      const tabla = th.closest('table');
+      const cuerpoTabla = tabla.querySelector('tbody');
+      const indice = Number(th.dataset.columna);
+      const ascendente = th.dataset.orden !== 'asc';
+      tabla.querySelectorAll('.est-ordenable').forEach(function (o) { delete o.dataset.orden; });
+      th.dataset.orden = ascendente ? 'asc' : 'desc';
+      const filas = Array.from(cuerpoTabla.querySelectorAll('tr.est-fila'));
+      filas.sort(function (a, b) {
+        const va = a.children[indice].dataset.valor, vb = b.children[indice].dataset.valor;
+        const na = Number(va), nb = Number(vb);
+        const comparacion = (!isNaN(na) && !isNaN(nb)) ? na - nb : va.localeCompare(vb, 'es');
+        return ascendente ? comparacion : -comparacion;
+      });
+      filas.forEach(function (f) { cuerpoTabla.appendChild(f); });
+    });
+  });
+
+  // Buscar por nombre en las tablas de uso.
+  const buscador = document.getElementById('buscarUso');
+  if (buscador) {
+    buscador.addEventListener('input', function () {
+      const texto = buscador.value.trim().toLowerCase();
+      document.querySelectorAll('.est-uso tr.est-fila').forEach(function (f) {
+        f.style.display = !texto || f.dataset.nombre.includes(texto) ? '' : 'none';
+      });
+    });
+  }
+
+  // Recordar la pestaña y el rol elegidos (solo en este navegador). Si el
+  // almacenamiento no está disponible (modo privado), se abre por defecto.
+  const CLAVE = 'orbith_estadisticas_uso';
+  function leer() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
+  function guardar(datos) { try { localStorage.setItem(CLAVE, JSON.stringify(Object.assign(leer(), datos))); } catch (e) {} }
+  const recordado = leer();
+  if (recordado.pestana) {
+    const boton = document.querySelector('[data-est-pestana="' + recordado.pestana + '"]');
+    if (boton) bootstrap.Tab.getOrCreateInstance(boton).show();
+  }
+  if (recordado.rol) {
+    document.querySelectorAll('[data-est-rol="' + recordado.rol + '"]').forEach(function (b) {
+      bootstrap.Tab.getOrCreateInstance(b).show();
+    });
+  }
+  document.querySelectorAll('[data-est-pestana]').forEach(function (b) {
+    b.addEventListener('shown.bs.tab', function () { guardar({ pestana: b.dataset.estPestana }); });
+  });
+  // Un mismo rol en Ranking y en Uso: al cambiarlo en uno, cambia también en el otro.
+  document.querySelectorAll('[data-est-rol]').forEach(function (b) {
+    b.addEventListener('shown.bs.tab', function () {
+      guardar({ rol: b.dataset.estRol });
+      document.querySelectorAll('[data-est-rol="' + b.dataset.estRol + '"]:not(.active)').forEach(function (otro) {
+        bootstrap.Tab.getOrCreateInstance(otro).show();
+      });
+    });
+  });
+
+  // "Enviar recordatorio": confirmación antes de avisar a la unidad.
+  document.querySelectorAll('.est-form-recordar').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (form.dataset.confirmado) return;
+      e.preventDefault();
+      const enviar = function () { form.dataset.confirmado = '1'; form.submit(); };
+      const texto = 'Se avisará a su moderador y a los administradores de que «' + form.dataset.unidad +
+                    '» no ha declarado el cierre de {{ mes.etiqueta }}.';
+      if (typeof Swal === 'undefined') { if (window.confirm(texto)) enviar(); return; }
+      Swal.fire({ title: '¿Enviar recordatorio?', text: texto, icon: 'question', showCancelButton: true,
+                  confirmButtonText: 'Sí, enviar', cancelButtonText: 'Cancelar' })
+        .then(function (r) { if (r.isConfirmed) enviar(); });
+    });
+  });
+})();
+</script>
+{% endblock %}

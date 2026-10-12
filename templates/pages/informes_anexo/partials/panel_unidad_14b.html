@@ -1,0 +1,37 @@
+{% comment %} El contenido de UNA pestaña del 14-B, servido por HTMX.
+
+   Una sección por hoja del libro: primero los departamentos y detrás las tres
+   especiales —Adiestrados, Contratados y Fuera de plantilla—, que agrupan a
+   quien cobra sin ocupar una plaza aprobada. Nadie sale dos veces. {% endcomment %}
+
+<div class="anx-tree-padre">
+    <div>
+        <span class="anx-meta-label">Unidad Organizativa</span>
+        <h2 class="h6 mb-0 fw-black">{{ unidad.descripcion }}</h2>
+    </div>
+    <span class="small">{{ hojas|length }} hoja{{ hojas|length|pluralize }} en el libro</span>
+</div>
+
+{% for hoja in hojas %}
+    {% if hoja.departamento %}
+        <div class="anx-tree-depto">
+            <i class="bx bx-folder-open me-1"></i>{{ hoja.nombre }}
+            <span class="anx-tab-cifra">{{ hoja.filas|length }} plazas</span>
+        </div>
+    {% else %}
+        {% comment %} Las tres especiales se marcan en naranja: no son un departamento
+           y su gente no ocupa plaza aprobada. {% endcomment %}
+        <div class="anx-aviso-fuera">
+            <span><i class="bx bx-error-circle me-1"></i>{{ hoja.nombre }}</span>
+            <span class="small">No ocupan plaza de la plantilla aprobada</span>
+        </div>
+    {% endif %}
+    <div class="orb-tabla-scroll orb-tabla-alto">
+        {% include "pages/informes_anexo/partials/tabla_14b.html" with filas=hoja.filas %}
+    </div>
+{% empty %}
+    <div class="text-center text-muted py-5">
+        <i class="bx bx-folder-open display-6 d-block mb-2"></i>
+        Esta unidad no tiene plazas registradas.
+    </div>
+{% endfor %}

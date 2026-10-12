@@ -1,0 +1,125 @@
+{% comment %}
+  Índice de Reglas: qué comprueba cada código, por qué suele fallar, qué impacto
+  tiene y cómo se corrige. Los textos vienen de las propias reglas
+  (`subsanacion.views.panel_reglas`). Arriba, la ayuda de la búsqueda con prefijos.
+  El filtro de esta pestaña trabaja en el navegador: no hace peticiones.
+{% endcomment %}
+
+<div class="sub-panel mb-3">
+  <div class="sub-panel-head sub-color-indigo">
+    <span class="sub-icono-chip"><i class="bi bi-search"></i></span>
+    <h6 class="sub-panel-title">Cómo buscar</h6>
+  </div>
+  <div class="p-3">
+    <p class="small mb-2">
+      En el buscador de Hallazgos (y en los de Contratos, Aspirantes y Bajas) se puede
+      escribir un <strong>prefijo</strong> para buscar solo en un dato concreto:
+    </p>
+    <div class="table-responsive">
+      <table class="table table-sm mb-2" style="font-size: .85rem;">
+        <thead><tr><th>Prefijo</th><th>Busca en</th><th>Ejemplo</th></tr></thead>
+        <tbody>
+          {% for clave, texto, ejemplo in prefijos %}
+            <tr><td class="fw-bold">{{ clave }}:</td><td>{{ texto }}</td><td><code>{{ ejemplo }}</code></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <ul class="small text-muted mb-0 ps-3">
+      <li>Se pueden combinar y tienen que cumplirse todos: <code>N:Juan U:Florida</code>.</li>
+      <li>Cada prefijo abarca todo lo que viene detrás hasta el siguiente prefijo.</li>
+      <li>Lo escrito antes del primer prefijo se busca como siempre, en todos los datos.</li>
+      <li>Da igual mayúsculas, minúsculas o acentos: «perez» encuentra «Pérez».</li>
+      <li><code>COD:</code> solo existe en Subsanación; <code>E:</code> y <code>CA:</code> no se aplican en Aspirantes (todavía no tienen contrato).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="sub-panel mb-3">
+  <div class="sub-panel-head sub-color-indigo">
+    <span class="sub-icono-chip"><i class="bi bi-journal-text"></i></span>
+    <h6 class="sub-panel-title">Índice de Reglas</h6>
+    <span class="badge bg-label-secondary ms-auto" id="contadorReglas">{{ total }} regla{{ total|pluralize }}</span>
+  </div>
+  <div class="p-3 pb-2">
+    <div class="input-group input-group-sm">
+      <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+      <input type="search" class="form-control" id="filtroReglas"
+             placeholder="Filtrar por código, nombre o texto (CTR, CTR-011, misión…)">
+    </div>
+  </div>
+</div>
+
+{% for categoria in categorias %}
+<div class="sub-panel mb-3 categoria-reglas">
+  <div class="sub-panel-head">
+    <span class="sub-icono-chip"><i class="bi {{ categoria.icono }}"></i></span>
+    <h6 class="sub-panel-title">{{ categoria.etiqueta }}</h6>
+    <span class="badge bg-label-secondary ms-auto contador-categoria">{{ categoria.reglas|length }}</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for regla in categoria.reglas %}
+    <details class="list-group-item regla-indice"
+             data-texto="{{ regla.codigo }} {{ regla.nombre }} {{ regla.descripcion }} {{ regla.causa_probable }} {{ regla.impacto }} {{ regla.solucion }}">
+      <summary class="d-flex flex-wrap align-items-center gap-2" style="cursor: pointer;">
+        <code class="fw-bold">{{ regla.codigo }}</code>
+        <span class="flex-grow-1">{{ regla.nombre }}</span>
+        <span class="sub-severidad sub-color-{{ regla.color }}">
+          <i class="bi {{ regla.icono_criticidad }}"></i>{{ regla.criticidad }}
+        </span>
+        {% if regla.abiertos %}
+          <a class="badge bg-label-danger text-decoration-none"
+             href="{% url 'subsanacion:panel_hallazgos' %}?q=COD:{{ regla.codigo }}{% if regla.es_extra %}&modulo={{ modulo_extras }}{% endif %}"
+             title="Ver sus hallazgos abiertos">
+            {{ regla.abiertos }} abierto{{ regla.abiertos|pluralize }} <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+        {% else %}
+          <span class="badge bg-label-success">Sin hallazgos</span>
+        {% endif %}
+      </summary>
+      <dl class="row small mt-2 mb-1">
+        <dt class="col-sm-3">Qué comprueba</dt><dd class="col-sm-9">{{ regla.descripcion }}</dd>
+        <dt class="col-sm-3">Causa probable</dt><dd class="col-sm-9">{{ regla.causa_probable }}</dd>
+        <dt class="col-sm-3">Impacto</dt><dd class="col-sm-9">{{ regla.impacto }}</dd>
+        <dt class="col-sm-3">Cómo se corrige</dt><dd class="col-sm-9 mb-0">{{ regla.solucion }}</dd>
+      </dl>
+    </details>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<div class="sub-vacio d-none" id="reglasSinCoincidencias">Ninguna regla coincide con el filtro.</div>
+
+<script>
+(function () {
+  const entrada = document.getElementById('filtroReglas');
+  if (!entrada) return;
+  const reglas = Array.from(document.querySelectorAll('.regla-indice'));
+  const categorias = Array.from(document.querySelectorAll('.categoria-reglas'));
+  const contador = document.getElementById('contadorReglas');
+  const vacio = document.getElementById('reglasSinCoincidencias');
+  // Sin acentos ni mayúsculas, igual que la búsqueda del servidor.
+  const normal = function (t) {
+    return (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  };
+  reglas.forEach(function (r) { r.dataset.normal = normal(r.dataset.texto); });
+
+  entrada.addEventListener('input', function () {
+    const palabras = normal(entrada.value).split(/\s+/).filter(Boolean);
+    let visibles = 0;
+    reglas.forEach(function (r) {
+      const ok = palabras.every(function (p) { return r.dataset.normal.indexOf(p) !== -1; });
+      r.classList.toggle('d-none', !ok);
+      if (ok) visibles++;
+    });
+    categorias.forEach(function (c) {
+      const enCategoria = c.querySelectorAll('.regla-indice:not(.d-none)').length;
+      c.querySelector('.contador-categoria').textContent = enCategoria;
+      c.classList.toggle('d-none', enCategoria === 0);
+    });
+    contador.textContent = visibles + (visibles === 1 ? ' regla' : ' reglas');
+    vacio.classList.toggle('d-none', visibles !== 0);
+  });
+})();
+</script>

@@ -960,6 +960,83 @@ class MisionSinPais(ReglaContratos):
         return [self._hallazgo(str(contrato.pk), 'Misión sin país')]
 
 
+def _datos_de_mision_faltantes(mision, dias, importe):
+    """Pura: `[(campo, nombre)]` de los datos de la misión que faltan.
+
+    El 0 cuenta como falta: es un valor válido para el modelo, pero nadie cumple
+    una misión de 0 días cobrando 0. Vacío y 0 se reclaman igual.
+    """
+    if not mision:
+        return []
+    faltantes = []
+    if not dias:
+        faltantes.append(('mision_dias', 'días'))
+    if not importe:
+        faltantes.append(('mision_importe', 'importe'))
+    return faltantes
+
+
+class MisionSinDiasOImporte(ReglaContratos):
+    codigo = 'CTR-021'
+    nombre = 'Contrato de misión sin días o importe'
+    criticidad = CRITICIDAD_MEDIA
+    # Evaluable en caliente: O(1) — solo campos propios de la instancia, sin FK.
+    evaluable_en_caliente = True
+
+    descripcion = (
+        'Comprueba que un contrato marcado como misión tenga registrados los días '
+        'que dura y su importe. Un valor en 0 también se reclama.')
+    causa_probable = (
+        'Se marcó «Misión» al crear el contrato pero la duración o el importe '
+        'todavía no estaban confirmados, o se registraron en el expediente físico '
+        'sin trasladarlos al sistema.')
+    impacto = (
+        'Sin los días y el importe, el informe de Misiones Internacionales sale '
+        'incompleto y su total no refleja lo que realmente se paga. No es '
+        'obligatorio a nivel de formulario porque el dato puede llegar después del '
+        'alta.')
+    solucion = 'Abra el contrato y complete los días y el importe de la misión.'
+
+    def _hallazgo(self, object_id, faltantes, titulo, unidad_organizativa_id=None):
+        nombres = ' ni '.join(nombre for _, nombre in faltantes)
+        return HallazgoDetectado(
+            object_id=object_id,
+            titulo=titulo,
+            detalle=f'El contrato es de misión, pero no tiene registrado {nombres}.',
+            datos={'faltantes': [campo for campo, _ in faltantes]},
+            unidad_organizativa_id=unidad_organizativa_id,
+            # Si faltan los dos, se apunta al primero: basta para llevar al
+            # usuario a la fila de la misión en el formulario.
+            campo_formulario=faltantes[0][0],
+        )
+
+    def ejecutar(self, contexto):
+        columnas = self.COLUMNAS_BASE + ('mision_dias', 'mision_importe')
+        filas = (self.base_queryset()
+                 .filter(mision=True)
+                 .filter(Q(mision_dias__isnull=True) | Q(mision_dias=0)
+                         | Q(mision_importe__isnull=True) | Q(mision_importe=0))
+                 .values(*columnas)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            faltantes = _datos_de_mision_faltantes(
+                True, fila['mision_dias'], fila['mision_importe'])
+            nombres = ' ni '.join(nombre for _, nombre in faltantes)
+            yield self._hallazgo(
+                str(fila['id']), faltantes,
+                self.titulo_de(fila, f'misión sin {nombres}'),
+                self.unidad_de(fila))
+
+    def evaluar_instancia(self, contrato):
+        faltantes = _datos_de_mision_faltantes(
+            contrato.mision, contrato.mision_dias, contrato.mision_importe)
+        if not faltantes:
+            return None
+        nombres = ' ni '.join(nombre for _, nombre in faltantes)
+        return [self._hallazgo(str(contrato.pk), faltantes, f'Misión sin {nombres}')]
+
+
 def _c_formal_sin_res(c_formal, c_formal_res):
     """Pura: la usan ejecutar() y evaluar_instancia() sin repetir la condición."""
     return bool(c_formal) and not (c_formal_res or '').strip()
@@ -1323,3 +1400,71 @@ class ImporteDistintoDelNomenclador(ReglaContratos):
                     unidad_organizativa_id=self.unidad_de(fila),
                     campo_formulario=campo,
                 )
+
+
+class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
+    """Un contrato que ocupa plaza sobre un cargo que no está en la plantilla.
+
+    No debería poder existir: lo rechazan el JavaScript de los tres modales,
+    `CAltaForm.clean()` y, desde ahora, `CAlta.clean()`. Esta regla existe por lo
+    que entró ANTES de esos cierres, y por lo que pueda entrar por una puerta que
+    no pase por el modelo —una carga masiva con `bulk_create`, una migración de
+    datos, un `update()` sobre `cargo` o `tipo`—.
+
+    Es Crítica por el mismo motivo que un contrato vencido: alguien cobra
+    ocupando una plaza que el organismo no aprobó, y eso descuadra el Anexo 14 y
+    el 14-A contra la plantilla real que se entrega.
+    """
+
+    codigo = 'CTR-020'
+    nombre = 'Contrato que ocupa plaza sobre un cargo fuera de la plantilla aprobada'
+    criticidad = CRITICIDAD_CRITICA
+
+    descripcion = (
+        'Busca los contratos cuyo tipo ocupa plaza —hoy, Indeterminado— asignados a '
+        'un cargo marcado como fuera de la plantilla aprobada.')
+    causa_probable = (
+        'El contrato se creó antes de que la comprobación existiera, o se cargó por '
+        'una vía que no pasa por el formulario (el admin, una importación o un '
+        'script). También ocurre si el cargo se sacó de la plantilla DESPUÉS de '
+        'contratar a alguien en él.')
+    impacto = (
+        'El trabajador ocupa una plaza que el organismo no aprobó. El Anexo 14 y el '
+        '14-A cuentan esa plaza fuera de la plantilla oficial mientras la nómina la '
+        'paga como si estuviera dentro, así que los dos documentos dejan de cuadrar '
+        'con la realidad.')
+    solucion = (
+        'Hay dos salidas y la correcta depende del caso, así que la decide Capital '
+        'Humano: si la plaza NO debía existir, cambie el tipo de contrato a uno que '
+        'no ocupe plaza (Determinado o Adiestrado). Si la plaza SÍ hace falta, '
+        'apruebe el cargo en la plantilla desde el Gestor de Plantilla. Aprobar un '
+        'cargo solo para silenciar el aviso es la salida equivocada.')
+
+    def ejecutar(self, contexto):
+        columnas = self.COLUMNAS_BASE + (
+            'tipo__descripcion', 'cargo__ncargo__descripcion',
+            'cargo__departamento__descripcion')
+
+        filas = (self.base_queryset()
+                 .filter(tipo__ocupa_plaza=True, cargo__en_plantilla=False)
+                 .values(*columnas)
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            cargo = fila.get('cargo__ncargo__descripcion') or '—'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'contrato fijo en «{cargo}», fuera de plantilla'),
+                detalle=(
+                    f'El contrato es de tipo «{fila.get("tipo__descripcion") or "—"}», '
+                    f'que ocupa plaza, pero el cargo «{cargo}» está marcado como fuera '
+                    f'de la plantilla aprobada.'),
+                datos={
+                    'tipo_de_contrato': fila.get('tipo__descripcion') or '—',
+                    'cargo': cargo,
+                    'departamento': fila.get('cargo__departamento__descripcion') or '—',
+                },
+                unidad_organizativa_id=self.unidad_de(fila),
+                campo_formulario='tipo',
+            )
+

@@ -1,0 +1,60 @@
+{% comment %} El contenido de UNA pestaña del Anexo 14, servido por HTMX.
+
+   Dentro de la unidad, las subunidades van SEGUIDAS, una tras otra, cada una con
+   su rótulo y sus departamentos debajo. No anidadas ni plegables: el informe se
+   lee de arriba abajo como el papel que imita.
+
+   Una unidad sin subunidades —una UEB— no lleva rótulo intermedio: sus
+   departamentos cuelgan directos de la cabecera de la unidad. Lo marca
+   `views._construir_hijas()` con `es_la_propia_unidad`, porque repetir ahí el
+   nombre de la unidad la haría parecer subunidad de sí misma. {% endcomment %}
+{% load informe_inteligente_extras %}
+
+<div class="anx-tree-padre">
+    <div>
+        <span class="anx-meta-label">Unidad Organizativa</span>
+        <h2 class="h6 mb-0 fw-black">{{ unidad.descripcion }}</h2>
+    </div>
+    <span class="small">{{ kpis.total_cargos }} plaza{{ kpis.total_cargos|pluralize }} aprobada{{ kpis.total_cargos|pluralize }}</span>
+</div>
+
+{% for seccion in secciones %}
+    {% if not seccion.unidad.es_la_propia_unidad %}
+        <div class="anx-tree-hija">
+            <span><i class="bx bx-sitemap me-1"></i>{{ seccion.unidad.descripcion }}</span>
+            <span class="anx-tab-cifra">{{ seccion.total }}</span>
+        </div>
+    {% endif %}
+
+    {% for depto in seccion.departamentos %}
+        <div class="anx-tree-depto">
+            <i class="bx bx-folder-open me-1"></i>{{ depto.descripcion }}
+            <span class="anx-tab-cifra">{{ depto.cargos_filtrados|length }} cargos</span>
+        </div>
+        {% include "pages/informes_anexo/partials/tabla_cargos.html" with cargos=depto.cargos_filtrados %}
+    {% endfor %}
+
+    {% comment %} Los cargos fuera de plantilla de ESTA subunidad, justo debajo de los
+       suyos. No suman en ninguna de las cifras de arriba. {% endcomment %}
+    {% if seccion.departamentos_fuera %}
+        <div class="anx-aviso-fuera">
+            <span>
+                <i class="bx bx-error-circle me-1"></i>Fuera de la plantilla aprobada
+                <span class="anx-tab-cifra">{{ seccion.total_fuera }} plazas</span>
+            </span>
+            <span class="small">No suman en las cifras oficiales</span>
+        </div>
+        {% for depto in seccion.departamentos_fuera %}
+            <div class="anx-tree-depto">
+                <i class="bx bx-folder-open me-1"></i>{{ depto.descripcion }}
+                <span class="anx-tab-cifra">{{ depto.cargos_filtrados|length }} cargos</span>
+            </div>
+            {% include "pages/informes_anexo/partials/tabla_cargos.html" with cargos=depto.cargos_filtrados %}
+        {% endfor %}
+    {% endif %}
+{% empty %}
+    <div class="text-center text-muted py-5">
+        <i class="bx bx-folder-open display-6 d-block mb-2"></i>
+        Esta unidad no tiene cargos que coincidan con los filtros aplicados.
+    </div>
+{% endfor %}

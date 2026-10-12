@@ -199,7 +199,13 @@ def _respuesta_enviada(request, mensaje='Solicitud enviada. Un Administrador la 
     `success_url` — el mismo contrato que ya usa `ContratoUpdateView.form_valid()` para el
     Administrador. Sin `success_url` explícito el JS cae a su propio valor por defecto
     (`list_contrato`), así que no hace falta más para que el modal se cierre y navegue.
+
+    Solo se llama tras crear la solicitud de verdad, así que también es el sitio
+    de la Guía de Orbith para las solicitudes enviadas desde un formulario.
     """
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primera_solicitud_enviada')
+
     if request.headers.get('HX-Request'):
         respuesta = HttpResponse(status=204)
         respuesta['HX-Trigger'] = json.dumps({

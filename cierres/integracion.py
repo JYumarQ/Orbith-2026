@@ -25,15 +25,15 @@ from .permisos import es_principal, puede_declarar
 # más que azul (esperando su turno), que pesa más que verde (todo en orden).
 _PRIORIDAD_COLOR = {COLOR_ROJO: 0, COLOR_NARANJA: 1, COLOR_AZUL: 2, COLOR_VERDE: 3}
 
-# Clase de Bootstrap lista para pintar, mismo criterio que
-# `EstadoCierreUnidad.color_badge`: la plantilla no decide colores, solo pinta
-# la clase que ya viene resuelta.
+# Clase de la insignia lista para pintar, mismo criterio y la misma paleta que
+# `EstadoCierreUnidad.color_badge`: la plantilla no decide colores, solo pinta la
+# clase que ya viene resuelta. Son las `inf-estado--*` de `informes-rrhh.css`.
 _CLASE_POR_COLOR = {
-    COLOR_VERDE: 'bg-label-success',
-    COLOR_AZUL: 'bg-label-info',
-    COLOR_NARANJA: 'bg-label-warning',
-    COLOR_ROJO: 'bg-label-danger',
-    COLOR_SIN_HIJAS: 'bg-label-secondary',
+    COLOR_VERDE: 'inf-estado inf-estado--ok',
+    COLOR_AZUL: 'inf-estado inf-estado--espera',
+    COLOR_NARANJA: 'inf-estado inf-estado--aviso',
+    COLOR_ROJO: 'inf-estado inf-estado--critico',
+    COLOR_SIN_HIJAS: 'inf-estado inf-estado--neutro',
 }
 
 # Para el `title`/tooltip del badge. En un padre no se refiere a SU propia

@@ -69,7 +69,8 @@
         </div>
     </div>
 
-    <div class="inf-tarjeta">
+    {# Cabecera fija y justa en la pantalla, en cada pestaña (static/css/orbith-tablas.css). #}
+    <div class="inf-tarjeta orb-tabla-card">
         <div class="inf-tarjeta-cabeza pb-0">
             <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item">
@@ -104,8 +105,8 @@
 
             {# ------------------------------- Altas ----------------------------------- #}
             <div class="tab-pane fade" id="hoja-altas">
-                <div class="table-responsive text-nowrap">
-                    <table class="inf-tabla">
+                <div class="orb-tabla-scroll text-nowrap">
+                    <table class="inf-tabla orb-tabla-fija">
                         <thead>
                             <tr>
                                 <th style="width: 40px;">No</th>
@@ -163,8 +164,8 @@
 
             {# -------------------------------- Bajas ---------------------------------- #}
             <div class="tab-pane fade" id="hoja-bajas">
-                <div class="table-responsive text-nowrap">
-                    <table class="inf-tabla">
+                <div class="orb-tabla-scroll text-nowrap">
+                    <table class="inf-tabla orb-tabla-fija">
                         <thead>
                             <tr>
                                 <th style="width: 40px;">No</th>

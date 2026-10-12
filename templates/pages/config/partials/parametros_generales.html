@@ -411,6 +411,41 @@
                     </div>
                 </div>
 
+                {% comment %}
+                  Conservación de la Auditoría. Apagado = «Nunca» (no se borra nada).
+                  Encendido, al abrir la pantalla de Auditoría se eliminan los eventos
+                  más antiguos que el plazo (ver `auditoria/limpieza.py`).
+                {% endcomment %}
+                <div class="col-12">
+                    <div class="modern-card-xl">
+                        <div class="card-subtitle">
+                            <i class="fas fa-history text-secondary"></i> Conservación de la Auditoría
+                        </div>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-12 col-md-6">
+                                <div class="form-check form-switch mb-1">
+                                    {{ form.auditoria_borrar_antigua }}
+                                    <label class="form-check-label" for="id_auditoria_borrar_antigua">{{ form.auditoria_borrar_antigua.label }}</label>
+                                </div>
+                                <p class="small text-muted mb-0">Apagado: la auditoría se conserva siempre (Nunca se borra).</p>
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <label class="modern-label">{{ form.auditoria_anios_conservar.label }}</label>
+                                <div class="modern-input-wrapper">
+                                    <div class="icon-container"><i class="fas fa-calendar-alt"></i></div>
+                                    {{ form.auditoria_anios_conservar }}
+                                </div>
+                                {% for error in form.auditoria_anios_conservar.errors %}
+                                    <div class="text-danger small mt-1">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-12 col-md-3">
+                                <p class="small text-muted mb-0">Entre 2 y 99 años. Lo más antiguo se elimina al abrir la pantalla de Auditoría y no se puede recuperar.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div class="mt-5 p-4 bg-dark rounded-pill d-flex flex-column flex-md-row align-items-center justify-content-between shadow-lg">
@@ -431,6 +466,20 @@
         </form>
         <script>
           document.addEventListener("DOMContentLoaded", function() {
+              // Conservación de la Auditoría: los años solo se escriben con el
+              // switch encendido. Apagado, el campo se vacía y no se envía.
+              const switchAuditoria = document.getElementById('id_auditoria_borrar_antigua');
+              const aniosAuditoria = document.getElementById('id_auditoria_anios_conservar');
+              if (switchAuditoria && aniosAuditoria) {
+                  const sincronizarAuditoria = function () {
+                      aniosAuditoria.disabled = !switchAuditoria.checked;
+                      aniosAuditoria.required = switchAuditoria.checked;
+                      if (!switchAuditoria.checked) aniosAuditoria.value = '';
+                  };
+                  switchAuditoria.addEventListener('change', sincronizarAuditoria);
+                  sincronizarAuditoria();
+              }
+
               const logoInput = document.getElementById('id_logo');
               const logoPreview = document.getElementById('logo-preview');
               const defaultState = document.getElementById('logo-default-state');

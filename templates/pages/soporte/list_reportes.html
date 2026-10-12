@@ -56,7 +56,8 @@
     </li>
   </ul>
 
-  <div class="card">
+  {# Estilo común de las tablas: static/css/orbith-tablas.css #}
+  <div class="card orb-tabla-card">
     <div class="card-header d-flex align-items-center gap-2">
       {# Igual que en Contratos: deshabilitado hasta que se seleccione una fila. #}
       <div id="reporte-toolbar" class="d-flex gap-2 toolbar-disabled">
@@ -76,8 +77,8 @@
       
     </div>
 
-    <div class="table-responsive text-nowrap">
-      <table class="table table-hover mb-0">
+    <div class="orb-tabla-scroll text-nowrap">
+      <table class="table orb-tabla">
         <thead>
           <tr>
             <th>Fecha</th>
@@ -155,6 +156,7 @@
         </tbody>
       </table>
     </div>
+    {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=reportes querystring=querystring_pagina nombre='reportes' %}
   </div>
 
 </div>

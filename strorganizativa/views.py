@@ -835,6 +835,10 @@ def htmx_load_contratos(request, cargo_id):
     cargo = get_object_or_404(cargos_visibles(request.user), pk=cargo_id)
     contratos = CAlta.objects.filter(cargo=cargo).select_related('aspirante')
 
+    # Guía de Orbith: recorrer la plantilla hasta las personas de un cargo.
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primera_exploracion_plantilla')
+
     q = request.GET.get('q')
     if q:
         contratos = contratos.filter(

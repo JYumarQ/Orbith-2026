@@ -1,0 +1,11 @@
+{% comment %}Avatar (foto o iniciales) y nombre público de `p`. Nunca el nombre de usuario.{% endcomment %}
+<span class="d-inline-flex align-items-center gap-2">
+  {% if p.avatar %}
+    <img src="{{ p.avatar }}" alt="" class="ranking-avatar" loading="lazy">
+  {% elif p.iniciales %}
+    <span class="ranking-avatar ranking-iniciales">{{ p.iniciales }}</span>
+  {% else %}
+    <span class="ranking-avatar ranking-iniciales sin-nombre"><i class="bx bx-user"></i></span>
+  {% endif %}
+  <span class="ranking-nombre text-start">{{ p.nombre }}</span>
+</span>

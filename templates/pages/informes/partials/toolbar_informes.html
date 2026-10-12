@@ -103,9 +103,23 @@
     <div class="card-body p-4 d-flex flex-column flex-xl-row justify-content-between align-items-center gap-4">
         
         <div class="text-center text-xl-start flex-shrink-0">
-            <h4 class="fw-bold mb-1 text-dark" style="letter-spacing: -0.5px;">
-                <span class="text-muted fw-light">Informes /</span>
-                <span class="text-primary">{{ titulo_informe }}</span>
+            <h4 class="fw-bold mb-1 text-dark d-flex align-items-center justify-content-center justify-content-xl-start flex-wrap gap-2" style="letter-spacing: -0.5px;">
+                <span><span class="text-muted fw-light">Informes /</span>
+                <span class="text-primary">{{ titulo_informe }}</span></span>
+                {% comment %} Recorridos guiados de los Informes RRHH (static/js/recorrido_informes_rrhh.js).
+                   Para los tres roles: todos consultan estos informes. {% endcomment %}
+                <span class="dropdown" style="letter-spacing: normal;">
+                    <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoInformesRRHH"
+                            data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+                        <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                    </button>
+                    <ul class="dropdown-menu" style="font-size: .875rem;">
+                        <li><button type="button" class="dropdown-item" data-recorrido="primer_informe_rrhh:informes">
+                            <i class="bx bx-bar-chart-square me-1"></i>Consultar los Informes RRHH</button></li>
+                        <li><button type="button" class="dropdown-item" data-recorrido="exportar_informes_rrhh:informes">
+                            <i class="bx bx-download me-1"></i>Exportar este informe</button></li>
+                    </ul>
+                </span>
             </h4>
 
             {% comment %} Fuente de datos: en tiempo real o contra un cierre mensual. Vive
@@ -175,7 +189,10 @@
                 {% include 'pages/informes/partials/filtro_unidades.html' %}
             </div>
 
-            <div style="flex: 1 1 230px; min-width: 230px; max-width: 320px;">
+            {% comment %} El "?" explica el informe abierto en un globo de texto. Los textos
+               viven en static/js/recorrido_informes_rrhh.js (AYUDA), por su url_name. {% endcomment %}
+            <div class="d-flex align-items-center gap-1" style="flex: 1 1 260px; min-width: 260px; max-width: 350px;">
+                <div class="flex-grow-1" style="min-width: 0;">
                 <select id="selector-informes" class="form-select" title="Elegir informe">
                     <option value="{% url 'informe_economia' %}">Consolidado F. Trabajo</option>
                     <option value="{% url 'informe_trabajadores_ueb' %}">Trabajadores x UEB</option>
@@ -185,6 +202,12 @@
                     <option value="{% url 'informe_motivos_contrato' %}">Contratos Determinados (Motivos)</option>
                     <option value="{% url 'informe_altas_bajas' %}">Altas y Bajas del Mes</option>
                 </select>
+                </div>
+                <button type="button" class="btn btn-icon btn-sm btn-label-info rounded-circle flex-shrink-0" id="btnAyudaInforme"
+                        data-informe="{{ request.resolver_match.url_name }}"
+                        title="¿Qué muestra este informe?" aria-label="¿Qué muestra este informe?">
+                    <i class="bx bx-question-mark"></i>
+                </button>
             </div>
 
             <div class="d-flex gap-2 flex-shrink-0">
@@ -324,3 +347,13 @@ function descargarExcel() {
     else Swal.fire('Aviso', 'La exportación a Excel para este informe está en desarrollo.', 'info');
 }
 </script>
+
+{% load estaticos %}
+<style>
+    /* Globo del botón "?": más ancho que el de Bootstrap, porque explica un informe entero. */
+    .informe-rrhh-popover { max-width: 380px; font-size: .82rem; }
+    .informe-rrhh-popover ul { margin-bottom: .25rem; }
+</style>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_exportar.js' %}"></script>
+<script src="{% estatico 'js/recorrido_informes_rrhh.js' %}"></script>

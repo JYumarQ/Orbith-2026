@@ -1,0 +1,91 @@
+{% comment %} El selector de unidades y las pestañas. Lo comparten el Anexo 14 y el 14-A.
+
+   Dos mandos, cada uno con su trabajo y sin pisarse:
+
+     * el SELECTOR decide sobre qué unidades va el informe;
+     * las PESTAÑAS deciden cuál de ellas se está mirando.
+
+   El selector es el control de fichas de `base/partials/selector_unidades.html`,
+   el mismo del Dashboard, Informes RRHH, Informe Inteligente, Contratos,
+   Pre-Nómina y Subsanación. Su `<select multiple>` oculto es la fuente de verdad
+   y viaja en el GET, así que el servidor recibe lo mismo que recibiría de un
+   formulario normal.
+
+   Nada marcado significa TODO el alcance del usuario, y por eso el texto de la
+   caja vacía cambia con el rol: «Toda la Empresa» para el Administrador y
+   «Todas mis unidades» para el Moderador. Lo decide
+   `views._marcador_de_unidades()`.
+
+   Las pestañas de unidad se cargan al pulsarlas (`hx-trigger="click once"`), no
+   al abrir la pantalla. La de Resumen sí viene con la página: es la que se mira
+   primero y la que da sentido a las demás.
+
+   PARÁMETROS
+   ----------
+     url_panel   Nombre de la ruta que sirve el contenido de una pestaña.
+     titulo_res  Qué dice la pestaña de Resumen en este informe.
+{% endcomment %}
+
+<div class="anx-panel anx-panel--desbordable anx-no-print">
+    <div class="p-3 pb-2">
+        <label class="anx-meta-label d-block mb-1">
+            <i class="bx bx-sitemap me-1"></i>Unidades Organizativas del informe
+        </label>
+        {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidades_anexo' campo=campo_unidades unidades=unidades_selector seleccionadas=unidades_marcadas marcador=marcador_unidades clase_extra='chip-multiselect--ancho' %}
+    </div>
+
+    <ul class="nav nav-tabs anx-tabs px-3" role="tablist">
+        {% comment %} El 14-B no lleva Resumen: ese conteo es el del 14-A y en un
+           registro de trabajadores no dice gran cosa. {% endcomment %}
+        {% if not sin_resumen %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" data-bs-toggle="tab"
+                    data-bs-target="#hoja-resumen" type="button" role="tab">
+                <i class="bx bx-bar-chart-square me-1"></i>{{ titulo_res|default:"Resumen" }}
+                <span class="anx-tab-cifra">{{ resumen.total.total }}</span>
+            </button>
+        </li>
+        {% endif %}
+        {% for u in unidades %}
+            <li class="nav-item" role="presentation">
+                {% comment %} `click once` es lo que hace la carga diferida: HTMX pide el
+                   panel la primera vez que se pulsa la pestaña y no vuelve a pedirlo.
+                   El query string entero viaja con la petición para que los filtros de
+                   cargo del Anexo 14 se apliquen también dentro del panel. {% endcomment %}
+                <button class="nav-link {% if sin_resumen and forloop.first %}active{% endif %}" data-bs-toggle="tab"
+                        data-bs-target="#hoja-u{{ u.pk }}" type="button" role="tab"
+                        hx-get="{% url url_panel u.pk %}?{{ request.GET.urlencode }}"
+                        hx-target="#hoja-u{{ u.pk }}"
+                        hx-swap="innerHTML"
+                        hx-trigger="{% if sin_resumen and forloop.first %}load, {% endif %}click once">
+                    {{ u.descripcion }}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+(function () {
+    /* El control de fichas avisa con `orbith:unidades` AL CERRAR el panel, no en
+       cada clic: con selección múltiple, recargar al marcar la primera unidad
+       impediría marcar la segunda. Aquí se recarga conservando el resto de la URL
+       —los filtros de cargo y los firmantes elegidos— y limpiando el `?padre=`
+       antiguo, que ya no manda desde que el selector admite varias. */
+    document.addEventListener('DOMContentLoaded', function () {
+        var caja = document.getElementById('filtro_unidades_anexo');
+        if (!caja) return;
+
+        caja.addEventListener('orbith:unidades', function (evento) {
+            var params = new URLSearchParams(window.location.search);
+            params.delete('{{ campo_unidades }}');
+            params.delete('padre');
+            (evento.detail.valores || []).forEach(function (valor) {
+                params.append('{{ campo_unidades }}', valor);
+            });
+            var cadena = params.toString();
+            window.location.href = window.location.pathname + (cadena ? '?' + cadena : '');
+        });
+    });
+})();
+</script>

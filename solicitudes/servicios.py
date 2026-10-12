@@ -18,6 +18,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from auditoria.models import AccionAuditoria
+from auditoria.registro_automatico import sin_auditoria_automatica
 from auditoria.servicios import registrar as registrar_auditoria
 from solicitudes import avisos
 from solicitudes.models import AccionSolicitud, EstadoSolicitud, Solicitud
@@ -266,6 +267,9 @@ def cancelar_revision(solicitud, usuario):
 
 
 @transaction.atomic
+# La aprobación ya deja su propio evento, enlazado a la Solicitud y con el
+# antes/después completo: el registro automático lo duplicaría.
+@sin_auditoria_automatica()
 def aprobar(solicitud, usuario, datos=None):
     """Aplica el cambio y marca la solicitud como aprobada.
 

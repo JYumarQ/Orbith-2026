@@ -76,6 +76,9 @@ def crear_reporte(request):
         for imagen in imagenes:
             ImagenReporteProblema.objects.create(reporte=reporte, imagen=imagen)
 
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primer_reporte_problema')
+
     return JsonResponse({
         'exito': True,
         'mensaje': 'Reporte enviado. Gracias por avisar; el administrador lo revisará.',
@@ -93,8 +96,15 @@ def lista_reportes(request):
     if estado and estado != 'TODOS':
         reportes = reportes.filter(estado=estado)
 
+    # Paginación común con enlaces (base/partials/tabla_paginacion_enlaces.html).
+    from django.core.paginator import Paginator
+    from core.paginacion import filas_por_pagina
+    pagina = Paginator(reportes.order_by('-fecha_creado'), filas_por_pagina(request)).get_page(
+        request.GET.get('pagina'))
+
     contexto = {
-        'reportes': reportes,
+        'reportes': pagina,
+        'querystring_pagina': f'&estado={estado}' if estado else '',
         'estado_actual': estado,
         'estados': ReporteProblema.ESTADOS,
         'total_pendientes': ReporteProblema.objects.filter(

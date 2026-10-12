@@ -1,0 +1,72 @@
+{% comment %} Una hoja del Anexo 14-B: las plazas de un departamento con quien las ocupa.
+
+   Cada fila es una PLAZA aprobada, no una persona. Las vacantes llevan su cargo,
+   su categoría, su grupo escala y su rol, y dejan vacío lo que depende del
+   trabajador: la plaza existe aunque nadie esté en ella, y enseñarlas es media
+   razón de ser de un registro de plantilla.
+
+   Las columnas CLA y Nocturnos llevan la TARIFA POR HORA de las tarjetas del
+   contrato, no un importe del mes, y por eso NO suman en el Total: el Total es
+   Escala + Maestría/Doctorado + Años de servicio + Otros.
+
+   Aquí NO se pinta la segunda fila de tarifa horaria que sí lleva el Excel. En
+   papel esa línea acompaña al importe; en pantalla, donde se busca y se ordena,
+   duplicaría cada fila y haría ilegible la tabla. El dato no se pierde: está en
+   el libro exportado. {% endcomment %}
+<table class="inf-tabla table-moderna anx-14b orb-tabla-fija">
+    <thead>
+        <tr>
+            <th class="text-center">No.</th>
+            <th class="text-start">Cargo</th>
+            <th class="text-center">Cat.</th>
+            <th class="text-start">Trabajador</th>
+            <th class="text-center">Sexo</th>
+            <th class="text-center">Carné</th>
+            <th class="text-start">Nivel de preparación</th>
+            <th class="text-center">G. Escala</th>
+            <th class="text-end th-grupo-indigo">Total</th>
+            <th class="text-end">Escala</th>
+            <th class="text-end" title="Tarifa por hora. No suma en el Total.">CLA <small>/h</small></th>
+            <th class="text-end" title="Tarifa por hora de las dos tarjetas. No suma en el Total.">Nocturnos <small>/h</small></th>
+            <th class="text-end">Maest./Doct.</th>
+            <th class="text-end">Años serv.</th>
+            <th class="text-end">Otros</th>
+            <th class="text-center">Rol</th>
+            <th class="text-center">Tridente</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for fila in filas %}
+            <tr class="{% if fila.vacante %}anx-f-vacante{% endif %}">
+                <td class="td-cifra">{{ fila.expediente|default:"—" }}</td>
+                <td class="td-nombre">{{ fila.cargo }}</td>
+                <td class="text-center">
+                    <span class="cat-insignia cat-{{ fila.cat_codigo }}"
+                          title="{{ fila.cat_codigo }}">{{ fila.categoria }}</span>
+                </td>
+                {% if fila.vacante %}
+                    <td class="td-nombre anx-vacante" colspan="4">Plaza vacante</td>
+                {% else %}
+                    <td class="td-nombre">{{ fila.nombre }}</td>
+                    <td class="text-center">{{ fila.sexo }}</td>
+                    <td class="text-center font-monospace">{{ fila.carne }}</td>
+                    <td>{{ fila.formacion|default:"—" }}</td>
+                {% endif %}
+                <td class="text-center font-monospace">{{ fila.grupo_escala }}</td>
+                <td class="td-cifra td-cifra--azul">{% if fila.vacante %}—{% else %}{{ fila.total|floatformat:2 }}{% endif %}</td>
+                <td class="td-cifra">{% if fila.vacante %}—{% else %}{{ fila.escala|floatformat:2 }}{% endif %}</td>
+                {% comment %} Las dos van en CUP/HORA, no en importe del mes: salen de
+                   las tarjetas del contrato. Por eso no se suman al Total. {% endcomment %}
+                <td class="td-cifra" title="Tarifa por hora de la tarjeta CLA">{{ fila.cla|default:"—" }}</td>
+                <td class="td-cifra" title="Tarifa por hora de las dos tarjetas de nocturnidad">{{ fila.nocturnos|default:"—" }}</td>
+                <td class="td-cifra">{% if fila.vacante %}—{% else %}{{ fila.maestria_doctorado|floatformat:2 }}{% endif %}</td>
+                <td class="td-cifra">{% if fila.vacante %}—{% else %}{{ fila.annos_servicio|floatformat:2 }}{% endif %}</td>
+                <td class="td-cifra">{% if fila.vacante %}—{% else %}{{ fila.otros|floatformat:2 }}{% endif %}</td>
+                <td class="text-center">{{ fila.rol|default:"—" }}</td>
+                <td class="text-center">{{ fila.tridente|default:"—" }}</td>
+            </tr>
+        {% empty %}
+            <tr class="fila-vacia"><td colspan="17">Sin plazas registradas.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>

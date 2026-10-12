@@ -21,14 +21,13 @@ from django.views.generic.edit import FormView
 
 
 def _con_progreso(queryset):
-    """Anota el conteo de tareas de la Guía de Orbith completadas por cada
-    usuario, en una sola consulta (evita N+1 al listar). `distinct=True` es
-    una precaución defensiva: no hay otro join que multiplique filas hoy,
-    pero cuesta nada y evita un bug silencioso si `search_usuarios` gana un
-    filtro con join en el futuro.
+    """Añade a cada usuario su avance en la Guía de Orbith (`progreso_total`
+    y `progreso_completadas_count`). Cada rol tiene su propio total de
+    tareas, así que se calcula en `progreso.servicios.anotar_progreso` con
+    dos consultas para toda la tabla, sin N+1. Devuelve una lista.
     """
-    from django.db.models import Count
-    return queryset.annotate(progreso_completadas_count=Count('tareas_guia', distinct=True))
+    from progreso.servicios import anotar_progreso
+    return anotar_progreso(queryset)
 from django.urls import reverse_lazy
 from django.db.models import Q
 from django.contrib.auth import get_user_model, logout, update_session_auth_hash
@@ -44,14 +43,12 @@ class UsuarioListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         # Excluye al usuario con username "superadmin"
-        return _con_progreso(CustomUser.objects.exclude(username='admin')).order_by('username')
+        return _con_progreso(CustomUser.objects.exclude(username='admin').order_by('username'))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CustomUserCreationForm()
         context['configuracion'] = Configuracion.objects.first()
-        from progreso.models import TareaGuia
-        context['progreso_total_catalogo'] = TareaGuia.objects.filter(activo=True).count()
         return context
 
 @login_required
@@ -63,10 +60,12 @@ def search_usuarios(request):
         Q(contrato__aspirante__nombre__icontains=query)|
         Q(contrato__aspirante__papellido__icontains=query)|
         Q(contrato__aspirante__sapellido__icontains=query)
-    ).exclude(username='admin')).order_by('username')
+    ).exclude(username='admin').order_by('username'))
 
-    from progreso.models import TareaGuia
-    contexto = {'usuarios': results, 'progreso_total_catalogo': TareaGuia.objects.filter(activo=True).count()}
+    # Paginación común: las filas por página del usuario (core/paginacion.py).
+    from core.paginacion import paginar
+    pagina = paginar(request, results)
+    contexto = {'usuarios': pagina, 'page_obj': pagina}
     return render(request, 'pages/usuarios/partials/filter_usuarios_list.html', contexto)
 
 User = get_user_model()
@@ -651,6 +650,7 @@ def guardar_preferencias(request):
 
     sidebar = _leer_booleano('sidebar_colapsada')
     animaciones = _leer_booleano('animaciones_activas')
+    distincion = _leer_booleano('mostrar_distincion')
 
     campos = []
     if sidebar is not None:
@@ -659,6 +659,19 @@ def guardar_preferencias(request):
     if animaciones is not None:
         preferencias.animaciones_activas = animaciones
         campos.append('animaciones_activas')
+    if distincion is not None:
+        preferencias.mostrar_distincion = distincion
+        campos.append('mostrar_distincion')
+    if 'filas_por_pagina' in request.POST:
+        from core.paginacion import OPCIONES_FILAS
+        try:
+            filas = int(request.POST.get('filas_por_pagina'))
+        except (TypeError, ValueError):
+            filas = None
+        if filas not in OPCIONES_FILAS:
+            return JsonResponse({'exito': False, 'mensaje': 'Número de filas no válido.'}, status=400)
+        preferencias.filas_por_pagina = filas
+        campos.append('filas_por_pagina')
 
     if not campos:
         return JsonResponse({'exito': False, 'mensaje': 'No se recibió ninguna preferencia.'}, status=400)
@@ -670,6 +683,8 @@ def guardar_preferencias(request):
         'mensaje': 'Preferencias guardadas.',
         'sidebar_colapsada': preferencias.sidebar_colapsada,
         'animaciones_activas': preferencias.animaciones_activas,
+        'mostrar_distincion': preferencias.mostrar_distincion,
+        'filas_por_pagina': preferencias.filas_por_pagina,
     })
 
 # =========================================================================

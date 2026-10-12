@@ -130,7 +130,7 @@
              que también es el nombre de la portada de Pre-Nómina
              (`prenomina/urls.py`), y por eso estando en Pre-Nómina se encendía este
              acordeón. {% endcomment %}
-          <li class="menu-item orb-acordeon-item {% if request.resolver_match.view_name == 'list_usuarios' or request.resolver_match.view_name == 'soporte:lista_reportes' or request.resolver_match.namespace == 'auditoria' %}orb-padre-activo abierto{% endif %}"
+          <li class="menu-item orb-acordeon-item {% if request.resolver_match.view_name == 'list_usuarios' or request.resolver_match.view_name == 'soporte:lista_reportes' or request.resolver_match.namespace == 'auditoria' or request.resolver_match.view_name == 'ranking_estadisticas' %}orb-padre-activo abierto{% endif %}"
               id="menuItemAdministracion">
             <a href="javascript:void(0);" class="menu-link orb-acordeon-toggle" id="menuLinkAdministracion"
                aria-expanded="false" title="Clic para desplegar">
@@ -157,6 +157,11 @@
                    class="orb-acordeon-sublink {% if request.resolver_match.namespace == 'auditoria' %}activo{% endif %}">
                   <i class="bx bx-history"></i><span>Auditoría</span>
                 </a>
+
+                <a href="{% url 'ranking_estadisticas' %}"
+                   class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'ranking_estadisticas' %}activo{% endif %}">
+                  <i class="bx bx-bar-chart-square"></i><span>Estadísticas de uso</span>
+                </a>
               </li>
             </ul>
           </li>
@@ -175,7 +180,7 @@
              cuando estás en uno de sus sub-ítems (Anexo 14, Cierres Mensuales).
              `cierres` no declara `app_name`, por eso se compara el prefijo de la ruta
              con `slice` en vez de `namespace`: '/cierres/' son 9 caracteres. {% endcomment %}
-          <li class="menu-item gestor-plantilla-item orb-acordeon-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.view_name == 'informes_anexo:anexo14' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
+          <li class="menu-item gestor-plantilla-item orb-acordeon-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.namespace == 'informes_anexo' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
             <a href="{% url 'gestor_plantilla' %}" class="menu-link" id="menuLinkGestorPlantilla" title="Clic: abrir · Doble clic: más opciones">
               <i class="menu-icon tf-icons bx bx-sitemap"></i>
               <div data-i18n="Basic">Gestor de Plantilla</div>
@@ -212,14 +217,14 @@
                 </a>
               </li>
               <li class="gestor-plantilla-subitem">
-                <span class="gestor-plantilla-sublink" aria-disabled="true">
-                  <i class="bx bx-file me-1"></i>Anexo 14A <span class="badge bg-label-secondary">Próximamente</span>
-                </span>
+                <a href="{% url 'informes_anexo:anexo14a' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14a' %}activo{% endif %}">
+                  <i class="bx bx-file me-1"></i>Anexo 14A
+                </a>
               </li>
               <li class="gestor-plantilla-subitem">
-                <span class="gestor-plantilla-sublink" aria-disabled="true">
-                  <i class="bx bx-file-blank me-1"></i>Anexo 14B <span class="badge bg-label-secondary">Próximamente</span>
-                </span>
+                <a href="{% url 'informes_anexo:anexo14b' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14b' %}activo{% endif %}">
+                  <i class="bx bx-file-blank me-1"></i>Anexo 14B
+                </a>
               </li>
               {% comment %} Cierres es donde el Moderador declara su plantilla al día y
                  consulta el historial de fotografías. El Observador no participa en el
@@ -459,6 +464,9 @@
                   <span class="fw-semibold d-block text-truncate">
                     {{ user.nombre_completo|default:user.username }}
                   </span>
+                  {# Distinción del Ranking Mensual: solo la medalla, sin texto (decisión de RRHH). #}
+                  {# Se pinta siempre que la tenga; el CSS la oculta si la apagó en Configuración. #}
+                  {% if distincion_ranking %}<i class="bx bxs-medal ranking-{{ distincion_ranking.metal }} distincion-medalla" aria-hidden="true"></i>{% endif %}
                   <small class="text-muted">{{ user.rol_descripcion }}</small>
                 </div>
               </div>
@@ -480,6 +488,12 @@
                   class="badge bg-label-info rounded-pill ms-auto"
                   style="{% if not progreso_sin_ver %}display: none;{% endif %}"
                 >{{ progreso_sin_ver|default:0 }}</span>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item px-3 py-2" data-bs-toggle="modal" data-bs-target="#modalRankingOrbith">
+                <i class="bx bx-trophy me-2"></i>
+                <span class="align-middle">Ranking Mensual Orbith</span>
               </button>
             </li>
             <li>

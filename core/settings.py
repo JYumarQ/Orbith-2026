@@ -40,7 +40,7 @@ INSTALLED_APPS = [
     'bolsa', 'contratos', 'strorganizativa', 'nomencladores',
     'notificaciones', 'dashboard', 'configuracion', 'usuarios', 'auditoria',
     'solicitudes', 'informes',  'informe_inteligente', 'informes_anexo',
-    'soporte', 'subsanacion', 'cierres', 'progreso', 'prenomina',
+    'soporte', 'subsanacion', 'cierres', 'progreso', 'prenomina', 'ranking',
 ]
 
 MIDDLEWARE = [
@@ -66,9 +66,13 @@ MIDDLEWARE = [
     'auditoria.middleware.CurrentUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Después de MessageMiddleware a propósito: ver docstring de
-    # DeteccionExportacionMiddleware (necesita messages.info() disponible).
+    # Recoge los logros de la Guía de la petición y los entrega en una cookie
+    # (ver su docstring). Va ANTES de DeteccionExportacionMiddleware para que
+    # los logros de una exportación también se recojan.
+    'progreso.middleware.LogrosGuiaMiddleware',
     'progreso.middleware.DeteccionExportacionMiddleware',
+    # Ranking Mensual: cierra el mes el día 1 y cuenta las descargas.
+    'ranking.middleware.RankingMiddleware',
     # Al final a propósito: ver docstring de ControlAccesoMiddleware.
     'usuarios.middleware.ControlAccesoMiddleware',
 ]
@@ -97,6 +101,8 @@ TEMPLATES = [
                 # categoría ocupacional. Los usan plantillas de varios módulos,
                 # así que viven en `core` y no en ninguno de ellos.
                 'presentacion': 'core.templatetags.presentacion',
+                # Pie común de las tablas (base/partials/tabla_paginacion.html).
+                'paginacion': 'core.templatetags.paginacion',
             },
         },
     },

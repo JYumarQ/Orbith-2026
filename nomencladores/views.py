@@ -17,6 +17,8 @@ from django.core.paginator import Paginator
 from .models import NFamiliaCargo, NNivelPreparacion, NTipoUnidadOrganizativa, NTipoFamilia, NNocturnidad
 from django.core.exceptions import ValidationError
 from decimal import Decimal, ROUND_HALF_UP
+from auditoria.models import AccionAuditoria
+from auditoria import registro_automatico
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
 ABR_MUNICIPIOS = {
@@ -160,14 +162,45 @@ def cargar_municipios(request):
         })
     
 
-# Agregar estas funciones en views.py
+# --- Auditoría de la escala salarial ---
+# Las tres vistas de abajo borran y vuelven a crear TODAS las filas de `NSalario`
+# del grupo en cada guardado. Fila a fila, una sola edición dejaría decenas de
+# eventos; por eso `NSalario` no está en el registro automático y aquí se audita un
+# único evento por grupo, con la escala completa antes y después.
+
+def _escala_legible(grupo):
+    """`{'Decisorio / Tridente I': '4500.00', 'Salario de cuadro': ...}`."""
+    escala = {}
+    for salario in (NSalario.objects.filter(grupo_escala=grupo)
+                    .select_related('rol', 'tridente')):
+        if not salario.rol_id and not salario.tridente_id:
+            clave = 'Salario de cuadro'
+        else:
+            clave = '%s / %s' % (salario.rol or '—', salario.tridente or '—')
+        escala[clave] = '%.2f' % salario.monto
+    return escala
+
+
+def _auditar_escala(grupo, antes):
+    despues = _escala_legible(grupo)
+    if not antes and not despues:
+        return
+    accion = (AccionAuditoria.CREAR if not antes else
+              AccionAuditoria.ELIMINAR if not despues else AccionAuditoria.MODIFICAR)
+    registro_automatico.registrar(grupo, accion, antes=antes, despues=despues,
+                                  descripcion='Escala salarial')
+
 
 @login_required
 def eliminar_salarios_grupo(request, grupo_id):
     if request.method == "DELETE" or request.method == "POST":
         try:
+            grupo = NGrupoEscala.objects.filter(pk=grupo_id).first()
+            antes = _escala_legible(grupo) if grupo else {}
             # Borrar todos los salarios asociados a este grupo escala
             count, _ = NSalario.objects.filter(grupo_escala_id=grupo_id).delete()
+            if grupo:
+                _auditar_escala(grupo, antes)
             
             if count > 0:
                 return JsonResponse({'success': True, 'message': 'Grupo de salarios eliminado y liberado correctamente.'})
@@ -187,6 +220,7 @@ def editar_salarios_grupo(request, grupo_id):
     
     if request.method == 'POST':
         try:
+            antes = _escala_legible(grupo)
             # Replicamos la misma lógica perfecta de guardado que en la creación
             NSalario.objects.filter(grupo_escala=grupo).delete()
             
@@ -201,7 +235,8 @@ def editar_salarios_grupo(request, grupo_id):
                         parts = key.split('_')
                         if len(parts) == 3: 
                             NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
-                            
+
+            _auditar_escala(grupo, antes)
             messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
             
@@ -274,6 +309,7 @@ def crear_salarios_por_grupo(request):
     if request.method == 'POST':
         grupo_id = request.POST.get('grupo_escala')
         grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
+        antes = _escala_legible(grupo)
         
         NSalario.objects.filter(grupo_escala=grupo).delete()
         
@@ -288,7 +324,8 @@ def crear_salarios_por_grupo(request):
                     parts = key.split('_')
                     if len(parts) == 3:
                         NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
-        
+
+        _auditar_escala(grupo, antes)
         messages.success(request, f"Configuración salarial del Grupo {grupo.nivel} guardada correctamente.")
         return redirect(reverse_lazy('parametros') + '?tab=salario')
     

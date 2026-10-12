@@ -1,0 +1,10 @@
+{% comment %}
+Selector de rol de "Estadísticas de uso": pestañas pequeñas de Bootstrap que muestran la
+tabla de un rol cada vez (#est-<grupo>-A/M/O). Moderadores, por defecto: es el rol con
+más usuarios. El último elegido se recuerda en el navegador (estadisticas_uso.html).
+{% endcomment %}
+<div class="btn-group btn-group-sm nav est-selector-rol" role="tablist" aria-label="Rol">
+  <button type="button" class="btn btn-outline-primary" data-bs-toggle="tab" data-bs-target="#est-{{ grupo }}-A" data-est-rol="A" role="tab">Administradores</button>
+  <button type="button" class="btn btn-outline-primary active" data-bs-toggle="tab" data-bs-target="#est-{{ grupo }}-M" data-est-rol="M" role="tab">Moderadores</button>
+  <button type="button" class="btn btn-outline-primary" data-bs-toggle="tab" data-bs-target="#est-{{ grupo }}-O" data-est-rol="O" role="tab">Observadores</button>
+</div>

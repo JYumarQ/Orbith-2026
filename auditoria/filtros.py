@@ -2,13 +2,15 @@
 
 Espejo de `solicitudes/filtros.py`: mismo helper para parámetros repetidos en la URL,
 mismo criterio de descartar en silencio los valores no reconocidos. A diferencia de
-Solicitudes no hay pestañas (no hay estados que agrupar) ni filtro de módulo/tipo de
-registro todavía: en esta entrega todo evento es `modulo='solicitudes'`.
+Solicitudes no hay pestañas (no hay estados que agrupar). Desde que existe el
+registro automático (`registro_automatico.py`) los eventos vienen de varios módulos,
+así que se puede filtrar por `modulo`.
 """
 
 from django.db.models import Q
 
 from .models import AccionAuditoria, EventoAuditoria
+from .registro_automatico import NOMBRES_DE_MODULO
 
 
 def _lista_de(request, parametro, validos=None, convertir=None):
@@ -36,6 +38,10 @@ def eventos_visibles():
         'usuario', 'unidad', 'content_type', 'solicitud')
 
 
+def nombre_de_modulo(clave):
+    return NOMBRES_DE_MODULO.get(clave) or (clave[:1].upper() + clave[1:])
+
+
 def opciones_de_filtro():
     """Opciones de los desplegables, derivadas de los eventos que existen de verdad."""
     base = eventos_visibles()
@@ -47,7 +53,12 @@ def opciones_de_filtro():
     unidades_presentes = base.exclude(unidad__isnull=True).values_list(
         'unidad', flat=True).distinct()
 
+    modulos_presentes = (base.exclude(modulo='').order_by()
+                         .values_list('modulo', flat=True).distinct())
     return {
+        'modulos': sorted(
+            ((clave, nombre_de_modulo(clave)) for clave in modulos_presentes),
+            key=lambda par: par[1]),
         'usuarios': [
             (persona.pk, persona.get_full_name() or persona.username) for persona in
             CustomUser.objects.filter(pk__in=usuarios_presentes).order_by('username')
@@ -66,6 +77,7 @@ def filtrar_eventos(request):
     usuarios = _lista_de(request, 'usuario', convertir=int)
     acciones = _lista_de(request, 'accion', validos=AccionAuditoria.values)
     unidades = _lista_de(request, 'unidad', convertir=int)
+    modulos = _lista_de(request, 'modulo')
     desde = (request.GET.get('desde') or '').strip()
     hasta = (request.GET.get('hasta') or '').strip()
 
@@ -82,6 +94,8 @@ def filtrar_eventos(request):
         consulta = consulta.filter(accion__in=acciones)
     if unidades:
         consulta = consulta.filter(unidad_id__in=unidades)
+    if modulos:
+        consulta = consulta.filter(modulo__in=modulos)
     if desde:
         try:
             consulta = consulta.filter(fecha__date__gte=desde)
@@ -98,9 +112,11 @@ def filtrar_eventos(request):
         'usuarios_actuales': usuarios,
         'acciones_actuales': acciones,
         'unidades_actuales': unidades,
+        'modulos_actuales': modulos,
         'desde': desde,
         'hasta': hasta,
         'opciones_filtro': opciones_de_filtro(),
-        'hay_filtros': bool(busqueda or usuarios or acciones or unidades or desde or hasta),
+        'hay_filtros': bool(busqueda or usuarios or acciones or unidades or modulos
+                            or desde or hasta),
     }
     return consulta, contexto

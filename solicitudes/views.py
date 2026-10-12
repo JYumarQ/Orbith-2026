@@ -30,7 +30,6 @@ from solicitudes.operaciones import (
 from solicitudes.permisos import (
     AccesoSolicitudesMixin, acceso_solicitudes, es_administrador, solo_admin)
 
-POR_PAGINA_POR_DEFECTO = 10
 
 
 # ----------------------------------------------------------------------
@@ -181,7 +180,7 @@ def _filas_de_comparacion(solicitud, usuario, formulario=None):
     _CAMPOS_POR_SWITCH = {
         'c_formal': ('c_formal_res',),
         'profesional': ('fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg'),
-        'mision': ('pais',),
+        'mision': ('pais', 'mision_dias', 'mision_importe'),
     }
     if formulario is not None:
         for switch, detalles in _CAMPOS_POR_SWITCH.items():
@@ -252,7 +251,6 @@ def lista_solicitudes(request):
         'pestanas': pestanas_con_contadores(request.user),
         'es_admin': es_administrador(request.user),
         'form_alta': SolicitudDesdeTablaForm(),
-        'current_page_size': str(_por_pagina(request)),
     })
     return render(request, 'pages/solicitudes/list_solicitud.html', contexto)
 
@@ -272,17 +270,10 @@ def buscar_solicitudes(request):
         request, 'pages/solicitudes/partials/filter_solicitud_list.html', contexto)
 
 
-def _por_pagina(request):
-    try:
-        valor = int(request.GET.get('per_page', POR_PAGINA_POR_DEFECTO))
-    except (TypeError, ValueError):
-        return POR_PAGINA_POR_DEFECTO
-    return valor if valor in (10, 25, 50) else POR_PAGINA_POR_DEFECTO
-
-
 def _paginar(request, consulta):
-    paginador = Paginator(consulta, _por_pagina(request))
-    pagina = paginador.get_page(request.GET.get('page'))
+    # Paginación común: las filas por página del usuario (core/paginacion.py).
+    from core.paginacion import paginar
+    pagina = paginar(request, consulta)
     pagina.object_list = _anotar_permisos(list(pagina.object_list), request.user)
     return pagina
 
@@ -398,6 +389,8 @@ def crear_solicitud(request):
             except servicios.ErrorDeSolicitud as error:
                 return _repintar_alta(request, cabecera, formulario_operacion,
                                       definicion, str(error))
+            from progreso.servicios import completar_tarea
+            completar_tarea(request.user, 'primera_solicitud_enviada')
             return _respuesta_htmx('Solicitud enviada. Un Administrador la revisará.')
 
     return _repintar_alta(request, cabecera, formulario_operacion, definicion)
@@ -525,6 +518,13 @@ def aprobar_solicitud(request, pk):
         return _repintar_revision(request, solicitud)
 
     messages.success(request, f'Solicitud aprobada: {solicitud.descriptor}')
+    from progreso.servicios import completar_tarea
+    completar_tarea(request.user, 'primera_solicitud_decidida')
+    from ranking.models import Actividad
+    from ranking.servicios import registrar_actividad
+    registrar_actividad(request.user, Actividad.SOLICITUD_DECIDIDA, detalle=solicitud.descriptor)
+    # Al Moderador que la envió le cuenta como "Solicitud aprobada".
+    registrar_actividad(solicitud.solicitante, Actividad.SOLICITUD_APROBADA, detalle=solicitud.descriptor)
     return redirect(_volver_al_listado(request))
 
 
@@ -555,6 +555,11 @@ def rechazar_solicitud(request, pk):
         messages.error(request, str(error))
     else:
         messages.success(request, f'Solicitud rechazada: {solicitud.descriptor}')
+        from progreso.servicios import completar_tarea
+        completar_tarea(request.user, 'primera_solicitud_decidida')
+        from ranking.models import Actividad
+        from ranking.servicios import registrar_actividad
+        registrar_actividad(request.user, Actividad.SOLICITUD_DECIDIDA, detalle=solicitud.descriptor)
     return redirect(_volver_al_listado(request))
 
 

@@ -39,7 +39,7 @@ class AuditoriaAdminTests(TestCase):
         evento = EventoAuditoria.objects.filter(
             object_id=str(aspirante.pk), accion='DEL').latest('fecha')
         self.assertEqual(evento.usuario_id, self.admin.pk)
-        self.assertEqual(evento.modulo, 'bolsa')
+        self.assertEqual(evento.modulo, 'aspirantes')  # mismo módulo que en los formularios
 
     def test_editar_un_aspirante_desde_el_admin_queda_auditado(self):
         from auditoria.models import EventoAuditoria

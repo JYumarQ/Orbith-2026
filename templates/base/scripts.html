@@ -58,6 +58,8 @@
 {% comment %} Activa Select2 (con buscador) sobre TODOS los <select> de la aplicación,
    incluidos los que llegan después por HTMX o dentro de un modal. {% endcomment %}
 <script src="{% estatico 'js/select_unificado.js' %}"></script>
+{# Ayuda «?» y avisos de la búsqueda con prefijos (E:, N:, CI:...) en los buscadores con `data-prefijos`. #}
+<script src="{% estatico 'js/busqueda_prefijos.js' %}"></script>
 {% comment %} Criterio único de validación visual (amarillo = vacío, verde = con dato)
    de los formularios. Lo activa cada plantilla con su lista de campos. {% endcomment %}
 <script src="{% estatico 'js/validacion_visual.js' %}"></script>

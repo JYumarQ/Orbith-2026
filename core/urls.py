@@ -33,6 +33,7 @@ urlpatterns = [
     path('nomencladores/', include('nomencladores.urls')),
     path('notificaciones/', include('notificaciones.urls')),
     path('progreso/', include('progreso.urls')),
+    path('ranking/', include('ranking.urls')),
     path('prenomina/', include('prenomina.urls')),
     path('usuarios/', include('usuarios.urls')),
     path('solicitudes/', include('solicitudes.urls')),

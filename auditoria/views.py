@@ -2,39 +2,28 @@
 Administrador: `admin_required` en cada vista, igual que el resto de la sección
 Administración."""
 
-from django.core.paginator import Paginator
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, render
 
+from core.paginacion import paginar as _paginar
 from usuarios.decorators import admin_required
 
-from .filtros import filtrar_eventos
+from .filtros import filtrar_eventos, nombre_de_modulo
+from .limpieza import borrar_auditoria_antigua
 from .models import EventoAuditoria
-
-POR_PAGINA_POR_DEFECTO = 25
-
-
-def _por_pagina(request):
-    try:
-        valor = int(request.GET.get('per_page', POR_PAGINA_POR_DEFECTO))
-    except (TypeError, ValueError):
-        return POR_PAGINA_POR_DEFECTO
-    return valor if valor in (10, 25, 50) else POR_PAGINA_POR_DEFECTO
-
-
-def _paginar(request, consulta):
-    paginador = Paginator(consulta, _por_pagina(request))
-    return paginador.get_page(request.GET.get('page'))
 
 
 @admin_required
 def index(request):
+    # Conservación configurada en Parámetros Generales: lo que supera el plazo se
+    # borra aquí, sin tareas programadas. Con «Nunca» no hace nada.
+    borrados = borrar_auditoria_antigua()
+    if borrados:
+        messages.info(request, 'Se eliminaron %d eventos de auditoría que superaban '
+                               'el plazo de conservación.' % borrados)
     consulta, contexto = filtrar_eventos(request)
     pagina = _paginar(request, consulta)
-    contexto.update({
-        'eventos': pagina,
-        'page_obj': pagina,
-        'current_page_size': str(_por_pagina(request)),
-    })
+    contexto.update({'eventos': pagina, 'page_obj': pagina})
     return render(request, 'pages/auditoria/list_auditoria.html', contexto)
 
 
@@ -69,4 +58,5 @@ def detalle_evento(request, pk):
         'cambio': evento.datos_antes.get(clave) != evento.datos_despues.get(clave),
     } for clave in claves]
     return render(request, 'pages/auditoria/partials/detalle_evento.html',
-                  {'evento': evento, 'filas': filas})
+                  {'evento': evento, 'filas': filas,
+                   'modulo': nombre_de_modulo(evento.modulo) if evento.modulo else '—'})

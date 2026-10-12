@@ -1,0 +1,6 @@
+{% comment %}
+Pie de la tabla de Solicitudes: el común de Orbith. Incluye la pestaña activa, la
+búsqueda y los filtros para que paginar no los pierda.
+{% endcomment %}
+{% url 'search_solicitudes' as url_buscar %}
+{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_solicitudes_results' incluir='#filter_tab, #search, #filter_tipo, #filter_unidad, #filter_moderador, #filter_desde, #filter_hasta' nombre='solicitudes' %}

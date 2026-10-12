@@ -17,8 +17,12 @@ from auditoria.models import EventoAuditoria
 @transaction.atomic
 def registrar(*, usuario, accion, content_type=None, object_id=None, instancia=None,
                datos_antes=None, datos_despues=None, solicitud=None, descriptor='',
-               unidad=None, modulo='solicitudes'):
+               unidad=None, modulo='solicitudes', usuario_nombre=None):
     """Registra un hecho de auditoría. Todo por keyword.
+
+    `usuario_nombre` solo hace falta cuando no hay usuario: el registro automático
+    (`auditoria/registro_automatico.py`) firma así como «Sistema» los cambios que
+    no vienen de ninguna persona (un comando, un proceso automático).
 
     Resolución de `content_type`/`object_id`, en orden de prioridad:
     1. Si se pasan explícitos, se usan tal cual (necesario para ELIMINAR: el objeto
@@ -38,7 +42,7 @@ def registrar(*, usuario, accion, content_type=None, object_id=None, instancia=N
     if not descriptor and solicitud is not None:
         descriptor = solicitud.descriptor
 
-    nombre_usuario = ''
+    nombre_usuario = usuario_nombre or ''
     if usuario is not None:
         nombre_usuario = usuario.get_full_name() or usuario.username
 

@@ -1,58 +1,144 @@
 {% extends 'base/base.html' %}
 
 {% block title %}Cierres Mensuales{% endblock %}
+{% load estaticos %}
 
 {% block content %}
 {% load static %}
 
+{% comment %} Cierres Mensuales, vestido con la paleta de los Informes de RRHH.
+
+   Antes era la pantalla de Bootstrap de fábrica: un <h4> suelto, una tarjeta gris y
+   una tabla con clases utilitarias sueltas. No tenía morado que quitar, pero tampoco
+   se parecía a ningún otro informe del proyecto. Ahora usa las mismas piezas que
+   Puestos Clave y los Anexos —`inf-hero`, `inf-kpi`, `inf-tarjeta`, `inf-tabla`—,
+   que define `static/css/informes-rrhh.css` y carga `base.html` para toda la
+   aplicación. {% endcomment %}
 <div class="content-wrapper">
-    <div class="container-xxl grow container-p-y">
+    <div class="container-xxl grow container-p-y inf-lienzo">
 
-        <h4 class="fw-bold py-3 mb-1">
-            <span class="text-muted fw-light">Orbith / Plantilla /</span> Cierres Mensuales
-        </h4>
+        <!-- ===== CABECERA ===== -->
+        <div class="inf-hero d-md-flex justify-content-between align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3">
+                <span class="inf-hero-icono"><i class="bx bx-calendar-check"></i></span>
+                <div>
+                    <div class="inf-hero-titulo d-flex align-items-center flex-wrap gap-2">
+                        <span>Cierres Mensuales</span>
+                        {# Recorrido guiado (static/js/recorrido_cierre.js). #}
+                        <span class="dropdown" style="font-size: 1rem; font-weight: normal;">
+                            <button type="button" class="btn btn-sm btn-label-info py-1 fw-normal dropdown-toggle" id="btnRecorridoCierres"
+                                    data-bs-toggle="dropdown" aria-expanded="false" title="Recorridos guiados de esta pantalla">
+                                <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+                            </button>
+                            <ul class="dropdown-menu" style="font-size: .875rem;">
+                                <li><button type="button" class="dropdown-item" data-recorrido="primer_cierre_declarado:cierres">
+                                    <i class="bx bx-calendar-check me-1"></i>Cierres Mensuales</button></li>
+                            </ul>
+                        </span>
+                    </div>
+                    <p class="inf-hero-nota">Estado de declaración de la plantilla por Unidad Organizativa.</p>
+                </div>
+            </div>
 
-        {% comment %} Explicar la ventana en la propia pantalla evita el soporte de
-           «¿por qué no me deja declarar?», que es la duda que más se va a repetir.
-        {% endcomment %}
-        <div class="alert {% if ventana_abierta %}alert-primary{% else %}alert-secondary{% endif %} d-flex align-items-center mb-4"
-             role="alert">
-            <i class="fas {% if ventana_abierta %}fa-door-open{% else %}fa-clock{% endif %} me-2"></i>
-            <div>
+            {% comment %} El plazo, en la propia cabecera. Es el dato que decide si se
+               puede declarar hoy, y explicarlo aquí evita la consulta de soporte que
+               más se repite: «¿por qué no me deja declarar?». Esmeralda cuando está
+               abierto y naranja cuando no, que en esta paleta es el color de «esto hay
+               que mirarlo». {% endcomment %}
+            <div class="text-md-end mt-3 mt-md-0">
                 {% if ventana_abierta %}
-                    <strong>Plazo abierto</strong> — puede declarar el cierre de
-                    <strong>{{ periodo_actual }}</strong> hasta el día {{ dia_fin }}.
+                    <span class="inf-estado inf-estado--ok px-3 py-2">
+                        <i class="bx bx-lock-open-alt me-1"></i>Plazo abierto
+                    </span>
+                    <div class="inf-hero-nota mt-1">
+                        Puede declarar <strong>{{ periodo_actual }}</strong> hasta el día {{ dia_fin }}.
+                    </div>
                 {% else %}
-                    El plazo ordinario de declaración va del día <strong>{{ dia_inicio }}</strong>
-                    al <strong>{{ dia_fin }}</strong> de cada mes. Fuera de esas fechas solo pueden
-                    regularizar las unidades que estén <strong>desactualizadas</strong>.
+                    <span class="inf-estado inf-estado--aviso px-3 py-2">
+                        <i class="bx bx-time-five me-1"></i>Plazo cerrado
+                    </span>
+                    <div class="inf-hero-nota mt-1">
+                        Va del día {{ dia_inicio }} al {{ dia_fin }} de cada mes. Fuera de esas
+                        fechas solo regularizan las unidades desactualizadas.
+                    </div>
                 {% endif %}
-                <div class="small mt-1">
-                    La declaración se realiza desde
-                    <a href="{% url 'gestor_plantilla' %}" class="fw-semibold">Gestor de Plantilla</a>:
-                    seleccione la Unidad Organizativa y pulse «Declarar actualizada».
+            </div>
+        </div>
+
+        <!-- ===== CIFRAS ===== -->
+        {% comment %} Las cuatro cifras cuentan lo que hay EN LA TABLA, filtro incluido:
+           un resumen que no cuadra con lo que se ve debajo es peor que no tenerlo. {% endcomment %}
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="inf-kpi inf-kpi--solida">
+                    <div class="inf-kpi-cabeza">
+                        <span class="inf-kpi-icono"><i class="bx bx-sitemap"></i></span>
+                        <span class="inf-kpi-rotulo">Unidades</span>
+                    </div>
+                    <div class="inf-kpi-cifra">{{ resumen.total }}</div>
+                    <div class="inf-kpi-pie">En su alcance</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="inf-kpi inf-kpi--verde">
+                    <div class="inf-kpi-cabeza">
+                        <span class="inf-kpi-icono"><i class="bx bx-check-circle"></i></span>
+                        <span class="inf-kpi-rotulo">Actualizadas</span>
+                    </div>
+                    <div class="inf-kpi-cifra">{{ resumen.actualizadas }}</div>
+                    <div class="inf-kpi-pie">Declararon al día</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="inf-kpi inf-kpi--naranja">
+                    <div class="inf-kpi-cabeza">
+                        <span class="inf-kpi-icono"><i class="bx bx-error-circle"></i></span>
+                        <span class="inf-kpi-rotulo">Desactualizadas</span>
+                    </div>
+                    <div class="inf-kpi-cifra">{{ resumen.desactualizadas }}</div>
+                    <div class="inf-kpi-pie">Dejaron pasar su plazo</div>
+                </div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="inf-kpi inf-kpi--azul">
+                    <div class="inf-kpi-cabeza">
+                        <span class="inf-kpi-icono"><i class="bx bx-minus-circle"></i></span>
+                        <span class="inf-kpi-rotulo">Nunca declaradas</span>
+                    </div>
+                    <div class="inf-kpi-cifra">{{ resumen.nunca }}</div>
+                    <div class="inf-kpi-pie">Sin primera declaración</div>
                 </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-
-                <div id="search_container" class="grow" style="max-width: 280px;">
-                    <div class="input-group input-group-merge">
-                        <span class="input-group-text border-0 ps-2"><i class="fas fa-search"></i></span>
-                        <input id="search" type="text" class="form-control border-0 shadow-none"
-                               placeholder="Buscar unidad..." name="q" value="{{ q }}"
-                               hx-get="{% url 'buscar_cierres' %}"
-                               hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
-                               hx-target="#lista_cierres"
-                               hx-include="#filter_estado">
-                    </div>
+        <!-- ===== LISTADO ===== -->
+        {# Estilo común de las tablas (static/css/orbith-tablas.css): justa en la pantalla y cabecera fija. Sin paginación: son pocas unidades. #}
+        <div class="inf-tarjeta orb-tabla-card">
+            <div class="inf-tarjeta-cabeza d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <h2 class="inf-tarjeta-titulo">Estado por Unidad Organizativa</h2>
+                    <span class="inf-tarjeta-nota">
+                        La declaración se hace desde
+                        <a href="{% url 'gestor_plantilla' %}" class="fw-bold text-indigo-600">Gestor de Plantilla</a>,
+                        con «Declarar actualizada» sobre la unidad.
+                    </span>
                 </div>
 
-                <div class="d-flex align-items-center gap-2 ms-auto">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div id="search_container" style="max-width: 260px;">
+                        <div class="input-group input-group-merge border border-slate-200 rounded-3">
+                            <span class="input-group-text border-0 bg-white ps-2 text-slate-400"><i class="bx bx-search"></i></span>
+                            <input id="search" type="text" class="form-control border-0 shadow-none"
+                                   placeholder="Buscar unidad..." name="q" value="{{ q }}"
+                                   hx-get="{% url 'buscar_cierres' %}"
+                                   hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters"
+                                   hx-target="#lista_cierres"
+                                   hx-include="#filter_estado">
+                        </div>
+                    </div>
+
                     <select id="filter_estado" name="estado" class="form-select form-select-sm"
-                            style="min-width: 190px;" onchange="triggerSearch()">
+                            style="min-width: 185px;" onchange="triggerSearch()">
                         <option value="">Todos los estados</option>
                         {% for valor, etiqueta in opciones_estado %}
                             <option value="{{ valor }}" {% if estado_actual == valor %}selected{% endif %}>
@@ -71,20 +157,20 @@
                     {% if es_admin %}
                     <button type="button" class="btn btn-sm btn-primary" id="btn-procesar"
                             onclick="confirmarProcesamiento()">
-                        <i class="fas fa-sync-alt me-1"></i> Procesar cierres
+                        <i class="bx bx-refresh me-1"></i> Procesar cierres
                     </button>
                     {% endif %}
                 </div>
             </div>
 
-            <div class="table-responsive text-nowrap">
-                <table class="table table-hover align-middle">
+            <div class="orb-tabla-scroll text-nowrap">
+                <table class="inf-tabla table-moderna orb-tabla-fija">
                     <thead>
                         <tr>
-                            <th>Unidad Organizativa</th>
-                            <th>Estado</th>
-                            <th>Último cierre</th>
-                            <th>Pendiente</th>
+                            <th class="text-start">Unidad Organizativa</th>
+                            <th class="text-center">Estado</th>
+                            <th class="text-center">Último cierre</th>
+                            <th class="text-center">Pendiente</th>
                             <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
@@ -141,7 +227,7 @@
             showCancelButton: true,
             confirmButtonText: 'Sí, procesar',
             cancelButtonText: 'Cancelar',
-            customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+            customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn inf-btn-suave' },
             buttonsStyling: false
         }).then(function (r) {
             if (r.isConfirmed) { ejecutarProcesamiento(); }
@@ -173,4 +259,6 @@
     }
     {% endif %}
 </script>
+<script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
+<script src="{% estatico 'js/recorrido_cierre.js' %}"></script>
 {% endblock %}

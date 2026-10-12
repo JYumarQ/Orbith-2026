@@ -20,6 +20,7 @@ Estilo: vistas basadas en función con fragmentos HTMX, igual que
 import logging
 
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -46,12 +47,11 @@ from .filtros import (
     querystring_sin_pagina,
 )
 from .models import EjecucionAnalisis, Hallazgo
-from .reglas import obtener_regla, total_reglas
+from .reglas import obtener_regla, obtener_reglas, total_reglas
 from .servicios import AnalisisEnCurso
 
 logger = logging.getLogger(__name__)
 
-HALLAZGOS_POR_PAGINA = 25
 REVISIONES_POR_PAGINA = 40
 
 PLANTILLA_ERROR = 'pages/subsanacion/partials/error.html'
@@ -98,7 +98,9 @@ def _contexto_dashboard():
 
 def _contexto_listado(request):
     consulta, filtros = filtrar_hallazgos(request)
-    paginador = Paginator(consulta, HALLAZGOS_POR_PAGINA)
+    # Filas por página del usuario, comunes a todas las tablas (core/paginacion.py).
+    from core.paginacion import filas_por_pagina
+    paginador = Paginator(consulta, filas_por_pagina(request))
     pagina = paginador.get_page(request.GET.get('pagina'))
 
     return {
@@ -192,6 +194,56 @@ def panel_hallazgos(request):
         contexto['total_vigentes'] = contexto['total_resultados']
     contexto['tab_activo'] = 'hallazgos'
     return render(request, 'pages/subsanacion/index.html', contexto)
+
+
+@permisos.acceso_subsanacion
+def panel_reglas(request):
+    """Índice de Reglas: qué comprueba cada código, por qué falla y cómo se corrige.
+
+    Los textos salen de las propias reglas (`subsanacion/reglas/`), así que el
+    índice no se puede desactualizar. Lo único que se consulta es cuántos hallazgos
+    abiertos tiene cada regla —una sola consulta agrupada—, con el mismo alcance que
+    el listado: un Moderador solo cuenta los de sus Unidades Organizativas.
+    Incluye la ayuda de la búsqueda con prefijos (`core/busqueda.py`).
+    """
+    from core.busqueda import PREFIJOS
+
+    abiertos = Hallazgo.objects.filter(
+        vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS)
+    if not permisos.es_administrador(request.user):
+        abiertos = abiertos.filter(
+            unidad_organizativa_id__in=permisos.unidades_visibles(request.user)
+            .values_list('pk', flat=True))
+    conteo = dict(abiertos.order_by().values_list('codigo_regla')
+                  .annotate(n=Count('id')).values_list('codigo_regla', 'n'))
+
+    por_modulo = {clave: [] for clave, _, _ in MODULOS}
+    for regla in obtener_reglas():
+        por_modulo.setdefault(regla.modulo, []).append({
+            'codigo': regla.codigo,
+            'nombre': regla.nombre,
+            'criticidad': dict(CRITICIDADES).get(regla.criticidad, ''),
+            'color': COLOR_POR_CRITICIDAD.get(regla.criticidad, 'gris'),
+            'icono_criticidad': ICONO_POR_CRITICIDAD.get(regla.criticidad, ''),
+            'descripcion': regla.descripcion,
+            'causa_probable': regla.causa_probable,
+            'impacto': regla.impacto,
+            'solucion': regla.solucion,
+            'abiertos': conteo.get(regla.codigo, 0),
+            # Extras no sale en «Todas» del listado: hay que pedir su categoría.
+            'es_extra': regla.modulo == MODULO_EXTRAS,
+        })
+    categorias = [
+        {'clave': clave, 'etiqueta': etiqueta, 'icono': icono,
+         'reglas': sorted(por_modulo[clave], key=lambda r: r['codigo'])}
+        for clave, etiqueta, icono in MODULOS if por_modulo.get(clave)
+    ]
+    return render(request, 'pages/subsanacion/partials/panel_reglas.html', {
+        'categorias': categorias,
+        'total': sum(len(c['reglas']) for c in categorias),
+        'prefijos': [(clave, texto, ejemplo) for clave, (texto, ejemplo) in PREFIJOS.items()],
+        'modulo_extras': MODULO_EXTRAS,
+    })
 
 
 @permisos.solo_admin_subsanacion

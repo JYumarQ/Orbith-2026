@@ -1714,6 +1714,8 @@ document.addEventListener('DOMContentLoaded', function () {
         // desde aquí que la descarga terminó ni que el documento se generó bien.
         const NOMBRES_TIPO = { word: 'documento Word', excel: 'archivo Excel', pdf: 'documento PDF' };
         notificar('Preparando el ' + (NOMBRES_TIPO[tipo] || NOMBRES_TIPO.pdf) + '…', 'info');
+        // Aviso para el recorrido guiado de exportar (recorrido_informe.js).
+        document.dispatchEvent(new CustomEvent('ii:exportacion', { detail: { tipo: tipo } }));
 
         document.body.appendChild(form);
         form.submit();
@@ -1817,6 +1819,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;
                 }
                 bootstrap.Modal.getInstance(elem('modalGuardarFavorito')).hide();
+                // Aviso para el recorrido guiado de favoritos (recorrido_informe.js),
+                // que tiene que seguir después de la recarga de abajo.
+                if (!esEdicion) document.dispatchEvent(new CustomEvent('ii:favorito-guardado'));
                 notificar(esEdicion
                     ? 'Informe «' + respuesta.nombre + '» actualizado.'
                     : 'Informe «' + respuesta.nombre + '» guardado en sus favoritos.');

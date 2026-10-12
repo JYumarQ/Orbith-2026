@@ -193,6 +193,38 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
           </label>
         </div>
 
+        {# Un solo valor para todas las tablas paginadas (core/paginacion.py). #}
+        <div class="d-flex align-items-center justify-content-between gap-3 mt-3">
+          <label class="form-label mb-0" for="prefFilasPorPagina">
+            Filas por página en las tablas
+            <small class="text-muted d-block">También se cambia desde el pie de cualquier tabla.</small>
+          </label>
+          <select id="prefFilasPorPagina" class="form-select form-select-sm" style="width: auto;" data-sin-select2>
+            <option value="10"{% if pref_filas_por_pagina == 10 %} selected{% endif %}>10</option>
+            <option value="25"{% if pref_filas_por_pagina == 25 %} selected{% endif %}>25</option>
+            <option value="50"{% if pref_filas_por_pagina == 50 %} selected{% endif %}>50</option>
+            <option value="100"{% if pref_filas_por_pagina == 100 %} selected{% endif %}>100</option>
+          </select>
+        </div>
+
+        {# Ranking Mensual: los 3 primeros de cada rol lucen su medalla el mes siguiente. #}
+        <div class="form-check form-switch mt-3">
+          <input class="form-check-input" type="checkbox" id="prefDistincion"
+                 data-metal="{{ distincion_ranking.metal|default:'' }}"
+                 {% if pref_mostrar_distincion %}checked{% endif %}
+                 {% if not distincion_ranking %}disabled{% endif %}>
+          <label class="form-check-label" for="prefDistincion">
+            Mostrar mi distinción del mes
+            <small class="text-muted d-block">
+              {% if distincion_ranking %}
+                Los iconos y tu foto en el color de tu medalla del Ranking Mensual.
+              {% else %}
+                Este mes no tienes distinción.
+              {% endif %}
+            </small>
+          </label>
+        </div>
+
         <div id="avisoPreferencias" class="alert alert-success py-2 px-3 mt-3 d-none" style="font-size: .8125rem;">
           <i class="bx bx-check-circle me-1"></i><span></span>
         </div>
@@ -249,6 +281,13 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
           <button type="button" class="btn btn-sm btn-label-danger w-100" id="btnAbrirReporte">
             <i class="bx bx-bug me-1"></i>Reportar problema
           </button>
+          {# Recorrido guiado (static/js/recorrido_reporte.js). #}
+          <div class="text-center mt-1">
+            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" style="font-size: .75rem;"
+                    data-recorrido="primer_reporte_problema:global">
+              <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
+            </button>
+          </div>
 
           <form id="formReporte" class="d-none mt-3">
             {% csrf_token %}
@@ -352,12 +391,35 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
 </div>
 
 
+<!-- ================= RANKING MENSUAL ORBITH ================= -->
+<div class="modal fade" id="modalRankingOrbith" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-3 border-bottom">
+        <h5 class="modal-title fs-5 fw-bold d-flex align-items-center"><i class="bx bx-trophy me-2 fs-3 text-primary"></i>Ranking Mensual Orbith</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body" id="contenidoRankingOrbith">
+        <div class="text-center text-muted py-4">
+          <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+          Cargando tu ranking...
+        </div>
+      </div>
+
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ================= GUÍA DE ORBITH ================= -->
 <div class="modal fade" id="modalGuiaOrbith" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
-      <div class="modal-header bg-label-info py-2">
-        <h5 class="modal-title fs-5"><i class="bx bx-compass me-2"></i>Guía de Orbith</h5>
+      <div class="modal-header py-3 border-bottom">
+        <h5 class="modal-title fs-5 fw-bold d-flex align-items-center"><i class="bx bx-compass me-2 fs-3 text-primary"></i>Guía de Orbith</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
 
@@ -589,6 +651,29 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
     });
   }
 
+  // Filas por página: un valor para todas las tablas. Las tablas que ya estén
+  // abiertas lo usan en su próxima búsqueda o al recargar.
+  const selectFilas = document.getElementById('prefFilasPorPagina');
+  if (selectFilas) {
+    selectFilas.addEventListener('change', function () {
+      window.orbithGuardarPreferencias({ filas_por_pagina: this.value }, d => {
+        mostrarAvisoPref(d.exito ? 'Preferencia guardada.' : d.mensaje, !d.exito);
+      });
+    });
+  }
+
+  // Distinción del Ranking: se aplica al instante (clase en <html>) y se guarda.
+  const switchDistincion = document.getElementById('prefDistincion');
+  if (switchDistincion && switchDistincion.dataset.metal) {
+    switchDistincion.addEventListener('change', function () {
+      const mostrar = this.checked;
+      document.documentElement.classList.toggle('distincion-' + this.dataset.metal, mostrar);
+      window.orbithGuardarPreferencias({ mostrar_distincion: mostrar }, d => {
+        mostrarAvisoPref(d.exito ? 'Preferencia guardada.' : d.mensaje, !d.exito);
+      });
+    });
+  }
+
   // ---------------------------------------------------------------
   // REPORTAR PROBLEMA
   // ---------------------------------------------------------------
@@ -736,7 +821,11 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
     modalGuia.addEventListener('show.bs.modal', function () {
       fetch("{% url 'progreso_panel' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' })
         .then(r => r.text())
-        .then(html => { contenidoGuia.innerHTML = html; })
+        .then(html => {
+          contenidoGuia.innerHTML = html;
+          // Aplica el filtro recordado (Todas / Pendientes / Completadas).
+          if (window.orbithGuiaPanelCargado) window.orbithGuiaPanelCargado(contenidoGuia);
+        })
         .catch(() => {
           contenidoGuia.innerHTML = '<p class="text-center text-muted mb-0">No se pudo cargar tu guía en este momento.</p>';
         });
@@ -753,6 +842,38 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
         .then(() => { badgeGuia.style.display = 'none'; })
         .catch(() => {});
       }
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // RANKING MENSUAL ORBITH
+  // Igual que la Guía: se calcula solo cuando el usuario abre la ventana.
+  // ---------------------------------------------------------------
+  const modalRanking = document.getElementById('modalRankingOrbith');
+  const contenidoRanking = document.getElementById('contenidoRankingOrbith');
+
+  // Pestaña con la que abrir la ventana la próxima vez (la pide la campana).
+  let pestanaRanking = null;
+  window.orbithAbrirRanking = function (pestana) {
+    if (!modalRanking || !window.bootstrap) return;
+    pestanaRanking = pestana || null;
+    bootstrap.Modal.getOrCreateInstance(modalRanking).show();
+  };
+
+  if (modalRanking && contenidoRanking) {
+    modalRanking.addEventListener('show.bs.modal', function () {
+      fetch("{% url 'ranking_panel' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+        .then(html => {
+          contenidoRanking.innerHTML = html;
+          const boton = pestanaRanking &&
+            contenidoRanking.querySelector('[data-ranking-pestana="' + pestanaRanking + '"]');
+          if (boton) bootstrap.Tab.getOrCreateInstance(boton).show();
+          pestanaRanking = null;
+        })
+        .catch(() => {
+          contenidoRanking.innerHTML = '<p class="text-center text-muted mb-0">No se pudo cargar el ranking en este momento.</p>';
+        });
     });
   }
 })();
