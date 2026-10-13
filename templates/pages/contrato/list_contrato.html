@@ -42,6 +42,10 @@
         margin-bottom: 0.5rem;
     }
 
+    /* Recontratación (decisión de RRHH del 12-10-2026): solo una línea verde fina
+       al inicio de la fila; al pasar el ratón por la primera celda, «Recontratado». */
+    .row-recontratado > td:first-child { box-shadow: inset 3px 0 0 0 #71dd37; }
+
     .row-movimiento-pendiente td {
         color: #ffab00 !important; /* Texto amarillo oscuro/naranja legible */
         border-top: 1px solid #ffab00 !important;
@@ -183,7 +187,7 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #hidden_sort, #hidden_order">
+                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #filter_recontratado, #filter_baja_ant_desde, #filter_baja_ant_hasta, #filter_jubilado, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -315,6 +319,39 @@
                                            value="{{ filtro_alta_hasta }}" onchange="triggerSearch()">
                                 </div>
                             </div>
+                            {% comment %} Recontratados: quien ya tuvo una baja antes de este
+                               contrato. Las fechas acotan esa baja anterior (a ellas lleva el
+                               aviso de la lista de Bajas). Jubilados: la casilla del contrato. {% endcomment %}
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_recontratado">Recontratados</label>
+                                    <select id="filter_recontratado" name="recontratado" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        <option value="si" {% if filtro_recontratado == 'si' %}selected{% endif %}>Solo recontratados</option>
+                                        <option value="no" {% if filtro_recontratado == 'no' %}selected{% endif %}>Sin recontratar</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_jubilado">Jubilados recontr.</label>
+                                    <select id="filter_jubilado" name="jubilado" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        <option value="si" {% if filtro_jubilado == 'si' %}selected{% endif %}>Solo jubilados recontratados</option>
+                                        <option value="no" {% if filtro_jubilado == 'no' %}selected{% endif %}>Los demás</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_baja_ant_desde">Baja anterior desde</label>
+                                    <input type="date" id="filter_baja_ant_desde" name="baja_anterior_desde" class="form-control form-control-sm"
+                                           value="{{ filtro_baja_anterior_desde }}" onchange="triggerSearch()">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_baja_ant_hasta">Baja anterior hasta</label>
+                                    <input type="date" id="filter_baja_ant_hasta" name="baja_anterior_hasta" class="form-control form-control-sm"
+                                           value="{{ filtro_baja_anterior_hasta }}" onchange="triggerSearch()">
+                                </div>
+                            </div>
 
                             <div class="dropdown-header-custom mt-3"><i class="fas fa-graduation-cap me-1"></i> Formación</div>
                             <div class="mb-2">
@@ -356,6 +393,8 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% include 'pages/contrato/partials/aviso_altas_con_baja.html' %}
 
             <div class="orb-tabla-scroll text-nowrap">
                 <table class="table orb-tabla">
@@ -404,6 +443,11 @@
       <div class="content-backdrop fade"></div>
 </div>
 
+<div class="modal fade" id="modalAltasConBaja" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content" id="contenidoModalAltasConBaja"></div>
+    </div>
+</div>
 <div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>
 <div class="modal fade" id="crear_empl" tabindex="-1" aria-hidden="true"></div>
 <div class="modal fade" id="editar_aspir" tabindex="-1" aria-hidden="true"></div>

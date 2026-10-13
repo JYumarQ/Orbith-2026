@@ -202,6 +202,33 @@ def _filtrar_bajas(request, qs):
     return qs.filter(pk__in=bajas.values('aspirante_id'))
 
 
+def _aviso_recontratados(request):
+    """Aviso de la lista de Bajas al filtrar por fecha de baja: cuántas de las
+    personas dadas de baja en ese período fueron recontratadas (hoy no salen en
+    Bajas) y el enlace a Contratos filtrado a ellas. Se cuenta con la MISMA consulta
+    que hará Contratos, así la cifra y la lista coinciden siempre. (0, '') si no se
+    filtra por fecha de baja."""
+    from types import SimpleNamespace
+
+    from django.http import QueryDict
+
+    from contratos.filtros import aplicar_filtros, contratos_visibles, fecha_de
+
+    desde, hasta = fecha_de(request, 'baja_desde'), fecha_de(request, 'baja_hasta')
+    if not (desde or hasta):
+        return {'recontratados_total': 0, 'recontratados_url': ''}
+    filtros = QueryDict(mutable=True)
+    filtros['recontratado'] = 'si'
+    if desde:
+        filtros['baja_anterior_desde'] = desde.isoformat()
+    if hasta:
+        filtros['baja_anterior_hasta'] = hasta.isoformat()
+    filtros.setlist('unidad', [v for v in request.GET.getlist('unidad') if v])
+    total = aplicar_filtros(SimpleNamespace(GET=filtros), contratos_visibles(request.user)).count()
+    return {'recontratados_total': total,
+            'recontratados_url': f"{reverse('list_contrato')}?{filtros.urlencode()}"}
+
+
 @never_cache
 def search_aspirantes(request):
     query = request.GET.get('filter_aspirante', '').strip()
@@ -265,6 +292,7 @@ class BajaListView(ListView):
         context['filtro_unidad'] = self.request.GET.getlist('unidad')
         context['filtro_baja_desde'] = self.request.GET.get('baja_desde', '')
         context['filtro_baja_hasta'] = self.request.GET.get('baja_hasta', '')
+        context.update(_aviso_recontratados(self.request))
 
         return context
 
@@ -292,6 +320,7 @@ def search_bajas(request):
         # Lo mismo que pone `BajaListView`: sin esto, tras buscar, las filas
         # perdían el resaltado de las bajas sin datos.
         'es_baja_view': True,
+        **_aviso_recontratados(request),
     })
 
 # 5. MODIFICAR: Validación con mensajes específicos

@@ -51,4 +51,5 @@
     <div hx-swap-oob="innerHTML:#table-pagination-footer">
         {% include 'pages/aspirante/partials/pie_tabla.html' %}
     </div>
+    {% if es_baja_view %}{% include 'pages/aspirante/partials/aviso_recontratados.html' with oob=True %}{% endif %}
 {% endif %}

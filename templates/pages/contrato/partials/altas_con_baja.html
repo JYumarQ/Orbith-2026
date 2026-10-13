@@ -1,0 +1,33 @@
+{% comment %}
+  Ventana del aviso «ya fueron dados de baja» (contratos.views.altas_con_baja_html):
+  quien entró en el período y ya se fue. Solo consulta; doble clic, su histórico.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">Altas del período que ya causaron baja</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      <thead>
+        <tr><th>No. Exp.</th><th>Nombre</th><th>Alta</th><th>Baja</th><th>Causa</th><th>Cargo</th><th>Unidad</th></tr>
+      </thead>
+      <tbody>
+        {% for b in bajas %}
+        <tr class="cursor-pointer" title="Doble clic para ver su histórico"
+            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' b.aspirante.pk %}')">
+          <td><strong>{{ b.no_expediente }}</strong></td>
+          <td>{{ b.aspirante.nombre }} {{ b.aspirante.papellido }} {{ b.aspirante.sapellido }}</td>
+          <td>{{ b.fecha_alta|date:"d/m/Y" }}</td>
+          <td>{{ b.fecha_baja|date:"d/m/Y" }}</td>
+          <td>{{ b.causa_baja.descripcion|default:"—" }}</td>
+          <td>{{ b.cargo.ncargo.descripcion|default:"—" }}</td>
+          <td>{{ b.cargo.departamento.unidad_organizativa.descripcion|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted p-4">Nadie dado de alta en esas fechas ha causado baja.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

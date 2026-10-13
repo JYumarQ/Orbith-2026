@@ -1540,3 +1540,78 @@ class FiltroFechaDeAltaTests(TestCase):
         self.assertEqual(expedientes(alta_desde='2026-09-10', alta_hasta='2026-10-12'), ['00702'])
         self.assertEqual(expedientes(alta_desde='2026-09-10'), ['00702', '00703'])
         self.assertEqual(expedientes(alta_desde='mal'), ['00701', '00702', '00703'])
+
+
+class RecontratadosYAvisosTests(TestCase):
+    """Recontratados (decisiones de RRHH del 12-10-2026): filtros de Contratos
+    «Recontratados», «Baja anterior desde/hasta» y «Jubilados recontratados»; el
+    aviso de Contratos (altas del período que ya causaron baja) y el de Bajas (bajas
+    del período ya recontratadas), cuya cifra coincide con la lista a la que lleva."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from contratos.models import CBaja
+        cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(
+            descripcion='Determinado', ocupa_plaza=True, requiere_motivo=False)
+
+        def persona(seq, estado='ACTIVO'):
+            return Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Pers{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'8001011260{seq}', estado=estado, sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio)
+
+        # Volvió: baja el 20/09 y contrato nuevo el 01/10 (jubilado recontratado).
+        cls.volvio = persona(1)
+        CBaja.objects.create(aspirante=cls.volvio, no_expediente='00901', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2025, 1, 1), fecha_baja=date(2026, 9, 20))
+        CAlta.objects.create(aspirante=cls.volvio, no_expediente='00902', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2026, 10, 1), jubilado_recontratado=True)
+        # Nunca se fue.
+        CAlta.objects.create(aspirante=persona(2), no_expediente='00903', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2026, 9, 15))
+        # Entró el 18/09 y se fue el 30/09: sigue de baja.
+        CBaja.objects.create(aspirante=persona(3, estado='BAJA'), no_expediente='00904', tipo=tipo,
+                             cargo=cargo, fecha_alta=date(2026, 9, 18), fecha_baja=date(2026, 9, 30))
+        cls.admin = CustomUser.objects.create_user(username='admin_recontr', password='x', es_admin=True)
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def expedientes(self, **params):
+        respuesta = self.client.get(reverse('search_contrato'), params)
+        return sorted(c.no_expediente for c in respuesta.context['object_list'])
+
+    def test_filtros_de_recontratados_y_jubilados(self):
+        self.assertEqual(self.expedientes(recontratado='si'), ['00902'])
+        self.assertEqual(self.expedientes(recontratado='no'), ['00903'])
+        self.assertEqual(self.expedientes(baja_anterior_desde='2026-09-01',
+                                          baja_anterior_hasta='2026-09-25'), ['00902'])
+        self.assertEqual(self.expedientes(baja_anterior_desde='2026-09-21'), [])
+        self.assertEqual(self.expedientes(jubilado='si'), ['00902'])
+
+    def test_marca_de_recontratado_en_la_fila(self):
+        respuesta = self.client.get(reverse('search_contrato'))
+        self.assertContains(respuesta, 'row-recontratado', count=1)
+        self.assertContains(respuesta, 'title="Recontratado"', count=1)
+
+    def test_aviso_de_altas_que_ya_causaron_baja(self):
+        params = {'alta_desde': '2026-09-10', 'alta_hasta': '2026-10-12'}
+        # El aviso viaja fuera de banda en las respuestas HTMX de la búsqueda.
+        respuesta = self.client.get(reverse('search_contrato'), params, HTTP_HX_REQUEST='true')
+        self.assertEqual(respuesta.context['altas_con_baja_total'], 1)
+        self.assertContains(respuesta, 'ya fue dado de baja')
+        ventana = self.client.get(reverse('contratos_altas_con_baja'), params)
+        self.assertEqual([b.no_expediente for b in ventana.context['bajas']], ['00904'])
+        # Sin fechas de alta no hay aviso.
+        self.assertEqual(self.client.get(reverse('search_contrato')).context['altas_con_baja_total'], 0)
+
+    def test_aviso_de_bajas_recontratadas_coincide_con_contratos(self):
+        respuesta = self.client.get(reverse('list_baja'),
+                                    {'baja_desde': '2026-09-12', 'baja_hasta': '2026-10-12'})
+        # En la tabla solo quien sigue de baja; el recontratado va en el aviso.
+        self.assertEqual([a.nombre for a in respuesta.context['aspirantes']], ['Pers3'])
+        self.assertEqual(respuesta.context['recontratados_total'], 1)
+        destino = self.client.get(respuesta.context['recontratados_url'])
+        self.assertEqual([c.no_expediente for c in destino.context['object_list']], ['00902'])

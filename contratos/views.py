@@ -39,7 +39,8 @@ from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
 from auditoria.models import AccionAuditoria
 from auditoria import registro_automatico
 from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
-from .filtros import aplicar_filtros, contratos_visibles
+from .filtros import (aplicar_filtros, altas_que_causaron_baja, anotar_recontratado,
+                      contratos_visibles)
 from .annos_servicio import annos_y_pago
 # Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
 # devuelve None para el Administrador, que sigue guardando directamente.
@@ -80,8 +81,9 @@ class ContratoListView(ListView):
         """
         qs = super().get_queryset().filter(
             pk__in=contratos_visibles(self.request.user).values_list('pk', flat=True))
-        # La fecha mínima de la Baja de cada fila, en la misma consulta.
-        qs = CAlta.con_fecha_ultimo_movimiento(qs)
+        # La fecha mínima de la Baja de cada fila y si es una recontratación, en la
+        # misma consulta.
+        qs = anotar_recontratado(CAlta.con_fecha_ultimo_movimiento(qs))
         return aplicar_filtros(self.request, qs.select_related(
             'aspirante',
             'tipo',
@@ -128,6 +130,11 @@ class ContratoListView(ListView):
         context['filtro_tipo'] = self.request.GET.get('tipo', '')
         context['filtro_alta_desde'] = self.request.GET.get('alta_desde', '')
         context['filtro_alta_hasta'] = self.request.GET.get('alta_hasta', '')
+        context['filtro_recontratado'] = self.request.GET.get('recontratado', '')
+        context['filtro_baja_anterior_desde'] = self.request.GET.get('baja_anterior_desde', '')
+        context['filtro_baja_anterior_hasta'] = self.request.GET.get('baja_anterior_hasta', '')
+        context['filtro_jubilado'] = self.request.GET.get('jubilado', '')
+        context['altas_con_baja_total'] = _total_altas_con_baja(self.request)
 
         # --- Filtros de estructura: unidad, departamento y cargo ---
         #
@@ -369,6 +376,22 @@ def _aplicar_busqueda_contratos(qs, texto):
     return qs
 
 
+def _total_altas_con_baja(request):
+    """Cifra del aviso «Hay N contratados en este período que ya fueron dados de
+    baja» (0 si no se filtra por fecha de alta: el aviso no sale)."""
+    qs = altas_que_causaron_baja(request)
+    return qs.count() if qs is not None else 0
+
+
+def altas_con_baja_html(request):
+    """Ventana del aviso: quién entró en el período y ya causó baja (solo consulta)."""
+    qs = altas_que_causaron_baja(request)
+    bajas = [] if qs is None else qs.select_related(
+        'aspirante', 'causa_baja', 'cargo__ncargo',
+        'cargo__departamento__unidad_organizativa').order_by('fecha_alta', 'fecha_baja')
+    return render(request, 'pages/contrato/partials/altas_con_baja.html', {'bajas': bajas})
+
+
 def search_contratos(request):
     # 1. Obtener parámetros de filtros
     query = request.GET.get('filter_contrato', '').strip()
@@ -385,8 +408,9 @@ def search_contratos(request):
         'rol',
         'tridente'
     ).order_by('-fecha_alta')
-    # La fecha mínima de la Baja de cada fila, en la misma consulta.
-    qs = CAlta.con_fecha_ultimo_movimiento(qs)
+    # La fecha mínima de la Baja de cada fila y si es una recontratación, en la
+    # misma consulta.
+    qs = anotar_recontratado(CAlta.con_fecha_ultimo_movimiento(qs))
 
     # 3. Aplicar Filtros "Embudo" (mismo criterio que la carga inicial de
     # ContratoListView — ver contratos/filtros.py::aplicar_filtros)
@@ -443,6 +467,7 @@ def search_contratos(request):
         'page_obj': page_obj,
         'paginator': page_obj.paginator,
         'search_url': 'search_contrato',
+        'altas_con_baja_total': _total_altas_con_baja(request),
     })
 
 

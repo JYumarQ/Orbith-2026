@@ -1,0 +1,20 @@
+{% comment %}
+  Aviso de la lista de Contratos al filtrar por fecha de alta: quien entró en el
+  período y ya causó baja no tiene contrato vivo, así que no sale en la tabla.
+  «Verlos» abre una ventana de consulta (contratos.views.altas_con_baja_html).
+  Solo aparece si hay alguno. Se vuelve a pintar con cada búsqueda (fuera de banda).
+{% endcomment %}
+<div id="aviso-altas-con-baja" {% if oob %}hx-swap-oob="true"{% endif %}>
+  {% if altas_con_baja_total %}
+  <div class="alert alert-warning d-flex align-items-center flex-wrap gap-2 py-2 px-3 mx-3 mt-2 mb-0 small">
+    <i class="bx bx-info-circle"></i>
+    <span>Hay <strong>{{ altas_con_baja_total }}</strong> contratado{{ altas_con_baja_total|pluralize }} en este período que ya {{ altas_con_baja_total|pluralize:"fue dado,fueron dados" }} de baja.</span>
+    <button type="button" class="btn btn-sm btn-outline-warning py-0 ms-auto"
+            hx-get="{% url 'contratos_altas_con_baja' %}" hx-target="#contenidoModalAltasConBaja"
+            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta"
+            hx-on::after-request="bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAltasConBaja')).show()">
+      Verlos
+    </button>
+  </div>
+  {% endif %}
+</div>

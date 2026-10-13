@@ -1,6 +1,6 @@
 {% if object_list %} 
     {% for c in object_list %}
-        <tr class="fila-contrato cursor-pointer {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
+        <tr class="fila-contrato cursor-pointer {% if c.es_recontratado %}row-recontratado{% endif %} {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
             onclick="seleccionarContrato(this)"
             ondblclick="abrirModalHistorico('{% url 'historico_trabajador' c.aspirante.pk %}')"
             data-id="{{ c.pk }}"
@@ -22,7 +22,7 @@
         >
         
         
-        <td>
+        <td{% if c.es_recontratado %} title="Recontratado"{% endif %}>
             <strong>{{ c.no_expediente }}</strong>
         </td>
         
@@ -78,4 +78,5 @@
     <div id="table-pagination-footer" hx-swap-oob="true">
         {% include 'pages/contrato/partials/pie_tabla.html' %}
     </div>
+    {% include 'pages/contrato/partials/aviso_altas_con_baja.html' with oob=True %}
 {% endif %}

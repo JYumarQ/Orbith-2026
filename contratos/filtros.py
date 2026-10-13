@@ -10,7 +10,7 @@ vistas llaman a la misma función, mismo patrón que `cierres/filtros.py` /
 
 from datetime import date
 
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
 from strorganizativa.jerarquia import expandir
 
@@ -51,7 +51,31 @@ def fecha_de(request, parametro):
         return None
 
 
-def aplicar_filtros(request, qs):
+def anotar_recontratado(qs):
+    """Marca cada contrato con `es_recontratado`: la persona ya tuvo una baja antes
+    (mientras un contrato está vivo, toda baja suya es anterior). La lista de
+    Contratos lo señala con una línea verde fina (decisión de RRHH del 12-10-2026)."""
+    from .models import CBaja
+    return qs.annotate(es_recontratado=Exists(
+        CBaja.objects.filter(aspirante_id=OuterRef('aspirante_id'))))
+
+
+def altas_que_causaron_baja(request):
+    """Aviso de Contratos al filtrar por fecha de alta: quien entró en ese rango y
+    ya se fue (su contrato es hoy una `CBaja`, así que no puede salir en la tabla).
+    Mismo alcance por rol y mismos filtros de la lista, salvo los que solo tienen
+    sentido para un contrato vivo. None si no se filtra por fecha de alta."""
+    from .models import CBaja
+
+    if not (fecha_de(request, 'alta_desde') or fecha_de(request, 'alta_hasta')):
+        return None
+    qs = CBaja.objects.all()
+    if tiene_alcance_acotado(request.user):
+        qs = qs.filter(cargo__departamento__unidad_organizativa__in=request.user.unidades.all())
+    return aplicar_filtros(request, qs, solo_comunes=True)
+
+
+def aplicar_filtros(request, qs, solo_comunes=False):
     """Aplica sobre `qs` (queryset de `CAlta`) los filtros presentes en
     `request.GET`. Cualquier parámetro ausente o vacío se ignora — un enlace
     sin filtros sigue mostrando el listado completo."""
@@ -104,6 +128,9 @@ def aplicar_filtros(request, qs):
     if alta_hasta:
         qs = qs.filter(fecha_alta__lte=alta_hasta)
 
+    if not solo_comunes:
+        qs = _filtrar_recontratados(request, qs)
+
     # --- Estructura: unidad organizativa, departamento y cargo ---
     #
     # Los tres admiten VARIOS valores (`?unidad=3&unidad=7`), porque la pregunta
@@ -132,4 +159,34 @@ def aplicar_filtros(request, qs):
     if cargos:
         qs = qs.filter(cargo__ncargo_id__in=cargos)
 
+    return qs
+
+
+def _filtrar_recontratados(request, qs):
+    """Filtros de contrato vivo (decisión de RRHH del 12-10-2026):
+
+    * `recontratado=si|no`: la persona tuvo, o no, una baja antes de este contrato.
+    * `baja_anterior_desde/hasta`: recontratados cuya baja cayó en esas fechas. Es
+      a donde lleva el aviso de la lista de Bajas («fueron recontratadas»).
+    * `jubilado=si|no`: la casilla «Jubilado Recontratado» del contrato.
+    """
+    from .models import CBaja
+
+    recontratado = request.GET.get('recontratado')
+    desde = fecha_de(request, 'baja_anterior_desde')
+    hasta = fecha_de(request, 'baja_anterior_hasta')
+    if recontratado in ('si', 'no') or desde or hasta:
+        bajas = CBaja.objects.filter(aspirante_id=OuterRef('aspirante_id'))
+        if desde:
+            bajas = bajas.filter(fecha_baja__gte=desde)
+        if hasta:
+            bajas = bajas.filter(fecha_baja__lte=hasta)
+        if recontratado == 'no' and not (desde or hasta):
+            qs = qs.exclude(Exists(bajas))
+        else:
+            qs = qs.filter(Exists(bajas))
+
+    jubilado = request.GET.get('jubilado')
+    if jubilado in ('si', 'no'):
+        qs = qs.filter(jubilado_recontratado=(jubilado == 'si'))
     return qs

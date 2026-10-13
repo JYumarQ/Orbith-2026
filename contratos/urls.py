@@ -13,6 +13,7 @@ urlpatterns = [
     path('cargar_salarios/', login_required(views.cargar_salario), name='cargar_salarios'),
     path('cargar_annos_servicio/', login_required(views.cargar_annos_servicio), name='cargar_annos_servicio'),
     path('search_contrato/', login_required(views.search_contratos), name='search_contrato'),
+    path('altas_con_baja/', login_required(views.altas_con_baja_html), name='contratos_altas_con_baja'),
     
     #?REPORTES
     path('reporte/modelo_movimiento/<str:pk>/', login_required(views.ModeloMovimientoDocxView.as_view()), name='imprimir_modelo_movimiento'),
