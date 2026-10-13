@@ -36,22 +36,22 @@
                 <th class="th-columna text-center">Cantidad</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody data-cifras-url="{% url 'informe_altas_bajas_detalle' %}">
             {% for par in resumen.desglose_par %}
-                <tr>
+                <tr data-p-tipo="{{ rotulo|lower }}">
                     {% if forloop.first %}
                         <td class="td-nombre" rowspan="{{ resumen.desglose_par|length }}">{{ cab_provincia|default:"—" }}</td>
                         <td class="td-nombre" rowspan="{{ resumen.desglose_par|length }}">{{ municipio_resumen }}</td>
-                        <td class="td-cifra td-cifra--fuerte" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total }}</td>
-                        <td class="td-cifra td-cifra--naranja" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_claves }}</td>
+                        <td class="td-cifra td-cifra--fuerte cifra-pulsable" data-p-columna="total" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total }}</td>
+                        <td class="td-cifra td-cifra--naranja cifra-pulsable" data-p-columna="claves" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_claves }}</td>
                     {% endif %}
                     <td>{{ par.cargo_clave|default:"" }}</td>
-                    <td class="td-cifra {% if par.cantidad_clave %}td-cifra--fuerte{% endif %}">{{ par.cantidad_clave }}</td>
+                    <td class="td-cifra {% if par.cantidad_clave %}td-cifra--fuerte cifra-pulsable{% endif %}" data-p-columna="cargo_clave" data-p-cargo="{{ par.cargo_clave }}">{{ par.cantidad_clave }}</td>
                     {% if forloop.first %}
-                        <td class="td-cifra td-cifra--azul" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_no_claves }}</td>
+                        <td class="td-cifra td-cifra--azul cifra-pulsable" data-p-columna="no_claves" rowspan="{{ resumen.desglose_par|length }}">{{ resumen.total_no_claves }}</td>
                     {% endif %}
                     <td>{{ par.cargo_no_clave|default:"" }}</td>
-                    <td class="td-cifra {% if par.cantidad_no_clave %}td-cifra--fuerte{% endif %}">{{ par.cantidad_no_clave }}</td>
+                    <td class="td-cifra {% if par.cantidad_no_clave %}td-cifra--fuerte cifra-pulsable{% endif %}" data-p-columna="cargo_no_clave" data-p-cargo="{{ par.cargo_no_clave }}">{{ par.cantidad_no_clave }}</td>
                 </tr>
             {% empty %}
                 <tr>

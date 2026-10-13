@@ -1,0 +1,21 @@
+{% comment %}
+  Ocupantes de un cargo en la ventana «Plazas» (dashboard.views.plazas_ocupantes_html).
+{% endcomment %}
+<div class="d-flex flex-wrap align-items-center gap-2 py-1">
+  {% for o in ocupantes %}
+    {% comment %} Un contrato que no ocupa plaza (Determinado…) está en el cargo pero no
+       cuenta en «Ocupadas»: se marca aparte para que la cifra no confunda. {% endcomment %}
+    <span class="badge bg-white text-body border fw-normal" title="{{ o.tipo.descripcion|default:'' }} · alta {{ o.fecha_alta|date:'d/m/Y' }}">
+      {{ o.aspirante.nombre }} {{ o.aspirante.papellido }} <span class="text-muted">({{ o.no_expediente }})</span>
+      {% if not o.tipo.ocupa_plaza %}<span class="text-warning ms-1">· {{ o.tipo.descripcion|default:"sin tipo" }}, no ocupa plaza</span>{% endif %}
+    </span>
+  {% empty %}
+    <span class="text-muted small">Nadie ocupa este cargo.</span>
+  {% endfor %}
+  {% if puede_contratar %}
+    <button type="button" class="btn btn-sm btn-primary ms-auto"
+            onclick="event.stopPropagation(); bootstrap.Modal.getInstance(document.getElementById('modalDashboard'))?.hide(); window.abrirModalNuevoContrato('{{ cargo.pk }}');">
+      <i class="bx bx-user-plus me-1"></i>Contratar aquí
+    </button>
+  {% endif %}
+</div>

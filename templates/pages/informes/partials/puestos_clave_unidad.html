@@ -19,7 +19,8 @@
 {% endcomment %}
 
 {% if unidad.nombre %}
-    <tr style="background-color: {% if nivel == 0 %}rgba(238, 242, 255, 0.65){% else %}rgba(248, 250, 252, 0.85){% endif %};">
+    <tr style="background-color: {% if nivel == 0 %}rgba(238, 242, 255, 0.65){% else %}rgba(248, 250, 252, 0.85){% endif %};"
+        data-p-familia="{{ familia.clave }}" data-p-unidad="{{ unidad.id }}"{% if unidad.es_padre %} data-p-rama="1"{% endif %}>
         <td class="{% if nivel == 0 %}px-4{% else %}px-4 ps-5{% endif %} py-2">
             <div class="d-flex align-items-center gap-2">
                 {% if nivel == 0 %}
@@ -31,24 +32,24 @@
                 {% endif %}
             </div>
         </td>
-        <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.aprob }}</td>
-        <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.cub }}</td>
-        <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.vac }}</td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600 cifra-pulsable" data-p-columna="aprob" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.aprob }}</td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600 cifra-pulsable" data-p-columna="cub" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.cub }}</td>
+        <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500 cifra-pulsable" data-p-columna="vac" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.vac }}</td>
         <td class="px-2 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 fw-black rounded-3" style="font-size: 11px; padding: 0.3rem 0.5rem;">{{ unidad.subtotales.porc }}%</span></td>
-        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.det }}</td>
-        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.muj }}</td>
-        <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.adiest }}</td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="det" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.det }}</td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="muj" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.muj }}</td>
+        <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="adiest" style="font-size: {% if nivel == 0 %}18px{% else %}16px{% endif %};">{{ unidad.subtotales.adiest }}</td>
     </tr>
 {% endif %}
 
 {% for p in unidad.puestos %}
-    <tr>
+    <tr data-p-ncargo="{{ p.codigo }}"{% if unidad.id %} data-p-unidad="{{ unidad.id }}"{% endif %}>
         <td class="py-1 {% if not unidad.nombre %}px-4 ps-5{% elif nivel == 0 %}px-4 ps-5{% else %}px-4 ps-6{% endif %}" {% if nivel > 0 %}style="padding-left: 3.5rem !important;"{% endif %}>
             <span class="fw-bold text-slate-700" style="font-size: 13px;">{{ p.nombre }}</span>
         </td>
-        <td class="px-2 py-1 text-center font-monospace text-slate-500" style="font-size: 18px;">{{ p.aprob }}</td>
-        <td class="px-2 py-1 text-center"><span class="badge bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem;">{{ p.cub }}</span></td>
-        <td class="px-2 py-1 text-center"><span class="badge {% if p.vac > 0 %}bg-orange-50 text-orange-500 border-orange-100{% else %}bg-transparent text-slate-400{% endif %} rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem; border: 1px solid transparent;">{{ p.vac }}</span></td>
+        <td class="px-2 py-1 text-center font-monospace text-slate-500 cifra-pulsable" data-p-columna="aprob" style="font-size: 18px;">{{ p.aprob }}</td>
+        <td class="px-2 py-1 text-center cifra-pulsable" data-p-columna="cub"><span class="badge bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem;">{{ p.cub }}</span></td>
+        <td class="px-2 py-1 text-center cifra-pulsable" data-p-columna="vac"><span class="badge {% if p.vac > 0 %}bg-orange-50 text-orange-500 border-orange-100{% else %}bg-transparent text-slate-400{% endif %} rounded-pill fw-bold" style="font-size: 16px; padding: 0.15rem 0.6rem; border: 1px solid transparent;">{{ p.vac }}</span></td>
         <td class="px-2 py-1 text-center" style="border-right: 1px solid rgba(238, 242, 255, 0.5);">
             <div class="d-flex flex-column align-items-center justify-content-center gap-1">
                 <div class="progress rounded-pill shadow-none" style="width: 48px; height: 3px; background-color: #f1f5f9;">
@@ -57,9 +58,9 @@
                 <span class="fw-black text-slate-400" style="font-size: 10px;">{{ p.porc }}%</span>
             </div>
         </td>
-        <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.det }}</td>
-        <td class="px-2 py-1 text-center"><span class="fw-bold {% if p.muj > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}" style="font-size: 18px;">{{ p.muj }}</span></td>
-        <td class="px-2 py-1 text-center text-slate-500 fw-bold" style="font-size: 18px;">{{ p.adiest }}</td>
+        <td class="px-2 py-1 text-center text-slate-500 fw-bold cifra-pulsable" data-p-columna="det" style="font-size: 18px;">{{ p.det }}</td>
+        <td class="px-2 py-1 text-center cifra-pulsable" data-p-columna="muj"><span class="fw-bold {% if p.muj > 0 %}text-indigo-600{% else %}text-slate-400{% endif %}" style="font-size: 18px;">{{ p.muj }}</span></td>
+        <td class="px-2 py-1 text-center text-slate-500 fw-bold cifra-pulsable" data-p-columna="adiest" style="font-size: 18px;">{{ p.adiest }}</td>
     </tr>
 {% endfor %}
 

@@ -1769,3 +1769,112 @@ class MisionesDiasEImporte(BaseInformes):
             {'valores': json.dumps({'00100': {'dias': '7', 'importe': '10.25'}})})
         self.assertNotIn(misiones.NOTA_VALORES_MANUALES,
                          self.textos(self.libro(respuesta)['Misiones']))
+
+
+class ConsolidadoInteractivo(BaseInformes):
+    """Piloto de los Informes RRHH interactivos (12-10-2026): pulsar una cifra del
+    Consolidado enseña qué hay detrás, y lo que enseña suma exactamente esa cifra."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        indeterminado = NTipoContrato.objects.create(
+            descripcion='Contrato Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+        adiestramiento = NTipoContrato.objects.create(
+            descripcion='Adiestramiento', ocupa_plaza=False, requiere_motivo=False)
+        for seq, (tipo, sexo) in enumerate(((indeterminado, 'F'), (indeterminado, 'M'),
+                                            (adiestramiento, 'F')), start=1):
+            asp = Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Inter{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'8601011234{seq}', estado='ACTIVO', sexo=sexo, raza='BL',
+                unidad_organizativa=cls.unidad, provincia=cls.provincia, municipio=cls.municipio)
+            CAlta.objects.create(aspirante=asp, no_expediente=f'0020{seq}', tipo=tipo,
+                                 cargo=cls.cargo, fecha_alta=date(2026, 2, 1))
+        cls.cargo.refrescar_conteo_plazas()
+
+    def test_cada_cifra_coincide_con_su_ventana(self):
+        from informes.views import COLUMNAS_CONSOLIDADO
+        contexto = self.consolidado().context
+        filas = dict(contexto['datos_tabla'])
+        filas['TOTAL'] = contexto['totales']
+        for categoria, valores in filas.items():
+            for columna, (_titulo, tipo) in COLUMNAS_CONSOLIDADO.items():
+                respuesta = self.client.get(reverse('informe_consolidado_detalle'),
+                                            {'categoria': categoria, 'columna': columna})
+                lista = respuesta.context['filas']
+                if tipo == 'cargos':
+                    campo = 'cant_aprobada' if columna == 'aprob' else 'vacantes'
+                    total = sum(getattr(c, campo) for c in lista)
+                else:
+                    total = len(lista)
+                self.assertEqual(total, valores[columna], (categoria, columna))
+
+    def test_las_personas_llevan_su_historico(self):
+        respuesta = self.client.get(reverse('informe_consolidado_detalle'),
+                                    {'categoria': 'TOTAL', 'columna': 't_muj'})
+        self.assertEqual(sorted(c.aspirante_nombre for c in respuesta.context['filas']),
+                         ['Ana Pérez Gómez', 'Inter1 P T', 'Inter3 P T'])
+        self.assertContains(respuesta, '/historico')
+
+    def test_una_columna_desconocida_no_rompe(self):
+        respuesta = self.client.get(reverse('informe_consolidado_detalle'), {'columna': 'x'})
+        self.assertEqual(respuesta.status_code, 400)
+
+
+class TrabajadoresUEBInteractivo(BaseInformes):
+    """Cada cifra de Trabajadores por UEB coincide con las personas de su ventana."""
+
+    def test_cada_cifra_coincide_con_su_ventana(self):
+        contexto = self.client.get(reverse('informe_trabajadores_ueb')).context
+        filas = [(d['id'], d['total'], d['mujeres']) for d in contexto['datos_uebs']]
+        filas.append(('TOTAL', contexto['total_general'], contexto['total_mujeres']))
+        for unidad, total, mujeres in filas:
+            for columna, cifra in (('total', total), ('mujeres', mujeres)):
+                r = self.client.get(reverse('informe_trabajadores_ueb_detalle'),
+                                    {'unidad': unidad, 'columna': columna})
+                self.assertEqual(len(r.context['filas']), cifra, (unidad, columna))
+        self.assertGreater(contexto['total_general'], 0)
+
+
+class InformesInteractivosCoherencia(BaseInformes):
+    """Puestos Clave, Registro Diario y Altas y Bajas: cada cifra pulsable de la
+    página coincide con lo que lista su ventana (se recorren las celdas reales)."""
+
+    def celdas(self, url, **params):
+        import re
+        html = self.client.get(reverse(url), params).content.decode()
+        destino = re.search(r'data-cifras-url="([^"]+)"', html).group(1)
+        for fila in re.findall(r'<tr([^>]*)>(.*?)</tr>', html, re.S):
+            de_fila = dict(re.findall(r'data-p-([a-z]+)="([^"]*)"', fila[0]))
+            for atributos, valor in re.findall(
+                    r'<td([^>]*cifra-pulsable[^>]*)>\s*(?:<[^>]+>\s*)*([0-9]+)', fila[1]):
+                yield destino, {**params, **de_fila,
+                                **dict(re.findall(r'data-p-([a-z]+)="([^"]*)"', atributos))}, int(valor)
+
+    def comprobar(self, url, **params):
+        vistas = 0
+        for destino, parametros, valor in self.celdas(url, **params):
+            # El total de trabajadores físicos del Registro Diario lo suma el
+            # navegador: en el HTML llega a 0. Se comprueba aparte en pantalla.
+            if parametros.get('grupo') == 'TOTAL':
+                continue
+            respuesta = self.client.get(destino, parametros)
+            filas = respuesta.context['filas']
+            if parametros.get('columna') in ('aprob', 'vac'):
+                campo = 'cant_aprobada' if parametros['columna'] == 'aprob' else 'vacantes'
+                total = sum(getattr(f, campo) for f in filas)
+            else:
+                total = len(filas)
+            self.assertEqual(total, valor, (url, parametros))
+            vistas += 1
+        self.assertGreater(vistas, 0, url)
+
+    def test_puestos_clave_en_los_dos_modos(self):
+        self.comprobar('informe_puestos_clave', agrupar='desglosado')
+        self.comprobar('informe_puestos_clave', agrupar='consolidado')
+
+    def test_registro_diario(self):
+        self.comprobar('informe_registro_diario')
+
+    def test_altas_y_bajas(self):
+        self.comprobar('informe_altas_bajas', mes=1, anno=2026)

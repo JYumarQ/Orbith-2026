@@ -95,12 +95,14 @@
             </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
+            <a href="#" role="button" title="Ver los cargos con vacantes"
+               onclick="abrirVentanaDashboard('{% url 'dashboard_plazas' %}?vista=vacantes&{{ request.GET.urlencode }}'); return false;"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
                 <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-user-voice fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ plazas.vacantes }}</div>
                 <span class="badge bg-label-danger mb-1">Alerta</span>
                 <small class="text-muted">Vacantes Libres</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
             <a href="#" role="button" title="Ver el promedio por unidad y por categoría"
@@ -310,7 +312,8 @@
 
     <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
-            <div class="card h-100 shadow border-0">
+            <div class="card h-100 shadow border-0 dash-enlace" role="button" title="Ver todos los cargos y sus plazas"
+                 onclick="abrirVentanaDashboard('{% url 'dashboard_plazas' %}?vista=todas&{{ request.GET.urlencode }}');" style="cursor: pointer;">
                 <div class="card-body text-center d-flex flex-column justify-content-center">
                     <h6 class="mb-2 fw-bold">Ocupación de Plazas</h6>
                     <div id="plazasGaugeChart" style="height: 140px;"></div>
@@ -458,17 +461,33 @@
                     <span class="fw-bold">Años de Servicio</span>
                 </div>
                 <div class="px-2 pt-2">
-                    <div id="antiguedad-uo" hidden>
+                    {% comment %} `#antiguedad-uo` lleva las unidades y el filtro «De __ a
+                       __ años» (vacío = sin límite, iguales = exacto): lo incluyen el
+                       buscador, la paginación y «Ver más». {% endcomment %}
+                    <div id="antiguedad-uo">
                         {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
-                    </div>
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text"><i class="bx bx-search"></i></span>
-                        <input type="text" name="q" class="form-control"
-                               placeholder="Nombre, CI o Expediente..."
-                               hx-get="{% url 'dashboard_antiguedad_html' %}"
-                               hx-trigger="input changed delay:500ms, keyup[key=='Enter']"
-                               hx-target="#antiguedad-resultado"
-                               hx-include="#antiguedad-uo">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bx bx-search"></i></span>
+                            <input type="text" name="q" id="antiguedad-q" class="form-control"
+                                   placeholder="Nombre, CI o Expediente..."
+                                   hx-get="{% url 'dashboard_antiguedad_html' %}"
+                                   hx-trigger="input changed delay:500ms, keyup[key=='Enter']"
+                                   hx-target="#antiguedad-resultado"
+                                   hx-include="#antiguedad-uo">
+                        </div>
+                        <div class="d-flex align-items-center gap-1 mt-1" style="font-size: .78rem;"
+                             hx-get="{% url 'dashboard_antiguedad_html' %}" hx-target="#antiguedad-resultado"
+                             hx-trigger="input changed delay:500ms from:.antiguedad-annos" hx-include="#antiguedad-uo">
+                            <span class="text-muted">De</span>
+                            <input type="number" min="0" max="80" name="annos_desde" aria-label="Años desde"
+                                   class="form-control form-control-sm antiguedad-annos" style="width: 4rem;">
+                            <span class="text-muted">a</span>
+                            <input type="number" min="0" max="80" name="annos_hasta" aria-label="Años hasta"
+                                   class="form-control form-control-sm antiguedad-annos" style="width: 4rem;">
+                            <span class="text-muted">años</span>
+                            <button type="button" class="btn btn-sm btn-primary py-0 ms-auto"
+                                    onclick="abrirAntiguedadDetalle()">Ver más</button>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body p-0" id="antiguedad-resultado"
@@ -528,14 +547,35 @@ a.dash-enlace:not(.card):hover { filter: brightness(1.08); }
 .dash-altas-bajas tr.dash-fila-baja > td { background-color: #fef2f2; }
 </style>
 
-{% comment %} Ventana común de la Dashboard: desglose del salario y altas/bajas de un
-   mes. `abrirVentanaDashboard(url)` carga el contenido y la abre. {% endcomment %}
+{% if puede_editar %}{% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}{% endif %}
+
+{% comment %} Ventana común de la Dashboard: desglose del salario, altas/bajas de un
+   mes y plazas. `abrirVentanaDashboard(url)` carga el contenido y la abre. {% endcomment %}
 <div class="modal fade" id="modalDashboard" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">
     <div class="modal-content" id="contenidoModalDashboard"></div>
   </div>
 </div>
 <script>
+// Ventana «Plazas»: una fila se despliega/pliega al pulsarla (sus ocupantes se
+// cargan la primera vez, `hx-trigger="click once"`).
+document.addEventListener('click', function (e) {
+    const fila = e.target.closest('#contenidoModalDashboard tr.plaza-fila');
+    if (!fila) return;
+    const detalle = document.getElementById('plaza-fila-detalle-' + fila.dataset.cargo);
+    const abierta = !detalle.classList.toggle('d-none');
+    fila.querySelector('.plaza-flecha').className = 'bx plaza-flecha ' + (abierta ? 'bx-chevron-up' : 'bx-chevron-down');
+});
+
+// «Ver más» de Años de Servicio: misma búsqueda y mismo filtro de años que la tarjeta.
+window.abrirAntiguedadDetalle = function () {
+    const params = new URLSearchParams();
+    document.querySelectorAll('#antiguedad-uo input[name]').forEach(function (campo) {
+        if (campo.value !== '') params.append(campo.name, campo.value);
+    });
+    abrirVentanaDashboard('{% url "dashboard_antiguedad_detalle" %}?' + params.toString());
+};
+
 window.abrirVentanaDashboard = function (url) {
     const contenido = document.getElementById('contenidoModalDashboard');
     contenido.innerHTML = '<div class="modal-body text-center text-muted py-5">Cargando…</div>';

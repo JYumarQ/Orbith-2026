@@ -120,59 +120,59 @@
                                 <th class="text-end">Trabajadores</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody data-cifras-url="{% url 'informe_registro_diario_detalle' %}">
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
                                 <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Obreros</td>
-                                <td class="text-end text-dark fs-5" id="val-obreros">{{ datos.Obreros.tot }}</td>
+                                <td class="text-end text-dark fs-5 cifra-pulsable" id="val-obreros" data-p-grupo="Obreros" data-p-columna="tot">{{ datos.Obreros.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-obreros-fem">{{ datos.Obreros.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6 cifra-pulsable" id="val-obreros-fem" data-p-grupo="Obreros" data-p-columna="muj">{{ datos.Obreros.muj }}</td>
                             </tr>
 
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
                                 <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Técnicos</td>
-                                <td class="text-end text-dark fs-5" id="val-tecnicos">{{ datos.Técnicos.tot }}</td>
+                                <td class="text-end text-dark fs-5 cifra-pulsable" id="val-tecnicos" data-p-grupo="Técnicos" data-p-columna="tot">{{ datos.Técnicos.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-tecnicos-fem">{{ datos.Técnicos.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6 cifra-pulsable" id="val-tecnicos-fem" data-p-grupo="Técnicos" data-p-columna="muj">{{ datos.Técnicos.muj }}</td>
                             </tr>
 
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
                                 <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Administrativos</td>
-                                <td class="text-end text-dark fs-5" id="val-admin">{{ datos.Administrativos.tot }}</td>
+                                <td class="text-end text-dark fs-5 cifra-pulsable" id="val-admin" data-p-grupo="Administrativos" data-p-columna="tot">{{ datos.Administrativos.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-admin-fem">{{ datos.Administrativos.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6 cifra-pulsable" id="val-admin-fem" data-p-grupo="Administrativos" data-p-columna="muj">{{ datos.Administrativos.muj }}</td>
                             </tr>
 
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
                                 <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Servicios</td>
-                                <td class="text-end text-dark fs-5" id="val-servicios">{{ datos.Servicios.tot }}</td>
+                                <td class="text-end text-dark fs-5 cifra-pulsable" id="val-servicios" data-p-grupo="Servicios" data-p-columna="tot">{{ datos.Servicios.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-servicios-fem">{{ datos.Servicios.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6 cifra-pulsable" id="val-servicios-fem" data-p-grupo="Servicios" data-p-columna="muj">{{ datos.Servicios.muj }}</td>
                             </tr>
 
                             <tr class="fila-categoria bg-emerald-50 bg-opacity-25">
                                 <td><i class="bx bxs-circle text-success me-2" style="font-size: 8px;"></i>Cuadros</td>
-                                <td class="text-end text-dark fs-5" id="val-cuadros">{{ datos.Cuadros.tot }}</td>
+                                <td class="text-end text-dark fs-5 cifra-pulsable" id="val-cuadros" data-p-grupo="Cuadros" data-p-columna="tot">{{ datos.Cuadros.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold fs-6" id="val-cuadros-fem">{{ datos.Cuadros.muj }}</td>
+                                <td class="text-end text-pink-600 fw-bold fs-6 cifra-pulsable" id="val-cuadros-fem" data-p-grupo="Cuadros" data-p-columna="muj">{{ datos.Cuadros.muj }}</td>
                             </tr>
 
                             <tr class="bg-orange-50 border-top border-warning border-2">
                                 <td class="py-3"><span class="fw-black text-dark text-uppercase"><i class="bx bxs-group text-warning fs-5 me-2"></i>Total Trabajadores Físicos</span></td>
-                                <td class="text-end text-warning fw-black fs-4" id="total-trabajadores">0</td>
+                                <td class="text-end text-warning fw-black fs-4 cifra-pulsable" id="total-trabajadores" data-p-grupo="TOTAL" data-p-columna="tot">0</td>
                             </tr>
                             <tr class="fila-sub bg-orange-50 bg-opacity-50">
                                 <td><i class="bx bx-subdirectory-right text-warning me-1"></i> De Ellos: Mujeres</td>
-                                <td class="text-end text-pink-600 fw-bold" id="total-trabajadores-fem">0</td>
+                                <td class="text-end text-pink-600 fw-bold cifra-pulsable" id="total-trabajadores-fem" data-p-grupo="TOTAL" data-p-columna="muj">0</td>
                             </tr>
 
                             <tr class="fila-categoria border-top border-2">
@@ -228,11 +228,11 @@
 
                             <tr class="fila-sub">
                                 <td class="fw-bold">Cumpliendo Misión Internacional</td>
-                                <td class="text-end fw-bold" id="val-misiones">{{ datos.Misiones.tot }}</td>
+                                <td class="text-end fw-bold cifra-pulsable" id="val-misiones" data-p-grupo="Misiones" data-p-columna="tot">{{ datos.Misiones.tot }}</td>
                             </tr>
                             <tr class="fila-sub">
                                 <td><i class="bx bx-subdirectory-right text-muted me-1"></i> De Ellas: Mujeres</td>
-                                <td class="text-end text-pink-600" id="val-misiones-fem">{{ datos.Misiones.muj }}</td>
+                                <td class="text-end text-pink-600 cifra-pulsable" id="val-misiones-fem" data-p-grupo="Misiones" data-p-columna="muj">{{ datos.Misiones.muj }}</td>
                             </tr>
 
                             <tr class="bg-indigo-50 border-top border-primary border-2">
@@ -754,4 +754,5 @@
     // Lanzar inmediatamente
     setTimeout(window.calcularMatematica, 300);
 </script>
+{% include 'pages/informes/partials/cifras_interactivas.html' %}
 {% endblock %}

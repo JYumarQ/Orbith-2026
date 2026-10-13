@@ -1,0 +1,34 @@
+{% comment %}
+  Ventana «Plazas» (dashboard.views.plazas_html): cargos en plantilla con sus
+  plazas. El desplegable y el buscador recargan solo las filas. Pulsar una fila
+  despliega sus ocupantes y, si queda plaza, «Contratar aquí».
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">Plazas de la plantilla</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <form id="plazas-filtros" class="d-flex flex-wrap gap-2 mb-2"
+        hx-get="{% url 'dashboard_plazas' %}?solo_filas=1&{{ qs_base }}"
+        hx-target="#plazas-filas" hx-trigger="change, input changed delay:400ms from:#plazas-q"
+        onsubmit="return false;">
+    <select name="vista" class="form-select form-select-sm" style="width: auto;" aria-label="Vista">
+      {% for valor, etiqueta in vistas %}
+      <option value="{{ valor }}" {% if valor == vista %}selected{% endif %}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+    <input type="search" id="plazas-q" name="q" value="{{ q }}" class="form-control form-control-sm"
+           style="max-width: 240px;" placeholder="Buscar cargo…" aria-label="Buscar cargo">
+  </form>
+  <div class="orb-tabla-scroll orb-tabla-alto">
+    <table class="table orb-tabla">
+      <thead>
+        <tr><th>Unidad</th><th>Departamento</th><th>Cargo</th>
+            <th class="text-end">Aprobadas</th><th class="text-end">Ocupadas</th><th class="text-end">Vacantes</th><th></th></tr>
+      </thead>
+      <tbody id="plazas-filas">
+        {% include 'pages/dashboard/partials/plazas_filas.html' %}
+      </tbody>
+    </table>
+  </div>
+</div>

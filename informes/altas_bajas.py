@@ -102,6 +102,10 @@ class FilaMovimiento:
     completar_cargo: bool = False
     antiguedad: str = ''
     cobro_sistema_pago: bool = False
+    # Para la ventana de una cifra del resumen: el expediente y el trabajador
+    # (doble clic, su histórico).
+    expediente: str = ''
+    aspirante_id: object = None
 
     @property
     def es_mujer(self):
@@ -219,6 +223,8 @@ def _fila(contrato, fecha, baja=None):
                    if unidad and unidad.municipio_id else SIN_MUNICIPIO),
         unidad_id=unidad.pk if unidad else None,
         ncargo_id=ncargo.pk if ncargo else None,
+        expediente=contrato.no_expediente or '',
+        aspirante_id=contrato.aspirante_id,
         **extra
     )
 

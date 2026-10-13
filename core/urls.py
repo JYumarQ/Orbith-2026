@@ -12,10 +12,14 @@ urlpatterns = [
     path('dashboard/piramide-edades/', dashboard_views.piramide_edades_json, name='dashboard_piramide_json'),
     path('dashboard/advertencias/', dashboard_views.advertencias_json, name='dashboard_advertencias_json'),
     path('dashboard/antiguedad/', dashboard_views.antiguedad_html, name='dashboard_antiguedad_html'),
+    path('dashboard/antiguedad/detalle/', dashboard_views.antiguedad_detalle_html, name='dashboard_antiguedad_detalle'),
     path('dashboard/altas-bajas-mes/', dashboard_views.altas_bajas_mes_html, name='dashboard_altas_bajas_mes'),
     path('dashboard/salario/', dashboard_views.salario_desglose_html, name='dashboard_salario'),
     path('dashboard/cumpleanos/', dashboard_views.cumpleanos_html, name='dashboard_cumpleanos'),
     path('dashboard/recordatorios/', dashboard_views.recordatorios_html, name='dashboard_recordatorios'),
+    path('dashboard/plazas/', dashboard_views.plazas_html, name='dashboard_plazas'),
+    path('dashboard/plazas/<int:cargo_id>/ocupantes/', dashboard_views.plazas_ocupantes_html,
+         name='dashboard_plazas_ocupantes'),
 
     ## ---------------------------------------------------------
     # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)

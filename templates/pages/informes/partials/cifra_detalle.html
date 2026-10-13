@@ -1,0 +1,42 @@
+{% comment %}
+  Ventana de una cifra de un Informe RRHH (ver `cifras_interactivas.html` y
+  `informes.views._ventana_de_cifra`): los cargos (`tipo='cargos'`) o las personas
+  que suman la cifra pulsada. Filas `FilaCargo` / `FilaContrato` de informes.fuentes.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ titulo }}{% if categoria %} · {{ categoria }}{% endif %}{% if fuente.es_historica %} <span class="badge bg-label-secondary ms-1">{{ fuente.etiqueta }}</span>{% endif %}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      {% if tipo == 'cargos' %}
+      <thead><tr><th>Unidad</th><th>Departamento</th><th>Cargo</th>
+        <th class="text-end">Aprobadas</th><th class="text-end">Cubiertas</th><th class="text-end">Vacantes</th></tr></thead>
+      <tbody>
+        {% for c in filas %}
+        <tr>
+          <td>{% for clave, nombre in nombres_unidad.items %}{% if clave == c.unidad_id %}{{ nombre }}{% endif %}{% endfor %}</td>
+          <td>{{ c.departamento_descripcion }}</td><td>{{ c.ncargo_descripcion }}</td>
+          <td class="text-end">{{ c.cant_aprobada }}</td><td class="text-end">{{ c.cant_cubierta }}</td>
+          <td class="text-end">{{ c.vacantes }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted p-4">No hay cargos en esta cifra.</td></tr>{% endfor %}
+      </tbody>
+      {% else %}
+      <thead><tr><th>Exp.</th><th>Nombre</th><th>Unidad</th><th>Departamento</th><th>Cargo</th><th>Contrato</th></tr></thead>
+      <tbody>
+        {% for c in filas %}
+        <tr {% if c.aspirante_id %}class="cursor-pointer" title="Doble clic para ver su histórico"
+            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' c.aspirante_id %}')"{% endif %}>
+          <td><strong>{{ c.no_expediente }}</strong></td><td>{{ c.aspirante_nombre }}</td>
+          <td>{% for clave, nombre in nombres_unidad.items %}{% if clave == c.unidad_id %}{{ nombre }}{% endif %}{% endfor %}</td>
+          <td>{{ c.departamento_descripcion }}</td><td>{{ c.ncargo_descripcion }}</td><td>{{ c.tipo_descripcion }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted p-4">Nadie en esta cifra.</td></tr>{% endfor %}
+      </tbody>
+      {% endif %}
+    </table>
+  </div>
+  <p class="text-muted small mt-2 mb-0">{{ filas|length }} {% if tipo == 'cargos' %}cargo{{ filas|length|pluralize }}{% else %}persona{{ filas|length|pluralize }}{% endif %}.</p>
+</div>

@@ -1,0 +1,33 @@
+{% comment %}
+  Ventana «Ver más» de Años de Servicio (dashboard.views.antiguedad_detalle_html).
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">Años de servicio{% if rango %} · {{ rango }}{% endif %}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <p class="text-muted small mb-2">{{ filas|length }} trabajador{{ filas|length|pluralize:"es" }} activo{{ filas|length|pluralize }}, del más antiguo al más nuevo. El importe sale de la escala de años de servicio vigente.</p>
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      <thead>
+        <tr><th>Exp.</th><th>Nombre</th><th>Unidad</th><th>Cargo</th><th>F. alta entidad</th>
+            <th class="text-end">Años</th><th class="text-end">Importe</th></tr>
+      </thead>
+      <tbody>
+        {% for c in filas %}
+        <tr>
+          <td><strong>{{ c.no_expediente }}</strong></td>
+          <td>{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}</td>
+          <td>{{ c.cargo.departamento.unidad_organizativa.descripcion|default:"—" }}</td>
+          <td>{{ c.cargo.ncargo.descripcion|default:"—" }}</td>
+          <td>{{ c.fecha_alta_entidad|date:"d/m/Y"|default:"—" }}</td>
+          <td class="text-end">{% if c.antiguedad is not None %}{{ c.antiguedad }}{% else %}—{% endif %}</td>
+          <td class="text-end">{% if c.importe_annos is not None %}${{ c.importe_annos }}{% else %}—{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted p-4">Nadie cumple ese filtro.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

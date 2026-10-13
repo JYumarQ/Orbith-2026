@@ -135,7 +135,7 @@
                         <th class="px-2 py-2 text-center text-slate-500 fw-bold text-uppercase" style="font-size: 10px; background-color: rgba(255, 247, 237, 0.2);">Adie.</th>
                     </tr>
                 </thead>
-                <tbody class="border-top-0">
+                <tbody class="border-top-0" data-cifras-url="{% url 'informe_puestos_clave_detalle' %}">
                     {% comment %} El informe se reparte por familia y, dentro de cada
                        una, por Unidad Organizativa: cada unidad encabeza con sus
                        totales y debajo van sus cargos, como el modelo oficial. La
@@ -143,20 +143,20 @@
                        modo que una direccion principal arrastra a sus subunidades sin
                        duplicar el maquetado. {% endcomment %}
                     {% for familia in datos_familias %}
-                        <tr style="background-color: rgba(49, 46, 129, 0.06);">
+                        <tr style="background-color: rgba(49, 46, 129, 0.06);" data-p-familia="{{ familia.clave }}">
                             <td class="px-4 py-2">
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="rounded-pill" style="width: 5px; height: 18px; background-color: #4f46e5;"></div>
                                     <span class="fw-black text-uppercase tracking-widest" style="font-size: 13px; color: #312e81;">{{ familia.nombre }}</span>
                                 </div>
                             </td>
-                            <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.aprob }}</td>
-                            <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600" style="font-size: 20px;">{{ familia.subtotales.cub }}</td>
-                            <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500" style="font-size: 20px;">{{ familia.subtotales.vac }}</td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-slate-600 cifra-pulsable" data-p-columna="aprob" style="font-size: 20px;">{{ familia.subtotales.aprob }}</td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-emerald-600 cifra-pulsable" data-p-columna="cub" style="font-size: 20px;">{{ familia.subtotales.cub }}</td>
+                            <td class="px-2 py-2 text-center font-monospace fw-bold text-orange-500 cifra-pulsable" data-p-columna="vac" style="font-size: 20px;">{{ familia.subtotales.vac }}</td>
                             <td class="px-2 py-2 text-center"><span class="badge bg-indigo-50 text-indigo-600 fw-black rounded-3" style="font-size: 11px; padding: 0.3rem 0.5rem;">{{ familia.subtotales.porc }}%</span></td>
-                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.det }}</td>
-                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.muj }}</td>
-                            <td class="px-2 py-2 text-center fw-bold text-slate-600" style="font-size: 20px;">{{ familia.subtotales.adiest }}</td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="det" style="font-size: 20px;">{{ familia.subtotales.det }}</td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="muj" style="font-size: 20px;">{{ familia.subtotales.muj }}</td>
+                            <td class="px-2 py-2 text-center fw-bold text-slate-600 cifra-pulsable" data-p-columna="adiest" style="font-size: 20px;">{{ familia.subtotales.adiest }}</td>
                         </tr>
                         {% for unidad in familia.unidades %}
                             {% include 'pages/informes/partials/puestos_clave_unidad.html' with unidad=unidad nivel=0 %}
@@ -221,4 +221,5 @@
         window.location.href = "{% url 'exportar_puestos_clave_excel' %}" + window.location.search;
     }
 </script>
+{% include 'pages/informes/partials/cifras_interactivas.html' %}
 {% endblock %}

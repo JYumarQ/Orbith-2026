@@ -6,6 +6,7 @@ urlpatterns = [
     # 1. INFORMES: CONSOLIDADO DE FUERZA DE TRABAJO
     # ---------------------------------------------------------
     path('economia/', views.InformeEconomiaView.as_view(), name='informe_economia'),
+    path('economia/detalle/', views.ConsolidadoDetalleView.as_view(), name='informe_consolidado_detalle'),
     path('economia/exportar-word/', views.ExportarConsolidadoWordView.as_view(), name='exportar_consolidado_word'),
     path('economia/exportar-pdf/', views.ExportarConsolidadoPDFView.as_view(), name='exportar_consolidado_pdf'),
     path('economia/exportar-excel/', views.ExportarConsolidadoExcelView.as_view(), name='exportar_consolidado_excel'),
@@ -14,6 +15,7 @@ urlpatterns = [
     # 2. INFORMES: TRABAJADORES X UEB
     # ---------------------------------------------------------
     path('economia/trabajadores-ueb/', views.InformeTrabajadoresUEBView.as_view(), name='informe_trabajadores_ueb'),
+    path('economia/trabajadores-ueb/detalle/', views.TrabajadoresUEBDetalleView.as_view(), name='informe_trabajadores_ueb_detalle'),
     path('economia/trabajadores-ueb/exportar-word/', views.ExportarResumenUEBWordView.as_view(), name='exportar_resumen_ueb_word'),
     path('economia/trabajadores-ueb/exportar-pdf/', views.ExportarResumenUEBPDFView.as_view(), name='exportar_resumen_ueb_pdf'),
     path('economia/trabajadores-ueb/exportar-excel/', views.ExportarResumenUEBExcelView.as_view(), name='exportar_resumen_ueb_excel'),
@@ -22,6 +24,7 @@ urlpatterns = [
     # 3. INFORMES: RESUMEN PUESTOS CLAVE
     # ---------------------------------------------------------
     path('puestos-clave/', views.InformePuestosClaveView.as_view(), name='informe_puestos_clave'),
+    path('puestos-clave/detalle/', views.PuestosClaveDetalleView.as_view(), name='informe_puestos_clave_detalle'),
     path('puestos-clave/exportar/word/', views.ExportarPuestosClaveWordView.as_view(), name='exportar_puestos_clave_word'),
     path('puestos-clave/exportar/pdf/', views.ExportarPuestosClavePDFView.as_view(), name='exportar_puestos_clave_pdf'),
     path('puestos-clave/exportar/excel/', views.ExportarPuestosClaveExcelView.as_view(), name='exportar_puestos_clave_excel'),
@@ -39,6 +42,7 @@ urlpatterns = [
     # 5. INFORMES: PLAN MENSUAL DE TRABAJO (REGISTRO DIARIO)
     # ---------------------------------------------------------
     path('registro-diario/', views.RegistroDiarioView.as_view(), name='informe_registro_diario'),
+    path('registro-diario/detalle/', views.RegistroDiarioDetalleView.as_view(), name='informe_registro_diario_detalle'),
     path('registro-diario/exportar-word/', views.ExportarRegistroDiarioWordView.as_view(), name='exportar_registro_diario_word'),
     path('registro-diario/exportar-pdf/', views.ExportarRegistroDiarioPDFView.as_view(), name='exportar_registro_diario_pdf'),
     path('registro-diario/exportar-excel/', views.ExportarRegistroDiarioExcelView.as_view(), name='exportar_registro_diario_excel'),
@@ -52,6 +56,7 @@ urlpatterns = [
     # 7. INFORMES: ALTAS Y BAJAS DEL MES (modelo de la UNE)
     # ---------------------------------------------------------
     path('altas-bajas/', views.InformeAltasBajasView.as_view(), name='informe_altas_bajas'),
+    path('altas-bajas/detalle/', views.AltasBajasDetalleView.as_view(), name='informe_altas_bajas_detalle'),
     path('altas-bajas/exportar-word/', views.ExportarAltasBajasWordView.as_view(), name='exportar_altas_bajas_word'),
     path('altas-bajas/exportar-pdf/', views.ExportarAltasBajasPDFView.as_view(), name='exportar_altas_bajas_pdf'),
     path('altas-bajas/exportar-excel/', views.ExportarAltasBajasExcelView.as_view(), name='exportar_altas_bajas_excel'),

@@ -68,7 +68,7 @@
     <div class="inf-tarjeta orb-tabla-card">
         <div class="inf-tarjeta-cabeza">
             <h5 class="inf-tarjeta-titulo">Listado de Trabajadores por Unidad Empresarial de Base</h5>
-            <small class="inf-tarjeta-nota">Desglose por unidad y por género. Una unidad principal suma las de sus subunidades.</small>
+            <small class="inf-tarjeta-nota">Desglose por unidad y por género. Una unidad principal suma las de sus subunidades. Pulse una cifra para ver quiénes son.</small>
         </div>
 
         <div class="orb-tabla-scroll text-nowrap">
@@ -84,22 +84,22 @@
                         <th class="th-columna text-center">Mujeres</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody data-cifras-url="{% url 'informe_trabajadores_ueb_detalle' %}">
                     {% for dato in datos_uebs %}
-                        <tr>
+                        <tr data-p-unidad="{{ dato.id }}">
                             <td class="td-nombre">{{ dato.nombre }}</td>
-                            <td class="td-cifra {% if dato.total %}td-cifra--fuerte{% else %}td-cifra--cero{% endif %}">{{ dato.total }}</td>
-                            <td class="td-cifra {% if dato.mujeres %}td-cifra--azul{% else %}td-cifra--cero{% endif %}">{{ dato.mujeres }}</td>
+                            <td class="td-cifra cifra-pulsable {% if dato.total %}td-cifra--fuerte{% else %}td-cifra--cero{% endif %}" data-p-columna="total">{{ dato.total }}</td>
+                            <td class="td-cifra cifra-pulsable {% if dato.mujeres %}td-cifra--azul{% else %}td-cifra--cero{% endif %}" data-p-columna="mujeres">{{ dato.mujeres }}</td>
                             <td class="td-cifra {% if dato.porciento %}td-cifra--naranja{% else %}td-cifra--cero{% endif %}">{{ dato.porciento }} %</td>
                         </tr>
                     {% empty %}
                         <tr class="fila-vacia"><td colspan="4">No se encontraron datos disponibles para las UEB.</td></tr>
                     {% endfor %}
 
-                    <tr class="fila-total">
+                    <tr class="fila-total" data-p-unidad="TOTAL">
                         <td class="td-nombre">Total general</td>
-                        <td class="td-cifra">{{ total_general }}</td>
-                        <td class="td-cifra">{{ total_mujeres }}</td>
+                        <td class="td-cifra cifra-pulsable" data-p-columna="total">{{ total_general }}</td>
+                        <td class="td-cifra cifra-pulsable" data-p-columna="mujeres">{{ total_mujeres }}</td>
                         <td class="td-cifra">100 %</td>
                     </tr>
                 </tbody>
@@ -122,4 +122,5 @@
         window.location.href = "{% url 'exportar_resumen_ueb_excel' %}" + window.location.search;
     }
 </script>
+{% include 'pages/informes/partials/cifras_interactivas.html' %}
 {% endblock %}

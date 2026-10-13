@@ -163,9 +163,33 @@ def antiguedad_html(request):
     fecha_alta_entidad en contratos/models.py), así que esta tarjeta solo
     considera contratos de aspirantes en estado ACTIVO.
     """
-    uo_ids, _ = resolver_filtros(request)
     query = (request.GET.get('q') or '').strip()
     page_num = request.GET.get('page', 1)
+    qs = _antiguedad_qs(request)
+
+    paginator = Paginator(qs, 10)
+    page_obj = paginator.get_page(page_num)
+
+    return render(request, 'pages/dashboard/partials/antiguedad_tabla.html', {
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'query': query,
+    })
+
+
+def _annos(request, parametro):
+    """Número de años de `?parametro=` (entero ≥ 0), o None si falta o no vale."""
+    valor = (request.GET.get(parametro) or '').strip()
+    return int(valor) if valor.isdigit() else None
+
+
+def _antiguedad_qs(request):
+    """Activos de la tarjeta «Años de Servicio», del más antiguo al más nuevo, con
+    el alcance de unidades, el buscador (`q`) y el filtro «De __ a __ años»
+    (`annos_desde` / `annos_hasta`; vacío = sin límite, iguales = exacto). La
+    comparten la tarjeta y su ventana «Ver más»."""
+    uo_ids, _ = resolver_filtros(request)
+    query = (request.GET.get('q') or '').strip()
 
     qs = CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
         'aspirante', 'cargo', 'cargo__departamento'
@@ -189,16 +213,38 @@ def antiguedad_html(request):
             Q(aspirante__doc_identidad__icontains=query)
         )
 
-    qs = qs.order_by(F('fecha_alta_entidad').asc(nulls_last=True))
+    desde, hasta = _annos(request, 'annos_desde'), _annos(request, 'annos_hasta')
+    if desde is not None:
+        qs = qs.filter(antiguedad__gte=desde)
+    if hasta is not None:
+        qs = qs.filter(antiguedad__lte=hasta)
 
-    paginator = Paginator(qs, 10)
-    page_obj = paginator.get_page(page_num)
+    return qs.order_by(F('fecha_alta_entidad').asc(nulls_last=True))
 
-    return render(request, 'pages/dashboard/partials/antiguedad_tabla.html', {
-        'page_obj': page_obj,
-        'paginator': paginator,
-        'query': query,
-    })
+
+def antiguedad_detalle_html(request):
+    """Ventana «Ver más» de Años de Servicio: los mismos trabajadores que la tarjeta
+    (mismo filtro) con unidad, cargo, F. alta entidad, años y el importe que les
+    corresponde por la escala. La escala se lee UNA vez, no una por persona."""
+    from prenomina.models import NEscalaAnnosServicio
+
+    escala = NEscalaAnnosServicio.como_diccionario()
+    filas = list(_antiguedad_qs(request).select_related(
+        'cargo__ncargo', 'cargo__departamento__unidad_organizativa'))
+    for contrato in filas:
+        contrato.importe_annos = (NEscalaAnnosServicio.cuantia_de(escala, contrato.antiguedad)
+                                  if contrato.antiguedad is not None else None)
+    desde, hasta = _annos(request, 'annos_desde'), _annos(request, 'annos_hasta')
+    if desde is not None and hasta is not None:
+        rango = f'{desde} años' if desde == hasta else f'de {desde} a {hasta} años'
+    elif desde is not None:
+        rango = f'{desde} años o más'
+    elif hasta is not None:
+        rango = f'hasta {hasta} años'
+    else:
+        rango = ''
+    return render(request, 'pages/dashboard/partials/antiguedad_detalle.html', {
+        'filas': filas, 'rango': rango})
 
 
 MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
@@ -369,6 +415,69 @@ def recordatorios_html(request):
         r.prioridad = _color_prioridad(r.fecha_objetivo)
     return render(request, 'pages/dashboard/partials/recordatorios_lista.html', {
         'recordatorios': recordatorios[:10], 'recordatorios_total': len(recordatorios)})
+
+
+VISTAS_PLAZAS = [('vacantes', 'Con vacantes'), ('llenas', 'Plazas llenas'),
+                 ('inactivos', 'Inactivos'), ('todas', 'Todas')]
+
+
+def plazas_html(request):
+    """Ventana «Plazas» de las tarjetas Vacantes Libres y Ocupación de Plazas
+    (decisiones de RRHH del 12-10-2026): los cargos EN plantilla con sus plazas
+    aprobadas, ocupadas y vacantes, con el mismo alcance de unidades que la
+    Dashboard. `vista`: vacantes / llenas / inactivos (sin plazas aprobadas, como
+    los llama el Gestor) / todas. `q` busca por el nombre del cargo."""
+    uo_ids, _ = resolver_filtros(request)
+    vista = request.GET.get('vista') if request.GET.get('vista') in dict(VISTAS_PLAZAS) else 'vacantes'
+    q = (request.GET.get('q') or '').strip()
+
+    cargos = CargoPlantilla.objects.filter(en_plantilla=True).select_related(
+        'ncargo', 'departamento__unidad_organizativa')
+    if uo_ids:
+        cargos = cargos.filter(departamento__unidad_organizativa_id__in=uo_ids)
+    if vista == 'vacantes':
+        cargos = cargos.filter(activo=True, cant_cubierta__lt=F('cant_aprobada'))
+    elif vista == 'llenas':
+        cargos = cargos.filter(activo=True, cant_cubierta__gte=F('cant_aprobada'))
+    elif vista == 'inactivos':
+        cargos = cargos.filter(activo=False)
+    if q:
+        cargos = cargos.filter(ncargo__descripcion__icontains=q)
+    cargos = list(cargos.order_by('departamento__unidad_organizativa__orden_informe',
+                                  'departamento__orden_informe', 'orden_informe'))
+    for cargo in cargos:
+        cargo.vacantes = max((cargo.cant_aprobada or 0) - (cargo.cant_cubierta or 0), 0)
+
+    plantilla = ('pages/dashboard/partials/plazas_filas.html' if request.GET.get('solo_filas')
+                 else 'pages/dashboard/partials/plazas.html')
+    # Los filtros de la Dashboard (unidades) para el desplegable y el buscador, sin
+    # los propios de la ventana, que ya ponen ellos.
+    base = request.GET.copy()
+    for propio in ('vista', 'q', 'solo_filas'):
+        base.pop(propio, None)
+    return render(request, plantilla, {
+        'cargos': cargos, 'vista': vista, 'vistas': VISTAS_PLAZAS, 'q': q,
+        'qs_base': base.urlencode(),
+        'total_vacantes': sum(c.vacantes for c in cargos),
+    })
+
+
+def plazas_ocupantes_html(request, cargo_id):
+    """Fila desplegada de la ventana «Plazas»: quién ocupa el cargo y, si queda
+    plaza y el usuario puede contratar, el botón «Contratar aquí»."""
+    from .filtros import unidades_visibles
+    from usuarios.mixins import puede_editar
+
+    cargo = get_object_or_404(
+        CargoPlantilla.objects.select_related('ncargo'), pk=cargo_id,
+        departamento__unidad_organizativa__in=unidades_visibles(request.user))
+    ocupantes = (CAlta.objects.filter(cargo=cargo).select_related('aspirante', 'tipo')
+                 .order_by('aspirante__nombre', 'aspirante__papellido'))
+    vacantes = max((cargo.cant_aprobada or 0) - (cargo.cant_cubierta or 0), 0)
+    return render(request, 'pages/dashboard/partials/plazas_ocupantes.html', {
+        'cargo': cargo, 'ocupantes': ocupantes,
+        'puede_contratar': cargo.activo and vacantes > 0 and puede_editar(request.user),
+    })
 
 
 # Create your views here.

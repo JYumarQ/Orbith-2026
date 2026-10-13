@@ -675,3 +675,97 @@ class DashboardInteractivaTests(TestCase):
         respuesta = self.client.get(reverse('dashboard_recordatorios'), {'prioridad': 'verde'})
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.context['recordatorios_total'], 0)
+
+
+class PlazasDashboardTests(TestCase):
+    """Ventana «Plazas» de Vacantes Libres / Ocupación de Plazas (12-10-2026)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        dpto = Departamento.objects.create(descripcion='Ventas', unidad_organizativa=unidad, orden_informe=1)
+        grupo = NGrupoEscala.objects.create(nivel='IV')
+
+        def cargo(nombre, aprobadas, cubiertas, en_plantilla=True):
+            c = CargoPlantilla.objects.create(
+                ncargo=NCargo.objects.create(descripcion=nombre, cat_ocupacional='TEC',
+                                             grupo_escala=grupo, salario_basico=4000),
+                departamento=dpto, cant_aprobada=aprobadas, orden_informe=CargoPlantilla.objects.count() + 1,
+                en_plantilla=en_plantilla)
+            CargoPlantilla.objects.filter(pk=c.pk).update(cant_cubierta=cubiertas)
+            return c
+        cls.con_vacantes = cargo('Técnico', 5, 3)
+        cls.lleno = cargo('Operario', 2, 2)
+        cls.inactivo = cargo('Antiguo', 0, 0)
+        cargo('Fuera', 3, 0, en_plantilla=False)
+        cls.admin = CustomUser.objects.create_user(username='admin_plazas', password='x', es_admin=True)
+        cls.observador = CustomUser.objects.create_user(
+            username='obs_plazas', password='x', es_observador=True)
+
+    def nombres(self, vista, **extra):
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse('dashboard_plazas'), {'vista': vista, **extra})
+        return [c.ncargo.descripcion for c in r.context['cargos']]
+
+    def test_vistas_y_buscador(self):
+        self.assertEqual(self.nombres('vacantes'), ['Técnico'])
+        self.assertEqual(self.nombres('llenas'), ['Operario'])
+        self.assertEqual(self.nombres('inactivos'), ['Antiguo'])
+        self.assertEqual(sorted(self.nombres('todas')), ['Antiguo', 'Operario', 'Técnico'])
+        self.assertEqual(self.nombres('todas', q='oper'), ['Operario'])
+
+    def test_contratar_aqui_solo_con_plaza_y_permiso(self):
+        url = lambda c: reverse('dashboard_plazas_ocupantes', args=[c.pk])
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(url(self.con_vacantes)), 'Contratar aquí')
+        self.assertNotContains(self.client.get(url(self.lleno)), 'Contratar aquí')
+        self.client.force_login(self.observador)
+        self.assertNotContains(self.client.get(url(self.con_vacantes)), 'Contratar aquí')
+
+
+class AnnosDeServicioFiltroTests(TestCase):
+    """Tarjeta Años de Servicio: filtro «De __ a __ años» y ventana «Ver más»."""
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cargo = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Técnico', cat_ocupacional='TEC',
+                                         grupo_escala=NGrupoEscala.objects.create(nivel='IV'),
+                                         salario_basico=4000),
+            departamento=Departamento.objects.create(
+                descripcion='Ventas', unidad_organizativa=unidad, orden_informe=1),
+            cant_aprobada=10, orden_informe=1)
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(descripcion='Determinado', ocupa_plaza=True, requiere_motivo=False)
+        hoy = date.today()
+        for seq, annos in enumerate((2, 4, 8, 12), start=1):
+            asp = Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Antig{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'8001011270{seq}', estado='ACTIVO', sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio)
+            CAlta.objects.create(aspirante=asp, no_expediente=f'0095{seq}', tipo=tipo, cargo=cargo,
+                                 fecha_alta=hoy, fecha_alta_entidad=date(hoy.year - annos, 1, 1))
+        cls.admin = CustomUser.objects.create_user(username='admin_antig', password='x', es_admin=True)
+
+    def annos(self, url='dashboard_antiguedad_html', **params):
+        self.client.force_login(self.admin)
+        r = self.client.get(reverse(url), params)
+        filas = r.context['page_obj'] if 'page_obj' in r.context else r.context['filas']
+        return sorted(c.antiguedad for c in filas)
+
+    def test_rangos(self):
+        self.assertEqual(self.annos(annos_desde=3, annos_hasta=5), [4])
+        self.assertEqual(self.annos(annos_hasta=4), [2, 4])
+        self.assertEqual(self.annos(annos_desde=10), [12])
+        self.assertEqual(self.annos(annos_desde=8, annos_hasta=8), [8])
+        self.assertEqual(self.annos(annos_desde='x'), [2, 4, 8, 12])
+
+    def test_ver_mas_usa_el_mismo_filtro(self):
+        self.assertEqual(self.annos('dashboard_antiguedad_detalle', annos_desde=3, annos_hasta=9), [4, 8])

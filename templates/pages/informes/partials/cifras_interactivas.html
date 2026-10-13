@@ -1,0 +1,45 @@
+{% comment %}
+  Informes RRHH interactivos (decisión de RRHH del 12-10-2026): pulsar una cifra
+  enseña qué hay detrás, en una ventana. Se incluye una vez por informe.
+
+  Uso: el contenedor de la tabla lleva `data-cifras-url` con la dirección de su vista «…Detalle»
+  y cada celda pulsable la clase `cifra-pulsable`. Los parámetros de la celda son
+  sus atributos `data-p-*` y los de su fila (`data-p-columna="t_tot"` → `columna`).
+  Los filtros del informe (unidades, cierre…) van en la dirección de la página y
+  se añaden solos. Una celda con 0 no abre nada.
+{% endcomment %}
+<style>
+  .cifra-pulsable { cursor: pointer; transition: background-color .15s; }
+  .cifra-pulsable:hover { background-color: rgba(105, 108, 255, 0.10) !important; text-decoration: underline dotted; }
+</style>
+<div class="modal fade" id="modalCifraInforme" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" id="contenidoModalCifraInforme"></div>
+  </div>
+</div>
+{% include 'pages/contrato/partials/modal_historico_include.html' %}
+<script>
+(function () {
+  if (window.OrbithCifrasInforme) return;
+  window.OrbithCifrasInforme = true;
+  document.addEventListener('click', function (e) {
+    const celda = e.target.closest('.cifra-pulsable');
+    const contenedor = celda && celda.closest('[data-cifras-url]');
+    if (!contenedor || celda.textContent.trim() === '0') return;
+    const params = new URLSearchParams(window.location.search);
+    [celda.closest('tr'), celda].forEach(function (el) {
+      if (!el) return;
+      Object.keys(el.dataset).forEach(function (clave) {
+        if (clave.length > 1 && clave[0] === 'p' && clave[1] === clave[1].toUpperCase()) {
+          params.set(clave.charAt(1).toLowerCase() + clave.slice(2), el.dataset[clave]);
+        }
+      });
+    });
+    const contenido = document.getElementById('contenidoModalCifraInforme');
+    contenido.innerHTML = '<div class="modal-body text-center text-muted py-5">Cargando…</div>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCifraInforme')).show();
+    htmx.ajax('GET', contenedor.dataset.cifrasUrl + '?' + params.toString(),
+              { target: '#contenidoModalCifraInforme', swap: 'innerHTML' });
+  });
+})();
+</script>

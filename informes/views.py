@@ -249,6 +249,22 @@ class InformeEconomiaView(GuiaInformeRRHHMixin, TemplateView):
         ]
 
 
+    @staticmethod
+    def clase_de_contrato(c):
+        """'plantilla' / 'adiestramiento' / 'determinado' según el nombre del tipo de
+        contrato (búsqueda por palabra clave, en este orden), o None si no tiene
+        cargo o tipo. La comparten las cifras y la ventana de cada cifra."""
+        if not c.ncargo_id or not c.tipo_descripcion:
+            return None
+        desc_tipo = c.tipo_descripcion.upper()
+        if 'INDETERMINADO' in desc_tipo:
+            return 'plantilla'
+        if 'ADIESTRAMIENTO' in desc_tipo:
+            return 'adiestramiento'
+        if 'DETERMINADO' in desc_tipo:
+            return 'determinado'
+        return None
+
     def mapear_categoria(self, codigo):
         mapa = {'OPE': 'Obreros', 'TEC': 'Técnico', 'CDI': 'Cuadro', 'CEJ': 'Cuadro', 'SER': 'Servicio', 'ADM': 'Administrativo'}
         return mapa.get(codigo, 'Obreros')
@@ -276,21 +292,17 @@ class InformeEconomiaView(GuiaInformeRRHHMixin, TemplateView):
 
         # Contratos, para sacar las mujeres, determinados y adiestrados
         for c in fuente.contratos:
-            # Protegemos el código asegurándonos de que tenga cargo y tipo asignado
-            if not c.ncargo_id or not c.tipo_descripcion: continue
+            clase = self.clase_de_contrato(c)
+            if clase is None:
+                continue
             cat = self.mapear_categoria(c.cat_ocupacional)
             mujer = c.es_mujer
-
-            # Convertimos el nombre del nomenclador a mayúsculas para buscar las palabras clave
-            desc_tipo = c.tipo_descripcion.upper()
-
-            # Buscamos de forma dinámica:
-            if 'INDETERMINADO' in desc_tipo:
+            if clase == 'plantilla':
                 if mujer: datos[cat]['p_muj'] += 1
-            elif 'ADIESTRAMIENTO' in desc_tipo:
+            elif clase == 'adiestramiento':
                 datos[cat]['a_tot'] += 1
                 if mujer: datos[cat]['a_muj'] += 1
-            elif 'DETERMINADO' in desc_tipo:
+            elif clase == 'determinado':
                 datos[cat]['d_tot'] += 1
                 if mujer: datos[cat]['d_muj'] += 1
 
@@ -304,6 +316,94 @@ class InformeEconomiaView(GuiaInformeRRHHMixin, TemplateView):
 
         return datos, totales
     
+
+def _ventana_de_cifra(request, fuente, titulo, tipo, filas, categoria=''):
+    """Ventana común de una cifra de los Informes RRHH interactivos: `filas` son
+    `FilaCargo` (tipo 'cargos') o `FilaContrato` (tipo 'personas') de la misma
+    fuente que la tabla —viva o el cierre—, así que suman la cifra pulsada."""
+    return render(request, 'pages/informes/partials/cifra_detalle.html', {
+        'titulo': titulo, 'tipo': tipo, 'filas': filas, 'categoria': categoria,
+        'fuente': fuente,
+        'nombres_unidad': {u: fuente.nombre_unidad(u) for u in {f.unidad_id for f in filas}},
+    })
+
+
+COLUMNAS_CONSOLIDADO = {
+    # columna: (título, qué lista: 'cargos' o 'personas')
+    'aprob': ('Plantilla aprobada', 'cargos'),
+    'vac': ('Vacantes', 'cargos'),
+    'cub': ('Plantilla cubierta', 'personas'),
+    'p_muj': ('Mujeres en plantilla', 'personas'),
+    'd_tot': ('Contratos determinados', 'personas'),
+    'd_muj': ('Mujeres con contrato determinado', 'personas'),
+    'a_tot': ('En adiestramiento', 'personas'),
+    'a_muj': ('Mujeres en adiestramiento', 'personas'),
+    't_tot': ('Total de trabajadores', 'personas'),
+    't_muj': ('Total de mujeres', 'personas'),
+}
+
+
+class ConsolidadoDetalleView(InformeEconomiaView):
+    """Ventana de una cifra del Consolidado (piloto de los Informes RRHH
+    interactivos, decisión de RRHH del 12-10-2026): pulsar una celda enseña qué hay
+    detrás. Las columnas de plazas (aprobadas, vacantes) listan los cargos; las
+    demás, las personas. Usa la misma fuente que la tabla —viva o el cierre
+    congelado— y las mismas reglas que `calcular_consolidado`, así que la lista
+    suma exactamente la cifra pulsada.
+
+    Parámetros: los del informe (fuente, periodo, ueb…) más `categoria` (una de las
+    filas, o TOTAL) y `columna` (clave de `COLUMNAS_CONSOLIDADO`).
+    """
+
+    def get(self, request, *args, **kwargs):
+        columna = request.GET.get('columna')
+        if columna not in COLUMNAS_CONSOLIDADO:
+            return HttpResponse('Cifra no válida.', status=400)
+        categoria = request.GET.get('categoria') or 'TOTAL'
+        fuente, _ctx = fuentes.resolver_fuente(request)
+        titulo, tipo = COLUMNAS_CONSOLIDADO[columna]
+
+        def en_categoria(codigo):
+            return categoria == 'TOTAL' or self.mapear_categoria(codigo) == categoria
+
+        filas = []
+        if tipo == 'cargos':
+            for cargo in fuente.cargos:
+                if not cargo.activo or not cargo.en_plantilla or not en_categoria(cargo.cat_ocupacional):
+                    continue
+                if columna == 'vac' and not cargo.vacantes:
+                    continue
+                filas.append(cargo)
+        else:
+            # Cada columna, con la MISMA regla que su cifra en `calcular_consolidado`:
+            # «Cubierta» sale del cargo (`cant_cubierta` = contratos que ocupan plaza
+            # en cargos activos y en plantilla, de trabajadores activos); las demás,
+            # de la clase del contrato. Los totales son la suma de sus columnas, como
+            # en la tabla, así que la lista también se suma columna a columna.
+            def personas(base):
+                lista = []
+                for c in fuente.contratos:
+                    if not en_categoria(c.cat_ocupacional):
+                        continue
+                    if base == 'cub':
+                        if (c.ncargo_id and c.ocupa_plaza and c.cargo_activo and c.en_plantilla
+                                and c.aspirante_estado == 'ACTIVO'):
+                            lista.append(c)
+                        continue
+                    clase = {'p': 'plantilla', 'd': 'determinado', 'a': 'adiestramiento'}[base[0]]
+                    if self.clase_de_contrato(c) == clase and (not base.endswith('_muj') or c.es_mujer):
+                        lista.append(c)
+                return lista
+
+            partes = {'t_tot': ('cub', 'd_tot', 'a_tot'),
+                      't_muj': ('p_muj', 'd_muj', 'a_muj')}.get(columna, (columna,))
+            for base in partes:
+                filas.extend(personas(base))
+
+        return _ventana_de_cifra(
+            request, fuente, titulo, tipo, filas,
+            'Todas las categorías' if categoria == 'TOTAL' else categoria)
+
 
 class ExportarConsolidadoWordView(InformeEconomiaView):
     """Consolidado de la Fuerza de Trabajo en Word.
@@ -407,6 +507,7 @@ class InformeTrabajadoresUEBView(GuiaInformeRRHHMixin, TemplateView):
             mujeres_ueb = sum(1 for c in contratos_ueb if c.es_mujer)
 
             datos_uebs.append({
+                'id': ueb.id,
                 'nombre': ueb.descripcion,
                 'es_principal': ueb.es_principal,
                 'es_subunidad': ueb.es_subunidad,
@@ -425,6 +526,18 @@ class InformeTrabajadoresUEBView(GuiaInformeRRHHMixin, TemplateView):
 
         return datos_uebs, total_general, total_mujeres
 
+    @staticmethod
+    def unidades_de_cada_raiz(fuente):
+        """{id de la unidad raíz: ids que suma (ella y, si es principal, sus hijas)},
+        el mismo reparto que `calcular_resumen_uebs`."""
+        grupos = {}
+        for ueb in (u for u in fuente.unidades.values() if not u.padre_id):
+            ids = {ueb.id}
+            if ueb.es_principal:
+                ids |= {u.id for u in fuente.unidades.values() if u.padre_id == ueb.id}
+            grupos[ueb.id] = ids
+        return grupos
+
     def _cifras_de_cabecera(self, datos_uebs, total_general, total_mujeres):
         """Las cuatro cifras que encabezan el informe.
 
@@ -440,6 +553,30 @@ class InformeTrabajadoresUEBView(GuiaInformeRRHHMixin, TemplateView):
             'unidades_con_personal': len(con_personal),
             'unidad_mayor': mayor,
         }
+
+
+class TrabajadoresUEBDetalleView(InformeTrabajadoresUEBView):
+    """Ventana de una cifra de Trabajadores por UEB: las personas de esa unidad
+    (con sus subunidades si es principal), o de todas con `unidad=TOTAL`.
+    `columna`: total / mujeres."""
+
+    def get(self, request, *args, **kwargs):
+        columna = request.GET.get('columna')
+        if columna not in ('total', 'mujeres'):
+            return HttpResponse('Cifra no válida.', status=400)
+        fuente, _ctx = fuentes.resolver_fuente(request)
+        grupos = self.unidades_de_cada_raiz(fuente)
+        unidad = request.GET.get('unidad') or 'TOTAL'
+        if unidad == 'TOTAL':
+            ids = set().union(*grupos.values()) if grupos else set()
+            nombre = 'Todas las unidades'
+        else:
+            ids = grupos.get(int(unidad) if unidad.isdigit() else None, set())
+            nombre = fuente.nombre_unidad(int(unidad)) if ids else ''
+        filas = [c for c in fuente.contratos if c.unidad_id in ids
+                 and (columna == 'total' or c.es_mujer)]
+        titulo = 'Trabajadores' if columna == 'total' else 'Mujeres'
+        return _ventana_de_cifra(request, fuente, titulo, 'personas', filas, nombre)
 
 
 class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
@@ -813,6 +950,7 @@ class InformePuestosClaveView(GuiaInformeRRHHMixin, TemplateView):
                                    contexto_fuente.get('unidades_alcance'),
                                    agrupacion)
             if bloque:
+                bloque['clave'] = 'puestos_clave'
                 datos_familias.append(bloque)
         else:
             try:
@@ -835,6 +973,7 @@ class InformePuestosClaveView(GuiaInformeRRHHMixin, TemplateView):
                         fuente, familia.nombre, ncargos,
                         contexto_fuente.get('unidades_alcance'), agrupacion)
                     if bloque:
+                        bloque['clave'] = familia.pk
                         datos_familias.append(bloque)
 
         for bloque in datos_familias:
@@ -903,6 +1042,79 @@ def _nombre_de_fichero(context, extension, informe='Puestos_Clave'):
 
     limpio = re.sub(r'[^\w\-]+', '_', '_'.join(p for p in partes if p), flags=re.UNICODE)
     return '%s.%s' % (limpio.strip('_'), extension)
+
+
+class PuestosClaveDetalleView(InformePuestosClaveView):
+    """Ventana de una cifra de Puestos Clave. La celda dice qué cargos suma
+    (`ncargo`, o los de su `familia`: 'puestos_clave' o el id de una familia) y de
+    qué unidades (`unidad`, con sus subunidades si `rama=1`; sin unidad, todo el
+    alcance del informe). Reglas idénticas a `_resumen_de_ncargo`."""
+
+    COLUMNAS = {'aprob': ('Plazas aprobadas', 'cargos'), 'vac': ('Vacantes', 'cargos'),
+                'cub': ('Plazas cubiertas', 'personas'), 'det': ('Contratos determinados', 'personas'),
+                'muj': ('Mujeres', 'personas'), 'adiest': ('En adiestramiento', 'personas')}
+
+    def get(self, request, *args, **kwargs):
+        columna = request.GET.get('columna')
+        if columna not in self.COLUMNAS:
+            return HttpResponse('Cifra no válida.', status=400)
+        fuente, _ctx = fuentes.resolver_fuente(request)
+
+        ncargo = request.GET.get('ncargo', '')
+        familia = request.GET.get('familia', '')
+        if ncargo.isdigit():
+            ncargos = {int(ncargo)}
+        elif familia == 'puestos_clave':
+            ncargos = {c.ncargo_id for c in fuente.cargos
+                       if c.puesto_clave and c.activo and c.en_plantilla}
+        elif familia.isdigit():
+            # Igual que el informe: los cargos de la familia marcados como clave.
+            ncargos = {n.pk for familia_obj in NFamiliaCargo.objects.filter(pk=int(familia))
+                       for n in familia_obj.cargos.all() if n.puesto_clave}
+        else:
+            return HttpResponse('Cifra no válida.', status=400)
+
+        unidad = request.GET.get('unidad', '')
+        unidades = None
+        if unidad.isdigit():
+            unidades = {int(unidad)}
+            if request.GET.get('rama') == '1':
+                unidades |= {u.id for u in fuente.unidades.values() if u.padre_id == int(unidad)}
+
+        def de_la_celda(fila):
+            return fila.ncargo_id in ncargos and (unidades is None or fila.unidad_id in unidades)
+
+        titulo, tipo = self.COLUMNAS[columna]
+        if tipo == 'cargos':
+            filas = [c for c in fuente.cargos if de_la_celda(c) and c.activo and c.en_plantilla
+                     and (columna == 'aprob' or c.vacantes)]
+        else:
+            filas = []
+            for c in fuente.contratos:
+                if not (de_la_celda(c) and c.cargo_activo and c.en_plantilla
+                        and c.aspirante_estado == 'ACTIVO'):
+                    continue
+                desc_tipo = (c.tipo_descripcion or '').upper()
+                if columna == 'muj':
+                    incluir = c.es_mujer
+                elif columna == 'cub':
+                    incluir = c.ocupa_plaza
+                elif 'INDETERMINADO' in desc_tipo:
+                    incluir = False
+                elif columna == 'det':
+                    incluir = 'DETERMINADO' in desc_tipo
+                else:
+                    incluir = 'DETERMINADO' not in desc_tipo and 'ADIESTRAMIENTO' in desc_tipo
+                if incluir:
+                    filas.append(c)
+
+        if ncargo.isdigit():
+            nombre = next((c.ncargo_descripcion for c in fuente.cargos if c.ncargo_id == int(ncargo)), '')
+        else:
+            nombre = 'Puestos Clave' if familia == 'puestos_clave' else 'Familia'
+        if unidades:
+            nombre = f'{nombre} · {fuente.nombre_unidad(int(unidad))}'
+        return _ventana_de_cifra(request, fuente, titulo, tipo, filas, nombre)
 
 
 class ExportarPuestosClaveWordView(InformePuestosClaveView):
@@ -1149,6 +1361,30 @@ class ExportarMisionesPDFView(ExportarMisionesMixin, InformeMisionesView):
 class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
     template_name = "pages/informes/registro_diario.html"
 
+    # OPE=Obreros, TEC=Técnicos, ADM=Administrativos, SER=Servicios, CDI/CEJ=Cuadros
+    CATEGORIAS = {'OPE': 'Obreros', 'TEC': 'Técnicos', 'ADM': 'Administrativos',
+                  'SER': 'Servicios', 'CDI': 'Cuadros', 'CEJ': 'Cuadros'}
+
+    @staticmethod
+    def contratos_del_registro(fuente, familia_filtro):
+        """Contratos de la fuente con el filtro de familia (`tipo_familia`).
+
+        Antes filtraba por `cargo__ncargo__familia_id`, un campo que NO existe:
+        `NCargo` tiene `familias` (M2M). Cualquier valor en este filtro reventaba
+        con FieldError; no saltaba porque la plantilla nunca lo enviaba. Ahora se
+        resuelve contra las familias congeladas de la fila."""
+        contratos = fuente.contratos
+        if familia_filtro:
+            try:
+                familia_id = int(familia_filtro)
+            except (TypeError, ValueError):
+                familia_id = None
+            if familia_id is not None:
+                familias_de_ncargo = {c.ncargo_id: c.familias_ids for c in fuente.cargos}
+                contratos = [c for c in contratos
+                             if familia_id in familias_de_ncargo.get(c.ncargo_id, ())]
+        return contratos
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         from datetime import date
@@ -1172,23 +1408,8 @@ class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
         familia_filtro = self.request.GET.get('tipo_familia', '')
 
         # 1. Contratos de la fuente (ya acotados a la unidad seleccionada y a sus
-        #    subunidades por `resolver_fuente`).
-        contratos = fuente.contratos
-
-        if familia_filtro:
-            # Antes filtraba por `cargo__ncargo__familia_id`, un campo que NO existe:
-            # `NCargo` tiene `familias` (M2M). Cualquier valor en este filtro
-            # reventaba con FieldError; no saltaba porque la plantilla nunca lo
-            # enviaba. Ahora se resuelve contra las familias congeladas de la fila.
-            try:
-                familia_id = int(familia_filtro)
-            except (TypeError, ValueError):
-                familia_id = None
-            if familia_id is not None:
-                familias_de_ncargo = {
-                    c.ncargo_id: c.familias_ids for c in fuente.cargos}
-                contratos = [c for c in contratos
-                             if familia_id in familias_de_ncargo.get(c.ncargo_id, ())]
+        #    subunidades por `resolver_fuente`), con el filtro de familia.
+        contratos = self.contratos_del_registro(fuente, familia_filtro)
 
         # 2. Diccionario de contadores
         # OPE=Obreros, TEC=Técnicos, ADM=Administrativos, SER=Servicios, CDI/CEJ=Cuadros
@@ -1202,7 +1423,6 @@ class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
         }
 
         for c in contratos:
-            cat = c.cat_ocupacional or ""
             es_mujer = c.es_mujer
 
             # Contar Misiones
@@ -1211,13 +1431,7 @@ class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
                 if es_mujer: datos['Misiones']['muj'] += 1
 
             # Contar por Categoría
-            llave = None
-            if cat == 'OPE': llave = 'Obreros'
-            elif cat == 'TEC': llave = 'Técnicos'
-            elif cat == 'ADM': llave = 'Administrativos'
-            elif cat == 'SER': llave = 'Servicios'
-            elif cat in ['CDI', 'CEJ']: llave = 'Cuadros'
-
+            llave = self.CATEGORIAS.get(c.cat_ocupacional or '')
             if llave:
                 datos[llave]['tot'] += 1
                 if es_mujer: datos[llave]['muj'] += 1
@@ -1278,6 +1492,31 @@ class RegistroDiarioView(GuiaInformeRRHHMixin, TemplateView):
         context.update(_cabecera_documento(self.request))
 
         return context
+
+
+class RegistroDiarioDetalleView(RegistroDiarioView):
+    """Ventana de una cifra del Registro Diario: las personas de una categoría
+    (`grupo`: Obreros, Técnicos…, Misiones, o TOTAL = trabajadores físicos), todas
+    o solo las mujeres (`columna`: tot / muj). Con el mismo filtro de familia."""
+
+    def get(self, request, *args, **kwargs):
+        grupo = request.GET.get('grupo') or ''
+        columna = request.GET.get('columna')
+        validos = set(self.CATEGORIAS.values()) | {'Misiones', 'TOTAL'}
+        if grupo not in validos or columna not in ('tot', 'muj'):
+            return HttpResponse('Cifra no válida.', status=400)
+        fuente, _ctx = fuentes.resolver_fuente(request)
+        filas = []
+        for c in self.contratos_del_registro(fuente, request.GET.get('tipo_familia', '')):
+            if columna == 'muj' and not c.es_mujer:
+                continue
+            categoria = self.CATEGORIAS.get(c.cat_ocupacional or '')
+            if ((grupo == 'Misiones' and c.mision) or (grupo == 'TOTAL' and categoria)
+                    or (grupo == categoria)):
+                filas.append(c)
+        nombre = {'TOTAL': 'Trabajadores físicos', 'Misiones': 'Cumpliendo misión internacional'}.get(grupo, grupo)
+        return _ventana_de_cifra(request, fuente, 'Mujeres' if columna == 'muj' else 'Trabajadores',
+                                 'personas', filas, nombre)
 
 
 class ExportarRegistroDiarioWordView(RegistroDiarioView):
@@ -1680,6 +1919,38 @@ class InformeAltasBajasView(GuiaInformeRRHHMixin, TemplateView):
         if not 1 <= mes <= 12 or not 1900 <= anno <= 2200:
             return defecto
         return anno, mes
+
+
+class AltasBajasDetalleView(InformeAltasBajasView):
+    """Ventana de una cifra del resumen de Altas y Bajas del Mes: las altas o bajas
+    (`tipo`) que suman esa cifra. `columna`: total / claves / no_claves, o
+    cargo_clave / cargo_no_clave con `cargo` (el nombre del cargo). Mismas reglas
+    que `altas_bajas.resumen`."""
+
+    def get(self, request, *args, **kwargs):
+        tipo = request.GET.get('tipo')
+        columna = request.GET.get('columna')
+        if tipo not in ('altas', 'bajas') or columna not in (
+                'total', 'claves', 'no_claves', 'cargo_clave', 'cargo_no_clave'):
+            return HttpResponse('Cifra no válida.', status=400)
+        fuente, _ctx = fuentes.resolver_fuente(request)
+        anno, mes = self._periodo(fuente)
+        unidades_ids = altas_bajas.unidades_pedidas(request)
+        filas = (altas_bajas.altas_del_mes if tipo == 'altas' else altas_bajas.bajas_del_mes)(
+            anno, mes, unidades_ids)
+        cargo = request.GET.get('cargo', '')
+        if columna in ('claves', 'cargo_clave'):
+            filas = [f for f in filas if f.puesto_clave]
+        elif columna in ('no_claves', 'cargo_no_clave'):
+            filas = [f for f in filas if not f.puesto_clave]
+        if columna.startswith('cargo_'):
+            filas = [f for f in filas if f.cargo == cargo]
+        titulo = {'total': 'Total', 'claves': 'En puestos clave', 'no_claves': 'En puestos no clave'}.get(
+            columna, cargo)
+        return render(request, 'pages/informes/partials/movimientos_detalle.html', {
+            'filas': filas, 'tipo': tipo, 'titulo': titulo,
+            'periodo': '%s %d' % (MESES_ES[mes - 1], anno),
+        })
 
 
 class ExportarAltasBajasExcelView(InformeAltasBajasView):

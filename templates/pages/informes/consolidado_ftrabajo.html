@@ -18,7 +18,7 @@
             <div class="card border-0 shadow-sm orb-tabla-card">
                 <div class="card-header border-bottom bg-transparent py-3">
                     <h5 class="mb-0 text-primary fw-bold">Consolidado de la Fuerza de Trabajo</h5>
-                    <small class="text-muted">Plantilla aprobada, cubierta y contratada por categoría ocupacional.</small>
+                    <small class="text-muted">Plantilla aprobada, cubierta y contratada por categoría ocupacional. Pulse una cifra para ver qué hay detrás.</small>
                 </div>
 
                 <div class="orb-tabla-scroll text-nowrap mt-2 pb-3">
@@ -44,7 +44,7 @@
                                 <th class="bg-total text-success fw-bold">Mujeres</th>
                             </tr>
                         </thead>
-                        <tbody id="tbody-consolidado">
+                        <tbody id="tbody-consolidado" data-cifras-url="{% url 'informe_consolidado_detalle' %}">
                             {% include 'pages/informes/partials/tabla_consolidado.html' %}
                         </tbody>
                     </table>
@@ -54,16 +54,16 @@
     </div>
 </div>
 
+{% include 'pages/informes/partials/cifras_interactivas.html' %}
+
 <script>
     function ejecutarWord() {
-        const params = new URLSearchParams(new FormData(document.getElementById('form-exportar'))).toString();
         window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_consolidado_word' %}?" + params;
+        window.location.href = "{% url 'exportar_consolidado_word' %}" + window.location.search;
     }
     function ejecutarPDF() {
-        const ueb = document.querySelector('[name="ueb"]').value;
         window.mostrarToast('Preparando documento…', 'info');
-        window.location.href = "{% url 'exportar_consolidado_pdf' %}?ueb=" + ueb;
+        window.location.href = "{% url 'exportar_consolidado_pdf' %}" + window.location.search;
     }
     function ejecutarExcel() {
         window.mostrarToast('Preparando el libro de Excel…', 'info');

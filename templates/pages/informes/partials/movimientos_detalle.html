@@ -1,0 +1,26 @@
+{% comment %}
+  Ventana de una cifra del resumen de Altas y Bajas (informes.views.AltasBajasDetalleView):
+  las altas o bajas que suman la cifra pulsada. Doble clic, el histórico.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ tipo|capfirst }} de {{ periodo }} · {{ titulo }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      <thead><tr><th>Fecha</th><th>Exp.</th><th>Nombre</th><th>Cargo</th><th>Área</th><th>Unidad</th>{% if tipo == 'bajas' %}<th>Causa</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for f in filas %}
+        <tr {% if f.aspirante_id %}class="cursor-pointer" title="Doble clic para ver su histórico"
+            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' f.aspirante_id %}')"{% endif %}>
+          <td>{{ f.fecha|date:"d/m/Y" }}</td><td><strong>{{ f.expediente }}</strong></td><td>{{ f.nombre }}</td>
+          <td>{{ f.cargo }}</td><td>{{ f.area }}</td><td>{{ f.unidad }}</td>
+          {% if tipo == 'bajas' %}<td>{{ f.causa|default:"—" }}</td>{% endif %}
+        </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted p-4">Nadie en esta cifra.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-muted small mt-2 mb-0">{{ filas|length }} persona{{ filas|length|pluralize }}.</p>
+</div>

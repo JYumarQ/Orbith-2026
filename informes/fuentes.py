@@ -130,6 +130,9 @@ class FilaContrato:
     # Datos de la misión. `None` = sin registrar, que no es lo mismo que 0.
     mision_dias: object = None
     mision_importe: object = None
+    # Para abrir el histórico del trabajador desde un informe (la cifra que se
+    # pulsa enseña quiénes son). En un cierre es el id que tenía al cerrar.
+    aspirante_id: object = None
 
     @property
     def es_mujer(self):
@@ -433,6 +436,7 @@ def fuente_actual(unidades_ids=None):
             salario=contrato.salario_actual,
             dias_restantes=_dias_restantes(contrato.fecha_alta, contrato.duracion, hoy),
             en_plantilla=bool(cargo.en_plantilla) if cargo else True,
+            aspirante_id=contrato.aspirante_id,
         ))
 
     return FuenteDatos(
@@ -526,6 +530,7 @@ def fuente_de_cierre(periodo, unidades_ids=None):
         FilaContrato(
             unidad_id=unidad_de_cierre[fila.cierre_id],
             no_expediente=fila.no_expediente,
+            aspirante_id=fila.aspirante_id_original,
             aspirante_nombre=fila.aspirante_nombre,
             doc_identidad=fila.doc_identidad,
             sexo=fila.sexo,
