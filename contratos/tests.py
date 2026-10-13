@@ -1592,9 +1592,14 @@ class RecontratadosYAvisosTests(TestCase):
         self.assertEqual(self.expedientes(jubilado='si'), ['00902'])
 
     def test_marca_de_recontratado_en_la_fila(self):
-        respuesta = self.client.get(reverse('search_contrato'))
-        self.assertContains(respuesta, 'row-recontratado', count=1)
-        self.assertContains(respuesta, 'title="Recontratado"', count=1)
+        # Sin filtros, la lista se ve como siempre.
+        self.assertNotContains(self.client.get(reverse('search_contrato')), 'row-recontratado')
+        # Con un filtro de recontratados, de baja anterior o de fecha de alta, sí.
+        for params in ({'recontratado': 'si'}, {'baja_anterior_desde': '2026-09-01'},
+                       {'alta_desde': '2026-01-01'}):
+            respuesta = self.client.get(reverse('search_contrato'), params)
+            self.assertContains(respuesta, 'row-recontratado', count=1)
+            self.assertContains(respuesta, 'title="Recontratado"', count=1)
 
     def test_aviso_de_altas_que_ya_causaron_baja(self):
         params = {'alta_desde': '2026-09-10', 'alta_hasta': '2026-10-12'}

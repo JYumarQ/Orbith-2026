@@ -1,6 +1,6 @@
 {% if object_list %} 
     {% for c in object_list %}
-        <tr class="fila-contrato cursor-pointer {% if c.es_recontratado %}row-recontratado{% endif %} {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
+        <tr class="fila-contrato cursor-pointer {% if marcar_recontratados and c.es_recontratado %}row-recontratado{% endif %} {% if c.en_proceso_movimiento %}row-movimiento-pendiente{% endif %}" 
             onclick="seleccionarContrato(this)"
             ondblclick="abrirModalHistorico('{% url 'historico_trabajador' c.aspirante.pk %}')"
             data-id="{{ c.pk }}"
@@ -22,7 +22,7 @@
         >
         
         
-        <td{% if c.es_recontratado %} title="Recontratado"{% endif %}>
+        <td{% if marcar_recontratados and c.es_recontratado %} title="Recontratado"{% endif %}>
             <strong>{{ c.no_expediente }}</strong>
         </td>
         

@@ -40,7 +40,7 @@ from auditoria.models import AccionAuditoria
 from auditoria import registro_automatico
 from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
 from .filtros import (anotar_movimientos_del_periodo, aplicar_filtros, altas_que_causaron_baja,
-                      anotar_recontratado, contratos_visibles, personas_de)
+                      anotar_recontratado, contratos_visibles, marcar_recontratados, personas_de)
 from .annos_servicio import annos_y_pago
 # Convierte el guardado en una solicitud cuando quien envía el formulario es un Moderador;
 # devuelve None para el Administrador, que sigue guardando directamente.
@@ -136,6 +136,7 @@ class ContratoListView(ListView):
         context['filtro_baja_anterior_hasta'] = self.request.GET.get('baja_anterior_hasta', '')
         context['filtro_jubilado'] = self.request.GET.get('jubilado', '')
         context['altas_con_baja_total'] = _total_altas_con_baja(self.request)
+        context['marcar_recontratados'] = marcar_recontratados(self.request)
 
         # --- Filtros de estructura: unidad, departamento y cargo ---
         #
@@ -479,6 +480,7 @@ def search_contratos(request):
         'paginator': page_obj.paginator,
         'search_url': 'search_contrato',
         'altas_con_baja_total': _total_altas_con_baja(request),
+        'marcar_recontratados': marcar_recontratados(request),
     })
 
 

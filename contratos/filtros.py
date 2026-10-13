@@ -80,6 +80,17 @@ def altas_que_causaron_baja(request):
     return qs.exclude(aspirante_id__in=en_la_lista.values('aspirante_id'))
 
 
+def marcar_recontratados(request):
+    """La línea verde de recontratado solo se pinta cuando la lista está filtrada
+    por recontratados, por baja anterior (a eso lleva «Verlas» desde Bajas) o por
+    fecha de alta (a eso lleva «Nuevas Altas» desde la Dashboard). Sin esos
+    filtros la lista se ve como siempre (decisión de RRHH del 13-10-2026)."""
+    return bool(request.GET.get('recontratado') in ('si', 'no')
+                or request.GET.getlist('baja_anterior_unidad')
+                or any(fecha_de(request, p) for p in (
+                    'baja_anterior_desde', 'baja_anterior_hasta', 'alta_desde', 'alta_hasta')))
+
+
 def personas_de(qs):
     """Cuántas personas distintas hay en un queryset de contratos o bajas. Las
     cifras cuentan personas: quien se fue dos veces en el mes es una persona que

@@ -36,6 +36,73 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.3.0",
+        "fecha": "2026-10-13",
+        "titulo": "Dashboard e Informes RRHH interactivos, y recontratados a la vista",
+        "cambios": [
+            ("nuevo", "Dashboard interactiva: Empleados Activos, Nuevas Altas, "
+                    "Nuevas Bajas, el equilibrio de género, Unidades y "
+                    "Departamentos llevan a su lista ya filtrada, conservando "
+                    "las unidades elegidas. El Gestor de Plantilla llega con la "
+                    "unidad abierta cuando solo hay una."),
+            ("nuevo", "Dashboard: ventanas de detalle para el salario promedio "
+                    "(por unidad y categoría), para cada mes del gráfico de "
+                    "Altas y Bajas (altas en azul y bajas en rojo, por fecha) y "
+                    "para cada barra de la Pirámide de Edades."),
+            ("nuevo", "Ventana de Plazas desde «Vacantes Libres» y «Ocupación de "
+                    "Plazas»: cargos con vacantes, llenos, inactivos o todos, "
+                    "quién ocupa cada uno y botón «Contratar aquí» con el cargo "
+                    "ya elegido."),
+            ("nuevo", "Años de Servicio: filtro «De __ a __ años» y botón «Ver "
+                    "más» con unidad, cargo, fecha de alta en la entidad e "
+                    "importe por escala. Cumpleaños: pestaña «Buscar» entre dos "
+                    "fechas. Recordatorios: filtro por prioridad. Radar de "
+                    "Jubilaciones: con el expediente y el histórico a un doble "
+                    "clic."),
+            ("nuevo", "Informes RRHH interactivos: en el Consolidado, "
+                    "Trabajadores por UEB, Puestos Clave, Registro Diario y Altas "
+                    "y Bajas, pulsar una cifra muestra quiénes son (o qué cargos, "
+                    "en las de plazas), también sobre un cierre mensual."),
+            ("nuevo", "Contratos: filtros «Alta desde/hasta», «Recontratados», "
+                    "«Baja anterior desde/hasta» y «Jubilados recontratados». "
+                    "Con esos filtros, una línea verde señala a los "
+                    "recontratados."),
+            ("nuevo", "Bajas: filtros de unidad y «Baja desde/hasta». Avisos "
+                    "cruzados entre las dos listas: en Contratos, quién entró en "
+                    "el período y ya causó baja; en Bajas, quién causó baja y "
+                    "fue recontratado, con enlace a sus contratos."),
+            ("nuevo", "Subsanación: cuatro reglas nuevas para fechas imposibles: "
+                    "bajas posteriores al contrato vigente (MOV-009), bajas con "
+                    "fecha futura (MOV-010), movimientos con año anterior a 1900 "
+                    "(MOV-011) y contratos con fecha de alta anterior a 1900 "
+                    "(CTR-022)."),
+            ("mejorado", "Las cifras de altas y bajas cuentan personas: quien se "
+                        "fue y volvió varias veces en el mismo período cuenta una "
+                        "vez, con la nota «2 bajas en el período». La tarjeta, la "
+                        "lista y su aviso siempre coinciden."),
+            ("mejorado", "Al causar baja se borran los avisos de su contrato y las "
+                        "alertas de datos de su ficha, que ya nadie podía "
+                        "resolver; el aviso «Baja de contrato» se conserva."),
+            ("mejorado", "El resumen de cierre del Ranking que reciben los "
+                        "Administradores muestra el nombre de usuario de quien no "
+                        "tiene nombre en su ficha."),
+            ("corregido", "Abrir una advertencia de un contrato que ya había "
+                        "causado baja daba un error de página no encontrada. "
+                        "Ahora se explica qué pasó y se ofrece volver."),
+            ("corregido", "El asistente de contratación mostraba un error técnico "
+                        "en vez del mensaje del formulario (por ejemplo, «el "
+                        "cargo no tiene plazas disponibles»), y aceptaba años "
+                        "imposibles como 0026 en la fecha efectiva."),
+            ("corregido", "En Aspirantes y Bajas, cambiar un filtro del panel no "
+                        "recargaba la tabla, y en Bajas esos filtros no "
+                        "filtraban nada."),
+            ("corregido", "En el Consolidado de Fuerza de Trabajo, el botón Word "
+                        "no hacía nada y el PDF solo tenía en cuenta la primera "
+                        "unidad elegida e ignoraba el cierre."),
+        ],
+    },
+
+    {
         "version": "3.2.0",
         "fecha": "2026-10-12",
         "titulo": "Anexo 14-B, Ranking Mensual, auditoría completa y tablas a pantalla justa",
@@ -361,80 +428,6 @@ CHANGELOG = [
             ("eliminado", "Retirada la pantalla de Cargos a página completa de "
                         "Nomencladores: estaba rota y duplicaba Configuración → "
                         "Familias de Cargos."),
-        ],
-    },
-    {
-        "version": "3.0.0",
-        "fecha": "2026-08-31",
-        "titulo": "Pre-Nómina, seguridad del acceso y saneamiento de estáticos",
-        "cambios": [
-            ("nuevo", "Pre-Nómina: módulo completo de Reportes de Pago, con "
-                    "conceptos por horas, conceptos por importe y claves de "
-                    "ausencia, más importación y exportación de datos."),
-            ("nuevo", "Pre-Nómina → Calendario: definición de jornadas, "
-                    "calendarios de pago y asignación de calendario a cada "
-                    "trabajador."),
-            ("nuevo", "Pre-Nómina → Mis Plantillas: plantillas de reporte "
-                    "reutilizables por usuario."),
-            ("nuevo", "Nomencladores propios de Pre-Nómina: Pago Asociado por "
-                    "Horas, Pago Asociado por Importe, Escala de Años de "
-                    "Servicio y Claves de Ausencia."),
-            ("nuevo", "Pantalla de acceso y cambio de contraseña: botón para "
-                    "mostrar u ocultar la contraseña mientras se escribe. Solo "
-                    "muestra lo que usted teclea: nunca una contraseña "
-                    "rellenada por el navegador, para que nadie pueda leer en "
-                    "un equipo compartido una clave guardada que no conoce."),
-            ("nuevo", "Pantalla de acceso: el enlace «¿Problemas para acceder?» "
-                    "abre un formulario que envía la incidencia a la bandeja "
-                    "del Administrador sin necesidad de iniciar sesión."),
-            ("seguridad", "Bloqueo por intentos fallidos: 10 fallos en 5 minutos "
-                        "bloquean la cuenta. Protege también el panel de "
-                        "administración de Django, y el Administrador puede "
-                        "desbloquear una cuenta al instante."),
-            ("seguridad", "Auditoría de accesos: los inicios de sesión, los "
-                        "intentos fallidos y los cierres de sesión quedan "
-                        "registrados. Nunca se guarda la contraseña."),
-            ("seguridad", "Caducidad de sesión: se cierra a los 60 minutos de "
-                        "inactividad, con un techo de 12 horas, y la sesión "
-                        "termina al cerrar el navegador. Antes duraba dos "
-                        "semanas."),
-            ("seguridad", "Retiradas las páginas de cambio y reseteo de "
-                        "contraseña que Django publica de serie: estaban "
-                        "accesibles sin iniciar sesión y sin plantilla, así que "
-                        "devolvían un error 500."),
-            ("seguridad", "El sistema arranca en modo seguro si falta el fichero "
-                        "de configuración del entorno, en lugar de mostrar "
-                        "trazas con detalles internos."),
-            ("seguridad", "La cookie de sesión pasa a ser inaccesible desde "
-                        "JavaScript y no viaja en peticiones de otros sitios."),
-            ("seguridad", "Las contraseñas siguen ahora un único criterio en los "
-                        "tres sitios donde se fijan: alta de usuario, cambio "
-                        "desde «Mi Perfil» y panel de administración. Antes el "
-                        "cambio aceptaba contraseñas que el alta rechazaba, "
-                        "entre ellas algunas de las más usadas del mundo. Se "
-                        "mantienen las exigencias de longitud, mayúscula y "
-                        "número, y se añaden el rechazo de contraseñas comunes "
-                        "y de las parecidas al nombre de usuario."),
-            ("corregido", "Los avisos de contraseña al dar de alta un usuario "
-                        "salían en inglés. Ahora están en español, como el "
-                        "resto del sistema."),
-            ("corregido", "Estáticos: la carpeta generada por «collectstatic» "
-                        "estaba versionada y desactualizada, de modo que en "
-                        "producción faltaban recursos que carga toda la "
-                        "aplicación. Ahora se genera en cada despliegue."),
-            ("corregido", "Pantalla de acceso: el usuario ya no se borra al "
-                        "fallar el intento, los avisos de éxito dejan de "
-                        "mostrarse en rojo como si fueran errores y el teclado "
-                        "del móvil ya no fuerza la mayúscula inicial."),
-            ("corregido", "Quien ya tiene la sesión abierta y vuelve a la "
-                        "pantalla de acceso va directo al inicio, en lugar de "
-                        "ver otra vez el formulario."),
-            ("mejorado", "Los gestores de contraseñas del navegador ya "
-                        "reconocen los campos de la pantalla de acceso."),
-            ("eliminado", "Nomencladores «Horario» y «Jornada»: sus tablas "
-                        "estaban vacías, ninguna pantalla los usaba y ningún "
-                        "contrato tenía jornada asignada. El tiempo de trabajo "
-                        "se gestiona ahora desde Pre-Nómina → Calendario."),
         ],
     },
 ]
