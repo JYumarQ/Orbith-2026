@@ -2208,3 +2208,49 @@ class CorreccionDeMovimientosTests(TestCase):
         self.assertContains(respuesta, 'ya tiene el expediente de su contrato', status_code=400)
         hallazgo.refresh_from_db()
         self.assertEqual(hallazgo.estado, Hallazgo.PENDIENTE)
+
+
+class ReglasDeFechasImposiblesTests(TestCase):
+    """MOV-009 (baja posterior al contrato vigente), MOV-010 (baja futura), MOV-011 y
+    CTR-022 (años anteriores a 1900). Reglas añadidas el 13-10-2026."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from contratos.models import CBaja, TMovimiento
+        esc = _EscenarioContratos()
+        cls.activo = esc.aspirante('80010113001')
+        cls.contrato = CAlta.objects.create(aspirante=cls.activo, no_expediente='01001',
+                                            tipo=esc.tipo_contrato, cargo=esc.cargo,
+                                            fecha_alta=date(2026, 4, 30))
+        # Baja posterior al contrato vigente (imposible) y otra legítima del mismo día.
+        cls.imposible = CBaja.objects.create(
+            aspirante=cls.activo, no_expediente='01001', tipo=esc.tipo_contrato, cargo=esc.cargo,
+            fecha_alta=date(2026, 1, 1), fecha_baja=date(2026, 8, 20))
+        cls.mismo_dia = CBaja.objects.create(
+            aspirante=cls.activo, no_expediente='01001', tipo=esc.tipo_contrato, cargo=esc.cargo,
+            fecha_alta=date(2026, 1, 1), fecha_baja=date(2026, 4, 30))
+        de_baja = esc.aspirante('80010113002', estado='BAJA')
+        cls.futura = CBaja.objects.create(
+            aspirante=de_baja, no_expediente='01002', tipo=esc.tipo_contrato, cargo=esc.cargo,
+            fecha_alta=date(2026, 1, 1), fecha_baja=date.today() + timedelta(days=30))
+        cls.contrato_0026 = CAlta.objects.create(
+            aspirante=esc.aspirante('80010113003'), no_expediente='01003',
+            tipo=esc.tipo_contrato, cargo=esc.cargo, fecha_alta=date(26, 10, 13))
+        cls.mov_0026 = TMovimiento.objects.create(
+            aspirante=cls.contrato_0026.aspirante, contrato=cls.contrato_0026, no_expediente='01003',
+            fecha_efectiva=date(26, 10, 13), cargo_anterior='---', cargo_nuevo='Especialista B',
+            salario_anterior=0, salario_nuevo=4000, tipo_movimiento='Alta Inicial')
+
+    def ids(self, codigo):
+        from .reglas import obtener_regla
+        return {h.object_id for h in obtener_regla(codigo).ejecutar(None)}
+
+    def test_baja_posterior_al_contrato_vigente(self):
+        self.assertEqual(self.ids('MOV-009'), {str(self.imposible.pk)})
+
+    def test_baja_futura(self):
+        self.assertEqual(self.ids('MOV-010'), {str(self.futura.pk)})
+
+    def test_anos_imposibles(self):
+        self.assertEqual(self.ids('CTR-022'), {str(self.contrato_0026.pk)})
+        self.assertEqual(self.ids('MOV-011'), {str(self.mov_0026.pk)})

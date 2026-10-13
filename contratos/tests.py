@@ -1660,3 +1660,63 @@ class VariosMovimientosEnElPeriodoTests(TestCase):
         filas = list(destino.context['object_list'])
         self.assertEqual([c.bajas_periodo for c in filas], [2])
         self.assertContains(destino, '2 bajas en el período')
+
+
+class AsistenteDeContratacionErroresTests(TestCase):
+    """El asistente de contratación (paso 2) enseña los errores en su pantalla en vez
+    de un error interno (500), y no acepta años imposibles (13-10-2026)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cargo_libre = _crear_departamento_con_cargo()
+        cls.cargo_lleno = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Lleno', cat_ocupacional='TEC',
+                                         grupo_escala=cls.cargo_libre.ncargo.grupo_escala,
+                                         salario_basico=4000),
+            departamento=cls.cargo_libre.departamento, cant_aprobada=1, orden_informe=99)
+        provincia, municipio = _crear_provincia_municipio()
+        cls.indeterminado = NTipoContrato.objects.create(
+            descripcion='Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+        ocupante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Ocupa', papellido='P', sapellido='T', doc_identidad='80010112901',
+            estado='ACTIVO', sexo='F', raza='BL', provincia=provincia, municipio=municipio)
+        CAlta.objects.create(aspirante=ocupante, no_expediente='00901', tipo=cls.indeterminado,
+                             cargo=cls.cargo_lleno, fecha_alta=date(2026, 1, 1))
+        cls.cargo_lleno.refrescar_conteo_plazas()
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Nuevo', papellido='P', sapellido='T', doc_identidad='80010112902',
+            estado='ASPIRANTE', sexo='M', raza='BL', provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_asistente', password='x', es_admin=True)
+
+    def _contratar(self, cargo_paso2, fecha):
+        self.client.force_login(self.admin)
+        xhr = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+        unidad = self.cargo_libre.departamento.unidad_organizativa_id
+        paso1 = self.client.post(reverse('add_contrato', args=[self.aspirante.doc_identidad]), {
+            'no_expediente': '00902', 'fecha_alta_entidad': '2026-10-01', 'fecha_alta': '2026-10-01',
+            'cargo': self.cargo_libre.pk, 'reg_militar': 'NIN', 'tipo_salario': 'FIJ',
+            'unidad': unidad, 'departamento': self.cargo_libre.departamento_id,
+            'tipo': self.indeterminado.pk}, **xhr)
+        self.assertTrue(paso1.json().get('redirect_to_wizard'), paso1.content[:300])
+        return self.client.post(reverse('finalizar_contrato_wizard', args=[self.aspirante.doc_identidad]), {
+            'generar_movimiento': 'true', 'fecha_efectiva': fecha, 'fecha_solicitud': '2026-10-01',
+            'unidad': unidad, 'departamento': cargo_paso2.departamento_id, 'cargo': cargo_paso2.pk,
+            'tipo_salario': 'FIJ', 'tipo': self.indeterminado.pk, 'salarioEscala': '4000'}, **xhr)
+
+    def test_un_error_del_formulario_se_ensena_y_no_es_un_500(self):
+        respuesta = self._contratar(self.cargo_lleno, '2026-10-01')
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('no tiene plazas disponibles', respuesta.json()['error_popup'])
+        self.assertTrue(respuesta.json()['html_form'])
+        self.assertFalse(CAlta.objects.filter(no_expediente='00902').exists())
+
+    def test_no_acepta_un_ano_imposible(self):
+        respuesta = self._contratar(self.cargo_libre, '0026-10-01')
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('1900 o posterior', respuesta.json()['error_popup'])
+        self.assertFalse(CAlta.objects.filter(no_expediente='00902').exists())
+
+    def test_con_datos_correctos_contrata(self):
+        respuesta = self._contratar(self.cargo_libre, '2026-10-01')
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        self.assertTrue(CAlta.objects.filter(no_expediente='00902').exists())

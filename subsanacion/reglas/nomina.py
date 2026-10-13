@@ -3,7 +3,9 @@
 from decimal import Decimal
 
 from django.apps import apps
-from django.db.models import F, Window
+from datetime import date
+
+from django.db.models import Exists, F, OuterRef, Q, Subquery, Window
 from django.db.models.functions import Lag
 
 from ..calculos import COLUMNAS_SALARIO, construir_indice_salarios, salario_esperado
@@ -754,4 +756,170 @@ class BajaSinMovimientosNiCargo(ReglaBase):
                     'movimientos_registrados': 0,
                 },
                 unidad_organizativa_id=None,
+            )
+
+
+
+def _fecha_texto(fecha):
+    """dd/mm/aaaa a mano: con años de una cifra (0026) `strftime('%Y')` depende de
+    la plataforma y en Windows sale «26» en vez de «0026»."""
+    return f'{fecha.day:02d}/{fecha.month:02d}/{fecha.year:04d}'
+
+
+class BajaPosteriorAlContratoVivo(ReglaBase):
+    """MOV-009: una persona ACTIVA tiene una baja posterior al inicio del contrato
+    que sigue teniendo (o una baja cuyo propio alta es posterior). Es imposible:
+    para causar baja hay que dejar de tener el contrato vivo. Desde los
+    formularios no puede ocurrir; llega por el panel de administración, una
+    importación o datos de prueba (caso de «Pinga», 13-10-2026).
+
+    Se compara con «>» y no con «>=»: causar baja y volver el MISMO día es
+    legítimo (la baja del día 10 y el contrato nuevo del día 10)."""
+
+    codigo = 'MOV-009'
+    nombre = 'Baja posterior al contrato vigente del trabajador'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'contratos.CBaja'
+
+    descripcion = (
+        'Busca trabajadores activos con una baja fechada después del inicio de su '
+        'contrato vigente.')
+    causa_probable = (
+        'La baja o el contrato se registraron o se corrigieron fuera de los formularios '
+        'de Orbith (panel de administración, importación de datos), que no comprueban '
+        'el orden de las fechas.')
+    impacto = (
+        'El histórico del trabajador queda en un orden imposible: aparece dándose de '
+        'baja mientras tiene un contrato vivo. Las cifras de altas y bajas de la '
+        'Dashboard y de los informes cuentan esa baja en un mes en que no ocurrió.')
+    solucion = (
+        'Abra el histórico del trabajador y decida qué está mal: la fecha de la baja, '
+        'la del contrato vigente, o si esa baja sobra. Corríjalo desde el panel de '
+        'administración. Esta regla no lo arregla sola porque hace falta decidir cuál '
+        'de los datos es el bueno.')
+
+    def ejecutar(self, contexto):
+        CAlta = apps.get_model('contratos', 'CAlta')
+        vivo = CAlta.objects.filter(aspirante_id=OuterRef('aspirante_id'),
+                                    aspirante__estado='ACTIVO')
+        filas = (self.base_queryset()
+                 .filter(aspirante__estado='ACTIVO')
+                 .annotate(alta_vigente=Subquery(vivo.order_by('-fecha_alta').values('fecha_alta')[:1]))
+                 .filter(Q(fecha_baja__gt=F('alta_vigente')) | Q(fecha_alta__gt=F('alta_vigente')))
+                 .values('id', 'no_expediente', 'fecha_alta', 'fecha_baja', 'alta_vigente',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'cargo__departamento__unidad_organizativa_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            referencia = referencia_contrato(
+                fila.get('aspirante__nombre'), fila.get('aspirante__papellido'),
+                fila.get('aspirante__sapellido'), fila.get('aspirante__doc_identidad'),
+                fila.get('no_expediente'))
+            vigente = _fecha_texto(fila['alta_vigente'])
+            baja = _fecha_texto(fila['fecha_baja']) if fila.get('fecha_baja') else '—'
+            alta = _fecha_texto(fila['fecha_alta']) if fila.get('fecha_alta') else '—'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{referencia} · baja del {baja} posterior a su contrato vigente del {vigente}',
+                detalle=(
+                    f'El trabajador sigue activo con un contrato que empezó el {vigente}, '
+                    f'pero tiene registrada una baja (alta {alta}, baja {baja}) posterior a esa fecha.'),
+                datos={
+                    'contrato_vigente_desde': vigente,
+                    'alta_de_la_baja': alta,
+                    'fecha_de_baja': baja,
+                },
+                unidad_organizativa_id=fila.get('cargo__departamento__unidad_organizativa_id'),
+            )
+
+
+class BajaConFechaFutura(ReglaBase):
+    """MOV-010: una baja fechada después de hoy."""
+
+    codigo = 'MOV-010'
+    nombre = 'Baja con fecha futura'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'contratos.CBaja'
+
+    descripcion = 'Busca bajas con fecha de baja posterior al día de hoy.'
+    causa_probable = (
+        'Se escribió mal el año o el mes de la fecha de baja, o se registró por '
+        'adelantado una baja que todavía no ha ocurrido.')
+    impacto = (
+        'El trabajador figura como baja antes de tiempo, y la baja se cuenta en un mes '
+        'que aún no ha llegado en la Dashboard, los informes y los cierres.')
+    solucion = (
+        'Compruebe la fecha de la baja en el histórico del trabajador. Si está mal '
+        'escrita, corríjala desde el panel de administración; si la baja todavía no '
+        'ha ocurrido, regístrela el día en que ocurra.')
+
+    def ejecutar(self, contexto):
+        from django.utils import timezone
+
+        hoy = timezone.localdate()
+        filas = (self.base_queryset()
+                 .filter(fecha_baja__gt=hoy)
+                 .values('id', 'no_expediente', 'fecha_baja',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'cargo__departamento__unidad_organizativa_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            referencia = referencia_contrato(
+                fila.get('aspirante__nombre'), fila.get('aspirante__papellido'),
+                fila.get('aspirante__sapellido'), fila.get('aspirante__doc_identidad'),
+                fila.get('no_expediente'))
+            baja = _fecha_texto(fila['fecha_baja'])
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{referencia} · baja con fecha futura ({baja})',
+                detalle=f'La baja está fechada el {baja}, después de hoy.',
+                datos={'fecha_de_baja': baja},
+                unidad_organizativa_id=fila.get('cargo__departamento__unidad_organizativa_id'),
+            )
+
+
+class MovimientoConAnoImposible(ReglaMovimientos):
+    """MOV-011: movimiento con fecha efectiva anterior a 1900 (un «0026» tecleado
+    en vez de «2026»). Complementa a CTR-017 / CTR-022, que miran el contrato."""
+
+    codigo = 'MOV-011'
+    nombre = 'Movimiento con fecha efectiva imposible'
+    criticidad = CRITICIDAD_ALTA
+
+    #: Mismo corte que `contratos.forms.ANO_MINIMO_FECHAS` (ver CTR-017).
+    ANO_MINIMO = 1900
+
+    descripcion = 'Busca movimientos de nómina con fecha efectiva de un año anterior a 1900.'
+    causa_probable = (
+        'Se escribió el año incompleto (0026 en vez de 2026). Hasta el 13-10-2026 el '
+        'asistente de contratación lo aceptaba al crear el movimiento de alta.')
+    impacto = (
+        'El movimiento se ordena antes que todo el histórico del trabajador y sale con '
+        'una fecha absurda en informes, documentos y en el cálculo de fechas mínimas.')
+    solucion = (
+        'Corrija la fecha efectiva del movimiento desde el panel de administración, '
+        'escribiendo el año con cuatro cifras. Revise también el contrato: si nació del '
+        'mismo asistente, su fecha de alta tendrá el mismo error (regla CTR-022).')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(fecha_efectiva__lt=date(self.ANO_MINIMO, 1, 1))
+                 .values('id', 'no_expediente', 'fecha_efectiva', 'tipo_movimiento',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'unidad_nueva_fk_id', 'unidad_anterior_fk_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            fecha = _fecha_texto(fila['fecha_efectiva'])
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'movimiento con fecha imposible ({fecha})'),
+                detalle=f'El movimiento tiene la fecha efectiva {fecha}, con un año anterior a {self.ANO_MINIMO}.',
+                datos={'fecha_efectiva': fecha, 'tipo_de_movimiento': fila.get('tipo_movimiento') or '—'},
+                unidad_organizativa_id=fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id'),
             )

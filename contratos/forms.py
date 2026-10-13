@@ -738,6 +738,18 @@ class MovimientoForm(CAltaForm):
         fields = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo', 'duracion', 
                   'tipo_salario', 'tridente', 'fecha_efectiva', 'fecha_solicitud', 'observaciones')
 
+    def clean_fecha_efectiva(self):
+        """Misma regla que las fechas del contrato (`ANO_MINIMO_FECHAS`): un «0026»
+        tecleado en vez de «2026» se rechaza aquí. Antes el asistente de contratación
+        guardaba el contrato con esa fecha antes de validar y la regla no llegaba a
+        actuar (contrato 79991 de la base de pruebas, 13-10-2026)."""
+        fecha = self.cleaned_data.get('fecha_efectiva')
+        if fecha and fecha.year < ANO_MINIMO_FECHAS:
+            raise forms.ValidationError(
+                f'El año de la fecha efectiva debe ser {ANO_MINIMO_FECHAS} o posterior. '
+                f'Revise que haya escrito el año completo (por ejemplo 2022, no 0002).')
+        return fecha
+
     def __init__(self, *args, unidad_id=None, departamento_id=None, **kwargs):
         super().__init__(*args, **kwargs)
 

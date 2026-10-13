@@ -1203,6 +1203,49 @@ class ContratoFechaAltaEntidadImposible(ReglaContratos):
             )
 
 
+class ContratoFechaAltaImposible(ReglaContratos):
+    """CTR-022: la fecha de alta del CONTRATO tiene un año que no puede ser real.
+
+    Regla aparte de CTR-017 (F. Alta Entidad) por el mismo motivo que CTR-017 está
+    aparte de CTR-016: otro dato, otra causa y otra solución. La fecha de alta no
+    se edita en el formulario del contrato (sale de solo lectura), así que la
+    solución pasa por el panel de administración."""
+
+    codigo = 'CTR-022'
+    nombre = 'Contrato con fecha de alta imposible'
+    criticidad = CRITICIDAD_ALTA
+    ANO_MINIMO = 1900
+
+    descripcion = 'Busca contratos cuya fecha de alta tiene un año anterior a 1900.'
+    causa_probable = (
+        'Se escribió el año incompleto (0026 en vez de 2026) en la fecha efectiva del '
+        'asistente de contratación, que hasta el 13-10-2026 lo aceptaba.')
+    impacto = (
+        'El contrato aparece como el más antiguo de la empresa, la fecha mínima para '
+        'bajas y movimientos queda en un año absurdo, y las cifras de altas por mes de '
+        'la Dashboard y los informes no lo cuentan en el mes real.')
+    solucion = (
+        'Corrija la fecha de alta del contrato desde el panel de administración, '
+        'escribiendo el año con cuatro cifras, y revise su movimiento «Alta Inicial» '
+        '(regla MOV-011). El asistente ya no admite años anteriores a 1900.')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(fecha_alta__isnull=False, fecha_alta__lt=date(self.ANO_MINIMO, 1, 1))
+                 .values(*self.COLUMNAS_BASE, 'fecha_alta')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            fecha = fila['fecha_alta']
+            texto_fecha = f'{fecha.day:02d}/{fecha.month:02d}/{fecha.year:04d}'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'con fecha de alta imposible ({texto_fecha})'),
+                detalle=f'La fecha de alta del contrato es {texto_fecha}, con un año anterior a {self.ANO_MINIMO}.',
+                datos={'expediente': fila.get('no_expediente') or '—', 'fecha_registrada': texto_fecha},
+                unidad_organizativa_id=self.unidad_de(fila),
+            )
+
+
 def _vencimiento_de(fecha_alta, duracion):
     """Fecha en la que se acaba un contrato determinado, o `None` si no se sabe.
 

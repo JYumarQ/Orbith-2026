@@ -2265,7 +2265,20 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 fecha_ui = request.POST.get('fecha_efectiva')
                 if fecha_ui:
                     from datetime import datetime
+                    from .forms import ANO_MINIMO_FECHAS
                     contrato.fecha_alta = datetime.strptime(fecha_ui, '%Y-%m-%d').date()
+                    # Se comprueba ANTES de guardar: el formulario de abajo ya no
+                    # lo vería (compara con lo guardado), y así un «0026» no llega
+                    # a crear el contrato.
+                    if contrato.fecha_alta.year < ANO_MINIMO_FECHAS:
+                        transaction.set_rollback(True)
+                        return JsonResponse({
+                            'form_is_valid': False,
+                            'error_popup': (
+                                f'El año de la fecha efectiva debe ser {ANO_MINIMO_FECHAS} o '
+                                'posterior. Revise que haya escrito el año completo '
+                                '(por ejemplo 2022, no 0002).'),
+                        }, status=400)
                 elif not contrato.fecha_alta:
                     from django.utils import timezone
                     contrato.fecha_alta = timezone.now().date()
@@ -2315,8 +2328,11 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         # documento no depende de resolver un pk ambiguo entre tablas.
                         pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
                     else:
-                        # Si el form falla, cancelamos todo (Contrato no se guarda) y devolvemos el error al modal
-                        transaction.set_rollback(True)
+                        # Si el form falla, cancelamos todo (Contrato no se guarda) y
+                        # devolvemos el error al modal. La transacción se anula AL
+                        # FINAL: pintar el formulario consulta la base, y con la
+                        # transacción ya anulada esas consultas fallaban y el usuario
+                        # veía un error técnico (500) en vez del mensaje del formulario.
                         context = {
                             'is_wizard': True, 'aspirante': aspirante, 'contrato_actual': contrato, 'form': form,
                             'initial_rol': '-', 'initial_grupo': '-', 'initial_cat': '-',
@@ -2331,6 +2347,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         mensajes = [str(error) for errores in form.errors.values() for error in errores]
                         mensaje_final = " ".join(mensajes) if mensajes else "Revise los datos del movimiento."
 
+                        transaction.set_rollback(True)
                         return JsonResponse({
                             'form_is_valid': False,
                             'html_form': html,
