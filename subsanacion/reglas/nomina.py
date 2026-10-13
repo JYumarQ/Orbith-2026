@@ -338,10 +338,21 @@ class MovimientoDesconectadoDeSuContrato(ReglaMovimientos):
         'Es información que existe y a la que ya no se llega por el camino normal, así '
         'que el histórico que se consulta parece más corto de lo que realmente es.')
     solucion = (
-        'Ejecute el comando de gestión «reenganchar_movimientos» (use --dry-run primero '
-        'para ver qué haría). Reasocia automáticamente cada movimiento al contrato vivo '
-        'del mismo trabajador con el mismo número de expediente. Estos movimientos no '
-        'se editan desde ningún formulario: son el registro de lo que ocurrió.')
+        'Un Administrador puede pulsar «Reenganchar al contrato» en este hallazgo: '
+        'enlaza el movimiento al contrato vivo del mismo trabajador con el mismo número '
+        'de expediente, y queda en Auditoría. Para muchos casos a la vez existe el '
+        'comando de gestión «reenganchar_movimientos» (use --dry-run primero). Estos '
+        'movimientos no se editan desde ningún formulario: son el registro de lo que '
+        'ocurrió.')
+
+    correccion_etiqueta = 'Reenganchar al contrato'
+    correccion_aviso = (
+        'Se enlazará este movimiento al contrato vivo del mismo trabajador con el mismo '
+        'número de expediente. El cambio queda registrado en Auditoría.')
+
+    def corregir(self, hallazgo):
+        from contratos.correcciones import reenganchar_movimiento
+        return reenganchar_movimiento(hallazgo.object_id)
 
     def ejecutar(self, contexto):
         from django.apps import apps
@@ -469,6 +480,79 @@ class MovimientoAnteriorAlAlta(ReglaMovimientos):
                     'fecha_efectiva_del_movimiento': efectiva.strftime('%d/%m/%Y'),
                     'fecha_de_alta_del_contrato': alta.strftime('%d/%m/%Y'),
                     'tipo_de_movimiento': fila.get('tipo_movimiento') or '—',
+                },
+                unidad_organizativa_id=(
+                    fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id')),
+            )
+
+
+class MovimientoConOtroExpediente(ReglaMovimientos):
+    """Movimiento enlazado a su contrato, pero con otro número de expediente.
+
+    Pasaba al corregir el expediente de un contrato: sus movimientos se quedaban con
+    el número viejo. Desde el 12-10-2026 `CAlta.save()` les lleva el nuevo, así que
+    esta regla encuentra los casos de antes (y los que lleguen por otra vía, como el
+    panel de administración o una importación).
+    """
+
+    codigo = 'MOV-008'
+    nombre = 'Movimiento con un expediente distinto al de su contrato'
+    criticidad = CRITICIDAD_MEDIA
+
+    descripcion = (
+        'Busca movimientos enlazados a un contrato cuyo número de expediente no '
+        'coincide con el del contrato.')
+    causa_probable = (
+        'Se corrigió el número de expediente del contrato después de crear el '
+        'movimiento, y el movimiento conservó el número anterior.')
+    impacto = (
+        'El movimiento no aparece al buscar por el expediente del trabajador '
+        '(«E:» en los buscadores), y el documento del movimiento de nómina sale con '
+        'un número de expediente que ya no es el suyo.')
+    solucion = (
+        'Un Administrador puede pulsar «Corregir expediente» en este hallazgo: el '
+        'movimiento toma el número de expediente de su contrato, y queda en Auditoría. '
+        'Antes, compruebe en el contrato que su número de expediente es el correcto.')
+
+    correccion_etiqueta = 'Corregir expediente'
+    correccion_aviso = (
+        'El movimiento tomará el número de expediente de su contrato. El cambio queda '
+        'registrado en Auditoría.')
+
+    def corregir(self, hallazgo):
+        from contratos.correcciones import alinear_expediente_movimiento
+        return alinear_expediente_movimiento(hallazgo.object_id)
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(contrato__isnull=False)
+                 # `exclude` y no `filter(~Q)`: así entran también los movimientos
+                 # con el expediente vacío, que tampoco coinciden.
+                 .exclude(no_expediente=F('contrato__no_expediente'))
+                 .values('id', 'no_expediente', 'fecha_efectiva', 'tipo_movimiento',
+                         'contrato__no_expediente',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'unidad_nueva_fk_id', 'unidad_anterior_fk_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            del_movimiento = fila.get('no_expediente') or '—'
+            del_contrato = fila['contrato__no_expediente']
+            efectiva = fila.get('fecha_efectiva')
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(
+                    fila, f'el movimiento tiene el expediente {del_movimiento} y su '
+                          f'contrato el {del_contrato}'),
+                detalle=(
+                    f'El movimiento está enlazado a un contrato con el expediente '
+                    f'{del_contrato}, pero él tiene guardado el {del_movimiento}.'),
+                datos={
+                    'fecha_efectiva': efectiva.strftime('%d/%m/%Y') if efectiva else '—',
+                    'tipo_de_movimiento': fila.get('tipo_movimiento') or '—',
+                    'expediente_del_movimiento': del_movimiento,
+                    'expediente_del_contrato': del_contrato,
                 },
                 unidad_organizativa_id=(
                     fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id')),

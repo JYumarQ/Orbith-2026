@@ -834,6 +834,8 @@ def htmx_load_contratos(request, cargo_id):
     # apellidos. Mismo acotado por alcance que las dos anteriores.
     cargo = get_object_or_404(cargos_visibles(request.user), pk=cargo_id)
     contratos = CAlta.objects.filter(cargo=cargo).select_related('aspirante')
+    # La fecha mínima de la Baja de cada persona, en la misma consulta.
+    contratos = CAlta.con_fecha_ultimo_movimiento(contratos)
 
     # Guía de Orbith: recorrer la plantilla hasta las personas de un cargo.
     from progreso.servicios import completar_tarea

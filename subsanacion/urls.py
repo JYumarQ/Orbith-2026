@@ -22,6 +22,7 @@ urlpatterns = [
     # Hallazgos
     path('hallazgo/<int:pk>/', views.detalle_hallazgo, name='detalle_hallazgo'),
     path('hallazgo/<int:pk>/estado/', views.cambiar_estado, name='cambiar_estado'),
+    path('hallazgo/<int:pk>/corregir/', views.corregir_hallazgo, name='corregir_hallazgo'),
 
     # Cadena de análisis: una petición por categoría
     path('analisis/iniciar/', views.iniciar_analisis, name='iniciar_analisis'),

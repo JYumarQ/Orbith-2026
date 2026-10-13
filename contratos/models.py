@@ -397,14 +397,19 @@ class CAlta(ContratoBase):
     
     @property
     def fecha_ultima_accion(self):
-        """Devuelve la fecha del último evento. (fecha_alta garantizada por validación)"""
-        from .models import TMovimiento
-        ultimo_mov = TMovimiento.objects.filter(
-            aspirante=self.aspirante, 
-            no_expediente=self.no_expediente
-        ).order_by('-fecha_efectiva').first()
-        
-        return ultimo_mov.fecha_efectiva if ultimo_mov else self.fecha_alta
+        """Fecha del último evento del contrato: la mínima para darle de baja o para
+        un nuevo movimiento. Es la misma que `fecha_efectiva_vigente()` (antes buscaba
+        los movimientos por número de expediente y fallaba si se había corregido)."""
+        return self.fecha_efectiva_vigente()
+
+    @staticmethod
+    def con_fecha_ultimo_movimiento(queryset):
+        """Añade a cada contrato la fecha de su último movimiento en la MISMA consulta
+        de la lista. Sin esto, `fecha_ultima_accion` hacía una consulta por fila en las
+        listas de Contratos y del Gestor de Plantilla."""
+        ultimo = (TMovimiento.objects.filter(contrato=models.OuterRef('pk'))
+                  .order_by('-fecha_efectiva').values('fecha_efectiva')[:1])
+        return queryset.annotate(fecha_ultimo_movimiento=models.Subquery(ultimo))
 
     def fecha_efectiva_vigente(self):
         """Fecha efectiva del último movimiento de nómina de ESTE contrato, contando
@@ -417,7 +422,10 @@ class CAlta(ContratoBase):
         después de crear un movimiento, el movimiento conserva el número viejo y
         por expediente dejaría de encontrarse (decisión de RRHH, 12-10-2026).
         Nunca devuelve una fecha anterior a la de alta del contrato."""
-        ultima = self.trazabilidad.aggregate(ultima=models.Max('fecha_efectiva'))['ultima']
+        if hasattr(self, 'fecha_ultimo_movimiento'):  # ya viene de la lista
+            ultima = self.fecha_ultimo_movimiento
+        else:
+            ultima = self.trazabilidad.aggregate(ultima=models.Max('fecha_efectiva'))['ultima']
         if ultima and (not self.fecha_alta or ultima > self.fecha_alta):
             return ultima
         return self.fecha_alta
@@ -456,12 +464,16 @@ class CAlta(ContratoBase):
         try:
             es_nuevo = self._state.adding
 
-            # Cargo que tenía antes, para liberar su plaza si cambió
+            # Cargo que tenía antes, para liberar su plaza si cambió, y expediente
+            # que tenía antes, para llevar el nuevo a sus movimientos (abajo).
             cargo_anterior_id = None
+            expediente_anterior = None
             if not es_nuevo:
-                anterior = CAlta.objects.filter(pk=self.pk).values('cargo_id').first()
+                anterior = (CAlta.objects.filter(pk=self.pk)
+                            .values('cargo_id', 'no_expediente').first())
                 if anterior:
                     cargo_anterior_id = anterior['cargo_id']
+                    expediente_anterior = anterior['no_expediente']
 
             # EL ESCUDO: Asignación y Limpieza real en base de datos
             #
@@ -491,6 +503,16 @@ class CAlta(ContratoBase):
             if nuevo_salario != self.salario_actual:
                 CAlta.objects.filter(pk=self.pk).update(salario_actual=nuevo_salario)
                 self.salario_actual = nuevo_salario
+
+            # Se corrigió el expediente: los movimientos de este contrato pasan al
+            # número nuevo. Si no, conservaban el viejo y dejaban de encontrarse por
+            # expediente (búsqueda «E:», documento del movimiento…). Decisión de RRHH
+            # del 12-10-2026; los casos anteriores los detecta Subsanación (MOV-008).
+            # Es un cambio derivado: Auditoría ya registra el del expediente del
+            # contrato, así que va con `update()` y no repite un evento por movimiento.
+            if expediente_anterior is not None and expediente_anterior != self.no_expediente:
+                self.trazabilidad.exclude(no_expediente=self.no_expediente).update(
+                    no_expediente=self.no_expediente)
 
             if es_nuevo:
                 # Recontratación: recuperar el histórico que se quedó huérfano cuando se

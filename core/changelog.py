@@ -61,6 +61,12 @@ CHANGELOG = [
             ("nuevo", "Subsanación: regla CTR-020 para los contratos fijos en "
                     "cargos fuera de plantilla, y pestaña «Índice de Reglas» "
                     "que explica qué comprueba cada código y cómo se corrige."),
+            ("nuevo", "Subsanación: regla MOV-008 para los movimientos de nómina "
+                    "que conservan un número de expediente distinto al de su "
+                    "contrato. En MOV-008 y MOV-002 un Administrador puede "
+                    "corregir el caso con un botón, con confirmación y registro "
+                    "en Auditoría. Además, al corregir el expediente de un "
+                    "contrato, sus movimientos toman el número nuevo."),
             ("nuevo", "Búsqueda con prefijos en Aspirantes, Bajas, Contratos y "
                     "Subsanación: E: expediente, N: nombre, CI: carnet, CA: "
                     "cargo, U: unidad y COD: código de regla. Se pueden "
@@ -111,6 +117,11 @@ CHANGELOG = [
                         "la «Fecha Efectiva de Firma» salía con la fecha de alta. "
                         "Ahora propone la del último movimiento de nómina del "
                         "contrato, y se puede cambiar antes de exportar."),
+            ("corregido", "La fecha mínima para dar de baja o hacer un movimiento "
+                        "de nómina podía salir más temprana de la cuenta si el "
+                        "expediente del contrato se había corregido. Las listas "
+                        "de Contratos y del Gestor de Plantilla, además, la "
+                        "calculan ahora sin una consulta por cada fila."),
             ("corregido", "Los filtros de Auditoría, Advertencias y Solicitudes "
                         "se cerraban al marcar la primera opción."),
             ("corregido", "Auditoría, Subsanación e Informe Inteligente dejaban "

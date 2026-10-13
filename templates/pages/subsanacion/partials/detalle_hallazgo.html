@@ -23,6 +23,13 @@
 
 <div class="modal-body">
 
+  {% if aviso_correccion %}
+    <div class="alert alert-success d-flex align-items-center gap-2 py-2">
+      <i class="bi bi-check2-circle"></i>
+      <div class="small">{{ aviso_correccion }} El hallazgo queda como <strong>Corregido</strong>.</div>
+    </div>
+  {% endif %}
+
   {% if not hallazgo.vigente %}
     <div class="alert alert-success d-flex align-items-center gap-2 py-2">
       <i class="bi bi-check2-circle"></i>
@@ -72,6 +79,20 @@
     <div class="sub-guia-bloque sub-color-verde mb-3">
       <div class="sub-guia-titulo"><i class="bi bi-tools me-1"></i>¿Cómo se corrige?</div>
       <p class="small mb-0">{{ regla.solucion }}</p>
+      {% comment %} Solo en las reglas que declaran su corrección (MOV-002, MOV-008) y
+         solo para un Administrador: es la única escritura de datos de Orbith que se
+         hace desde Subsanación (ver subsanacion.views.corregir_hallazgo). {% endcomment %}
+      {% if puede_corregir %}
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+          <button type="button" class="btn btn-success btn-sm"
+                  hx-post="{% url 'subsanacion:corregir_hallazgo' hallazgo.pk %}"
+                  hx-target="#contenidoModalHallazgo" hx-swap="innerHTML"
+                  hx-confirm="{{ regla.correccion_aviso }} ¿Continuar?">
+            <i class="bi bi-magic me-1"></i>{{ regla.correccion_etiqueta }}
+          </button>
+          <small class="text-muted">{{ regla.correccion_aviso }}</small>
+        </div>
+      {% endif %}
     </div>
   {% else %}
     <div class="alert alert-secondary small py-2">

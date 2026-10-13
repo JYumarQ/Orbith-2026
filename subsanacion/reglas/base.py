@@ -147,6 +147,21 @@ class ReglaBase:
     modelo_enlace = None
     enlace_url = None
 
+    # --- Corrección desde Subsanación (opcional) ---------------------------
+    # Casi ninguna regla la tiene: lo normal es que el usuario corrija en el
+    # formulario del registro. Solo las que se arreglan sin decidir nada y no tienen
+    # formulario (MOV-002, MOV-008) declaran `correccion_etiqueta` (el texto del
+    # botón «Corregir», que solo ve un Administrador), `correccion_aviso` (lo que
+    # hará, para la confirmación) e implementan `corregir()`.
+    correccion_etiqueta = None
+    correccion_aviso = ''
+
+    def corregir(self, hallazgo):
+        """Arregla el registro de `hallazgo` y devuelve el texto para el historial.
+        Lanza ValueError con el motivo si el arreglo ya no se puede aplicar. La
+        escritura la hace la app de negocio (p. ej. `contratos.correcciones`)."""
+        raise NotImplementedError(f'La regla {self.codigo} no tiene corrección.')
+
     def __init_subclass__(cls, **kwargs):
         """Registra la regla por el simple hecho de heredar.
 

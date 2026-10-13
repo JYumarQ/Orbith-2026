@@ -1505,3 +1505,13 @@ class FechaEfectivaDeFirmaTests(TestCase):
             reverse('exportar_contrato_word', kwargs={'pk': self.contrato.pk}))
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.context['form'].initial['fecha_efectiva'], date(2026, 9, 20))
+
+    def test_la_fecha_minima_de_la_baja_usa_el_mismo_criterio(self):
+        self._movimiento(date(2026, 9, 20), expediente='1213')
+        self.assertEqual(self.contrato.fecha_ultima_accion, date(2026, 9, 20))
+
+    def test_en_la_lista_se_calcula_sin_una_consulta_por_fila(self):
+        self._movimiento(date(2026, 9, 20), expediente='1213')
+        contrato = CAlta.con_fecha_ultimo_movimiento(CAlta.objects.filter(pk=self.contrato.pk)).get()
+        with self.assertNumQueries(0):
+            self.assertEqual(contrato.fecha_ultima_accion, date(2026, 9, 20))

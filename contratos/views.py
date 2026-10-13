@@ -81,6 +81,8 @@ class ContratoListView(ListView):
         """
         qs = super().get_queryset().filter(
             pk__in=contratos_visibles(self.request.user).values_list('pk', flat=True))
+        # La fecha mínima de la Baja de cada fila, en la misma consulta.
+        qs = CAlta.con_fecha_ultimo_movimiento(qs)
         return aplicar_filtros(self.request, qs.select_related(
             'aspirante',
             'tipo',
@@ -382,6 +384,8 @@ def search_contratos(request):
         'rol',
         'tridente'
     ).order_by('-fecha_alta')
+    # La fecha mínima de la Baja de cada fila, en la misma consulta.
+    qs = CAlta.con_fecha_ultimo_movimiento(qs)
 
     # 3. Aplicar Filtros "Embudo" (mismo criterio que la carga inicial de
     # ContratoListView — ver contratos/filtros.py::aplicar_filtros)
@@ -1199,11 +1203,9 @@ class ContratoBajaView(RequiereEdicionMixin, DeleteView):
         # =================================================================
         
         
-        # A. Buscar último movimiento registrado
-        ultimo_mov = TMovimiento.objects.filter(contrato=contrato).order_by('-fecha_efectiva').first()
-        
-        # B. Definir fecha límite (El evento más reciente entre el último mov o el alta original)
-        fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+        # A-B. Fecha límite: el evento más reciente del contrato (su último
+        # movimiento o el alta). La misma que ve el formulario en la lista.
+        fecha_limite = contrato.fecha_efectiva_vigente()
         
         # C. Comparar (Baja no puede ser anterior a lo último que pasó)
         if fecha_limite and fecha_baja < fecha_limite:
@@ -1382,12 +1384,7 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 context['initial_tarifa_extras'] = round((context['initial_tarifa_horaria'] * porcentaje_extra) + context['initial_tarifa_horaria'], 5)
         
         # Añadimos la fecha límite cronológica para el JavaScript
-        ultimo_mov = TMovimiento.objects.filter(
-            aspirante=contrato.aspirante,
-            no_expediente=contrato.no_expediente
-        ).order_by('-fecha_efectiva').first()
-        
-        fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+        fecha_limite = contrato.fecha_efectiva_vigente()
         if fecha_limite:
             context['fecha_limite_js'] = fecha_limite.strftime('%Y-%m-%d')
 
@@ -1408,14 +1405,9 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
             # =================================================================
             
-            # Buscamos si hay movimientos previos usando la ruta segura
-            ultimo_mov = TMovimiento.objects.filter(
-                aspirante=contrato.aspirante,
-                no_expediente=contrato.no_expediente
-            ).order_by('-fecha_efectiva').first()
-            
-            # La fecha límite es: La del último movimiento, O si no hay, la fecha de Alta original
-            fecha_limite = ultimo_mov.fecha_efectiva if ultimo_mov else contrato.fecha_alta
+            # La fecha límite es la del último movimiento del contrato o, si no hay
+            # ninguno posterior, la de alta. Por el enlace, no por expediente.
+            fecha_limite = contrato.fecha_efectiva_vigente()
 
             # fecha_limite puede ser None (contrato sin fecha_alta y sin movimientos):
             # sin este guardia la comparación lanzaba TypeError y devolvía un 500.

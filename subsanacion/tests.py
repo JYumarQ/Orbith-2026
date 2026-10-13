@@ -2086,3 +2086,125 @@ class MisionSinDiasOImporteTests(TestCase):
         self.assertEqual(encontrados, {str(vacio.pk), str(con_cero.pk)})
         self.assertNotIn(str(completo.pk), encontrados)
         self.assertNotIn(str(sin_mision.pk), encontrados)
+
+
+class CorreccionDeMovimientosTests(TestCase):
+    """MOV-002 y MOV-008 con botón «Corregir» (decisión de RRHH, 12-10-2026): solo
+    un Administrador lo ve y lo usa; la corrección queda en Auditoría y el hallazgo
+    pasa a Corregido. Y al cambiar el expediente de un contrato, sus movimientos
+    toman el número nuevo, para que el caso MOV-008 no vuelva a producirse."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.esc = _EscenarioContratos()
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_correccion', password='x', es_admin=True)
+        cls.moderador = CustomUser.objects.create_user(
+            username='moderador_correccion', password='x', es_moderador=True)
+        cls.moderador.unidades.set([cls.esc.unidad])
+
+    def setUp(self):
+        self.contrato = CAlta.objects.create(
+            aspirante=self.esc.aspirante('90010112401'), no_expediente='12131',
+            tipo=self.esc.tipo_contrato, cargo=self.esc.cargo, fecha_alta=date(2026, 8, 20))
+
+    def _movimiento(self, expediente, contrato='propio'):
+        from contratos.models import TMovimiento
+        return TMovimiento.objects.create(
+            aspirante=self.contrato.aspirante, no_expediente=expediente,
+            contrato=self.contrato if contrato == 'propio' else None,
+            fecha_efectiva=date(2026, 9, 20), cargo_anterior='Especialista B',
+            cargo_nuevo='Especialista B', salario_anterior=4000, salario_nuevo=4500,
+            tipo_movimiento='Movimiento de Nómina', unidad_nueva_fk=self.esc.unidad)
+
+    def _hallazgo(self, codigo, movimiento):
+        from contratos.models import TMovimiento
+        return Hallazgo.objects.create(
+            codigo_regla=codigo, object_id=str(movimiento.pk),
+            content_type=ContentType.objects.get_for_model(TMovimiento),
+            modulo='nomina', criticidad=CRITICIDAD_ALTA, titulo='Prueba',
+            ultima_deteccion=timezone.now(), unidad_organizativa=self.esc.unidad)
+
+    # --- MOV-008: detección ------------------------------------------------
+
+    def test_mov008_detecta_el_expediente_distinto(self):
+        from .reglas.nomina import MovimientoConOtroExpediente
+        distinto = self._movimiento('1213')
+        self._movimiento('12131')  # coincide: no se reporta
+        hallazgos = list(MovimientoConOtroExpediente().ejecutar(None))
+        self.assertEqual([h.object_id for h in hallazgos], [str(distinto.pk)])
+        self.assertEqual(hallazgos[0].datos['expediente_del_contrato'], '12131')
+
+    def test_cambiar_el_expediente_del_contrato_lo_lleva_a_sus_movimientos(self):
+        movimiento = self._movimiento('12131')
+        self.contrato.no_expediente = '12132'
+        self.contrato.save()
+        movimiento.refresh_from_db()
+        self.assertEqual(movimiento.no_expediente, '12132')
+
+    # --- El botón «Corregir» -----------------------------------------------
+
+    def test_el_administrador_corrige_el_expediente(self):
+        from auditoria.models import EventoAuditoria
+        movimiento = self._movimiento('1213')
+        hallazgo = self._hallazgo('MOV-008', movimiento)
+        self.client.force_login(self.admin)
+
+        respuesta = self.client.post(
+            reverse('subsanacion:corregir_hallazgo', args=[hallazgo.pk]))
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, '1213 → 12131')
+        movimiento.refresh_from_db()
+        self.assertEqual(movimiento.no_expediente, '12131')
+        hallazgo.refresh_from_db()
+        self.assertEqual(hallazgo.estado, Hallazgo.CORREGIDO)
+        self.assertEqual(hallazgo.revisado_por, self.admin)
+        self.assertTrue(EventoAuditoria.objects.filter(
+            object_id=str(movimiento.pk), usuario=self.admin).exists())
+
+    def test_el_administrador_reengancha_el_movimiento(self):
+        movimiento = self._movimiento('12131', contrato=None)
+        hallazgo = self._hallazgo('MOV-002', movimiento)
+        self.client.force_login(self.admin)
+
+        self.client.post(reverse('subsanacion:corregir_hallazgo', args=[hallazgo.pk]))
+
+        movimiento.refresh_from_db()
+        self.assertEqual(movimiento.contrato_id, self.contrato.pk)
+        hallazgo.refresh_from_db()
+        self.assertEqual(hallazgo.estado, Hallazgo.CORREGIDO)
+
+    def test_el_moderador_no_puede_corregir(self):
+        movimiento = self._movimiento('1213')
+        hallazgo = self._hallazgo('MOV-008', movimiento)
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('subsanacion:corregir_hallazgo', args=[hallazgo.pk]))
+
+        movimiento.refresh_from_db()
+        self.assertEqual(movimiento.no_expediente, '1213')
+        hallazgo.refresh_from_db()
+        self.assertEqual(hallazgo.estado, Hallazgo.PENDIENTE)
+
+    def test_el_boton_solo_lo_ve_el_administrador(self):
+        hallazgo = self._hallazgo('MOV-008', self._movimiento('1213'))
+        url = reverse('subsanacion:detalle_hallazgo', args=[hallazgo.pk])
+
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(url), 'Corregir expediente')
+        self.client.force_login(self.moderador)
+        self.assertNotContains(self.client.get(url), 'subsanacion/hallazgo/%d/corregir' % hallazgo.pk)
+
+    def test_si_ya_no_aplica_no_toca_nada(self):
+        movimiento = self._movimiento('1213')
+        hallazgo = self._hallazgo('MOV-008', movimiento)
+        type(movimiento).objects.filter(pk=movimiento.pk).update(no_expediente='12131')
+        self.client.force_login(self.admin)
+
+        respuesta = self.client.post(
+            reverse('subsanacion:corregir_hallazgo', args=[hallazgo.pk]))
+
+        self.assertContains(respuesta, 'ya tiene el expediente de su contrato', status_code=400)
+        hallazgo.refresh_from_db()
+        self.assertEqual(hallazgo.estado, Hallazgo.PENDIENTE)

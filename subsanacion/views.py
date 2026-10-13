@@ -20,6 +20,7 @@ Estilo: vistas basadas en función con fragmentos HTMX, igual que
 import logging
 
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
@@ -332,7 +333,7 @@ def _hallazgos_visibles(usuario):
 
 
 @permisos.acceso_subsanacion
-def detalle_hallazgo(request, pk):
+def detalle_hallazgo(request, pk, aviso_correccion=''):
     """Detalle: qué encontró, por qué es un problema, cómo se corrige y a dónde ir."""
     hallazgo = get_object_or_404(_hallazgos_visibles(request.user), pk=pk)
 
@@ -343,6 +344,8 @@ def detalle_hallazgo(request, pk):
     return render(request, 'pages/subsanacion/partials/detalle_hallazgo.html', {
         'hallazgo': hallazgo,
         'regla': regla,
+        'puede_corregir': _puede_corregir(request.user, hallazgo, regla),
+        'aviso_correccion': aviso_correccion,
         'enlace': enlace_de_hallazgo(
             hallazgo, forzar_url=regla.enlace_url if regla else None,
             # `detalle_hallazgo` se abre vía HTMX dentro de un modal sobre el panel de
@@ -388,6 +391,45 @@ def cambiar_estado(request, pk):
     # Se devuelve el detalle recargado para que el usuario vea el estado nuevo y su
     # historial actualizado sin recargar la página entera.
     return detalle_hallazgo(request, pk)
+
+
+# ---------------------------------------------------------------------------
+# Corrección desde Subsanación: la única excepción a «no tocar datos de negocio»
+# ---------------------------------------------------------------------------
+
+def _puede_corregir(usuario, hallazgo, regla):
+    """El botón «Corregir» solo existe para un Administrador, en un hallazgo
+    abierto y vigente de una regla que declara su corrección (MOV-002, MOV-008)."""
+    return bool(regla and regla.correccion_etiqueta and hallazgo.vigente
+                and hallazgo.esta_abierto and permisos.es_administrador(usuario))
+
+
+@permisos.solo_admin_subsanacion
+@require_POST
+def corregir_hallazgo(request, pk):
+    """Aplica la corrección de la regla y marca el hallazgo como Corregido.
+
+    Decisión de RRHH (12-10-2026): los movimientos de nómina no tienen formulario de
+    edición, así que dos casos que solo se arreglaban desde la consola se arreglan
+    aquí. La escritura la hace la app de negocio (`contratos.correcciones`) con
+    `save()`, de modo que Auditoría registra el cambio con este usuario. Todo va en
+    una transacción: si el hallazgo no pudiera marcarse, el dato tampoco cambia.
+    """
+    hallazgo = get_object_or_404(_hallazgos_visibles(request.user), pk=pk)
+    regla = obtener_regla(hallazgo.codigo_regla)
+    if not _puede_corregir(request.user, hallazgo, regla):
+        return _error(request, 'Este hallazgo no se puede corregir desde Subsanación.')
+
+    try:
+        with transaction.atomic():
+            resultado = regla.corregir(hallazgo)
+            servicios.cambiar_estado_hallazgo(
+                hallazgo, Hallazgo.CORREGIDO, usuario=request.user,
+                nota=f'Corregido desde Subsanación. {resultado}')
+    except ValueError as exc:
+        return _error(request, f'No se pudo corregir: {exc}')
+
+    return detalle_hallazgo(request, pk, aviso_correccion=resultado)
 
 
 # ---------------------------------------------------------------------------
