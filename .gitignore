@@ -36,3 +36,7 @@ cloudflared.exe
 backup_*.json
 *_backup.json
 respaldos/
+
+# Volcados antiguos del esquema y del código: no se usan y no van al repositorio.
+esquema.sql
+orbith_contratos_nomencladores.txt

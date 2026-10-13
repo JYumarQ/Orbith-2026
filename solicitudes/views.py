@@ -15,7 +15,6 @@ lógica de «qué se muestra a la izquierda y qué widget va a la derecha» no c
 import json
 
 from django.contrib import messages
-from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse

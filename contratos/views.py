@@ -4,7 +4,6 @@ from django.template.loader import render_to_string
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.views.generic import ListView, CreateView, DeleteView, UpdateView, View, FormView
-from django.core.paginator import Paginator
 from django.conf import settings
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 from bolsa.models import Aspirante
