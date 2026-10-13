@@ -1,0 +1,24 @@
+{% comment %}
+  Ventana de una barra de la Pirámide de Edades (dashboard.views.piramide_detalle_html).
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ titulo }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      <thead><tr><th>Exp.</th><th>Nombre</th><th class="text-end">Edad</th><th>Cargo</th><th>Unidad</th></tr></thead>
+      <tbody>
+        {% for f in filas %}
+        <tr class="cursor-pointer" title="Doble clic para ver su histórico"
+            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' f.aspirante_id %}')">
+          <td><strong>{{ f.expediente }}</strong></td><td>{{ f.nombre }}</td><td class="text-end">{{ f.edad }}</td>
+          <td>{{ f.cargo }}</td><td>{{ f.unidad }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted p-4">Nadie en este tramo.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-muted small mt-2 mb-0">{{ filas|length }} persona{{ filas|length|pluralize }}.</p>
+</div>

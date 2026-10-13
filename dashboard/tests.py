@@ -769,3 +769,17 @@ class AnnosDeServicioFiltroTests(TestCase):
 
     def test_ver_mas_usa_el_mismo_filtro(self):
         self.assertEqual(self.annos('dashboard_antiguedad_detalle', annos_desde=3, annos_hasta=9), [4, 8])
+
+
+class PiramideDetalleTests(DashboardInteractivaTests):
+    """Cada barra de la Pirámide de Edades coincide con su ventana."""
+
+    def test_cada_barra_coincide_con_su_ventana(self):
+        datos = self.client.get(reverse('dashboard_piramide_json')).json()
+        for sexo, serie in (('M', datos['edades_m']), ('F', datos['edades_f'])):
+            for tramo, cantidad in enumerate(serie):
+                r = self.client.get(reverse('dashboard_piramide_detalle'),
+                                    {'tramo': tramo, 'sexo': sexo, 'cortes': datos['cortes']})
+                self.assertEqual(len(r.context['filas']), cantidad, (sexo, tramo))
+        self.assertEqual(self.client.get(reverse('dashboard_piramide_detalle'),
+                                         {'tramo': 99, 'sexo': 'M'}).status_code, 400)

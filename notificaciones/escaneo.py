@@ -88,9 +88,17 @@ def notificar_resultados(resultados_creacion, destinatario, *, resultados_global
     resultados_globales = (
         resultados_globales if resultados_globales is not None else resultados_creacion)
 
+    # Las fichas de quien causó baja no reciben alertas: nadie las va a completar
+    # (decisión de RRHH del 13-10-2026; ver `receptores.borrar_avisos_del_contrato`).
+    from bolsa.models import Aspirante
+    de_baja = {str(pk) for pk in Aspirante.objects.filter(estado='BAJA').values_list('pk', flat=True)}
+
     for regla, detectados in resultados_creacion:
-        tipo_ct = ContentType.objects.get_for_model(regla.obtener_modelo())
+        modelo = regla.obtener_modelo()
+        tipo_ct = ContentType.objects.get_for_model(modelo)
         for hallazgo in detectados:
+            if modelo is Aspirante and hallazgo.object_id in de_baja:
+                continue
             _registrar_notificacion_de_hallazgo(
                 tipo_ct=tipo_ct, object_id=hallazgo.object_id,
                 destinatario=destinatario, regla=regla, hallazgo=hallazgo)

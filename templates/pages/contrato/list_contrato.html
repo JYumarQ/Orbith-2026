@@ -44,7 +44,16 @@
 
     /* Recontratación (decisión de RRHH del 12-10-2026): solo una línea verde fina
        al inicio de la fila; al pasar el ratón por la primera celda, «Recontratado». */
-    .row-recontratado > td:first-child { box-shadow: inset 3px 0 0 0 #71dd37; }
+    /* La línea va con `box-shadow`, igual que el rayado y el realce de las filas
+       (orbith-tablas.css): en las filas pares o al pasar el ratón, aquella regla la
+       tapaba. Por eso se repite combinada con cada uno. */
+    .orb-tabla > tbody > tr.row-recontratado > td:first-child { box-shadow: inset 3px 0 0 0 #71dd37; }
+    .orb-tabla > tbody > tr.row-recontratado:nth-child(even) > td:first-child {
+        box-shadow: inset 3px 0 0 0 #71dd37, inset 0 0 0 9999px var(--orb-tabla-raya);
+    }
+    .orb-tabla > tbody > tr.row-recontratado:hover > td:first-child {
+        box-shadow: inset 3px 0 0 0 #71dd37, inset 0 0 0 9999px var(--orb-tabla-hover);
+    }
 
     .row-movimiento-pendiente td {
         color: #ffab00 !important; /* Texto amarillo oscuro/naranja legible */

@@ -1720,3 +1720,66 @@ class AsistenteDeContratacionErroresTests(TestCase):
         respuesta = self._contratar(self.cargo_libre, '2026-10-01')
         self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
         self.assertTrue(CAlta.objects.filter(no_expediente='00902').exists())
+
+
+class AvisosAlCausarBajaTests(TestCase):
+    """Al causar baja se borran los avisos del contrato y las alertas de la ficha
+    (no los Eventos), el análisis no las vuelve a crear, y un enlace a un contrato
+    que ya no existe muestra una página clara en vez del 404 (13-10-2026)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from django.contrib.contenttypes.models import ContentType
+        from notificaciones.models import Notificacion
+        cls.Notificacion = Notificacion
+        cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(descripcion='Determinado', ocupa_plaza=False, requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Se', papellido='Va', sapellido='T', doc_identidad='80010113101',
+            estado='ACTIVO', sexo='F', raza='BL', provincia=provincia, municipio=municipio)
+        cls.contrato = CAlta.objects.create(aspirante=cls.aspirante, no_expediente='01101', tipo=tipo,
+                                            cargo=cargo, fecha_alta=date(2026, 1, 1))
+        cls.admin = CustomUser.objects.create_user(username='admin_avisos_baja', password='x', es_admin=True)
+        cls.ct_contrato = ContentType.objects.get_for_model(CAlta)
+        cls.ct_ficha = ContentType.objects.get_for_model(Aspirante)
+
+    def _aviso(self, ct, object_id, tipo, codigo):
+        return self.Notificacion.objects.create(
+            titulo=codigo, mensaje='', tipo=tipo, codigo_regla=codigo, content_type=ct,
+            object_id=str(object_id), destinatario=self.admin)
+
+    def test_la_baja_borra_avisos_del_contrato_y_alertas_de_la_ficha(self):
+        N = self.Notificacion
+        self._aviso(self.ct_contrato, self.contrato.pk, N.Tipo.ALERTA, 'CTR-X')
+        self._aviso(self.ct_ficha, self.aspirante.pk, N.Tipo.ALERTA, 'ASP-X')
+        evento = self._aviso(self.ct_ficha, self.aspirante.pk, N.Tipo.EVENTO, 'BAJA-X')
+        pk = self.contrato.pk
+        self.aspirante.estado = 'BAJA'
+        self.aspirante.save(update_fields=['estado'])
+        self.contrato.delete()
+        self.assertFalse(N.objects.filter(content_type=self.ct_contrato, object_id=str(pk)).exists())
+        quedan = N.objects.filter(content_type=self.ct_ficha)
+        # Ninguna alerta; los Eventos se quedan (también el «Baja de contrato» que
+        # crea la propia baja).
+        self.assertFalse(quedan.filter(tipo=N.Tipo.ALERTA).exists())
+        self.assertTrue(quedan.filter(pk=evento.pk).exists())
+
+    def test_el_analisis_no_crea_alertas_para_fichas_de_baja(self):
+        from types import SimpleNamespace
+        from notificaciones.escaneo import notificar_resultados
+        from subsanacion.reglas import obtener_regla
+        self.aspirante.estado = 'BAJA'
+        self.aspirante.save(update_fields=['estado'])
+        regla = obtener_regla('ASP-006')
+        hallazgo = SimpleNamespace(object_id=str(self.aspirante.pk), clave_extra='', titulo='Sin dirección',
+                                   detalle='', unidad_organizativa_id=None, campo_formulario='direccion')
+        notificar_resultados([(regla, [hallazgo])], self.admin)
+        self.assertFalse(self.Notificacion.objects.filter(content_type=self.ct_ficha).exists())
+
+    def test_enlace_a_un_contrato_que_ya_no_existe(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('updt_contrato', args=[999999]), {'next': '/notificaciones/'})
+        self.assertEqual(respuesta.status_code, 404)
+        self.assertContains(respuesta, 'Este contrato ya no existe', status_code=404)
+        self.assertContains(respuesta, 'href="/notificaciones/"', status_code=404)

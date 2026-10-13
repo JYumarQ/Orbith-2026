@@ -10,6 +10,7 @@ urlpatterns = [
     # DASHBOARD PRINCIPAL
     path('', dashboard_views.DashboardView.as_view(), name='dashboard'),
     path('dashboard/piramide-edades/', dashboard_views.piramide_edades_json, name='dashboard_piramide_json'),
+    path('dashboard/piramide-edades/detalle/', dashboard_views.piramide_detalle_html, name='dashboard_piramide_detalle'),
     path('dashboard/advertencias/', dashboard_views.advertencias_json, name='dashboard_advertencias_json'),
     path('dashboard/antiguedad/', dashboard_views.antiguedad_html, name='dashboard_antiguedad_html'),
     path('dashboard/antiguedad/detalle/', dashboard_views.antiguedad_detalle_html, name='dashboard_antiguedad_detalle'),

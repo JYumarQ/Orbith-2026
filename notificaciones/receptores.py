@@ -73,3 +73,38 @@ def avisar_criticas_nuevas(sender, ejecucion, **kwargs):
                 'tipo': Notificacion.Tipo.ALERTA, 'estado': Notificacion.Estado.ACTIVA,
             },
         )
+
+
+def borrar_avisos_del_contrato(sender, instance, **kwargs):
+    """Al borrarse un contrato vivo (al causar baja, o desde el Admin) se borran:
+
+    * TODOS los avisos que apuntaban al contrato («Designado sin código», «Nuevo
+      contrato de alta»…). Antes se quedaban activos para siempre y su enlace
+      llevaba a un contrato que ya no existe (error 404).
+    * Si la persona se queda sin contrato vivo (ha causado baja), las ALERTAS de
+      datos de su ficha («Sin dirección», «Tallas incompletas»…): ya nadie las va a
+      completar. Los avisos de tipo Evento, como «Baja de contrato», se quedan:
+      son los que informan de la baja. Si vuelve a ser contratada, el análisis de
+      incidencias le crea de nuevo las alertas que sigan haciendo falta.
+
+    Se borran y no se marcan «Resuelto» porque nadie los resolvió (decisión de
+    RRHH del 13-10-2026)."""
+    from django.contrib.contenttypes.models import ContentType
+
+    from bolsa.models import Aspirante
+
+    from .models import Notificacion
+
+    borradas, _ = Notificacion.objects.filter(
+        content_type=ContentType.objects.get_for_model(type(instance)),
+        object_id=str(instance.pk)).delete()
+    if instance.aspirante_id and not type(instance).objects.filter(
+            aspirante_id=instance.aspirante_id).exists():
+        de_la_ficha, _ = Notificacion.objects.filter(
+            content_type=ContentType.objects.get_for_model(Aspirante),
+            object_id=str(instance.aspirante_id),
+            tipo=Notificacion.Tipo.ALERTA).delete()
+        borradas += de_la_ficha
+    if borradas:
+        logger.info('Borrados %s avisos del contrato %s (y de su ficha), que ya no existe.',
+                    borradas, instance.pk)

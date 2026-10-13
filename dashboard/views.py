@@ -151,6 +151,36 @@ def piramide_edades_json(request):
     })
 
 
+def piramide_detalle_html(request):
+    """Ventana de una barra de la Pirámide de Edades: los hombres o las mujeres
+    (`sexo`) activos del tramo `tramo` (índice, con los mismos `cortes` y unidades
+    que la tarjeta)."""
+    uo_ids, _ = resolver_filtros(request)
+    cortes = _cortes_edad_desde_request(request)
+    categorias = _categorias_edad(cortes)
+    sexo = request.GET.get('sexo')
+    tramo = request.GET.get('tramo', '')
+    if sexo not in ('M', 'F') or not tramo.isdigit() or int(tramo) >= len(categorias):
+        return HttpResponse('Tramo no válido.', status=400)
+    tramo = int(tramo)
+
+    activos = _filtrar_por_uo(
+        CAlta.objects.filter(aspirante__estado='ACTIVO', aspirante__sexo=sexo).select_related(
+            'aspirante', 'cargo__ncargo', 'cargo__departamento__unidad_organizativa'),
+        'cargo__departamento', uo_ids)
+    filas = []
+    for contrato in activos:
+        edad = contrato.aspirante.get_edad
+        if edad is None or _bucket_edad(edad, cortes) != tramo:
+            continue
+        cargo, unidad = _cargo_y_unidad(contrato)
+        filas.append({'expediente': contrato.no_expediente, 'nombre': _nombre(contrato.aspirante),
+                      'aspirante_id': contrato.aspirante_id, 'edad': edad, 'cargo': cargo, 'unidad': unidad})
+    filas.sort(key=lambda f: (f['edad'], f['nombre']))
+    return render(request, 'pages/dashboard/partials/piramide_detalle.html', {
+        'filas': filas, 'titulo': f"{'Hombres' if sexo == 'M' else 'Mujeres'} de {categorias[tramo]} años"})
+
+
 def antiguedad_html(request):
     """Tarjeta 'Antigüedad': lista de contratos ACTIVOS ordenada por más
     antiguo primero (fecha_alta_entidad ascendente), con el mismo alcance de
@@ -669,10 +699,14 @@ class DashboardView(TemplateView):
 
             nombre_full = f"{asp.nombre} {asp.papellido}"
 
+            # Expediente (para distinguir nombres iguales) y aspirante (doble clic,
+            # histórico) en las tres pestañas del Radar de Jubilaciones.
+            del_radar = {'expediente': c.no_expediente, 'aspirante_id': asp.pk}
+
             if c.jubilado_recontratado:
                 cargo_desc_jr = c.cargo.ncargo.descripcion if c.cargo and getattr(c.cargo, 'ncargo', None) else '-'
                 jubilados_recontratados.append({
-                    'nombre': nombre_full, 'edad': edad, 'sexo': sexo, 'cargo': cargo_desc_jr
+                    'nombre': nombre_full, 'edad': edad, 'sexo': sexo, 'cargo': cargo_desc_jr, **del_radar
                 })
 
             if edad is not None:
@@ -687,11 +721,11 @@ class DashboardView(TemplateView):
                 # superado la ventana", exactamente el rango que antes comprobaban las
                 # condiciones 58<=edad<=60 / 63<=edad<=65.
                 if asp.dias_hasta_jubilacion is not None and asp.dias_hasta_jubilacion <= 0:
-                    pre_jubilacion.append({'nombre': nombre_full, 'edad': edad, 'sexo': sexo, 'cargo': cargo_desc})
+                    pre_jubilacion.append({'nombre': nombre_full, 'edad': edad, 'sexo': sexo, 'cargo': cargo_desc, **del_radar})
                 elif sexo == 'F' and edad > 60:
-                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'F', 'cargo': cargo_desc})
+                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'F', 'cargo': cargo_desc, **del_radar})
                 elif sexo == 'M' and edad > 65:
-                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc})
+                    recontratados.append({'nombre': nombre_full, 'edad': edad, 'sexo': 'M', 'cargo': cargo_desc, **del_radar})
 
             # I) Distribución por Raza (con código crudo paralelo, ver Nivel Educacional arriba)
             if asp.raza:

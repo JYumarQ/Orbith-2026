@@ -381,9 +381,9 @@
                         <div class="tab-pane fade show active" id="tab-pre">
                             <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
                                 {% for p in pre_jubilacion %}
-                                <li class="list-group-item px-3 py-2">
+                                <li class="list-group-item px-3 py-2 cursor-pointer" title="Doble clic para ver su histórico" ondblclick="abrirModalHistorico('{% url 'historico_trabajador' p.aspirante_id %}')">
                                     <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge {% if p.sexo == 'F' %}bg-label-danger{% else %}bg-label-info{% endif %}">{{ p.edad }}</span></div>
-                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                    <small class="text-muted" style="font-size:0.7rem;">Exp. {{ p.expediente }} · <i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
                                 </li>
                                 {% empty %}
                                 <li class="list-group-item text-center text-muted py-4">Ningún Contrato está próximo de cumplir edad de Jubilación</li>
@@ -393,9 +393,9 @@
                         <div class="tab-pane fade" id="tab-rec">
                             <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
                                 {% for p in recontratados %}
-                                <li class="list-group-item px-3 py-2">
+                                <li class="list-group-item px-3 py-2 cursor-pointer" title="Doble clic para ver su histórico" ondblclick="abrirModalHistorico('{% url 'historico_trabajador' p.aspirante_id %}')">
                                     <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge bg-label-secondary">{{ p.edad }}</span></div>
-                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                    <small class="text-muted" style="font-size:0.7rem;">Exp. {{ p.expediente }} · <i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
                                 </li>
                                 {% empty %}
                                 <li class="list-group-item text-center text-muted py-4">No hay recontratados.</li>
@@ -405,9 +405,9 @@
                         <div class="tab-pane fade" id="tab-jr">
                             <ul class="list-group list-group-flush overflow-auto" style="height: 190px;">
                                 {% for p in jubilados_recontratados %}
-                                <li class="list-group-item px-3 py-2">
+                                <li class="list-group-item px-3 py-2 cursor-pointer" title="Doble clic para ver su histórico" ondblclick="abrirModalHistorico('{% url 'historico_trabajador' p.aspirante_id %}')">
                                     <div class="d-flex justify-content-between mb-1"><span class="fw-bold" style="font-size:0.8rem;">{{ p.nombre }}</span><span class="badge {% if p.sexo == 'F' %}bg-label-danger{% else %}bg-label-info{% endif %}">{{ p.edad|default:"-" }}</span></div>
-                                    <small class="text-muted" style="font-size:0.7rem;"><i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
+                                    <small class="text-muted" style="font-size:0.7rem;">Exp. {{ p.expediente }} · <i class="bx bx-briefcase me-1"></i>{{ p.cargo }}</small>
                                 </li>
                                 {% empty %}
                                 <li class="list-group-item text-center text-muted py-4">No hay jubilados recontratados.</li>
@@ -548,6 +548,7 @@ a.dash-enlace:not(.card):hover { filter: brightness(1.08); }
 </style>
 
 {% if puede_editar %}{% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}{% endif %}
+{% include 'pages/contrato/partials/modal_historico_include.html' %}
 
 {% comment %} Ventana común de la Dashboard: desglose del salario, altas/bajas de un
    mes y plazas. `abrirVentanaDashboard(url)` carga el contenido y la abre. {% endcomment %}
@@ -761,7 +762,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const datosM = edadesM.map(x => -x);
     const chartEdades = renderChartSafely('#edadesPyramidChart', {
         series: [{ name: 'Hombres', data: datosM }, { name: 'Mujeres', data: edadesF }],
-        chart: { type: 'bar', height: 220, stacked: true, toolbar: { show: false } },
+        chart: { type: 'bar', height: 220, stacked: true, toolbar: { show: false },
+                 // Pulsar una barra: los hombres o las mujeres de ese tramo, en una
+                 // ventana, con los cortes y las unidades que haya puestos.
+                 events: { dataPointSelection: function (e, ctx, config) {
+                     const params = new URLSearchParams('{{ request.GET.urlencode|escapejs }}');
+                     const cortes = document.querySelector('#form-cortes-edad input[name="cortes"]');
+                     if (cortes) params.set('cortes', cortes.value);
+                     params.set('tramo', config.dataPointIndex);
+                     params.set('sexo', config.seriesIndex === 0 ? 'M' : 'F');
+                     abrirVentanaDashboard('{% url "dashboard_piramide_detalle" %}?' + params.toString());
+                 } } },
         colors: ['#0ea5e9', '#f43f5e'],
         plotOptions: { bar: { horizontal: true, barHeight: '75%' } },
         dataLabels: { enabled: false },

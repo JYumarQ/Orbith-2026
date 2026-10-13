@@ -203,6 +203,9 @@ def avisar_hallazgos_en_caliente(instancia):
         return
 
     claves_vigentes = set()
+    # La ficha de quien causó baja no recibe alertas (ver `escaneo.notificar_resultados`).
+    if instancia._meta.label_lower == 'bolsa.aspirante' and getattr(instancia, 'estado', '') == 'BAJA':
+        resultados = []
 
     for regla, detectados in resultados:
         for detectado in detectados:

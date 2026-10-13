@@ -37,6 +37,28 @@ class ModalOPaginaCompletaMixin:
             return [self.template_name]
         return [self.template_name_pagina]
 
+    def get(self, request, *args, **kwargs):
+        """Si el registro ya no existe (un contrato que causó baja, por ejemplo, y
+        alguien llega desde un aviso o un enlace viejo), en vez de la página de error
+        404 de Django se explica qué pasó y se ofrece volver (13-10-2026)."""
+        from django.http import Http404
+        from django.shortcuts import render
+
+        try:
+            return super().get(request, *args, **kwargs)
+        except Http404:
+            modelo = getattr(self, 'model', None)
+            es_contrato = bool(modelo and modelo._meta.model_name == 'calta')
+            # El nombre interno de CAlta es «Alta»; para el usuario es un contrato.
+            nombre = 'contrato' if es_contrato else (modelo._meta.verbose_name.lower() if modelo else 'registro')
+            plantilla = ('base/partials/registro_no_existe.html' if self._es_peticion_fragmento()
+                         else 'base/registro_no_existe.html')
+            return render(request, plantilla, {
+                'nombre_registro': nombre,
+                'es_contrato': es_contrato,
+                'volver': request.GET.get('next') or str(getattr(self, 'url_por_defecto', '') or '/'),
+            }, status=404)
+
 
 class VolverAlOrigenMixin:
     """Generaliza el patrón `next` que hoy solo tenía `AspiranteUpdateView`.

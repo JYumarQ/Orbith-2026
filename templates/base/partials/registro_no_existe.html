@@ -1,0 +1,20 @@
+{% comment %}
+  Mensaje de «este registro ya no existe» (core.mixins.ModalOPaginaCompletaMixin).
+  Se usa en el modal y, dentro de base/registro_no_existe.html, en página completa.
+{% endcomment %}
+<div class="text-center py-5 px-3">
+  <i class="bx bx-file-find text-warning" style="font-size: 3rem;"></i>
+  <h5 class="mt-3 mb-2">Este {{ nombre_registro }} ya no existe</h5>
+  <p class="text-muted mb-4" style="max-width: 460px; margin: 0 auto;">
+    {% if es_contrato %}
+      El trabajador causó baja o el contrato se eliminó, así que no hay nada que abrir.
+      Su historial sigue disponible en la lista de Bajas.
+    {% else %}
+      Se eliminó después de que se creara el enlace por el que ha llegado aquí.
+    {% endif %}
+  </p>
+  <div class="d-flex justify-content-center gap-2 flex-wrap">
+    <a href="{{ volver }}" class="btn btn-primary"><i class="bx bx-arrow-back me-1"></i>Volver</a>
+    {% if es_contrato %}<a href="{% url 'list_baja' %}" class="btn btn-outline-secondary">Ir a Bajas</a>{% endif %}
+  </div>
+</div>
