@@ -320,7 +320,8 @@ class AvisosCierreTests(TestCase):
         for admin in (self.admin, self.admin2):
             resumen = self.avisos_de(admin, clave_extra='RESUMEN').get()
             self.assertEqual(resumen.titulo, 'Ranking de Septiembre 2026: ganadores')
-            self.assertIn('Moderadores: 🥇 Usuario sin nombre (300 XP)', resumen.mensaje)
+            # Solo lo leen Administradores: sin nombre, sale el nombre de usuario.
+            self.assertIn('Moderadores: 🥇 oro (300 XP)', resumen.mensaje)
             self.assertIn('Observadores: nadie sumó XP.', resumen.mensaje)
         # Su aviso personal, aparte del resumen.
         self.assertEqual(self.avisos_de(self.admin2).count(), 2)

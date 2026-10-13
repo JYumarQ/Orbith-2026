@@ -46,15 +46,18 @@ def texto_aviso(fila, rol, total_participantes, nombre_mes):
 
 
 def texto_resumen(clasificaciones, nombre_mes, anno):
-    """(título, mensaje) del resumen para los Administradores."""
-    from .servicios import PUESTOS_PREMIADOS, nombre_publico
+    """(título, mensaje) del resumen para los Administradores. Como solo lo leen
+    ellos, quien no tiene nombre sale con su nombre de usuario, igual que en
+    Estadísticas de uso (`estadisticas.nombre_para_admin`)."""
+    from .estadisticas import nombre_para_admin
+    from .servicios import PUESTOS_PREMIADOS
 
     partes = []
     for rol in (Rol.ADMINISTRADOR, Rol.MODERADOR, Rol.OBSERVADOR):
         ganadores = [f for f in clasificaciones.get(rol, [])
                      if f['xp'] > 0 and f['puesto'] <= PUESTOS_PREMIADOS]
         if ganadores:
-            nombres = ', '.join(f'{MEDALLAS[f["puesto"]][0]} {nombre_publico(f["usuario"])} ({f["xp"]} XP)'
+            nombres = ', '.join(f'{MEDALLAS[f["puesto"]][0]} {nombre_para_admin(f["usuario"])} ({f["xp"]} XP)'
                                 for f in ganadores)
         else:
             nombres = 'nadie sumó XP'
