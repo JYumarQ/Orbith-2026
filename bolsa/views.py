@@ -192,6 +192,10 @@ def _filtrar_bajas(request, qs):
     unidades = expandir([v for v in request.GET.getlist('unidad') if v])
     if not (desde or hasta or unidades):
         return qs
+    if desde or hasta:
+        # Para la nota «2 bajas en el período» de la fila.
+        from contratos.filtros import _cuantas_bajas
+        qs = qs.annotate(bajas_periodo=_cuantas_bajas(desde, hasta, 'fecha_baja', unidades, ref='pk'))
     bajas = CBaja.objects.all()
     if desde:
         bajas = bajas.filter(fecha_baja__gte=desde)
@@ -223,7 +227,9 @@ def _aviso_recontratados(request):
         filtros['baja_anterior_desde'] = desde.isoformat()
     if hasta:
         filtros['baja_anterior_hasta'] = hasta.isoformat()
-    filtros.setlist('unidad', [v for v in request.GET.getlist('unidad') if v])
+    # La unidad de la BAJA, no la del contrato nuevo (puede volver en otra unidad):
+    # la misma que usa la lista de Bajas y «Nuevas Bajas» de la Dashboard.
+    filtros.setlist('baja_anterior_unidad', [v for v in request.GET.getlist('unidad') if v])
     total = aplicar_filtros(SimpleNamespace(GET=filtros), contratos_visibles(request.user)).count()
     return {'recontratados_total': total,
             'recontratados_url': f"{reverse('list_contrato')}?{filtros.urlencode()}"}

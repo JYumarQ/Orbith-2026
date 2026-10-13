@@ -10,7 +10,8 @@ vistas llaman a la misma función, mismo patrón que `cierres/filtros.py` /
 
 from datetime import date
 
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 
 from strorganizativa.jerarquia import expandir
 
@@ -72,7 +73,49 @@ def altas_que_causaron_baja(request):
     qs = CBaja.objects.all()
     if tiene_alcance_acotado(request.user):
         qs = qs.filter(cargo__departamento__unidad_organizativa__in=request.user.unidades.all())
-    return aplicar_filtros(request, qs, solo_comunes=True)
+    qs = aplicar_filtros(request, qs, solo_comunes=True)
+    # Quien YA sale en la lista (se fue y volvió en el período) no se repite en el
+    # aviso: así lista + aviso = «Nuevas Altas» de la Dashboard, contando personas.
+    en_la_lista = aplicar_filtros(request, contratos_visibles(request.user))
+    return qs.exclude(aspirante_id__in=en_la_lista.values('aspirante_id'))
+
+
+def personas_de(qs):
+    """Cuántas personas distintas hay en un queryset de contratos o bajas. Las
+    cifras cuentan personas: quien se fue dos veces en el mes es una persona que
+    causó baja (decisión de RRHH del 13-10-2026)."""
+    return qs.values('aspirante_id').distinct().count()
+
+
+def _cuantas_bajas(desde, hasta, campo, unidades=None, ref='aspirante_id'):
+    """Subconsulta: cuántas `CBaja` de la persona tienen `campo` en el rango.
+    `ref` es dónde está la persona en la consulta de fuera: `aspirante_id` en un
+    contrato, `pk` en la lista de Bajas (que es de aspirantes)."""
+    from .models import CBaja
+    bajas = CBaja.objects.filter(aspirante_id=OuterRef(ref))
+    if desde:
+        bajas = bajas.filter(**{f'{campo}__gte': desde})
+    if hasta:
+        bajas = bajas.filter(**{f'{campo}__lte': hasta})
+    if unidades:
+        bajas = bajas.filter(cargo__departamento__unidad_organizativa_id__in=unidades)
+    return Coalesce(Subquery(bajas.values('aspirante_id').annotate(n=Count('pk')).values('n')[:1],
+                             output_field=IntegerField()), Value(0))
+
+
+def anotar_movimientos_del_periodo(request, qs):
+    """Para la nota «2 altas / 2 bajas en el período» de la lista de Contratos:
+    `altas_periodo` (este contrato más las bajas cuya alta cae en el rango de
+    alta buscado) y `bajas_periodo` (bajas en el rango de «Baja anterior»)."""
+    alta_desde, alta_hasta = fecha_de(request, 'alta_desde'), fecha_de(request, 'alta_hasta')
+    if alta_desde or alta_hasta:
+        qs = qs.annotate(altas_periodo=_cuantas_bajas(alta_desde, alta_hasta, 'fecha_alta') + 1)
+    baja_desde = fecha_de(request, 'baja_anterior_desde')
+    baja_hasta = fecha_de(request, 'baja_anterior_hasta')
+    if baja_desde or baja_hasta:
+        unidades = expandir([v for v in request.GET.getlist('baja_anterior_unidad') if v])
+        qs = qs.annotate(bajas_periodo=_cuantas_bajas(baja_desde, baja_hasta, 'fecha_baja', unidades))
+    return qs
 
 
 def aplicar_filtros(request, qs, solo_comunes=False):
@@ -175,13 +218,18 @@ def _filtrar_recontratados(request, qs):
     recontratado = request.GET.get('recontratado')
     desde = fecha_de(request, 'baja_anterior_desde')
     hasta = fecha_de(request, 'baja_anterior_hasta')
-    if recontratado in ('si', 'no') or desde or hasta:
+    # La unidad DE LA BAJA (puede volver en otra): la manda el aviso de Bajas
+    # cuando allí hay unidades elegidas, para que su cifra y esta lista coincidan.
+    unidades_baja = expandir([v for v in request.GET.getlist('baja_anterior_unidad') if v])
+    if recontratado in ('si', 'no') or desde or hasta or unidades_baja:
         bajas = CBaja.objects.filter(aspirante_id=OuterRef('aspirante_id'))
         if desde:
             bajas = bajas.filter(fecha_baja__gte=desde)
         if hasta:
             bajas = bajas.filter(fecha_baja__lte=hasta)
-        if recontratado == 'no' and not (desde or hasta):
+        if unidades_baja:
+            bajas = bajas.filter(cargo__departamento__unidad_organizativa_id__in=unidades_baja)
+        if recontratado == 'no' and not (desde or hasta or unidades_baja):
             qs = qs.exclude(Exists(bajas))
         else:
             qs = qs.filter(Exists(bajas))

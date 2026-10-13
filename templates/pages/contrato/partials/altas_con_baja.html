@@ -17,7 +17,7 @@
         <tr class="cursor-pointer" title="Doble clic para ver su histórico"
             ondblclick="abrirModalHistorico('{% url 'historico_trabajador' b.aspirante.pk %}')">
           <td><strong>{{ b.no_expediente }}</strong></td>
-          <td>{{ b.aspirante.nombre }} {{ b.aspirante.papellido }} {{ b.aspirante.sapellido }}</td>
+          <td>{{ b.aspirante.nombre }} {{ b.aspirante.papellido }} {{ b.aspirante.sapellido }}{% if b.veces > 1 %} <small class="text-muted">· {{ b.veces }} altas en el período</small>{% endif %}</td>
           <td>{{ b.fecha_alta|date:"d/m/Y" }}</td>
           <td>{{ b.fecha_baja|date:"d/m/Y" }}</td>
           <td>{{ b.causa_baja.descripcion|default:"—" }}</td>

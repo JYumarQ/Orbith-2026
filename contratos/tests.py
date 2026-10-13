@@ -1615,3 +1615,48 @@ class RecontratadosYAvisosTests(TestCase):
         self.assertEqual(respuesta.context['recontratados_total'], 1)
         destino = self.client.get(respuesta.context['recontratados_url'])
         self.assertEqual([c.no_expediente for c in destino.context['object_list']], ['00902'])
+
+
+class VariosMovimientosEnElPeriodoTests(TestCase):
+    """Quien causa baja y vuelve varias veces en el mismo período cuenta como UNA
+    persona, con la nota «N bajas/altas en el período» (decisión de RRHH del
+    13-10-2026). Lista + aviso = cifra de la Dashboard."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from contratos.models import CBaja
+        cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(descripcion='Determinado', ocupa_plaza=False, requiere_motivo=False)
+        cls.ida_y_vuelta = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Vuelve', papellido='P', sapellido='T', doc_identidad='80010112801',
+            estado='ACTIVO', sexo='F', raza='BL', provincia=provincia, municipio=municipio)
+        # En septiembre: entra el 1, se va el 5, vuelve el 8, se va el 15 y vuelve el 20.
+        CBaja.objects.create(aspirante=cls.ida_y_vuelta, no_expediente='00811', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2026, 9, 1), fecha_baja=date(2026, 9, 5))
+        CBaja.objects.create(aspirante=cls.ida_y_vuelta, no_expediente='00811', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2026, 9, 8), fecha_baja=date(2026, 9, 15))
+        CAlta.objects.create(aspirante=cls.ida_y_vuelta, no_expediente='00811', tipo=tipo, cargo=cargo,
+                             fecha_alta=date(2026, 9, 20))
+        cls.admin = CustomUser.objects.create_user(username='admin_varias', password='x', es_admin=True)
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_altas_una_persona_con_nota(self):
+        r = self.client.get(reverse('search_contrato'),
+                            {'alta_desde': '2026-09-01', 'alta_hasta': '2026-09-30'}, HTTP_HX_REQUEST='true')
+        filas = list(r.context['object_list'])
+        self.assertEqual(len(filas), 1)
+        self.assertEqual(filas[0].altas_periodo, 3)
+        # Ya sale en la lista: el aviso no la repite.
+        self.assertEqual(r.context['altas_con_baja_total'], 0)
+        self.assertContains(r, '3 altas en el período')
+
+    def test_bajas_una_persona_con_nota(self):
+        r = self.client.get(reverse('search_bajas'), {'baja_desde': '2026-09-01', 'baja_hasta': '2026-09-30'})
+        self.assertEqual(r.context['recontratados_total'], 1)
+        destino = self.client.get(r.context['recontratados_url'])
+        filas = list(destino.context['object_list'])
+        self.assertEqual([c.bajas_periodo for c in filas], [2])
+        self.assertContains(destino, '2 bajas en el período')

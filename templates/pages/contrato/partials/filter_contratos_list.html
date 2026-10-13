@@ -28,6 +28,10 @@
         
         <td>
             {{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }}
+            {% comment %} Varios movimientos en el período buscado: se cuenta una persona,
+               pero se avisa (decisión de RRHH del 13-10-2026). {% endcomment %}
+            {% if c.altas_periodo > 1 %}<small class="text-muted ms-1">· {{ c.altas_periodo }} altas en el período</small>{% endif %}
+            {% if c.bajas_periodo > 1 %}<small class="text-muted ms-1">· {{ c.bajas_periodo }} bajas en el período</small>{% endif %}
         </td>
         
         <td>

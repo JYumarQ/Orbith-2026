@@ -527,13 +527,17 @@ class DashboardView(TemplateView):
         # porque CAlta se borra al causar baja (histórico inmutable): sin esto, quien
         # fue contratado y ya se fue dentro de la ventana desaparecería del conteo.
         hace_30 = hoy - timedelta(days=30)
-        context['altas_30d'] = (
-            _filtrar(CAlta.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
-            + _filtrar(CBaja.objects.filter(fecha_alta__range=(hace_30, hoy)), 'cargo__departamento').count()
-        )
+        # Se cuentan PERSONAS (decisión de RRHH del 13-10-2026): quien entró, se fue
+        # y volvió en la ventana es una persona dada de alta, no dos. Así la cifra
+        # coincide con la lista a la que lleva más su aviso.
+        personas_alta = set(_filtrar(CAlta.objects.filter(fecha_alta__range=(hace_30, hoy)),
+                                     'cargo__departamento').values_list('aspirante_id', flat=True))
+        personas_alta |= set(_filtrar(CBaja.objects.filter(fecha_alta__range=(hace_30, hoy)),
+                                      'cargo__departamento').values_list('aspirante_id', flat=True))
+        context['altas_30d'] = len(personas_alta)
         context['bajas_30d'] = _filtrar(
             CBaja.objects.filter(fecha_baja__range=(hace_30, hoy)), 'cargo__departamento'
-        ).count()
+        ).values('aspirante_id').distinct().count()
 
         # 2. Diccionarios y contadores inicializados en 0 (Evita que el JS falle si no hay datos)
         cumpleaneros = []

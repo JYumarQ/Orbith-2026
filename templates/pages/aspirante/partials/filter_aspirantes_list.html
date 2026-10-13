@@ -24,6 +24,7 @@
 
     <td class="text-center">
       {{ aspirante.nombre }} {{ aspirante.papellido }} {{ aspirante.sapellido }}
+      {% if aspirante.bajas_periodo > 1 %}<br><small class="text-muted">{{ aspirante.bajas_periodo }} bajas en el período</small>{% endif %}
     </td>
 
     <td class="text-center">
