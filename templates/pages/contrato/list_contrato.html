@@ -183,7 +183,7 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #hidden_sort, #hidden_order">
+                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -301,6 +301,18 @@
                                         <option value="{{ t.descripcion }}" {% if filtro_tipo == t.descripcion %}selected{% endif %}>{{ t.descripcion }}</option>
                                         {% endfor %}
                                     </select>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-2">
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_alta_desde">Alta desde</label>
+                                    <input type="date" id="filter_alta_desde" name="alta_desde" class="form-control form-control-sm"
+                                           value="{{ filtro_alta_desde }}" onchange="triggerSearch()">
+                                </div>
+                                <div class="col-6">
+                                    <label class="small text-muted" for="filter_alta_hasta">Alta hasta</label>
+                                    <input type="date" id="filter_alta_hasta" name="alta_hasta" class="form-control form-control-sm"
+                                           value="{{ filtro_alta_hasta }}" onchange="triggerSearch()">
                                 </div>
                             </div>
 
@@ -736,6 +748,10 @@ document.addEventListener('keydown', function(e) {
             if (defaultOption) {
                 sel.value = '';
             }
+        });
+        // Y las fechas de alta.
+        document.querySelectorAll('.dropdown-menu input[type="date"]').forEach(function (campo) {
+            campo.value = '';
         });
         // También limpiar el input de búsqueda principal
         const searchInput = document.getElementById('search');

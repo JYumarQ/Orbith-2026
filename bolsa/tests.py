@@ -308,3 +308,62 @@ class SelectorDeAspirantesParaContratar(TestCase):
         """Abierto desde el Gestor de Cargos, el contrato hereda la plaza."""
         html = self.listar(cargo='77').content.decode()
         self.assertIn('?cargo=77', html)
+
+
+class FiltrosDeBajasTests(TestCase):
+    """La lista de Bajas filtra por fecha y unidad de la baja (lo usa la Dashboard)
+    y, ahora también, por los datos personales del panel, que antes no hacían nada."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from contratos.models import CBaja
+        from nomencladores.models import (NCargo, NGrupoEscala, NTipoContrato,
+                                          NTipoUnidadOrganizativa)
+        from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizativa
+
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        ncargo = NCargo.objects.create(descripcion='Técnico', cat_ocupacional='TEC',
+                                       grupo_escala=NGrupoEscala.objects.create(nivel='IV'),
+                                       salario_basico=4000)
+        cargos = []
+        for orden, nombre in enumerate(('UEB Central', 'UEB Norte'), start=1):
+            unidad = UnidadOrganizativa.objects.create(
+                descripcion=nombre, tipo=tipo_unidad, grupo_nomina=1, orden_informe=orden)
+            cargos.append(CargoPlantilla.objects.create(
+                ncargo=ncargo, cant_aprobada=5, orden_informe=1,
+                departamento=Departamento.objects.create(
+                    descripcion='Dpto', unidad_organizativa=unidad, orden_informe=1)))
+        cls.central = cargos[0].departamento.unidad_organizativa
+        provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
+        tipo = NTipoContrato.objects.create(
+            descripcion='Determinado', ocupa_plaza=True, requiere_motivo=False)
+        for seq, (fecha, cargo, sexo) in enumerate((
+                (date(2026, 9, 20), cargos[0], 'F'),
+                (date(2026, 9, 25), cargos[1], 'M'),
+                (date(2026, 5, 1), cargos[0], 'F')), start=1):
+            aspirante = Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Baja{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'8501011230{seq}', estado='BAJA', sexo=sexo, raza='BL',
+                provincia=provincia, municipio=municipio)
+            CBaja.objects.create(aspirante=aspirante, no_expediente=f'0080{seq}', tipo=tipo,
+                                 cargo=cargo, fecha_alta=date(2024, 1, 1), fecha_baja=fecha)
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_bajas_f', password='x', es_admin=True)
+
+    def nombres(self, url, **params):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse(url), params)
+        return sorted(a.nombre for a in respuesta.context['aspirantes'])
+
+    def test_por_fecha_y_unidad_de_la_baja(self):
+        self.assertEqual(self.nombres('list_baja', baja_desde='2026-09-12', baja_hasta='2026-10-12'),
+                         ['Baja1', 'Baja2'])
+        self.assertEqual(self.nombres('search_bajas', baja_desde='2026-09-12', unidad=self.central.pk),
+                         ['Baja1'])
+
+    def test_los_datos_personales_ya_filtran_en_bajas(self):
+        self.assertEqual(self.nombres('search_bajas', sexo='M'), ['Baja2'])

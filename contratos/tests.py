@@ -1515,3 +1515,28 @@ class FechaEfectivaDeFirmaTests(TestCase):
         contrato = CAlta.con_fecha_ultimo_movimiento(CAlta.objects.filter(pk=self.contrato.pk)).get()
         with self.assertNumQueries(0):
             self.assertEqual(contrato.fecha_ultima_accion, date(2026, 9, 20))
+
+
+class FiltroFechaDeAltaTests(TestCase):
+    """Filtro «Alta desde / hasta» de la lista de Contratos (lo usa la Dashboard)."""
+
+    def test_filtra_por_rango_de_fecha_de_alta(self):
+        cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(
+            descripcion='Determinado', ocupa_plaza=True, requiere_motivo=False)
+        for seq, alta in ((1, date(2026, 9, 1)), (2, date(2026, 9, 20)), (3, date(2026, 11, 1))):
+            aspirante = Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Alta{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'9001011250{seq}', estado='ACTIVO', sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio)
+            CAlta.objects.create(aspirante=aspirante, no_expediente=f'0070{seq}', tipo=tipo,
+                                 cargo=cargo, fecha_alta=alta)
+
+        def expedientes(**params):
+            request = RequestFactory().get('/', params)
+            return sorted(aplicar_filtros(request, CAlta.objects.all())
+                          .values_list('no_expediente', flat=True))
+        self.assertEqual(expedientes(alta_desde='2026-09-10', alta_hasta='2026-10-12'), ['00702'])
+        self.assertEqual(expedientes(alta_desde='2026-09-10'), ['00702', '00703'])
+        self.assertEqual(expedientes(alta_desde='mal'), ['00701', '00702', '00703'])

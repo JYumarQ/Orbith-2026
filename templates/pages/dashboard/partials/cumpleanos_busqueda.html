@@ -1,0 +1,16 @@
+{% comment %}
+  Resultado de la pestaña «Buscar» de Cumpleaños (dashboard.views.cumpleanos_html).
+{% endcomment %}
+{% if sin_rango %}
+<li class="list-group-item text-center text-muted py-4">Elija una fecha o un rango de fechas.</li>
+{% else %}
+{% for c in cumpleanos %}
+<li class="list-group-item d-flex align-items-center py-2">
+  <div class="avatar avatar-sm me-3">{% if c.sexo == 'M' %}<span class="avatar-initial rounded-circle bg-label-info"><i class="bx bx-male"></i></span>{% else %}<span class="avatar-initial rounded-circle bg-label-danger"><i class="bx bx-female"></i></span>{% endif %}</div>
+  <span class="fw-semibold" style="font-size:0.85rem;">{{ c.nombre }}</span>
+  <span class="badge bg-label-primary ms-auto">{{ c.fecha_str }}</span>
+</li>
+{% empty %}
+<li class="list-group-item text-center text-muted py-4">Nadie cumple años en esas fechas</li>
+{% endfor %}
+{% endif %}

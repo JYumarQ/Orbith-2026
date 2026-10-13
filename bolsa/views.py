@@ -142,27 +142,19 @@ def _aplicar_busqueda(qs, texto, con_baja=False):
     return qs
 
 
-@never_cache
-def search_aspirantes(request):
-    # Obtenemos todos los parámetros
-    query = request.GET.get('filter_aspirante', '').strip()
+def _filtrar_datos_personales(request, qs):
+    """Filtros del panel comunes a Aspirantes y Bajas (ubicación, datos personales
+    y formación). Antes solo los aplicaba Aspirantes: en Bajas el panel existía pero
+    no filtraba nada."""
     provincia_id = request.GET.get('provincia')
     municipio_id = request.GET.get('municipio')
     nivel_educ = request.GET.get('nivel_educ')
     especialidad_id = request.GET.get('especialidad')
 
-    # --- NUEVOS PARÁMETROS ---
     sexo = request.GET.get('sexo')
     raza = request.GET.get('raza')
     grado_cientifico = request.GET.get('grado_cientifico')
 
-    # Filtro base (Añadido ordenamiento cronológico por defecto)
-    qs = Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id')
-
-    # Filtro de seguridad (Moderador)
-    
-
-    # --- APLICAR NUEVOS FILTROS ---
     if provincia_id:
         qs = qs.filter(provincia_id=provincia_id)
     
@@ -183,8 +175,39 @@ def search_aspirantes(request):
         
     if grado_cientifico:
         qs = qs.filter(grado_cientifico=grado_cientifico)
+    return qs
 
-    
+
+def _filtrar_bajas(request, qs):
+    """Filtros propios de Bajas: fecha de baja desde/hasta y unidad organizativa
+    de la baja. Un trabajador entra si tiene ALGUNA baja que cumpla los dos a la vez.
+    La Dashboard llega aquí con «desde» relleno al pulsar «Nuevas Bajas», y con las
+    unidades que tuviera elegidas, para que la lista coincida con su cifra."""
+    from contratos.filtros import fecha_de
+    from contratos.models import CBaja
+    from strorganizativa.jerarquia import expandir
+
+    desde = fecha_de(request, 'baja_desde')
+    hasta = fecha_de(request, 'baja_hasta')
+    unidades = expandir([v for v in request.GET.getlist('unidad') if v])
+    if not (desde or hasta or unidades):
+        return qs
+    bajas = CBaja.objects.all()
+    if desde:
+        bajas = bajas.filter(fecha_baja__gte=desde)
+    if hasta:
+        bajas = bajas.filter(fecha_baja__lte=hasta)
+    if unidades:
+        bajas = bajas.filter(cargo__departamento__unidad_organizativa_id__in=unidades)
+    return qs.filter(pk__in=bajas.values('aspirante_id'))
+
+
+@never_cache
+def search_aspirantes(request):
+    query = request.GET.get('filter_aspirante', '').strip()
+    qs = _filtrar_datos_personales(
+        request, Aspirante.objects.filter(estado='ASPIRANTE').order_by('-id'))
+
     # Filtro de texto: libre y con prefijos (ver `_aplicar_busqueda`).
     if query:
         qs = _aplicar_busqueda(qs, query)
@@ -203,7 +226,9 @@ class BajaListView(ListView):
     template_name = "pages/aspirante/list_aspir.html" # Reutilizamos el template
 
     def get_queryset(self):
-        return _anotar_baja_sin_datos(Aspirante.objects.filter(estado='BAJA')).order_by('-id')
+        # Los filtros de la URL ya se aplican al abrir (p. ej. desde la Dashboard).
+        qs = _anotar_baja_sin_datos(Aspirante.objects.filter(estado='BAJA')).order_by('-id')
+        return _filtrar_bajas(self.request, _filtrar_datos_personales(self.request, qs))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -229,6 +254,18 @@ class BajaListView(ListView):
         context['provincias_list'] = provincias_list
         context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
 
+        # Filtros propios de Bajas, marcados si se llega con ellos en la URL.
+        from strorganizativa.jerarquia import ordenar_con_jerarquia
+        from strorganizativa.models import UnidadOrganizativa
+        from usuarios.alcance import tiene_alcance_acotado
+        unidades = UnidadOrganizativa.objects.all()
+        if tiene_alcance_acotado(self.request.user):
+            unidades = unidades.filter(pk__in=self.request.user.unidades.values_list('pk', flat=True))
+        context['unidades_filtro'] = ordenar_con_jerarquia(unidades.select_related('padre'))
+        context['filtro_unidad'] = self.request.GET.getlist('unidad')
+        context['filtro_baja_desde'] = self.request.GET.get('baja_desde', '')
+        context['filtro_baja_hasta'] = self.request.GET.get('baja_hasta', '')
+
         return context
 
 
@@ -237,8 +274,7 @@ class BajaListView(ListView):
 def search_bajas(request):
     query = request.GET.get('filter_aspirante', '').strip() # Usamos mismo nombre de input para no tocar template
     qs = _anotar_baja_sin_datos(Aspirante.objects.filter(estado='BAJA')).order_by('-id')
-
-    
+    qs = _filtrar_bajas(request, _filtrar_datos_personales(request, qs))
 
     # Filtro de texto: libre y con prefijos (ver `_aplicar_busqueda`). Aquí sí
     # tienen sentido E: y CA:, que salen de la baja (`CBaja`) del trabajador.

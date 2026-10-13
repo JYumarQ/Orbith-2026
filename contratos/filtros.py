@@ -8,6 +8,8 @@ vistas llaman a la misma función, mismo patrón que `cierres/filtros.py` /
 `subsanacion/filtros.py`.
 """
 
+from datetime import date
+
 from django.db.models import Q
 
 from strorganizativa.jerarquia import expandir
@@ -38,6 +40,15 @@ def contratos_visibles(usuario):
         return qs.filter(
             cargo__departamento__unidad_organizativa__in=usuario.unidades.all())
     return qs
+
+
+def fecha_de(request, parametro):
+    """La fecha AAAA-MM-DD de `?parametro=`, o None si falta o no es válida (una
+    fecha mal escrita en la URL se ignora, igual que cualquier otro filtro)."""
+    try:
+        return date.fromisoformat((request.GET.get(parametro) or '').strip())
+    except ValueError:
+        return None
 
 
 def aplicar_filtros(request, qs):
@@ -83,6 +94,15 @@ def aplicar_filtros(request, qs):
 
     if tipo:
         qs = qs.filter(tipo__descripcion=tipo)
+
+    # Fecha de alta del contrato, desde y/o hasta (ambas incluidas). La Dashboard
+    # llega con «desde» relleno al pulsar «Nuevas Altas (últimos 30 días)».
+    alta_desde = fecha_de(request, 'alta_desde')
+    alta_hasta = fecha_de(request, 'alta_hasta')
+    if alta_desde:
+        qs = qs.filter(fecha_alta__gte=alta_desde)
+    if alta_hasta:
+        qs = qs.filter(fecha_alta__lte=alta_hasta)
 
     # --- Estructura: unidad organizativa, departamento y cargo ---
     #

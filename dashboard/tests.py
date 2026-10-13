@@ -577,3 +577,101 @@ class CumpleanosSemanaTests(TestCase):
         self.assertTrue(any('Cumple2' in n for n in nombres))
         self.assertFalse(any('Cumple1' in n for n in nombres))
         self.assertFalse(any('Cumple3' in n for n in nombres))
+
+
+class DashboardInteractivaTests(TestCase):
+    """Dashboard interactiva (decisiones de RRHH del 12-10-2026): los enlaces de las
+    tarjetas conservan las unidades elegidas, la ventana de altas y bajas de un mes,
+    el desglose del salario, los cumpleaños entre dos fechas y el filtro de
+    prioridad de Recordatorios."""
+
+    @classmethod
+    def setUpTestData(cls):
+        tipo_unidad = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Central', tipo=tipo_unidad, grupo_nomina=1, orden_informe=1)
+        cls.otra = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=tipo_unidad, grupo_nomina=1, orden_informe=2)
+        ncargo = NCargo.objects.create(
+            descripcion='Especialista B', cat_ocupacional='TEC',
+            grupo_escala=NGrupoEscala.objects.create(nivel='IV'), salario_basico=4000)
+        cls.cargo = CargoPlantilla.objects.create(
+            ncargo=ncargo, cant_aprobada=10, orden_informe=1,
+            departamento=Departamento.objects.create(
+                descripcion='Contabilidad', unidad_organizativa=cls.unidad, orden_informe=1))
+        cls.cargo_otra = CargoPlantilla.objects.create(
+            ncargo=ncargo, cant_aprobada=10, orden_informe=1,
+            departamento=Departamento.objects.create(
+                descripcion='Ventas', unidad_organizativa=cls.otra, orden_informe=1))
+        cls.provincia, cls.municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+
+        def persona(seq, nacimiento, estado='ACTIVO', sexo='F'):
+            ci = f'{nacimiento:%y%m%d}0{seq:04d}'
+            return Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Persona{seq}', papellido='Prueba', sapellido='Test',
+                doc_identidad=ci, estado=estado, sexo=sexo, raza='BL',
+                provincia=cls.provincia, municipio=cls.municipio)
+
+        cls.dic = persona(1, date(1990, 12, 31))
+        cls.ene = persona(2, date(1991, 1, 10), sexo='M')
+        cls.feb = persona(3, date(1990, 2, 20))
+        for seq, asp, cargo, alta in ((1, cls.dic, cls.cargo, date(2026, 6, 3)),
+                                      (2, cls.ene, cls.cargo, date(2026, 6, 15)),
+                                      (3, cls.feb, cls.cargo_otra, date(2026, 6, 20))):
+            CAlta.objects.create(aspirante=asp, no_expediente=f'0000{seq}', tipo=cls.tipo,
+                                 cargo=cargo, fecha_alta=alta)
+        cls.de_baja = persona(4, date(1985, 5, 5), estado='BAJA', sexo='M')
+        CBaja.objects.create(aspirante=cls.de_baja, no_expediente='00004', tipo=cls.tipo,
+                             cargo=cls.cargo, fecha_alta=date(2025, 1, 1),
+                             fecha_baja=date(2026, 6, 10))
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_interactiva', password='x', es_admin=True)
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def test_los_enlaces_conservan_la_unidad_elegida(self):
+        respuesta = self.client.get(reverse('dashboard'), {'uo': self.unidad.pk})
+        self.assertEqual(respuesta.context['qs_unidades'], f'&unidad={self.unidad.pk}')
+        self.assertEqual(str(respuesta.context['unidad_unica']), str(self.unidad.pk))
+        self.assertContains(respuesta, f'?sexo=F&amp;unidad={self.unidad.pk}')
+        sin_filtro = self.client.get(reverse('dashboard'))
+        self.assertEqual(sin_filtro.context['qs_unidades'], '')
+        self.assertIsNone(sin_filtro.context['unidad_unica'])
+
+    def test_ventana_de_altas_y_bajas_del_mes(self):
+        url = reverse('dashboard_altas_bajas_mes')
+        respuesta = self.client.get(url, {'anno': 2026, 'mes': 6})
+        filas = respuesta.context['filas']
+        self.assertEqual([(f['fecha'].day, f['tipo']) for f in filas],
+                         [(3, 'alta'), (10, 'baja'), (15, 'alta'), (20, 'alta')])
+        self.assertEqual((respuesta.context['total_altas'], respuesta.context['total_bajas']), (3, 1))
+        self.assertContains(respuesta, 'Junio 2026')
+        # Con una unidad elegida, solo lo de esa unidad.
+        acotada = self.client.get(url, {'anno': 2026, 'mes': 6, 'uo': self.otra.pk})
+        self.assertEqual(len(acotada.context['filas']), 1)
+        self.assertEqual(self.client.get(url, {'anno': 'x', 'mes': 6}).status_code, 400)
+
+    def test_desglose_del_salario(self):
+        respuesta = self.client.get(reverse('dashboard_salario'))
+        self.assertEqual(respuesta.context['personas'], 3)
+        _titulo, _columna, por_unidad = respuesta.context['tablas'][0]
+        self.assertEqual({f['nombre']: f['personas'] for f in por_unidad},
+                         {'UEB Central': 2, 'UEB Norte': 1})
+
+    def test_cumpleanos_entre_fechas_tambien_cruzando_fin_de_anno(self):
+        def nombres(desde, hasta=''):
+            r = self.client.get(reverse('dashboard_cumpleanos'), {'desde': desde, 'hasta': hasta})
+            return [c['nombre'] for c in r.context['cumpleanos']]
+        self.assertEqual(nombres('2026-01-20', '2026-02-20'), ['Persona3 Prueba'])
+        self.assertEqual(nombres('2026-12-20', '2027-01-31'), ['Persona1 Prueba', 'Persona2 Prueba'])
+        self.assertEqual(nombres('2030-12-31'), ['Persona1 Prueba'])  # un solo día; el año no cuenta
+        self.assertTrue(self.client.get(reverse('dashboard_cumpleanos')).context['sin_rango'])
+
+    def test_recordatorios_por_prioridad(self):
+        respuesta = self.client.get(reverse('dashboard_recordatorios'), {'prioridad': 'verde'})
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.context['recordatorios_total'], 0)

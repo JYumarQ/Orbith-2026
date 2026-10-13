@@ -68,28 +68,31 @@
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
+            <a href="{% url 'list_contrato' %}?{{ qs_unidades|slice:'1:' }}" title="Ver la lista de contratos"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
                 <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ contratos_count }}</div>
                 <span class="badge bg-label-success mb-1">Total</span>
                 <small class="text-muted">Empleados Activos</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
+            <a href="{% url 'list_contrato' %}?alta_desde={{ fecha_hace_30 }}&alta_hasta={{ fecha_hoy }}{{ qs_unidades }}" title="Ver los contratos con alta en los últimos 30 días"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">+{{ altas_30d|default:"0" }}</div>
                 <span class="badge bg-label-primary mb-1">Últimos 30 días</span>
                 <small class="text-muted">Nuevas Altas</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
+            <a href="{% url 'list_baja' %}?baja_desde={{ fecha_hace_30 }}&baja_hasta={{ fecha_hoy }}{{ qs_unidades }}" title="Ver las bajas de los últimos 30 días"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
                 <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-trending-down fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3 text-danger">-{{ bajas_30d|default:"0" }}</div>
                 <span class="badge bg-label-danger mb-1">Últimos 30 días</span>
                 <small class="text-muted">Nuevas Bajas</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
             <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-3s">
@@ -100,28 +103,32 @@
             </div>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
+            <a href="#" role="button" title="Ver el promedio por unidad y por categoría"
+               onclick="abrirVentanaDashboard('{% url 'dashboard_salario' %}?{{ request.GET.urlencode }}'); return false;"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-4s">
                 <div class="icon-circle bg-gradient-success mb-2 mx-auto"><i class="bx bx-dollar-circle fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">${{ salario_prom }}</div>
                 <span class="badge bg-label-secondary mb-1">Global</span>
                 <small class="text-muted">Salario Escala Promedio</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
+            <a href="{% url 'gestor_plantilla' %}{% if unidad_unica %}?unidad={{ unidad_unica }}{% endif %}" title="Abrir el Gestor de Plantilla"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ uo_count }}</div>
                 <span class="badge bg-label-info mb-1">Estructura</span>
                 <small class="text-muted">Unidades Organizativas</small>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <div class="card h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
+            <a href="{% url 'gestor_plantilla' %}{% if unidad_unica %}?unidad={{ unidad_unica }}{% endif %}" title="Abrir el Gestor de Plantilla"
+               class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-sitemap fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ depto_count }}</div>
                 <span class="badge bg-label-info mb-1">Estructura</span>
                 <small class="text-muted">Departamentos</small>
-            </div>
+            </a>
         </div>
     </div>
 
@@ -132,18 +139,18 @@
                     <h6 class="mb-4 fw-bold">Equilibrio de Género</h6>
                     <div class="w-100 position-relative" style="height: 60px; margin-bottom: 18px;">
                         <div class="d-flex align-items-center justify-content-between w-100" style="height: 60px;">
-                            <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;"><i class="bx bx-male fs-1 text-info"></i></span>
+                            <a href="{% url 'list_contrato' %}?sexo=M{{ qs_unidades }}" title="Ver los hombres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-male fs-1 text-info"></i></a>
                             <div class="flex-grow-1 position-relative" style="height: 60px;">
                                 <div class="d-flex w-100" style="height: 60px; background: #f3f4f6; border-radius: 30px; overflow: hidden;">
-                                    <div class="d-flex align-items-center justify-content-center bg-gradient-info" style="width: {{ generos.porc_hombres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                    <a href="{% url 'list_contrato' %}?sexo=M{{ qs_unidades }}" title="Ver los hombres" class="d-flex align-items-center justify-content-center bg-gradient-info dash-enlace" style="width: {{ generos.porc_hombres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
                                         <span class="text-white fw-bold">{{ generos.hombres }} ({{ generos.porc_hombres|default:'0' }}%)</span>
-                                    </div>
-                                    <div class="d-flex align-items-center justify-content-center bg-gradient-danger" style="width: {{ generos.porc_mujeres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                    </a>
+                                    <a href="{% url 'list_contrato' %}?sexo=F{{ qs_unidades }}" title="Ver las mujeres" class="d-flex align-items-center justify-content-center bg-gradient-danger dash-enlace" style="width: {{ generos.porc_mujeres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
                                         <span class="text-white fw-bold">{{ generos.mujeres }} ({{ generos.porc_mujeres|default:'0' }}%)</span>
-                                    </div>
+                                    </a>
                                 </div>
                             </div>
-                            <span class="d-flex align-items-center justify-content-center" style="width: 44px; height: 60px;"><i class="bx bx-female fs-1 text-danger"></i></span>
+                            <a href="{% url 'list_contrato' %}?sexo=F{{ qs_unidades }}" title="Ver las mujeres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-female fs-1 text-danger"></i></a>
                         </div>
                     </div>
                     <div class="text-center mt-3"><small class="text-muted">Total: <span class="fw-bold">{{ contratos_count }} activos</span></small></div>
@@ -153,7 +160,7 @@
         <div class="col-12 col-lg-8">
             <div class="card h-100 shadow border-0 animate__animated animate__fadeInRight">
                 <div class="card-header pb-0 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold">Evolución Altas y Bajas</h6>
+                    <h6 class="m-0 fw-bold">Evolución Altas y Bajas <small class="text-muted fw-normal ms-1" style="font-size: .72rem;">Pulse un mes para ver su listado</small></h6>
                     <div><span class="badge bg-label-primary">+{{ graficos.altas_total|default:"0" }}</span> <span class="badge bg-label-danger">-{{ graficos.bajas_total|default:"0" }}</span></div>
                 </div>
                 <div class="card-body p-0"><div id="altasBajasAreaChart"></div></div>
@@ -170,6 +177,7 @@
                         <li class="nav-item"><button class="nav-link active py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-cercanos" style="font-size:0.75rem;">Cercanos <span class="badge bg-label-primary">{{ cumpleannos|length }}</span></button></li>
                         <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-semana" style="font-size:0.75rem;">Semana actual <span class="badge bg-label-primary">{{ cumpleanos_semana_actual|length }}</span></button></li>
                         <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-prox" style="font-size:0.75rem;">Próxima semana <span class="badge bg-label-primary">{{ cumpleanos_semana_prox|length }}</span></button></li>
+                        <li class="nav-item"><button class="nav-link py-2 px-1" data-bs-toggle="tab" data-bs-target="#tab-cumple-buscar" style="font-size:0.75rem;"><i class="bx bx-search"></i> Buscar</button></li>
                     </ul>
                     <div class="tab-content p-0 m-0">
                         <div class="tab-pane fade show active" id="tab-cumple-cercanos">
@@ -211,30 +219,56 @@
                                 {% endfor %}
                             </ul>
                         </div>
+                        {% comment %} Cumpleaños entre dos fechas (dashboard.views.cumpleanos_html).
+                           Solo cuentan día y mes: el año de las casillas no importa, y el
+                           rango puede cruzar fin de año. Sin «Al», busca un solo día. {% endcomment %}
+                        <div class="tab-pane fade" id="tab-cumple-buscar">
+                            <div class="d-flex align-items-end gap-2 px-3 pt-2" id="cumple-buscar-fechas">
+                                <div class="flex-fill">
+                                    <label class="small text-muted mb-0" for="cumple-desde">Del</label>
+                                    <input type="date" id="cumple-desde" name="desde" class="form-control form-control-sm">
+                                </div>
+                                <div class="flex-fill">
+                                    <label class="small text-muted mb-0" for="cumple-hasta">Al</label>
+                                    <input type="date" id="cumple-hasta" name="hasta" class="form-control form-control-sm">
+                                </div>
+                            </div>
+                            <small class="text-muted d-block px-3" style="font-size: .7rem;">El año no cuenta: solo el día y el mes.</small>
+                            <ul id="cumple-buscar-resultados" class="list-group list-group-flush overflow-auto" style="max-height: 160px;"
+                                hx-get="{% url 'dashboard_cumpleanos' %}?{{ request.GET.urlencode }}"
+                                hx-trigger="change from:#cumple-buscar-fechas"
+                                hx-include="#cumple-desde, #cumple-hasta">
+                                <li class="list-group-item text-center text-muted py-4">Elija una fecha o un rango de fechas.</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-12 col-lg-4">
           <div class="card h-100 shadow border-0 animate__animated animate__fadeInUp" style="min-height: 280px;">
-              <div class="card-header bg-label-danger d-flex align-items-center">
+              <div class="card-header bg-label-danger d-flex align-items-center flex-wrap gap-2">
                   <i class="bx bx-error-circle fs-4 text-danger me-2"></i>
                   <span class="fw-bold">Recordatorios</span>
-                  {% if recordatorios_total %}<span class="badge bg-danger ms-2">{{ recordatorios_total }}</span>{% endif %}
-                  <a href="{% url 'lista_notificaciones' %}?tab=recordatorios&sub=sistema" class="btn btn-primary btn-sm ms-auto">Ver más</a>
+                  <span id="recordatorios-total" class="badge bg-danger ms-2{% if not recordatorios_total %} d-none{% endif %}">{{ recordatorios_total }}</span>
+                  {% comment %} Filtro y «Ver más» van JUNTOS en un grupo: si no caben en la
+                     línea del título bajan los dos a la vez, nunca el botón solo. {% endcomment %}
+                  <div class="ms-auto d-flex align-items-center gap-2 flex-nowrap">
+                      <select id="select-prioridad-recordatorios" name="prioridad" class="form-select form-select-sm" style="width: auto;"
+                              aria-label="Prioridad"
+                              hx-get="{% url 'dashboard_recordatorios' %}?{{ request.GET.urlencode }}"
+                              hx-target="#recordatorios-lista" hx-trigger="change">
+                          <option value="">Todas</option>
+                          <option value="rojo">🔴 Vencido/Hoy</option>
+                          <option value="naranja">🟠 Cercano</option>
+                          <option value="amarillo">🟡 Próximo</option>
+                          <option value="verde">🟢 Lejano</option>
+                      </select>
+                      <a id="recordatorios-ver-mas" href="{% url 'lista_notificaciones' %}?tab=recordatorios&sub=sistema" class="btn btn-primary btn-sm">Ver más</a>
+                  </div>
               </div>
-              <ul class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
-                  {% for r in recordatorios %}
-                  <li class="list-group-item d-flex align-items-center py-2">
-                      <span class="me-2">{{ r.prioridad.emoji }}</span>
-                      <span style="font-size:0.85rem;">
-                          <b>{{ r.titulo }}</b>
-                          <small class="text-muted d-block">{{ r.prioridad.etiqueta }}{% if r.prioridad.dias is not None %} · {{ r.fecha_objetivo|date:"d/m/Y" }}{% endif %}</small>
-                      </span>
-                  </li>
-                  {% empty %}
-                  <li class="list-group-item text-center text-muted py-4">Sin recordatorios activos</li>
-                  {% endfor %}
+              <ul id="recordatorios-lista" class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
+                  {% include 'pages/dashboard/partials/recordatorios_lista.html' %}
               </ul>
           </div>
       </div>
@@ -243,7 +277,8 @@
                 <div class="card-header bg-label-warning d-flex align-items-center flex-wrap gap-2">
                     <i class="bx bx-shield-quarter fs-4 text-warning me-2"></i>
                     <span class="fw-bold">Advertencias</span>
-                    <form id="form-advertencias" method="get" class="ms-auto d-flex align-items-center gap-2">
+                    <div class="ms-auto d-flex align-items-center gap-2 flex-nowrap">
+                    <form id="form-advertencias" method="get" class="d-flex align-items-center gap-2">
                         {% for id in filtro_uo_seleccionadas %}<input type="hidden" name="uo" value="{{ id }}">{% endfor %}
                         <input type="hidden" name="cortes" value="{{ edades_cortes_str }}">
                         <select id="select-severidad" name="severidad" class="form-select form-select-sm" style="width: auto;">
@@ -254,6 +289,7 @@
                         </select>
                     </form>
                     <a id="advertencias-ver-mas" href="{% url 'lista_notificaciones' %}?tab=advertencias{% for s in severidad_actual %}&severidad={{ s }}{% endfor %}" class="btn btn-primary btn-sm">Ver más</a>
+                    </div>
                 </div>
                 <ul id="advertencias-lista" class="list-group list-group-flush overflow-auto" style="max-height: 220px;">
                     {% for a in advertencias %}
@@ -480,7 +516,41 @@
 
 /* El CSS del selector de unidades se movió a `static/css/orbith-controles.css`
    al hacerlo compartido: lo usan también Informes RRHH e Informe Inteligente. */
+
+/* ===== Tarjetas y piezas que llevan a su lista (12-10-2026) ===== */
+a.dash-enlace { color: inherit; text-decoration: none; cursor: pointer; }
+a.card.dash-enlace { transition: transform .15s ease, box-shadow .15s ease; }
+a.card.dash-enlace:hover { transform: translateY(-2px); box-shadow: 0 .4rem 1rem rgba(67, 89, 113, .18) !important; }
+a.dash-enlace:not(.card):hover { filter: brightness(1.08); }
+#altasBajasAreaChart { cursor: pointer; }
+/* Ventana de Altas y Bajas del mes: altas en azul y bajas en rojo. */
+.dash-altas-bajas tr.dash-fila-alta > td { background-color: #eef2ff; }
+.dash-altas-bajas tr.dash-fila-baja > td { background-color: #fef2f2; }
 </style>
+
+{% comment %} Ventana común de la Dashboard: desglose del salario y altas/bajas de un
+   mes. `abrirVentanaDashboard(url)` carga el contenido y la abre. {% endcomment %}
+<div class="modal fade" id="modalDashboard" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" id="contenidoModalDashboard"></div>
+  </div>
+</div>
+<script>
+window.abrirVentanaDashboard = function (url) {
+    const contenido = document.getElementById('contenidoModalDashboard');
+    contenido.innerHTML = '<div class="modal-body text-center text-muted py-5">Cargando…</div>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalDashboard')).show();
+    htmx.ajax('GET', url, { target: '#contenidoModalDashboard', swap: 'innerHTML' });
+};
+
+// «Ver más» de Recordatorios lleva la prioridad elegida en la tarjeta.
+document.addEventListener('change', function (e) {
+    if (e.target.id !== 'select-prioridad-recordatorios') return;
+    const enlace = document.getElementById('recordatorios-ver-mas');
+    const base = '{% url "lista_notificaciones" %}?tab=recordatorios&sub=sistema';
+    enlace.href = base + (e.target.value ? '&prioridad=' + encodeURIComponent(e.target.value) : '');
+});
+</script>
 
 <script>
 /* La lógica del selector de unidades se movió a `static/js/selector_unidades.js`,
@@ -548,9 +618,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // ApexCharts) — el clic sobre un segmento del gráfico sigue su comportamiento
     // nativo intacto, no se toca `dataPointSelection` en ningún gráfico.
     const urlContratos = '{% url "list_contrato" %}';
+    // Las unidades elegidas en «Filtros Organizativos» viajan también (`&unidad=..`).
+    const qsUnidades = '{{ qs_unidades|escapejs }}';
     function irAContratos(param, valor) {
         if (valor === null || valor === undefined || valor === '') return;
-        window.location.href = urlContratos + '?' + param + '=' + encodeURIComponent(valor);
+        window.location.href = urlContratos + '?' + param + '=' + encodeURIComponent(valor) + qsUnidades;
     }
     // `codigos` es un array paralelo a `labels`/`series` en el mismo orden; si la
     // posición no tiene código (p.ej. la porción "Otros" de Top5+Otros) no navega.
@@ -567,10 +639,31 @@ document.addEventListener('DOMContentLoaded', function () {
         colors: ['#22c55e'], plotOptions: { radialBar: { hollow: { size: '65%' }, track: { background: '#f3f4f6' }, dataLabels: { value: { fontSize: '20px', color: '#22c55e', fontWeight: 700, offsetY: 5, formatter: function(val) { return val + '%'; } }, name: { show: false } } } }
     });
 
-    // 2. Altas y Bajas
+    // 2. Altas y Bajas. Pulsar un mes (el punto, la zona o su nombre) abre la
+    // ventana con sus altas y bajas. En un gráfico de área el clic no trae el
+    // punto si no cae justo encima, así que se recuerda el mes bajo el ratón.
+    const clavesMeses = {{ graficos.claves|safe|default:"[]" }};
+    let mesBajoElRaton = -1;
+    function abrirMes(indice) {
+        const clave = clavesMeses[indice];
+        if (!clave) return;
+        const params = new URLSearchParams('{{ request.GET.urlencode|escapejs }}');
+        params.set('anno', clave[0]);
+        params.set('mes', clave[1]);
+        abrirVentanaDashboard('{% url "dashboard_altas_bajas_mes" %}?' + params.toString());
+    }
     renderChartSafely('#altasBajasAreaChart', {
         series: [{ name: 'Altas', data: {{ graficos.altas|safe|default:"[]" }} }, { name: 'Bajas', data: {{ graficos.bajas|safe|default:"[]" }} }],
-        chart: { type: 'area', height: 170, stacked: false, toolbar: { show: false }, parentHeightOffset: 0 },
+        chart: { type: 'area', height: 170, stacked: false, toolbar: { show: false }, parentHeightOffset: 0,
+                 events: {
+                     mouseMove: function (e, ctx, config) { if (config.dataPointIndex >= 0) mesBajoElRaton = config.dataPointIndex; },
+                     mouseLeave: function () { mesBajoElRaton = -1; },
+                     click: function (e, ctx, config) {
+                         const indice = config.dataPointIndex >= 0 ? config.dataPointIndex : mesBajoElRaton;
+                         if (indice >= 0) abrirMes(indice);
+                     },
+                     xAxisLabelClick: function (e, ctx, config) { abrirMes(config.labelIndex); }
+                 } },
         colors: ['#6366f1', '#ef4444'], fill: { type: 'gradient', gradient: { shadeIntensity: 0.7, opacityFrom: 0.7, opacityTo: 0.2 } },
         stroke: { curve: 'smooth', width: 2 },
         grid: { show: false, padding: { left: 15, right: 15, top: 0, bottom: -10 } },

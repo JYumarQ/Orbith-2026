@@ -1,0 +1,16 @@
+{% comment %}
+  Filas de la tarjeta Recordatorios. La usan la Dashboard al cargar y
+  dashboard.views.recordatorios_html al cambiar la prioridad.
+{% endcomment %}
+{% for r in recordatorios %}
+<li class="list-group-item d-flex align-items-center py-2">
+  <span class="me-2">{{ r.prioridad.emoji }}</span>
+  <span style="font-size:0.85rem;">
+    <b>{{ r.titulo }}</b>
+    <small class="text-muted d-block">{{ r.prioridad.etiqueta }}{% if r.prioridad.dias is not None %} · {{ r.fecha_objetivo|date:"d/m/Y" }}{% endif %}</small>
+  </span>
+</li>
+{% empty %}
+<li class="list-group-item text-center text-muted py-4">Sin recordatorios {% if request.GET.prioridad %}con esa prioridad{% else %}activos{% endif %}</li>
+{% endfor %}
+{% if request.htmx %}<span id="recordatorios-total" hx-swap-oob="true" class="badge bg-danger ms-2{% if not recordatorios_total %} d-none{% endif %}">{{ recordatorios_total }}</span>{% endif %}

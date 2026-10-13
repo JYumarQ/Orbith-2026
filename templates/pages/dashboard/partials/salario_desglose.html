@@ -1,0 +1,31 @@
+{% comment %}
+  Ventana de «Salario Escala Promedio» (dashboard.views.salario_desglose_html):
+  el promedio por unidad y por categoría ocupacional. Se pinta en #modalDashboard.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">Salario escala promedio</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <p class="mb-3"><span class="fw-bold fs-4">${{ promedio }}</span>
+    <span class="text-muted">de promedio entre {{ personas }} trabajador{{ personas|pluralize:"es" }} activo{{ personas|pluralize }}</span></p>
+  <div class="row g-3">
+    {% for titulo, columna, filas in tablas %}
+    <div class="col-12 col-lg-6">
+      <h6 class="fw-bold mb-2">{{ titulo }}</h6>
+      <div class="orb-tabla-scroll" style="max-height: 50vh;">
+        <table class="table orb-tabla">
+          <thead><tr><th>{{ columna }}</th><th class="text-end">Personas</th><th class="text-end">Promedio</th></tr></thead>
+          <tbody>
+            {% for f in filas %}
+            <tr><td>{{ f.nombre }}</td><td class="text-end">{{ f.personas }}</td><td class="text-end text-nowrap">${{ f.promedio }}</td></tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-muted text-center">Sin datos</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>

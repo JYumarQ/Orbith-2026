@@ -150,9 +150,9 @@
                        {% if es_baja_view %}data-prefijos="E,N,CI,CA,U" data-pantalla="Bajas"{% else %}data-prefijos="N,CI,U" data-pantalla="Aspirantes"{% endif %}
                        name="filter_aspirante"
                        hx-get="{% url search_url %}" 
-                       hx-trigger="input changed delay:500ms, keyup[key=='Enter'], refreshTable from:body" 
+                       hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters, refreshTable from:body" 
                        hx-target="#filter_aspirantes_results"
-                       hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado">
+                       hx-include="#filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_unidad, #filter_baja_desde, #filter_baja_hasta">
                 </div>
             </div>
 
@@ -163,11 +163,32 @@
                 </button>
                 <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px; max-height: 500px; overflow-y: auto;">
                     <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
-                        <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
+                        <span>{% if es_baja_view %}<i class="fas fa-user-minus me-1"></i> Baja{% else %}<i class="fas fa-map-marker-alt me-1"></i> Ubicación{% endif %}</span>
                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
                             <i class="fas fa-undo-alt me-1"></i> Reset
                         </button>
                     </div>
+                    {% if es_baja_view %}
+                    {% comment %} Filtros propios de Bajas (bolsa.views._filtrar_bajas): unidad y
+                       fechas de la baja. La Dashboard llega aquí con ellos rellenos. {% endcomment %}
+                    <div class="mb-2">
+                        <label class="small text-muted">Unidad Organizativa</label>
+                        {% include 'base/partials/selector_unidades.html' with id_caja='filtro_unidad_bajas' campo='unidad' id_select='filter_unidad' unidades=unidades_filtro seleccionadas=filtro_unidad marcador='Todas' clase_extra='chip-multiselect--sm' %}
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="small text-muted" for="filter_baja_desde">Baja desde</label>
+                            <input type="date" id="filter_baja_desde" name="baja_desde" class="form-control form-control-sm"
+                                   value="{{ filtro_baja_desde }}" onchange="triggerSearch()">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted" for="filter_baja_hasta">Baja hasta</label>
+                            <input type="date" id="filter_baja_hasta" name="baja_hasta" class="form-control form-control-sm"
+                                   value="{{ filtro_baja_hasta }}" onchange="triggerSearch()">
+                        </div>
+                    </div>
+                    <div class="dropdown-header-custom mt-3"><i class="fas fa-map-marker-alt me-1"></i> Ubicación</div>
+                    {% endif %}
                     <div class="mb-2">
                         <label class="small text-muted">Provincia</label>
                         <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
@@ -577,7 +598,21 @@
         }
     });
 
+    // Bajas: el selector de unidades avisa al cerrar su panel, no en cada clic.
+    (function () {
+        const caja = document.getElementById('filtro_unidad_bajas');
+        if (caja) caja.addEventListener('orbith:unidades', function () { triggerSearch(); });
+    })();
+
     function resetFiltros() {
+        // Selectores de fichas (unidad, en Bajas) y fechas, aparte de los <select>.
+        if (window.OrbithSelectorUnidades) {
+            document.querySelectorAll('.dropdown-menu .chip-multiselect')
+                .forEach(window.OrbithSelectorUnidades.limpiar);
+        }
+        document.querySelectorAll('.dropdown-menu input[type="date"]').forEach(function (campo) {
+            campo.value = '';
+        });
         // Limpiar todos los campos de filtro
         const selects = document.querySelectorAll('.dropdown-menu select');
         selects.forEach(sel => {

@@ -4,4 +4,4 @@ activos y la ordenación (`#hidden_sort`, `#hidden_order`): al cambiar de págin
 hace una petición nueva, y lo que no viaje aquí se pierde.
 {% endcomment %}
 {% url 'search_contrato' as url_buscar %}
-{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_contratos_results' incluir='#search, #filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #hidden_sort, #hidden_order' nombre='contratos' %}
+{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_contratos_results' incluir='#search, #filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #hidden_sort, #hidden_order' nombre='contratos' %}

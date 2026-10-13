@@ -1,0 +1,38 @@
+{% comment %}
+  Ventana del gráfico «Evolución Altas y Bajas» (dashboard.views.altas_bajas_mes_html):
+  las altas (filas azules) y las bajas (filas rojas) del mes pulsado, en orden
+  cronológico. Se pinta dentro de #modalDashboard.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">Altas y Bajas · {{ titulo }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  <div class="d-flex gap-2 mb-2">
+    <span class="badge bg-label-primary">+{{ total_altas }} altas</span>
+    <span class="badge bg-label-danger">-{{ total_bajas }} bajas</span>
+  </div>
+  {% if filas %}
+  <div class="orb-tabla-scroll orb-tabla-alto">
+    <table class="table orb-tabla dash-altas-bajas">
+      <thead>
+        <tr><th>Fecha</th><th>Movimiento</th><th>Exp.</th><th>Nombre</th><th>Cargo</th><th>Unidad</th></tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr class="dash-fila-{{ f.tipo }}">
+          <td class="text-nowrap">{{ f.fecha|date:"d/m/Y" }}</td>
+          <td>{% if f.tipo == 'alta' %}<span class="badge bg-primary">Alta</span>{% else %}<span class="badge bg-danger">Baja</span>{% endif %}</td>
+          <td>{{ f.expediente }}</td>
+          <td>{{ f.nombre }}</td>
+          <td>{{ f.cargo }}</td>
+          <td>{{ f.unidad }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted text-center py-4 mb-0">No hubo altas ni bajas en {{ titulo }}.</p>
+  {% endif %}
+</div>

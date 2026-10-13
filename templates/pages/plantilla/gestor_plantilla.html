@@ -1107,6 +1107,19 @@
             },
         });
     }
+
+    // Llegada desde la Dashboard con `?unidad=<id>` (cuando allí solo había una
+    // unidad): se abre esa unidad con sus departamentos, como si se pulsara. Si es
+    // una subunidad, se despliega antes su unidad principal para que se vea.
+    document.addEventListener('DOMContentLoaded', function () {
+        const id = new URLSearchParams(window.location.search).get('unidad');
+        const tarjeta = id && document.getElementById('unit-' + id);
+        if (!tarjeta) return;
+        const contenedorHijas = tarjeta.closest('.hijas-container');
+        if (contenedorHijas) contenedorHijas.style.display = '';
+        tarjeta.click();
+        tarjeta.scrollIntoView({ block: 'nearest' });
+    });
 </script>
 
 {% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}

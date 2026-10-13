@@ -126,6 +126,8 @@ class ContratoListView(ListView):
         context['filtro_grado_cientifico'] = self.request.GET.get('grado_cientifico', '')
         context['filtro_cat_ocupacional'] = self.request.GET.get('cat_ocupacional', '')
         context['filtro_tipo'] = self.request.GET.get('tipo', '')
+        context['filtro_alta_desde'] = self.request.GET.get('alta_desde', '')
+        context['filtro_alta_hasta'] = self.request.GET.get('alta_hasta', '')
 
         # --- Filtros de estructura: unidad, departamento y cargo ---
         #

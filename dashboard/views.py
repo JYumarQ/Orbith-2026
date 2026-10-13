@@ -201,6 +201,176 @@ def antiguedad_html(request):
     })
 
 
+MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+                'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+
+def _contexto_enlaces(request, filtro_ctx):
+    """Lo que necesitan las tarjetas para llevar a su lista (decisiones de RRHH del
+    12-10-2026):
+
+    * `qs_unidades`: las unidades elegidas en «Filtros Organizativos» como
+      `&unidad=..`, para que la lista que se abre coincida con la cifra pulsada.
+      Solo las pedidas y ya validadas contra el alcance; sin elegir ninguna no se
+      añade nada y la lista aplica sola el alcance del rol.
+    * `fecha_hace_30` y `fecha_hoy`: el rango de Nuevas Altas / Nuevas Bajas. El
+      «hasta» hace falta: la tarjeta cuenta hasta hoy, y sin él la lista sumaría
+      las altas y bajas con fecha futura.
+    * `unidad_unica`: la unidad que el Gestor de Plantilla abre directamente cuando
+      solo hay una (elegida en el filtro, o la única de un Moderador).
+    """
+    from .filtros import unidades_visibles
+
+    elegidas = filtro_ctx.get('filtro_uo_seleccionadas_txt') or []
+    unidad_unica = elegidas[0] if len(elegidas) == 1 else None
+    if not elegidas:
+        visibles = list(unidades_visibles(request.user).values_list('pk', flat=True)[:2])
+        if len(visibles) == 1:
+            unidad_unica = visibles[0]
+    return {
+        'qs_unidades': ''.join(f'&unidad={v}' for v in elegidas),
+        'fecha_hace_30': (date.today() - timedelta(days=30)).isoformat(),
+        'fecha_hoy': date.today().isoformat(),
+        'unidad_unica': unidad_unica,
+    }
+
+
+def _nombre(aspirante):
+    return ' '.join(p for p in (aspirante.nombre, aspirante.papellido, aspirante.sapellido) if p)
+
+
+def _cargo_y_unidad(registro):
+    cargo = registro.cargo
+    if not cargo:
+        return '—', '—'
+    departamento = cargo.departamento
+    unidad = departamento.unidad_organizativa if departamento else None
+    return (cargo.ncargo.descripcion if cargo.ncargo else '—',
+            unidad.descripcion if unidad else '—')
+
+
+def altas_bajas_mes_html(request):
+    """Ventana del gráfico «Evolución Altas y Bajas»: las altas y bajas del mes
+    pulsado, en orden cronológico. Mismo criterio que el gráfico: las altas son
+    `CAlta.fecha_alta` más `CBaja.fecha_alta` (quien entró y ya se fue también fue
+    un alta ese mes) y las bajas, `CBaja.fecha_baja`; con el alcance de unidades
+    del resto de la Dashboard."""
+    uo_ids, _ = resolver_filtros(request)
+    try:
+        anno, mes = int(request.GET.get('anno')), int(request.GET.get('mes'))
+        inicio = date(anno, mes, 1)
+    except (TypeError, ValueError):
+        return HttpResponse('Mes no válido.', status=400)
+    fin = date(anno + 1, 1, 1) if mes == 12 else date(anno, mes + 1, 1)
+    relaciones = ('aspirante', 'cargo__ncargo', 'cargo__departamento__unidad_organizativa')
+
+    def filas(qs, campo_fecha, tipo):
+        qs = _filtrar_por_uo(
+            qs.filter(**{f'{campo_fecha}__gte': inicio, f'{campo_fecha}__lt': fin})
+            .select_related(*relaciones), 'cargo__departamento', uo_ids)
+        for registro in qs:
+            cargo, unidad = _cargo_y_unidad(registro)
+            yield {'fecha': getattr(registro, campo_fecha), 'tipo': tipo,
+                   'expediente': registro.no_expediente or '—',
+                   'nombre': _nombre(registro.aspirante), 'cargo': cargo, 'unidad': unidad}
+
+    lista = (list(filas(CAlta.objects.all(), 'fecha_alta', 'alta'))
+             + list(filas(CBaja.objects.all(), 'fecha_alta', 'alta'))
+             + list(filas(CBaja.objects.all(), 'fecha_baja', 'baja')))
+    lista.sort(key=lambda f: (f['fecha'], f['tipo'] == 'baja', f['nombre']))
+    return render(request, 'pages/dashboard/partials/altas_bajas_mes.html', {
+        'filas': lista, 'titulo': f'{MESES_LARGOS[mes - 1]} {anno}',
+        'total_altas': sum(f['tipo'] == 'alta' for f in lista),
+        'total_bajas': sum(f['tipo'] == 'baja' for f in lista),
+    })
+
+
+def salario_desglose_html(request):
+    """Ventana de «Salario Escala Promedio»: el promedio por unidad y por
+    categoría ocupacional de los activos, con el mismo cálculo que la tarjeta
+    (`salario_total`) y el mismo alcance de unidades."""
+    from nomencladores.models import NCargo
+
+    uo_ids, _ = resolver_filtros(request)
+    activos = _filtrar_por_uo(
+        CAlta.objects.filter(aspirante__estado='ACTIVO').select_related(
+            'cargo__ncargo', 'cargo__departamento__unidad_organizativa'),
+        'cargo__departamento', uo_ids)
+    nombres_categoria = dict(NCargo._meta.get_field('cat_ocupacional').choices)
+
+    por_unidad, por_categoria, total, cuantos = {}, {}, 0.0, 0
+    for contrato in activos:
+        salario = float(contrato.salario_total or 0)
+        _cargo, unidad = _cargo_y_unidad(contrato)
+        ncargo = contrato.cargo.ncargo if contrato.cargo else None
+        codigo = ncargo.cat_ocupacional if ncargo else None
+        categoria = 'Cuadros' if codigo in ('CDI', 'CEJ') else nombres_categoria.get(codigo, 'Sin categoría')
+        for grupo, clave in ((por_unidad, unidad), (por_categoria, categoria)):
+            suma, n = grupo.get(clave, (0.0, 0))
+            grupo[clave] = (suma + salario, n + 1)
+        total += salario
+        cuantos += 1
+
+    def tabla(grupo):
+        filas = [{'nombre': k, 'personas': n, 'promedio': round(s / n, 2)}
+                 for k, (s, n) in grupo.items()]
+        return sorted(filas, key=lambda f: -f['promedio'])
+
+    return render(request, 'pages/dashboard/partials/salario_desglose.html', {
+        'tablas': [('Por unidad', 'Unidad', tabla(por_unidad)),
+                   ('Por categoría ocupacional', 'Categoría', tabla(por_categoria))],
+        'promedio': round(total / cuantos, 2) if cuantos else 0, 'personas': cuantos,
+    })
+
+
+def cumpleanos_html(request):
+    """Pestaña «Buscar» de Cumpleaños: los activos que cumplen años entre dos fechas.
+    Solo cuentan el día y el mes (el año de las casillas se ignora), y el rango
+    puede cruzar fin de año: del 20/12 al 10/01. Sin «hasta», es un solo día."""
+    uo_ids, _ = resolver_filtros(request)
+    try:
+        desde = date.fromisoformat(request.GET.get('desde') or '')
+        hasta = date.fromisoformat(request.GET.get('hasta') or request.GET.get('desde') or '')
+    except ValueError:
+        return render(request, 'pages/dashboard/partials/cumpleanos_busqueda.html', {'sin_rango': True})
+    d, h = (desde.month, desde.day), (hasta.month, hasta.day)
+    cruza_fin_de_anno = d > h
+
+    activos = _filtrar_por_uo(
+        CAlta.objects.filter(aspirante__estado='ACTIVO', aspirante__fecha_nacimiento__isnull=False)
+        .select_related('aspirante'), 'cargo__departamento', uo_ids)
+    lista = []
+    for contrato in activos:
+        nacimiento = contrato.aspirante.fecha_nacimiento
+        clave = (nacimiento.month, nacimiento.day)
+        if not (clave >= d or clave <= h) if cruza_fin_de_anno else not (d <= clave <= h):
+            continue
+        # Orden cronológico dentro del rango, también cuando cruza fin de año.
+        orden = (clave[0] + 12, clave[1]) if cruza_fin_de_anno and clave < d else clave
+        lista.append({'nombre': f'{contrato.aspirante.nombre} {contrato.aspirante.papellido}',
+                      'sexo': contrato.aspirante.sexo, 'orden': orden,
+                      'fecha_str': f'{nacimiento.day} {MESES_CORTOS[nacimiento.month - 1]}'})
+    lista.sort(key=lambda c: (c['orden'], c['nombre']))
+    return render(request, 'pages/dashboard/partials/cumpleanos_busqueda.html', {'cumpleanos': lista})
+
+
+def recordatorios_html(request):
+    """Lista de la tarjeta Recordatorios con el filtro de prioridad (`?prioridad=`,
+    el mismo de Notificaciones → Recordatorios) sin recargar la Dashboard."""
+    from notificaciones.views import _color_prioridad
+
+    uo_ids, _ = resolver_filtros(request)
+    recordatorios, _ctx = filtrar_recordatorios(
+        request, request.user, origen=Notificacion.Origen.SISTEMA)
+    if uo_ids:
+        recordatorios = [r for r in recordatorios if r.unidad_id in uo_ids]
+    for r in recordatorios:
+        r.prioridad = _color_prioridad(r.fecha_objetivo)
+    return render(request, 'pages/dashboard/partials/recordatorios_lista.html', {
+        'recordatorios': recordatorios[:10], 'recordatorios_total': len(recordatorios)})
+
+
 # Create your views here.
 class DashboardView(TemplateView):
     template_name = "pages/dashboard.html"
@@ -221,6 +391,7 @@ class DashboardView(TemplateView):
         # el contexto de filtro).
         uo_ids, filtro_ctx = resolver_filtros(self.request)
         context.update(filtro_ctx)
+        context.update(_contexto_enlaces(self.request, filtro_ctx))
 
         def _filtrar(qs, campo_departamento):
             return _filtrar_por_uo(qs, campo_departamento, uo_ids)
@@ -554,12 +725,13 @@ class DashboardView(TemplateView):
                 clave = (b.fecha_baja.year, b.fecha_baja.month)
                 bajas_por_mes[clave] = bajas_por_mes.get(clave, 0) + 1
 
-        datos_meses = []; datos_altas = []; datos_bajas = []
+        datos_meses = []; datos_altas = []; datos_bajas = []; claves_meses = []
         for i in range(5, -1, -1):
             mes_target = hoy.month - i
             anno_target = hoy.year
             if mes_target <= 0: mes_target += 12; anno_target -= 1
             datos_meses.append(meses[mes_target - 1])
+            claves_meses.append([anno_target, mes_target])
 
             # Altas: CAlta.fecha_alta (activos actuales) + CBaja.fecha_alta (quienes ya
             # se fueron). Necesario porque CAlta se borra al causar baja (histórico
@@ -573,6 +745,8 @@ class DashboardView(TemplateView):
 
         context['graficos'] = {
             'meses': json.dumps(datos_meses),   # Etiquetas van con JSON
+            # (año, mes) de cada punto, para abrir el listado del mes pulsado.
+            'claves': json.dumps(claves_meses),
             'altas': datos_altas,               # Lista normal
             'bajas': datos_bajas,               # Lista normal
             'altas_total': datos_altas[-1] if datos_altas else 0,
