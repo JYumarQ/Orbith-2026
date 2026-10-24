@@ -7,7 +7,6 @@ from .forms import ConfiguracionForm
 from nomencladores.models import NSalario, NGrupoEscala, NTridente, NRol, NProvincia, NMunicipio, \
     NCausaAltaBaja, NCondicionLaboralAnormal, NEspecialidad, NCargo, NFamiliaCargo, NNivelPreparacion, NTipoContrato, NMotivoContrato, NTipoUnidadOrganizativa, NTipoFamilia, NNocturnidad
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
 from operator import attrgetter
@@ -93,7 +92,6 @@ class ParametrosGeneralesView(FormView):
         messages.success(self.request, 'Configuracion guardada correctamente')
         return super().form_valid(form)
 
-@csrf_exempt
 @require_POST
 def actualizar_salario(request):
     try:

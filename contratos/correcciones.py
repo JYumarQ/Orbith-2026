@@ -68,3 +68,28 @@ def alinear_expediente_movimiento(movimiento_id):
     movimiento.no_expediente = nuevo
     movimiento.save(update_fields=['no_expediente'])
     return f'Expediente del movimiento corregido: {anterior or "—"} → {nuevo}.'
+
+
+def dar_por_revisado_importe_antiguo(contrato_id, concepto):
+    """CTR-023: RRHH revisó el importe que el contrato tenía tecleado a mano y no
+    encajaba con el nomenclador. Se borra el pendiente; el contrato ya cobra lo que
+    dice el nomenclador (23-10-2026). Queda en Auditoría con quien lo revisó."""
+    from auditoria.middleware import get_current_user
+    from auditoria.models import AccionAuditoria
+    from auditoria.servicios import registrar as registrar_auditoria
+    from django.contrib.contenttypes.models import ContentType
+
+    from .models import ImporteSinNomenclador
+
+    pendiente = ImporteSinNomenclador.objects.filter(
+        contrato_id=contrato_id, concepto=concepto).select_related('contrato').first()
+    if pendiente is None:
+        raise ValueError('Ese importe antiguo ya estaba revisado.')
+    texto = (f'Importe antiguo de {pendiente.get_concepto_display()} '
+             f'({pendiente.importe_antiguo}) dado por revisado.')
+    registrar_auditoria(
+        usuario=get_current_user(), accion=AccionAuditoria.MODIFICAR, modulo='contratos',
+        content_type=ContentType.objects.get_for_model(CAlta),
+        object_id=str(contrato_id), descriptor=f'{pendiente.contrato}: {texto}')
+    pendiente.delete()
+    return texto

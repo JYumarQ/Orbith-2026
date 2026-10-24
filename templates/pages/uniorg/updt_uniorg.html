@@ -57,6 +57,8 @@
                     </div>
                 </div>
                 
+                {% if not user.es_moderador or user.es_admin %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
+
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     {% include 'pages/solicitudes/partials/boton_guardar.html' %}

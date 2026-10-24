@@ -1,6 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.template.loader import render_to_string
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 from .models import NCargo, NProvincia, NMunicipio, NCausaAltaBaja, NCondicionLaboralAnormal
 from .forms import NCargoForm, RegistrarSalariosForm, EditarSalariosForm, NGrupoEscalaForm, NTipoUnidadOrganizativaForm
@@ -10,6 +9,11 @@ from django.db import transaction
 from nomencladores.models import NSalario, NRol, NTridente, NGrupoEscala, NEspecialidad, NTipoContrato, NMotivoContrato
 from django.http import JsonResponse, HttpResponse
 import json
+import logging
+
+from contratos.cambios_externos import MotivoRequerido, motivo_de_cambio, motivo_del_post
+
+logger = logging.getLogger(__name__)
 from django.db.models.deletion import RestrictedError
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Count, ProtectedError
@@ -189,12 +193,72 @@ def _auditar_escala(grupo, antes):
               AccionAuditoria.ELIMINAR if not despues else AccionAuditoria.MODIFICAR)
     registro_automatico.registrar(grupo, accion, antes=antes, despues=despues,
                                   descripcion='Escala salarial')
+    if antes != despues:
+        _actualizar_salarios_del_grupo(grupo)
+
+
+def _actualizar_salarios_del_grupo(grupo):
+    """Al cambiar la escala de un grupo se recalcula el salario guardado de los
+    contratos de ese grupo, se anota un cambio externo en el histórico de cada
+    trabajador afectado y se avisa a los administradores y a quien hizo el cambio
+    (decisión de RRHH del 23-10-2026). Si la pantalla no trajo motivo,
+    `registrar_cambio` lanza `MotivoRequerido` y la vista deshace el guardado."""
+    from contratos.cambios_externos import Afectado, registrar_cambio, texto_del_motivo
+    from contratos.models import CAlta, CambioExterno
+
+    cambiados = CAlta.recalcular_salarios(
+        CAlta.objects.filter(cargo__ncargo__grupo_escala=grupo))
+    if not cambiados:
+        return
+    registrar_cambio(CambioExterno.Origen.ESCALA, grupo, [
+        Afectado(c, f'La escala salarial del grupo {grupo.nivel} cambió.',
+                 f'Salario {antes}', f'Salario {despues}')
+        for c, antes, despues in cambiados])
+    contratos = 'contrato' if len(cambiados) == 1 else 'contratos'
+    mensaje = ('La escala salarial del grupo %s cambió. Debido a este cambio se actualizó '
+               'el salario de %s %s de ese grupo. %s' % (
+                   grupo.nivel, len(cambiados), contratos, texto_del_motivo()))
+    try:
+        from notificaciones.avisos import CODIGO_CAMBIO_ESCALA, avisar_cambio_salarial
+        avisar_cambio_salarial(grupo, codigo=CODIGO_CAMBIO_ESCALA,
+                               titulo='Cambio en la escala salarial', mensaje=mensaje.strip())
+    except Exception:
+        logger.exception('No se pudo avisar del cambio de la escala del grupo %s.', grupo.pk)
+
+
+def _guardar_escala_del_grupo(request, grupo):
+    """Sustituye la escala del grupo por la del formulario (lo comparten el alta y
+    la edición). Al auditarla se recalculan los contratos afectados."""
+    antes = _escala_legible(grupo)
+    NSalario.objects.filter(grupo_escala=grupo).delete()
+
+    if grupo.es_cuadro:
+        monto_c = request.POST.get('salario_cuadro')
+        if monto_c:
+            NSalario.objects.create(grupo_escala=grupo, rol=None, tridente=None, monto=monto_c)
+
+    if grupo.tiene_rol:
+        for key, value in request.POST.items():
+            if key.startswith('salario_') and value:
+                parts = key.split('_')
+                if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                    NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
+
+    _auditar_escala(grupo, antes)
 
 
 @login_required
 def eliminar_salarios_grupo(request, grupo_id):
     if request.method == "DELETE" or request.method == "POST":
         try:
+            from contratos.models import CAlta
+            en_uso = CAlta.objects.filter(cargo__ncargo__grupo_escala_id=grupo_id).count()
+            if en_uso:
+                # Sin escala esos trabajadores se quedarían sin salario (23-10-2026).
+                contratos = 'contrato lo usa' if en_uso == 1 else 'contratos lo usan'
+                return JsonResponse({'error': (
+                    f'No se puede eliminar la escala de este grupo: {en_uso} {contratos}. '
+                    f'Edite sus importes en lugar de borrarla.')}, status=400)
             grupo = NGrupoEscala.objects.filter(pk=grupo_id).first()
             antes = _escala_legible(grupo) if grupo else {}
             # Borrar todos los salarios asociados a este grupo escala
@@ -220,26 +284,15 @@ def editar_salarios_grupo(request, grupo_id):
     
     if request.method == 'POST':
         try:
-            antes = _escala_legible(grupo)
-            # Replicamos la misma lógica perfecta de guardado que en la creación
-            NSalario.objects.filter(grupo_escala=grupo).delete()
-            
-            if grupo.es_cuadro:
-                monto_c = request.POST.get('salario_cuadro')
-                if monto_c:
-                    NSalario.objects.create(grupo_escala=grupo, rol=None, tridente=None, monto=monto_c)
-            
-            if grupo.tiene_rol:
-                for key, value in request.POST.items():
-                    if key.startswith('salario_') and value:
-                        parts = key.split('_')
-                        if len(parts) == 3: 
-                            NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
-
-            _auditar_escala(grupo, antes)
+            with motivo_de_cambio(*motivo_del_post(request)):
+                _guardar_escala_del_grupo(request, grupo)
             messages.success(request, f"Salarios del Grupo {grupo.nivel} actualizados.")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
-            
+
+        except MotivoRequerido as e:
+            transaction.set_rollback(True)
+            messages.error(request, f"No se guardaron los salarios del Grupo {grupo.nivel}: {e}")
+            return redirect(reverse_lazy('parametros') + '?tab=salario')
         except Exception as e:
             messages.error(request, f"Error al guardar: {e}")
             return redirect(reverse_lazy('parametros') + '?tab=salario')
@@ -309,23 +362,13 @@ def crear_salarios_por_grupo(request):
     if request.method == 'POST':
         grupo_id = request.POST.get('grupo_escala')
         grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
-        antes = _escala_legible(grupo)
-        
-        NSalario.objects.filter(grupo_escala=grupo).delete()
-        
-        if grupo.es_cuadro:
-            monto_c = request.POST.get('salario_cuadro')
-            if monto_c:
-                NSalario.objects.create(grupo_escala=grupo, rol=None, tridente=None, monto=monto_c)
-        
-        if grupo.tiene_rol:
-            for key, value in request.POST.items():
-                if key.startswith('salario_') and value:
-                    parts = key.split('_')
-                    if len(parts) == 3:
-                        NSalario.objects.create(grupo_escala=grupo, rol_id=parts[1], tridente_id=parts[2], monto=value)
-
-        _auditar_escala(grupo, antes)
+        try:
+            with motivo_de_cambio(*motivo_del_post(request)):
+                _guardar_escala_del_grupo(request, grupo)
+        except MotivoRequerido as e:
+            transaction.set_rollback(True)
+            messages.error(request, f"No se guardaron los salarios del Grupo {grupo.nivel}: {e}")
+            return redirect(reverse_lazy('parametros') + '?tab=salario')
         messages.success(request, f"Configuración salarial del Grupo {grupo.nivel} guardada correctamente.")
         return redirect(reverse_lazy('parametros') + '?tab=salario')
     
@@ -408,7 +451,6 @@ def cargar_esp(request):
 
 #TRIDENTE
 # CREATE
-@csrf_exempt
 @require_POST
 def tridente_create(request):
     data = json.loads(request.body)
@@ -419,7 +461,6 @@ def tridente_create(request):
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 # UPDATE
-@csrf_exempt
 @require_http_methods(["PUT"])
 def tridente_update(request, pk):
     obj = NTridente.objects.get(pk=pk)
@@ -432,14 +473,12 @@ def tridente_update(request, pk):
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 # DELETE
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def tridente_delete(request, pk):
     NTridente.objects.get(pk=pk).delete()
     return JsonResponse({'success': True})
 
 # ---------- CRUD NRol ----------
-@csrf_exempt
 @require_http_methods(["POST"])
 def rol_create(request):
     data = json.loads(request.body)
@@ -454,7 +493,6 @@ def rol_create(request):
     # Devolvemos solo lo que existe
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def rol_update(request, pk):
     obj = get_object_or_404(NRol, pk=pk)
@@ -470,14 +508,12 @@ def rol_update(request, pk):
     
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def rol_delete(request, pk):
     NRol.objects.get(pk=pk).delete()
     return JsonResponse({'success': True})
 
 # ---------- CRUD NGrupoEscala ----------
-@csrf_exempt
 @require_POST
 def grupo_create(request):
     data = json.loads(request.body)
@@ -492,7 +528,6 @@ def grupo_create(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def grupo_update(request, pk):
     obj = NGrupoEscala.objects.get(pk=pk)
@@ -509,7 +544,6 @@ def grupo_update(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def grupo_delete(request, pk):
     try:
@@ -563,7 +597,6 @@ def verificar_siglas(request):
     return JsonResponse({'coincidencia': coincidencia})
 
 
-@csrf_exempt
 @require_POST
 def provincia_create(request):
     data = json.loads(request.body)
@@ -587,7 +620,6 @@ def provincia_create(request):
         'coincidencia': coincidencia,
     })
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def provincia_update(request, pk):
     obj = NProvincia.objects.get(pk=pk)
@@ -614,7 +646,6 @@ def provincia_update(request, pk):
         'coincidencia': coincidencia,
     })
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def provincia_delete(request, pk):
     try:
@@ -624,7 +655,6 @@ def provincia_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
 # ---------- CRUD NMunicipio ----------
-@csrf_exempt
 @require_POST
 def municipio_create(request):
     data = json.loads(request.body)
@@ -651,7 +681,6 @@ def municipio_create(request):
         'coincidencia': coincidencia,
     })
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def municipio_update(request, pk):
     obj = NMunicipio.objects.get(pk=pk)
@@ -678,7 +707,6 @@ def municipio_update(request, pk):
         'coincidencia': coincidencia,
     })
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def municipio_delete(request, pk):
     try:
@@ -688,7 +716,6 @@ def municipio_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
 # ---------- CRUD NCausaAltaBaja ----------
-@csrf_exempt
 @require_POST
 def causa_create(request):
     data = json.loads(request.body)
@@ -700,7 +727,6 @@ def causa_create(request):
     return JsonResponse({'id': obj.id, 'descripcion': obj.descripcion,
                          'alta': obj.alta})
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def causa_update(request, pk):
     obj = NCausaAltaBaja.objects.get(pk=pk)
@@ -715,7 +741,6 @@ def causa_update(request, pk):
     return JsonResponse({'id': obj.id, 'descripcion': obj.descripcion,
                          'alta': obj.alta})
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def causa_delete(request, pk):
     try:
@@ -725,7 +750,6 @@ def causa_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
 # ---------- CRUD NCondicionLaboralAnormal ----------
-@csrf_exempt
 @require_POST
 def condicion_create(request):
     try:
@@ -754,7 +778,6 @@ def condicion_create(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_POST
 @login_required
 def nocturnidad_create(request):
@@ -797,7 +820,6 @@ def nocturnidad_create(request):
         print(f"Error en nocturnidad_create: {e}") 
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 @login_required
 def nocturnidad_delete(request, pk):
@@ -807,7 +829,6 @@ def nocturnidad_delete(request, pk):
     except ProtectedError:
         return JsonResponse({'error': 'No se puede eliminar. Está en uso.'}, status=400)
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def condicion_update(request, pk):
     try:
@@ -840,7 +861,6 @@ def condicion_update(request, pk):
         print("❌ Error en backend:", str(e))
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 @login_required
 def condicion_delete(request, pk):
@@ -853,7 +873,6 @@ def condicion_delete(request, pk):
         return JsonResponse({'error': 'No se puede eliminar. Esta condición está siendo usada por uno o más contratos.'}, status=400)
 
 # ---------- CRUD NEspecialidad ----------
-@csrf_exempt
 @require_POST
 def especialidad_create(request):
     data = json.loads(request.body)
@@ -871,7 +890,6 @@ def especialidad_create(request):
         'educ_superior': obj.educ_superior
     })
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def especialidad_update(request, pk):
     obj = get_object_or_404(NEspecialidad, pk=pk)
@@ -889,7 +907,6 @@ def especialidad_update(request, pk):
         'educ_superior': obj.educ_superior
     })
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def especialidad_delete(request, pk):
     try:
@@ -899,7 +916,6 @@ def especialidad_delete(request, pk):
         return JsonResponse({'error': 'No encontrado'}, status=404)
 
 # ---------- CRUD NCargo API ----------
-@csrf_exempt
 @require_POST
 def cargo_create(request):
     data = json.loads(request.body)
@@ -934,7 +950,6 @@ def cargo_create(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def cargo_update(request, pk):
     try:
@@ -955,7 +970,14 @@ def cargo_update(request, pk):
         obj.grupo_escala = grupo
         obj.salario_basico = float(salario_basico)
         obj.puesto_clave = puesto_clave                # <-- 2. Actualizamos la BD
-        obj.save()
+        # Si el cambio afecta a contratos hace falta un motivo (23-10-2026): sin él
+        # se responde 409 y la pantalla lo pide antes de reintentar.
+        try:
+            with transaction.atomic(), motivo_de_cambio(
+                    data.get('motivo_cambio', ''), bool(data.get('error_humano'))):
+                obj.save()
+        except MotivoRequerido as e:
+            return JsonResponse({'requiere_motivo': True, 'error': str(e)}, status=409)
 
         return JsonResponse({
             'id': obj.id,
@@ -972,7 +994,6 @@ def cargo_update(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def cargo_delete(request, pk):
     try:
@@ -998,7 +1019,6 @@ def cargo_delete(request, pk):
         return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
 
 
-@csrf_exempt
 @require_POST
 @login_required
 def api_familia_create(request):
@@ -1017,7 +1037,6 @@ def api_familia_create(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
     
-@csrf_exempt
 @require_POST
 @login_required
 def api_familia_update(request, pk):
@@ -1035,7 +1054,6 @@ def api_familia_update(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_POST
 @login_required
 def api_familia_delete(request, pk):
@@ -1048,7 +1066,6 @@ def api_familia_delete(request, pk):
         return JsonResponse({'error': str(e)}, status=400)
     
 
-@csrf_exempt
 @require_POST
 @login_required
 def api_cargo_move(request):
@@ -1076,7 +1093,6 @@ def api_cargo_move(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 
-@csrf_exempt
 @require_POST
 @login_required
 def api_cargo_move_bulk(request):
@@ -1118,7 +1134,6 @@ def api_cargo_move_bulk(request):
 
 
 # ---------- CRUD NNivelPreparacion ----------
-@csrf_exempt
 @require_POST
 def nivel_preparacion_create(request):
     data = json.loads(request.body)
@@ -1129,7 +1144,6 @@ def nivel_preparacion_create(request):
     obj = NNivelPreparacion.objects.create(nombre=nombre.title())
     return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def nivel_preparacion_update(request, pk):
     obj = get_object_or_404(NNivelPreparacion, pk=pk)
@@ -1142,7 +1156,6 @@ def nivel_preparacion_update(request, pk):
     obj.save()
     return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def nivel_preparacion_delete(request, pk):
     try:
@@ -1155,7 +1168,6 @@ def nivel_preparacion_delete(request, pk):
     
 
 # ---------- CRUD Tipo de Contrato ----------
-@csrf_exempt
 @require_POST
 def tipo_contrato_create(request):
     data = json.loads(request.body)
@@ -1178,7 +1190,6 @@ def tipo_contrato_create(request):
         'ocupa_plaza': obj.ocupa_plaza, 'requiere_motivo': obj.requiere_motivo
     })
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def tipo_contrato_update(request, pk):
     obj = get_object_or_404(NTipoContrato, pk=pk)
@@ -1194,7 +1205,6 @@ def tipo_contrato_update(request, pk):
     
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def tipo_contrato_delete(request, pk):
     try:
@@ -1208,7 +1218,6 @@ def tipo_contrato_delete(request, pk):
     except Exception as e:
         return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
 
-@csrf_exempt
 @require_POST
 def tipo_contrato_toggle_plaza(request, pk):
     obj = get_object_or_404(NTipoContrato, pk=pk)
@@ -1217,7 +1226,6 @@ def tipo_contrato_toggle_plaza(request, pk):
     obj.save()
     return JsonResponse({'success': True})
 
-@csrf_exempt
 @require_POST
 def tipo_contrato_toggle_motivo(request, pk):
     obj = get_object_or_404(NTipoContrato, pk=pk)
@@ -1227,7 +1235,6 @@ def tipo_contrato_toggle_motivo(request, pk):
     return JsonResponse({'success': True})
 
 # ---------- CRUD Motivo de Contrato ----------
-@csrf_exempt
 @require_POST
 def motivo_contrato_create(request):
     data = json.loads(request.body)
@@ -1249,7 +1256,6 @@ def motivo_contrato_create(request):
     obj = NMotivoContrato.objects.create(descripcion=descripcion, tipo_contrato_id=tipo_id)
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
-@csrf_exempt
 @require_http_methods(["PUT"])
 def motivo_contrato_update(request, pk):
     obj = get_object_or_404(NMotivoContrato, pk=pk)
@@ -1282,7 +1288,6 @@ def motivo_contrato_update(request, pk):
 
     return JsonResponse({'id': obj.id, 'nombre': obj.descripcion})
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 def motivo_contrato_delete(request, pk):
     try:
@@ -1296,7 +1301,6 @@ def motivo_contrato_delete(request, pk):
     except Exception as e:
         return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
 
-@csrf_exempt
 def tipo_contrato_info(request, pk):
     try:
         tc = NTipoContrato.objects.get(pk=pk)
@@ -1311,7 +1315,6 @@ def tipo_contrato_info(request, pk):
     except NTipoContrato.DoesNotExist:
         return JsonResponse({'error': 'No encontrado'}, status=404)
     
-@csrf_exempt
 @require_POST
 def toggle_tipo_adiestrado(request, pk):
     obj = get_object_or_404(NTipoContrato, pk=pk)
@@ -1444,7 +1447,6 @@ def eliminar_tipo_unidad(request, pk):
         
 
 # ---------- CRUD NTipoFamilia (Para el Modal) ----------
-@csrf_exempt
 @require_POST
 @login_required
 def tipo_familia_create(request):
@@ -1469,7 +1471,6 @@ def tipo_familia_create(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
-@csrf_exempt
 @require_http_methods(["DELETE"])
 @login_required
 def tipo_familia_delete(request, pk):

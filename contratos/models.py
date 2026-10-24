@@ -7,7 +7,8 @@ from django.db import models
 from django.db.models.signals import post_delete, post_save
 from bolsa.models import Aspirante
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
-from nomencladores.models import NTridente, NSalario, NCausaAltaBaja, NRol, NTipoContrato, NMotivoContrato
+from nomencladores.models import (NTridente, NSalario, NCausaAltaBaja, NTipoContrato,
+                                  NMotivoContrato, NImporteGradoCientifico)
 from django.core.validators import MaxValueValidator, MinValueValidator
 from datetime import timedelta
 from django.utils import timezone
@@ -44,6 +45,28 @@ def _obtener_escala_salarial():
         }
         _local_escala.valores = escala
     return escala
+
+
+_local_grados = threading.local()
+
+
+def _obtener_importes_de_grado():
+    """`{'MC': importe, 'DC': importe}` del nomenclador, una consulta por petición
+    (mismo criterio que la escala salarial de arriba)."""
+    importes = getattr(_local_grados, 'valores', None)
+    if importes is None:
+        importes = dict(NImporteGradoCientifico.objects.values_list('grado', 'importe'))
+        _local_grados.valores = importes
+    return importes
+
+
+def invalidar_importes_de_grado(**kwargs):
+    _local_grados.valores = None
+
+
+request_started.connect(invalidar_importes_de_grado, dispatch_uid='contratos_importes_grado')
+post_save.connect(invalidar_importes_de_grado, sender=NImporteGradoCientifico, dispatch_uid='contratos_grado_save')
+post_delete.connect(invalidar_importes_de_grado, sender=NImporteGradoCientifico, dispatch_uid='contratos_grado_delete')
 
 
 def invalidar_escala_salarial(**kwargs):
@@ -134,13 +157,10 @@ class CAlta(ContratoBase):
         ('DIN', 'Dinámico')
     ], default='DIN')
 
-    rol = models.ForeignKey(
-        NRol,
-        on_delete=models.RESTRICT,
-        blank=True,
-        null=True,
-        verbose_name="Rol de Pago"
-    )
+    # Sin campo «rol»: el rol de pago es del CARGO que ocupa (`cargo.rol`, se define
+    # en el Gestor de cargos), no del contrato. Hasta el 23-10-2026 había una copia
+    # aquí que un movimiento de nómina dejaba con el rol del cargo anterior, y el Word
+    # del contrato salía con el salario de ese rol (migración 0022).
 
     tridente = models.ForeignKey(
         NTridente,
@@ -148,36 +168,24 @@ class CAlta(ContratoBase):
         blank=True,
         null= True
         )
-    # Los cuatro importes que se suman al salario. Todos `Decimal(10, 2)`:
+    # Los cuatro importes que se suman al salario (Maestría, Doctorado, CNCI e
+    # Instructor) NO se guardan en el contrato desde el 23-10-2026: el nomenclador
+    # manda. Se leen con `importe_maestria`, `importe_doctorado`, `importe_cnci` e
+    # `importe_instructor` (abajo). La nómina ya emitida no cambia porque la
+    # Pre-Nómina y los cierres congelan su propia copia al emitirse. Los importes
+    # tecleados a mano antes de existir el nomenclador que no encajaron con
+    # ninguna entrada quedaron en `ImporteSinNomenclador` (migración 0024).
     #
-    #  * `maestria` y `doctorado` eran enteros, así que un importe con centavos
-    #    se guardaba truncado sin avisar.
-    #  * `instructor` era `Decimal(4, 2)`, es decir con tope en 99,99. Cualquier
-    #    cuantía de tres cifras era imposible de registrar.
-    #
-    # El importe se sigue guardando AQUÍ aunque ahora exista un nomenclador
-    # (`nomencladores.NImporteGradoCientifico` y `NPagoAdicional`). Es
-    # deliberado: el contrato y la nómina que salió de él no deben cambiar
-    # porque alguien actualice una cuantía meses después. La regla CTR-019 de
-    # Subsanación es la que reclama las diferencias con el nomenclador para que
-    # sea una persona quien decida si toca actualizarlas.
-    maestria = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
-    doctorado = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
-    cnci = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
-    instructor = models.DecimalField(default=Decimal('0.00'), validators=[MinValueValidator(Decimal('0.00'))], max_digits=10, decimal_places=2, null=True, blank=True)
-
-    # Qué entrada del nomenclador se eligió. El importe de arriba es el que
-    # cuenta para el cálculo; esto guarda la DESCRIPCIÓN, que sin la referencia
-    # se perdería: al reabrir el contrato no habría forma de saber cuál de las
-    # opciones se había elegido, solo su cuantía.
+    # Qué entrada del nomenclador se eligió. PROTECT: una entrada que usan
+    # contratos no se puede borrar (se edita su importe o se cambian antes).
     instructor_nomenclador = models.ForeignKey(
         'nomencladores.NPagoAdicional',
-        on_delete=models.SET_NULL, null=True, blank=True,
+        on_delete=models.PROTECT, null=True, blank=True,
         related_name='contratos_instructor',
         verbose_name='Instructor (nomenclador)')
     cnci_nomenclador = models.ForeignKey(
         'nomencladores.NPagoAdicional',
-        on_delete=models.SET_NULL, null=True, blank=True,
+        on_delete=models.PROTECT, null=True, blank=True,
         related_name='contratos_cnci',
         verbose_name='CNCI (nomenclador)')
     
@@ -346,7 +354,6 @@ class CAlta(ContratoBase):
                 tiene_cargo=bool(cargo),
                 es_cuadro=bool(ncargo.es_cuadro) if ncargo else False,
                 grupo_escala_id=ncargo.grupo_escala_id if ncargo else None,
-                rol_id_contrato=self.rol_id,
                 rol_id_cargo=cargo.rol_id if cargo else None,
                 tridente_id=self.tridente_id,
                 salario_basico=ncargo.salario_basico if ncargo else None,
@@ -357,6 +364,57 @@ class CAlta(ContratoBase):
             # registra: antes cualquier fallo de cálculo desaparecía sin rastro.
             logger.exception("No se pudo calcular el salario de escala del contrato %s: %s", self.pk, e)
             return None
+
+    # ---- Importes que se suman al salario: siempre del nomenclador ----
+
+    def _importe_de_grado(self, grado):
+        if not self.aspirante_id or self.aspirante.grado_cientifico != grado:
+            return Decimal('0.00')
+        return _obtener_importes_de_grado().get(grado) or Decimal('0.00')
+
+    @property
+    def importe_maestria(self):
+        """Importe de Maestría si el trabajador es Máster (nomenclador), si no 0."""
+        return self._importe_de_grado('MC')
+
+    @property
+    def importe_doctorado(self):
+        """Importe de Doctorado si el trabajador es Doctor (nomenclador), si no 0."""
+        return self._importe_de_grado('DC')
+
+    @property
+    def importe_cnci(self):
+        """Importe de la entrada de CNCI elegida, o 0."""
+        return self.cnci_nomenclador.importe if self.cnci_nomenclador_id else Decimal('0.00')
+
+    @property
+    def importe_instructor(self):
+        """Importe de la entrada de Instructor elegida, o 0."""
+        return self.instructor_nomenclador.importe if self.instructor_nomenclador_id else Decimal('0.00')
+
+    @staticmethod
+    def recalcular_salarios(queryset):
+        """Recalcula el salario guardado (`salario_actual`) de los contratos de
+        `queryset` y devuelve los que cambiaron como `[(contrato, antes, despues)]`
+        (lo necesita el registro de cambios externos).
+
+        Hace falta cuando cambia algo de lo que depende el salario SIN guardar el
+        contrato: el rol de un cargo en el Gestor de cargos o un importe de la escala
+        salarial. Va con `update()` fila a fila (solo las que cambian) y no con
+        `save()`: no es una edición del contrato, así que no debe disparar
+        avisos, plazas ni Auditoría (que ya excluye `salario_actual`).
+        """
+        invalidar_escala_salarial()
+        cambiados = []
+        for contrato in queryset.select_related('aspirante', 'cargo__ncargo', 'cargo__rol'):
+            nuevo = contrato.calcular_salario_escala()
+            nuevo = Decimal(str(nuevo)).quantize(Decimal('0.01')) if nuevo is not None else None
+            antes = contrato.salario_actual
+            if nuevo != antes:
+                CAlta.objects.filter(pk=contrato.pk).update(salario_actual=nuevo)
+                contrato.salario_actual = nuevo
+                cambiados.append((contrato, antes, nuevo))
+        return cambiados
 
     @property
     def funcionario(self):
@@ -488,9 +546,9 @@ class CAlta(ContratoBase):
 
             if es_cuadro or self.tipo_salario == 'FIJ':
                 self.tridente = None
-            elif self.tipo_salario == 'DIN' and not self.tridente:
-                from nomencladores.models import NTridente
-                self.tridente = NTridente.objects.filter(tipo='I').first()
+            # Un contrato dinámico sin tridente NO recibe «Tridente I» por defecto
+            # (decisión de RRHH del 23-10-2026): nadie lo habría elegido. Se queda sin
+            # él y SAL-002 avisa (en rojo) hasta que RRHH elija el correcto.
 
             if es_nuevo:
                 self.actualizar_aspirante(self.aspirante.doc_identidad)
@@ -510,6 +568,14 @@ class CAlta(ContratoBase):
             # del 12-10-2026; los casos anteriores los detecta Subsanación (MOV-008).
             # Es un cambio derivado: Auditoría ya registra el del expediente del
             # contrato, así que va con `update()` y no repite un evento por movimiento.
+            # Importe antiguo sin entrada (CTR-023): al elegir la entrada de CNCI o
+            # de Instructor en el contrato, el pendiente queda resuelto.
+            resueltos = [c for c, fk in (('cnci', self.cnci_nomenclador_id),
+                                         ('instructor', self.instructor_nomenclador_id)) if fk]
+            if resueltos and not es_nuevo:
+                self.importes_sin_nomenclador.filter(
+                    concepto__in=resueltos, importe_nomenclador__isnull=True).delete()
+
             if expediente_anterior is not None and expediente_anterior != self.no_expediente:
                 self.trazabilidad.exclude(no_expediente=self.no_expediente).update(
                     no_expediente=self.no_expediente)
@@ -573,6 +639,13 @@ class CAlta(ContratoBase):
                     logger.exception(
                         "No se pudo notificar el alta del contrato %s.", self.pk)
 
+            # Revisión por registro (Fase 2, 23-10-2026): los hallazgos Críticos y
+            # Altos de este contrato, su ficha y su cargo (y el cargo anterior si
+            # cambió) quedan al día al momento. Nunca lanza.
+            from subsanacion.por_registro import revisar_registros
+            revisar_registros(contratos=[self.pk], aspirantes=[self.aspirante_id],
+                              cargos=[self.cargo_id, cargo_anterior_id])
+
         except Exception as e:
             logger.exception("Error al guardar el contrato %s: %s", self.pk, e)
             raise
@@ -606,11 +679,18 @@ class CAlta(ContratoBase):
         except Exception as e:
             logger.exception("Error al eliminar el contrato %s: %s", self.pk, e)
 
+        pk_borrado, aspirante_id = self.pk, self.aspirante_id
         super().delete(*args, **kwargs)
 
         # 2. Recalculamos la plaza DESPUÉS de borrar, contando la realidad
         if cargo_id_afectado:
             self.actualizar_plantilla(cargo_id_afectado)
+
+        # Los hallazgos del contrato borrado se cierran (ya no existe) y se revisan
+        # su ficha y su cargo (Fase 2, 23-10-2026). Nunca lanza.
+        from subsanacion.por_registro import revisar_registros
+        revisar_registros(contratos=[pk_borrado], aspirantes=[aspirante_id],
+                          cargos=[cargo_id_afectado])
 
 
     def __str__(self):
@@ -970,3 +1050,112 @@ def _borrar_cbaja_asociada(instance, usuario_actual):
 
 post_delete.connect(_al_eliminar_movimiento, sender=TMovimiento,
                      dispatch_uid='contratos_al_eliminar_movimiento')
+
+class ImporteSinNomenclador(models.Model):
+    """Importe que un contrato tenía tecleado a mano y que no encajaba con el
+    nomenclador cuando el importe dejó de guardarse en el contrato (23-10-2026).
+
+    Dos casos, los dos de antes de que existieran los nomencladores:
+    * CNCI o Instructor con importe pero SIN entrada del nomenclador (y ninguna
+      entrada con el mismo importe a la que enlazarlo).
+    * Un importe distinto del que dice el nomenclador (entrada elegida con otra
+      cuantía, o Maestría/Doctorado distinto del importe del grado).
+
+    Es un registro transitorio: la regla CTR-023 de Subsanación lo muestra hasta
+    que RRHH lo revisa. Se borra solo al asignar la entrada al contrato, o con el
+    botón «Dar por revisado» del hallazgo.
+    """
+
+    CONCEPTOS = [
+        ('cnci', 'CNCI'),
+        ('instructor', 'Instructor'),
+        ('maestria', 'Maestría'),
+        ('doctorado', 'Doctorado'),
+    ]
+
+    contrato = models.ForeignKey(
+        CAlta, on_delete=models.CASCADE, related_name='importes_sin_nomenclador')
+    concepto = models.CharField(max_length=12, choices=CONCEPTOS)
+    importe_antiguo = models.DecimalField(max_digits=10, decimal_places=2)
+    importe_nomenclador = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text='Lo que dice el nomenclador; vacío si el contrato no tenía entrada.')
+    fecha = models.DateField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Importe antiguo sin nomenclador'
+        verbose_name_plural = 'Importes antiguos sin nomenclador'
+        constraints = [
+            models.UniqueConstraint(fields=['contrato', 'concepto'],
+                                    name='unique_importe_antiguo_por_concepto'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_concepto_display()} {self.importe_antiguo} del contrato {self.contrato_id}'
+
+
+class CambioExterno(models.Model):
+    """Un cambio hecho MÁS ARRIBA del contrato que lo afectó, sin ser un movimiento
+    de nómina (decisión de RRHH del 23-10-2026).
+
+    Ejemplos: la escala salarial de su grupo cambió, su cargo cambió de rol o pasó a
+    otro departamento, se renombró su unidad, cambió el importe de su CNCI o el grado
+    científico de su ficha. Se muestra intercalado en el histórico del trabajador (y
+    en su PDF) con otro aspecto, pero NO es un movimiento: no cuenta para la fecha
+    efectiva, ni para Altas y Bajas, ni lo vigilan las reglas de movimientos.
+
+    * `lote` agrupa las filas de un mismo cambio (una edición de la escala toca a
+      muchos contratos a la vez).
+    * `error_humano`: el cambio corrige un error de tecleo. No se muestra en el
+      histórico (solo queda en Auditoría) y ANULA el último cambio real del mismo
+      origen, que tampoco se muestra ya.
+    * Es permanente: no se purga con Auditoría. Se escribe solo desde
+      `contratos.cambios_externos`.
+    """
+
+    class Origen(models.TextChoices):
+        ESCALA = 'ESC', 'Escala salarial'
+        CARGO = 'CAR', 'Cargo'
+        NOMENCLADOR_CARGO = 'NCA', 'Nomenclador de cargo'
+        DEPARTAMENTO = 'DEP', 'Departamento'
+        UNIDAD = 'UNI', 'Unidad organizativa'
+        IMPORTE = 'IMP', 'Importe de nomenclador'
+        FICHA = 'FIC', 'Ficha del trabajador'
+
+    contrato = models.ForeignKey(
+        CAlta, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cambios_externos')
+    aspirante = models.ForeignKey(
+        Aspirante, on_delete=models.CASCADE, related_name='cambios_externos')
+    no_expediente = models.CharField(max_length=20, blank=True, default='')
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    origen = models.CharField(max_length=3, choices=Origen.choices)
+    origen_content_type = models.ForeignKey(
+        ContentType, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    origen_object_id = models.CharField(max_length=50, blank=True, default='')
+    lote = models.CharField(max_length=32, db_index=True)
+
+    descripcion = models.TextField()
+    valor_anterior = models.CharField(max_length=150, blank=True, default='')
+    valor_nuevo = models.CharField(max_length=150, blank=True, default='')
+    motivo = models.TextField(blank=True, default='')
+    error_humano = models.BooleanField(default=False)
+    anulado = models.BooleanField(default=False)
+
+    usuario = models.ForeignKey(
+        'usuarios.CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    usuario_nombre = models.CharField(max_length=150, blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Cambio externo'
+        verbose_name_plural = 'Cambios externos'
+        ordering = ['-fecha']
+        indexes = [models.Index(fields=['aspirante', 'fecha'])]
+
+    def __str__(self):
+        return f'{self.get_origen_display()}: {self.descripcion[:60]}'
+
+    @property
+    def visible_en_historico(self):
+        return not self.error_humano and not self.anulado

@@ -185,6 +185,13 @@ def aplicar_filtros(request, qs, solo_comunes=False):
     if not solo_comunes:
         qs = _filtrar_recontratados(request, qs)
 
+    # Con problemas (Fase 2, 23-10-2026): críticos (rojo), altos (ámbar) o todos,
+    # según los hallazgos abiertos de Subsanación del contrato y de su ficha.
+    problemas = request.GET.get('problemas')
+    if problemas in ('criticos', 'altos', 'todos'):
+        from subsanacion.indicadores import contratos_con_problemas
+        qs = qs.filter(pk__in=contratos_con_problemas(problemas))
+
     # --- Estructura: unidad organizativa, departamento y cargo ---
     #
     # Los tres admiten VARIOS valores (`?unidad=3&unidad=7`), porque la pregunta

@@ -1,0 +1,31 @@
+{% comment %}
+  Motivo de un cambio que puede afectar a contratos (decisión de RRHH del 23-10-2026).
+  Solo es obligatorio si el cambio afecta de verdad a algún contrato: entonces queda
+  en el histórico de cada trabajador afectado como «cambio externo». «Error humano»
+  corrige un error de tecleo: no aparece en el histórico (solo en Auditoría) y anula
+  el cambio anterior equivocado. Lo leen `contratos.cambios_externos.motivo_del_post`.
+
+  Variables opcionales: `motivo_error` (texto del aviso), `motivo_valor`, `motivo_error_humano`.
+{% endcomment %}
+<div class="border rounded-3 p-3 mt-3 bg-light{% if motivo_error %} border-danger{% endif %}" data-motivo-cambio>
+    <label class="form-label fw-semibold mb-1" for="id_motivo_cambio">
+        <i class="fas fa-pen-to-square me-1 text-primary"></i>Motivo del cambio
+        <span class="text-muted fw-normal small">(obligatorio solo si el cambio afecta a contratos)</span>
+    </label>
+    {% if motivo_error %}
+        <div class="alert alert-danger py-2 px-3 small mb-2" role="alert">
+            <i class="fas fa-triangle-exclamation me-1"></i>{{ motivo_error }}
+        </div>
+    {% endif %}
+    <textarea name="motivo_cambio" id="id_motivo_cambio" rows="2" maxlength="500"
+              class="form-control form-control-sm"
+              placeholder="Ej.: Ajuste salarial según Res. 458/23">{{ motivo_valor|default:'' }}</textarea>
+    <div class="form-check mt-2 mb-0">
+        <input class="form-check-input" type="checkbox" name="error_humano" value="1"
+               id="id_error_humano"{% if motivo_error_humano %} checked{% endif %}>
+        <label class="form-check-label small" for="id_error_humano">
+            <strong>Error humano:</strong> corrige un error de tecleo. No aparecerá en el
+            histórico de los trabajadores (solo en Auditoría).
+        </label>
+    </div>
+</div>

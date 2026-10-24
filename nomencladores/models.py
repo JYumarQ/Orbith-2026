@@ -272,6 +272,81 @@ class NCargo(Base):
         """Fuente única de verdad: un cargo es Cuadro solo por su categoría ocupacional."""
         return self.cat_ocupacional in self.CATEGORIAS_CUADRO
 
+    def save(self, *args, **kwargs):
+        anterior = None
+        if self.pk:
+            anterior = NCargo.objects.filter(pk=self.pk).select_related('grupo_escala').first()
+        super().save(*args, **kwargs)
+        if anterior is not None:
+            self._aplicar_a_sus_contratos(anterior)
+
+    def _aplicar_a_sus_contratos(self, anterior):
+        """El nomenclador define el grupo escala, el salario básico (Fijo), la
+        categoría y el nombre del cargo de quienes lo ocupan: si cambian, cambian sus
+        datos sin tocar su contrato (decisión de RRHH del 23-10-2026).
+
+        * Pasa a Cuadro: un cuadro no tiene rol ni tridente; se quitan del cargo y
+          de sus contratos. Si su grupo no tiene importe de Cuadros, SAL-002 avisa.
+        * Deja de ser Cuadro: el cargo queda sin rol (lo avisa la regla «cargo sin
+          rol») y sus contratos dinámicos sin tridente (lo avisa SAL-002) hasta que
+          RRHH los asigne.
+        * Se recalcula el salario guardado, se anota un cambio externo por contrato
+          y se avisa en la campana.
+        """
+        from contratos.cambios_externos import Afectado, registrar_cambio, texto_del_motivo
+        from contratos.models import CAlta, CambioExterno
+        from strorganizativa.models import CargoPlantilla
+
+        cambios = []
+        if anterior.descripcion != self.descripcion:
+            cambios.append('pasó a llamarse «%s»' % self.descripcion)
+        if anterior.grupo_escala_id != self.grupo_escala_id:
+            cambios.append('cambió del grupo escala %s al %s' % (
+                anterior.grupo_escala.nivel, self.grupo_escala.nivel))
+        if anterior.salario_basico != self.salario_basico:
+            cambios.append('cambió su salario básico de %s a %s' % (
+                anterior.salario_basico, self.salario_basico))
+        if anterior.cat_ocupacional != self.cat_ocupacional:
+            cambios.append('cambió de categoría: %s a %s' % (
+                anterior.get_cat_ocupacional_display(), self.get_cat_ocupacional_display()))
+        if not cambios:
+            return
+
+        contratos = CAlta.objects.filter(cargo__ncargo=self)
+        if self.es_cuadro and not anterior.es_cuadro:
+            CargoPlantilla.objects.filter(ncargo=self).update(rol=None)
+            contratos.update(tridente=None)
+        if not contratos.exists():
+            return
+
+        salarios = {c.pk: (antes, despues)
+                    for c, antes, despues in CAlta.recalcular_salarios(contratos)}
+        descripcion = 'El cargo «%s» %s.' % (anterior.descripcion, ' y '.join(cambios))
+        if self.es_cuadro and not anterior.es_cuadro:
+            descripcion += ' Como Cuadro, se le quitaron el rol y el tridente.'
+        elif anterior.es_cuadro and not self.es_cuadro:
+            descripcion += ' Queda pendiente asignar el rol del cargo y el tridente.'
+        lista = list(contratos.select_related('aspirante'))
+        registrar_cambio(CambioExterno.Origen.NOMENCLADOR_CARGO, self, [
+            Afectado(c, descripcion,
+                     *(('Salario %s' % salarios[c.pk][0], 'Salario %s' % salarios[c.pk][1])
+                       if c.pk in salarios else ('', '')))
+            for c in lista])
+        try:
+            from notificaciones.avisos import CODIGO_CAMBIO_ROL, avisar_cambio_salarial
+            total = len(lista)
+            avisar_cambio_salarial(
+                self, codigo=CODIGO_CAMBIO_ROL, titulo='Cambio en un nomenclador de cargo',
+                mensaje=' '.join(p for p in (
+                    descripcion,
+                    'Afecta a %s %s; a %s se le actualizó el salario.' % (
+                        total, 'contrato' if total == 1 else 'contratos', len(salarios)),
+                    texto_del_motivo()) if p))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'No se pudo avisar del cambio del nomenclador de cargo %s.', self.pk)
+
     class Meta:
         verbose_name = ("NCargo")
         verbose_name_plural = ("NCargos")
@@ -521,6 +596,45 @@ class NTipoContrato(Base):
     def __str__(self):
         return self.descripcion
 
+    def save(self, *args, **kwargs):
+        ocupaba = (NTipoContrato.objects.filter(pk=self.pk)
+                   .values_list('ocupa_plaza', flat=True).first()) if self.pk else None
+        super().save(*args, **kwargs)
+        if ocupaba is not None and ocupaba != self.ocupa_plaza:
+            self._recontar_plazas()
+
+    def _recontar_plazas(self):
+        """«Ocupa plaza» decide qué contratos cuentan como plazas cubiertas. Al
+        cambiarlo se recuentan los cargos que tienen contratos de este tipo (antes se
+        quedaban desfasados hasta guardar algún contrato, y podían mostrar plazas
+        libres que no lo estaban). Si algún cargo queda con más ocupantes que plazas
+        aprobadas, se avisa a los administradores (decisión de RRHH, 23-10-2026)."""
+        from strorganizativa.models import CargoPlantilla
+
+        cargos = CargoPlantilla.objects.filter(calta__tipo=self).distinct()
+        sobrepasados = []
+        for cargo in cargos:
+            cargo.refrescar_conteo_plazas()
+            if cargo.cant_cubierta > cargo.cant_aprobada:
+                sobrepasados.append(cargo)
+        if not sobrepasados:
+            return
+        try:
+            from notificaciones.avisos import CODIGO_CAMBIO_ESTRUCTURA, avisar_cambio_salarial
+            lista = ', '.join('%s (%s de %s plazas)' % (
+                c.ncargo.descripcion, c.cant_cubierta, c.cant_aprobada) for c in sobrepasados[:10])
+            avisar_cambio_salarial(
+                self, codigo=CODIGO_CAMBIO_ESTRUCTURA,
+                titulo='Cargos con más ocupantes que plazas',
+                mensaje=('El tipo de contrato «%s» %s ocupa plaza. Quedaron %s cargos con más '
+                         'ocupantes que plazas aprobadas: %s.' % (
+                             self.descripcion, 'ahora' if self.ocupa_plaza else 'ya no',
+                             len(sobrepasados), lista)))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                'No se pudo avisar del recuento de plazas del tipo %s.', self.pk)
+
 # NUEVO NOMENCLADOR
 class NMotivoContrato(Base):
     descripcion = models.CharField(max_length=100, verbose_name="Descripción")   # ← quitado unique=True
@@ -571,11 +685,9 @@ class NTipoUnidadOrganizativa(Base):
 # acabar con importes distintos sin que nada avisara, y actualizar la cuantía
 # obligaba a abrir todos los contratos.
 #
-# Aquí viven ahora esas cuantías. El contrato SIGUE guardando el número: no es
-# una redundancia, es lo que protege el pasado. Si mañana cambia el importe del
-# nomenclador, los contratos y las nóminas ya emitidas conservan el suyo, y la
-# regla CTR-019 de Subsanación es la que reclama las diferencias para que sea
-# una persona quien decida actualizarlas.
+# Aquí viven esas cuantías, y desde el 23-10-2026 el contrato ya NO guarda el
+# número: el nomenclador manda (`CAlta.importe_*`). El pasado lo protegen las
+# copias que congelan la Pre-Nómina y los cierres al emitirse.
 
 
 class NImporteGradoCientifico(Base):
@@ -612,6 +724,16 @@ class NImporteGradoCientifico(Base):
 
     def __str__(self):
         return f'{self.get_grado_display()}: {self.importe}'
+
+    def save(self, *args, **kwargs):
+        anterior = (NImporteGradoCientifico.objects.filter(pk=self.pk)
+                    .values_list('importe', flat=True).first()) if self.pk else None
+        super().save(*args, **kwargs)
+        if anterior is not None and anterior != self.importe:
+            from contratos.cambios_externos import registrar_cambio_de_importe
+            registrar_cambio_de_importe(
+                self, self.get_grado_display(), anterior, self.importe,
+                aspirante__grado_cientifico=self.grado)
 
 
 class NPagoAdicional(Base):
@@ -653,3 +775,14 @@ class NPagoAdicional(Base):
 
     def __str__(self):
         return f'{self.descripcion} ({self.importe})'
+
+    def save(self, *args, **kwargs):
+        anterior = (NPagoAdicional.objects.filter(pk=self.pk)
+                    .values_list('importe', flat=True).first()) if self.pk else None
+        super().save(*args, **kwargs)
+        if anterior is not None and anterior != self.importe:
+            from contratos.cambios_externos import registrar_cambio_de_importe
+            campo = 'cnci_nomenclador' if self.tipo == self.CNCI else 'instructor_nomenclador'
+            registrar_cambio_de_importe(
+                self, f'{self.get_tipo_display()} «{self.descripcion}»', anterior, self.importe,
+                **{campo: self})

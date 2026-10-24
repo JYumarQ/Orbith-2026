@@ -204,7 +204,6 @@ class CAltaForm(forms.ModelForm):
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 
             'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
-            'maestria', 'doctorado', 'cnci', 'instructor',
             'instructor_nomenclador', 'cnci_nomenclador', 'jubilado_recontratado',
             'mision', 'pais', 'mision_dias', 'mision_importe',
             'cla', 'nocturnidad_1', 'nocturnidad_2'
@@ -229,8 +228,6 @@ class CAltaForm(forms.ModelForm):
             'funcionario_res': 'No. Res. Funcionario',
             'designado_res':'No. Res. Designado',
             'tipo_salario': 'Tipo de Salario',
-            'maestria': 'Maestría',
-            'cnci': 'CNCI',
             'instructor_nomenclador': 'Instructor',
             'cnci_nomenclador': 'CNCI',
             'jubilado_recontratado': 'Jubilado Recontratado',
@@ -297,25 +294,9 @@ class CAltaForm(forms.ModelForm):
                 'hx-include': '#id_cargo, #id_tridente',
                 'hx-trigger': 'change'
             }),
-            # Los cuatro importes dejan de escribirse a mano.
-            #
-            # Maestría y doctorado salen del grado científico del trabajador y del
-            # nomenclador, así que viajan OCULTOS: lo que ve el usuario es una caja
-            # de solo lectura que pinta la plantilla con `form.texto_maestria` /
-            # `form.texto_doctorado`. Va en una caja aparte y no en este mismo
-            # widget porque el campo del modelo es un número y tiene que poder
-            # mostrar el texto «Nomenc. Vacío» cuando el nomenclador está sin
-            # definir.
-            #
-            # Instructor y CNCI también van ocultos: el usuario elige una entrada
-            # del nomenclador en los desplegables `instructor_nomenclador` y
-            # `cnci_nomenclador`, y `clean()` copia aquí su importe. El número se
-            # sigue guardando en el contrato para que la nómina ya emitida no
-            # cambie si mañana se retoca el nomenclador.
-            'maestria': forms.HiddenInput(),
-            'doctorado': forms.HiddenInput(),
-            'cnci': forms.HiddenInput(),
-            'instructor': forms.HiddenInput(),
+            # Los cuatro importes no son campos del contrato: Maestría y Doctorado salen
+            # del grado científico del trabajador + nomenclador, e Instructor y CNCI de
+            # la entrada elegida en estos desplegables (decisión de RRHH, 23-10-2026).
             'instructor_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_instructor_nomenclador'}),
             'cnci_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_cnci_nomenclador'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
@@ -498,11 +479,10 @@ class CAltaForm(forms.ModelForm):
     # IMPORTES DEL CONTRATO
     # ------------------------------------------------------------------
     #
-    # Los cuatro dejaron de escribirse a mano. Maestría y doctorado se deducen
-    # del grado científico del trabajador; instructor y CNCI se eligen de un
-    # desplegable. El número se sigue guardando en el contrato: es lo que hace
-    # que una nómina ya emitida no cambie porque alguien retoque el nomenclador
-    # meses después.
+    # Los cuatro no se guardan en el contrato (23-10-2026): el nomenclador manda.
+    # Maestría y doctorado se deducen del grado científico del trabajador;
+    # instructor y CNCI, de la entrada elegida en su desplegable. La nómina ya
+    # emitida no cambia porque Pre-Nómina y cierres congelan su propia copia.
 
     #: Texto que se muestra cuando el trabajador tiene el grado pero el
     #: nomenclador está sin definir. Es un aviso, no un importe: el contrato
@@ -559,30 +539,6 @@ class CAltaForm(forms.ModelForm):
             setattr(self, f'texto_{campo}', texto)
 
         self.importes_del_grado = valores
-        for campo, valor in valores.items():
-            if campo in self.fields:
-                self.fields[campo].required = False
-                self.initial[campo] = valor
-
-    def _aplicar_importes(self, cleaned_data):
-        """Escribe los cuatro importes desde el nomenclador, ignorando lo enviado.
-
-        Se recalcula en el servidor a propósito: los campos viajan ocultos, así
-        que lo que llega en el POST no es de fiar. Y aunque lo fuera, el importe
-        correcto es el del nomenclador, no el que tuviera el navegador.
-        """
-        for campo, valor in self.importes_del_grado.items():
-            if campo in self.fields:
-                cleaned_data[campo] = valor
-
-        for campo_fk, campo_importe in (('instructor_nomenclador', 'instructor'),
-                                        ('cnci_nomenclador', 'cnci')):
-            if campo_importe not in self.fields:
-                continue
-            elegido = cleaned_data.get(campo_fk)
-            cleaned_data[campo_importe] = elegido.importe if elegido else Decimal('0.00')
-
-        return cleaned_data
 
     def clean_no_expediente(self):
         expediente = self.cleaned_data.get('no_expediente')
@@ -601,7 +557,6 @@ class CAltaForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        cleaned_data = self._aplicar_importes(cleaned_data)
         cargo = cleaned_data.get('cargo')
         
         # Obtener tipo_contrato del form, o de la instancia si estamos en un movimiento

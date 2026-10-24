@@ -176,13 +176,13 @@ class NomencladorDeGradoCientificoVacio(ReglaBase):
         'y todavía no se han rellenado, o se registró el primer trabajador con ese '
         'grado científico después de configurar el sistema.')
     impacto = (
-        'El contrato de esos trabajadores muestra «Nomenc. Vacío» y guarda 0 en el '
-        'importe, así que cobran de menos. Y no se puede arreglar desde el propio '
-        'contrato: el campo es de solo lectura.')
+        'El contrato de esos trabajadores muestra «Nomenc. Vacío» y cobran 0 por ese '
+        'concepto, es decir, de menos. Y no se puede arreglar desde el propio '
+        'contrato: el importe sale siempre del nomenclador.')
     solucion = (
         'Abra Configuración → Parámetros Generales → Nomencladores → Laborales y '
-        'Profesionales y defina el importe en la tarjeta que se indica abajo. '
-        'Después, abra y guarde los contratos afectados para que lo tomen.')
+        'Profesionales y defina el importe en la tarjeta que se indica abajo. Los '
+        'contratos lo toman solos.')
 
     #: (clave del grado, etiqueta de la tarjeta) — la clave es la misma que usa
     #: `bolsa.Aspirante.grado_cientifico`, así que no hay tabla de equivalencias
@@ -220,7 +220,7 @@ class NomencladorDeGradoCientificoVacio(ReglaBase):
                 detalle=(
                     f'{afectados} trabajador(es) activo(s) tienen el grado de '
                     f'{etiqueta}, pero su importe no está definido en el nomenclador, '
-                    f'así que sus contratos guardan 0.'),
+                    f'así que cobran 0 por ese concepto.'),
                 # El número de afectados NO entra en `datos`: cambia con cada alta o
                 # baja y movería la huella del hallazgo, devolviendo a Pendiente uno
                 # ya silenciado sin que el problema haya cambiado.
@@ -229,4 +229,134 @@ class NomencladorDeGradoCientificoVacio(ReglaBase):
                     'importe': 'Sin definir',
                 },
                 campo_formulario='importe',
+            )
+
+
+class ParametrosDeTarifaInvalidos(ReglaBase):
+    """El fondo de tiempo o el porcentaje de horas extras no permiten calcular.
+
+    Son los dos parámetros de Configuración de los que sale la tarifa horaria y la
+    de horas extras de TODOS los trabajadores (`contratos/tarifas.py`) y el fondo
+    que congela cada Pre-Nómina. Desde el 23-10-2026 no hay valor fijo de respaldo
+    en el código: si faltan, la tarifa queda vacía y la Pre-Nómina no se crea.
+    """
+
+    codigo = 'CFG-004'
+    nombre = 'Parámetros del cálculo de la tarifa sin definir o inválidos'
+    modulo = MODULO_CONFIGURACION
+    criticidad = CRITICIDAD_CRITICA
+    modelo = 'configuracion.Configuracion'
+
+    descripcion = (
+        'Comprueba que el fondo de tiempo para el cálculo de la tarifa sea mayor que '
+        'cero y que el porcentaje de horas extras esté entre 0 y 1 (0.25 = 25 %).')
+    causa_probable = (
+        'El valor se cambió fuera del formulario (Admin de Django, importación o '
+        'restauración de una copia), o el porcentaje se escribió como «25» en vez '
+        'de «0.25».')
+    impacto = (
+        'Sin fondo de tiempo no hay tarifa horaria ni de horas extras en ninguna '
+        'pantalla y no se puede crear la Pre-Nómina. Con un porcentaje mayor que 1, '
+        'las horas extras salen multiplicadas (con «25», por 26).')
+    solucion = (
+        'Abra Configuración → Parámetros Generales y corrija el fondo de tiempo o el '
+        'porcentaje de horas extras.')
+
+    def ejecutar(self, contexto):
+        fila = (self.obtener_modelo()._default_manager
+                .values('id', 'fondo_tiempo_calc_tarif', 'porcentaje_horas_extras').first())
+        if fila is None:
+            return  # Lo reporta CFG-001.
+
+        fondo = fila.get('fondo_tiempo_calc_tarif')
+        if fondo is None or fondo <= 0:
+            yield HallazgoDetectado(
+                object_id=str(fila['id']), clave_extra='fondo',
+                titulo='El fondo de tiempo para el cálculo de la tarifa no es válido',
+                detalle=(f'El fondo de tiempo vale {fondo if fondo is not None else "vacío"}: '
+                         'debe ser mayor que cero para poder calcular la tarifa horaria.'),
+                datos={'parametro': 'Fondo de tiempo', 'valor': str(fondo)},
+                campo_formulario='fondo_tiempo_calc_tarif',
+            )
+
+        porcentaje = fila.get('porcentaje_horas_extras')
+        if porcentaje is None or not (0 <= porcentaje <= 1):
+            yield HallazgoDetectado(
+                object_id=str(fila['id']), clave_extra='porcentaje',
+                titulo='El porcentaje de horas extras no es válido',
+                detalle=(f'El porcentaje de horas extras vale '
+                         f'{porcentaje if porcentaje is not None else "vacío"}: debe ser una '
+                         'fracción entre 0 y 1 (0.25 para un 25 %).'),
+                datos={'parametro': 'Porcentaje de horas extras', 'valor': str(porcentaje)},
+                campo_formulario='porcentaje_horas_extras',
+            )
+
+
+class EscalaSalarialIncompleta(ReglaBase):
+    """Un grupo escala en uso no tiene en la escala los importes que necesita.
+
+    SAL-002 ya avisa contrato por contrato («sin salario calculable»); esta regla
+    señala la CAUSA en Parámetros Generales, una sola vez por grupo, para quien puede
+    arreglarla: el Administrador que mantiene la escala salarial.
+    """
+
+    codigo = 'CFG-005'
+    nombre = 'Escala salarial sin los importes que usan los contratos'
+    modulo = MODULO_CONFIGURACION
+    criticidad = CRITICIDAD_CRITICA
+    modelo = 'nomencladores.NGrupoEscala'
+
+    descripcion = (
+        'Busca grupos escala con contratos de salario dinámico cuyo importe no está '
+        'en la escala salarial: el de Cuadros para los cargos de Cuadro, o el de su '
+        'rol y tridente para los demás.')
+    causa_probable = (
+        'El grupo se creó o se editó en la escala sin completar todos sus importes, o '
+        'se asignó un cargo a un grupo (o un rol a un cargo) que la escala no tiene '
+        'previsto.')
+    impacto = (
+        'Esos trabajadores aparecen sin salario en las pantallas, los informes, el '
+        'Word del contrato y la Pre-Nómina.')
+    solucion = (
+        'Abra Configuración → Parámetros Generales → Salarios y complete los '
+        'importes del grupo que se indican abajo.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+
+        CAlta = apps.get_model('contratos', 'CAlta')
+        NSalario = apps.get_model('nomencladores', 'NSalario')
+        NCargo = apps.get_model('nomencladores', 'NCargo')
+
+        escala = set(NSalario.objects.filter(monto__gt=0).values_list(
+            'grupo_escala_id', 'rol_id', 'tridente_id'))
+        usados = (CAlta.objects
+                  .filter(tipo_salario='DIN', cargo__ncargo__grupo_escala__isnull=False)
+                  .values_list('cargo__ncargo__grupo_escala_id', 'cargo__ncargo__grupo_escala__nivel',
+                               'cargo__ncargo__cat_ocupacional', 'cargo__rol_id',
+                               'cargo__rol__tipo', 'tridente_id', 'tridente__tipo')
+                  .distinct())
+
+        faltan = {}
+        for grupo, nivel, categoria, rol, rol_tipo, tridente, tridente_tipo in usados:
+            if categoria in NCargo.CATEGORIAS_CUADRO:
+                if (grupo, rol, None) in escala or (grupo, None, None) in escala:
+                    continue
+                falta = 'Cuadros'
+            else:
+                # Sin rol o sin tridente el problema es del cargo o del contrato
+                # (lo avisan SAL-002 y la regla de cargo sin rol), no de la escala.
+                if rol is None or tridente is None or (grupo, rol, tridente) in escala:
+                    continue
+                falta = f'{rol_tipo} · Tridente {tridente_tipo}'
+            faltan.setdefault((grupo, nivel), set()).add(falta)
+
+        for (grupo, nivel), combinaciones in sorted(faltan.items(), key=lambda x: x[0][1]):
+            lista = ', '.join(sorted(combinaciones))
+            yield HallazgoDetectado(
+                object_id=str(grupo),
+                titulo=f'Grupo {nivel}: faltan importes en la escala salarial',
+                detalle=(f'Hay contratos del grupo {nivel} que necesitan estos importes y la '
+                         f'escala no los tiene: {lista}.'),
+                datos={'grupo_escala': nivel, 'importes_que_faltan': lista},
             )

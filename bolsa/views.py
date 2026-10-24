@@ -21,7 +21,8 @@ from .models import Aspirante
 from .forms import AspiranteForm
 from usuarios.decorators import write_required
 from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
-from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
+from core.mixins import (AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin,
+                         MotivoDeCambioMixin, VolverAlOrigenMixin)
 # Convierte la eliminación en una solicitud cuando la pide un Moderador; devuelve None
 # para el Administrador, que elimina directamente.
 from solicitudes.integracion import desviar_borrado
@@ -475,7 +476,7 @@ class AspiranteCreateView(CreateView):
 
 # ----------------- EDITAR -----------------
 @method_decorator(write_required, name='dispatch')
-class AspiranteUpdateView(AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class AspiranteUpdateView(MotivoDeCambioMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = Aspirante
     form_class = AspiranteForm
     template_name = "pages/aspirante/updt_aspir.html"
@@ -497,8 +498,14 @@ class AspiranteUpdateView(AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixi
         if aspirante.nivel_educ == 'NS' and not aspirante.especialidad:
             messages.warning(self.request, 'Debe seleccionar una especialidad si el nivel educativo es Nivel Superior')
 
-        # 3. Guardamos
-        aspirante.save()
+        # 3. Guardamos. Si cambió el grado científico y tiene contrato, hace falta
+        # un motivo para su histórico (decisión de RRHH, 23-10-2026).
+        def guardar():
+            aspirante.save()
+            return aspirante
+        error = self.guardar_con_motivo(form, guardar)
+        if error is not None:
+            return error
         self.object = aspirante # Por seguridad, actualizamos la instancia en la vista
 
         # 4. Retornamos usando el flujo normal de Django (Recarga la página)

@@ -28,8 +28,11 @@ importe, con alta, edición y baja.
 
 import json
 
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
+
+from contratos.cambios_externos import MotivoRequerido, motivo_de_cambio, motivo_del_post
 
 from usuarios.decorators import admin_required
 
@@ -142,6 +145,7 @@ def guardar(request, slug, pk=None):
             NPagoAdicional, pk=pk, tipo=ficha['tipo']) if pk else None
         Formulario, singular = NPagoAdicionalForm, ficha['singular']
 
+    motivo_error = ''
     if request.method == 'POST':
         formulario = Formulario(request.POST, instance=instancia)
         if formulario.is_valid():
@@ -153,9 +157,16 @@ def guardar(request, slug, pk=None):
                 objeto.grado = ficha['grado']
             else:
                 objeto.tipo = ficha['tipo']
-            objeto.save()
-            verbo = 'actualizado' if instancia else 'creado'
-            return _respuesta_htmx(f'{singular} {verbo}.', ficha['evento'])
+            # Cambiar un importe en uso cambia lo que cobran esos contratos desde hoy:
+            # hace falta un motivo para su histórico (decisión de RRHH, 23-10-2026).
+            try:
+                with transaction.atomic(), motivo_de_cambio(*motivo_del_post(request)):
+                    objeto.save()
+            except MotivoRequerido as e:
+                motivo_error = str(e)
+            else:
+                verbo = 'actualizado' if instancia else 'creado'
+                return _respuesta_htmx(f'{singular} {verbo}.', ficha['evento'])
     else:
         formulario = Formulario(instance=instancia)
 
@@ -163,6 +174,9 @@ def guardar(request, slug, pk=None):
         'form': formulario, 'slug': slug, 'ficha': ficha,
         'objeto': instancia, 'titulo': singular,
         'es_grado': ficha['clase'] == 'grado',
+        'motivo_error': motivo_error,
+        'motivo_valor': motivo_del_post(request)[0] if request.method == 'POST' else '',
+        'motivo_error_humano': motivo_del_post(request)[1] if request.method == 'POST' else False,
     })
 
 
@@ -181,9 +195,15 @@ def eliminar(request, slug, pk):
     objeto = get_object_or_404(NPagoAdicional, pk=pk, tipo=ficha['tipo'])
     etiqueta = objeto.descripcion
 
-    # `SET_NULL` en las dos claves de `CAlta`, así que borrar aquí nunca rompe un
-    # contrato: pierde la referencia a la descripción, pero conserva su importe,
-    # que es lo que cuenta para el salario y para la nómina ya emitida.
+    # Una entrada que usan contratos no se borra (decisión de RRHH del 23-10-2026):
+    # el contrato ya no guarda el importe, así que se quedaría sin él. PROTECT en
+    # las dos claves de `CAlta` lo garantiza también fuera de esta pantalla.
+    en_uso = (objeto.contratos_cnci.count() + objeto.contratos_instructor.count())
+    if en_uso:
+        contratos = 'contrato la usa' if en_uso == 1 else 'contratos la usan'
+        return _respuesta_htmx(
+            f'No se puede eliminar «{etiqueta}»: {en_uso} {contratos}. Asígneles otra '
+            f'entrada antes, o edite su importe.', ficha['evento'], icono='warning')
     objeto.delete()
     return _respuesta_htmx(f'{ficha["singular"]} «{etiqueta}» eliminado.',
                            ficha['evento'])

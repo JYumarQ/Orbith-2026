@@ -1,0 +1,18 @@
+{% comment %}
+  Triángulo de problemas (Fase 2). Variables: `nivel` ('critico'|'alto'), `url` (de
+  la ventana; vacío en los niveles de la cascada, que solo avisan), `total` (opcional).
+{% endcomment %}
+{% if nivel %}
+    {% if url %}
+        <button type="button" class="triangulo-problema {{ nivel }}"
+                onclick="abrirProblemas('{{ url }}', event)"
+                title="{% if nivel == 'critico' %}Problema crítico{% else %}Problema importante{% endif %}{% if total %} ({{ total }}){% endif %}: pulse para ver qué pasa y cómo se soluciona"
+                aria-label="Ver problemas">
+            <i class="fas fa-triangle-exclamation"></i>
+        </button>
+    {% else %}
+        <span class="triangulo-problema {{ nivel }}" title="Hay registros con problemas críticos por debajo">
+            <i class="fas fa-triangle-exclamation"></i>
+        </span>
+    {% endif %}
+{% endif %}

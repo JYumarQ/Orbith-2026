@@ -167,10 +167,16 @@ def iniciar_ejecucion(usuario=None, origen=EjecucionAnalisis.MANUAL, modulos=Non
 # Reconciliación (el corazón del módulo)
 # ---------------------------------------------------------------------------
 
-def reconciliar_regla(regla, ejecucion, contexto):
+def reconciliar_regla(regla, ejecucion, contexto, ids=None):
     """Ejecuta una regla y sincroniza sus hallazgos con la base de datos.
 
     Devuelve un diccionario con los contadores de lo que hizo.
+
+    `ids` (revisión por registro, 23-10-2026): si se indica, la regla solo recorre
+    esas filas de su modelo (ver `reglas.base.solo_registros`) y solo se crean,
+    refrescan o cierran los hallazgos de esas filas. La respuesta es completa y
+    cierta para ellas, así que cerrar las que ya no se detectan es correcto; el resto
+    de la tabla no se toca.
 
     El paso de «desaparecidos» se acota SIEMPRE por `codigo_regla`. Es lo que hace
     correcto ejecutar el análisis por partes: si un módulo no corre, sus hallazgos no
@@ -183,9 +189,13 @@ def reconciliar_regla(regla, ejecucion, contexto):
 
     # Todos los hallazgos que esta regla generó alguna vez (servido por
     # subs_hall_regla_vig). Se cargan de golpe: es una consulta, no N.
+    consulta_existentes = Hallazgo.objects.filter(codigo_regla=regla.codigo)
+    if ids is not None:
+        ids = [str(i) for i in ids]
+        consulta_existentes = consulta_existentes.filter(content_type=tipo, object_id__in=ids)
     existentes = {
         (hallazgo.object_id, hallazgo.clave_extra): hallazgo
-        for hallazgo in Hallazgo.objects.filter(codigo_regla=regla.codigo)
+        for hallazgo in consulta_existentes
     }
 
     detectadas = set()
@@ -195,7 +205,13 @@ def reconciliar_regla(regla, ejecucion, contexto):
     truncada = False
     contados = 0
 
-    for detectado in regla.ejecutar(contexto):
+    from .reglas.base import solo_registros
+    from contextlib import nullcontext
+    restriccion = solo_registros({regla.modelo: ids}) if ids is not None else nullcontext()
+    with restriccion:
+        detectados_regla = list(regla.ejecutar(contexto))
+
+    for detectado in detectados_regla:
         contados += 1
         if contados > LIMITE_HALLAZGOS_POR_REGLA:
             truncada = True

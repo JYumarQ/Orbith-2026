@@ -88,10 +88,12 @@ class EscudoTridenteTests(TestCase):
         alta.refresh_from_db()
         self.assertIsNone(alta.tridente_id)
 
-    def test_dinamico_sin_cuadro_y_sin_tridente_asigna_el_por_defecto(self):
+    def test_dinamico_sin_cuadro_y_sin_tridente_no_recibe_uno_por_defecto(self):
+        """Sin «Tridente I» automático (decisión de RRHH del 23-10-2026): nadie lo
+        habría elegido. Se queda sin tridente y SAL-002 avisa."""
         alta = self._crear_alta(self.cargo_no_cuadro, 'DIN', tridente=None)
         alta.refresh_from_db()
-        self.assertEqual(alta.tridente_id, self.tridente_i.pk)
+        self.assertIsNone(alta.tridente_id)
 
     def test_dinamico_sin_cuadro_conserva_el_tridente_asignado(self):
         otro_tridente = NTridente.objects.create(tipo='II')
@@ -1012,9 +1014,9 @@ class ImportesDelContratoTests(TestCase):
     """Los cuatro importes dejaron de escribirse a mano.
 
     Maestria y doctorado salen del grado cientifico del trabajador y del
-    nomenclador; instructor y CNCI, de la entrada elegida en su desplegable. El
-    numero se sigue guardando en el contrato para que una nomina ya emitida no
-    cambie porque alguien retoque el nomenclador meses despues.
+    nomenclador; instructor y CNCI, de la entrada elegida en su desplegable. Desde
+    el 23-10-2026 el contrato no guarda el numero: el nomenclador manda (la nomina
+    ya emitida la protegen las copias de Pre-Nomina y cierres).
     """
 
     @classmethod
@@ -1077,12 +1079,12 @@ class ImportesDelContratoTests(TestCase):
         self.assertEqual(f.texto_maestria, 'Nomenc. Vac\u00edo')
         self.assertEqual(f.importes_del_grado['maestria'], Decimal('0.00'))
 
-    def test_los_cuatro_importes_viajan_ocultos(self):
-        """Se rellenan solos, asi que no se escriben: lo que se ve es una caja de
-        solo lectura (maestria y doctorado) o un desplegable (instructor y CNCI)."""
+    def test_los_importes_no_son_campos_del_formulario(self):
+        """Desde el 23-10-2026 el contrato no guarda los importes: lo que se ve es
+        una caja de solo lectura (maestria y doctorado) o un desplegable."""
         f = CAltaForm(aspirante=self.sin_grado)
         for campo in ('maestria', 'doctorado', 'instructor', 'cnci'):
-            self.assertIsInstance(f.fields[campo].widget, forms.HiddenInput, campo)
+            self.assertNotIn(campo, f.fields)
 
     # ---- Instructor y CNCI: desplegables del nomenclador ----
 
@@ -1092,33 +1094,42 @@ class ImportesDelContratoTests(TestCase):
                          [self.instructor])
         self.assertEqual(list(f.fields['cnci_nomenclador'].queryset), [self.cnci])
 
-    # ---- El servidor es el que manda ----
+    # ---- El nomenclador manda (23-10-2026) ----
 
-    def test_el_servidor_ignora_los_importes_que_lleguen_en_el_post(self):
-        """Los campos van ocultos, asi que lo que llega en el POST no es de fiar.
-        Y aunque lo fuera, el importe correcto es el del nomenclador."""
-        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+    def _contrato(self, aspirante, **extra):
+        return CAlta.objects.create(
+            aspirante=aspirante, no_expediente=aspirante.doc_identidad[-5:],
+            tipo=self.tipo_contrato, fecha_alta=date.today(), **extra)
 
-        f = CAltaForm({
-            'maestria': '99999', 'doctorado': '88888',
-            'instructor': '7777', 'cnci': '6666',
-            'instructor_nomenclador': self.instructor.pk,
-            'cnci_nomenclador': self.cnci.pk,
-        }, aspirante=self.master)
-        f.is_valid()   # el resto del formulario queda incompleto a proposito
+    def test_los_importes_se_leen_siempre_del_nomenclador(self):
+        grado = NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
+        contrato = self._contrato(self.master, instructor_nomenclador=self.instructor,
+                                  cnci_nomenclador=self.cnci)
+        self.assertEqual((contrato.importe_maestria, contrato.importe_doctorado,
+                          contrato.importe_instructor, contrato.importe_cnci),
+                         (Decimal('500.00'), Decimal('0.00'), Decimal('150.00'), Decimal('220.00')))
 
-        self.assertEqual(f.cleaned_data['maestria'], Decimal('500.00'))
-        self.assertEqual(f.cleaned_data['doctorado'], Decimal('0.00'))
-        self.assertEqual(f.cleaned_data['instructor'], Decimal('150.00'))
-        self.assertEqual(f.cleaned_data['cnci'], Decimal('220.00'))
+        # Cambiar el nomenclador cambia lo que cobra desde hoy, sin tocar el contrato.
+        from contratos.models import invalidar_importes_de_grado
+        grado.importe = Decimal('440.00')
+        grado.save()
+        self.cnci.importe = Decimal('329.00')
+        self.cnci.save()
+        invalidar_importes_de_grado()
+        contrato = CAlta.objects.get(pk=contrato.pk)
+        self.assertEqual(contrato.importe_maestria, Decimal('440.00'))
+        self.assertEqual(contrato.importe_cnci, Decimal('329.00'))
 
     def test_sin_elegir_nada_los_pagos_quedan_en_cero(self):
-        f = CAltaForm({'instructor_nomenclador': '', 'cnci_nomenclador': ''},
-                      aspirante=self.sin_grado)
-        f.is_valid()
+        contrato = self._contrato(self.sin_grado)
+        self.assertEqual((contrato.importe_instructor, contrato.importe_cnci,
+                          contrato.importe_maestria), (Decimal('0.00'),) * 3)
 
-        self.assertEqual(f.cleaned_data['instructor'], Decimal('0.00'))
-        self.assertEqual(f.cleaned_data['cnci'], Decimal('0.00'))
+    def test_no_se_puede_borrar_una_entrada_que_usan_contratos(self):
+        from django.db.models import ProtectedError
+        self._contrato(self.sin_grado, cnci_nomenclador=self.cnci)
+        with self.assertRaises(ProtectedError):
+            self.cnci.delete()
 
     def test_al_editar_el_aspirante_sale_del_propio_contrato(self):
         """En edicion no hace falta pasarlo: sale de la instancia."""
@@ -1150,12 +1161,9 @@ class ImportesDelContratoTests(TestCase):
         instructor = NPagoAdicional.objects.create(
             tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Jefe',
             importe=Decimal('345.67'))
-
-        f = CAltaForm({'instructor_nomenclador': instructor.pk}, aspirante=self.master)
-        f.is_valid()
-
-        self.assertEqual(f.cleaned_data['maestria'], Decimal('1234.56'))
-        self.assertEqual(f.cleaned_data['instructor'], Decimal('345.67'))
+        contrato = self._contrato(self.master, instructor_nomenclador=instructor)
+        self.assertEqual(contrato.importe_maestria, Decimal('1234.56'))
+        self.assertEqual(contrato.importe_instructor, Decimal('345.67'))
 
 
 class FiltrosEstructuraContratosTests(TestCase):
@@ -1788,3 +1796,84 @@ class AvisosAlCausarBajaTests(TestCase):
         self.assertEqual(respuesta.status_code, 404)
         self.assertContains(respuesta, 'Este contrato ya no existe', status_code=404)
         self.assertContains(respuesta, 'href="/notificaciones/"', status_code=404)
+
+
+class RolDelCargoTests(TestCase):
+    """El rol de pago es del CARGO, no del contrato (producción, 23-10-2026): tras un
+    movimiento de nómina a un cargo con otro rol, el Word del contrato salía con el
+    salario del rol anterior. Cambiar el rol de un cargo o la escala salarial
+    recalcula el salario guardado de sus contratos y avisa."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from nomencladores.models import NRol, NSalario
+        cargo = _crear_departamento_con_cargo()
+        cls.grupo = cargo.ncargo.grupo_escala
+        cls.fundamental = NRol.objects.create(tipo='Fundamental')
+        cls.decisorio = NRol.objects.create(tipo='Decisorio')
+        cls.tridente = NTridente.objects.create(tipo='I')
+        NSalario.objects.create(grupo_escala=cls.grupo, rol=cls.fundamental, tridente=cls.tridente, monto=4890)
+        NSalario.objects.create(grupo_escala=cls.grupo, rol=cls.decisorio, tridente=cls.tridente, monto=5379)
+        cargo.rol = cls.fundamental
+        cargo.save()
+        cls.cargo_fundamental = cargo
+        cls.cargo_decisorio = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Técnico de Comunicaciones', cat_ocupacional='TEC',
+                                         grupo_escala=cls.grupo, salario_basico=4000),
+            departamento=cargo.departamento, rol=cls.decisorio, cant_aprobada=5, orden_informe=2)
+        provincia, municipio = _crear_provincia_municipio()
+        aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Osiel', papellido='Torres', sapellido='Pérez',
+            doc_identidad='80010113199', estado='ACTIVO', sexo='M', raza='BL',
+            provincia=provincia, municipio=municipio)
+        tipo = NTipoContrato.objects.create(descripcion='Indeterminado', ocupa_plaza=False, requiere_motivo=False)
+        cls.contrato = CAlta.objects.create(
+            aspirante=aspirante, no_expediente='02890', tipo=tipo, cargo=cargo,
+            tridente=cls.tridente, tipo_salario='DIN', fecha_alta=date(2025, 1, 20))
+        cls.admin = CustomUser.objects.create_user(username='admin_rol_cargo', password='x', es_admin=True)
+
+    def test_tras_cambiar_de_cargo_el_word_usa_el_rol_del_cargo_nuevo(self):
+        self.assertEqual(self.contrato.salario_actual, Decimal('4890.00'))
+        # Lo que hace el movimiento de nómina: cambia el cargo y guarda.
+        self.contrato.cargo = self.cargo_decisorio
+        self.contrato.save()
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.salario_actual, Decimal('5379.00'))
+
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('exportar_contrato_word', args=[self.contrato.pk]))
+        self.assertEqual(respuesta.context['salario_escala'], '5379.00')
+        vista = respuesta.context['view']
+        ctx = vista._compilar_contexto_word(self.contrato, {}, None)
+        self.assertEqual((ctx['check_decisorio'], ctx['check_fundamental']), ('X', ''))
+
+    def test_cambiar_el_rol_del_cargo_recalcula_y_avisa(self):
+        from notificaciones.models import Notificacion
+        self.cargo_fundamental.rol = self.decisorio
+        self.cargo_fundamental.save()
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.salario_actual, Decimal('5379.00'))
+        aviso = Notificacion.objects.get(codigo_regla='EVT-ROL', destinatario=self.admin)
+        self.assertEqual(aviso.titulo, 'Cambio de rol en un cargo')
+        self.assertIn('cambió de rol: Fundamental a Decisorio', aviso.mensaje)
+        self.assertIn('se actualizó el salario de 1 contrato asignado a dicho cargo', aviso.mensaje)
+
+    def test_guardar_el_cargo_sin_cambiar_el_rol_no_avisa(self):
+        from notificaciones.models import Notificacion
+        self.cargo_fundamental.cant_aprobada = 6
+        self.cargo_fundamental.save()
+        self.assertFalse(Notificacion.objects.filter(codigo_regla='EVT-ROL').exists())
+
+    def test_editar_la_escala_recalcula_y_avisa(self):
+        from notificaciones.models import Notificacion
+        self.client.force_login(self.admin)
+        self.client.post(reverse('editar_salarios', args=[self.grupo.pk]), {
+            f'salario_{self.fundamental.pk}_{self.tridente.pk}': '5000',
+            f'salario_{self.decisorio.pk}_{self.tridente.pk}': '5379',
+            'motivo_cambio': 'Ajuste salarial',
+        })
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.salario_actual, Decimal('5000.00'))
+        aviso = Notificacion.objects.get(codigo_regla='EVT-ESCALA', destinatario=self.admin)
+        self.assertIn('La escala salarial del grupo IV cambió', aviso.mensaje)
+        self.assertIn('1 contrato de ese grupo', aviso.mensaje)

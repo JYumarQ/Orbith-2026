@@ -5,6 +5,7 @@ from django.db.models import Count, F, Q
 from ..constantes import (
     CRITICIDAD_ALTA,
     CRITICIDAD_BAJA,
+    CRITICIDAD_CRITICA,
     CRITICIDAD_MEDIA,
     MODULO_ESTRUCTURA,
     TAMANO_LOTE,
@@ -334,4 +335,58 @@ class CargoSinNivelDePreparacion(ReglaBase):
                 unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
                 # Lleva el panel de advertencias directo al desplegable del formulario.
                 campo_formulario='nivel_preparacion',
+            )
+
+
+class CargoSinRol(ReglaBase):
+    """Un cargo que no es de Cuadro, con trabajadores, no tiene rol de pago.
+
+    El rol es del cargo (decisión de RRHH del 23-10-2026): sin él, ninguno de sus
+    trabajadores de salario dinámico tiene salario calculable. Pasa sobre todo cuando
+    el nomenclador del cargo deja de ser Cuadro (un cuadro no lleva rol), o cuando el
+    cargo se guardó sin rol desde fuera del formulario.
+    """
+
+    codigo = 'EST-008'
+    nombre = 'Cargo que no es de Cuadro sin rol asignado'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_CRITICA
+    modelo = 'strorganizativa.CargoPlantilla'
+
+    descripcion = (
+        'Busca cargos con trabajadores cuya categoría ocupacional no es de Cuadro y '
+        'que no tienen rol de pago (Decisorio, Fundamental o Apoyo).')
+    causa_probable = (
+        'El nomenclador del cargo dejó de ser de Cuadro (un cuadro no lleva rol), o '
+        'el cargo se guardó sin rol desde el Admin o una importación.')
+    impacto = (
+        'Sus trabajadores de salario dinámico se quedan sin salario calculable en '
+        'las pantallas, los informes, el Word del contrato y la Pre-Nómina.')
+    solucion = (
+        'Abra el cargo en el Gestor de Plantilla y elija su rol. Después, revise que '
+        'sus contratos tengan tridente.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+
+        NCargo = apps.get_model('nomencladores', 'NCargo')
+        filas = (self.base_queryset()
+                 .filter(rol__isnull=True, calta__isnull=False)
+                 .exclude(ncargo__cat_ocupacional__in=NCargo.CATEGORIAS_CUADRO)
+                 .annotate(trabajadores=Count('calta', distinct=True))
+                 .values('id', 'ncargo__descripcion', 'departamento__descripcion',
+                         'departamento__unidad_organizativa_id', 'trabajadores')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        for fila in filas:
+            cargo = fila.get('ncargo__descripcion') or 'Cargo sin descripción'
+            departamento = fila.get('departamento__descripcion') or '—'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{cargo} · {departamento} · sin rol de pago',
+                detalle=(f'El cargo no es de Cuadro y no tiene rol: sus trabajadores de '
+                         f'salario dinámico no tienen salario calculable.'),
+                datos={'cargo': cargo, 'departamento': departamento},
+                unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
+                campo_formulario='rol',
             )

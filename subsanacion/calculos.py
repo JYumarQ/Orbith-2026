@@ -44,7 +44,6 @@ COLUMNAS_SALARIO = (
     'no_expediente',
     'salario_actual',
     'tipo_salario',
-    'rol_id',
     'tridente_id',
     'cargo_id',
     'cargo__rol_id',
@@ -80,7 +79,6 @@ def salario_esperado(fila, indice_salarios):
         # modo el criterio sigue viviendo en un solo sitio.
         es_cuadro=categoria in NCargo.CATEGORIAS_CUADRO,
         grupo_escala_id=fila.get('cargo__ncargo__grupo_escala_id'),
-        rol_id_contrato=fila.get('rol_id'),
         rol_id_cargo=fila.get('cargo__rol_id'),
         tridente_id=fila.get('tridente_id'),
         salario_basico=fila.get('cargo__ncargo__salario_basico'),

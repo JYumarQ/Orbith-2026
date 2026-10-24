@@ -31,6 +31,7 @@ from . import permisos, servicios
 from .constantes import (
     CLAVES_MODULOS,
     COLOR_POR_CRITICIDAD,
+    CRITICIDAD_CRITICA,
     CRITICIDADES,
     DIAS_RESULTADO_ANTIGUO,
     ETIQUETA_MODULO,
@@ -521,4 +522,50 @@ def finalizar_analisis(request, pk):
     return render(request, 'pages/subsanacion/partials/resultado_analisis.html', {
         'ejecucion': ejecucion,
         'modulos': servicios.resumen_por_modulo(ejecucion),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Ventana del ⚠️ (triángulos del Gestor de plantilla y de Contratos, Fase 2)
+# ---------------------------------------------------------------------------
+
+def problemas_registro(request, modelo, pk):
+    """Problemas Críticos y Altos de un contrato (con los de su ficha) o de un
+    cargo, con qué pasa, por qué y cómo se soluciona. La abre cualquiera que pueda
+    ver ese registro (también un Observador: solo lee). Un Administrador puede abrir
+    el detalle del hallazgo en Subsanación, donde están «Corregir» y los estados."""
+    from contratos.filtros import contratos_visibles
+    from strorganizativa.permisos import cargos_visibles
+
+    from .indicadores import CRITICO, hallazgos_del_registro
+
+    if not request.user.is_authenticated:
+        raise Http404
+    if modelo == 'contrato':
+        objeto = get_object_or_404(contratos_visibles(request.user).select_related(
+            'aspirante', 'cargo__ncargo'), pk=pk)
+        titulo = f'{objeto.aspirante} · Exp. {objeto.no_expediente}'
+    elif modelo == 'cargo':
+        objeto = get_object_or_404(cargos_visibles(request.user).select_related(
+            'ncargo', 'departamento'), pk=pk)
+        titulo = f'{objeto.ncargo.descripcion} · {objeto.departamento.descripcion}'
+    else:
+        raise Http404
+
+    es_admin = permisos.es_administrador(request.user)
+    volver = request.headers.get('HX-Current-URL') or request.GET.get('next')
+    problemas = []
+    for hallazgo in hallazgos_del_registro(modelo, objeto):
+        regla = obtener_regla(hallazgo.codigo_regla)
+        problemas.append({
+            'hallazgo': hallazgo,
+            'regla': regla,
+            'critico': hallazgo.criticidad <= CRITICIDAD_CRITICA,
+            'de_la_ficha': hallazgo.content_type.model == 'aspirante',
+            'enlace': enlace_de_hallazgo(
+                hallazgo, forzar_url=regla.enlace_url if regla else None,
+                next_url=volver, origen_label='la lista', usuario=request.user),
+        })
+    return render(request, 'pages/subsanacion/partials/problemas_registro.html', {
+        'titulo': titulo, 'problemas': problemas, 'es_admin': es_admin,
     })

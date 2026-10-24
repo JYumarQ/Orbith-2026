@@ -27,6 +27,7 @@
                            Mismo color que el resto de advertencias del sistema. {% endcomment %}
                         <h6 class="mb-0 fw-bold {% if not cargo.activo %}text-secondary{% elif not cargo.en_plantilla %}{% else %}text-dark{% endif %} text-truncate"
                             {% if cargo.en_plantilla %}style="font-size: 0.85rem;"{% else %}style="font-size: 0.85rem; color: #ffab00;" title="Fuera de la plantilla aprobada"{% endif %}>
+                            {% include 'base/partials/triangulo_problema.html' with nivel=cargo.nivel_problema url=cargo.url_problemas %}
                             {{ cargo.ncargo.descripcion }}
                         </h6>
                         

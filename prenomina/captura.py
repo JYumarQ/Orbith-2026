@@ -35,7 +35,8 @@ from .models import ReporteTrabajador
 _RELACIONES = (
     'aspirante', 'cargo', 'cargo__departamento',
     'cargo__departamento__unidad_organizativa', 'cargo__ncargo',
-    'cargo__ncargo__grupo_escala', 'cargo__rol', 'rol', 'tridente',
+    'cargo__ncargo__grupo_escala', 'cargo__rol', 'tridente',
+    'cnci_nomenclador', 'instructor_nomenclador',
     # La jornada asignada y su calendario: sin esto, congelar 200 trabajadores
     # lanzaría 400 consultas sueltas para averiguar las horas de cada uno.
     'asignacion_calendario', 'asignacion_calendario__calendario',
@@ -224,10 +225,10 @@ def datos_de_trabajador(contrato, *, fondo_tarifa, referencia,
         'horas_mes': horas_mes,
         'salario_escala': salario,
         'tarifa_horaria': _tarifa_horaria(salario, fondo_tarifa),
-        'cnci': contrato.cnci or Decimal('0'),
-        'maestria': contrato.maestria or 0,
-        'doctorado': contrato.doctorado or 0,
-        'instructor': contrato.instructor or Decimal('0'),
+        'cnci': contrato.importe_cnci,
+        'maestria': contrato.importe_maestria,
+        'doctorado': contrato.importe_doctorado,
+        'instructor': contrato.importe_instructor,
         'anos_servicio': annos_de_servicio(contrato.fecha_alta_entidad, referencia),
         'fecha_alta_entidad': contrato.fecha_alta_entidad,
     }

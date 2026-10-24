@@ -21,6 +21,7 @@
                 
                 <div class="d-flex flex-column overflow-hidden" style="flex: 1;">
                     <h6 class="fw-bold text-dark mb-0 text-truncate" style="font-size: 0.85rem;" title="{{ dpto.descripcion }}">
+                        {% if dpto.pk in departamentos_con_problemas %}{% include 'base/partials/triangulo_problema.html' with nivel='critico' url='' %}{% endif %}
                         {{ dpto.descripcion }}
                     </h6>
                     

@@ -11,13 +11,14 @@ from django.db.models.functions import Lag
 from ..calculos import COLUMNAS_SALARIO, construir_indice_salarios, salario_esperado
 from ..constantes import (
     CRITICIDAD_ALTA,
+    CRITICIDAD_CRITICA,
     CRITICIDAD_INFORMATIVA,
     CRITICIDAD_MEDIA,
     MODULO_NOMINA,
     TAMANO_LOTE,
 )
 from ..formato import referencia_contrato, referencia_trabajador
-from .base import HallazgoDetectado, ReglaBase
+from .base import HallazgoDetectado, ReglaBase, restringir
 
 
 def _evaluar_salarios(contexto):
@@ -34,7 +35,7 @@ def _evaluar_salarios(contexto):
         discrepantes = []
         incalculables = []
 
-        filas = (CAlta.objects
+        filas = (restringir(CAlta.objects.all(), 'contratos.calta')
                  .values(*COLUMNAS_SALARIO)
                  .iterator(chunk_size=TAMANO_LOTE))
 
@@ -133,7 +134,7 @@ class SalarioDesincronizado(ReglaSalario):
 class SalarioNoCalculable(ReglaSalario):
     codigo = 'SAL-002'
     nombre = 'Contrato sin datos suficientes para calcular el salario'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = (
         'Busca contratos en los que Orbith no puede determinar el salario porque falta '

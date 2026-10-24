@@ -368,7 +368,7 @@ class NivelEducativoSinCompletar(ReglaAspirantes):
 
     codigo = 'ASP-007'
     nombre = 'Nivel educativo sin completar'
-    criticidad = CRITICIDAD_CRITICA
+    criticidad = CRITICIDAD_ALTA
     evaluable_en_caliente = True
 
     descripcion = (

@@ -329,36 +329,32 @@
                                   el grado científico del trabajador. La caja que se ve es un
                                   input suelto, sin `name`, porque tiene que poder mostrar el
                                   texto «Nomenc. Vacío» y el campo real del formulario es un
-                                  número; ese campo viaja oculto y `CAltaForm.clean()` lo
-                                  reescribe en el servidor con el importe del nomenclador.
+                                  número. El importe no se guarda en el contrato: sale del grado y del
+                                  nomenclador (23-10-2026).
 
                                   Instructor y CNCI son desplegables del nomenclador —los
                                   selects unificados de la aplicación, vía `select_unificado.js`—
-                                  y su importe se copia también en `clean()`.
+                                  y su importe se lee siempre de la entrada elegida.
                                 {% endcomment %}
                                 <div class="col-md-3 mb-3">
-                                    <label class="form-label" for="txt_maestria">{{ form.maestria.label }}</label>
+                                    <label class="form-label" for="txt_maestria">Maestría</label>
                                     <input type="text" class="form-control bg-light" readonly
                                            id="txt_maestria" value="{{ form.texto_maestria }}"
                                            title="Se rellena solo según el grado científico del trabajador">
-                                    {{ form.maestria }}
                                 </div>
                                 <div class="col-md-3 mb-3">
-                                    <label class="form-label" for="txt_doctorado">{{ form.doctorado.label }}</label>
+                                    <label class="form-label" for="txt_doctorado">Doctorado</label>
                                     <input type="text" class="form-control bg-light" readonly
                                            id="txt_doctorado" value="{{ form.texto_doctorado }}"
                                            title="Se rellena solo según el grado científico del trabajador">
-                                    {{ form.doctorado }}
                                 </div>
                                 <div class="col-md-3 mb-3">
                                     <label class="form-label" for="id_instructor_nomenclador">{{ form.instructor_nomenclador.label }}</label>
                                     {{ form.instructor_nomenclador }}
-                                    {{ form.instructor }}
                                 </div>
                                 <div class="col-md-3 mb-3">
                                     <label class="form-label" for="id_cnci_nomenclador">{{ form.cnci_nomenclador.label }}</label>
                                     {{ form.cnci_nomenclador }}
-                                    {{ form.cnci }}
                                 </div>
 
                                 <!-- CONDICIONES LABORALES ANORMALES Y NOCTURNIDADES -->

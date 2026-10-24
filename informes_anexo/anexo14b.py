@@ -111,8 +111,8 @@ def _fila(cargo, contrato, referencia):
     aspirante = contrato.aspirante if contrato else None
 
     maestria_doctorado = (
-        (contrato.maestria or 0) + (contrato.doctorado or 0)) if contrato else 0
-    otros = ((contrato.cnci or 0) + (contrato.instructor or 0)) if contrato else 0
+        contrato.importe_maestria + contrato.importe_doctorado) if contrato else 0
+    otros = (contrato.importe_cnci + contrato.importe_instructor) if contrato else 0
     escala = (contrato.salario_actual or 0) if contrato else 0
 
     # `annos_y_pago` devuelve `(años, cuantía)`; la cuantía es `None` cuando no

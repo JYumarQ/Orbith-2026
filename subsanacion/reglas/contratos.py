@@ -1,6 +1,6 @@
 """Reglas de integridad de los contratos de alta."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.apps import apps
@@ -196,7 +196,7 @@ class MotivoIncoherenteConTipo(ReglaContratos):
 class ContratoSinTipo(ReglaContratos):
     codigo = 'CTR-003'
     nombre = 'Contrato sin tipo de contrato'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = 'Busca contratos que no tienen asignado ningún tipo de contrato.'
     causa_probable = (
@@ -229,7 +229,7 @@ class ContratoSinTipo(ReglaContratos):
 class ContratoSinFechaAlta(ReglaContratos):
     codigo = 'CTR-004'
     nombre = 'Contrato sin fecha de contratación'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = 'Busca contratos sin fecha de alta registrada.'
     causa_probable = (
@@ -326,102 +326,6 @@ class ContratoSinRegistroMilitar(ReglaContratos):
                 datos={'expediente': fila.get('no_expediente') or '—'},
                 unidad_organizativa_id=self.unidad_de(fila),
             )
-
-
-def _grado_cientifico_sin_reflejar(grado, maestria, doctorado):
-    """Pura: recibe valores escalares, no un dict ni una instancia.
-
-    La usan `ejecutar()` (con valores de `.values()`) y `evaluar_instancia()` (con
-    atributos de la instancia real) para que la condición nunca pueda divergir entre
-    el barrido periódico y la alerta en caliente. Devuelve una lista de
-    `(clave_extra, etiqueta, campo)` — vacía si no hay problema.
-    """
-    problemas = []
-    if grado == 'MC' and not (maestria or 0):
-        problemas.append(('maestria_vacia', 'Máster', 'campo_maestria'))
-    if grado == 'DC' and not (doctorado or 0):
-        problemas.append(('doctorado_vacio', 'Doctor', 'campo_doctorado'))
-    return problemas
-
-
-class GradoCientificoSinReflejar(ReglaContratos):
-    """Un mismo problema con dos variantes: máster y doctor.
-
-    Se agrupan en una sola clase porque comparten causa, impacto y solución; se
-    distinguen con `clave_extra` para poder revisar cada variante por separado.
-    """
-
-    codigo = 'CTR-007'
-    nombre = 'Grado científico no reflejado en el contrato'
-    criticidad = CRITICIDAD_MEDIA
-    # Evaluable en caliente: es O(1) — un único salto de FK ya accesible
-    # (`instancia.aspirante`) más dos campos propios de la instancia.
-    evaluable_en_caliente = True
-
-    descripcion = (
-        'Comprueba que el contrato refleje en el campo correspondiente (máster o '
-        'doctorado) el grado científico que tiene registrado el trabajador.')
-    causa_probable = (
-        'El trabajador obtuvo el grado científico después de crear el contrato, o '
-        'se registró su grado científico en la ficha personal sin actualizar el '
-        'contrato con el porcentaje o los datos correspondientes.')
-    impacto = (
-        'El contrato no refleja un dato que afecta al cálculo salarial y a los '
-        'informes de calificación del personal.')
-    solucion = (
-        'Abra el contrato y complete el campo correspondiente al grado científico '
-        'que tiene registrado el trabajador.')
-
-    def _hallazgo(self, object_id, clave_extra, etiqueta, campo, titulo, unidad_organizativa_id=None):
-        return HallazgoDetectado(
-            object_id=object_id,
-            clave_extra=clave_extra,
-            titulo=titulo,
-            detalle=(
-                f'El trabajador tiene registrado el grado científico de {etiqueta}, '
-                f'pero el campo correspondiente del contrato está vacío.'),
-            datos={'grado_cientifico': etiqueta, campo: 'Vacío'},
-            unidad_organizativa_id=unidad_organizativa_id,
-            # `campo` aquí es la clave de presentación ('campo_maestria'/'campo_doctorado'),
-            # no el nombre real del campo del modelo: se le quita el prefijo.
-            campo_formulario=campo.replace('campo_', ''),
-        )
-
-    def ejecutar(self, contexto):
-        columnas = self.COLUMNAS_BASE + (
-            'maestria', 'doctorado', 'aspirante__grado_cientifico')
-
-        filas = (self.base_queryset()
-                 .filter(aspirante__grado_cientifico__in=['MC', 'DC'])
-                 .values(*columnas)
-                 .iterator(chunk_size=TAMANO_LOTE))
-
-        for fila in filas:
-            grado = fila.get('aspirante__grado_cientifico')
-            problemas = _grado_cientifico_sin_reflejar(
-                grado, fila.get('maestria'), fila.get('doctorado'))
-
-            for clave_extra, etiqueta, campo in problemas:
-                sufijo = ('es máster y el contrato no lo refleja' if etiqueta == 'Máster'
-                          else 'es doctor y el contrato no lo refleja')
-                yield self._hallazgo(
-                    str(fila['id']), clave_extra, etiqueta, campo,
-                    self.titulo_de(fila, sufijo), self.unidad_de(fila))
-
-    def evaluar_instancia(self, contrato):
-        aspirante = contrato.aspirante
-        problemas = _grado_cientifico_sin_reflejar(
-            aspirante.grado_cientifico if aspirante else None,
-            contrato.maestria, contrato.doctorado)
-        if not problemas:
-            return None
-
-        return [
-            self._hallazgo(
-                str(contrato.pk), clave_extra, etiqueta, campo,
-                f'{etiqueta} y el contrato no lo refleja')
-            for clave_extra, etiqueta, campo in problemas
-        ]
 
 
 class AspiranteConMultiplesContratos(ReglaContratos):
@@ -1249,27 +1153,15 @@ class ContratoFechaAltaImposible(ReglaContratos):
 def _vencimiento_de(fecha_alta, duracion):
     """Fecha en la que se acaba un contrato determinado, o `None` si no se sabe.
 
-    La duración se guarda en MESES (`CAlta.duracion`). Se suma con aritmética de
-    meses a mano y no con `timedelta`, que solo entiende de días: 6 meses no son
-    180 días fijos, y con la aproximación un contrato podía darse por vencido
-    varios días antes o después de tiempo.
+    La duración de un contrato es SIEMPRE en días (confirmado por RRHH el
+    23-10-2026): es lo que escribe el Word («N días»), lo que usa
+    `CAlta.fecha_vencimiento` y el Recordatorio de vencimiento. Hasta entonces esta
+    regla la sumaba como meses, así que un contrato de 90 días no se daba por
+    vencido hasta pasados 90 meses.
     """
     if not fecha_alta or not duracion:
         return None
-
-    total = fecha_alta.month - 1 + int(duracion)
-    anno = fecha_alta.year + total // 12
-    mes = total % 12 + 1
-
-    # El día 31 no existe en todos los meses: se recorta al último día real, que
-    # es lo mismo que hace cualquier calendario al sumar meses.
-    dia = fecha_alta.day
-    while dia > 28:
-        try:
-            return date(anno, mes, dia)
-        except ValueError:
-            dia -= 1
-    return date(anno, mes, dia)
+    return fecha_alta + timedelta(days=int(duracion))
 
 
 class ContratoDeterminadoVencido(ReglaContratos):
@@ -1313,17 +1205,22 @@ class ContratoDeterminadoVencido(ReglaContratos):
 
         for fila in filas:
             vence = _vencimiento_de(fila.get('fecha_alta'), fila.get('duracion'))
-            if vence is None or vence >= hoy:
+            # Crítica desde el mismo día del vencimiento (antes de vencer avisa el
+            # Recordatorio de 60 días; decisión de RRHH del 23-10-2026).
+            if vence is None or vence > hoy:
                 continue
 
             dias = (hoy - vence).days
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
-                titulo=self.titulo_de(fila, f'contrato vencido el {vence:%d/%m/%Y}'),
+                titulo=self.titulo_de(
+                    fila, 'contrato que vence hoy' if vence == hoy
+                    else f'contrato vencido el {vence:%d/%m/%Y}'),
                 detalle=(
-                    f'El contrato es de {fila["duracion"]} meses desde el '
-                    f'{fila["fecha_alta"]:%d/%m/%Y}, así que venció el '
-                    f'{vence:%d/%m/%Y}, y el trabajador sigue activo.'),
+                    f'El contrato es de {fila["duracion"]} días desde el '
+                    f'{fila["fecha_alta"]:%d/%m/%Y}, así que '
+                    f'{"vence hoy" if vence == hoy else f"venció el {vence:%d/%m/%Y}"}, '
+                    f'y el trabajador sigue activo.'),
                 # `dias` NO entra en `datos`: cambia cada día que pasa y movería la
                 # huella del hallazgo, devolviendo a Pendiente uno ya silenciado.
                 datos={
@@ -1337,112 +1234,80 @@ class ContratoDeterminadoVencido(ReglaContratos):
             )
 
 
-#: Los cuatro importes del contrato y de dónde sale el valor con el que se comparan.
-#: Maestría y doctorado salen del grado científico del trabajador; instructor y CNCI,
-#: de la entrada del nomenclador que se eligió en el desplegable.
-_IMPORTES_VIGILADOS = (
-    ('maestria', 'Maestría'),
-    ('doctorado', 'Doctorado'),
-    ('instructor', 'Instructor'),
-    ('cnci', 'CNCI'),
-)
+class ImporteAntiguoSinNomenclador(ReglaContratos):
+    """Importe que el contrato tenía tecleado a mano y no encajaba con el nomenclador.
 
-
-class ImporteDistintoDelNomenclador(ReglaContratos):
-    """El importe guardado en el contrato ya no coincide con el del nomenclador.
-
-    Que el contrato guarde su propio número NO es una redundancia: es lo que
-    impide que una nómina ya emitida cambie porque alguien retoque una cuantía
-    meses después. El precio de esa garantía es justo este hallazgo — alguien
-    tiene que mirar las diferencias y decidir cuáles actualizar.
-
-    Por eso la criticidad es Media y no Alta: una diferencia puede ser
-    perfectamente correcta (el contrato es anterior a la subida) o puede ser un
-    olvido. Lo decide una persona, no la regla.
+    Desde el 23-10-2026 los importes de Maestría, Doctorado, CNCI e Instructor ya no
+    se guardan en el contrato: el nomenclador manda. La migración que quitó las
+    columnas dejó anotados (`contratos.ImporteSinNomenclador`) los importes antiguos
+    que no encajaban. Es un problema transitorio, heredado de antes de que existieran
+    los nomencladores: criticidad Media, sin rojo.
     """
 
-    codigo = 'CTR-019'
-    nombre = 'Importe del contrato distinto al del nomenclador'
+    codigo = 'CTR-023'
+    nombre = 'Importe antiguo del contrato que no coincide con el nomenclador'
     criticidad = CRITICIDAD_MEDIA
 
     descripcion = (
-        'Compara los cuatro importes del contrato —maestría, doctorado, instructor '
-        'y CNCI— con las cuantías definidas en Configuración → Parámetros '
-        'Generales → Laborales y Profesionales.')
+        'Muestra los importes de Maestría, Doctorado, CNCI o Instructor que el '
+        'contrato tenía escritos a mano y que no coincidían con el nomenclador '
+        'cuando el importe pasó a leerse siempre del nomenclador.')
     causa_probable = (
-        'El importe del nomenclador se modificó después de guardar el contrato. Los '
-        'contratos no se reescriben solos a propósito, para que una nómina ya '
-        'emitida no cambie de cifra sin que nadie lo decida.')
+        'El importe se tecleó a mano antes de que existieran los nomencladores, o '
+        'el nomenclador cambió después y el contrato conservaba el importe viejo.')
     impacto = (
-        'El trabajador cobra una cuantía distinta de la vigente. Puede ser correcto '
-        'si el contrato es anterior al cambio, pero mientras no se revise no hay '
-        'forma de saber cuáles son olvidos.')
+        'El trabajador cobra ahora lo que dice el nomenclador. Si el importe antiguo '
+        'era el correcto, falta elegir en el contrato la entrada que le corresponde '
+        '(o crearla en el nomenclador).')
     solucion = (
-        'Abra el contrato y guárdelo: los importes se reescriben con los del '
-        'nomenclador. Si la diferencia es intencionada, silencie el hallazgo.')
+        'Abra el contrato y elija la entrada de CNCI o Instructor que le corresponde: '
+        'el pendiente se cierra solo. Si el importe del nomenclador es el bueno, un '
+        'Administrador puede pulsar «Dar por revisado».')
+
+    correccion_etiqueta = 'Dar por revisado'
+    correccion_aviso = (
+        'El contrato se queda con el importe del nomenclador y este pendiente se '
+        'borra. Queda registrado en Auditoría.')
+
+    def corregir(self, hallazgo):
+        from contratos.correcciones import dar_por_revisado_importe_antiguo
+        return dar_por_revisado_importe_antiguo(hallazgo.object_id, hallazgo.clave_extra)
 
     def ejecutar(self, contexto):
-        from django.apps import apps as _apps
-
-        NImporteGradoCientifico = _apps.get_model(
-            'nomencladores', 'NImporteGradoCientifico')
-
-        # Dos consultas en total, no una por contrato: el nomenclador es diminuto y
-        # se lee entero de una vez a un diccionario en memoria.
-        importe_por_grado = dict(
-            NImporteGradoCientifico.objects.values_list('grado', 'importe'))
-
-        columnas = self.COLUMNAS_BASE + (
-            'maestria', 'doctorado', 'instructor', 'cnci',
-            'aspirante__grado_cientifico',
-            'instructor_nomenclador__descripcion', 'instructor_nomenclador__importe',
-            'cnci_nomenclador__descripcion', 'cnci_nomenclador__importe',
-        )
-
-        filas = (self.base_queryset()
-                 .values(*columnas)
+        ImporteSinNomenclador = apps.get_model('contratos', 'ImporteSinNomenclador')
+        prefijo = {c: f'contrato__{c}' for c in self.COLUMNAS_BASE}
+        filas = (ImporteSinNomenclador.objects
+                 .values('concepto', 'importe_antiguo', 'importe_nomenclador',
+                         *prefijo.values())
                  .iterator(chunk_size=TAMANO_LOTE))
+        etiquetas = dict(ImporteSinNomenclador.CONCEPTOS)
 
-        for fila in filas:
-            grado = fila.get('aspirante__grado_cientifico')
-            esperados = {
-                # Sin grado científico, lo que corresponde es cero.
-                'maestria': importe_por_grado.get('MC') if grado == 'MC' else Decimal('0.00'),
-                'doctorado': importe_por_grado.get('DC') if grado == 'DC' else Decimal('0.00'),
-                'instructor': fila.get('instructor_nomenclador__importe'),
-                'cnci': fila.get('cnci_nomenclador__importe'),
-            }
-
-            for campo, etiqueta in _IMPORTES_VIGILADOS:
-                esperado = esperados[campo]
-                if esperado is None:
-                    # Nomenclador sin definir (lo reclama CFG-003) o sin entrada
-                    # elegida en el desplegable: no hay con qué comparar.
-                    continue
-
-                guardado = fila.get(campo) or Decimal('0.00')
-                if Decimal(guardado) == Decimal(esperado):
-                    continue
-
-                yield HallazgoDetectado(
-                    object_id=str(fila['id']),
-                    # Un contrato puede diferir en más de un importe a la vez y cada
-                    # uno se corrige por separado, así que el campo forma parte de la
-                    # clave del hallazgo.
-                    clave_extra=campo,
-                    titulo=self.titulo_de(
-                        fila, f'{etiqueta} no coincide con el nomenclador'),
-                    detalle=(
-                        f'El contrato tiene {guardado} en {etiqueta}, pero el '
-                        f'nomenclador dice {esperado}.'),
-                    datos={
-                        'importe': etiqueta,
-                        'guardado_en_el_contrato': str(guardado),
-                        'segun_el_nomenclador': str(esperado),
-                    },
-                    unidad_organizativa_id=self.unidad_de(fila),
-                    campo_formulario=campo,
-                )
+        for pendiente in filas:
+            fila = {c: pendiente[ruta] for c, ruta in prefijo.items()}
+            etiqueta = etiquetas.get(pendiente['concepto'], pendiente['concepto'])
+            antiguo = pendiente['importe_antiguo']
+            nomenclador = pendiente['importe_nomenclador']
+            if nomenclador is None:
+                detalle = (f'El contrato tenía {antiguo} de {etiqueta} escrito a mano y '
+                           f'ninguna entrada del nomenclador con ese importe. Ahora cobra 0 '
+                           f'por ese concepto hasta que se le elija una entrada.')
+            else:
+                detalle = (f'El contrato tenía {antiguo} de {etiqueta}, pero el '
+                           f'nomenclador dice {nomenclador}. Ahora cobra {nomenclador}.')
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                clave_extra=pendiente['concepto'],
+                titulo=self.titulo_de(fila, f'{etiqueta}: importe antiguo distinto del nomenclador'),
+                detalle=detalle,
+                datos={
+                    'concepto': etiqueta,
+                    'importe_antiguo': str(antiguo),
+                    'segun_el_nomenclador': str(nomenclador) if nomenclador is not None else 'Sin entrada',
+                },
+                unidad_organizativa_id=self.unidad_de(fila),
+                campo_formulario=f'{pendiente["concepto"]}_nomenclador'
+                if pendiente['concepto'] in ('cnci', 'instructor') else '',
+            )
 
 
 class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):

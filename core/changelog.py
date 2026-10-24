@@ -36,6 +36,64 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.4.0",
+        "fecha": "2026-10-24",
+        "titulo": "El nomenclador manda, cambios externos en el histórico y problemas a la vista",
+        "cambios": [
+            ("corregido", "El Word del contrato y de su modificación podía salir con el "
+                        "salario de otro rol: tras un movimiento de nómina a un cargo con "
+                        "otro rol, el contrato conservaba una copia del rol anterior. El "
+                        "rol ya es solo del cargo, como define el Gestor de cargos."),
+            ("mejorado", "Maestría, Doctorado, CNCI e Instructor se leen siempre del "
+                        "nomenclador: cambiar un importe lo cambia desde hoy para todos. "
+                        "Los importes tecleados a mano que no coincidían se revisan en "
+                        "Subsanación (CTR-023). No se puede borrar una entrada en uso."),
+            ("corregido", "El salario, la tarifa horaria y las horas extras se calculan "
+                        "igual en todas las pantallas que en el Word y los informes. Antes "
+                        "la pantalla de edición ignoraba el salario fijo y el de los "
+                        "cuadros, y las horas extras salían distintas en cada pantalla."),
+            ("nuevo", "Cambios externos: al cambiar la escala salarial, el rol o el "
+                        "departamento de un cargo, un nomenclador de cargo, el nombre de una "
+                        "unidad o departamento, un importe o el grado científico de la "
+                        "ficha, cada trabajador afectado lo ve en su histórico (y en su "
+                        "PDF), con el motivo. No es un movimiento de nómina."),
+            ("nuevo", "Motivo del cambio: se pide solo cuando el cambio afecta a "
+                        "contratos. «Error humano» corrige un error de tecleo sin dejar "
+                        "rastro en el histórico (queda en Auditoría) y anula el cambio "
+                        "equivocado anterior."),
+            ("nuevo", "Histórico del trabajador: interruptor «Incluir cambios externos» "
+                        "para ver solo los movimientos de nómina o también los cambios."),
+            ("nuevo", "Triángulos de problemas: rojo (crítico) en cascada en el Gestor de "
+                        "plantilla, de contrato a cargo, departamento y unidad; ámbar "
+                        "(alto) en el contrato o el cargo. En Contratos, la fila crítica "
+                        "se enmarca en rojo. Al pulsar el triángulo se explica qué pasa y "
+                        "cómo se soluciona. Nuevo filtro «Con problemas»."),
+            ("mejorado", "Las advertencias se mantienen al día solas: al guardar un "
+                        "contrato, una ficha o un cargo se revisan sus reglas, el primer "
+                        "inicio de sesión del día lanza la revisión completa y, al entrar, "
+                        "Administradores y Moderadores ponen al día su campana (cada 4 h)."),
+            ("mejorado", "Al cambiar «Ocupa plaza» de un tipo de contrato se recuentan las "
+                        "plazas, y un movimiento de unidad actualiza la unidad de la ficha. "
+                        "Al pasar un cargo a Cuadro se le quitan el rol y el tridente."),
+            ("nuevo", "Subsanación: reglas nuevas para el fondo de tiempo y el porcentaje "
+                        "de horas extras (CFG-004), la escala salarial incompleta (CFG-005) "
+                        "y el cargo sin rol (EST-008). Rojo = criticidad Crítica en toda la "
+                        "aplicación."),
+            ("corregido", "El vencimiento de contrato de Subsanación contaba la duración en "
+                        "meses: ahora en días, como el Word y el recordatorio, y avisa "
+                        "desde el mismo día del vencimiento."),
+            ("corregido", "La Pre-Nómina no podía crearse con un instructor de 100 o más "
+                        "(tope de 99,99) y guardaba Maestría y Doctorado sin centavos."),
+            ("eliminado", "El Tridente I por defecto: un contrato dinámico sin tridente se "
+                        "queda sin él y se avisa hasta que RRHH elija el correcto. Y las "
+                        "reglas CTR-007 y CTR-019, que ya no pueden darse."),
+            ("seguridad", "Las pantallas de Nomencladores y Configuración ya exigen el token "
+                        "CSRF: una página ajena no puede cambiar datos en nombre de un "
+                        "administrador con la sesión abierta."),
+        ],
+    },
+
+    {
         "version": "3.3.0",
         "fecha": "2026-10-13",
         "titulo": "Dashboard e Informes RRHH interactivos, y recontratados a la vista",
@@ -328,106 +386,6 @@ CHANGELOG = [
             ("corregido", "Registro Diario: el campo del Plan se veía más alto "
                         "que las otras tres cifras de su tarjeta, y el "
                         "cumplimiento se partía en dos líneas."),
-        ],
-    },
-    {
-        "version": "3.0.1",
-        "fecha": "2026-09-02",
-        "titulo": "Informes por unidad, filtros unificados y validación de formularios",
-        "cambios": [
-            ("nuevo", "Puestos Clave: el informe se puede ver repartido por "
-                    "Unidad Organizativa —cada unidad con sus totales y sus "
-                    "cargos debajo, y las direcciones principales encabezando "
-                    "su rama— o consolidado, sumando cada cargo de todas las "
-                    "unidades. Se elige con el conmutador «Desglosado / "
-                    "Consolidado» de la barra de filtros, que recuerda su "
-                    "última posición."),
-            ("nuevo", "Puestos Clave en Word y PDF: encabezado con el logo, la "
-                    "provincia, el municipio y la unidad del informe, quién lo "
-                    "exportó, el período y «Hoja X de Y» en todas las páginas. "
-                    "El nombre del fichero lleva la unidad y el mes."),
-            ("nuevo", "Filtro por Unidad Organizativa en TODOS los informes de "
-                    "RRHH, con selección múltiple. Elegir una unidad principal "
-                    "incluye sus subunidades, y cada subunidad se puede "
-                    "consultar por separado."),
-            ("nuevo", "Lista de Contratos: filtros por Unidad Organizativa, "
-                    "Departamento y Cargo, todos de selección múltiple."),
-            ("nuevo", "Nomencladores de importes: Maestría, Doctorado, "
-                    "Instructor y CNCI. El contrato toma de ahí sus importes en "
-                    "vez de escribirlos a mano, y una regla de Subsanación "
-                    "avisa de los contratos cuyo importe ya no coincide."),
-            ("nuevo", "Informe Inteligente: dieciséis medidas para Contratos "
-                    "—cuadros, mujeres en puestos clave, grado científico, "
-                    "nivel superior, título de oro, profesionales, jubilados "
-                    "recontratados, contratos determinados, antigüedad y "
-                    "misiones— y ocho para Estructura y Plantilla, con la "
-                    "cobertura de la plantilla y las plazas vacantes. Todas se "
-                    "pueden dibujar en la Evolución mensual."),
-            ("nuevo", "Informe Inteligente: campos nuevos de Puesto Clave y "
-                    "Contrato Determinado en Contratos, y Puesto Clave y Plazas "
-                    "Vacantes en Estructura y Plantilla."),
-            ("nuevo", "Selector de período unificado en Informes RRHH e Informe "
-                    "Inteligente: una rejilla de meses que marca en gris los "
-                    "que no tienen cierre declarado."),
-            ("nuevo", "Usuarios: columna de Rol en el listado y botón "
-                    "«Actualizar conexiones» para ver al momento quién está "
-                    "dentro."),
-            ("nuevo", "Usuarios: al asignar una Unidad Principal a un moderador "
-                    "entran también sus subunidades, y las unidades que ya "
-                    "lleva otro moderador aparecen apagadas en el desplegable. "
-                    "Una subunidad nueva se reparte sola, sin tener que reabrir "
-                    "la ficha del moderador."),
-            ("nuevo", "Subsanación: siete reglas nuevas —cargo sin nivel de "
-                    "preparación, unidad que no declaró su cierre mensual, "
-                    "moderador sin todas las subunidades de su principal, "
-                    "subunidad sin su principal, contrato determinado vencido "
-                    "con el trabajador activo, fecha de alta en la entidad "
-                    "imposible, importe distinto al del nomenclador y fórmula "
-                    "de Pago por Importe que ya no es válida."),
-            ("mejorado", "Un solo criterio de color en todos los formularios: "
-                        "amarillo el campo obligatorio que falta, rojo el dato "
-                        "escrito que no es válido y verde el correcto. El botón "
-                        "de guardar espera a que no quede nada pendiente. Los "
-                        "campos opcionales ya no se pintan de amarillo."),
-            ("mejorado", "Todos los desplegables de la aplicación se ven y se "
-                        "manejan igual, con buscador para escribir en vez de "
-                        "recorrer la lista."),
-            ("mejorado", "El selector de unidades del Dashboard, de Informes "
-                        "RRHH y de Informe Inteligente es el mismo control, con "
-                        "las subunidades indentadas bajo su principal y "
-                        "búsqueda por rama."),
-            ("mejorado", "Informes RRHH: el desplegable de tipo de informe "
-                        "conserva la fuente de datos —si está mirando un cierre "
-                        "de agosto, sigue en agosto al cambiar de informe."),
-            ("mejorado", "El Observador deja de tener acceso al panel de "
-                        "Notificaciones; conserva sus avisos personales en la "
-                        "campana."),
-            ("corregido", "La exportación a Word del Resumen de Puestos Clave y "
-                        "del Resumen por UEB no generaba el documento."),
-            ("corregido", "Puestos Clave: exportar a Word o PDF con el filtro de "
-                        "unidades puesto devolvía un error."),
-            ("corregido", "Lista de Contratos: al cambiar de página se perdían "
-                        "los filtros aplicados."),
-            ("corregido", "El panel de filtros de la Lista de Contratos se "
-                        "cerraba al elegir en un desplegable."),
-            ("corregido", "Informe Inteligente: el selector de Unidad "
-                        "Organizativa no respondía, y la pantalla saltaba al "
-                        "final al recuperar un informe guardado."),
-            ("corregido", "Parámetros Generales: el REUP no se validaba en el "
-                        "navegador."),
-            ("corregido", "Formulario de Baja: «Causa de Baja» es obligatorio y "
-                        "no se marcaba como tal."),
-            ("corregido", "Cierres mensuales: la fotografía guardaba los "
-                        "importes sin decimales."),
-            ("corregido", "Aspirantes: el sexo deducido del carné de identidad "
-                        "no se daba por válido, y los desplegables encadenados "
-                        "del contrato se quedaban en verde después de "
-                        "vaciarse."),
-            ("corregido", "Corregida la errata «Maetría» en el formulario de "
-                        "contrato."),
-            ("eliminado", "Retirada la pantalla de Cargos a página completa de "
-                        "Nomencladores: estaba rota y duplicaba Configuración → "
-                        "Familias de Cargos."),
         ],
     },
 ]

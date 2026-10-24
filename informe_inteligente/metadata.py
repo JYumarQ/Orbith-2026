@@ -653,7 +653,8 @@ def _campos_calta():
         },
         "rol": {
             "label": "Rol de Pago",
-            "ruta_orm": "rol__tipo",
+            # El rol es del cargo que ocupa; el contrato no tiene rol propio.
+            "ruta_orm": "cargo__rol__tipo",
             "tipo": "opcion",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": True,
@@ -680,7 +681,9 @@ def _campos_calta():
         },
         "maestria": {
             "label": "Maestrías",
-            "ruta_orm": "maestria",
+            # Del grado científico del trabajador + nomenclador (el contrato ya
+            # no guarda el importe): se resuelve por anotación en motor.py.
+            "ruta_orm": None,
             "tipo": "numero",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": False,
@@ -688,7 +691,9 @@ def _campos_calta():
         },
         "doctorado": {
             "label": "Doctorados",
-            "ruta_orm": "doctorado",
+            # Del grado científico del trabajador + nomenclador (el contrato ya
+            # no guarda el importe): se resuelve por anotación en motor.py.
+            "ruta_orm": None,
             "tipo": "numero",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": False,
@@ -696,7 +701,9 @@ def _campos_calta():
         },
         "cnci": {
             "label": "CNCI",
-            "ruta_orm": "cnci",
+            # Importe de la entrada del nomenclador elegida (el contrato ya no
+            # guarda el importe): se resuelve por anotación en motor.py.
+            "ruta_orm": None,
             "tipo": "numero",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": False,
@@ -704,7 +711,9 @@ def _campos_calta():
         },
         "instructor": {
             "label": "Instructor",
-            "ruta_orm": "instructor",
+            # Importe de la entrada del nomenclador elegida (el contrato ya no
+            # guarda el importe): se resuelve por anotación en motor.py.
+            "ruta_orm": None,
             "tipo": "numero",
             "categoria": "salariales",
             "filtrable": True, "ordenable": True, "agrupable": False,

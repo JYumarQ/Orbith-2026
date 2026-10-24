@@ -23,7 +23,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         queryset = CAlta.objects.select_related(
-            "cargo__ncargo__grupo_escala", "cargo__rol", "rol", "tridente"
+            "cargo__ncargo__grupo_escala", "cargo__rol", "tridente"
         )
         if not options["todos"]:
             queryset = queryset.filter(salario_actual__isnull=True)

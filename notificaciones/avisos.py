@@ -343,3 +343,44 @@ def avisar_nuevo_cargo(cargo):
                 'unidad': unidad,
             },
         )
+
+
+CODIGO_CAMBIO_ROL = 'EVT-ROL'
+CODIGO_CAMBIO_ESCALA = 'EVT-ESCALA'
+CODIGO_CAMBIO_ESTRUCTURA = 'EVT-ESTRUC'
+CODIGO_CAMBIO_IMPORTE = 'EVT-IMPORTE'
+
+
+def avisar_cambio_salarial(objeto, *, codigo, titulo, mensaje, unidad=None):
+    """Avisa de que un cambio en un cargo (su rol) o en la escala salarial actualizó
+    el salario de contratos ya existentes (decisión de RRHH del 23-10-2026).
+
+    Lo reciben los administradores activos, quien hizo el cambio y, si el cambio es
+    de un cargo, el moderador de su unidad: un moderador no edita cargos
+    directamente, lo pide con una Solicitud y quien la aplica es el administrador;
+    así el moderador que lo pidió también se entera.
+
+    Cada cambio es un hecho distinto (el mismo cargo puede cambiar de rol varias
+    veces), así que `clave_extra` lleva el instante y nunca colapsa con uno anterior.
+    """
+    from usuarios.models import CustomUser
+
+    destinatarios = set(CustomUser.objects.filter(es_admin=True, is_active=True))
+    if unidad is not None:
+        destinatarios.update(destinatarios_de_unidad(unidad))
+    usuario = get_current_user()
+    if usuario is not None and getattr(usuario, 'is_authenticated', False):
+        destinatarios.add(usuario)
+
+    tipo_ct = ContentType.objects.get_for_model(objeto)
+    instante = timezone.now().strftime('%Y%m%d%H%M%S%f')
+    for destinatario in destinatarios:
+        _registrar_notificacion(
+            tipo_ct=tipo_ct, object_id=str(objeto.pk), destinatario=destinatario,
+            codigo_regla=codigo, clave_extra=instante,
+            defaults={
+                'titulo': titulo, 'mensaje': mensaje,
+                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
+                'unidad': unidad,
+            },
+        )

@@ -1,5 +1,7 @@
 from django.urls import path
 
+from . import automatico
+
 from . import views
 
 app_name = 'subsanacion'
@@ -23,6 +25,14 @@ urlpatterns = [
     path('hallazgo/<int:pk>/', views.detalle_hallazgo, name='detalle_hallazgo'),
     path('hallazgo/<int:pk>/estado/', views.cambiar_estado, name='cambiar_estado'),
     path('hallazgo/<int:pk>/corregir/', views.corregir_hallazgo, name='corregir_hallazgo'),
+    path('problemas/<str:modelo>/<int:pk>/', views.problemas_registro, name='problemas_registro'),
+    # Búsqueda automática de incidencias desde el navegador (Fase 2): análisis diario y
+    # búsqueda ligera al iniciar sesión. Ver `subsanacion/automatico.py`.
+    path('auto/estado/', automatico.estado, name='auto_estado'),
+    path('auto/iniciar/', automatico.iniciar, name='auto_iniciar'),
+    path('auto/<int:pk>/modulo/<str:clave>/', automatico.modulo, name='auto_modulo'),
+    path('auto/<int:pk>/finalizar/', automatico.finalizar, name='auto_finalizar'),
+    path('auto/buscar/', automatico.buscar, name='auto_buscar'),
 
     # Cadena de análisis: una petición por categoría
     path('analisis/iniciar/', views.iniciar_analisis, name='iniciar_analisis'),

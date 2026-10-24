@@ -163,3 +163,47 @@ class AdvertenciasDelRegistroMixin:
         context['advertencias_total'] = datos['total']
         context['advertencias_resueltas'] = datos['resueltas']
         return context
+
+
+class MotivoDeCambioMixin:
+    """Pide el motivo cuando un guardado afecta a contratos (decisión de RRHH del
+    23-10-2026). La plantilla incluye `base/partials/motivo_cambio.html`.
+
+    Uso en `form_valid`::
+
+        error = self.guardar_con_motivo(form, form.save)
+        if error is not None:
+            return error
+
+    Si el guardado lanza `MotivoRequerido`, se vuelve a pintar el formulario con el
+    aviso y se deshace la transacción. El orden importa (ver la nota de
+    `CargoPlantillaUpdateView.form_invalid`): primero se pinta —la plantilla consulta
+    la base— y solo después se marca el rollback.
+    """
+
+    motivo_error = ''
+
+    def guardar_con_motivo(self, form, guardar):
+        from django.db import transaction
+
+        from contratos.cambios_externos import MotivoRequerido, motivo_de_cambio, motivo_del_post
+
+        try:
+            with transaction.atomic(), motivo_de_cambio(*motivo_del_post(self.request)):
+                self.object = guardar()
+        except MotivoRequerido as e:
+            self.motivo_error = str(e)
+            respuesta = self.form_invalid(form)
+            if hasattr(respuesta, 'render') and not respuesta.is_rendered:
+                respuesta.render()
+            return respuesta
+        return None
+
+    def get_context_data(self, **kwargs):
+        from contratos.cambios_externos import motivo_del_post
+
+        contexto = super().get_context_data(**kwargs)
+        contexto['motivo_error'] = self.motivo_error
+        if self.request.method == 'POST':
+            contexto['motivo_valor'], contexto['motivo_error_humano'] = motivo_del_post(self.request)
+        return contexto

@@ -480,7 +480,7 @@
                 const method = isNew ? 'POST' : 'PUT';
 
                 try {
-                    const res = await fetch(url, {
+                    const enviar = () => fetch(url, {
                         method: method,
                         headers: {
                             'Content-Type': 'application/json',
@@ -488,8 +488,40 @@
                         },
                         body: JSON.stringify(payload)
                     });
+                    let res = await enviar();
+                    let data = await res.json();
 
-                    const data = await res.json();
+                    // El cambio afecta a contratos: se pide el motivo (o «Error humano»)
+                    // y se reintenta. Queda en el histórico de cada trabajador afectado.
+                    if (res.status === 409 && data.requiere_motivo) {
+                        const respuesta = await Swal.fire({
+                            title: 'Motivo del cambio',
+                            html: `<p class="small text-start mb-2">${data.error}</p>
+                                   <textarea id="swal-motivo" class="form-control form-control-sm" rows="3"
+                                             maxlength="500" placeholder="Ej.: Ajuste según Res. 458/23"></textarea>
+                                   <div class="form-check text-start mt-2">
+                                     <input class="form-check-input" type="checkbox" id="swal-error-humano">
+                                     <label class="form-check-label small" for="swal-error-humano">
+                                       <strong>Error humano:</strong> corrige un error de tecleo; no aparecerá
+                                       en el histórico de los trabajadores (solo en Auditoría).</label>
+                                   </div>`,
+                            showCancelButton: true, confirmButtonText: 'Guardar', cancelButtonText: 'Cancelar',
+                            preConfirm: () => {
+                                const motivo = document.getElementById('swal-motivo').value.trim();
+                                const error = document.getElementById('swal-error-humano').checked;
+                                if (!motivo && !error) {
+                                    Swal.showValidationMessage('Escriba el motivo o marque «Error humano».');
+                                    return false;
+                                }
+                                return { motivo, error };
+                            }
+                        });
+                        if (!respuesta.isConfirmed) return;
+                        payload.motivo_cambio = respuesta.value.motivo;
+                        payload.error_humano = respuesta.value.error;
+                        res = await enviar();
+                        data = await res.json();
+                    }
                     if (!res.ok) throw new Error(data.error || 'Error al guardar');
 
                     tr.dataset.id = data.id;

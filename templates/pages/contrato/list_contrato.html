@@ -66,6 +66,15 @@
         border-left: 3px solid #ffab00 !important;
     }
 
+    /* Problema crítico (Fase 2, 23-10-2026): fila enmarcada en rojo con el ⚠️ en la
+       primera celda. Va después del movimiento pendiente para que el rojo mande. */
+    .row-problema-critico td {
+        border-top: 1px solid #dc2626 !important;
+        border-bottom: 1px solid #dc2626 !important;
+    }
+    .row-problema-critico td:first-child { border-left: 3px solid #dc2626 !important; }
+    .row-problema-critico td:last-child { border-right: 1px solid #dc2626 !important; }
+
     /* El panel de filtros es una sola columna: se desplaza en vertical y nunca
        en horizontal. La barra horizontal salia porque el contenido -las fichas
        del selector- es mas ancho que los 280px que el panel tenia de minimo. */
@@ -196,7 +205,7 @@
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
-                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #filter_recontratado, #filter_baja_ant_desde, #filter_baja_ant_hasta, #filter_jubilado, #hidden_sort, #hidden_order">
+                            hx-include="#filter_unidad, #filter_departamento, #filter_cargo, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_cat_ocupacional, #filter_tipo, #filter_alta_desde, #filter_alta_hasta, #filter_recontratado, #filter_baja_ant_desde, #filter_baja_ant_hasta, #filter_jubilado, #filter_problemas, #hidden_sort, #hidden_order">
                     </div>
                 </div>
 
@@ -346,6 +355,21 @@
                                         <option value="">Todos</option>
                                         <option value="si" {% if filtro_jubilado == 'si' %}selected{% endif %}>Solo jubilados recontratados</option>
                                         <option value="no" {% if filtro_jubilado == 'no' %}selected{% endif %}>Los demás</option>
+                                    </select>
+                                </div>
+                            </div>
+                            {% comment %} Con problemas (Fase 2): según los hallazgos abiertos de Subsanación del
+                               contrato y de la ficha. Rojo = crítico; ámbar = alto, sin crítico. {% endcomment %}
+                            <div class="row g-2 mb-2">
+                                <div class="col-12">
+                                    <label class="small text-muted" for="filter_problemas">
+                                        <i class="fas fa-triangle-exclamation text-danger me-1"></i>Con problemas
+                                    </label>
+                                    <select id="filter_problemas" name="problemas" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos los contratos</option>
+                                        <option value="criticos" {% if filtro_problemas == 'criticos' %}selected{% endif %}>Críticos (rojo)</option>
+                                        <option value="altos" {% if filtro_problemas == 'altos' %}selected{% endif %}>Altos (ámbar)</option>
+                                        <option value="todos" {% if filtro_problemas == 'todos' %}selected{% endif %}>Críticos o altos</option>
                                     </select>
                                 </div>
                             </div>
@@ -865,4 +889,5 @@ document.addEventListener('keydown', function(e) {
 </script>
 {% include 'pages/contrato/partials/modal_historico_include.html' %}
 {% include 'pages/contrato/partials/modal_nuevo_contrato.html' %}
+{% include 'base/partials/modal_problemas.html' %}
 {% endblock %}

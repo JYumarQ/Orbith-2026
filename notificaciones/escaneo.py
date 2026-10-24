@@ -73,7 +73,8 @@ def _claves_vigentes_de(resultados):
     return claves
 
 
-def notificar_resultados(resultados_creacion, destinatario, *, resultados_globales=None):
+def notificar_resultados(resultados_creacion, destinatario, *, resultados_globales=None,
+                         codigos_relevantes=None):
     """Traduce `resultados_creacion` (ya filtrado por alcance) en `Notificacion` para
     `destinatario`, reutilizando el helper de `avisos.py`. Resuelve comparando contra
     `resultados_globales` (por defecto, los mismos `resultados_creacion`).
@@ -103,26 +104,39 @@ def notificar_resultados(resultados_creacion, destinatario, *, resultados_global
                 tipo_ct=tipo_ct, object_id=hallazgo.object_id,
                 destinatario=destinatario, regla=regla, hallazgo=hallazgo)
 
-    codigos_relevantes = {r.codigo for r in obtener_reglas() if r.evaluable_en_caliente}
+    if codigos_relevantes is None:
+        codigos_relevantes = {r.codigo for r in obtener_reglas() if r.evaluable_en_caliente}
     claves_vigentes = _claves_vigentes_de(resultados_globales)
     _resolver_notificaciones_obsoletas(
         destinatario=destinatario, codigos_relevantes=codigos_relevantes,
         claves_vigentes=claves_vigentes)
 
 
+def reglas_de_la_busqueda():
+    """Las reglas en caliente más las Críticas y Altas de la revisión por registro
+    (Fase 2, 23-10-2026): así la búsqueda pone al día en la campana todo lo
+    importante del alcance del usuario, no solo los datos de ficha."""
+    from subsanacion.por_registro import REGLAS_POR_REGISTRO
+    return [r for r in obtener_reglas()
+            if r.evaluable_en_caliente or r.codigo in REGLAS_POR_REGISTRO]
+
+
 def escanear_para_usuario(usuario):
-    """Escaneo MANUAL (botón «Buscar incidencias»).
+    """Escaneo del usuario: el botón «Buscar incidencias» y la búsqueda automática
+    al iniciar sesión (como mucho cada 4 horas, ver `subsanacion.automatico`).
 
     Admin -> alcance global (sin filtro). Moderador -> sus unidades asignadas
     (`usuario.unidades`); si no tiene ninguna, el alcance es un conjunto VACÍO (no
     global) y el escaneo no encuentra nada en su nombre. Devuelve el total de
     incidencias notificadas.
     """
-    resultados_globales = evaluar_reglas_en_caliente()
+    reglas = reglas_de_la_busqueda()
+    resultados_globales = evaluar_reglas_en_caliente(reglas)
     unidades = None if usuario.es_admin else list(
         usuario.unidades.values_list('pk', flat=True))
     resultados_creacion = filtrar_por_unidades(resultados_globales, unidades)
-    notificar_resultados(resultados_creacion, usuario, resultados_globales=resultados_globales)
+    notificar_resultados(resultados_creacion, usuario, resultados_globales=resultados_globales,
+                         codigos_relevantes={r.codigo for r in reglas})
     return sum(len(detectados) for _, detectados in resultados_creacion)
 
 

@@ -74,6 +74,19 @@
         </thead>
         <tbody>
             {% for item in historial %}
+            {% if item.es_cambio_externo %}
+            <tr style="background-color: #f1f5f9; color: #475569;">
+                <td><strong>Cambio externo</strong><br><span style="font-size: 7pt;">{{ item.origen }}</span></td>
+                <td class="text-center">{{ item.expediente }}</td>
+                <td colspan="2">
+                    {{ item.descripcion }}
+                    {% if item.valor_anterior or item.valor_nuevo %}<br><span style="font-size: 7pt;">{{ item.valor_anterior }} → {{ item.valor_nuevo }}</span>{% endif %}
+                    {% if item.motivo %}<br><span style="font-size: 7pt;">Motivo: {{ item.motivo }}</span>{% endif %}
+                </td>
+                <td class="text-center">{{ item.fecha_inicio_str }}</td>
+                <td class="text-center">—</td>
+            </tr>
+            {% else %}
             <tr>
                 <td><strong>{{ item.evento }}</strong></td>
                 <td class="text-center">{{ item.expediente }}</td>
@@ -93,6 +106,7 @@
                     {% endif %}
                 </td>
             </tr>
+            {% endif %}
             {% empty %}
             <tr>
                 <td colspan="6" class="text-center">No hay historial registrado para este trabajador.</td>

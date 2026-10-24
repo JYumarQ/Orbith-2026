@@ -628,16 +628,26 @@ class BasePreNomina(TestCase):
         cls.tipo_contrato = NTipoContrato.objects.create(
             descripcion='Indeterminado', ocupa_plaza=True)
 
+        # Los importes salen del nomenclador (el contrato ya no los guarda).
+        from nomencladores.models import NImporteGradoCientifico, NPagoAdicional
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('1.00'))
+        cls.cnci = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.CNCI, descripcion='Etapa I', importe=Decimal('30.00'))
+        cls.cnci_2 = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.CNCI, descripcion='Etapa II', importe=Decimal('75.00'))
+        cls.instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='15h', importe=Decimal('5.00'))
+
         cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
-            provincia=cls.provincia, municipio=cls.municipio)
+            provincia=cls.provincia, municipio=cls.municipio, grado_cientifico='MC')
         cls.contrato = CAlta.objects.create(
             aspirante=cls.aspirante, no_expediente='00100',
             tipo=cls.tipo_contrato, cargo=cls.cargo,
             tipo_salario='FIJ',
             fecha_alta=date(2020, 1, 15), fecha_alta_entidad=date(2020, 1, 15),
-            cnci=Decimal('30.00'), maestria=1, instructor=Decimal('5.00'))
+            cnci_nomenclador=cls.cnci, instructor_nomenclador=cls.instructor)
 
         cls.admin = CustomUser.objects.create_user(
             username='admin_pn3', password='clave', es_admin=True)
@@ -960,6 +970,8 @@ class FirmasRecordadas(BasePreNomina):
     """«Hecho por», «Revisado por» y «Aprobado por» se recuerdan por usuario."""
 
     def test_al_crear_un_reporte_se_guardan_las_tres_firmas(self):
+        from configuracion.models import Configuracion
+        Configuracion.objects.create(nombre_empresa='Prueba')
         self.client.force_login(self.moderador)
         plantilla = self.plantilla_de()
         # Sin Calendario de Pago, `crear_reporte()` se niega antes de llegar a
@@ -1127,10 +1139,20 @@ class TrabajadoresDelReporte(BasePreNomina):
             servicios.agregar_trabajador(reporte, '99999', self.moderador)
         self.assertIn('99999', str(caja.exception))
 
+    def test_importes_reales_de_tres_y_cuatro_cifras(self):
+        """Instructor tenía tope en 99,99 y Maestría era entera: un instructor de 1000
+        (Res. 458/23) hacía fallar la creación del reporte (23-10-2026)."""
+        from nomencladores.models import NImporteGradoCientifico
+        self.instructor.importe = Decimal('1000.00')
+        self.instructor.save()
+        NImporteGradoCientifico.objects.filter(grado='MC').update(importe=Decimal('440.50'))
+        fila = self.crear().trabajadores.first()
+        self.assertEqual((fila.instructor, fila.maestria), (Decimal('1000.00'), Decimal('440.50')))
+
     def test_reagregar_a_alguien_ya_presente_recongela_su_ficha(self):
         """Es el botón «Actualizar datos del trabajador»."""
         reporte = self.crear()
-        self.contrato.cnci = Decimal('75.00')
+        self.contrato.cnci_nomenclador = self.cnci_2
         self.contrato.save()
 
         servicios.agregar_trabajador(reporte, '00100', self.moderador)
@@ -1386,6 +1408,8 @@ class PantallaDeReportes(BasePreNomina):
         self.assertEqual(respuesta.status_code, 404)
 
     def test_el_alta_desde_la_pantalla_crea_el_reporte(self):
+        from configuracion.models import Configuracion
+        Configuracion.objects.create(nombre_empresa='Prueba')
         # Las horas del mes salen del Calendario de Pago: hay que tenerlo montado
         # antes de dar de alta el reporte, igual que en el uso real.
         self.preparar_calendario(self.moderador, Periodo(2026, 7))
@@ -1456,9 +1480,12 @@ class PantallaDeReportes(BasePreNomina):
         reporte = self.crear(fondo_tarifa=None)
         self.assertEqual(reporte.fondo_tarifa, Decimal('176.00'))
 
-    def test_sin_configuracion_se_usa_el_fondo_por_defecto(self):
-        reporte = self.crear(fondo_tarifa=None)
-        self.assertEqual(reporte.fondo_tarifa, Decimal('190.60'))
+    def test_sin_fondo_en_la_configuracion_no_se_crea(self):
+        """Sin valor fijo de respaldo (23-10-2026): sin fondo de tiempo válido en
+        Configuración el reporte no se crea y se explica dónde definirlo."""
+        from prenomina.servicios import ErrorDePreNomina
+        with self.assertRaisesMessage(ErrorDePreNomina, 'falta el fondo de tiempo'):
+            self.crear(fondo_tarifa=None)
 
     def test_cerrar_y_reabrir_desde_la_pantalla(self):
         reporte = self.crear()

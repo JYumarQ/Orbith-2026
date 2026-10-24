@@ -258,16 +258,13 @@ def _preparar_unidad(solicitud, datos, objeto):
 def _ejecutar_contrato(solicitud, formulario, objeto):
     """Guarda el contrato aplicando las mismas reglas que `ContratoUpdateView.form_valid`.
 
-    Ese `form_valid` deriva dos campos del cargo en lugar de tomarlos del formulario: el
-    rol de pago sale del cargo, y el tridente se anula si el cargo es de cuadro. Se
-    replica aquí para que aprobar una solicitud deje el contrato exactamente igual que
+    Ese `form_valid` anula el tridente si el cargo es de cuadro (el rol de pago no hay
+    que copiarlo: es del cargo, el contrato no tiene rol propio). Se replica aquí para que aprobar una solicitud deje el contrato exactamente igual que
     si lo hubiera guardado un Administrador desde la pantalla de siempre; si no, el mismo
     cambio produciría dos resultados distintos según por dónde entrara.
     """
     contrato = formulario.save(commit=False)
 
-    if contrato.cargo and contrato.cargo.rol:
-        contrato.rol = contrato.cargo.rol
     if contrato.cargo and contrato.cargo.ncargo.es_cuadro:
         contrato.tridente = None
 

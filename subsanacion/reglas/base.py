@@ -24,6 +24,8 @@ crítico y otro es menor, son dos reglas, no una (véase CFG-001 y CFG-002). Lo 
 puede producir varios hallazgos con la misma gravedad es `clave_extra` (véase CTR-002).
 """
 
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
 
@@ -119,6 +121,34 @@ def registrar(clase):
     _REGISTRO[clase.codigo] = clase
 
 
+# ---------------------------------------------------------------------------
+# Revisión por registro (23-10-2026)
+# ---------------------------------------------------------------------------
+# Para revisar UN contrato (o los afectados por un cambio) con la MISMA regla del
+# barrido, sin reescribirla: dentro de `solo_registros()`, `base_queryset()` (y
+# quien use `restringir()`) solo devuelve esas filas. Lo usa
+# `subsanacion.por_registro`. Fuera de ese bloque no cambia nada.
+_restriccion = threading.local()
+
+
+@contextmanager
+def solo_registros(mapa):
+    """`mapa` = `{'contratos.calta': [ids], ...}` (etiquetas en minúsculas)."""
+    anterior = getattr(_restriccion, 'mapa', None)
+    _restriccion.mapa = {k.lower(): [str(i) for i in v] for k, v in mapa.items()}
+    try:
+        yield
+    finally:
+        _restriccion.mapa = anterior
+
+
+def restringir(queryset, etiqueta):
+    mapa = getattr(_restriccion, 'mapa', None)
+    if mapa is None or etiqueta.lower() not in mapa:
+        return queryset
+    return queryset.filter(pk__in=mapa[etiqueta.lower()])
+
+
 class ReglaBase:
     """Clase base de todas las reglas de integridad."""
 
@@ -198,7 +228,7 @@ class ReglaBase:
         (ver el docstring de `subsanacion.servicios`); el alcance por unidad se
         aplica al LEER el listado, no al detectar.
         """
-        return self.obtener_modelo()._default_manager.all()
+        return restringir(self.obtener_modelo()._default_manager.all(), self.modelo)
 
     def ejecutar(self, contexto) -> Iterator[HallazgoDetectado]:
         """Produce los hallazgos. Debe ser un generador y no debe escribir en la BD."""

@@ -385,3 +385,29 @@ class NombreYSiglasDelTerritorio(TestCase):
 
         self.assertEqual(nombre, 'Florida')
         self.assertEqual(siglas, 'FLO')   # y se normalizan a mayúsculas
+
+
+class ProteccionCsrfTests(TestCase):
+    """Las APIs de Nomencladores ya no llevan `@csrf_exempt` (Fase 3, 23-10-2026): una
+    página ajena no puede cambiar nomencladores en nombre de un administrador con la
+    sesión abierta. Las pantallas de Orbith mandan el token (ver `base.html`)."""
+
+    def setUp(self):
+        from django.test import Client
+        from .models import NTridente
+        self.tridente = NTridente.objects.create(tipo='I')
+        admin = CustomUser.objects.create_user(username='admin_csrf', password='x', es_admin=True)
+        self.cliente = Client(enforce_csrf_checks=True)
+        self.cliente.force_login(admin)
+
+    def test_sin_token_se_rechaza_y_con_token_pasa(self):
+        url = reverse('tridente-update', args=[self.tridente.pk])
+        sin = self.cliente.put(url, '{"tipo": "II"}', content_type='application/json')
+        self.assertEqual(sin.status_code, 403)
+        self.cliente.get(reverse('parametros'))   # la página deja la cookie del token
+        token = self.cliente.cookies['csrftoken'].value
+        con = self.cliente.put(url, '{"tipo": "II"}', content_type='application/json',
+                               HTTP_X_CSRFTOKEN=token)
+        self.assertEqual(con.status_code, 200)
+        self.tridente.refresh_from_db()
+        self.assertEqual(self.tridente.tipo, 'II')

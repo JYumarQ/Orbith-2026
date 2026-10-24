@@ -22,8 +22,7 @@ NO cambie la lógica de `calcular_salario()` sin revisar los dos llamadores.
 
 
 def calcular_salario(*, tipo_salario, tiene_cargo, es_cuadro, grupo_escala_id,
-                     rol_id_contrato, rol_id_cargo, tridente_id, salario_basico,
-                     buscar_monto):
+                     rol_id_cargo, tridente_id, salario_basico, buscar_monto):
     """Devuelve el salario de escala como `float` redondeado a 2 decimales, o `None`.
 
     Devuelve `None` cuando no hay datos suficientes para calcularlo. Ojo: `None`
@@ -34,8 +33,11 @@ def calcular_salario(*, tipo_salario, tiene_cargo, es_cuadro, grupo_escala_id,
         tiene_cargo:      si el contrato tiene un cargo de plantilla asignado.
         es_cuadro:        si la categoría ocupacional del cargo es CDI o CEJ.
         grupo_escala_id:  grupo de escala del nomenclador del cargo.
-        rol_id_contrato:  rol de pago propio del contrato (puede ser None).
-        rol_id_cargo:     rol del cargo de plantilla, que se usa como respaldo.
+        rol_id_cargo:     rol del cargo de plantilla. El rol es del CARGO, no del
+                          contrato: el contrato no tiene rol propio (decisión de
+                          RRHH del 23-10-2026; antes una copia en el contrato se
+                          quedaba vieja tras un movimiento de nómina y el Word salía
+                          con el salario del rol anterior).
         tridente_id:      tridente del contrato (puede ser None).
         salario_basico:   salario básico del nomenclador del cargo, para 'FIJ'.
         buscar_monto:     `f(grupo_escala_id, rol_id, tridente_id) -> monto | None`.
@@ -45,8 +47,7 @@ def calcular_salario(*, tipo_salario, tiene_cargo, es_cuadro, grupo_escala_id,
         if not tiene_cargo:
             return None
 
-        # El rol puede venir del contrato o, si no lo tiene, del cargo.
-        rol_id = rol_id_contrato or rol_id_cargo
+        rol_id = rol_id_cargo
 
         if es_cuadro:
             # Un cuadro cobra sin tridente.

@@ -245,13 +245,13 @@
     <p> CLA: Importe_________ Nocturnidad: ____________ CNCI: Tarifa: ________ Importe: ________</p>
     <p> Otros:(especificar) ____________</p>
     <p>Grado Científico Maestría (
-            {% if contrato.maestria > 0 %}
+            {% if contrato.importe_maestria > 0 %}
                 <u> x </u> ) Tarifa _____ Importe______ </p>
             {% else %}
                 ___ ) Tarifa______ Importe______ </p>
             {% endif %}
     <p>Doctorado (
-            {% if contrato.doctorado > 0 %}
+            {% if contrato.importe_doctorado > 0 %}
                 <u> x </u> ) Tarifa _____ Importe______ </p>
             {% else %}
                 ___ ) Tarifa______ Importe______ </p>

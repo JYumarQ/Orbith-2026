@@ -49,10 +49,10 @@
           <div class="alert alert-info d-flex align-items-start p-2 mb-0" role="alert">
             <i class="fas fa-circle-info me-2 mt-1"></i>
             <div class="small">
-              Este importe se rellena solo en el contrato de cada trabajador
-              registrado con este grado científico. Cambiarlo aquí NO reescribe los
-              contratos ya guardados: la regla CTR-019 de Subsanación le avisará de
-              cuáles no coinciden para que decida usted si actualizarlos.
+              Este importe se aplica al contrato de cada trabajador registrado con
+              este grado científico. Cambiarlo aquí cambia lo que cobran desde hoy;
+              las Pre-Nóminas y los cierres ya emitidos conservan el importe de
+              entonces.
             </div>
           </div>
         {% else %}
@@ -60,10 +60,12 @@
             <i class="fas fa-circle-info me-2 mt-1"></i>
             <div class="small">
               Aparecerá como una opción del desplegable «{{ ficha.titulo }}» en los
-              formularios de crear y editar contrato.
+              formularios de crear y editar contrato. Cambiar el importe de una
+              entrada cambia lo que cobran desde hoy los contratos que la tienen.
             </div>
           </div>
         {% endif %}
+        {% if objeto %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
       </div>
 
       <div class="modal-footer">

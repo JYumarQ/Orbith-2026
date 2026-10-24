@@ -696,10 +696,13 @@ class ReporteTrabajador(models.Model):
     # redondeo a dos se aplica una sola vez, sobre el importe final.
     tarifa_horaria = models.DecimalField(
         max_digits=10, decimal_places=4, default=Decimal('0'))
-    cnci = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal('0'))
-    maestria = models.PositiveIntegerField(default=0)
-    doctorado = models.PositiveIntegerField(default=0)
-    instructor = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('0'))
+    # Mismo tamaño que el contrato y los cierres (23-10-2026): antes Maestría y
+    # Doctorado eran enteros (se perdían los centavos) e Instructor tenía tope en
+    # 99,99, así que un instructor de 500 hacía fallar la creación del reporte.
+    cnci = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0'))
+    maestria = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0'))
+    doctorado = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0'))
+    instructor = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0'))
     anos_servicio = models.PositiveSmallIntegerField(default=0)
     fecha_alta_entidad = models.DateField(null=True, blank=True)
 

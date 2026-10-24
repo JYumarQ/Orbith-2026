@@ -11,7 +11,8 @@ from django.db.models import Q, ProtectedError, Count, Prefetch, RestrictedError
 from django.db import transaction
 from contratos.models import CAlta
 from django.contrib.messages.views import SuccessMessageMixin
-from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
+from core.mixins import (AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin,
+                         MotivoDeCambioMixin, VolverAlOrigenMixin)
 # Cierra al Observador TODA vista que escriba. Va como primera base de cada clase
 # para que su `dispatch` corte antes que el de cualquier otro mixin, y responde
 # JSON cuando la petición es HTMX/AJAX: el Gestor de Plantilla habla por JSON y
@@ -150,7 +151,7 @@ class CargoPlantillaCreateView(RequiereEdicionMixin, SuccessMessageMixin, Create
         transaction.set_rollback(True)
         return respuesta
 
-class CargoPlantillaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class CargoPlantillaUpdateView(MotivoDeCambioMixin, RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = CargoPlantilla
     form_class = CargoPlantillaForm
     template_name = 'pages/cargo/updt_cargo.html'
@@ -170,8 +171,15 @@ class CargoPlantillaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Advert
         rol_valido = ((cargo.ncargo.cat_ocupacional in ('CDI', 'CEJ') and cargo.rol is None) or
                       (cargo.ncargo.cat_ocupacional not in ('CDI', 'CEJ') and cargo.rol is not None))
         
-        # 2. Guardar definitivamente en la base de datos
-        cargo.save()
+        # 2. Guardar definitivamente en la base de datos. Si el cambio (rol,
+        # nomenclador o departamento) afecta a contratos, hace falta un motivo: se
+        # anota en el histórico de cada trabajador (decisión de RRHH, 23-10-2026).
+        def guardar():
+            cargo.save()
+            return cargo
+        error = self.guardar_con_motivo(form, guardar)
+        if error is not None:
+            return error
 
         # 3. La magia de HTMX para refrescar la columna de Cargos automáticamente
         if self.request.headers.get('HX-Request'):
@@ -394,7 +402,7 @@ class DepartamentoCreateView(RequiereEdicionMixin, SuccessMessageMixin, CreateVi
         return super().form_valid(form)
     
     
-class DepartamentoUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class DepartamentoUpdateView(MotivoDeCambioMixin, RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     """Editar departamento. Para un Moderador se convierte en solicitud de aprobación."""
     model = Departamento
     form_class = DepartamentoForm
@@ -441,7 +449,9 @@ class DepartamentoUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Adverten
         return respuesta
 
     def form_valid(self, form):
-        self.object = form.save()
+        error = self.guardar_con_motivo(form, form.save)
+        if error is not None:
+            return error
         if self.request.headers.get('HX-Request'):
             if self.request.POST.get('next') or self.request.GET.get('next'):
                 messages.success(self.request, self.mensaje_de_guardado_exitoso('Departamento actualizado correctamente'))
@@ -543,7 +553,7 @@ class UnidadOrganizativaCreateView(SuccessMessageMixin, CreateView):
         transaction.set_rollback(True)
         return respuesta
 
-class UnidadOrganizativaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
+class UnidadOrganizativaUpdateView(MotivoDeCambioMixin, RequiereEdicionMixin, SuccessMessageMixin, AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin, UpdateView):
     model = UnidadOrganizativa
     form_class = UnidadOrganizativaForm
     template_name = 'pages/uniorg/updt_uniorg.html'
@@ -559,7 +569,9 @@ class UnidadOrganizativaUpdateView(RequiereEdicionMixin, SuccessMessageMixin, Ad
         return context
     
     def form_valid(self, form):
-        self.object = form.save()
+        error = self.guardar_con_motivo(form, form.save)
+        if error is not None:
+            return error
 
         if self.request.htmx:
             if self.request.POST.get('next') or self.request.GET.get('next'):
@@ -710,8 +722,12 @@ def gestor_plantilla_view(request):
     # dos consultas para todo el listado, no en una por fila.
     unidades = integracion_cierres.anotar_acciones(list(unidades), request.user)
 
-    # 6. Respuestas HTMX o Render normal
-    context = {'unidades': unidades, 'q': q}
+    # 6. Respuestas HTMX o Render normal. `unidades_con_problemas`: triángulo rojo
+    # en cascada (Fase 2): alguna subunidad, departamento, cargo o contrato por
+    # debajo tiene un problema Crítico abierto en Subsanación.
+    from subsanacion.indicadores import cascada_critica
+    context = {'unidades': unidades, 'q': q,
+               'unidades_con_problemas': cascada_critica()['unidades']}
 
     if request.htmx:
         return render(request, 'pages/plantilla/partials/lista_unidades_div.html', context)
@@ -766,10 +782,12 @@ def htmx_load_departamentos(request, unidad_id):
         # Si ordenamos por prioridad, usamos id como desempate
         dptos = dptos.order_by(field, 'id')
 
+    from subsanacion.indicadores import cascada_critica
     return render(request, 'pages/plantilla/partials/lista_departamentos.html', {
         'departamentos': dptos,
         'unidad_seleccionada': unidad,
-        'q': q
+        'q': q,
+        'departamentos_con_problemas': cascada_critica()['departamentos'],
     })
 
 
@@ -818,6 +836,16 @@ def htmx_load_cargos(request, dpto_id):
         if order == 'desc':
             field = f'-{field}'
         cargos = cargos.order_by(field, 'id')  # desempate por id
+
+    # Triángulos (Fase 2): rojo si el cargo o algo por debajo tiene un problema
+    # Crítico; ámbar si el cargo tiene uno Alto propio.
+    from subsanacion.indicadores import marcar, niveles_de_cargos
+    cargos = list(cargos)
+    niveles, propios = niveles_de_cargos([c.pk for c in cargos])
+    cargos = marcar(cargos, niveles)
+    for cargo in cargos:
+        if cargo.pk in propios:
+            cargo.url_problemas = reverse('subsanacion:problemas_registro', args=['cargo', cargo.pk])
 
     return render(request, 'pages/plantilla/partials/lista_cargos.html', {
         'cargos': cargos,
@@ -879,6 +907,12 @@ def htmx_load_contratos(request, cargo_id):
         field = 'aspirante__nombre'
         if order == 'desc': field = f'-{field}'
         contratos = contratos.order_by(field)
+
+    # Triángulos (Fase 2): problemas Críticos (rojo) y Altos (ámbar) del contrato y
+    # de la ficha del trabajador; al pulsarlo se abre su ventana.
+    from subsanacion.indicadores import marcar, problemas_por_contrato
+    contratos = list(contratos)
+    contratos = marcar(contratos, problemas_por_contrato(contratos), 'contrato')
 
     return render(request, 'pages/plantilla/partials/lista_contratos.html', {
         'contratos': contratos,

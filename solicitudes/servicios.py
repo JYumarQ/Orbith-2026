@@ -336,7 +336,13 @@ def aprobar(solicitud, usuario, datos=None):
         if not formulario.is_valid():
             raise PropuestaInvalida(formulario)
 
-    resultado = ejecutar(solicitud, definicion, formulario, objeto)
+    # Si el cambio afecta a contratos (rol o departamento de un cargo, nombre de
+    # una unidad…), el motivo que queda en el histórico de cada trabajador es el de
+    # la solicitud: aprobarla ES la decisión, así que no se vuelve a pedir.
+    from contratos.cambios_externos import motivo_de_cambio
+    motivo = f'Solicitud #{solicitud.pk}' + (f': {solicitud.motivo}' if solicitud.motivo else '')
+    with motivo_de_cambio(motivo, exigir=False):
+        resultado = ejecutar(solicitud, definicion, formulario, objeto)
 
     if definicion['accion'] == AccionSolicitud.ELIMINAR:
         # Al borrar, Django deja la instancia sin pk, y la GenericForeignKey de la

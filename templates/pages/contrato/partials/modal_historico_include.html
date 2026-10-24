@@ -33,6 +33,10 @@
     .badge-gold { background-color: #fefce8; color: #ca8a04; border-color: #fef08a; }
     .badge-orange { background-color: #fff7ed; color: #ea580c; border-color: #ffedd5; }
     .badge-rose { background-color: #fff1f2; color: #e11d48; border-color: #ffe4e6; }
+    /* Cambio externo (no es un movimiento): gris y discreto. */
+    .badge-slate { background-color: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+    .fila-cambio-externo td { background-color: #f8fafc; }
+    [data-bs-theme="dark"] .fila-cambio-externo td { background-color: rgba(148, 163, 184, .08); }
 
     /* Pastillas de colores específicos para las Fechas Fin */
     .date-pill {
@@ -110,7 +114,21 @@
             </div>
 
             <div class="modal-footer bg-light py-3 px-4 d-flex justify-content-between align-items-center border-top">
-                <span class="text-muted small fw-bold">Total de eventos: <span id="cantEventos" class="text-primary fs-5">0</span></span>
+                <div class="d-flex align-items-center gap-4 flex-wrap">
+                    <span class="text-muted small fw-bold">Total de eventos: <span id="cantEventos" class="text-primary fs-5">0</span></span>
+                    {% comment %}
+                      Solo movimientos de nómina, o movimientos + cambios externos (cambios en
+                      la escala, el cargo, la unidad, los importes… que afectaron al
+                      trabajador sin ser un movimiento). El PDF exporta lo mismo que se ve.
+                    {% endcomment %}
+                    <div class="form-check form-switch mb-0" title="Cambios hechos más arriba del contrato que lo afectaron">
+                        <input class="form-check-input" type="checkbox" role="switch" id="switchCambiosExternos" checked
+                               onchange="aplicarFiltroCambiosExternos(true)">
+                        <label class="form-check-label small" for="switchCambiosExternos">
+                            Incluir cambios externos <span class="text-muted">(escala, cargo, unidad, importes…)</span>
+                        </label>
+                    </div>
+                </div>
                 <button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">Cerrar</button>
             </div>
 
@@ -139,6 +157,35 @@
             btnExp.style.pointerEvents = 'none';
         }
     });
+
+    // Interruptor «Incluir cambios externos». La elección se recuerda en este
+    // navegador; si el almacenamiento no está disponible, se muestran todos.
+    (function () {
+        try {
+            const guardado = localStorage.getItem('historicoCambiosExternos');
+            if (guardado !== null) {
+                const sw = document.getElementById('switchCambiosExternos');
+                if (sw) sw.checked = guardado === '1';
+            }
+        } catch (e) { /* sin almacenamiento: valor por defecto */ }
+    })();
+
+    function aplicarFiltroCambiosExternos(recordar) {
+        const sw = document.getElementById('switchCambiosExternos');
+        const ver = !sw || sw.checked;
+        if (recordar) {
+            try { localStorage.setItem('historicoCambiosExternos', ver ? '1' : '0'); } catch (e) { }
+        }
+        const filas = document.querySelectorAll('#tablaHistoricoBody tr[data-id]');
+        let visibles = 0;
+        filas.forEach(fila => {
+            const externa = fila.classList.contains('fila-cambio-externo');
+            fila.style.display = (externa && !ver) ? 'none' : '';
+            if (!(externa && !ver)) visibles++;
+        });
+        const cant = document.getElementById('cantEventos');
+        if (cant && filas.length) cant.innerText = visibles;
+    }
 
     function abrirModalHistorico(url) {
         // APERTURA SEGURA CON JQUERY (Evita el error 'backdrop undefined')
@@ -182,6 +229,37 @@
                         else if (item.evento === 'Movimiento Cargo') { icon = 'fa-briefcase'; cssType = 'orange'; colorFinClase = 'fc-naranja'; }
                         else if (item.evento === 'Movimiento Salario') { icon = 'fa-coins'; cssType = 'gold'; colorFinClase = 'fc-dorado'; }
                         else if (item.evento === 'Baja') { icon = 'fa-arrow-down'; cssType = 'rose'; colorFinClase = 'fc-rojo'; }
+
+                        // Cambio externo (23-10-2026): un cambio hecho más arriba del contrato
+                        // (escala, cargo, unidad, importes…). No es un movimiento: fila gris,
+                        // sin cápsula ni exportación.
+                        if (item.es_cambio_externo) {
+                            const esc = (t) => String(t || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                            const valores = (item.valor_anterior || item.valor_nuevo)
+                                ? `<span class="text-muted small">${esc(item.valor_anterior)}</span> <i class="fas fa-arrow-right text-muted small mx-1"></i> <span class="fw-semibold small">${esc(item.valor_nuevo)}</span>`
+                                : '<span class="text-muted">---</span>';
+                            const motivo = item.motivo
+                                ? `<div class="small text-muted mt-1"><i class="fas fa-comment-dots me-1"></i>${esc(item.motivo)}</div>` : '';
+                            const filaExterna = `
+                                <tr class="fila-cambio-externo" data-id="" title="Cambio externo: no es un movimiento de nómina"
+                                    onclick="seleccionarFila(this)">
+                                    <td>
+                                        <div class="badge-modern badge-slate"><i class="fas fa-gears"></i> Cambio externo</div>
+                                        <div class="small text-muted mt-1">${esc(item.origen)}</div>
+                                    </td>
+                                    <td colspan="2">
+                                        <div class="text-dark small">${esc(item.descripcion)}</div>${motivo}
+                                    </td>
+                                    <td class="text-end">${valores}</td>
+                                    <td>
+                                        <div class="d-flex align-items-center justify-content-center">
+                                            <div class="date-pill date-normal"><i class="fas fa-calendar-alt text-muted opacity-50"></i> ${item.fecha_inicio_str}</div>
+                                        </div>
+                                    </td>
+                                </tr>`;
+                            if (tbody) tbody.insertAdjacentHTML('beforeend', filaExterna);
+                            return;
+                        }
 
                         const isSalarioCero = (item.salario === '---' || item.salario === '0.00');
                         const salarioHtml = isSalarioCero 
@@ -235,6 +313,7 @@
                         `;
                         if(tbody) tbody.insertAdjacentHTML('beforeend', fila);
                     });
+                    aplicarFiltroCambiosExternos(false);
                 } else {
                     if(document.getElementById('cantEventos')) document.getElementById('cantEventos').innerText = '0';
                     if(tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Este trabajador no tiene historial registrado.</td></tr>';
@@ -341,7 +420,9 @@
 
     function exportarTodoPDF() {
         if (aspiranteActualId) {
-            window.open(`/contrato/exportar/historico/pdf/${aspiranteActualId}/`, '_blank');
+            const sw = document.getElementById('switchCambiosExternos');
+            const externos = (!sw || sw.checked) ? '1' : '0';
+            window.open(`/contrato/exportar/historico/pdf/${aspiranteActualId}/?externos=${externos}`, '_blank');
         } else {
             Swal.fire('Atención', 'No se pudo identificar al trabajador.', 'warning');
         }

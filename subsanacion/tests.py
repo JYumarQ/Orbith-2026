@@ -683,16 +683,6 @@ class FuncionesPurasEnCalienteTests(TestCase):
     cubre a los dos. No hace falta un CAlta real: son funciones de valores escalares.
     """
 
-    def test_grado_cientifico_sin_reflejar(self):
-        from .reglas.contratos import _grado_cientifico_sin_reflejar
-
-        self.assertEqual(_grado_cientifico_sin_reflejar('MC', 0, 0), [
-            ('maestria_vacia', 'Máster', 'campo_maestria')])
-        self.assertEqual(_grado_cientifico_sin_reflejar('DC', 0, 0), [
-            ('doctorado_vacio', 'Doctor', 'campo_doctorado')])
-        self.assertEqual(_grado_cientifico_sin_reflejar('MC', 30, 0), [])
-        self.assertEqual(_grado_cientifico_sin_reflejar(None, 0, 0), [])
-
     def test_funcionario_o_designado_sin_codigo(self):
         from .reglas.contratos import _funcionario_o_designado_sin_codigo
 
@@ -769,7 +759,7 @@ class FuncionesPurasEnCalienteTests(TestCase):
 
 
 class EvaluarInstanciaTests(TestCase):
-    """`evaluar_instancia()` de CTR-007/012/013 sobre una instancia real, no un dict.
+    """`evaluar_instancia()` de CTR-012/013 sobre una instancia real, no un dict.
 
     Se usa `SimpleNamespace` en vez de un `CAlta` real: los tres métodos solo acceden
     a atributos propios y a un único salto de FK ya resuelto (`contrato.aspirante`),
@@ -778,31 +768,6 @@ class EvaluarInstanciaTests(TestCase):
     de verdad, sin necesitar el grafo completo de fixtures (aspirante, cargo,
     plantilla, etc.).
     """
-
-    def test_grado_cientifico_detecta_master_sin_reflejar(self):
-        from types import SimpleNamespace
-
-        from .reglas.contratos import GradoCientificoSinReflejar
-
-        contrato = SimpleNamespace(
-            pk=1, maestria=0, doctorado=0,
-            aspirante=SimpleNamespace(grado_cientifico='MC'))
-
-        detectados = GradoCientificoSinReflejar().evaluar_instancia(contrato)
-
-        self.assertEqual(len(detectados), 1)
-        self.assertEqual(detectados[0].clave_extra, 'maestria_vacia')
-
-    def test_grado_cientifico_sin_problema_devuelve_none(self):
-        from types import SimpleNamespace
-
-        from .reglas.contratos import GradoCientificoSinReflejar
-
-        contrato = SimpleNamespace(
-            pk=1, maestria=30, doctorado=0,
-            aspirante=SimpleNamespace(grado_cientifico='MC'))
-
-        self.assertIsNone(GradoCientificoSinReflejar().evaluar_instancia(contrato))
 
     def test_funcionario_sin_codigo_detectado(self):
         from types import SimpleNamespace
@@ -1313,7 +1278,9 @@ class ContratoSinFechaAltaEntidadTests(TestCase):
 
         regla = ContratoSinFechaAltaEntidad()
         resultado = reconciliar_regla(regla, ejecucion, ContextoAnalisis(ejecucion))
-        self.assertEqual(resultado['nuevos'], 1)
+        # Ya lo creó la revisión por registro al guardar el contrato (Fase 2): el
+        # análisis lo encuentra y lo refresca en lugar de crearlo de nuevo.
+        self.assertEqual(resultado['nuevos'] + resultado['persistentes'], 1)
 
         creado = Hallazgo.objects.get(
             codigo_regla='CTR-016', object_id=str(self.contrato_sin.pk))
@@ -1684,6 +1651,11 @@ class ContratoDeterminadoVencidoTests(TestCase):
         contrato = self._contrato('90010100001', date.today() - timedelta(days=400), 6)
         self.assertIn(str(contrato.pk), self.hallazgos())
 
+    def test_detecta_el_contrato_que_vence_hoy(self):
+        """Crítica desde el mismo día del vencimiento (antes avisa el Recordatorio)."""
+        contrato = self._contrato('90010100005', date.today() - timedelta(days=90), 90)
+        self.assertIn(str(contrato.pk), self.hallazgos())
+
     def test_no_reclama_un_contrato_todavia_vigente(self):
         contrato = self._contrato('90010100002', date.today() - timedelta(days=10), 12)
         self.assertNotIn(str(contrato.pk), self.hallazgos())
@@ -1705,85 +1677,58 @@ class ContratoDeterminadoVencidoTests(TestCase):
         contrato = self._contrato('90010100004', date.today() - timedelta(days=400), None)
         self.assertNotIn(str(contrato.pk), self.hallazgos())
 
-    def test_el_vencimiento_se_calcula_en_meses_no_en_dias(self):
+    def test_el_vencimiento_se_calcula_en_dias(self):
+        """La duración es siempre en días (RRHH, 23-10-2026), igual que el Word y el
+        Recordatorio de vencimiento."""
         from .reglas.contratos import _vencimiento_de
-        self.assertEqual(_vencimiento_de(date(2026, 1, 15), 6), date(2026, 7, 15))
-        self.assertEqual(_vencimiento_de(date(2026, 8, 10), 12), date(2027, 8, 10))
-        # El 31 de enero + 1 mes no existe: se recorta al último día real.
-        self.assertEqual(_vencimiento_de(date(2026, 1, 31), 1), date(2026, 2, 28))
+        self.assertEqual(_vencimiento_de(date(2026, 1, 15), 90), date(2026, 4, 15))
+        self.assertEqual(_vencimiento_de(date(2026, 8, 10), 365), date(2027, 8, 10))
         self.assertIsNone(_vencimiento_de(None, 6))
         self.assertIsNone(_vencimiento_de(date(2026, 1, 1), None))
 
 
-class ImporteDistintoDelNomencladorTests(TestCase):
-    """CTR-019: la contrapartida de que el contrato guarde su propio importe."""
+class ImporteAntiguoSinNomencladorTests(TestCase):
+    """CTR-023: los importes tecleados a mano que no encajaban con el nomenclador
+    cuando el contrato dejó de guardarlos (23-10-2026)."""
 
     @classmethod
     def setUpTestData(cls):
         cls.base = _EscenarioContratos()
-        cls.instructor = NPagoAdicional.objects.create(
-            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor Principal',
-            importe=Decimal('150.00'))
+        cls.cnci = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.CNCI, descripcion='Etapa I', importe=Decimal('329.00'))
 
-    def _contrato(self, doc, expediente, grado=None, **importes):
-        return CAlta.objects.create(
-            aspirante=self.base.aspirante(doc, grado_cientifico=grado),
-            no_expediente=expediente, tipo=self.base.tipo_contrato,
-            cargo=self.base.cargo, fecha_alta=date.today(), **importes)
+    def setUp(self):
+        from contratos.models import ImporteSinNomenclador
+        self.contrato = CAlta.objects.create(
+            aspirante=self.base.aspirante('90010200001'), no_expediente='0201',
+            tipo=self.base.tipo_contrato, cargo=self.base.cargo, fecha_alta=date.today())
+        ImporteSinNomenclador.objects.create(
+            contrato=self.contrato, concepto='cnci', importe_antiguo=Decimal('800.00'))
 
     def hallazgos(self):
-        from .reglas.contratos import ImporteDistintoDelNomenclador
-        return {(h.object_id, h.clave_extra)
-                for h in ImporteDistintoDelNomenclador().ejecutar(None)}
+        from .reglas.contratos import ImporteAntiguoSinNomenclador
+        return list(ImporteAntiguoSinNomenclador().ejecutar(None))
 
-    def test_detecta_la_maestria_desfasada(self):
-        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
-        contrato = self._contrato('90010200001', '0201', grado='MC',
-                                  maestria=Decimal('300.00'))
+    def test_muestra_el_importe_antiguo_hasta_que_se_elige_la_entrada(self):
+        hallazgos = self.hallazgos()
+        self.assertEqual([(h.object_id, h.clave_extra) for h in hallazgos],
+                         [(str(self.contrato.pk), 'cnci')])
+        self.assertIn('800.00', hallazgos[0].detalle)
 
-        self.assertIn((str(contrato.pk), 'maestria'), self.hallazgos())
+        self.contrato.cnci_nomenclador = self.cnci
+        self.contrato.save()
+        self.assertEqual(self.hallazgos(), [])
 
-    def test_no_reclama_cuando_coincide(self):
-        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
-        contrato = self._contrato('90010200002', '0202', grado='MC',
-                                  maestria=Decimal('500.00'))
-
-        self.assertNotIn((str(contrato.pk), 'maestria'), self.hallazgos())
-
-    def test_reclama_el_importe_de_quien_no_tiene_el_grado(self):
-        """Sin grado científico lo que corresponde es cero."""
-        contrato = self._contrato('90010200003', '0203', grado=None,
-                                  doctorado=Decimal('900.00'))
-
-        self.assertIn((str(contrato.pk), 'doctorado'), self.hallazgos())
-
-    def test_con_el_nomenclador_sin_definir_no_hay_con_que_comparar(self):
-        """Ese caso lo reclama CFG-003: cada problema, una sola ficha."""
-        contrato = self._contrato('90010200004', '0204', grado='MC',
-                                  maestria=Decimal('300.00'))
-
-        self.assertNotIn((str(contrato.pk), 'maestria'), self.hallazgos())
-
-    def test_detecta_el_instructor_desfasado(self):
-        contrato = self._contrato('90010200005', '0205', instructor=Decimal('75.00'))
-        contrato.instructor_nomenclador = self.instructor   # el nomenclador dice 150
-        contrato.save()
-
-        self.assertIn((str(contrato.pk), 'instructor'), self.hallazgos())
-
-    def test_sin_entrada_elegida_no_se_compara_el_instructor(self):
-        contrato = self._contrato('90010200006', '0206', instructor=Decimal('75.00'))
-        self.assertNotIn((str(contrato.pk), 'instructor'), self.hallazgos())
-
-    def test_un_contrato_puede_fallar_en_varios_importes_a_la_vez(self):
-        """Por eso el campo forma parte de la clave: cada uno se corrige aparte."""
-        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('500.00'))
-        contrato = self._contrato('90010200007', '0207', grado='MC',
-                                  maestria=Decimal('1.00'), doctorado=Decimal('2.00'))
-
-        encontrados = {campo for pk, campo in self.hallazgos()
-                       if pk == str(contrato.pk)}
-        self.assertEqual(encontrados, {'maestria', 'doctorado'})
+    def test_dar_por_revisado_lo_borra(self):
+        from types import SimpleNamespace
+        from .reglas.contratos import ImporteAntiguoSinNomenclador
+        texto = ImporteAntiguoSinNomenclador().corregir(
+            SimpleNamespace(object_id=str(self.contrato.pk), clave_extra='cnci'))
+        self.assertIn('dado por revisado', texto)
+        self.assertEqual(self.hallazgos(), [])
+        with self.assertRaises(ValueError):
+            ImporteAntiguoSinNomenclador().corregir(
+                SimpleNamespace(object_id=str(self.contrato.pk), clave_extra='cnci'))
 
 
 class NomencladorDeGradoCientificoVacioTests(TestCase):

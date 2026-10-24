@@ -204,7 +204,7 @@
                         <div class="col-4">
                             <div class="card border shadow-none text-center py-2 bg-white">
                                 <small class="text-muted d-block text-uppercase fw-semibold" style="font-size: 10px;">CNCI</small>
-                                <span class="fw-bold text-dark">${{ contrato.cnci|default:"0.00" }}</span>
+                                <span class="fw-bold text-dark">${{ contrato.importe_cnci|default:"0.00" }}</span>
                             </div>
                         </div>
                         <div class="col-4">
@@ -288,7 +288,7 @@
                         <div class="col-4">
                             <label class="form-label text-muted text-uppercase" style="font-size: 11px;">Rol</label>
                             <div class="form-control-plaintext text-muted border-bottom py-1">
-                                {{ contrato.rol.tipo|default:"(-)" }}
+                                {{ contrato.cargo.rol.tipo|default:"(-)" }}
                             </div>
                         </div>
 

@@ -31,6 +31,7 @@
                 </div>
                 <div class="d-flex flex-column text-truncate">
                     <h6 class="mb-0 text-dark fw-bold text-truncate" style="font-size: 0.8rem;" title="{{ c.aspirante.nombre }} {{ c.aspirante.papellido }}">
+                        {% include 'base/partials/triangulo_problema.html' with nivel=c.nivel_problema url=c.url_problemas total=c.total_problemas %}
                         {{ c.aspirante.nombre }} {{ c.aspirante.papellido }}
                     </h6>
                     <small class="text-muted text-truncate" style="font-size: 0.7rem;">

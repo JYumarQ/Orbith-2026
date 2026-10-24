@@ -95,6 +95,10 @@ ENLACES_POR_MODELO = {
     'nomencladores.NImporteGradoCientifico': {
         'url': 'parametros', 'etiqueta': 'Abrir parámetros generales',
         'editable': True, 'sin_argumento': True, 'solo_admin': True},
+    # CFG-005 (escala salarial incompleta): la escala se edita en Parámetros Generales.
+    'nomencladores.NGrupoEscala': {
+        'url': 'parametros', 'etiqueta': 'Abrir parámetros generales',
+        'editable': True, 'sin_argumento': True, 'solo_admin': True},
 }
 
 

@@ -6,6 +6,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Orbith{% endblock %}</title>
+    {# Token CSRF para las peticiones fetch de escritura (Fase 3, 23-10-2026): se añade
+       solo a toda petición POST/PUT/PATCH/DELETE hacia Orbith que no lo lleve. Así
+       ninguna pantalla depende de acordarse de ponerlo y las vistas ya no necesitan
+       `@csrf_exempt`, que dejaba la puerta abierta a peticiones falsificadas. #}
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <script>
+      (function () {
+        if (!window.fetch) return;
+        var original = window.fetch;
+        window.ORBITH_CSRF = function () {
+          var meta = document.querySelector('meta[name="csrf-token"]');
+          var cookie = document.cookie.match(/(^|;)\s*csrftoken\s*=\s*([^;]+)/);
+          return (cookie && cookie.pop()) || (meta && meta.content) || '';
+        };
+        window.fetch = function (recurso, opciones) {
+          opciones = opciones || {};
+          var esPeticion = (typeof Request !== 'undefined') && recurso instanceof Request;
+          var metodo = (opciones.method || (esPeticion ? recurso.method : 'GET') || 'GET').toUpperCase();
+          if (['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(metodo) !== -1) {
+            var url = esPeticion ? recurso.url : String(recurso);
+            var mismoOrigen = !/^https?:\/\//i.test(url) || url.indexOf(window.location.origin) === 0;
+            if (mismoOrigen) {
+              var cabeceras = new Headers(opciones.headers || (esPeticion ? recurso.headers : undefined));
+              if (!cabeceras.has('X-CSRFToken')) cabeceras.set('X-CSRFToken', window.ORBITH_CSRF());
+              opciones = Object.assign({}, opciones, { headers: cabeceras });
+            }
+          }
+          return original.call(this, recurso, opciones);
+        };
+      })();
+    </script>
     <link rel="icon" type="image/png" href="{% static 'img/favicon/favicon.png' %}" />
 
     <link rel="stylesheet" href="{% static 'vendor/css/core.css' %}" class="template-customizer-core-css">
@@ -263,6 +294,15 @@
         if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
       });
     </script>
+
+    {% if user.is_authenticated %}
+    {# Búsqueda automática de incidencias (Fase 2): análisis diario y búsqueda al entrar. #}
+    <span id="cfg-incidencias-automaticas" hidden
+          data-url-estado="{% url 'subsanacion:auto_estado' %}"
+          data-url-iniciar="{% url 'subsanacion:auto_iniciar' %}"
+          data-url-buscar="{% url 'subsanacion:auto_buscar' %}"></span>
+    <script src="{% estatico 'js/incidencias_automaticas.js' %}"></script>
+    {% endif %}
 
     {% block extra_scripts %}{% endblock %}
 </body>

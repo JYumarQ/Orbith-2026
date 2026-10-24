@@ -164,6 +164,7 @@
                     </div>
                 </div>
                 </br>
+                {% if object.calta_contratos.exists and not user.es_moderador or object.calta_contratos.exists and user.es_admin %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar</button>

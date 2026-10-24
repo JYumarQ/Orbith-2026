@@ -55,7 +55,10 @@ class Base(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        with sin_auditoria_automatica():
+        # Los hallazgos de estas pruebas se crean a mano: sin la revisión por
+        # registro, que añadiría los suyos al guardar los contratos.
+        from subsanacion.por_registro import sin_revision_por_registro
+        with sin_auditoria_automatica(), sin_revision_por_registro():
             tipo = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
             cls.florida = UnidadOrganizativa.objects.create(
                 descripcion='Florida', tipo=tipo, grupo_nomina=1, orden_informe=1)

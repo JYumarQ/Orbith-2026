@@ -1,0 +1,51 @@
+{% comment %}
+  Ventana del ⚠️ (Fase 2, 23-10-2026): problemas Críticos y Altos de un contrato (con
+  los de su ficha) o de un cargo. Se carga dentro de `base/partials/modal_problemas.html`.
+{% endcomment %}
+<div class="modal-header border-bottom">
+    <h5 class="modal-title fw-bold">
+        <i class="fas fa-triangle-exclamation text-danger me-2"></i>Problemas detectados
+        <div class="small text-muted fw-normal mt-1">{{ titulo }}</div>
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body" id="cuerpoProblemas">
+    {% for p in problemas %}
+        <div class="border rounded-3 p-3 mb-3 problema-{% if p.critico %}critico{% else %}alto{% endif %}">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                <div>
+                    <span class="badge {% if p.critico %}bg-danger{% else %}bg-warning text-dark{% endif %} me-1">
+                        <i class="fas fa-triangle-exclamation me-1"></i>{% if p.critico %}Crítico{% else %}Alto{% endif %}
+                    </span>
+                    <span class="badge bg-label-secondary">{{ p.hallazgo.codigo_regla }}</span>
+                    {% if p.de_la_ficha %}<span class="badge bg-label-info">Ficha del trabajador</span>{% endif %}
+                </div>
+            </div>
+            <div class="fw-semibold">{% if p.regla %}{{ p.regla.nombre }}{% else %}{{ p.hallazgo.titulo }}{% endif %}</div>
+            {% if p.hallazgo.detalle %}<div class="small mt-1">{{ p.hallazgo.detalle }}</div>{% endif %}
+            {% if p.regla %}
+                {% if p.regla.causa_probable %}
+                    <div class="small text-muted mt-2"><strong>Por qué pasa:</strong> {{ p.regla.causa_probable }}</div>
+                {% endif %}
+                {% if p.regla.solucion %}
+                    <div class="small mt-2"><strong><i class="fas fa-wrench me-1 text-primary"></i>Cómo se soluciona:</strong> {{ p.regla.solucion }}</div>
+                {% endif %}
+            {% endif %}
+            <div class="d-flex gap-2 mt-3 flex-wrap">
+                {% if p.enlace and p.enlace.href %}
+                    <a href="{{ p.enlace.href }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-pen-to-square me-1"></i>{{ p.enlace.etiqueta|default:'Abrir registro' }}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        <div class="text-center text-muted py-4">
+            <i class="fas fa-circle-check text-success fs-3 mb-2 d-block"></i>
+            Este registro ya no tiene problemas críticos ni altos.
+        </div>
+    {% endfor %}
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+</div>

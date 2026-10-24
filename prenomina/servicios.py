@@ -125,12 +125,13 @@ def _fondo_de_tarifa():
     Se sigue COPIANDO en el reporte (`ReportePago.fondo_tarifa`) en vez de leerlo
     al vuelo: un reporte cerrado tiene que poder recalcularse igual dentro de dos
     años, aunque el parámetro haya cambiado desde entonces.
+
+    Sin valor fijo de respaldo (decisión de RRHH del 23-10-2026): si Configuración
+    no tiene un fondo válido, devuelve `None` y el reporte no se crea (la regla
+    CFG-004 de Subsanación lo avisa).
     """
-    from configuracion.models import Configuracion
-    configuracion = Configuracion.objects.first()
-    if configuracion and configuracion.fondo_tiempo_calc_tarif:
-        return configuracion.fondo_tiempo_calc_tarif
-    return Decimal('190.60')
+    from contratos.tarifas import parametros_de_tarifa
+    return parametros_de_tarifa()[0]
 
 
 # --------------------------------------------------------------------------- #
@@ -233,13 +234,20 @@ def crear_reporte(unidad, periodo, usuario, *,
         raise ErrorDePreNomina(
             'La fecha final del período no puede ser anterior a la inicial.')
 
+    if fondo_tarifa is None:
+        fondo_tarifa = _fondo_de_tarifa()
+    if fondo_tarifa is None:
+        raise ErrorDePreNomina(
+            'No se puede crear el reporte: falta el fondo de tiempo para el cálculo de '
+            'la tarifa. Defínalo en Configuración → Parámetros Generales.')
+
     reporte = ReportePago.objects.create(
         unidad=unidad, anno=periodo.anno, mes=periodo.mes, quincena=quincena,
         estado=EstadoReporte.BORRADOR,
         # Valor de arranque: `_fondo_de_referencia()` lo sustituye unas líneas
         # más abajo, ya con los trabajadores congelados y sus jornadas conocidas.
         fondo_tiempo=fondo_tiempo or Decimal('0.01'),
-        fondo_tarifa=fondo_tarifa if fondo_tarifa is not None else _fondo_de_tarifa(),
+        fondo_tarifa=fondo_tarifa,
         fecha_desde=fecha_desde, fecha_hasta=fecha_hasta,
         hecho_por=hecho_por or _nombre_de(usuario),
         revisado_por=revisado_por, aprobado_por=aprobado_por,

@@ -33,6 +33,9 @@ class CustomUser(AbstractUser):
     es_observador = models.BooleanField(default=False)
     fecha_creado = models.DateField(auto_now_add=True)
     fecha_actualizado = models.DateTimeField(auto_now=True)
+    # Última búsqueda automática de incidencias al iniciar sesión (Fase 2,
+    # 23-10-2026): se repite como mucho cada 4 horas. Ver `subsanacion.automatico`.
+    ultima_busqueda_incidencias = models.DateTimeField(null=True, blank=True, editable=False)
 
     avatar = models.ImageField(
         upload_to='img/avatares/',

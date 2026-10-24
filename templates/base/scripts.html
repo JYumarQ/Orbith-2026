@@ -2,6 +2,14 @@
 {% load estaticos %}
 
 <script src="{% static 'vendor/libs/jquery/jquery-3.7.1.min.js' %}"></script>
+<script>
+  // Mismo token CSRF para las peticiones $.ajax de escritura (ver base.html).
+  $.ajaxSetup({ beforeSend: function (xhr, opciones) {
+    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(opciones.type) && !opciones.crossDomain && window.ORBITH_CSRF) {
+      xhr.setRequestHeader('X-CSRFToken', window.ORBITH_CSRF());
+    }
+  } });
+</script>
 <script src="{% estatico 'js/sweetalert2.js' %}"></script>
 <script>
   /* Toast único del proyecto: fondo blanco, borde y sombra, esquina superior

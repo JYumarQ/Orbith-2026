@@ -98,6 +98,24 @@ class ConfiguracionForm(forms.ModelForm):
         # `Meta.widgets`; el mínimo real (2 años) es el del validador del modelo.
         self.fields['auditoria_anios_conservar'].widget.attrs['min'] = '2'
 
+    def clean_fondo_tiempo_calc_tarif(self):
+        """Divide al salario para sacar la tarifa horaria: con cero o negativo no hay
+        tarifa posible (ver `contratos/tarifas.py` y la regla CFG-004)."""
+        fondo = self.cleaned_data.get('fondo_tiempo_calc_tarif')
+        if fondo is not None and fondo <= 0:
+            raise forms.ValidationError(
+                'El fondo de tiempo debe ser mayor que cero (por ejemplo, 190.6 horas).')
+        return fondo
+
+    def clean_porcentaje_horas_extras(self):
+        """Se guarda como fracción: 0.25 es un 25 %. Un «25» tecleado creyendo que
+        es un porcentaje multiplicaría las horas extras por 26."""
+        porcentaje = self.cleaned_data.get('porcentaje_horas_extras')
+        if porcentaje is not None and not (0 <= porcentaje <= 1):
+            raise forms.ValidationError(
+                'Escriba el porcentaje como fracción entre 0 y 1: por ejemplo, 0.25 para un 25 %.')
+        return porcentaje
+
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get('auditoria_borrar_antigua'):

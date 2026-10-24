@@ -8,7 +8,7 @@ como única fuente de verdad sobre qué es válido.
 from datetime import date, timedelta
 
 from django.db.models import Q, F, Value, CharField, Count, Sum, Avg, OuterRef, Subquery
-from django.db.models.functions import Concat, ExtractYear, ExtractMonth, ExtractDay
+from django.db.models.functions import Coalesce, Concat, ExtractYear, ExtractMonth, ExtractDay
 from django.db.models.expressions import Func
 from django.apps import apps
 
@@ -134,6 +134,22 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
             queryset = queryset.annotate(
                 vacantes=F("cant_aprobada") - F("cant_cubierta"),
             )
+        elif key in ("maestria", "doctorado"):
+            # El importe ya no vive en el contrato (23-10-2026): el del grado
+            # científico del trabajador según el nomenclador, o 0 si no lo tiene.
+            from django.db.models import Case, DecimalField, OuterRef, Subquery, When
+            from nomencladores.models import NImporteGradoCientifico
+            grado = "MC" if key == "maestria" else "DC"
+            importe = Subquery(NImporteGradoCientifico.objects.filter(grado=grado)
+                               .values("importe")[:1])
+            queryset = queryset.annotate(**{key: Case(
+                When(**{f"{prefijo}grado_cientifico": grado}, then=Coalesce(importe, Value(0))),
+                default=Value(0), output_field=DecimalField(max_digits=10, decimal_places=2))})
+        elif key in ("cnci", "instructor"):
+            from django.db.models import DecimalField
+            queryset = queryset.annotate(**{key: Coalesce(
+                F(f"{key}_nomenclador__importe"), Value(0),
+                output_field=DecimalField(max_digits=10, decimal_places=2))})
         # Si en el futuro se añade otro campo calculado, su anotación va aquí.
 
     return queryset

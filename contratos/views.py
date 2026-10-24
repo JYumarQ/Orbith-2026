@@ -8,6 +8,7 @@ from django.conf import settings
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 from bolsa.models import Aspirante
 from .models import CAlta, CBaja, TMovimiento
+from .tarifas import calcular_tarifas, parametros_de_tarifa, salario_de_combinacion
 from .forms import CAltaForm
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import Departamento, CargoPlantilla, UnidadOrganizativa
@@ -69,7 +70,7 @@ class ContratoListView(ListView):
 
         `partials/filter_contratos_list.html` baja por `c.aspirante`,
         `c.cargo.departamento.unidad_organizativa`, `c.cargo.ncargo.grupo_escala`,
-        `c.cargo.rol`, `c.rol` y `c.tridente`. Sin esto Django resolvía cada salto
+        `c.cargo.rol` y `c.tridente`. Sin esto Django resolvía cada salto
         con una consulta suelta por fila: la vista disparaba 95 consultas (36 de
         ellas repetidas) con apenas 51 empleados.
 
@@ -89,7 +90,7 @@ class ContratoListView(ListView):
             'aspirante',
             'tipo',
             'motivo',
-            'rol',
+            'cargo__rol',
             'tridente',
             'cargo',
             'cargo__ncargo',
@@ -108,6 +109,11 @@ class ContratoListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        # Triángulos de problemas de cada fila de la página (Fase 2).
+        from subsanacion.indicadores import marcar, problemas_por_contrato
+        filas = list(context['object_list'])
+        context['object_list'] = marcar(filas, problemas_por_contrato(filas), 'contrato')
+        context['filtro_problemas'] = self.request.GET.get('problemas', '')
         context['form'] = CAltaForm()
         context['search_url'] = 'search_contrato'
         context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
@@ -417,7 +423,6 @@ def search_contratos(request):
         'cargo__ncargo',
         'cargo__ncargo__grupo_escala',
         'cargo__rol',
-        'rol',
         'tridente'
     ).order_by('-fecha_alta')
     # La fecha mínima de la Baja de cada fila y si es una recontratación, en la
@@ -458,7 +463,7 @@ def search_contratos(request):
         elif sort_col == 'rol':
             jerarquia = {"APOYO": 1, "FUNDAMENTAL": 2, "DECISORIO": 3, "CUADRO": 4}
             def get_rol_val(c):
-                r = c.rol or (c.cargo.rol if c.cargo else None)
+                r = c.cargo.rol if c.cargo else None
                 rol_str = r.tipo.upper() if r else "CUADRO"
                 return jerarquia.get(rol_str, 0)
             contratos_list.sort(key=get_rol_val, reverse=reverse_sort)
@@ -474,8 +479,13 @@ def search_contratos(request):
     from core.paginacion import paginar
     page_obj = paginar(request, contratos_list)
 
+    # Triángulos de problemas de cada fila de la página (Fase 2).
+    from subsanacion.indicadores import marcar, problemas_por_contrato
+    filas = list(page_obj)
+    filas = marcar(filas, problemas_por_contrato(filas), 'contrato')
+
     return render(request, 'pages/contrato/partials/filter_contratos_list.html', {
-        'object_list': page_obj,
+        'object_list': filas,
         'page_obj': page_obj,
         'paginator': page_obj.paginator,
         'search_url': 'search_contrato',
@@ -865,6 +875,32 @@ def historico_trabajador(request, aspirante_id):
         item['fecha_inicio_str'] = item['fecha_inicio'].strftime('%d/%m/%Y')
         lista_final.append(item)
 
+    # --- CAMBIOS EXTERNOS (23-10-2026) ---
+    # Cambios hechos más arriba del contrato (escala, cargo, unidad, importes…). Se
+    # intercalan por fecha DESPUÉS de calcular las fechas de fin: no son estados del
+    # contrato, así que no cortan el período de ningún movimiento. Los de «Error
+    # humano» y los anulados por una corrección no se muestran (quedan en Auditoría).
+    from django.utils import timezone
+
+    from .models import CambioExterno
+    for cambio in (CambioExterno.objects
+                   .filter(aspirante_id=aspirante_id, error_humano=False, anulado=False)
+                   .order_by('fecha')):
+        dia = timezone.localtime(cambio.fecha).date()
+        lista_final.append({
+            'id': None, 'es_cambio_externo': True,
+            'evento': 'Cambio externo', 'origen': cambio.get_origen_display(),
+            'fecha_orden': dia, 'fecha_inicio': dia,
+            'fecha_inicio_str': dia.strftime('%d/%m/%Y'), 'fecha_fin': '',
+            'expediente': cambio.no_expediente, 'unidad': '---',
+            'cargo': cambio.descripcion, 'descripcion': cambio.descripcion,
+            'motivo': cambio.motivo, 'usuario': cambio.usuario_nombre,
+            'valor_anterior': cambio.valor_anterior, 'valor_nuevo': cambio.valor_nuevo,
+            'salario': '---', 'es_baja': False, 'estado_clase': 'text-secondary',
+        })
+    # Orden estable: en el mismo día, el movimiento va antes que el cambio externo.
+    lista_final.sort(key=lambda x: (x['fecha_orden'], bool(x.get('es_cambio_externo'))))
+
     return JsonResponse({'data': lista_final, 'encabezado': encabezado})
 
 # --- 2. NUEVA VISTA PARA EXPORTAR HISTORIAL COMPLETO (PDF) ---
@@ -879,6 +915,9 @@ class ExportarHistoricoPDFView(View):
         # Súper truco: Llamamos a tu propia función para reciclar los datos ordenados
         respuesta = historico_trabajador(request, aspirante_id)
         datos_historial = json.loads(respuesta.content)['data']
+        # Lo mismo que se ve en pantalla: con o sin los cambios externos.
+        if request.GET.get('externos') == '0':
+            datos_historial = [d for d in datos_historial if not d.get('es_cambio_externo')]
         
         context = {
             'aspirante': aspirante,
@@ -962,10 +1001,7 @@ class ContratoCreateView(RequiereEdicionMixin, CreateView):
 
     def form_valid(self, form):
         self.object = form.save(commit=False)
-        
-        if self.object.cargo and self.object.cargo.rol:
-            self.object.rol = self.object.cargo.rol
-        
+
         aspirante_id = self.kwargs['aspirante_id']
         self.object.aspirante = get_object_or_404(Aspirante, doc_identidad=aspirante_id)
         
@@ -1072,48 +1108,13 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
 
         context['fecha_contratacion_actual'] = contrato.fecha_ultima_accion
 
-        config = Configuracion.objects.first()
-        if config and config.fondo_tiempo_calc_tarif is not None:
-            fondo = float(config.fondo_tiempo_calc_tarif)
-        else:
-            fondo = 190.6
-            messages.warning(self.request, "Parámetros de configuración no encontrados. Usando valor por defecto.")
-        context['fondo'] = fondo
-
-        if config and config.porcentaje_horas_extras is not None:
-            porcentaje_extra = float(config.porcentaje_horas_extras)
-        else:
-            porcentaje_extra = 0.25
-    
-        # 2) Si ya tiene cargo y tridente, calculo salario/tarifa/extras
-        if contrato.cargo and contrato.tridente:
-            cargo = contrato.cargo
-            tridente_id = contrato.tridente.id
-            grupo_escala = cargo.ncargo.grupo_escala
-            rol = cargo.rol
-
-            try:
-                salario_obj = NSalario.objects.get(
-                    grupo_escala=grupo_escala,
-                    rol=rol,
-                    tridente_id=tridente_id
-                )
-                monto = float(salario_obj.monto)
-                
-                tarifa = round(monto / fondo, 5) if fondo else 0
-                extras = round((tarifa * porcentaje_extra) + tarifa, 5)
-                
-                context['initial_salario_escala'] = round(monto, 2)
-                context['initial_tarifa_horaria'] = tarifa
-                context['initial_tarifa_extras'] = extras
-            except NSalario.DoesNotExist:
-                context['initial_salario_escala'] = ""
-                context['initial_tarifa_horaria'] = ""
-                context['initial_tarifa_extras'] = ""
-        else:
-            context['initial_salario_escala'] = ""
-            context['initial_tarifa_horaria'] = ""
-            context['initial_tarifa_extras'] = ""
+        # Salario, tarifa y horas extras con el cálculo ÚNICO de la app (el mismo del
+        # Word, los informes y la Pre-Nómina). Antes esta pantalla consultaba la escala
+        # por su cuenta: ignoraba el salario Fijo y dejaba vacío el de los cuadros.
+        tarifas = calcular_tarifas(contrato.calcular_salario_escala())
+        context['initial_salario_escala'] = tarifas['salario'] if tarifas['salario'] is not None else ""
+        context['initial_tarifa_horaria'] = tarifas['tarifa'] if tarifas['tarifa'] is not None else ""
+        context['initial_tarifa_extras'] = tarifas['extras'] if tarifas['extras'] is not None else ""
 
         return context
 
@@ -1130,9 +1131,6 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
     def form_valid(self, form):
         self.object = form.save(commit=False)
 
-        if self.object.cargo and self.object.cargo.rol:
-            self.object.rol = self.object.cargo.rol
-            
         # --- LIMPIEZA AUTOMÁTICA DE TRIDENTE ---
         if self.object.cargo and self.object.cargo.ncargo.es_cuadro:
             self.object.tridente = None
@@ -1413,14 +1411,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             context['initial_rol'] = contrato.cargo.rol.tipo if contrato.cargo.rol else "-"
             
             if salario_base:
-                monto = float(salario_base)
-                config = Configuracion.objects.first()
-                fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-                porcentaje_extra = float(config.porcentaje_horas_extras) if config and config.porcentaje_horas_extras else 0.25
-
-                context['initial_salario_escala'] = round(monto, 2)
-                context['initial_tarifa_horaria'] = round(monto / fondo, 5) if fondo else 0
-                context['initial_tarifa_extras'] = round((context['initial_tarifa_horaria'] * porcentaje_extra) + context['initial_tarifa_horaria'], 5)
+                tarifas = calcular_tarifas(salario_base)
+                context['initial_salario_escala'] = tarifas['salario']
+                context['initial_tarifa_horaria'] = tarifas['tarifa'] if tarifas['tarifa'] is not None else ""
+                context['initial_tarifa_extras'] = tarifas['extras'] if tarifas['extras'] is not None else ""
         
         # Añadimos la fecha límite cronológica para el JavaScript
         fecha_limite = contrato.fecha_efectiva_vigente()
@@ -1560,6 +1554,13 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 self.object, AccionAuditoria.MOVIMIENTO, antes=antes_auditoria,
                 despues=registro_automatico.fotografia(self.object, con_vacios=True))
 
+            # La ficha del trabajador sigue su unidad: si el movimiento lo cambió de
+            # unidad, la ficha también (decisión de RRHH, 23-10-2026). Es parte del
+            # mismo movimiento, así que va con update() y sin evento propio.
+            if unidad_nue_obj and self.object.aspirante.unidad_organizativa_id != unidad_nue_obj.pk:
+                Aspirante.objects.filter(pk=self.object.aspirante_id).update(
+                    unidad_organizativa=unidad_nue_obj)
+
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
             # La unidad ANTERIOR del contrato (antes de este cambio) ya era una de
@@ -1685,8 +1686,9 @@ class ModeloMovimientoDocxView(View):
         contrato_base = obj.contrato if es_movimiento_real and hasattr(obj, 'contrato') else (obj if not es_movimiento_real else None)
 
         # --- CONFIGURACIÓN TARIFA ---
-        config = Configuracion.objects.first()
-        fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
+        # Fondo de tiempo de Configuración, sin valor fijo de respaldo (si falta,
+        # la tarifa queda vacía y la regla CFG-004 lo avisa).
+        fondo = float(parametros_de_tarifa()[0] or 0)
 
         # --- FUNCIONES DE FORMATO LIBRES DE "NONE" ---
         def obtener_inicial_categoria(cat_str):
@@ -1782,10 +1784,10 @@ class ModeloMovimientoDocxView(View):
         suma_otros_num = 0
         if contrato_base:
             suma_otros_num = (
-                float(getattr(contrato_base, 'maestria', 0) or 0) +
-                float(getattr(contrato_base, 'doctorado', 0) or 0) +
-                float(getattr(contrato_base, 'instructor', 0) or 0) +
-                float(getattr(contrato_base, 'cnci', 0) or 0)
+                float(getattr(contrato_base, 'importe_maestria', 0) or 0) +
+                float(getattr(contrato_base, 'importe_doctorado', 0) or 0) +
+                float(getattr(contrato_base, 'importe_instructor', 0) or 0) +
+                float(getattr(contrato_base, 'importe_cnci', 0) or 0)
             )
 
         if suma_otros_num > 0:
@@ -1865,8 +1867,8 @@ class ModeloMovimientoDocxView(View):
             suma_otros_ant = 0
             if base_ant:
                 suma_otros_ant = (
-                    float(getattr(base_ant, 'maestria', 0) or 0) + float(getattr(base_ant, 'doctorado', 0) or 0) +
-                    float(getattr(base_ant, 'instructor', 0) or 0) + float(getattr(base_ant, 'cnci', 0) or 0)
+                    float(getattr(base_ant, 'importe_maestria', 0) or 0) + float(getattr(base_ant, 'importe_doctorado', 0) or 0) +
+                    float(getattr(base_ant, 'importe_instructor', 0) or 0) + float(getattr(base_ant, 'importe_cnci', 0) or 0)
                 )
 
             if suma_otros_ant > 0:
@@ -1947,52 +1949,24 @@ def cargar_salario(request):
             context['nuevo_rol'] = rol_obj.tipo if rol_obj else "-"
             context['nuevo_grupo'] = grupo_obj.nivel if grupo_obj else "-"
             
-            monto = 0.00
+            # El tridente solo se muestra (y solo cuenta) para un salario dinámico que
+            # no sea de Cuadro. Del XXII al XXIV la escala solo tiene Decisorios.
+            nivel_num = nivel_romano_a_int(grupo_obj.nivel) if grupo_obj else 0
+            context['mostrar_tridente'] = (
+                tipo_salario != 'FIJ' and not es_cuadro_por_cat
+                and not (22 <= nivel_num <= 24 and rol_obj and rol_obj.tipo != "Decisorio"))
 
-            # --- ESCENARIO A: SALARIO FIJO DEL CARGO ---
-            if tipo_salario == 'FIJ':
-                monto = float(cargo.ncargo.salario_basico)
-                context['mostrar_tridente'] = False
-            
-            # --- ESCENARIO B: SALARIO DINÁMICO DE LA TABLA ---
-            else:
-                salario_obj = None
-                
-                if es_cuadro_por_cat:
-                    context['mostrar_tridente'] = False
-                    salario_obj = NSalario.objects.filter(
-                        grupo_escala=grupo_obj,
-                        rol__isnull=True,
-                        tridente__isnull=True
-                    ).first()
-                else:
-                    nivel_num = nivel_romano_a_int(grupo_obj.nivel) if grupo_obj else 0
-                    
-                    if 22 <= nivel_num <= 24 and (rol_obj and rol_obj.tipo != "Decisorio"):
-                        context['mostrar_tridente'] = False
-                        salario_obj = None 
-                    else:
-                        context['mostrar_tridente'] = True 
-                        
-                        if tridente_id and rol_obj: 
-                            salario_obj = NSalario.objects.filter(
-                                grupo_escala=grupo_obj,
-                                rol=rol_obj,
-                                tridente_id=tridente_id
-                            ).first()
-                
-                if salario_obj and salario_obj.monto:
-                    monto = float(salario_obj.monto)
-
-            # --- CÁLCULOS FINALES ---
-            if monto > 0:
-                config = Configuracion.objects.first()
-                fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-                
+            # El salario con el cálculo ÚNICO de la app (`contratos/salarios.py`), el
+            # mismo del Word, los informes y la Pre-Nómina; y la tarifa y las horas
+            # extras con la fórmula única (`contratos/tarifas.py`). Antes aquí las
+            # horas extras eran «salario ÷ 160.6», fijo en el código.
+            tridente = tridente_id if (context['mostrar_tridente'] and str(tridente_id).isdigit()) else None
+            tarifas = calcular_tarifas(salario_de_combinacion(cargo, tridente, tipo_salario))
+            if tarifas['salario']:
                 context.update({
-                    'salario': round(monto, 2),
-                    'tarifa':  round(monto / fondo, 5) if fondo else 0,
-                    'extras':  round(monto / 160.6, 5),
+                    'salario': tarifas['salario'],
+                    'tarifa': tarifas['tarifa'] or 0,
+                    'extras': tarifas['extras'] or 0,
                 })
                 
         except Exception as e:
@@ -2159,23 +2133,14 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 i_rol = cargo_obj.rol.tipo if cargo_obj.rol else "-"
                 
                 
-                # Rescatar cálculos salariales exactos
-                monto = 0
-                if unsaved_contrato.tipo_salario == 'FIJ':
-                    monto = float(cargo_obj.ncargo.salario_basico)
-                elif hasattr(unsaved_contrato, 'tridente_id') and unsaved_contrato.tridente_id:
-                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol=cargo_obj.rol, tridente_id=unsaved_contrato.tridente_id).first()
-                    if sal_obj: monto = float(sal_obj.monto)
-                elif cargo_obj.ncargo.es_cuadro:
-                    sal_obj = NSalario.objects.filter(grupo_escala=cargo_obj.ncargo.grupo_escala, rol__isnull=True, tridente__isnull=True).first()
-                    if sal_obj: monto = float(sal_obj.monto)
-
-                if monto > 0:
-                    config = Configuracion.objects.first()
-                    fondo = float(config.fondo_tiempo_calc_tarif) if config and config.fondo_tiempo_calc_tarif else 190.6
-                    i_salario = round(monto, 2)
-                    i_tarifa = round(monto / fondo, 5) if fondo else 0
-                    i_extras = round((i_tarifa*0.25)+i_tarifa, 5)
+                # Salario, tarifa y horas extras con el cálculo ÚNICO de la app (antes
+                # aquí las horas extras eran «× 1.25» fijo en el código).
+                tarifas = calcular_tarifas(salario_de_combinacion(
+                    cargo_obj, unsaved_contrato.tridente_id, unsaved_contrato.tipo_salario))
+                if tarifas['salario']:
+                    i_salario = tarifas['salario']
+                    i_tarifa = tarifas['tarifa'] or 0
+                    i_extras = tarifas['extras'] or 0
             except Exception as e:
                 logger.exception("Error precargando datos del cargo en el wizard: %s", e)
 
@@ -2235,8 +2200,6 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     # validó en la Fase 1, pero el contrato no se guarda hasta aquí: en
                     # ese intervalo otro usuario pudo ocupar la última vacante.
                     cargo_obj = CargoPlantilla.objects.select_for_update().select_related('ncargo').get(pk=contrato.cargo_id)
-                    if cargo_obj.rol:
-                        contrato.rol = cargo_obj.rol
 
                     if contrato.tipo and contrato.tipo.ocupa_plaza:
                         if not cargo_obj.en_plantilla:
@@ -2426,7 +2389,8 @@ def exportar_contratos_excel(request):
     contratos = qs.select_related(
         'aspirante', 'aspirante__municipio', 'aspirante__provincia', 'aspirante__especialidad',
         'tipo', 'motivo', 'cargo', 'cargo__ncargo', 'cargo__ncargo__grupo_escala',
-        'cargo__departamento', 'cargo__departamento__unidad_organizativa', 'rol', 'tridente'
+        'cargo__departamento', 'cargo__departamento__unidad_organizativa', 'cargo__rol', 'tridente',
+        'cnci_nomenclador', 'instructor_nomenclador'
     ).order_by('cargo__departamento__unidad_organizativa__descripcion', 'aspirante__papellido')
 
     def si_no(valor): return "Sí" if valor else "No"
@@ -2450,8 +2414,8 @@ def exportar_contratos_excel(request):
             si_no(c.profesional), si_no(c.jubilado_recontratado), si_no(c.mision), c.pais or "", c.reg_militar or "",
             # Grupo Escala
             getattr(c.cargo.ncargo.grupo_escala, 'nivel', '') if c.cargo and c.cargo.ncargo and getattr(c.cargo.ncargo, 'grupo_escala', None) else "",
-            getattr(c.rol, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
-            c.instructor or 0, c.cnci or 0,
+            getattr(c.cargo.rol if c.cargo else None, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
+            c.importe_instructor or 0, c.importe_cnci or 0,
             asp.doc_identidad, asp.serie_ci or "", asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
             asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
             asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
@@ -2506,6 +2470,8 @@ class ExportarContratoWordView(FormView):
                 'motivo',
                 'tridente',
                 'cla',
+                'cnci_nomenclador',
+                'instructor_nomenclador',
                 'nocturnidad_1__nocturnidad',
                 'nocturnidad_2__nocturnidad'
             ).get(pk=pk)
@@ -2580,22 +2546,17 @@ class ExportarContratoWordView(FormView):
 
         # Preparar Grados Científicos para solo lectura
         grados = []
-        if getattr(contrato, 'maestria', 0) > 0:
-            grados.append(f"Maestría (${contrato.maestria})")
-        if getattr(contrato, 'doctorado', 0) > 0:
-            grados.append(f"Doctorado (${contrato.doctorado})")
+        if getattr(contrato, 'importe_maestria', 0) > 0:
+            grados.append(f"Maestría (${contrato.importe_maestria})")
+        if getattr(contrato, 'importe_doctorado', 0) > 0:
+            grados.append(f"Doctorado (${contrato.importe_doctorado})")
         context['grados_cientificos_texto'] = " • ".join(grados) if grados else "(-)"
 
         # Cálculos Matemáticos de Salario reutilizando el método del modelo
         monto_escala = contrato.calcular_salario_escala()
         context['salario_escala'] = f"{monto_escala:.2f}" if monto_escala else "0.00"
-        context['tarifa_horaria'] = "0.00"
-        
-        config = Configuracion.objects.first()
-        if monto_escala and config and config.fondo_tiempo_calc_tarif:
-            fondo = float(config.fondo_tiempo_calc_tarif)
-            tarifa = round(float(monto_escala) / fondo, 5) if fondo else 0
-            context['tarifa_horaria'] = f"{tarifa:.5f}"
+        tarifa = calcular_tarifas(monto_escala)['tarifa']
+        context['tarifa_horaria'] = f"{tarifa:.5f}" if tarifa is not None else "0.00"
 
         return context
 
@@ -2652,11 +2613,8 @@ class ExportarContratoWordView(FormView):
         # 3. Matemática Salarial
         monto_escala = contrato.calcular_salario_escala()
         salario_escala = f"{monto_escala:.2f}" if monto_escala else ""
-        tarifa_horaria = ""
-        
-        if monto_escala and config and config.fondo_tiempo_calc_tarif:
-            fondo = float(config.fondo_tiempo_calc_tarif)
-            tarifa_horaria = f"{round(float(monto_escala) / fondo, 5):.5f}" if fondo else ""
+        tarifa = calcular_tarifas(monto_escala)['tarifa']
+        tarifa_horaria = f"{tarifa:.5f}" if tarifa is not None else ""
 
         # 4. Extracción de Provincia y Municipio (Desde el HTML manual)
         prov_id = self.request.POST.get('provincia_entidad')
@@ -2684,6 +2642,8 @@ class ExportarContratoWordView(FormView):
 
         # 6. Código del tridente en números romanos ('I', 'II', 'III')
         tridente_codigo = (contrato.tridente.tipo or '').strip().upper() if contrato.tridente else ''
+
+        rol_tipo = (contrato.cargo.rol.tipo or '').upper() if contrato.cargo and contrato.cargo.rol else ''
 
         # 7. Construcción Final del Diccionario (Valores por defecto en "" para usar el Subrayado de Word)
         ctx = {
@@ -2725,9 +2685,11 @@ class ExportarContratoWordView(FormView):
             'bg_cdi': "X" if contrato.cargo and contrato.cargo.ncargo.cat_ocupacional in ['CDI', 'CEJ'] else "",
 
             # ROLES
-            'check_fundamental': "X" if contrato.rol and 'FUNDAMENTAL' in contrato.rol.tipo.upper() else "",
-            'check_apoyo': "X" if contrato.rol and 'APOYO' in contrato.rol.tipo.upper() else "",
-            'check_decisorio': "X" if contrato.rol and 'DECISORIO' in contrato.rol.tipo.upper() else "",
+            # El rol es el del cargo que ocupa (antes leía una copia en el contrato
+            # que podía quedarse con el rol de un cargo anterior).
+            'check_fundamental': "X" if rol_tipo and 'FUNDAMENTAL' in rol_tipo else "",
+            'check_apoyo': "X" if rol_tipo and 'APOYO' in rol_tipo else "",
+            'check_decisorio': "X" if rol_tipo and 'DECISORIO' in rol_tipo else "",
             
             # TRIDENTES
             # Se marca por el código romano ('I', 'II', 'III'), no por el id de la
@@ -2748,11 +2710,11 @@ class ExportarContratoWordView(FormView):
             # ADICIONALES Y PAGOS
             'pago_cla': f"(${contrato.cla.tarifa_hora})" if contrato.cla else "",
             'pago_nocturnidad': cleaned_data.get('nocturnidad_texto') or "",
-            'pago_cnci': getattr(contrato, 'cnci', ""),
-            'check_maestria': "X" if getattr(contrato, 'maestria', 0) > 0 else "",
-            'maestria_importe': f"${contrato.maestria}" if getattr(contrato, 'maestria', 0) > 0 else "",
-            'check_doctorado': "X" if getattr(contrato, 'doctorado', 0) > 0 else "",
-            'doctorado_importe': f"${contrato.doctorado}" if getattr(contrato, 'doctorado', 0) > 0 else "",
+            'pago_cnci': contrato.importe_cnci or "",
+            'check_maestria': "X" if getattr(contrato, 'importe_maestria', 0) > 0 else "",
+            'maestria_importe': f"${contrato.importe_maestria}" if getattr(contrato, 'importe_maestria', 0) > 0 else "",
+            'check_doctorado': "X" if getattr(contrato, 'importe_doctorado', 0) > 0 else "",
+            'doctorado_importe': f"${contrato.importe_doctorado}" if getattr(contrato, 'importe_doctorado', 0) > 0 else "",
             'sistema_pago_texto': cleaned_data.get('sistema_pago') or "",
             'check_pago_quincenal': "X" if cleaned_data.get('periodo_pago') == 'Quincenal' else "",
             'check_pago_mensual': "X" if cleaned_data.get('periodo_pago') == 'Mensual' else "",

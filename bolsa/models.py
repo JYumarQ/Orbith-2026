@@ -188,7 +188,15 @@ class Aspirante(Contacto):
         # El alta SÍ queda bloqueada: sin `pk` no hay nada heredado que respetar.
         sin_validar = {'nivel_educ'} if (self.pk and not self.nivel_educ) else None
         self.full_clean(exclude=sin_validar)  # asegura que se ejecute clean()
+        grado_anterior = (Aspirante.objects.filter(pk=self.pk)
+                          .values_list('grado_cientifico', flat=True).first()) if self.pk else None
         super().save(*args, **kwargs)
+
+        # El grado científico decide los importes de Maestría y Doctorado de sus
+        # contratos (que ya no los guardan): cambiarlo es un cambio externo para
+        # su histórico (decisión de RRHH del 23-10-2026).
+        if self.pk and (grado_anterior or None) != (self.grado_cientifico or None):
+            self._registrar_cambio_de_grado(grado_anterior)
 
         try:
             from notificaciones.avisos import avisar_hallazgos_en_caliente
@@ -197,6 +205,27 @@ class Aspirante(Contacto):
             logger.exception(
                 "No se pudieron evaluar/notificar las alertas de integridad "
                 "del trabajador %s.", self.pk)
+
+        # Revisión por registro (Fase 2): la ficha y sus contratos. Nunca lanza.
+        from subsanacion.por_registro import revisar_registros
+        revisar_registros(aspirantes=[self.pk],
+                          contratos=list(self.calta_contratos.values_list('pk', flat=True)))
+
+    def _registrar_cambio_de_grado(self, grado_anterior):
+        from contratos.cambios_externos import Afectado, registrar_cambio
+        from contratos.models import CambioExterno
+
+        nombres = dict(self._meta.get_field('grado_cientifico').choices)
+        antes = nombres.get(grado_anterior, 'sin grado científico')
+        ahora = nombres.get(self.grado_cientifico, 'sin grado científico')
+        afectados = []
+        for contrato in self.calta_contratos.all():
+            importes = (contrato.importe_maestria, contrato.importe_doctorado)
+            afectados.append(Afectado(
+                contrato, f'El grado científico de la ficha cambió: {antes} a {ahora}.',
+                f'Grado: {antes}',
+                'Grado: %s (Maestría %s, Doctorado %s)' % (ahora, *importes)))
+        registrar_cambio(CambioExterno.Origen.FICHA, self, afectados)
 
     def __str__(self):
         return f"{self.nombre} {self.papellido} {self.sapellido or ''}".strip()

@@ -48,7 +48,8 @@ def _contratos_de(unidad):
             .select_related('aspirante', 'aspirante__especialidad',
                             'cargo', 'cargo__departamento',
                             'cargo__ncargo', 'cargo__ncargo__grupo_escala',
-                            'tipo', 'motivo', 'rol', 'tridente')
+                            'tipo', 'motivo', 'cargo__rol', 'tridente',
+                            'cnci_nomenclador', 'instructor_nomenclador')
             .order_by('id'))
 
 
@@ -147,13 +148,14 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         fecha_vence_lic=contrato.fecha_vence_lic,
         fecha_vence_recal=contrato.fecha_vence_recal,
         fecha_vence_seg=contrato.fecha_vence_seg,
-        rol_tipo=contrato.rol.tipo if contrato.rol else '',
+        # El rol es del cargo (antes leía una copia del contrato, vacía en muchos).
+        rol_tipo=contrato.cargo.rol.tipo if contrato.cargo and contrato.cargo.rol else '',
         tridente_tipo=contrato.tridente.tipo if contrato.tridente else '',
         tipo_salario=contrato.tipo_salario or '',
-        maestria=contrato.maestria,
-        doctorado=contrato.doctorado,
-        cnci=contrato.cnci,
-        instructor=contrato.instructor,
+        maestria=contrato.importe_maestria,
+        doctorado=contrato.importe_doctorado,
+        cnci=contrato.importe_cnci,
+        instructor=contrato.importe_instructor,
     )
 
 

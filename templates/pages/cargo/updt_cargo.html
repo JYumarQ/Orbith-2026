@@ -105,6 +105,8 @@
 
                 <input type="hidden" name="autoriza_desplazamiento" id="autoriza_desplazamiento" value="false">
 
+                {% if not user.es_moderador or user.es_admin %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
+
                 <div class="modal-footer px-0 pb-3 mt-4">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     {% include 'pages/solicitudes/partials/boton_guardar.html' %}

@@ -1205,7 +1205,6 @@ class ContratoDesviado(BaseDepartamento):
 
         cls.grupo = NGrupoEscala.objects.create(nivel='VII')
         cls.rol = NRol.objects.create(tipo='Técnico')
-        cls.otro_rol = NRol.objects.create(tipo='Operario')
         cls.tridente = NTridente.objects.create(tipo='I')
         cls.tipo_contrato = NTipoContrato.objects.create(descripcion='Indeterminado')
         cls.motivo = NMotivoContrato.objects.create(
@@ -1234,10 +1233,7 @@ class ContratoDesviado(BaseDepartamento):
             # contrato no la tuviera, los atajos de "solo cambia campos libres"
             # la verian como un cambio mas y pedirian aprobacion.
             fecha_alta_entidad=date(2020, 3, 1),
-            tipo_salario='DIN',
-            # `rol` lo deriva del cargo la vista al guardar; se parte de otro valor a
-            # propósito para comprobar que el ejecutor lo corrige igual que ella.
-            rol=cls.otro_rol)
+            tipo_salario='DIN')
 
     def _datos_contrato(self, **cambios):
         datos = {
@@ -1351,7 +1347,7 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(self.contrato.fecha_alta_entidad, date(2019, 7, 4))
         self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
         # El importe se copia del nomenclador, no viene del POST.
-        self.assertEqual(self.contrato.instructor, self.instructor.importe)
+        self.assertEqual(self.contrato.importe_instructor, self.instructor.importe)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
@@ -1423,7 +1419,7 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(self.contrato.motivo, self.motivo)
         self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
         # El importe se copia del nomenclador, no viene del POST.
-        self.assertEqual(self.contrato.instructor, self.instructor.importe)
+        self.assertEqual(self.contrato.importe_instructor, self.instructor.importe)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
@@ -1445,7 +1441,7 @@ class ContratoDesviado(BaseDepartamento):
         self.contrato.refresh_from_db()
         # Manda la elección del Administrador, no la que pidió el Moderador.
         self.assertEqual(self.contrato.instructor_nomenclador_id, self.otro_instructor.pk)
-        self.assertEqual(self.contrato.rol, self.rol)
+        self.assertEqual(self.contrato.cargo.rol, self.rol)
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
@@ -1503,7 +1499,7 @@ class ContratoDesviado(BaseDepartamento):
         ajeno = CAlta.objects.create(
             aspirante=otro_aspirante, no_expediente='00999',
             tipo=self.tipo_contrato, cargo=otro_cargo, tridente=self.tridente,
-            fecha_alta=date(2026, 2, 1), tipo_salario='DIN', rol=self.rol)
+            fecha_alta=date(2026, 2, 1), tipo_salario='DIN')
         self.client.force_login(self.moderador)
 
         respuesta = self.client.post(
