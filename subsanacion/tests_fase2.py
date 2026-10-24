@@ -123,6 +123,13 @@ class TriangulosTests(BaseFase2):
 
 
 class BusquedaAutomaticaTests(BaseFase2):
+    """La hora se fija en cada prueba: a partir de las 16:00 no se comprueba nada."""
+
+    def setUp(self):
+        from unittest import mock
+        parche = mock.patch('subsanacion.automatico._en_horario', return_value=True)
+        self.en_horario = parche.start()
+        self.addCleanup(parche.stop)
 
     def test_analisis_diario_una_vez_al_dia(self):
         self.client.force_login(self.observador)
@@ -137,12 +144,51 @@ class BusquedaAutomaticaTests(BaseFase2):
                          (EjecucionAnalisis.PROGRAMADA, None))
         self.assertFalse(self.client.get(reverse('subsanacion:auto_estado')).json()['analizar'])
 
-    def test_busqueda_al_entrar_segun_el_rol_y_cada_4_horas(self):
+    def test_admin_cada_2_horas_y_observador_nunca(self):
         self.client.force_login(self.observador)
         self.assertFalse(self.client.get(reverse('subsanacion:auto_estado')).json()['buscar'])
         self.client.force_login(self.admin)
         self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
         self.assertFalse(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
         CustomUser.objects.filter(pk=self.admin.pk).update(
-            ultima_busqueda_incidencias=timezone.now() - timedelta(hours=5))
+            ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=125))
         self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
+
+    def test_moderador_cada_30_minutos_y_solo_sus_registros(self):
+        from notificaciones.models import Notificacion
+        moderador = CustomUser.objects.create_user(username='mod_f2', password='x', es_moderador=True)
+        moderador.unidades.add(self.cargo.departamento.unidad_organizativa)
+        self.contrato(fecha_alta=date.today() - timedelta(days=40), duracion=30)
+        self.client.force_login(moderador)
+        self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
+        self.assertTrue(Notificacion.objects.filter(destinatario=moderador, codigo_regla='CTR-018').exists())
+        CustomUser.objects.filter(pk=moderador.pk).update(
+            ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=20))
+        self.assertFalse(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
+        CustomUser.objects.filter(pk=moderador.pk).update(
+            ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=31))
+        self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
+
+    def test_despues_de_las_4_no_se_comprueba_nada(self):
+        self.en_horario.return_value = False
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(reverse('subsanacion:auto_estado')).json(),
+                         {'analizar': False, 'buscar': False})
+        self.assertEqual(self.client.post(reverse('subsanacion:auto_iniciar')).json(), {'ocupado': True})
+        self.assertFalse(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
+
+
+class HorarioTests(TestCase):
+    """La hora límite es la local de Orbith (America/Havana): a las 15:59 sí, a las
+    16:00 ya no."""
+
+    def test_limite_de_las_4_de_la_tarde(self):
+        from unittest import mock
+        from subsanacion import automatico
+        base = timezone.localtime()
+        with mock.patch('subsanacion.automatico.timezone.localtime',
+                        return_value=base.replace(hour=15, minute=59)):
+            self.assertTrue(automatico._en_horario())
+        with mock.patch('subsanacion.automatico.timezone.localtime',
+                        return_value=base.replace(hour=16, minute=0)):
+            self.assertFalse(automatico._en_horario())

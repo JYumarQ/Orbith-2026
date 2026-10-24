@@ -9,9 +9,14 @@ No hay tareas programadas en el servidor, así que las lanza el NAVEGADOR (ver
   una petición por módulo, como «Buscar incidencias» de Subsanación, para no
   acercarse al límite de tiempo del servidor. Si se cierra la pestaña a mitad, la
   ejecución queda abandonada y la retoma el siguiente que entre.
-* **Búsqueda ligera al iniciar sesión**: Administrador, toda la empresa; Moderador,
-  sus unidades; Observador, nada. Como mucho una vez cada 4 horas por usuario. Pone
-  al día SU campana (`notificaciones.escaneo.escanear_para_usuario`).
+* **Búsqueda ligera**: Administrador, toda la empresa, como mucho cada 2 horas;
+  Moderador, solo SUS registros (sus 100-200 trabajadores, no toda la empresa),
+  como mucho cada 30 minutos; Observador, nunca. Pone al día SU campana
+  (`notificaciones.escaneo.escanear_para_usuario`).
+* **Horario** (decisión de RRHH del 24-10-2026): la jornada es de 8:30 a 15:00, así
+  que a partir de las 16:00 (hora de Cuba, `TIME_ZONE`) no se lanza ninguna
+  comprobación automática. Lo que pase después lo recoge el primer inicio de
+  sesión del día siguiente.
 """
 
 from datetime import timedelta
@@ -25,7 +30,24 @@ from .constantes import CLAVES_MODULOS
 from .contexto import ContextoAnalisis
 from .models import EjecucionAnalisis
 
-HORAS_ENTRE_BUSQUEDAS = 4
+#: Tiempo mínimo entre dos búsquedas automáticas del mismo usuario, por rol.
+INTERVALO_ADMIN = timedelta(hours=2)
+INTERVALO_MODERADOR = timedelta(minutes=30)
+#: A partir de esta hora (local) no se lanza ninguna comprobación automática.
+HORA_LIMITE = 16
+
+
+def _en_horario():
+    return timezone.localtime().hour < HORA_LIMITE
+
+
+def _intervalo(usuario):
+    """Cada cuánto busca este usuario, o None si nunca (Observador)."""
+    if usuario.es_admin:
+        return INTERVALO_ADMIN
+    if usuario.es_moderador:
+        return INTERVALO_MODERADOR
+    return None
 
 
 def _sin_sesion():
@@ -33,7 +55,10 @@ def _sin_sesion():
 
 
 def _analisis_pendiente_hoy():
-    """True si hoy todavía no terminó ningún análisis completo y no hay uno en marcha."""
+    """True si es horario, hoy todavía no terminó ningún análisis completo y no hay
+    uno en marcha."""
+    if not _en_horario():
+        return False
     servicios.cerrar_ejecuciones_abandonadas()
     if servicios.obtener_ejecucion_en_curso() is not None:
         return False
@@ -44,10 +69,11 @@ def _analisis_pendiente_hoy():
 
 
 def _busqueda_pendiente(usuario):
-    if not (usuario.es_admin or usuario.es_moderador):
+    intervalo = _intervalo(usuario)
+    if intervalo is None or not _en_horario():
         return False
     ultima = usuario.ultima_busqueda_incidencias
-    return ultima is None or timezone.now() - ultima >= timedelta(hours=HORAS_ENTRE_BUSQUEDAS)
+    return ultima is None or timezone.now() - ultima >= intervalo
 
 
 @require_GET
@@ -110,7 +136,7 @@ def buscar(request):
     # Se anota ANTES de buscar y de forma condicional: si dos pestañas abren a la
     # vez, la actualización solo «gana» en una y la otra no busca.
     from django.db.models import Q
-    limite = timezone.now() - timedelta(hours=HORAS_ENTRE_BUSQUEDAS)
+    limite = timezone.now() - _intervalo(usuario)
     ganada = CustomUser.objects.filter(
         Q(ultima_busqueda_incidencias__isnull=True) | Q(ultima_busqueda_incidencias__lte=limite),
         pk=usuario.pk).update(ultima_busqueda_incidencias=timezone.now())

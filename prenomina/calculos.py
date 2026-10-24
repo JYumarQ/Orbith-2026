@@ -22,6 +22,7 @@ través de un concepto por horas no impide que se descuenten del fondo del mes.
 La lectura intuitiva («si se paga, no se descuenta») produce doble conteo.
 """
 
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 
 from . import formulas
@@ -30,6 +31,8 @@ from .models import (NEscalaAnnosServicio, TipoValorImporte, ValorAusencia,
                      ValorHoras, ValorImporte)
 
 CERO = Decimal('0')
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -95,22 +98,26 @@ def contexto_de(trabajador, horas):
     """
     return {
         'horas': Decimal(horas or CERO),
+        'horas_mes': trabajador.horas_mes or CERO,
+        'horas_trabajadas': trabajador.horas_trabajadas or CERO,
         'salario_escala': trabajador.salario_escala or CERO,
         'tarifa_horaria': trabajador.tarifa_horaria or CERO,
         'cnci': trabajador.cnci or CERO,
         'maestria': Decimal(trabajador.maestria or 0),
+        'doctorado': Decimal(trabajador.doctorado or 0),
         'instructor': trabajador.instructor or CERO,
         'anos_servicio': Decimal(trabajador.anos_servicio or 0),
     }
 
 
-def importe_de(concepto, trabajador, horas):
+def importe_de(concepto, trabajador, horas, avisos=None):
     """Importe de un concepto para un trabajador. Despacha por tipo de valor.
 
     Una fórmula que falle en tiempo de ejecución no debe tumbar el guardado de
-    toda una fila: se registra como cero. `formulas.validar()` ya rechaza al
-    guardar el concepto las fórmulas que fallarían, así que llegar aquí con un
-    error significa que hay un fallo del sistema, no del usuario.
+    toda una fila: se registra como cero. Lo mismo un resultado negativo, que un
+    pago no puede tener. Ninguno de los dos se calla: si se pasa `avisos` (una
+    lista), se le añade un mensaje en español para enseñarlo al usuario, y
+    siempre queda en el log.
     """
     if concepto.tipo_valor == TipoValorImporte.IMPORTE:
         return redondear(concepto.importe_fijo or CERO)
@@ -121,9 +128,24 @@ def importe_de(concepto, trabajador, horas):
 
     try:
         bruto = formulas.evaluar(concepto.formula, contexto_de(trabajador, horas))
-    except formulas.ErrorDeFormula:
+    except formulas.ErrorDeFormula as error:
+        _avisar(avisos, f'«{concepto.etiqueta}» no se pudo calcular para '
+                        f'{trabajador.nombre_completo} ({error}) y se registró 0.')
         return CERO
-    return redondear(bruto)
+
+    importe = redondear(bruto)
+    if importe < CERO:
+        _avisar(avisos, f'«{concepto.etiqueta}» daba {formulas.formatear(importe)} '
+                        f'para {trabajador.nombre_completo} y se registró 0: un '
+                        f'pago no puede ser negativo. Revise la fórmula.')
+        return CERO
+    return importe
+
+
+def _avisar(avisos, mensaje):
+    logger.warning('Pre-Nómina: %s', mensaje)
+    if avisos is not None:
+        avisos.append(mensaje)
 
 
 # --------------------------------------------------------------------------- #
@@ -173,14 +195,17 @@ def recalcular_trabajador(trabajador, *, conceptos=None):
     # Calendario de Pago según la jornada que tuviera asignada al congelarse.
     trabajador.horas_trabajadas = horas_trabajadas(trabajador.horas_mes, descontadas)
 
-    # 3. Importes.
+    # 3. Importes. Los avisos (fórmula que falla o que da negativo con este
+    #    trabajador) quedan en `trabajador.avisos_importe` para que el servicio
+    #    que llamó se los enseñe al usuario.
     total_importe = CERO
     a_actualizar = []
+    avisos = []
     for valor in valores_importe:
         concepto = valor.concepto
         base = (por_codigo_horas.get(concepto.relacionado_con_codigo, CERO)
                 if concepto.relacionado_con_codigo is not None else None)
-        nuevo = importe_de(concepto, trabajador, base or CERO)
+        nuevo = importe_de(concepto, trabajador, base or CERO, avisos)
         total_importe += nuevo
         if valor.importe != nuevo or valor.horas_base != base:
             valor.importe = nuevo
@@ -192,6 +217,7 @@ def recalcular_trabajador(trabajador, *, conceptos=None):
     trabajador.total_importe = redondear(total_importe)
     trabajador.save(update_fields=['total_horas_descontadas', 'horas_trabajadas',
                                    'total_importe'])
+    trabajador.avisos_importe = avisos
     return trabajador
 
 

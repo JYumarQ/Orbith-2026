@@ -223,11 +223,29 @@ def validar_formula(request):
                       {'error': str(error)})
 
     usadas = formulas.variables_usadas(expresion)
-    return render(request, 'pages/prenomina/partials/formula_feedback.html', {
+    contexto = {
         'valida': True,
-        'usa_horas': 'horas' in usadas,
+        # El recordatorio solo si falta el concepto: el modal manda también
+        # «Relacionado con» y repite la comprobación cuando cambia.
+        'usa_horas': 'horas' in usadas and not request.POST.get('relacionado_con'),
         'variables_usadas': sorted(usadas),
-    })
+    }
+    # Vista previa con valores ficticios. `validar()` ya pasó con los valores
+    # del ensayo, pero los de ejemplo son otros: si con ellos la fórmula falla o
+    # da negativo, se dice en vez de enseñar un número.
+    try:
+        resultado, valores = formulas.ejemplo(expresion)
+    except formulas.ErrorDeFormula:
+        pass
+    else:
+        contexto.update({
+            'ejemplo_valores': [(nombre, formulas.formatear(valor))
+                                for nombre, valor in valores.items()],
+            'ejemplo_resultado': formulas.formatear(resultado),
+            'ejemplo_negativo': resultado < 0,
+        })
+    return render(request, 'pages/prenomina/partials/formula_feedback.html',
+                  contexto)
 
 
 # =========================================================================== #
@@ -245,6 +263,21 @@ def _respuesta_reporte(mensaje, icono='success', extra=None):
     respuesta = HttpResponse(status=204)
     respuesta['HX-Trigger'] = json.dumps(disparadores)
     return respuesta
+
+
+def _con_avisos(mensaje, avisos, maximo=3):
+    """Añade al mensaje los avisos de importes que se registraron como 0.
+
+    Devuelve `(mensaje, icono)`: con avisos, el icono pasa a `warning` para que
+    el usuario no lo tome por un guardado limpio. Se enseñan unos pocos; el
+    resto se resume, porque una importación de 500 filas podría dar cientos.
+    """
+    if not avisos:
+        return mensaje, 'success'
+    partes = [mensaje, *avisos[:maximo]]
+    if len(avisos) > maximo:
+        partes.append(f'… y {len(avisos) - maximo} avisos más del mismo tipo.')
+    return ' '.join(partes), 'warning'
 
 
 def _paginar(request, consulta, por_pagina=15):
@@ -621,7 +654,7 @@ def valores_trabajador(request, pk, trabajador_pk):
 
     if request.method == 'POST':
         try:
-            servicios.guardar_valores(
+            guardado = servicios.guardar_valores(
                 trabajador.pk, request.user,
                 ausencias=_horas_del_post(request.POST, 'ausencia'),
                 horas=_horas_del_post(request.POST, 'horas'))
@@ -631,9 +664,11 @@ def valores_trabajador(request, pk, trabajador_pk):
                 {**_contexto_valores(reporte, trabajador, request.POST),
                  'error': str(error)})
 
-        return _respuesta_reporte(
+        mensaje, icono = _con_avisos(
             f'Valores de {trabajador.nombre_completo} guardados.',
-            extra={'filaActualizada': trabajador.pk})
+            guardado.avisos_importe)
+        return _respuesta_reporte(mensaje, icono=icono,
+                                  extra={'filaActualizada': trabajador.pk})
 
     return render(request, 'pages/prenomina/partials/modal_valores.html',
                   _contexto_valores(reporte, trabajador))
@@ -785,6 +820,8 @@ def importar_reporte(request, pk):
         return render(request, 'pages/prenomina/partials/modal_importar.html',
                       {'reporte': reporte, 'error': str(error)})
 
-    return _respuesta_reporte(
+    mensaje, icono = _con_avisos(
         f'Importadas {resumen["filas"]} filas. Los importes se recalcularon.',
-        extra={'recargarReporte': True})
+        resumen['avisos'])
+    return _respuesta_reporte(mensaje, icono=icono,
+                              extra={'recargarReporte': True})

@@ -26,27 +26,58 @@ que ampliarlo a mano y es el momento de reconsiderar una biblioteca.
 
 Gramática admitida
 ------------------
-Números enteros y decimales, `+`, `-`, `*`, `/`, paréntesis, y las variables de
-`VARIABLES` escritas como `{{nombre}}`. Nada más.
+Números enteros y decimales (con punto o con coma: `1.25` y `1,25` son lo
+mismo), `+`, `-`, `*`, `/`, paréntesis, y las variables de `VARIABLES` escritas
+como `{{nombre}}`. Nada más.
+
+Un pago por importe nunca puede ser negativo: `validar()` rechaza la fórmula que
+ya da negativo en el ensayo en seco, y `calculos.importe_de()` registra 0 (con
+aviso) si un trabajador concreto la lleva por debajo de cero.
 """
 
 import ast
-from decimal import (Decimal, DivisionByZero, InvalidOperation, Overflow,
-                     localcontext)
+import re
+from decimal import (ROUND_HALF_UP, Decimal, DivisionByZero, InvalidOperation,
+                     Overflow, localcontext)
 
-# Variables que una fórmula puede referenciar. Todas están congeladas en la fila
-# del trabajador del reporte (`ReporteTrabajador`), así que evaluar una fórmula
+# Variables que una fórmula puede referenciar, con la explicación que ve el
+# Administrador al pasar el ratón. Todas están congeladas en la fila del
+# trabajador del reporte (`ReporteTrabajador`), así que evaluar una fórmula
 # nunca consulta datos vivos: un reporte cerrado se recalcula igual dentro de
-# cinco años.
-VARIABLES = (
-    'horas',           # horas del concepto por horas relacionado
-    'salario_escala',  # salario de escala congelado
-    'tarifa_horaria',  # salario_escala / fondo de tarifa, congelada
-    'cnci',
-    'maestria',
-    'instructor',
-    'anos_servicio',
-)
+# cinco años. Es un diccionario y no una tupla para que la descripción viva junto
+# al nombre; `in` y el recorrido siguen funcionando igual.
+VARIABLES = {
+    'horas': 'Horas del concepto por horas indicado en «Relacionado con».',
+    'horas_mes': 'Horas del mes del trabajador, según su jornada en el Calendario de Pago.',
+    'horas_trabajadas': 'Horas del mes menos las ausencias que restan.',
+    'salario_escala': 'Salario de escala del trabajador.',
+    'tarifa_horaria': 'Salario de escala entre el fondo de tiempo para la tarifa.',
+    'cnci': 'Importe de CNCI del trabajador.',
+    'maestria': 'Importe de Maestría del trabajador.',
+    'doctorado': 'Importe de Doctorado del trabajador.',
+    'instructor': 'Importe de Instructor del trabajador.',
+    'anos_servicio': 'Años de servicio del trabajador.',
+}
+
+#: Valores FICTICIOS para la vista previa del modal («con 10 horas daría…»). No
+#: salen de ningún trabajador: solo ilustran qué hace la fórmula, y la pantalla
+#: los enseña junto al resultado para que nadie los tome por datos reales.
+VALORES_DE_EJEMPLO = {
+    'horas': Decimal('10'),
+    'horas_mes': Decimal('190.60'),
+    'horas_trabajadas': Decimal('182.60'),
+    'salario_escala': Decimal('5000'),
+    'tarifa_horaria': Decimal('26.2329'),
+    'cnci': Decimal('500'),
+    'maestria': Decimal('350'),
+    'doctorado': Decimal('450'),
+    'instructor': Decimal('200'),
+    'anos_servicio': Decimal('10'),
+}
+
+# Coma decimal entre dos cifras: «1,25» → «1.25». Solo entre cifras, para que
+# una coma en cualquier otro sitio siga siendo un error con su propio mensaje.
+_COMA_DECIMAL = re.compile(r'(?<=\d),(?=\d)')
 
 LONGITUD_MAXIMA = 200
 NODOS_MAXIMOS = 100
@@ -93,6 +124,14 @@ def normalizar(expresion):
     if '{' in limpio or '}' in limpio:
         raise ErrorDeFormula(
             'Hay llaves sueltas. Las variables se escriben así: {{horas}}')
+
+    # En Cuba el decimal se escribe con coma. Sin esto, «1,25» llegaba a Python
+    # como una tupla `(1, 25)` y el usuario leía «no admite listas ni conjuntos».
+    limpio = _COMA_DECIMAL.sub('.', limpio)
+    if ',' in limpio:
+        raise ErrorDeFormula(
+            'La coma solo se admite como separador decimal, entre dos cifras '
+            '(por ejemplo 1,25).')
     return ' '.join(limpio.split())
 
 
@@ -305,7 +344,7 @@ def validar(expresion):
     for valor in VALORES_DE_ENSAYO:
         contexto = {nombre: valor for nombre in VARIABLES}
         try:
-            evaluar(expresion, contexto)
+            resultado = evaluar(expresion, contexto)
         except ErrorDeFormula as error:
             if 'divide entre cero' in str(error) and valor == 0 and usadas:
                 nombres = ', '.join('{{' + v + '}}' for v in sorted(usadas))
@@ -313,3 +352,34 @@ def validar(expresion):
                     'La fórmula divide entre una variable (%s) y fallaría con '
                     'cualquier trabajador que tenga 0. Reformúlela.' % nombres)
             raise
+
+        # Un pago no puede ser negativo. El ensayo no ve todos los casos (con
+        # variables distintas entre sí, `{{cnci}} - {{instructor}}` puede bajar
+        # de cero solo con algunos trabajadores): esos los recoge
+        # `calculos.importe_de()`, que registra 0 y avisa.
+        if resultado < 0:
+            if usadas:
+                condicion = 'con todas las variables a %s' % formatear(valor)
+            else:
+                condicion = 'siempre'
+            raise ErrorDeFormula(
+                'La fórmula puede dar un importe negativo (%s da %s). Los pagos '
+                'por importe no pueden ser negativos.'
+                % (condicion, formatear(resultado)))
+
+
+def formatear(valor):
+    """Número con dos decimales y coma decimal, para los mensajes al usuario."""
+    redondeado = Decimal(valor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return str(redondeado).replace('.', ',')
+
+
+def ejemplo(expresion):
+    """Resultado de la fórmula con `VALORES_DE_EJEMPLO`, para la vista previa.
+
+    Devuelve `(resultado, {variable: valor})` con solo las variables que la
+    fórmula usa. Lanza `ErrorDeFormula` igual que `evaluar()`.
+    """
+    usadas = variables_usadas(expresion)
+    valores = {nombre: VALORES_DE_EJEMPLO[nombre] for nombre in sorted(usadas)}
+    return evaluar(expresion, valores), valores

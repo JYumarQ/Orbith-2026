@@ -1,6 +1,7 @@
 from django import forms
 from django.db.models import Count, Q
 from django.urls import reverse_lazy
+from django.utils import timezone
 from .models import CAlta
 from strorganizativa.models import UnidadOrganizativa, Departamento, CargoPlantilla
 from nomencladores.models import (NRol, NTipoContrato, NCondicionLaboralAnormal,
@@ -39,6 +40,10 @@ CAMPOS_FECHA_CONTRATO = (
     'fecha_alta', 'fecha_alta_entidad',
     'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg',
 )
+
+#: Fechas del contrato que no pueden ser posteriores a hoy (decisión de RRHH del
+#: 23-10-2026). Las de vencimiento no están: son futuras por naturaleza.
+CAMPOS_FECHA_NO_FUTURA = ('fecha_alta', 'fecha_alta_entidad')
 
 #: Datos que solo existen con el switch Misión activo: `clean()` los vacía al apagarlo.
 CAMPOS_DE_MISION = ('pais', 'mision_dias', 'mision_importe')
@@ -427,6 +432,12 @@ class CAltaForm(forms.ModelForm):
         if 'fecha_alta_entidad' in self.fields:
             self.fields['fecha_alta_entidad'].required = True
 
+        # El calendario no deja elegir fechas futuras; `clean()` lo vuelve a comprobar.
+        hoy_html = timezone.localdate().isoformat()
+        for nombre in CAMPOS_FECHA_NO_FUTURA:
+            if nombre in self.fields:
+                self.fields[nombre].widget.attrs['max'] = hoy_html
+
         # --- EL ESCUDO DEL SERVIDOR ---
         # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
         if self.instance and self.instance.pk and self.instance.tipo_salario == 'FIJ':
@@ -627,6 +638,11 @@ class CAltaForm(forms.ModelForm):
         # --- 4. NINGUNA FECHA DEL CONTRATO ANTERIOR AL AÑO 1900 ---
         self._validar_ano_minimo(cleaned_data)
 
+        # --- 4.b NI LA F. DE CONTRATACIÓN NI LA F. ALTA ENTIDAD SON FUTURAS ---
+        # Decisión de RRHH del 23-10-2026. Las fechas de vencimiento (licencia,
+        # recalificación, seguro) quedan fuera: son futuras por naturaleza.
+        self._validar_no_futuras(cleaned_data)
+
         # --- 5. SIN MISIÓN NO HAY PAÍS, DÍAS NI IMPORTE ---
         # Hasta ahora `pais` se vaciaba solo porque el navegador no envía un
         # campo deshabilitado. Aquí lo decide el servidor, para todos los datos
@@ -637,6 +653,23 @@ class CAltaForm(forms.ModelForm):
                     cleaned_data[nombre] = None
 
         return cleaned_data
+
+    def _validar_no_futuras(self, cleaned_data):
+        """Rechaza una F. de Contratación o F. Alta Entidad posterior a hoy.
+
+        Igual que `_validar_ano_minimo`, se salta el valor que YA está guardado: si un
+        contrato antiguo tiene una fecha futura, abrirlo para corregir otra cosa no debe
+        bloquearse por un campo que el usuario no puede tocar (Subsanación lo señala).
+        """
+        hoy = timezone.localdate()
+        for nombre in CAMPOS_FECHA_NO_FUTURA:
+            if nombre not in self.fields:
+                continue
+            valor = cleaned_data.get(nombre)
+            if not valor or valor <= hoy or valor == getattr(self.instance, nombre, None):
+                continue
+            etiqueta = self.fields[nombre].label or nombre
+            self.add_error(nombre, f'"{etiqueta}" no puede ser una fecha futura.')
 
     def _validar_ano_minimo(self, cleaned_data):
         """Rechaza las fechas con un año imposible (ver `ANO_MINIMO_FECHAS`).
@@ -703,6 +736,16 @@ class MovimientoForm(CAltaForm):
             raise forms.ValidationError(
                 f'El año de la fecha efectiva debe ser {ANO_MINIMO_FECHAS} o posterior. '
                 f'Revise que haya escrito el año completo (por ejemplo 2022, no 0002).')
+        # Ningún movimiento con fecha futura (decisión de RRHH del 23-10-2026). La
+        # comparación con el resto del histórico la hace `contratos/cronologia.py`.
+        if fecha and fecha > timezone.localdate():
+            raise forms.ValidationError('La fecha efectiva no puede ser una fecha futura.')
+        return fecha
+
+    def clean_fecha_solicitud(self):
+        fecha = self.cleaned_data.get('fecha_solicitud')
+        if fecha and fecha > timezone.localdate():
+            raise forms.ValidationError('La fecha de solicitud no puede ser una fecha futura.')
         return fecha
 
     def __init__(self, *args, unidad_id=None, departamento_id=None, **kwargs):
@@ -735,6 +778,10 @@ class MovimientoForm(CAltaForm):
         if 'fecha_alta_entidad' in self.fields:
             self.fields['fecha_alta_entidad'].widget = forms.HiddenInput()
             self.fields['fecha_alta_entidad'].required = False
+
+        # Ni la fecha efectiva ni la de solicitud pueden ser futuras.
+        for nombre in ('fecha_efectiva', 'fecha_solicitud'):
+            self.fields[nombre].widget.attrs['max'] = timezone.localdate().isoformat()
 
         # 3. Campos obligatorios para el movimiento
         self.fields['unidad'].required = True

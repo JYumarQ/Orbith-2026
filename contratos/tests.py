@@ -7,7 +7,7 @@ pruebas cubren el "escudo" de `save()`, que es la última línea de defensa para
 cualquier guardado que no pase por el formulario (admin de Django, scripts).
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django import forms
@@ -1877,3 +1877,166 @@ class RolDelCargoTests(TestCase):
         aviso = Notificacion.objects.get(codigo_regla='EVT-ESCALA', destinatario=self.admin)
         self.assertIn('La escala salarial del grupo IV cambió', aviso.mensaje)
         self.assertIn('1 contrato de ese grupo', aviso.mensaje)
+
+
+class CronologiaDelHistoricoTests(TestCase):
+    """Regla única del histórico (`contratos/cronologia.py`, decisión de RRHH del
+    23-10-2026): ningún evento futuro, dos eventos del trabajador nunca el mismo día,
+    recontratar como pronto el día siguiente a la baja y todo contrato con su Alta
+    Inicial. Lo comprueba el SERVIDOR, no solo el JavaScript."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from nomencladores.models import NCausaAltaBaja
+        cls.cargo = _crear_departamento_con_cargo()
+        cls.otro_cargo = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Especialista A', cat_ocupacional='TEC',
+                                         grupo_escala=cls.cargo.ncargo.grupo_escala,
+                                         salario_basico=4000),
+            departamento=cls.cargo.departamento, cant_aprobada=5, orden_informe=2)
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(
+            descripcion='Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+        cls.causa = NCausaAltaBaja.objects.create(descripcion='Renuncia')
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Vuelve', papellido='P', sapellido='T',
+            doc_identidad='80010114001', estado='BAJA', sexo='M', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.activo = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Sigue', papellido='P', sapellido='T',
+            doc_identidad='80010114002', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_cronologia', password='x', es_admin=True)
+
+    def setUp(self):
+        self.hoy = timezone.localdate()
+        self.ayer = self.hoy - timedelta(days=1)
+        self.manana = self.hoy + timedelta(days=1)
+        self.hace_10 = self.hoy - timedelta(days=10)
+        self.client.force_login(self.admin)
+        self.xhr = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+
+    # --- Asistente de alta / recontratación ---------------------------------
+
+    def _recontratar(self, fecha, generar='true'):
+        unidad = self.cargo.departamento.unidad_organizativa_id
+        doc = self.aspirante.doc_identidad
+        paso1 = self.client.post(reverse('add_contrato', args=[doc]), {
+            'no_expediente': '01401',
+            'fecha_alta_entidad': (self.hace_10 - timedelta(days=30)).isoformat(),
+            'fecha_alta': self.hace_10.isoformat(), 'cargo': self.cargo.pk,
+            'reg_militar': 'NIN', 'tipo_salario': 'FIJ', 'unidad': unidad,
+            'departamento': self.cargo.departamento_id, 'tipo': self.tipo.pk}, **self.xhr)
+        self.assertTrue(paso1.json().get('redirect_to_wizard'), paso1.content[:300])
+        return self.client.post(reverse('finalizar_contrato_wizard', args=[doc]), {
+            'generar_movimiento': generar, 'fecha_efectiva': fecha.isoformat(),
+            'unidad': unidad, 'departamento': self.cargo.departamento_id,
+            'cargo': self.cargo.pk, 'tipo_salario': 'FIJ', 'tipo': self.tipo.pk,
+            'salarioEscala': '4000'}, **self.xhr)
+
+    def _baja_previa(self, fecha):
+        CBaja.objects.create(aspirante=self.aspirante, no_expediente='01401', tipo=self.tipo,
+                             cargo=self.cargo, fecha_alta=fecha - timedelta(days=30),
+                             fecha_baja=fecha)
+
+    def test_recontratar_el_mismo_dia_de_la_baja_se_rechaza(self):
+        self._baja_previa(self.hace_10)
+        respuesta = self._recontratar(self.hace_10)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('debe ser posterior al último evento', respuesta.json()['error_popup'])
+        self.assertFalse(CAlta.objects.filter(aspirante=self.aspirante).exists())
+
+    def test_recontratar_antes_de_la_baja_se_rechaza(self):
+        self._baja_previa(self.hace_10)
+        respuesta = self._recontratar(self.hace_10 - timedelta(days=5))
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertFalse(CAlta.objects.filter(aspirante=self.aspirante).exists())
+
+    def test_alta_con_fecha_futura_se_rechaza(self):
+        respuesta = self._recontratar(self.manana)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('no puede ser una fecha futura', respuesta.json()['error_popup'])
+        self.assertFalse(CAlta.objects.filter(aspirante=self.aspirante).exists())
+
+    def test_recontratar_al_dia_siguiente_crea_siempre_el_alta_inicial(self):
+        self._baja_previa(self.hace_10)
+        dia_siguiente = self.hace_10 + timedelta(days=1)
+        # Aunque llegue «omitir movimiento» (la opción ya no existe en pantalla), el
+        # contrato nace con su Alta Inicial en la misma fecha.
+        respuesta = self._recontratar(dia_siguiente, generar='false')
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        contrato = CAlta.objects.get(aspirante=self.aspirante)
+        self.assertEqual(contrato.fecha_alta, dia_siguiente)
+        self.assertTrue(contrato.trazabilidad.filter(
+            tipo_movimiento='Alta Inicial', fecha_efectiva=dia_siguiente).exists())
+
+    # --- Movimiento de nómina y baja ----------------------------------------
+
+    def _contrato_activo(self):
+        contrato = CAlta.objects.create(aspirante=self.activo, no_expediente='01402', tipo=self.tipo,
+                                        cargo=self.cargo, tipo_salario='FIJ', fecha_alta=self.hace_10)
+        TMovimiento.objects.create(contrato=contrato, aspirante=self.activo, no_expediente='01402',
+                                   fecha_efectiva=self.hace_10, cargo_anterior='---',
+                                   cargo_nuevo='Especialista B', salario_anterior=0,
+                                   salario_nuevo=4000, tipo_movimiento='Alta Inicial')
+        return contrato
+
+    def _movimiento(self, contrato, fecha):
+        return self.client.post(reverse('movimiento_contrato', args=[contrato.pk]), {
+            'fecha_efectiva': fecha.isoformat(),
+            'unidad': self.cargo.departamento.unidad_organizativa_id,
+            'departamento': self.cargo.departamento_id, 'cargo': self.otro_cargo.pk,
+            'tipo': self.tipo.pk, 'tipo_salario': 'FIJ', 'salarioEscala': '4000'}, **self.xhr)
+
+    def test_movimiento_el_mismo_dia_que_el_ultimo_evento_se_rechaza(self):
+        contrato = self._contrato_activo()
+        respuesta = self._movimiento(contrato, self.hace_10)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('No se permiten dos eventos el mismo día', respuesta.json()['error_popup'])
+        self.assertEqual(contrato.trazabilidad.count(), 1)
+
+    def test_movimiento_con_fecha_futura_se_rechaza(self):
+        contrato = self._contrato_activo()
+        respuesta = self._movimiento(contrato, self.manana)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(contrato.trazabilidad.count(), 1)
+
+    def test_movimiento_al_dia_siguiente_se_registra(self):
+        contrato = self._contrato_activo()
+        respuesta = self._movimiento(contrato, self.hace_10 + timedelta(days=1))
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        self.assertEqual(contrato.trazabilidad.count(), 2)
+
+    def _baja(self, contrato, fecha_baja, fecha_documento=None):
+        return self.client.post(reverse('del_contrato', args=[contrato.pk]), {
+            'fecha_baja': fecha_baja.isoformat(),
+            'fecha_efectiva': (fecha_documento or fecha_baja).isoformat(),
+            'causa_baja': self.causa.pk})
+
+    def test_baja_el_mismo_dia_que_el_alta_se_rechaza(self):
+        contrato = self._contrato_activo()
+        respuesta = self._baja(contrato, self.hace_10)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertTrue(CAlta.objects.filter(pk=contrato.pk).exists())
+
+    def test_baja_futura_o_documento_futuro_se_rechazan(self):
+        contrato = self._contrato_activo()
+        self.assertEqual(self._baja(contrato, self.manana).status_code, 400)
+        self.assertEqual(self._baja(contrato, self.ayer, fecha_documento=self.manana).status_code, 400)
+        self.assertTrue(CAlta.objects.filter(pk=contrato.pk).exists())
+
+    def test_baja_posterior_se_registra(self):
+        contrato = self._contrato_activo()
+        respuesta = self._baja(contrato, self.ayer)
+        self.assertTrue(respuesta.json()['success'], respuesta.content[:300])
+        self.assertFalse(CAlta.objects.filter(pk=contrato.pk).exists())
+
+    # --- Formularios ----------------------------------------------------------
+
+    def test_el_formulario_de_movimiento_no_acepta_fechas_futuras(self):
+        contrato = self._contrato_activo()
+        form = MovimientoForm(data={'fecha_efectiva': self.manana, 'fecha_solicitud': self.manana},
+                              instance=contrato, user=self.admin)
+        form.is_valid()
+        self.assertIn('fecha_efectiva', form.errors)
+        self.assertIn('fecha_solicitud', form.errors)

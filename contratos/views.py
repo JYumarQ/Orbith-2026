@@ -23,6 +23,7 @@ from django.db import transaction
 from xhtml2pdf import pisa
 from datetime import datetime, timedelta
 from .forms import CAltaForm, MovimientoForm
+from .cronologia import ultimo_evento, validar_fecha_evento, validar_fecha_no_futura
 from docxtpl import DocxTemplate, RichText
 from io import BytesIO
 import os
@@ -1240,16 +1241,14 @@ class ContratoBajaView(RequiereEdicionMixin, DeleteView):
         # =================================================================
         
         
-        # A-B. Fecha límite: el evento más reciente del contrato (su último
-        # movimiento o el alta). La misma que ve el formulario en la lista.
-        fecha_limite = contrato.fecha_efectiva_vigente()
-        
-        # C. Comparar (Baja no puede ser anterior a lo último que pasó)
-        if fecha_limite and fecha_baja < fecha_limite:
-            return JsonResponse({
-                'success': False, 
-                'message': f"No puede dar Baja con fecha {fecha_baja.strftime('%d/%m/%Y')} porque existe un evento posterior el {fecha_limite.strftime('%d/%m/%Y')}."
-            }, status=400)
+        # Regla única del histórico (`contratos/cronologia.py`): la baja no puede ser
+        # futura ni caer el mismo día o antes que el último evento de la persona.
+        # El documento de la baja tampoco puede estar fechado en el futuro.
+        mensaje = (validar_fecha_evento(fecha_baja, contrato.aspirante_id, contrato,
+                                        etiqueta='La fecha de baja')
+                   or validar_fecha_no_futura(fecha_efectiva, 'La fecha del documento'))
+        if mensaje:
+            return JsonResponse({'success': False, 'message': mensaje}, status=400)
         # =================================================================
 
         try:
@@ -1416,8 +1415,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 context['initial_tarifa_horaria'] = tarifas['tarifa'] if tarifas['tarifa'] is not None else ""
                 context['initial_tarifa_extras'] = tarifas['extras'] if tarifas['extras'] is not None else ""
         
-        # Añadimos la fecha límite cronológica para el JavaScript
-        fecha_limite = contrato.fecha_efectiva_vigente()
+        # Último evento del histórico de la persona, para el JavaScript (la fecha
+        # nueva tiene que ser estrictamente posterior). El servidor lo vuelve a
+        # comprobar al guardar con la misma regla (`contratos/cronologia.py`).
+        fecha_limite = ultimo_evento(contrato.aspirante_id, contrato)
         if fecha_limite:
             context['fecha_limite_js'] = fecha_limite.strftime('%Y-%m-%d')
 
@@ -1438,16 +1439,12 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
             # =================================================================
             
-            # La fecha límite es la del último movimiento del contrato o, si no hay
-            # ninguno posterior, la de alta. Por el enlace, no por expediente.
-            fecha_limite = contrato.fecha_efectiva_vigente()
-
-            # fecha_limite puede ser None (contrato sin fecha_alta y sin movimientos):
-            # sin este guardia la comparación lanzaba TypeError y devolvía un 500.
-            if nueva_fecha and fecha_limite and nueva_fecha < fecha_limite:
-                # Si la nueva fecha es viajar al pasado -> ERROR
-                mensaje = f"Error Cronológico: La fecha seleccionada ({nueva_fecha.strftime('%d/%m/%Y')}) es anterior al último evento registrado ({fecha_limite.strftime('%d/%m/%Y')})."
-                
+            # Regla única del histórico (`contratos/cronologia.py`): ni futura ni el
+            # mismo día o antes que el último evento de la persona.
+            mensaje = validar_fecha_evento(
+                nueva_fecha, contrato.aspirante_id, contrato,
+                etiqueta='La fecha efectiva del movimiento')
+            if mensaje:
                 if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
                 else:
@@ -2163,17 +2160,11 @@ def finalizar_contrato_wizard(request, aspirante_id):
         # =========================================================
         
         
-        ultima_baja = CBaja.objects.filter(aspirante_id=aspirante.id).order_by('-fecha_baja').first()
-        ultimo_mov = TMovimiento.objects.filter(aspirante_id=aspirante.id).order_by('-fecha_efectiva').first()
-        
-        fechas_pasadas = []
-        if ultima_baja and ultima_baja.fecha_baja: 
-            fechas_pasadas.append(ultima_baja.fecha_baja)
-        if ultimo_mov and ultimo_mov.fecha_efectiva: 
-            fechas_pasadas.append(ultimo_mov.fecha_efectiva)
-        
-        if fechas_pasadas:
-            fecha_limite = max(fechas_pasadas)
+        # Último evento de la persona (su última baja o movimiento): la fecha del
+        # alta tiene que ser como pronto el día siguiente. El POST lo vuelve a
+        # comprobar con la misma regla (`contratos/cronologia.py`).
+        fecha_limite = ultimo_evento(aspirante.id)
+        if fecha_limite:
             context['fecha_limite_js'] = fecha_limite.strftime('%Y-%m-%d')
         # =========================================================
 
@@ -2181,7 +2172,6 @@ def finalizar_contrato_wizard(request, aspirante_id):
 
     # POST: Ejecutar el guardado en Base de Datos
     elif request.method == 'POST':
-        generar_movimiento = request.POST.get('generar_movimiento') == 'true'
         from django.urls import reverse
         from django.utils import timezone
        
@@ -2225,99 +2215,107 @@ def finalizar_contrato_wizard(request, aspirante_id):
                                 )
                             }, status=400)
                 
-                # --- LA CURA CONTRA FECHAS ERRÓNEAS EN RECONTRATACIÓN ---
-                # IMPERATIVO: Siempre mandará la fecha validada de la UI, ignorando la caché del borrador
-                fecha_ui = request.POST.get('fecha_efectiva')
-                if fecha_ui:
+                # --- LA FECHA DEL ALTA ES LA FECHA EFECTIVA DEL MOVIMIENTO ---
+                # Manda siempre la fecha de la pantalla del movimiento, no la del
+                # borrador. Es obligatoria (ya no se pone «hoy» por defecto) y pasa por
+                # la regla única del histórico ANTES de guardar nada: ni futura, ni el
+                # mismo día o antes que la última baja o movimiento de la persona (en
+                # una recontratación, como pronto el día siguiente a la baja).
+                try:
                     from datetime import datetime
-                    from .forms import ANO_MINIMO_FECHAS
-                    contrato.fecha_alta = datetime.strptime(fecha_ui, '%Y-%m-%d').date()
-                    # Se comprueba ANTES de guardar: el formulario de abajo ya no
-                    # lo vería (compara con lo guardado), y así un «0026» no llega
-                    # a crear el contrato.
-                    if contrato.fecha_alta.year < ANO_MINIMO_FECHAS:
-                        transaction.set_rollback(True)
-                        return JsonResponse({
-                            'form_is_valid': False,
-                            'error_popup': (
-                                f'El año de la fecha efectiva debe ser {ANO_MINIMO_FECHAS} o '
-                                'posterior. Revise que haya escrito el año completo '
-                                '(por ejemplo 2022, no 0002).'),
-                        }, status=400)
-                elif not contrato.fecha_alta:
-                    from django.utils import timezone
-                    contrato.fecha_alta = timezone.now().date()
+                    fecha_ui = datetime.strptime(
+                        request.POST.get('fecha_efectiva') or '', '%Y-%m-%d').date()
+                except ValueError:
+                    fecha_ui = None
+                mensaje = validar_fecha_evento(
+                    fecha_ui, aspirante.id, etiqueta='La fecha efectiva del alta')
+                # Del borrador llega como texto ISO (la sesión no guarda fechas).
+                alta_entidad = contrato.fecha_alta_entidad
+                if isinstance(alta_entidad, str):
+                    from django.utils.dateparse import parse_date
+                    alta_entidad = parse_date(alta_entidad)
+                if not mensaje and alta_entidad and alta_entidad > fecha_ui:
+                    mensaje = (
+                        f'La fecha efectiva del alta ({fecha_ui:%d/%m/%Y}) no puede ser '
+                        f'anterior a la F. Alta Entidad ({alta_entidad:%d/%m/%Y}).')
+                if mensaje:
+                    transaction.set_rollback(True)
+                    return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
+                contrato.fecha_alta = fecha_ui
 
                 contrato.save() # Guardado Físico
                 logger.info("Contrato creado desde el wizard: pk=%s aspirante=%s", contrato.pk, contrato.aspirante_id)
                 
                 pdf_url = ""
                 
-                # 2. CREAR MOVIMIENTO (Solo si el Caso 2 fue Confirmado)
-                if generar_movimiento:
-                    form = MovimientoForm(request.POST, instance=contrato, user=request.user)
-                    if form.is_valid():
-                        nueva_fecha = form.cleaned_data.get('fecha_efectiva')
-                        cargo_nuevo = form.cleaned_data.get('cargo')
-                        salario_nue = float(request.POST.get('salarioEscala', 0))
+                # 2. CREAR EL MOVIMIENTO «ALTA INICIAL»: SIEMPRE (decisión de RRHH del
+                # 23-10-2026). Ya no existe «Omitir movimiento»: todo contrato nace con
+                # su Alta Inicial en el histórico. Si el formulario no es válido, no se
+                # guarda nada (ni el contrato).
+                form = MovimientoForm(request.POST, instance=contrato, user=request.user)
+                if form.is_valid():
+                    cargo_nuevo = form.cleaned_data.get('cargo')
+                    salario_nue = float(request.POST.get('salarioEscala', 0))
+
+                    tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
+                    mov_alta = TMovimiento.objects.create(
+                        contrato=contrato,
+                        aspirante=aspirante,
+                        no_expediente=contrato.no_expediente,
+                        # La misma fecha ya validada arriba: el alta y su movimiento
+                        # son un solo evento del histórico.
+                        fecha_efectiva=contrato.fecha_alta,
+                        fecha_solicitud=form.cleaned_data.get('fecha_solicitud'),
+                        observaciones=form.cleaned_data.get('observaciones', ''),
                         
-                        tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
-                        mov_alta = TMovimiento.objects.create(
-                            contrato=contrato,
-                            aspirante=aspirante,
-                            no_expediente=contrato.no_expediente,
-                            fecha_efectiva=nueva_fecha if nueva_fecha else timezone.now().date(),
-                            fecha_solicitud=form.cleaned_data.get('fecha_solicitud'),
-                            observaciones=form.cleaned_data.get('observaciones', ''),
-                            
-                            cargo_anterior="---",
-                            salario_anterior=0,
-                            unidad_anterior="---",
-                            
-                            cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
-                            departamento_nuevo=cargo_nuevo.departamento.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
-                            grupo_escala_nuevo=cargo_nuevo.ncargo.grupo_escala.nivel if (cargo_nuevo and cargo_nuevo.ncargo.grupo_escala) else "---",
-                            cat_ocupacional_nuevo=cargo_nuevo.ncargo.get_cat_ocupacional_display() if cargo_nuevo else "---",
-                            tipo_salario_nuevo=tipo_sal_nue_val,
-                            rol_nuevo=cargo_nuevo.rol.tipo if (cargo_nuevo and cargo_nuevo.rol) else "---",
-                            tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
-                            salario_nuevo=salario_nue,
-                            unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
-                            unidad_nueva_fk=cargo_nuevo.departamento.unidad_organizativa if (cargo_nuevo and cargo_nuevo.departamento) else None,
+                        cargo_anterior="---",
+                        salario_anterior=0,
+                        unidad_anterior="---",
+                        
+                        cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
+                        departamento_nuevo=cargo_nuevo.departamento.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
+                        grupo_escala_nuevo=cargo_nuevo.ncargo.grupo_escala.nivel if (cargo_nuevo and cargo_nuevo.ncargo.grupo_escala) else "---",
+                        cat_ocupacional_nuevo=cargo_nuevo.ncargo.get_cat_ocupacional_display() if cargo_nuevo else "---",
+                        tipo_salario_nuevo=tipo_sal_nue_val,
+                        rol_nuevo=cargo_nuevo.rol.tipo if (cargo_nuevo and cargo_nuevo.rol) else "---",
+                        tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
+                        salario_nuevo=salario_nue,
+                        unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
+                        unidad_nueva_fk=cargo_nuevo.departamento.unidad_organizativa if (cargo_nuevo and cargo_nuevo.departamento) else None,
 
-                            tipo_movimiento="Alta Inicial"
-                        )
-                        form.instance.en_proceso_movimiento = False
-                        contrato = form.save()
-                        # Apuntamos al movimiento recién creado, no al contrato: así el
-                        # documento no depende de resolver un pk ambiguo entre tablas.
-                        pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
-                    else:
-                        # Si el form falla, cancelamos todo (Contrato no se guarda) y
-                        # devolvemos el error al modal. La transacción se anula AL
-                        # FINAL: pintar el formulario consulta la base, y con la
-                        # transacción ya anulada esas consultas fallaban y el usuario
-                        # veía un error técnico (500) en vez del mensaje del formulario.
-                        context = {
-                            'is_wizard': True, 'aspirante': aspirante, 'contrato_actual': contrato, 'form': form,
-                            'initial_rol': '-', 'initial_grupo': '-', 'initial_cat': '-',
-                            'salario_actual': 0, 'initial_salario_escala': 0,
-                            'initial_tarifa_horaria': 0, 'initial_tarifa_extras': 0,
-                        }
-                        html = render_to_string("pages/contrato/movimiento_nomina.html", context, request=request)
+                        tipo_movimiento="Alta Inicial"
+                    )
+                    form.instance.en_proceso_movimiento = False
+                    contrato = form.save()
+                    # Apuntamos al movimiento recién creado, no al contrato: así el
+                    # documento no depende de resolver un pk ambiguo entre tablas.
+                    pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
+                else:
+                    # Si el form falla, cancelamos todo (Contrato no se guarda) y
+                    # devolvemos el error al modal. La transacción se anula AL
+                    # FINAL: pintar el formulario consulta la base, y con la
+                    # transacción ya anulada esas consultas fallaban y el usuario
+                    # veía un error técnico (500) en vez del mensaje del formulario.
+                    context = {
+                        'is_wizard': True, 'aspirante': aspirante, 'contrato_actual': contrato, 'form': form,
+                        'initial_rol': '-', 'initial_grupo': '-', 'initial_cat': '-',
+                        'salario_actual': 0, 'initial_salario_escala': 0,
+                        'initial_tarifa_horaria': 0, 'initial_tarifa_extras': 0,
+                    }
+                    html = render_to_string("pages/contrato/movimiento_nomina.html", context, request=request)
 
-                        # El modal solo sabe leer 'error_popup'. Sin este mensaje, el
-                        # usuario veía "Error de comunicación inesperado" ante cualquier
-                        # error de validación.
-                        mensajes = [str(error) for errores in form.errors.values() for error in errores]
-                        mensaje_final = " ".join(mensajes) if mensajes else "Revise los datos del movimiento."
+                    # El modal solo sabe leer 'error_popup'. Sin este mensaje, el
+                    # usuario veía "Error de comunicación inesperado" ante cualquier
+                    # error de validación.
+                    mensajes = [str(error) for errores in form.errors.values() for error in errores]
+                    mensaje_final = " ".join(mensajes) if mensajes else "Revise los datos del movimiento."
 
-                        transaction.set_rollback(True)
-                        return JsonResponse({
-                            'form_is_valid': False,
-                            'html_form': html,
-                            'error_popup': mensaje_final,
-                        }, status=400)
+                    transaction.set_rollback(True)
+                    return JsonResponse({
+                        'form_is_valid': False,
+                        'html_form': html,
+                        'error_popup': mensaje_final,
+                    }, status=400)
                 
                 registro_automatico.registrar(
                     contrato, AccionAuditoria.ALTA,

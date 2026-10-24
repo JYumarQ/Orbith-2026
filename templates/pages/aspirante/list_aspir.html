@@ -318,9 +318,9 @@
 
 {% endblock %}
 
-{# `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
+{% comment %} `extra_scripts` fuera de `content`: anidado dentro, Django escribía este
    bloque dos veces en la página (una en su hueco de la plantilla base y otra
-   arrastrado por `content`), ejecutando el mismo <script> por duplicado. #}
+   arrastrado por `content`), ejecutando el mismo <script> por duplicado. {% endcomment %}
 {% block extra_scripts %}
   <script src="{% static 'vendor/libs/sweetalert2/sweetalert2.all.min.js' %}"></script>
   {% if not es_baja_view %}

@@ -477,19 +477,21 @@
             // CASO 1: Interceptar botón "Cancelar"
             $('#btnCancelarMov').on('click', function() {
                 if (isWizard) {
+                    // Todo contrato nace con su «Alta Inicial» (decisión de RRHH del
+                    // 23-10-2026): ya no se puede guardar el contrato sin movimiento.
+                    // Cancelar aquí es abandonar el alta; no se guarda nada.
                     Swal.fire({
-                        title: '¿Omitir Movimiento?',
-                        text: '¿Desea realizar contrato sin crear un movimiento de nómina?',
+                        title: '¿Cancelar el alta?',
+                        text: 'El contrato no se guardará. Todo contrato necesita su movimiento de Alta Inicial.',
                         icon: 'warning',
                         showCancelButton: true,
-                        confirmButtonText: 'SÍ, guardar contrato',
+                        confirmButtonText: 'SÍ, cancelar el alta',
                         cancelButtonText: 'NO, seguir editando',
                         confirmButtonColor: '#696cff',
                         cancelButtonColor: '#8592a3'
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            $('#inputGenerarMovimiento').val('false');
-                            enviarDatos(); // Enviar para forzar el guardado del contrato
+                            document.querySelector('#modalMovimientoContrato .btn-close').click();
                         }
                     });
                 } else {
@@ -525,7 +527,7 @@
                     return;
                 }
 
-                if (!isWizard && fechaAlta && fechaInput < fechaAlta) {
+                if (!isWizard && fechaAlta && fechaInput <= fechaAlta) {
                     window.mostrarToast('Fecha inválida: debe ser posterior a la fecha de Alta (' + fechaAlta + ').', 'error');
                     return;
                 }
@@ -784,13 +786,21 @@
             if (name === 'fecha_efectiva') {
                 if (!valido) {
                     pintarBorde(this, false);
-                } else if (fechaLimiteStr && this.value < fechaLimiteStr) {
+                } else if (this.max && this.value > this.max) {
+                    // Ningún movimiento con fecha futura (decisión de RRHH del 23-10-2026).
                     pintarBorde(this, false);
                     let $parent = $(this).parent();
-                    if ($parent.find('.error-fecha').length === 0) {
-                        const fechaFormat = fechaLimiteStr.split('-').reverse().join('/');
-                        $parent.append(`<small class="text-danger fw-bold error-fecha mt-1 d-block">Error cronológico: La fecha seleccionada no puede ser anterior al último evento registrado ${fechaFormat}</small>`);
-                    }
+                    $parent.find('.error-fecha').remove();
+                    $parent.append(`<small class="text-danger fw-bold error-fecha mt-1 d-block">La fecha efectiva no puede ser futura.</small>`);
+                } else if (fechaLimiteStr && this.value <= fechaLimiteStr) {
+                    // Estrictamente posterior: dos eventos del trabajador nunca caen el
+                    // mismo día (en una recontratación, como pronto el día siguiente a
+                    // la baja). El servidor aplica la misma regla.
+                    pintarBorde(this, false);
+                    let $parent = $(this).parent();
+                    $parent.find('.error-fecha').remove();
+                    const fechaFormat = fechaLimiteStr.split('-').reverse().join('/');
+                    $parent.append(`<small class="text-danger fw-bold error-fecha mt-1 d-block">Error cronológico: la fecha tiene que ser posterior al último evento del histórico (${fechaFormat}). No se permiten dos eventos el mismo día.</small>`);
                 } else {
                     pintarBorde(this, true);
                 }

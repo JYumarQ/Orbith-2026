@@ -1376,3 +1376,50 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
                 campo_formulario='tipo',
             )
 
+
+class ContratoConFechaFutura(ReglaContratos):
+    """CTR-024: F. de Contratación o F. Alta Entidad posterior a hoy.
+
+    Desde el 23-10-2026 (decisión de RRHH) ninguna de las dos puede ser futura; los
+    formularios ya lo impiden. Las fechas de vencimiento quedan fuera: son futuras
+    por naturaleza.
+    """
+
+    codigo = 'CTR-024'
+    nombre = 'Contrato con fecha futura'
+    criticidad = CRITICIDAD_ALTA
+
+    descripcion = (
+        'Busca contratos con la F. de Contratación o la F. Alta Entidad posterior al '
+        'día de hoy.')
+    causa_probable = (
+        'Se escribió mal el año o el mes, o se registró por adelantado un contrato que '
+        'todavía no ha empezado. Hasta el 23-10-2026 Orbith lo aceptaba.')
+    impacto = (
+        'El trabajador figura contratado antes de tiempo, los años de servicio y el '
+        'vencimiento salen mal, y el contrato se cuenta en un mes que aún no ha llegado.')
+    solucion = (
+        'Corrija la fecha desde el panel de administración (la F. de Contratación no se '
+        'edita desde el formulario) junto con la de su movimiento de Alta Inicial.')
+
+    def ejecutar(self, contexto):
+        from django.utils import timezone
+
+        hoy = timezone.localdate()
+        filas = (self.base_queryset()
+                 .filter(Q(fecha_alta__gt=hoy) | Q(fecha_alta_entidad__gt=hoy))
+                 .values(*self.COLUMNAS_BASE, 'fecha_alta', 'fecha_alta_entidad')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            if fila.get('fecha_alta') and fila['fecha_alta'] > hoy:
+                cual, fecha = 'F. de Contratación', fila['fecha_alta']
+            else:
+                cual, fecha = 'F. Alta Entidad', fila['fecha_alta_entidad']
+            texto = f'{fecha.day:02d}/{fecha.month:02d}/{fecha.year:04d}'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'{cual} futura ({texto})'),
+                detalle=f'El contrato tiene la {cual} {texto}, posterior a hoy.',
+                datos={'campo': cual, 'fecha': texto},
+                unidad_organizativa_id=self.unidad_de(fila),
+            )

@@ -33,9 +33,32 @@
           </div>
         {% endif %}
 
+        {% if form.relacion_que_se_pierde %}
+          {% comment %}
+            Concepto guardado antes de que «Relacionado con» fuera solo para
+            fórmulas. Se avisa en vez de quitar la relación en silencio: deja de
+            añadirse solo al reporte y hay que ponerlo en las plantillas.
+          {% endcomment %}
+          <div class="alert alert-warning d-flex align-items-start p-2 mb-3" role="alert">
+            <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
+            <div class="small">
+              Este concepto está relacionado con «{{ form.relacion_que_se_pierde }}», pero
+              ya solo los conceptos por fórmula pueden tener esa relación. Al guardarlo se
+              quitará y dejará de añadirse solo a los reportes: inclúyalo en sus
+              plantillas si lo necesita.
+            </div>
+          </div>
+        {% endif %}
+
         <div class="row g-3">
           {% for campo in form %}
-            <div class="{% if campo.name == 'descripcion' or campo.name == 'formula' %}col-12{% else %}col-md-6{% endif %}">
+            {% comment %}
+              `data-segun-tipo` lo leen el script de abajo para enseñar solo los
+              campos del tipo de valor elegido. Solo lo llevan los pagos por
+              importe (`con_formula`); en los otros tres nomencladores no hay tipo.
+            {% endcomment %}
+            <div class="{% if campo.name == 'descripcion' or campo.name == 'formula' %}col-12{% else %}col-md-6{% endif %}"
+                 {% if con_formula %}{% if campo.name == 'importe_fijo' %}data-segun-tipo="IMP"{% elif campo.name == 'formula' or campo.name == 'relacionado_con' %}data-segun-tipo="FOR"{% endif %}{% endif %}>
               {% if campo.field.widget.input_type == 'checkbox' %}
                 <div class="form-check form-switch mt-4">
                   {{ campo }}
@@ -54,37 +77,57 @@
               {% if campo.errors %}
                 <div class="text-danger small mt-1 fw-bold">{{ campo.errors.0 }}</div>
               {% endif %}
+
+              {% if con_formula and campo.name == 'formula' %}
+                {% comment %}
+                  Variables: cada botón inserta la suya donde esté el cursor. El
+                  `title` es la explicación de `formulas.VARIABLES`.
+                {% endcomment %}
+                <div class="mt-2">
+                  <div class="small fw-bold text-slate-500 mb-1">Variables (pulse para insertarla)</div>
+                  <div class="d-flex flex-wrap gap-1">
+                    {% for nombre, descripcion in variables.items %}
+                      <button type="button" class="btn btn-sm btn-light border font-monospace py-0 px-2 pn-variable"
+                              style="font-size: 0.72rem;"
+                              data-variable="{{ nombre }}" title="{{ descripcion }}">&#123;&#123;{{ nombre }}&#125;&#125;</button>
+                    {% endfor %}
+                  </div>
+                  <div class="form-text" style="font-size: 0.72rem;">
+                    Operaciones admitidas: + &minus; * / y paréntesis.
+                  </div>
+                </div>
+
+                {% comment %}
+                  Comprobador en vivo. Llama a la MISMA `formulas.validar()` del
+                  backend: no hay una segunda gramática escrita en JavaScript que
+                  pueda desalinearse. Es ayuda de escritura; la validación de
+                  verdad sigue ocurriendo al guardar.
+
+                  `hx-target="this"` es imprescindible: sin él, el `div` hereda
+                  el `hx-target="#modal_prenomina"` del formulario (en htmx los
+                  hijos heredan esos atributos) y la respuesta sustituía el
+                  modal entero por el aviso. `load` lo lanza también al abrir la
+                  ficha de un concepto que ya tiene fórmula.
+                {% endcomment %}
+                <div id="pn-formula-feedback" class="mt-2"
+                     hx-post="{% url 'prenomina:validar_formula' %}"
+                     hx-trigger="load, keyup changed delay:400ms from:#id_formula, change from:#id_relacionado_con"
+                     hx-include="#id_formula, #id_relacionado_con"
+                     hx-target="this"
+                     hx-swap="innerHTML"></div>
+              {% endif %}
             </div>
           {% endfor %}
 
           {% if con_formula %}
-            {% comment %}
-              Comprobador en vivo. Llama a la MISMA `formulas.validar()` del
-              backend: no hay una segunda gramática escrita en JavaScript que
-              pueda desalinearse. Es ayuda de escritura; la validación de verdad
-              sigue ocurriendo al guardar.
-            {% endcomment %}
-            <div class="col-12">
-              <div id="pn-formula-feedback"
-                   hx-post="{% url 'prenomina:validar_formula' %}"
-                   hx-trigger="keyup changed delay:400ms from:#id_formula"
-                   hx-include="#id_formula"
-                   hx-swap="innerHTML"></div>
-
-              <details class="mt-2">
-                <summary class="small text-slate-500" style="cursor: pointer;">
-                  Variables disponibles
-                </summary>
-                <div class="d-flex flex-wrap gap-1 mt-2">
-                  {% for variable in variables %}
-                    <code class="badge bg-light text-muted">&#123;&#123;{{ variable }}&#125;&#125;</code>
-                  {% endfor %}
+            <div class="col-12" data-segun-tipo="ESC">
+              <div class="alert alert-light border d-flex align-items-start p-2 mb-0">
+                <i class="fas fa-table-list me-2 mt-1 text-slate-500"></i>
+                <div class="small text-slate-500">
+                  La cuantía de cada trabajador se toma de la Escala de Años de Servicio,
+                  según sus años de servicio al cerrar el período del reporte.
                 </div>
-                <div class="form-text" style="font-size: 0.72rem;">
-                  Operaciones admitidas: + &minus; * / y paréntesis.
-                  &#123;&#123;horas&#125;&#125; toma las horas del concepto indicado en «Relacionado con».
-                </div>
-              </details>
+              </div>
             </div>
           {% endif %}
         </div>
@@ -101,3 +144,42 @@
     </form>
   </div>
 </div>
+
+{% if con_formula %}
+<script>
+  (function () {
+    var modal = document.getElementById('modal_prenomina');
+    var tipo = modal && modal.querySelector('#id_tipo_valor');
+    if (!tipo) { return; }
+    var formula = modal.querySelector('#id_formula');
+
+    // Solo se ocultan: lo que quede escrito en un campo oculto lo vacía
+    // `NPagoImporteForm.clean()` al guardar, así que no hace falta borrarlo aquí
+    // (y volver al tipo anterior recupera lo que se había escrito).
+    function aplicarTipo() {
+      modal.querySelectorAll('[data-segun-tipo]').forEach(function (bloque) {
+        bloque.classList.toggle('d-none', bloque.dataset.segunTipo !== tipo.value);
+      });
+    }
+
+    modal.querySelectorAll('.pn-variable').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        // Las llaves van partidas para que Django no las tome por una variable
+        // de la plantilla.
+        var texto = '{' + '{' + boton.dataset.variable + '}' + '}';
+        var inicio = formula.selectionStart;
+        var fin = formula.selectionEnd;
+        if (inicio === null || inicio === undefined) { inicio = fin = formula.value.length; }
+        formula.setRangeText(texto, inicio, fin, 'end');
+        formula.focus();
+        // El comprobador escucha `keyup` del campo: se le avisa igual que si se
+        // hubiera tecleado.
+        formula.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+      });
+    });
+
+    tipo.addEventListener('change', aplicarTipo);
+    aplicarTipo();
+  })();
+</script>
+{% endif %}

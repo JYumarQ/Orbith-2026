@@ -213,6 +213,13 @@ class NPagoImporte(Base):
         errores = {}
         texto = (self.formula or '').strip()
 
+        # «Relacionado con» es de dónde toma la fórmula sus {{horas}}: en un
+        # importe fijo o una escala no significa nada (decisión del 23-10-2026).
+        if self.relacionado_con_id and self.tipo_valor != TipoValorImporte.FORMULA:
+            errores['relacionado_con'] = (
+                'Solo los conceptos por fórmula se relacionan con un concepto '
+                'por horas.')
+
         if self.tipo_valor == TipoValorImporte.IMPORTE:
             if self.importe_fijo is None:
                 errores['importe_fijo'] = 'Indique el importe.'

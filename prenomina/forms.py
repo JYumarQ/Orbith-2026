@@ -72,10 +72,12 @@ class NPagoImporteForm(forms.ModelForm):
     anterior.
     """
 
+    # Orden pensado para el modal: primero QUÉ es el concepto, después el tipo, y
+    # debajo solo los campos de ese tipo (el modal oculta los demás).
     class Meta:
         model = NPagoImporte
-        fields = ('codigo', 'descripcion', 'relacionado_con', 'tipo_valor',
-                  'importe_fijo', 'formula')
+        fields = ('codigo', 'descripcion', 'tipo_valor', 'importe_fijo',
+                  'formula', 'relacionado_con')
         widgets = {
             'codigo': forms.NumberInput(attrs={**_TEXTO, 'min': 1, 'step': 1}),
             'descripcion': forms.TextInput(
@@ -94,8 +96,25 @@ class NPagoImporteForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['relacionado_con'].empty_label = '— Ninguno —'
         self.fields['relacionado_con'].required = False
+        # El texto del modelo no cambia para no generar una migración solo por
+        # una ayuda; la que ve el usuario es esta.
+        self.fields['relacionado_con'].help_text = (
+            'Concepto por horas del que la fórmula toma {{horas}}. Además, este '
+            'importe se añadirá solo al reporte cuando se seleccione ese concepto.')
         self.fields['importe_fijo'].required = False
         self.fields['formula'].required = False
+        self.fields['formula'].help_text = (
+            'Puede escribir los decimales con coma o con punto. El resultado no '
+            'puede ser negativo.')
+
+        # Conceptos guardados ANTES de que la relación fuera solo para fórmulas:
+        # al guardarlos se les quita, y el modal lo avisa en vez de hacerlo en
+        # silencio, porque dejarán de añadirse solos al reporte.
+        instancia = self.instance
+        self.relacion_que_se_pierde = (
+            instancia.relacionado_con
+            if instancia.pk and instancia.relacionado_con_id
+            and instancia.tipo_valor != TipoValorImporte.FORMULA else None)
 
     def clean(self):
         """Limpia los campos que el tipo elegido deja sin sentido.
@@ -113,6 +132,7 @@ class NPagoImporteForm(forms.ModelForm):
             datos['importe_fijo'] = None
         if tipo != TipoValorImporte.FORMULA:
             datos['formula'] = ''
+            datos['relacionado_con'] = None
         else:
             datos['formula'] = (datos.get('formula') or '').strip()
 

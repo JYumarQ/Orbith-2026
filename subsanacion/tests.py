@@ -2167,7 +2167,8 @@ class ReglasDeFechasImposiblesTests(TestCase):
         cls.contrato = CAlta.objects.create(aspirante=cls.activo, no_expediente='01001',
                                             tipo=esc.tipo_contrato, cargo=esc.cargo,
                                             fecha_alta=date(2026, 4, 30))
-        # Baja posterior al contrato vigente (imposible) y otra legítima del mismo día.
+        # Baja posterior al contrato vigente y otra del mismo día: las dos imposibles
+        # desde el 23-10-2026 (recontratar exige el día siguiente a la baja).
         cls.imposible = CBaja.objects.create(
             aspirante=cls.activo, no_expediente='01001', tipo=esc.tipo_contrato, cargo=esc.cargo,
             fecha_alta=date(2026, 1, 1), fecha_baja=date(2026, 8, 20))
@@ -2191,7 +2192,7 @@ class ReglasDeFechasImposiblesTests(TestCase):
         return {h.object_id for h in obtener_regla(codigo).ejecutar(None)}
 
     def test_baja_posterior_al_contrato_vigente(self):
-        self.assertEqual(self.ids('MOV-009'), {str(self.imposible.pk)})
+        self.assertEqual(self.ids('MOV-009'), {str(self.imposible.pk), str(self.mismo_dia.pk)})
 
     def test_baja_futura(self):
         self.assertEqual(self.ids('MOV-010'), {str(self.futura.pk)})
@@ -2199,3 +2200,92 @@ class ReglasDeFechasImposiblesTests(TestCase):
     def test_anos_imposibles(self):
         self.assertEqual(self.ids('CTR-022'), {str(self.contrato_0026.pk)})
         self.assertEqual(self.ids('MOV-011'), {str(self.mov_0026.pk)})
+
+
+class ReglasDeCronologiaDelHistoricoTests(TestCase):
+    """MOV-012 (mismo día), MOV-013 (movimiento futuro), MOV-014 (sin su Alta
+    Inicial), CTR-024 (contrato con fecha futura) y la exclusión de ciclos
+    anteriores en MOV-003. Reglas del 23-10-2026."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from contratos.models import CBaja, TMovimiento
+        esc = _EscenarioContratos()
+        hoy = date.today()
+
+        def mov(contrato, fecha, tipo='Movimiento de Nómina', **extra):
+            return TMovimiento.objects.create(
+                aspirante=contrato.aspirante, contrato=contrato, no_expediente=contrato.no_expediente,
+                fecha_efectiva=fecha, cargo_anterior='---', cargo_nuevo='Especialista B',
+                salario_anterior=0 if tipo == 'Alta Inicial' else 4000, salario_nuevo=4000,
+                tipo_movimiento=tipo, **extra)
+
+        # Bien: Alta Inicial en su fecha y un movimiento posterior.
+        cls.bien = CAlta.objects.create(aspirante=esc.aspirante('80010114101'), no_expediente='01411',
+                                        tipo=esc.tipo_contrato, cargo=esc.cargo,
+                                        fecha_alta=date(2026, 3, 1))
+        mov(cls.bien, date(2026, 3, 1), 'Alta Inicial')
+        mov(cls.bien, date(2026, 4, 1))
+
+        # Dos movimientos el mismo día: se señala el segundo.
+        cls.repetido = CAlta.objects.create(aspirante=esc.aspirante('80010114102'), no_expediente='01412',
+                                            tipo=esc.tipo_contrato, cargo=esc.cargo,
+                                            fecha_alta=date(2026, 3, 1))
+        mov(cls.repetido, date(2026, 3, 1), 'Alta Inicial')
+        mov(cls.repetido, date(2026, 5, 1))
+        cls.segundo_del_dia = mov(cls.repetido, date(2026, 5, 1))
+
+        # Movimiento futuro y contrato con F. Alta Entidad futura.
+        cls.futuro = CAlta.objects.create(aspirante=esc.aspirante('80010114103'), no_expediente='01413',
+                                          tipo=esc.tipo_contrato, cargo=esc.cargo,
+                                          fecha_alta=date(2026, 3, 1),
+                                          fecha_alta_entidad=hoy + timedelta(days=5))
+        mov(cls.futuro, date(2026, 3, 1), 'Alta Inicial')
+        cls.mov_futuro = mov(cls.futuro, hoy + timedelta(days=5))
+
+        # Sin Alta Inicial, y con Alta Inicial de otra fecha.
+        cls.sin_alta = CAlta.objects.create(aspirante=esc.aspirante('80010114104'), no_expediente='01414',
+                                            tipo=esc.tipo_contrato, cargo=esc.cargo,
+                                            fecha_alta=date(2026, 3, 1))
+        cls.alta_desfasada = CAlta.objects.create(aspirante=esc.aspirante('80010114105'),
+                                                  no_expediente='01415', tipo=esc.tipo_contrato,
+                                                  cargo=esc.cargo, fecha_alta=date(2026, 3, 10))
+        mov(cls.alta_desfasada, date(2026, 3, 1), 'Alta Inicial')
+
+        # Recontratado: el contrato nuevo reengancha el Alta Inicial de su ciclo
+        # anterior, que es anterior a su alta. No es un error para MOV-003.
+        cls.recontratado = CAlta.objects.create(aspirante=esc.aspirante('80010114106'),
+                                                no_expediente='01416', tipo=esc.tipo_contrato,
+                                                cargo=esc.cargo, fecha_alta=date(2026, 6, 2))
+        mov(cls.recontratado, date(2026, 1, 1), 'Alta Inicial')
+        CBaja.objects.create(aspirante=cls.recontratado.aspirante, no_expediente='01416',
+                             tipo=esc.tipo_contrato, cargo=esc.cargo,
+                             fecha_alta=date(2026, 1, 1), fecha_baja=date(2026, 6, 1))
+        mov(cls.recontratado, date(2026, 6, 2), 'Alta Inicial')
+
+    def ids(self, codigo):
+        from .reglas import obtener_regla
+        return {h.object_id for h in obtener_regla(codigo).ejecutar(None)}
+
+    def test_eventos_del_mismo_dia(self):
+        self.assertEqual(self.ids('MOV-012'), {str(self.segundo_del_dia.pk)})
+
+    def test_movimiento_futuro(self):
+        self.assertEqual(self.ids('MOV-013'), {str(self.mov_futuro.pk)})
+
+    def test_contrato_con_fecha_futura(self):
+        self.assertEqual(self.ids('CTR-024'), {str(self.futuro.pk)})
+
+    def test_contrato_sin_su_alta_inicial(self):
+        self.assertEqual(self.ids('MOV-014'), {str(self.sin_alta.pk), str(self.alta_desfasada.pk)})
+
+    def test_mov003_ignora_los_ciclos_anteriores_de_un_recontratado(self):
+        ids = self.ids('MOV-003')
+        del_recontratado = {str(pk) for pk in self.recontratado.trazabilidad.values_list('pk', flat=True)}
+        self.assertFalse(del_recontratado & ids)
+        # El Alta Inicial desfasada (10/03 frente a 01/03) sí es anterior al alta.
+        self.assertTrue({str(pk) for pk in self.alta_desfasada.trazabilidad.values_list('pk', flat=True)} <= ids)
+
+    def test_mov006_queda_retirada(self):
+        from .reglas import obtener_reglas
+        self.assertNotIn('MOV-006', {r.codigo for r in obtener_reglas()})

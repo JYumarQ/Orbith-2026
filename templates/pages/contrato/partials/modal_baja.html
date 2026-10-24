@@ -117,9 +117,16 @@ dentro de las funciones, así que este script puede ir antes de que se carguen.
         // Fecha del último movimiento del contrato: la Fecha de Baja no puede ser anterior.
         document.getElementById('baja_fecha_limite').value = datos.fechaLimite || '';
 
-        const hoy = new Date().toISOString().split('T')[0];
-        document.getElementById('baja_fecha').value = hoy;
-        document.getElementById('baja_fecha_efectiva').value = hoy;
+        // Hoy en la hora LOCAL: `toISOString()` va en UTC y por la noche (Cuba es
+        // UTC-4/-5) devolvía ya el día siguiente, que el servidor rechaza por futuro.
+        const ahora = new Date();
+        const hoy = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        // Ninguna de las dos fechas puede ser futura (decisión de RRHH del 23-10-2026).
+        ['baja_fecha', 'baja_fecha_efectiva'].forEach(function (id) {
+            const campo = document.getElementById(id);
+            campo.value = hoy;
+            campo.max = hoy;
+        });
         document.getElementById('baja_causa').value = '';
         document.getElementById('baja_observaciones').value = '';
         // Interruptores a su valor inicial en cada baja: antes, en Contratos,
@@ -167,24 +174,27 @@ dentro de las funciones, así que este script puede ir antes de que se carguen.
             const valor = $(this).val();
             let noEstaVacio = valor && valor.trim() !== '';
 
-            // 1. La Fecha de Baja no puede ser anterior al último movimiento.
+            // 1. La Fecha de Baja tiene que ser POSTERIOR al último evento (no el
+            //    mismo día) y no puede ser futura. El servidor lo vuelve a comprobar.
+            const max = this.getAttribute('max');
+            const futura = noEstaVacio && max && valor > max;
             if (name === 'fecha_baja') {
-                if (!noEstaVacio) {
-                    pintarBorde(this, false);
-                } else if (fechaLimiteStr && valor < fechaLimiteStr) {
-                    pintarBorde(this, false);
-                    let $parent = $(this).parent();
-                    if ($parent.find('.error-cronologico').length === 0) {
-                        const fFmt = fechaLimiteStr.split('-').reverse().join('/');
-                        $parent.append(`<small class="text-danger fw-bold error-cronologico mt-1 d-block">Error: No puede ser anterior al ${fFmt}</small>`);
-                    }
-                } else {
-                    pintarBorde(this, true);
+                $(this).parent().find('.error-cronologico').remove();
+                let error = '';
+                if (futura) {
+                    error = 'Error: La fecha de baja no puede ser futura';
+                } else if (noEstaVacio && fechaLimiteStr && valor <= fechaLimiteStr) {
+                    const fFmt = fechaLimiteStr.split('-').reverse().join('/');
+                    error = `Error: Tiene que ser posterior al ${fFmt} (no se permiten dos eventos el mismo día)`;
                 }
+                if (error) {
+                    $(this).parent().append(`<small class="text-danger fw-bold error-cronologico mt-1 d-block">${error}</small>`);
+                }
+                pintarBorde(this, noEstaVacio && !error);
             }
-            // 2. Fecha de Documento y Causa: solo exigen no estar vacíos.
+            // 2. Fecha de Documento (sin fecha futura) y Causa: no pueden quedar vacíos.
             else if (obligatorios.includes(name)) {
-                pintarBorde(this, noEstaVacio);
+                pintarBorde(this, noEstaVacio && !futura);
             }
         });
 

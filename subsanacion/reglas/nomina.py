@@ -456,10 +456,20 @@ class MovimientoAnteriorAlAlta(ReglaMovimientos):
         'incorrecta, contacte al administrador de la base de datos.')
 
     def ejecutar(self, contexto):
+        # Al recontratar, `CAlta.save()` reengancha al contrato nuevo los movimientos
+        # de los ciclos anteriores de la persona: son anteriores a su alta por
+        # definición. No son el error que busca esta regla, y se reconocen porque
+        # entre el movimiento y el alta hay una baja del trabajador.
+        CBaja = apps.get_model('contratos', 'CBaja')
+        de_un_ciclo_anterior = CBaja.objects.filter(
+            aspirante_id=OuterRef('aspirante_id'),
+            fecha_baja__gte=OuterRef('fecha_efectiva'),
+            fecha_baja__lt=OuterRef('contrato__fecha_alta'))
         filas = (self.base_queryset()
                  .filter(contrato__isnull=False,
                          contrato__fecha_alta__isnull=False,
                          fecha_efectiva__lt=F('contrato__fecha_alta'))
+                 .exclude(Exists(de_un_ciclo_anterior))
                  .values('id', 'no_expediente', 'fecha_efectiva', 'tipo_movimiento',
                          'contrato__fecha_alta',
                          'aspirante__nombre', 'aspirante__papellido',
@@ -633,6 +643,11 @@ class BajaAnteriorAlAlta(ReglaBase):
 
 
 class ContratoSinMovimientos(ReglaBase):
+    # Desactivada el 23-10-2026: la sustituye MOV-014 («Contrato sin su movimiento
+    # de Alta Inicial»), más estricta (un contrato sin movimientos tampoco tiene Alta
+    # Inicial) y ya no informativa. Sus hallazgos se archivan solos en el siguiente
+    # análisis completo (`archivar_hallazgos_de_reglas_retiradas`).
+    activa = False
     codigo = 'MOV-006'
     nombre = 'Contrato sin ningún movimiento registrado'
     modulo = MODULO_NOMINA
@@ -774,8 +789,9 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
     formularios no puede ocurrir; llega por el panel de administración, una
     importación o datos de prueba (caso de «Pinga», 13-10-2026).
 
-    Se compara con «>» y no con «>=»: causar baja y volver el MISMO día es
-    legítimo (la baja del día 10 y el contrato nuevo del día 10)."""
+    Se compara con «>=»: desde el 23-10-2026 (decisión de RRHH) recontratar exige
+    como pronto el día SIGUIENTE a la baja, así que una baja del mismo día en que
+    empieza el contrato vigente también es imposible."""
 
     codigo = 'MOV-009'
     nombre = 'Baja posterior al contrato vigente del trabajador'
@@ -784,8 +800,8 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
     modelo = 'contratos.CBaja'
 
     descripcion = (
-        'Busca trabajadores activos con una baja fechada después del inicio de su '
-        'contrato vigente.')
+        'Busca trabajadores activos con una baja fechada el mismo día o después del '
+        'inicio de su contrato vigente.')
     causa_probable = (
         'La baja o el contrato se registraron o se corrigieron fuera de los formularios '
         'de Orbith (panel de administración, importación de datos), que no comprueban '
@@ -807,7 +823,7 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
         filas = (self.base_queryset()
                  .filter(aspirante__estado='ACTIVO')
                  .annotate(alta_vigente=Subquery(vivo.order_by('-fecha_alta').values('fecha_alta')[:1]))
-                 .filter(Q(fecha_baja__gt=F('alta_vigente')) | Q(fecha_alta__gt=F('alta_vigente')))
+                 .filter(Q(fecha_baja__gte=F('alta_vigente')) | Q(fecha_alta__gte=F('alta_vigente')))
                  .values('id', 'no_expediente', 'fecha_alta', 'fecha_baja', 'alta_vigente',
                          'aspirante__nombre', 'aspirante__papellido',
                          'aspirante__sapellido', 'aspirante__doc_identidad',
@@ -827,7 +843,8 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
                 titulo=f'{referencia} · baja del {baja} posterior a su contrato vigente del {vigente}',
                 detalle=(
                     f'El trabajador sigue activo con un contrato que empezó el {vigente}, '
-                    f'pero tiene registrada una baja (alta {alta}, baja {baja}) posterior a esa fecha.'),
+                    f'pero tiene registrada una baja (alta {alta}, baja {baja}) del mismo día o '
+                    f'posterior. Recontratar exige, como pronto, el día siguiente a la baja.'),
                 datos={
                     'contrato_vigente_desde': vigente,
                     'alta_de_la_baja': alta,
@@ -923,4 +940,179 @@ class MovimientoConAnoImposible(ReglaMovimientos):
                 detalle=f'El movimiento tiene la fecha efectiva {fecha}, con un año anterior a {self.ANO_MINIMO}.',
                 datos={'fecha_efectiva': fecha, 'tipo_de_movimiento': fila.get('tipo_movimiento') or '—'},
                 unidad_organizativa_id=fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id'),
+            )
+
+
+class EventosDelMismoDia(ReglaMovimientos):
+    """MOV-012: dos movimientos del mismo trabajador con la misma fecha efectiva.
+
+    Desde el 23-10-2026 (decisión de RRHH) dos eventos del histórico nunca caen el
+    mismo día (`contratos/cronologia.py`). Se señala cada movimiento que repite la
+    fecha de otro anterior (por `id`), no el primero: así el hallazgo apunta al que
+    hay que mover.
+    """
+
+    codigo = 'MOV-012'
+    nombre = 'Dos eventos del histórico el mismo día'
+    criticidad = CRITICIDAD_MEDIA
+
+    descripcion = (
+        'Busca movimientos del histórico (alta, movimiento de nómina o baja) con la '
+        'misma fecha efectiva que otro movimiento anterior del mismo trabajador.')
+    causa_probable = (
+        'Hasta el 23-10-2026 Orbith aceptaba un evento con la misma fecha que el '
+        'último registrado; también puede llegar por el panel de administración.')
+    impacto = (
+        'El orden del histórico ese día deja de estar claro: los informes y la cadena '
+        'de salarios (MOV-001) lo deciden por el orden de creación, no por la fecha.')
+    solucion = (
+        'Abra el histórico del trabajador y decida qué evento ocurrió después; corrija '
+        'su fecha desde el panel de administración para que quede en un día posterior.')
+
+    def ejecutar(self, contexto):
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+        anterior_mismo_dia = TMovimiento.objects.filter(
+            aspirante_id=OuterRef('aspirante_id'),
+            fecha_efectiva=OuterRef('fecha_efectiva'),
+            id__lt=OuterRef('id'))
+        filas = (self.base_queryset()
+                 .filter(aspirante__isnull=False)
+                 .filter(Exists(anterior_mismo_dia))
+                 .values('id', 'no_expediente', 'fecha_efectiva', 'tipo_movimiento',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'unidad_nueva_fk_id', 'unidad_anterior_fk_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            fecha = _fecha_texto(fila['fecha_efectiva'])
+            tipo = fila.get('tipo_movimiento') or '—'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'{tipo} del {fecha} repite el día de otro evento'),
+                detalle=(f'El movimiento «{tipo}» tiene la fecha efectiva {fecha}, la '
+                         f'misma que otro evento anterior del histórico del trabajador.'),
+                datos={'fecha_efectiva': fecha, 'tipo_de_movimiento': tipo},
+                unidad_organizativa_id=fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id'),
+            )
+
+
+class MovimientoConFechaFutura(ReglaMovimientos):
+    """MOV-013: movimiento con fecha efectiva o de solicitud posterior a hoy."""
+
+    codigo = 'MOV-013'
+    nombre = 'Movimiento con fecha futura'
+    criticidad = CRITICIDAD_ALTA
+
+    descripcion = (
+        'Busca movimientos del histórico con la fecha efectiva o la de solicitud '
+        'posterior al día de hoy.')
+    causa_probable = (
+        'Se escribió mal el año o el mes, o se registró por adelantado un cambio que '
+        'todavía no ha ocurrido. Hasta el 23-10-2026 Orbith lo aceptaba.')
+    impacto = (
+        'El histórico muestra como ocurrido algo que aún no ha pasado, y el último '
+        'evento del trabajador queda en el futuro: no se puede registrar ningún '
+        'movimiento ni baja nuevos hasta después de esa fecha.')
+    solucion = (
+        'Compruebe la fecha en el histórico del trabajador y corríjala desde el panel '
+        'de administración. Si el cambio todavía no ha ocurrido, regístrelo el día en '
+        'que ocurra.')
+
+    def ejecutar(self, contexto):
+        from django.utils import timezone
+
+        hoy = timezone.localdate()
+        filas = (self.base_queryset()
+                 .filter(Q(fecha_efectiva__gt=hoy) | Q(fecha_solicitud__gt=hoy))
+                 .values('id', 'no_expediente', 'fecha_efectiva', 'fecha_solicitud',
+                         'tipo_movimiento',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'unidad_nueva_fk_id', 'unidad_anterior_fk_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            efectiva, solicitud = fila['fecha_efectiva'], fila.get('fecha_solicitud')
+            if efectiva > hoy:
+                cual, fecha = 'fecha efectiva', _fecha_texto(efectiva)
+            else:
+                cual, fecha = 'fecha de solicitud', _fecha_texto(solicitud)
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'movimiento con {cual} futura ({fecha})'),
+                detalle=f'El movimiento tiene la {cual} {fecha}, posterior a hoy.',
+                datos={
+                    'fecha_efectiva': _fecha_texto(efectiva),
+                    'fecha_de_solicitud': _fecha_texto(solicitud) if solicitud else '—',
+                    'tipo_de_movimiento': fila.get('tipo_movimiento') or '—',
+                },
+                unidad_organizativa_id=fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id'),
+            )
+
+
+class ContratoSinAltaInicial(ReglaBase):
+    """MOV-014: contrato vigente sin su movimiento «Alta Inicial».
+
+    Desde el 23-10-2026 (decisión de RRHH) todo contrato nace con su Alta Inicial:
+    el asistente ya no permite omitirla. Cuenta la de la MISMA fecha que la F. de
+    Contratación, porque tras una recontratación el contrato también reengancha las
+    Altas Iniciales de ciclos anteriores (`CAlta.save()`), y esas no son la suya.
+    Sustituye a MOV-006.
+    """
+
+    codigo = 'MOV-014'
+    nombre = 'Contrato sin su movimiento de Alta Inicial'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'contratos.CAlta'
+
+    descripcion = (
+        'Busca contratos sin un movimiento «Alta Inicial» con la misma fecha que su '
+        'F. de Contratación.')
+    causa_probable = (
+        'Hasta el 23-10-2026 el asistente de contratación permitía «omitir el '
+        'movimiento»; también puede deberse a que se corrigió una de las dos fechas '
+        'sin la otra, o a contratos anteriores a que existiera el histórico.')
+    impacto = (
+        'El histórico del trabajador no muestra cuándo ni con qué cargo y salario '
+        'empezó el contrato, y la cadena de salarios (MOV-001) no tiene punto de '
+        'partida.')
+    solucion = (
+        'Si no hay Alta Inicial, regístrela desde el panel de administración con los '
+        'datos con que empezó el contrato. Si existe pero con otra fecha, corrija la '
+        'que esté equivocada (la del movimiento o la F. de Contratación).')
+
+    def ejecutar(self, contexto):
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+        alta_propia = TMovimiento.objects.filter(
+            contrato_id=OuterRef('pk'), tipo_movimiento='Alta Inicial',
+            fecha_efectiva=OuterRef('fecha_alta'))
+        alguna_alta = TMovimiento.objects.filter(
+            contrato_id=OuterRef('pk'), tipo_movimiento='Alta Inicial')
+        filas = (self.base_queryset()
+                 .filter(~Exists(alta_propia))
+                 .annotate(tiene_alguna=Exists(alguna_alta))
+                 .values('id', 'no_expediente', 'fecha_alta', 'tiene_alguna',
+                         'aspirante__nombre', 'aspirante__papellido',
+                         'aspirante__sapellido', 'aspirante__doc_identidad',
+                         'cargo__departamento__unidad_organizativa_id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            referencia = referencia_contrato(
+                fila.get('aspirante__nombre'), fila.get('aspirante__papellido'),
+                fila.get('aspirante__sapellido'), fila.get('aspirante__doc_identidad'),
+                fila.get('no_expediente'))
+            alta = _fecha_texto(fila['fecha_alta']) if fila.get('fecha_alta') else '—'
+            if fila['tiene_alguna']:
+                sufijo = f'su Alta Inicial no coincide con la F. de Contratación ({alta})'
+                detalle = (f'El contrato empezó el {alta}, pero ninguna de sus Altas '
+                           f'Iniciales tiene esa fecha.')
+            else:
+                sufijo = 'sin movimiento de Alta Inicial'
+                detalle = 'El contrato no tiene ningún movimiento «Alta Inicial» en su histórico.'
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{referencia} · {sufijo}',
+                detalle=detalle,
+                datos={'fecha_de_contratacion': alta},
+                unidad_organizativa_id=fila.get('cargo__departamento__unidad_organizativa_id'),
             )

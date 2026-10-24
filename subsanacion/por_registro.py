@@ -42,7 +42,7 @@ def sin_revision_por_registro():
 REGLAS_POR_REGISTRO = (
     # Contrato
     'CTR-001', 'CTR-002', 'CTR-003', 'CTR-004', 'CTR-010', 'CTR-016', 'CTR-017',
-    'CTR-018', 'CTR-020', 'CTR-022', 'SAL-001', 'SAL-002',
+    'CTR-018', 'CTR-020', 'CTR-022', 'CTR-024', 'SAL-001', 'SAL-002',
     # Ficha del trabajador
     'ASP-001', 'ASP-007', 'VIS-001',
     # Cargo

@@ -26,6 +26,27 @@
       {% if usa_horas %}
         <br><span class="text-muted">Recuerde indicar el concepto en «Relacionado con».</span>
       {% endif %}
+      {% if ejemplo_resultado %}
+        {% comment %}
+          Vista previa con valores FICTICIOS (`formulas.VALORES_DE_EJEMPLO`). Se
+          enseñan los valores junto al resultado para que nadie los tome por los
+          de un trabajador real.
+        {% endcomment %}
+        <div class="mt-1 pt-1 border-top border-success-subtle">
+          {% if ejemplo_valores %}
+            Ejemplo con valores ficticios:
+            {% for nombre, valor in ejemplo_valores %}<code>&#123;&#123;{{ nombre }}&#125;&#125;</code> = {{ valor }}{% if not forloop.last %}, {% endif %}{% endfor %}
+          {% else %}
+            Resultado:
+          {% endif %}
+          {% if ejemplo_negativo %}
+            → <strong class="text-danger">{{ ejemplo_resultado }}</strong>.
+            <span class="text-danger">Con valores así el importe sería negativo y se registraría 0.</span>
+          {% else %}
+            → <strong>{{ ejemplo_resultado }}</strong>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </div>
 {% endif %}

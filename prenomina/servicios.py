@@ -981,16 +981,18 @@ def importar_valores(reporte, filas, usuario):
     conceptos = calculos.cargar_conceptos(reporte)
     trabajadores = {t.pk: t for t in reporte.trabajadores.all()}
 
+    avisos = []
     for fila in filas:
         trabajador = trabajadores[fila.trabajador_pk]
         _escribir_valores(trabajador, ValorAusencia, 'valores_ausencia',
                           fila.ausencias)
         _escribir_valores(trabajador, ValorHoras, 'valores_horas', fila.horas)
         calculos.recalcular_trabajador(trabajador, conceptos=conceptos)
+        avisos.extend(trabajador.avisos_importe)
 
     calculos.refrescar_totales(reporte)
 
     _auditar(usuario, AccionAuditoria.MODIFICAR, reporte,
              f'Importadas {len(filas)} filas en el reporte '
              f'{reporte.etiqueta_periodo} de {reporte.unidad_descripcion}')
-    return {'filas': len(filas)}
+    return {'filas': len(filas), 'avisos': avisos}

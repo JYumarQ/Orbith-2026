@@ -6,10 +6,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Orbith{% endblock %}</title>
-    {# Token CSRF para las peticiones fetch de escritura (Fase 3, 23-10-2026): se añade
-       solo a toda petición POST/PUT/PATCH/DELETE hacia Orbith que no lo lleve. Así
-       ninguna pantalla depende de acordarse de ponerlo y las vistas ya no necesitan
-       `@csrf_exempt`, que dejaba la puerta abierta a peticiones falsificadas. #}
+    {% comment %}
+      Token CSRF para las peticiones fetch de escritura (Fase 3, 23-10-2026): se añade
+      solo a toda petición POST/PUT/PATCH/DELETE hacia Orbith que no lo lleve. Así
+      ninguna pantalla depende de acordarse de ponerlo y las vistas ya no necesitan
+      `@csrf_exempt`, que dejaba la puerta abierta a peticiones falsificadas.
+    {% endcomment %}
     <meta name="csrf-token" content="{{ csrf_token }}">
     <script>
       (function () {

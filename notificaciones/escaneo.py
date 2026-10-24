@@ -121,6 +121,28 @@ def reglas_de_la_busqueda():
             if r.evaluable_en_caliente or r.codigo in REGLAS_POR_REGISTRO]
 
 
+def _registros_de_unidades(unidades):
+    """Ids de los contratos, fichas y cargos de esas unidades, para `solo_registros`."""
+    from django.db.models import Q
+
+    from bolsa.models import Aspirante
+    from contratos.models import CAlta
+    from strorganizativa.models import CargoPlantilla
+
+    contratos = list(CAlta.objects.filter(
+        cargo__departamento__unidad_organizativa__in=unidades).values_list('pk', 'aspirante_id'))
+    fichas = set(Aspirante.objects.filter(
+        Q(unidad_organizativa__in=unidades) | Q(pk__in=[a for _, a in contratos])
+    ).values_list('pk', flat=True))
+    cargos = CargoPlantilla.objects.filter(
+        departamento__unidad_organizativa__in=unidades).values_list('pk', flat=True)
+    return {
+        'contratos.calta': [pk for pk, _ in contratos],
+        'bolsa.aspirante': list(fichas),
+        'strorganizativa.cargoplantilla': list(cargos),
+    }
+
+
 def escanear_para_usuario(usuario):
     """Escaneo del usuario: el botón «Buscar incidencias» y la búsqueda automática
     al iniciar sesión (como mucho cada 4 horas, ver `subsanacion.automatico`).
@@ -131,9 +153,17 @@ def escanear_para_usuario(usuario):
     incidencias notificadas.
     """
     reglas = reglas_de_la_busqueda()
-    resultados_globales = evaluar_reglas_en_caliente(reglas)
     unidades = None if usuario.es_admin else list(
         usuario.unidades.values_list('pk', flat=True))
+    if unidades is None:
+        resultados_globales = evaluar_reglas_en_caliente(reglas)
+    else:
+        # Moderador: las reglas solo recorren SUS contratos, fichas y cargos (24-10-2026),
+        # no los ~2.000 de la empresa para luego descartar casi todo. Mismas reglas,
+        # limitadas con `solo_registros` (ver `subsanacion.reglas.base`).
+        from subsanacion.reglas.base import solo_registros
+        with solo_registros(_registros_de_unidades(unidades)):
+            resultados_globales = evaluar_reglas_en_caliente(reglas)
     resultados_creacion = filtrar_por_unidades(resultados_globales, unidades)
     notificar_resultados(resultados_creacion, usuario, resultados_globales=resultados_globales,
                          codigos_relevantes={r.codigo for r in reglas})

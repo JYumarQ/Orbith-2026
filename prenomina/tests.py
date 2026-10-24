@@ -195,6 +195,47 @@ class MotorDeFormulas(SimpleTestCase):
             with self.subTest(expresion=expresion):
                 formulas.validar(expresion)  # no debe lanzar
 
+    # --- Coma decimal -------------------------------------------------------
+
+    def test_la_coma_decimal_vale_igual_que_el_punto(self):
+        """En Cuba se escribe 1,25; antes llegaba a Python como una tupla."""
+        contexto = {'tarifa_horaria': Decimal('10')}
+        self.assertEqual(formulas.evaluar('{{tarifa_horaria}} * 1,25', contexto),
+                         formulas.evaluar('{{tarifa_horaria}} * 1.25', contexto))
+        formulas.validar('{{horas}} * 1,5')  # no debe lanzar
+
+    def test_una_coma_que_no_es_decimal_tiene_su_propio_mensaje(self):
+        for expresion in ('1, 25', '{{horas}},{{cnci}}', '1,'):
+            with self.subTest(expresion=expresion):
+                with self.assertRaises(ErrorDeFormula) as caja:
+                    formulas.compilar(expresion)
+                self.assertIn('separador decimal', str(caja.exception))
+
+    # --- Sin negativos ------------------------------------------------------
+
+    def test_una_formula_que_da_negativo_se_rechaza_al_guardar(self):
+        for expresion in ('0 - 5', '0 - {{salario_escala}}', '({{horas}} - 8) * 2'):
+            with self.subTest(expresion=expresion):
+                with self.assertRaises(ErrorDeFormula) as caja:
+                    formulas.validar(expresion)
+                self.assertIn('negativo', str(caja.exception))
+
+    def test_las_variables_nuevas_se_pueden_usar(self):
+        for nombre in ('doctorado', 'horas_mes', 'horas_trabajadas'):
+            with self.subTest(variable=nombre):
+                self.assertIn(nombre, formulas.VARIABLES)
+                formulas.validar('{{%s}} * 2' % nombre)  # no debe lanzar
+
+    def test_el_ejemplo_solo_usa_las_variables_de_la_formula(self):
+        resultado, valores = formulas.ejemplo('{{horas}} * 2,5')
+        self.assertEqual(list(valores), ['horas'])
+        self.assertEqual(resultado,
+                         formulas.VALORES_DE_EJEMPLO['horas'] * Decimal('2.5'))
+
+    def test_formatear_usa_coma_y_dos_decimales(self):
+        self.assertEqual(formulas.formatear(Decimal('-12.345')), '-12,35')
+        self.assertEqual(formulas.formatear(Decimal('200')), '200,00')
+
     # --- Precisión ----------------------------------------------------------
 
     def test_la_aritmetica_es_decimal_exacta(self):
@@ -375,6 +416,44 @@ class NomencladoresDeConfiguracion(TestCase):
         self.assertTrue(formulario.is_valid(), formulario.errors)
         self.assertEqual(formulario.cleaned_data['formula'], '')
 
+    # --- «Relacionado con» es solo para fórmulas ---------------------------
+
+    def test_un_importe_fijo_no_puede_relacionarse_con_un_concepto_por_horas(self):
+        for tipo in (TipoValorImporte.IMPORTE, TipoValorImporte.ESCALA):
+            with self.subTest(tipo=tipo):
+                NEscalaAnnosServicio.objects.get_or_create(
+                    annos=1, defaults={'cuantia': Decimal('200')})
+                pago = NPagoImporte(
+                    codigo=30, descripcion='Relacionado', tipo_valor=tipo,
+                    importe_fijo=(Decimal('10') if tipo == TipoValorImporte.IMPORTE
+                                  else None),
+                    relacionado_con=self.extras)
+                with self.assertRaises(ValidationError) as caja:
+                    pago.full_clean()
+                self.assertIn('relacionado_con', caja.exception.message_dict)
+
+    def test_el_formulario_quita_la_relacion_si_no_es_formula(self):
+        formulario = NPagoImporteForm(data={
+            'codigo': 31, 'descripcion': 'Fijo', 'tipo_valor': TipoValorImporte.IMPORTE,
+            'importe_fijo': '10', 'relacionado_con': self.extras.pk,
+        })
+        self.assertTrue(formulario.is_valid(), formulario.errors)
+        self.assertIsNone(formulario.cleaned_data['relacionado_con'])
+
+    def test_el_formulario_avisa_de_la_relacion_heredada_que_se_pierde(self):
+        """Conceptos guardados antes de la regla: el modal lo dice, no lo calla."""
+        heredado = NPagoImporte.objects.create(
+            codigo=32, descripcion='Heredado', tipo_valor=TipoValorImporte.IMPORTE,
+            importe_fijo=Decimal('10'), relacionado_con=self.extras)
+        self.assertEqual(NPagoImporteForm(instance=heredado).relacion_que_se_pierde,
+                         self.extras)
+
+        por_formula = NPagoImporte.objects.create(
+            codigo=33, descripcion='Fórmula', tipo_valor=TipoValorImporte.FORMULA,
+            formula='{{horas}} * 2', relacionado_con=self.extras)
+        self.assertIsNone(
+            NPagoImporteForm(instance=por_formula).relacion_que_se_pierde)
+
     # --- Relaciones protegidas ---------------------------------------------
 
     def test_no_se_puede_borrar_un_pago_por_horas_en_uso(self):
@@ -516,6 +595,26 @@ class CierreDeLosEndpointsDeConfiguracion(TestCase):
             reverse('prenomina:validar_formula'), {'formula': '2 ^ 3'},
             HTTP_HX_REQUEST='true')
         self.assertContains(respuesta, 'multiplicar')
+
+    def test_el_comprobador_ensena_un_ejemplo_del_resultado(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.post(
+            reverse('prenomina:validar_formula'), {'formula': '{{horas}} * 2,5'},
+            HTTP_HX_REQUEST='true')
+        # 10 horas ficticias × 2,5.
+        self.assertContains(respuesta, 'valores ficticios')
+        self.assertContains(respuesta, '25,00')
+
+    def test_el_comprobador_no_sustituye_el_modal(self):
+        """Regresión: heredaba el `hx-target` del formulario y borraba el modal."""
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(
+            reverse('prenomina:nuevo_nomenclador', args=['pagos-importe']),
+            HTTP_HX_REQUEST='true')
+        self.assertContains(respuesta, 'id="pn-formula-feedback"')
+        html = respuesta.content.decode()
+        bloque = html[html.index('id="pn-formula-feedback"'):]
+        self.assertIn('hx-target="this"', bloque[:bloque.index('</div>')])
 
 
 class IntegracionConParametrosGenerales(TestCase):
@@ -1873,6 +1972,31 @@ class CalculoDeImportes(BaseConConceptos):
         ReporteTrabajador.objects.filter(pk=self.fila(reporte).pk).update(
             horas_trabajadas=Decimal('99'))
         self.assertTrue(calculos.verificar_integridad(reporte))
+
+    def test_un_importe_que_da_negativo_con_un_trabajador_se_registra_cero_con_aviso(self):
+        """El ensayo en seco no lo ve (con variables iguales da 0); el cálculo sí."""
+        NPagoImporte.objects.create(
+            codigo=40, descripcion='Resta', tipo_valor=TipoValorImporte.FORMULA,
+            formula='{{anos_servicio}} - {{cnci}}')   # 6 − 30 con el trabajador de prueba
+        reporte = self.crear()
+        servicios.configurar_conceptos(reporte, self.moderador, codigos_importe=[40])
+        fila = self.fila(reporte)
+
+        guardado = servicios.guardar_valores(fila.pk, self.moderador)
+
+        self.assertEqual(fila.valores_importe.get(concepto__codigo=40).importe,
+                         Decimal('0'))
+        self.assertEqual(len(guardado.avisos_importe), 1)
+        self.assertIn('negativo', guardado.avisos_importe[0])
+
+    def test_las_variables_nuevas_salen_de_la_fila_congelada(self):
+        reporte = self.preparar()
+        fila = self.fila(reporte)
+        contexto = calculos.contexto_de(fila, Decimal('0'))
+        self.assertEqual(contexto['horas_mes'], fila.horas_mes)
+        self.assertEqual(contexto['horas_trabajadas'], fila.horas_trabajadas)
+        self.assertEqual(contexto['doctorado'], fila.doctorado)
+        self.assertEqual(set(contexto), set(formulas.VARIABLES))
 
 
 class TrabajadorAnadidoDespues(BaseConConceptos):
