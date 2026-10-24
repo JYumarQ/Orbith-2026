@@ -83,3 +83,17 @@ def validar_fecha_evento(fecha, aspirante_id, contrato=None, etiqueta='La fecha'
                 f'eventos el mismo día: la primera fecha válida es el '
                 f'{_texto(ultimo + timedelta(days=1))}.')
     return None
+
+
+def bloquear_historico(aspirante_id):
+    """Bloquea la ficha de la persona hasta que termine la transacción en curso.
+
+    Un movimiento, una baja, un alta o una corrección del editor del histórico de la
+    MISMA persona esperan su turno en vez de guardarse a la vez: si no, dos usuarios
+    podían validar la fecha contra el mismo «último evento» y dejar dos eventos que
+    no encajan (24-10-2026). Es el mismo bloqueo que usa el editor del histórico.
+    Tiene que llamarse DENTRO de `transaction.atomic()` y ANTES de validar fechas.
+    """
+    from bolsa.models import Aspirante
+    Aspirante.objects.select_for_update().filter(pk=aspirante_id).values_list('pk', flat=True).first()
+

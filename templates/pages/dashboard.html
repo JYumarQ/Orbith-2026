@@ -68,7 +68,7 @@
 
     <div class="row g-3 mb-3">
         <div class="col-6 col-md-4 col-lg">
-            <a href="{% url 'list_contrato' %}?{{ qs_unidades|slice:'1:' }}" title="Ver la lista de contratos"
+            <a href="#" role="button" title="Ver los empleados activos" onclick="abrirVentanaDe('activos'); return false;"
                class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp">
                 <div class="icon-circle bg-gradient-primary mb-2 mx-auto"><i class="bx bx-group fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ contratos_count }}</div>
@@ -77,7 +77,7 @@
             </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <a href="{% url 'list_contrato' %}?alta_desde={{ fecha_hace_30 }}&alta_hasta={{ fecha_hoy }}{{ qs_unidades }}" title="Ver los contratos con alta en los últimos 30 días"
+            <a href="#" role="button" title="Ver las altas de los últimos 30 días" onclick="abrirVentanaDe('altas'); return false;"
                class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-1s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-file fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">+{{ altas_30d|default:"0" }}</div>
@@ -86,7 +86,7 @@
             </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <a href="{% url 'list_baja' %}?baja_desde={{ fecha_hace_30 }}&baja_hasta={{ fecha_hoy }}{{ qs_unidades }}" title="Ver las bajas de los últimos 30 días"
+            <a href="#" role="button" title="Ver las bajas de los últimos 30 días" onclick="abrirVentanaDe('bajas'); return false;"
                class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-2s">
                 <div class="icon-circle bg-gradient-danger mb-2 mx-auto"><i class="bx bx-trending-down fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3 text-danger">-{{ bajas_30d|default:"0" }}</div>
@@ -115,7 +115,7 @@
             </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <a href="{% url 'gestor_plantilla' %}{% if unidad_unica %}?unidad={{ unidad_unica }}{% endif %}" title="Abrir el Gestor de Plantilla"
+            <a href="#" role="button" title="Ver las unidades con sus plazas" onclick="abrirVentanaDe('unidades'); return false;"
                class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-secondary mb-2 mx-auto"><i class="bx bx-building-house fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ uo_count }}</div>
@@ -124,7 +124,7 @@
             </a>
         </div>
         <div class="col-6 col-md-4 col-lg">
-            <a href="{% url 'gestor_plantilla' %}{% if unidad_unica %}?unidad={{ unidad_unica }}{% endif %}" title="Abrir el Gestor de Plantilla"
+            <a href="#" role="button" title="Ver los departamentos con sus plazas" onclick="abrirVentanaDe('departamentos'); return false;"
                class="card dash-enlace h-100 text-center p-3 shadow-sm border-0 animate__animated animate__fadeInUp animate__delay-5s">
                 <div class="icon-circle bg-gradient-info mb-2 mx-auto"><i class="bx bx-sitemap fs-2 text-white"></i></div>
                 <div class="fw-bold fs-3">{{ depto_count }}</div>
@@ -141,18 +141,18 @@
                     <h6 class="mb-4 fw-bold">Equilibrio de Género</h6>
                     <div class="w-100 position-relative" style="height: 60px; margin-bottom: 18px;">
                         <div class="d-flex align-items-center justify-content-between w-100" style="height: 60px;">
-                            <a href="{% url 'list_contrato' %}?sexo=M{{ qs_unidades }}" title="Ver los hombres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-male fs-1 text-info"></i></a>
+                            <a href="#" role="button" onclick="abrirVentanaDe('activos', 'sexo=M'); return false;" title="Ver los hombres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-male fs-1 text-info"></i></a>
                             <div class="flex-grow-1 position-relative" style="height: 60px;">
                                 <div class="d-flex w-100" style="height: 60px; background: #f3f4f6; border-radius: 30px; overflow: hidden;">
-                                    <a href="{% url 'list_contrato' %}?sexo=M{{ qs_unidades }}" title="Ver los hombres" class="d-flex align-items-center justify-content-center bg-gradient-info dash-enlace" style="width: {{ generos.porc_hombres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                    <a href="#" role="button" onclick="abrirVentanaDe('activos', 'sexo=M'); return false;" title="Ver los hombres" class="d-flex align-items-center justify-content-center bg-gradient-info dash-enlace" style="width: {{ generos.porc_hombres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
                                         <span class="text-white fw-bold">{{ generos.hombres }} ({{ generos.porc_hombres|default:'0' }}%)</span>
                                     </a>
-                                    <a href="{% url 'list_contrato' %}?sexo=F{{ qs_unidades }}" title="Ver las mujeres" class="d-flex align-items-center justify-content-center bg-gradient-danger dash-enlace" style="width: {{ generos.porc_mujeres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
+                                    <a href="#" role="button" onclick="abrirVentanaDe('activos', 'sexo=F'); return false;" title="Ver las mujeres" class="d-flex align-items-center justify-content-center bg-gradient-danger dash-enlace" style="width: {{ generos.porc_mujeres|default:'0' }}%; font-size:0.8em; overflow: hidden; white-space: nowrap;">
                                         <span class="text-white fw-bold">{{ generos.mujeres }} ({{ generos.porc_mujeres|default:'0' }}%)</span>
                                     </a>
                                 </div>
                             </div>
-                            <a href="{% url 'list_contrato' %}?sexo=F{{ qs_unidades }}" title="Ver las mujeres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-female fs-1 text-danger"></i></a>
+                            <a href="#" role="button" onclick="abrirVentanaDe('activos', 'sexo=F'); return false;" title="Ver las mujeres" class="d-flex align-items-center justify-content-center dash-enlace" style="width: 44px; height: 60px;"><i class="bx bx-female fs-1 text-danger"></i></a>
                         </div>
                     </div>
                     <div class="text-center mt-3"><small class="text-muted">Total: <span class="fw-bold">{{ contratos_count }} activos</span></small></div>
@@ -423,7 +423,7 @@
     <div class="row g-3 mb-3">
         <div class="col-12 col-lg-4">
             <div class="card h-100 shadow border-0">
-                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Causas de Baja</h6></div>
+                <div class="card-header pb-0 text-center"><h6 class="m-0 fw-bold">Top Causas de Baja <small class="text-muted fw-normal ms-1" style="font-size: .72rem;">Pulse una barra</small></h6></div>
                 <div class="card-body pb-0 px-2 d-flex align-items-end"><div id="causasBajaChart" style="width: 100%;"></div></div>
             </div>
         </div>
@@ -577,6 +577,29 @@ window.abrirAntiguedadDetalle = function () {
     abrirVentanaDashboard('{% url "dashboard_antiguedad_detalle" %}?' + params.toString());
 };
 
+// Ventana genérica (dashboard/ventanas.py) con los filtros de la Dashboard (`uo`…)
+// más los de la cifra pulsada (`extra`, p. ej. 'sexo=F').
+const URL_VENTANA = '{% url "dashboard_ventana" "CLAVE" %}';
+const QS_DASHBOARD = '{{ request.GET.urlencode|escapejs }}';
+window.abrirVentanaDe = function (clave, extra) {
+    const consulta = [extra, QS_DASHBOARD].filter(Boolean).join('&');
+    abrirVentanaDashboard(URL_VENTANA.replace('CLAVE', clave) + (consulta ? '?' + consulta : ''));
+};
+
+// El Excel de una ventana lleva lo que haya ahora en su buscador y en su vista
+// (Plazas): se pueden haber cambiado después de abrirla.
+document.addEventListener('click', function (e) {
+    const enlace = e.target.closest('#contenidoModalDashboard a[data-excel-ventana]');
+    if (!enlace) return;
+    const url = new URL(enlace.getAttribute('href'), window.location.origin);
+    document.querySelectorAll('#contenidoModalDashboard input[name="q"], #contenidoModalDashboard select[name="vista"]')
+        .forEach(function (campo) {
+            if (campo.value) url.searchParams.set(campo.name, campo.value);
+            else url.searchParams.delete(campo.name);
+        });
+    enlace.setAttribute('href', url.pathname + url.search);
+});
+
 window.abrirVentanaDashboard = function (url) {
     const contenido = document.getElementById('contenidoModalDashboard');
     contenido.innerHTML = '<div class="modal-body text-center text-muted py-5">Cargando…</div>';
@@ -654,22 +677,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Navegación por leyenda: los gráficos de distribución redirigen a Contratos
-    // filtrado SOLO al hacer clic en la leyenda (evento dedicado `legendClick` de
-    // ApexCharts) — el clic sobre un segmento del gráfico sigue su comportamiento
-    // nativo intacto, no se toca `dataPointSelection` en ningún gráfico.
-    const urlContratos = '{% url "list_contrato" %}';
-    // Las unidades elegidas en «Filtros Organizativos» viajan también (`&unidad=..`).
-    const qsUnidades = '{{ qs_unidades|escapejs }}';
+    // Gráficos de distribución (24-10-2026): pulsar la LEYENDA o la PORCIÓN abre la
+    // ventana con esas personas; desde ella, «Ver más» lleva a Contratos filtrado.
+    // Las unidades elegidas en «Filtros Organizativos» viajan con la ventana.
     function irAContratos(param, valor) {
         if (valor === null || valor === undefined || valor === '') return;
-        window.location.href = urlContratos + '?' + param + '=' + encodeURIComponent(valor) + qsUnidades;
+        abrirVentanaDe('activos', param + '=' + encodeURIComponent(valor));
     }
     // `codigos` es un array paralelo a `labels`/`series` en el mismo orden; si la
-    // posición no tiene código (p.ej. la porción "Otros" de Top5+Otros) no navega.
+    // posición no tiene código (p.ej. la porción "Otros" de Top5+Otros) no abre nada.
     function legendClickHaciaContratos(param, codigos) {
         return function (chartContext, seriesIndex) {
             irAContratos(param, codigos[seriesIndex]);
+        };
+    }
+    function porcionHaciaVentana(param, codigos) {
+        return function (evento, chartContext, config) {
+            irAContratos(param, codigos[config.dataPointIndex]);
         };
     }
 
@@ -713,9 +737,18 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // 3. Top Causas de Baja
+    const causasBajaIds = {{ causas_baja_ids|safe|default:"[]" }};
     renderChartSafely('#causasBajaChart', {
         series: [{ name: 'Bajas', data: {{ causas_baja_data|safe|default:"[]" }} }],
-        chart: { type: 'bar', height: 200, toolbar: { show: false } },
+        chart: {
+            type: 'bar', height: 200, toolbar: { show: false },
+            events: {
+                dataPointSelection: function (evento, chartContext, config) {
+                    const causa = causasBajaIds[config.dataPointIndex];
+                    if (causa) abrirVentanaDe('causa', 'causa=' + encodeURIComponent(causa));
+                }
+            }
+        },
         colors: ['#ef4444'],
         plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
         dataLabels: { enabled: false },
@@ -731,7 +764,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'donut', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#catOcupacionalDonut', {{ cat_ocupacional|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('cat_ocupacional', catOcupacionalCodigos)
+                legendClick: legendClickHaciaContratos('cat_ocupacional', catOcupacionalCodigos),
+                dataPointSelection: porcionHaciaVentana('cat_ocupacional', catOcupacionalCodigos)
             }
         },
         labels: ['Ope (O)', 'Téc (T)', 'Adm (A)', 'Ser (S)', 'Cua (C)'],
@@ -906,7 +940,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'donut', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#tiposContratoChart', {{ tipos_contrato_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('tipo', tiposContratoLabels)
+                legendClick: legendClickHaciaContratos('tipo', tiposContratoLabels),
+                dataPointSelection: porcionHaciaVentana('tipo', tiposContratoLabels)
             }
         },
         labels: tiposContratoLabels,
@@ -935,7 +970,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'pie', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#educacionalPieChart', {{ nivel_educ_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('nivel_educ', nivelEducCodigos)
+                legendClick: legendClickHaciaContratos('nivel_educ', nivelEducCodigos),
+                dataPointSelection: porcionHaciaVentana('nivel_educ', nivelEducCodigos)
             }
         },
         labels: {{ nivel_educ_labels|safe|default:"[]" }},
@@ -958,7 +994,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'pie', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#razaPieChart', {{ raza_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('raza', razaCodigos)
+                legendClick: legendClickHaciaContratos('raza', razaCodigos),
+                dataPointSelection: porcionHaciaVentana('raza', razaCodigos)
             }
         },
         labels: {{ raza_labels|safe|default:"[]" }},
@@ -982,7 +1019,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'pie', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#especialidadPieChart', {{ especialidad_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('especialidad', especialidadCodigos)
+                legendClick: legendClickHaciaContratos('especialidad', especialidadCodigos),
+                dataPointSelection: porcionHaciaVentana('especialidad', especialidadCodigos)
             }
         },
         labels: {{ especialidad_labels|safe|default:"[]" }},
@@ -1005,7 +1043,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'donut', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#municipioPieChart', {{ municipio_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('municipio', municipioCodigos)
+                legendClick: legendClickHaciaContratos('municipio', municipioCodigos),
+                dataPointSelection: porcionHaciaVentana('municipio', municipioCodigos)
             }
         },
         labels: {{ municipio_labels|safe|default:"[]" }},
@@ -1029,7 +1068,8 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'donut', height: esMovil ? 258 : 230,
             events: {
                 mounted: function () { agregarCantidadALeyenda('#gradoCientificoPieChart', {{ grado_cientifico_data|safe|default:"[]" }}); },
-                legendClick: legendClickHaciaContratos('grado_cientifico', gradoCientificoCodigos)
+                legendClick: legendClickHaciaContratos('grado_cientifico', gradoCientificoCodigos),
+                dataPointSelection: porcionHaciaVentana('grado_cientifico', gradoCientificoCodigos)
             }
         },
         labels: {{ grado_cientifico_labels|safe|default:"[]" }},

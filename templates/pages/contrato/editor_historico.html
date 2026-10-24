@@ -1,0 +1,805 @@
+{% extends 'base/base.html' %}
+{% comment %}
+  Editor del histórico (fase 4, 24-10-2026). Solo el Administrador.
+  Diseño aprobado (maqueta v2): línea de tiempo por contratos a la izquierda, mesa
+  de edición a la derecha y barra del borrador fija abajo. Todo se edita en
+  BORRADOR en el navegador; cada cambio se manda a «previa», que lo comprueba con
+  el motor (contratos/editor_historico.py). Solo «Guardar todo» escribe.
+{% endcomment %}
+
+{% block title %}Editor del histórico{% endblock %}
+
+{% block extra_head %}
+<style>
+  .eh {
+    --orb: #696cff; --orb-osc: #5f61e6; --orb-suave: rgba(105,108,255,.10); --orb-borde: rgba(105,108,255,.35);
+    --tinta: #384551; --texto: #646e78; --tenue: #a1acb8;
+    --fondo: #f5f5f9; --papel: #ffffff; --linea: #e7e7ef; --pizarra: #2b2c40;
+    --alta: #16a34a; --alta-suave: #dcfce7; --baja: #dc2626; --baja-suave: #fee2e2;
+    --corregido: #ca8a04; --corregido-suave: #fef9c3; --cierre: #0369a1; --cierre-suave: #e0f2fe;
+    --mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+    --sombra: 0 2px 6px rgba(67,89,113,.10), 0 1px 1px rgba(67,89,113,.04);
+    color: var(--texto); font-size: .9rem;
+  }
+  .eh h1, .eh h2, .eh h3 { color: var(--tinta); text-wrap: balance; }
+  .eh .num { font-variant-numeric: tabular-nums; }
+  .eh .migas { font-size: .78rem; color: var(--tenue); }
+  .eh .migas a { color: var(--tenue); text-decoration: none; } .eh .migas a:hover { color: var(--orb); }
+  .eh .sello-admin { font-size: .7rem; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--orb); background: var(--orb-suave); border-radius: 999px; padding: .25rem .6rem; }
+
+  /* Ficha */
+  .eh .ficha { background: var(--papel); border-radius: .75rem; box-shadow: var(--sombra); }
+  .eh .avatar { width: 56px; height: 56px; border-radius: 14px; background: var(--orb); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 1.15rem; flex-shrink: 0; }
+  .eh .dato-ficha { font-size: .78rem; } .eh .dato-ficha b { color: var(--tinta); }
+  .eh .expediente { font-family: var(--mono); color: var(--tinta); background: var(--fondo); border: 1px solid var(--linea); border-radius: .35rem; padding: .05rem .4rem; }
+  .eh .cifra { border-left: 1px solid var(--linea); padding-left: 1rem; }
+  .eh .cifra .valor { font-size: 1.35rem; font-weight: 800; color: var(--tinta); line-height: 1; }
+  .eh .cifra .rotulo { font-size: .68rem; text-transform: uppercase; letter-spacing: .5px; color: var(--tenue); }
+  .eh .estado { font-size: .7rem; font-weight: 700; border-radius: 999px; padding: .2rem .55rem; }
+  .eh .estado-ACTIVO { background: var(--alta-suave); color: var(--alta); }
+  .eh .estado-BAJA { background: var(--baja-suave); color: var(--baja); }
+  .eh .estado-ASPIRANTE { background: var(--fondo); color: var(--texto); }
+
+  /* Avisos */
+  .eh .aviso { border-radius: .6rem; padding: .7rem .85rem; font-size: .8rem; display: flex; gap: .6rem; }
+  .eh .aviso ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+  .eh .aviso-error { background: var(--baja-suave); color: #991b1b; }
+  .eh .aviso-anomalia { background: var(--corregido-suave); color: #854d0e; }
+
+  /* Contratos y eventos */
+  .eh .contrato { background: var(--papel); border-radius: .75rem; box-shadow: var(--sombra); overflow: hidden; }
+  .eh .contrato.vigente { box-shadow: var(--sombra), 0 0 0 1px var(--orb-borde); }
+  .eh .contrato-cab { display: flex; align-items: center; gap: .75rem; padding: .85rem 1rem; border-bottom: 1px solid var(--linea); }
+  .eh .contrato-n { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: .8rem; background: var(--fondo); color: var(--texto); }
+  .eh .vigente .contrato-n { background: var(--orb); color: #fff; }
+  .eh .contrato-cab h3 { font-size: .9rem; margin: 0; }
+  .eh .contrato-cab .periodo { font-size: .75rem; color: var(--tenue); }
+  .eh .contrato-cuerpo { padding: .9rem 1rem .4rem; position: relative; }
+  .eh .contrato-cuerpo::before { content: ''; position: absolute; left: calc(1rem + 27px); top: 1.2rem; bottom: 1.4rem; width: 2px; background: var(--linea); }
+  .eh .evento { display: grid; grid-template-columns: 56px 1fr; gap: .9rem; margin-bottom: .55rem; position: relative; }
+  .eh .fecha-sello { font-family: var(--mono); text-align: center; background: var(--papel); border: 1px solid var(--linea); border-radius: .5rem; padding: .3rem 0; line-height: 1.15; position: relative; z-index: 1; height: fit-content; }
+  .eh .fecha-sello .d { font-size: 1.05rem; font-weight: 600; color: var(--tinta); }
+  .eh .fecha-sello .m { font-size: .62rem; text-transform: uppercase; letter-spacing: .5px; color: var(--tenue); }
+  .eh .fecha-sello .a { font-size: .66rem; color: var(--texto); }
+  .eh .tarjeta { background: var(--fondo); border: 1px solid transparent; border-radius: .6rem; padding: .65rem .8rem; cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; min-width: 0; }
+  .eh .tarjeta:hover { background: var(--papel); border-color: var(--linea); }
+  .eh .tarjeta:focus-visible { outline: 2px solid var(--orb); outline-offset: 2px; }
+  .eh .evento.sel .tarjeta { background: var(--papel); border-color: var(--orb); box-shadow: 0 0 0 3px var(--orb-suave); }
+  .eh .evento.sel .fecha-sello { border-color: var(--orb); }
+  .eh .tarjeta .resumen { font-size: .8rem; color: var(--texto); overflow-wrap: anywhere; }
+  .eh .tarjeta .resumen b { color: var(--tinta); }
+  .eh .antes { color: var(--tenue); text-decoration: line-through; text-decoration-color: rgba(161,172,184,.6); }
+  .eh .salario { font-weight: 700; color: var(--tinta); font-variant-numeric: tabular-nums; }
+  .eh .tipo { font-size: .66rem; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; border-radius: 999px; padding: .15rem .5rem; white-space: nowrap; }
+  .eh .tipo-ALTA { background: var(--alta-suave); color: var(--alta); }
+  .eh .tipo-MOV { background: var(--orb-suave); color: var(--orb); }
+  .eh .tipo-BAJA { background: var(--baja-suave); color: var(--baja); }
+  .eh .marca { font-size: .66rem; font-weight: 700; border-radius: 999px; padding: .15rem .5rem; white-space: nowrap; }
+  .eh .marca-corregido { background: var(--corregido-suave); color: var(--corregido); }
+  .eh .marca-vigente { background: var(--pizarra); color: #fff; }
+  .eh .marca-borrado { background: var(--baja-suave); color: var(--baja); }
+  .eh .nota-cierre { display: inline-flex; align-items: center; gap: .3rem; font-size: .7rem; font-weight: 600; color: var(--cierre); background: var(--cierre-suave); border-radius: .35rem; padding: .12rem .45rem; margin-top: .4rem; }
+  .eh .evento.corregido .tarjeta { box-shadow: inset 3px 0 0 var(--corregido); }
+  .eh .evento.corregido.sel .tarjeta { box-shadow: inset 3px 0 0 var(--corregido), 0 0 0 3px var(--orb-suave); }
+  .eh .evento.borrado .tarjeta { opacity: .6; } .eh .evento.borrado .resumen { text-decoration: line-through; }
+  .eh .insertar { margin: 0 0 .55rem calc(56px + .9rem); display: flex; align-items: center; justify-content: center; gap: .35rem; font-size: .72rem; font-weight: 600; color: var(--tenue); border: 1px dashed #d5d7e0; border-radius: .5rem; padding: .25rem; background: transparent; width: calc(100% - 56px - .9rem); }
+  .eh .insertar:hover, .eh .insertar:focus-visible { color: var(--orb); border-color: var(--orb); background: var(--orb-suave); outline: none; }
+
+  /* Mesa de edición */
+  .eh .mesa { background: var(--papel); border-radius: .75rem; box-shadow: var(--sombra); overflow: hidden; position: sticky; top: 1rem; }
+  .eh .mesa-cab { background: var(--pizarra); color: #fff; padding: .9rem 1rem; display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+  .eh .mesa-cab .eyebrow { font-size: .66rem; letter-spacing: .6px; text-transform: uppercase; color: #b4b6ff; font-weight: 700; }
+  .eh .mesa-cab h3 { color: #fff; font-size: .98rem; margin: .1rem 0 0; }
+  .eh .mesa-cab .sub { font-size: .74rem; color: #c3c5d4; }
+  .eh .btn-borrar { color: #fca5a5; border: 1px solid rgba(252,165,165,.35); background: transparent; font-size: .76rem; font-weight: 600; border-radius: .45rem; padding: .3rem .6rem; white-space: nowrap; }
+  .eh .btn-borrar:hover { background: rgba(220,38,38,.18); color: #fff; }
+  .eh .btn-deshacer { color: #e4e5f0; border: 1px solid rgba(255,255,255,.25); background: transparent; font-size: .76rem; font-weight: 600; border-radius: .45rem; padding: .3rem .6rem; white-space: nowrap; }
+  .eh .mesa-cuerpo { padding: 1rem; display: grid; gap: 1rem; }
+  .eh .mesa-vacia { padding: 2.5rem 1.2rem; text-align: center; color: var(--tenue); font-size: .85rem; }
+  .eh .grupo-titulo { font-size: .68rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--tenue); display: flex; align-items: center; gap: .5rem; margin-bottom: .45rem; }
+  .eh .grupo-titulo::after { content: ''; flex: 1; height: 1px; background: var(--linea); }
+  .eh .form-label { font-size: .7rem; font-weight: 600; color: var(--texto); margin-bottom: .2rem; }
+  .eh .form-control, .eh .form-select { font-size: .84rem; }
+  .eh .derivado { background: var(--fondo) !important; color: var(--texto); }
+  .eh .cambiado, .eh .cambiado + .select2 .select2-selection { border-color: var(--corregido) !important; background: #fffdf2 !important; }
+  .eh .chip-cambiado { font-size: .62rem; font-weight: 700; color: var(--corregido); background: var(--corregido-suave); border-radius: 999px; padding: .05rem .4rem; margin-left: .3rem; }
+  .eh .retribucion { background: var(--orb-suave); border-radius: .6rem; padding: .8rem; }
+  .eh .retribucion .form-control { font-family: var(--mono); font-weight: 600; font-size: .95rem; }
+  .eh .accion-mini { background: none; border: 0; padding: 0; margin-top: .3rem; font-size: .72rem; font-weight: 600; color: var(--orb); }
+  .eh .accion-mini:hover { text-decoration: underline; }
+  .eh .ayuda { font-size: .72rem; color: var(--tenue); margin-top: .25rem; }
+  .eh .aviso-cierres { display: flex; gap: .6rem; background: var(--cierre-suave); color: #075985; border-radius: .6rem; padding: .7rem .8rem; font-size: .78rem; }
+  .eh .aviso-cierres i { font-size: 1.05rem; color: var(--cierre); margin-top: .1rem; }
+
+  /* Barra del borrador */
+  .eh .borrador { position: sticky; bottom: 0; z-index: 20; background: var(--pizarra); color: #fff; border-radius: .75rem .75rem 0 0; box-shadow: 0 -6px 18px rgba(43,44,64,.25); padding: .75rem 1rem calc(.75rem + env(safe-area-inset-bottom, 0px)); display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+  .eh .borrador .contador { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: rgba(234,179,8,.18); color: #facc15; font-weight: 800; }
+  .eh .borrador .sub { font-size: .74rem; color: #c3c5d4; }
+  .eh .borrador .sub.mal { color: #fca5a5; }
+  .eh .btn-orb { background: var(--orb); color: #fff; border: 0; font-weight: 600; }
+  .eh .btn-orb:hover { background: var(--orb-osc); color: #fff; }
+  .eh .btn-orb:disabled { opacity: .5; }
+  .eh .btn-fantasma { background: transparent; color: #e4e5f0; border: 1px solid rgba(255,255,255,.25); }
+  .eh .btn-fantasma:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+  /* Ventana «Revisar los cambios» (fuera de .eh: Bootstrap la mueve al body) */
+  #ehRevisar .comprobado { display: flex; gap: .5rem; align-items: center; background: #dcfce7; color: #166534; border-radius: .5rem; padding: .55rem .75rem; font-size: .8rem; }
+  #ehRevisar .con-errores { background: #fee2e2; color: #991b1b; border-radius: .5rem; padding: .55rem .75rem; font-size: .8rem; }
+  #ehRevisar .tabla-cambios { font-size: .8rem; }
+  #ehRevisar .tabla-cambios th { font-size: .68rem; text-transform: uppercase; letter-spacing: .4px; color: #a1acb8; font-weight: 700; }
+  #ehRevisar .tabla-cambios .antes { color: #a1acb8; text-decoration: line-through; }
+  #ehRevisar .tabla-cambios .despues { color: #384551; font-weight: 700; }
+  #ehRevisar .seccion-modal { font-size: .72rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: #a1acb8; margin: 1rem 0 .45rem; }
+  @media (max-width: 991px) { .eh .mesa { position: static; } }
+  @media (max-width: 575px) { .eh .cifra { border-left: 0; padding-left: 0; } }
+  @media (prefers-reduced-motion: reduce) { .eh * { transition: none !important; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="eh container-xxl flex-grow-1 container-p-y">
+
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <div class="me-auto">
+      <div class="migas"><a href="{% url 'list_contrato' %}">Contratos</a> / Histórico del trabajador / Editar</div>
+      <h1 class="h5 mb-0 mt-1">Editor del histórico</h1>
+    </div>
+    <span class="sello-admin"><i class="fas fa-shield-alt me-1"></i>Solo Administrador</span>
+  </div>
+
+  <!-- Ficha -->
+  <div class="ficha p-3 mb-3 d-flex flex-wrap align-items-center gap-3">
+    <div class="avatar">{{ persona.nombre|slice:":1"|upper }}{{ persona.papellido|slice:":1"|upper }}</div>
+    <div class="me-auto" style="min-width:0">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <h2 class="h5 mb-0">{{ persona.nombre }} {{ persona.papellido }} {{ persona.sapellido }}</h2>
+        <span class="estado estado-{{ persona.estado }}">{{ persona.get_estado_display|default:persona.estado }}</span>
+      </div>
+      <div class="dato-ficha mt-1 d-flex flex-wrap gap-3">
+        <span>CI <b class="num">{{ persona.doc_identidad }}</b></span>
+        <span>Expediente <span class="expediente">{{ expediente }}</span>
+          <i class="fas fa-info-circle ms-1 text-muted" title="El expediente se corrige en «Editar contrato» y cambia en todas partes."></i></span>
+        {% if unidad %}<span><i class="fas fa-building me-1"></i>{{ unidad }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-3 flex-wrap">
+      <div class="cifra"><div class="valor num">{{ contratos }}</div><div class="rotulo">Contratos</div></div>
+      <div class="cifra"><div class="valor num">{{ eventos }}</div><div class="rotulo">Eventos</div></div>
+    </div>
+  </div>
+
+  <div id="ehAnomalias" class="aviso aviso-anomalia mb-3" hidden></div>
+  <div id="ehErrores" class="aviso aviso-error mb-3" hidden role="alert"></div>
+
+  <div class="row g-3">
+    <div class="col-lg-7 d-grid gap-3 align-content-start" id="ehLinea"></div>
+    <div class="col-lg-5"><div class="mesa" id="ehMesa"></div></div>
+  </div>
+
+  <div class="borrador mt-3" id="ehBorrador" hidden>
+    <div class="contador num" id="ehContador">0</div>
+    <div class="me-auto">
+      <div class="fw-semibold" id="ehContadorTexto">0 cambios en borrador</div>
+      <div class="sub" id="ehBorradorSub">Todavía no se ha guardado nada</div>
+    </div>
+    <button type="button" class="btn btn-sm btn-fantasma" id="ehDescartar">Descartar todo</button>
+    <button type="button" class="btn btn-sm btn-orb px-3" id="ehRevisarBtn">Revisar y guardar <i class="fas fa-arrow-right ms-1"></i></button>
+  </div>
+</div>
+
+<!-- Revisar y guardar -->
+<div class="modal fade" id="ehRevisar" tabindex="-1" aria-labelledby="ehRevisarTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="ehRevisarTitulo"><i class="fas fa-clipboard-check me-2" style="color:#696cff"></i>Revisar los cambios</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+    <div class="modal-body" id="ehRevisarCuerpo"></div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Volver a editar</button>
+      <button type="button" class="btn btn-primary" id="ehGuardar"><i class="fas fa-check me-1"></i>Guardar todo</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- Insertar -->
+<div class="modal fade" id="ehInsertar" tabindex="-1" aria-labelledby="ehInsertarTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="ehInsertarTitulo">Insertar un movimiento que faltó</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+    </div>
+    <div class="modal-body small">
+      <p id="ehInsertarAyuda"></p>
+      <label class="form-label" for="ehNuevaFecha">Fecha efectiva</label>
+      <input class="form-control" type="date" id="ehNuevaFecha">
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="ehInsertarOk">Añadir al borrador</button>
+    </div>
+  </div></div>
+</div>
+
+{{ datos_editor|json_script:"eh-datos" }}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  'use strict';
+  const DATOS = JSON.parse(document.getElementById('eh-datos').textContent);
+  const CAT = DATOS.catalogos;
+  const URL_BASE = '/contrato/editor-historico/' + DATOS.aspirante_id + '/';
+  const SIN = '---';
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const ESTADOS = { ACTIVO: 'Activo', BAJA: 'Baja', ASPIRANTE: 'Aspirante' };
+  const originales = {};
+  DATOS.eventos.forEach(function (e) { originales[e.clave] = e; });
+
+  // El borrador: lo único que el navegador recuerda. Nada se guarda hasta «Guardar todo».
+  let borrador = { ediciones: {}, borrados: [], inserciones: [] };
+  let eventos = DATOS.eventos;
+  let seleccion = null;
+  let previa = { ok: true, errores: [], resumen: null };
+  let peticion = 0;
+
+  // ---------------- utilidades ----------------
+  function esc(texto) {
+    return String(texto == null ? '' : texto).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fecha(iso) { if (!iso) return SIN; const p = iso.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; }
+  function dinero(valor) {
+    const n = Number(valor);
+    if (valor === null || valor === undefined || valor === '' || isNaN(n)) return SIN;
+    const [ent, dec] = n.toFixed(2).split('.');
+    return ent.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + dec;
+  }
+  function vacio(v) { return v === null || v === undefined || v === '' || v === SIN; }
+  function evento(clave) { return eventos.find(function (e) { return e.clave === clave; }); }
+  function nombreTipo(e) {
+    if (e.tipo === 'BAJA') return 'Baja';
+    if (e.tipo === 'ALTA') return e.recontratacion ? 'Recontratación' : 'Alta Inicial';
+    return 'Movimiento de nómina';
+  }
+  function titulo(e) { return nombreTipo(e) + ' · ' + fecha(e.fecha); }
+  function aviso(icono, tituloTexto, texto) {
+    if (window.Swal) return Swal.fire({ icon: icono, title: tituloTexto, text: texto, confirmButtonColor: '#696cff' });
+  }
+
+  // ---------------- el borrador ----------------
+  function indiceNuevo(clave) { return clave.indexOf('nuevo:') === 0 ? parseInt(clave.slice(6), 10) - 1 : -1; }
+
+  function listaDeCambios() {
+    const lista = [];
+    Object.keys(borrador.ediciones).forEach(function (clave) {
+      const campos = borrador.ediciones[clave];
+      if (Object.keys(campos).length && borrador.borrados.indexOf(clave) === -1)
+        lista.push({ op: 'editar', evento: clave, campos: campos });
+    });
+    borrador.inserciones.forEach(function (ins) {
+      lista.push({ op: 'insertar', tras: ins.tras, campos: Object.assign({ fecha: ins.fecha }, ins.campos) });
+    });
+    borrador.borrados.forEach(function (clave) { lista.push({ op: 'borrar', evento: clave }); });
+    return lista;
+  }
+  function cuantos() {
+    let n = borrador.inserciones.length + borrador.borrados.length;
+    Object.keys(borrador.ediciones).forEach(function (c) {
+      if (borrador.borrados.indexOf(c) === -1) n += Object.keys(borrador.ediciones[c]).length;
+    });
+    return n;
+  }
+
+  // ¿El valor elegido es el mismo que había? Entonces se quita del borrador.
+  function igualAlOriginal(o, campo, valor) {
+    const s = o.estado || {};
+    switch (campo) {
+      case 'fecha': case 'fecha_solicitud': case 'fecha_documento': return (o[campo] || '') === (valor || '');
+      case 'observaciones': return (o.observaciones || '').trim() === (valor || '').trim();
+      case 'duracion': return String(o.duracion == null ? '' : o.duracion) === String(valor == null ? '' : valor);
+      case 'causa_baja_id': return String(o.causa_baja_id || '') === String(valor || '');
+      case 'salario': case 'otros': return Number(s[campo]) === Number(valor);
+      case 'tipo_salario': return ({ FIJ: 'Fijo', DIN: 'Dinámico' })[valor] === s.tipo_salario;
+      case 'cargo_id': {
+        const c = CAT.cargos.find(function (x) { return String(x.id) === String(valor); });
+        return !!c && c.cargo === s.cargo && c.departamento === s.departamento && c.unidad === s.unidad;
+      }
+      case 'tipo_id': {
+        const t = CAT.tipos.find(function (x) { return String(x.id) === String(valor); });
+        return !!t && t.descripcion === s.tipo_contrato;
+      }
+      case 'motivo_id': {
+        if (!valor) return vacio(s.motivo);
+        const m = CAT.motivos.find(function (x) { return String(x.id) === String(valor); });
+        return !!m && m.descripcion === s.motivo;
+      }
+      case 'tridente_id': {
+        if (!valor) return vacio(s.tridente);
+        const t = CAT.tridentes.find(function (x) { return String(x.id) === String(valor); });
+        return !!t && t.texto === s.tridente;
+      }
+    }
+    return false;
+  }
+
+  function fijar(clave, campo, valor) {
+    const n = indiceNuevo(clave);
+    if (n >= 0) {
+      const ins = borrador.inserciones[n];
+      if (campo === 'fecha') ins.fecha = valor; else ins.campos[campo] = valor;
+    } else {
+      const campos = borrador.ediciones[clave] = borrador.ediciones[clave] || {};
+      if (igualAlOriginal(originales[clave], campo, valor)) delete campos[campo];
+      else campos[campo] = valor;
+      if (!Object.keys(campos).length) delete borrador.ediciones[clave];
+    }
+    actualizar();
+  }
+
+  function marcarBorrado(clave) {
+    const n = indiceNuevo(clave);
+    if (n >= 0) {
+      // Quitar un movimiento insertado: los insertados detrás se renumeran.
+      const quitado = borrador.inserciones.splice(n, 1)[0];
+      borrador.inserciones.forEach(function (ins) {
+        const j = indiceNuevo(ins.tras);
+        if (j === n) ins.tras = quitado.tras;
+        else if (j > n) ins.tras = 'nuevo:' + j;
+      });
+      seleccion = quitado.tras;
+    } else if (borrador.borrados.indexOf(clave) === -1) {
+      borrador.borrados.push(clave);
+      delete borrador.ediciones[clave];
+    }
+    actualizar();
+  }
+  function deshacerBorrado(clave) {
+    borrador.borrados = borrador.borrados.filter(function (c) { return c !== clave; });
+    actualizar();
+  }
+
+  // ---------------- vista previa (el motor del servidor) ----------------
+  function actualizar() {
+    const mia = ++peticion;
+    pintarBorrador(true);
+    if (!cuantos()) {
+      eventos = DATOS.eventos; previa = { ok: true, errores: [], resumen: null };
+      pintar(); return;
+    }
+    fetch(URL_BASE + 'previa/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cambios: listaDeCambios() })
+    }).then(function (r) { return r.json(); }).then(function (datos) {
+      if (mia !== peticion) return;   // llegó otra respuesta más nueva
+      previa = datos;
+      if (datos.eventos) eventos = datos.eventos;
+      if (datos.version_actual && datos.version_actual !== DATOS.version) {
+        previa.errores = ['Otro administrador u otra operación cambió este histórico. Recargue la página '
+                          + '(perderá el borrador) antes de seguir.'].concat(previa.errores || []);
+        previa.ok = false;
+      }
+      pintar();
+    }).catch(function () {
+      if (mia !== peticion) return;
+      previa = { ok: false, errores: ['No se pudo comprobar el borrador (sin conexión con el servidor).'] };
+      pintar();
+    });
+  }
+
+  // ---------------- pintar ----------------
+  function pintar() {
+    pintarErrores();
+    pintarLinea();
+    pintarMesa();
+    pintarBorrador(false);
+  }
+
+  function pintarErrores() {
+    const caja = document.getElementById('ehErrores');
+    const errores = previa.errores || [];
+    caja.hidden = !errores.length;
+    caja.innerHTML = errores.length ? '<i class="fas fa-exclamation-triangle mt-1"></i><div><b>Así no se puede guardar:</b><ul>'
+      + errores.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>' : '';
+  }
+
+  function resumenEvento(e) {
+    const s = e.estado || {}, a = e.antes || {};
+    if (e.tipo === 'BAJA')
+      return 'Causa: <b>' + esc(e.causa_baja || SIN) + '</b>' + (e.fecha_documento ? ' · documento del ' + fecha(e.fecha_documento) : '');
+    let cargo = '<b>' + esc(s.cargo) + '</b>';
+    if (e.tipo === 'MOV' && !vacio(a.cargo) && a.cargo !== s.cargo) cargo = '<span class="antes">' + esc(a.cargo) + '</span> → ' + cargo;
+    const partes = [cargo];
+    if (!vacio(s.unidad)) partes.push(esc(s.unidad));
+    if (!vacio(s.tipo_contrato)) partes.push(esc(s.tipo_contrato));
+    if (!vacio(s.tridente)) partes.push(esc(s.tridente).toLowerCase());
+    return partes.join(' · ');
+  }
+
+  function pintarLinea() {
+    const contratos = [];
+    eventos.forEach(function (e) {
+      if (!contratos[e.contrato - 1]) contratos[e.contrato - 1] = [];
+      contratos[e.contrato - 1].push(e);
+    });
+    if (!contratos.length) {
+      document.getElementById('ehLinea').innerHTML = '<div class="contrato p-4 text-center text-muted">'
+        + 'Sin eventos: al guardar, la persona vuelve a la lista de aspirantes.</div>';
+      return;
+    }
+    const html = contratos.map(function (grupo, i) {
+      const vivos = grupo.filter(function (e) { return !e.borrado; });
+      const abierto = grupo[0].contrato_abierto;
+      const ultimoVivo = abierto && vivos.length ? vivos[vivos.length - 1].clave : null;
+      const fin = vivos.length && vivos[vivos.length - 1].tipo === 'BAJA' ? vivos[vivos.length - 1].fecha : null;
+      const cerrado = vivos.length && vivos[vivos.length - 1].tipo === 'BAJA';
+      const estadoContrato = abierto ? 'vigente' : (cerrado ? 'terminado' : (vivos.length ? 'sin baja: revise' : 'se borra'));
+      const periodo = vivos.length ? (fin ? fecha(vivos[0].fecha) + ' – ' + fecha(fin) : 'desde ' + fecha(vivos[0].fecha)) : 'se borra entero';
+      let cuerpo = '';
+      grupo.forEach(function (e) {
+        const p = e.fecha ? e.fecha.split('-') : ['', '01', ''];
+        const clases = ['evento'];
+        if (e.clave === seleccion) clases.push('sel');
+        if (e.editado.length || e.nuevo) clases.push('corregido');
+        if (e.borrado) clases.push('borrado');
+        let marcas = '<span class="tipo tipo-' + e.tipo + '">' + nombreTipo(e) + '</span>';
+        if (e.nuevo) marcas += '<span class="marca marca-corregido">nuevo</span>';
+        else if (e.editado.length) marcas += '<span class="marca marca-corregido">corregido</span>';
+        if (e.borrado) marcas += '<span class="marca marca-borrado">se borrará</span>';
+        if (e.clave === ultimoVivo && e.tipo !== 'BAJA') marcas += '<span class="marca marca-vigente">último · contrato vigente</span>';
+        const meses = e.meses_cerrados || [];
+        cuerpo += '<div class="' + clases.join(' ') + '" data-clave="' + esc(e.clave) + '">'
+          + '<div class="fecha-sello"><div class="d">' + p[2] + '</div><div class="m">' + MESES[parseInt(p[1], 10) - 1] + '</div><div class="a">' + p[0] + '</div></div>'
+          + '<div class="tarjeta" tabindex="0" role="button" aria-label="Corregir ' + esc(titulo(e)) + '">'
+          + '<div class="d-flex justify-content-between gap-2 flex-wrap"><span class="d-flex gap-1 flex-wrap">' + marcas + '</span>'
+          + (e.tipo !== 'BAJA' ? '<span class="salario">' + dinero(e.estado.salario) + '</span>' : '') + '</div>'
+          + '<div class="resumen mt-1">' + resumenEvento(e) + '</div>'
+          + (meses.length ? '<span class="nota-cierre"><i class="fas fa-lock"></i>Sale en ' + meses.length
+             + (meses.length === 1 ? ' mes cerrado · ' + esc(meses[0]) : ' meses cerrados · ' + esc(meses[0]) + ' – ' + esc(meses[meses.length - 1])) + '</span>' : '')
+          + '</div></div>';
+        if (e.tipo !== 'BAJA' && !e.borrado)
+          cuerpo += '<button type="button" class="insertar" data-tras="' + esc(e.clave) + '"><i class="fas fa-plus-circle"></i>Insertar un movimiento que faltó</button>';
+      });
+      return '<section class="contrato' + (abierto ? ' vigente' : '') + '">'
+        + '<div class="contrato-cab"><div class="contrato-n">C' + (i + 1) + '</div>'
+        + '<div class="me-auto"><h3>Contrato ' + (i + 1) + ' · ' + estadoContrato + '</h3>'
+        + '<div class="periodo num">' + periodo + ' · ' + vivos.length + (vivos.length === 1 ? ' evento' : ' eventos') + '</div></div></div>'
+        + '<div class="contrato-cuerpo">' + cuerpo + '</div></section>';
+    }).join('');
+    document.getElementById('ehLinea').innerHTML = html;
+  }
+
+  // ---- Mesa de edición ----
+  function opcion(valor, texto, elegida) {
+    return '<option value="' + esc(valor) + '"' + (elegida ? ' selected' : '') + '>' + esc(texto) + '</option>';
+  }
+  function chip(e, campos) {
+    return campos.some(function (c) { return e.editado.indexOf(c) !== -1; }) ? '<span class="chip-cambiado">corregido</span>' : '';
+  }
+  function clase(e, campos) {
+    return campos.some(function (c) { return e.editado.indexOf(c) !== -1; }) ? ' cambiado' : '';
+  }
+  function cargoElegido(e) {
+    const s = e.estado;
+    if (e.ids && e.ids.cargo_id) return String(e.ids.cargo_id);
+    const c = CAT.cargos.find(function (x) { return x.cargo === s.cargo && x.departamento === s.departamento && x.unidad === s.unidad; });
+    return c ? String(c.id) : '';
+  }
+  function tipoElegido(e) {
+    if (e.ids && e.ids.tipo_id) return CAT.tipos.find(function (t) { return t.id === e.ids.tipo_id; });
+    return CAT.tipos.find(function (t) { return t.descripcion === e.estado.tipo_contrato; });
+  }
+
+  function mesaDeMovimiento(e) {
+    const s = e.estado;
+    const cargoId = cargoElegido(e);
+    let opcionesCargo = cargoId ? '' : opcion('', '«' + s.cargo + '» (' + s.departamento + ', ' + s.unidad + ') — no está en la plantilla actual', true);
+    let unidad = null;
+    CAT.cargos.forEach(function (c) {
+      if (c.unidad !== unidad) { if (unidad !== null) opcionesCargo += '</optgroup>'; unidad = c.unidad; opcionesCargo += '<optgroup label="' + esc(c.unidad) + '">'; }
+      opcionesCargo += opcion(c.id, c.cargo + ' · ' + c.departamento + (c.activo ? '' : ' (inactivo)'), String(c.id) === cargoId);
+    });
+    if (unidad !== null) opcionesCargo += '</optgroup>';
+
+    const tipo = tipoElegido(e);
+    let opcionesTipo = tipo ? '' : opcion('', vacio(s.tipo_contrato) ? 'Sin tipo' : '«' + s.tipo_contrato + '» (ya no existe)', true);
+    CAT.tipos.forEach(function (t) { opcionesTipo += opcion(t.id, t.descripcion, tipo && t.id === tipo.id); });
+    const motivos = tipo ? CAT.motivos.filter(function (m) { return m.tipo_contrato_id === tipo.id; }) : [];
+    let opcionesMotivo = opcion('', tipo && tipo.requiere_motivo ? 'Elija el motivo' : 'No lo pide este tipo', vacio(s.motivo));
+    let motivoEncontrado = vacio(s.motivo);
+    motivos.forEach(function (m) {
+      const sel = m.descripcion === s.motivo; if (sel) motivoEncontrado = true;
+      opcionesMotivo += opcion(m.id, m.descripcion, sel);
+    });
+    if (!motivoEncontrado) opcionesMotivo += opcion('', '«' + s.motivo + '» (ya no existe)', true);
+    const tsal = s.tipo_salario === 'Fijo' ? 'FIJ' : (s.tipo_salario === 'Dinámico' ? 'DIN' : '');
+    let opcionesTridente = opcion('', 'Sin tridente', vacio(s.tridente));
+    CAT.tridentes.forEach(function (t) { opcionesTridente += opcion(t.id, t.texto.replace('Tridente ', ''), t.texto === s.tridente); });
+    const meses = e.meses_cerrados || [];
+
+    return ''
+      + '<div><div class="grupo-titulo">Fechas</div><div class="row g-2">'
+      + '<div class="col-6"><label class="form-label" for="ehFecha">Fecha efectiva ' + chip(e, ['fecha']) + '</label><input class="form-control num' + clase(e, ['fecha']) + '" type="date" id="ehFecha" data-campo="fecha" value="' + esc(e.fecha) + '"></div>'
+      + '<div class="col-6"><label class="form-label" for="ehFechaSol">Fecha de solicitud ' + chip(e, ['fecha_solicitud']) + '</label><input class="form-control num' + clase(e, ['fecha_solicitud']) + '" type="date" id="ehFechaSol" data-campo="fecha_solicitud" value="' + esc(e.fecha_solicitud) + '"></div>'
+      + '</div></div>'
+      + '<div><div class="grupo-titulo">Cargo</div>'
+      + '<label class="form-label" for="ehCargo">Cargo ' + chip(e, ['cargo', 'departamento', 'unidad']) + '</label>'
+      + '<select class="form-select' + clase(e, ['cargo', 'departamento', 'unidad']) + '" id="ehCargo" data-campo="cargo_id">' + opcionesCargo + '</select>'
+      + '<div class="ayuda">Unidad, departamento, categoría, grupo y rol salen del cargo.</div>'
+      + '<div class="row g-2 mt-1">'
+      + '<div class="col-5"><label class="form-label" for="ehUnidad">Unidad</label><input class="form-control derivado" id="ehUnidad" value="' + esc(s.unidad) + '" readonly></div>'
+      + '<div class="col-3"><label class="form-label" for="ehGrupo">Grupo</label><input class="form-control derivado num" id="ehGrupo" value="' + esc(s.grupo_escala) + '" readonly></div>'
+      + '<div class="col-4"><label class="form-label" for="ehRol">Rol</label><input class="form-control derivado" id="ehRol" value="' + esc(s.rol) + '" readonly></div>'
+      + '</div></div>'
+      + '<div><div class="grupo-titulo">Contrato</div><div class="row g-2">'
+      + '<div class="col-6"><label class="form-label" for="ehTipo">Tipo de contrato ' + chip(e, ['tipo_contrato']) + '</label><select class="form-select' + clase(e, ['tipo_contrato']) + '" id="ehTipo" data-campo="tipo_id">' + opcionesTipo + '</select></div>'
+      + '<div class="col-6"><label class="form-label" for="ehMotivo">Motivo ' + chip(e, ['motivo']) + '</label><select class="form-select' + clase(e, ['motivo']) + '" id="ehMotivo" data-campo="motivo_id"' + (tipo && tipo.requiere_motivo ? '' : ' disabled') + '>' + opcionesMotivo + '</select></div>'
+      + '<div class="col-4"><label class="form-label" for="ehDuracion">Duración ' + chip(e, ['duracion']) + '</label><input class="form-control num' + clase(e, ['duracion']) + '" type="number" min="0" step="1" id="ehDuracion" data-campo="duracion" placeholder="días" value="' + esc(e.duracion == null ? '' : e.duracion) + '"></div>'
+      + '<div class="col-4"><label class="form-label" for="ehTipoSal">Tipo de salario ' + chip(e, ['tipo_salario']) + '</label><select class="form-select' + clase(e, ['tipo_salario']) + '" id="ehTipoSal" data-campo="tipo_salario">'
+      + (tsal ? '' : opcion('', 'Sin dato', true)) + opcion('DIN', 'Dinámico', tsal === 'DIN') + opcion('FIJ', 'Fijo', tsal === 'FIJ') + '</select></div>'
+      + '<div class="col-4"><label class="form-label" for="ehTridente">Tridente ' + chip(e, ['tridente']) + '</label><select class="form-select' + clase(e, ['tridente']) + '" id="ehTridente" data-campo="tridente_id"' + (tsal === 'FIJ' ? ' disabled' : '') + '>' + opcionesTridente + '</select></div>'
+      + '</div></div>'
+      + '<div class="retribucion"><div class="grupo-titulo">Retribución</div><div class="row g-2">'
+      + '<div class="col-6"><label class="form-label" for="ehSalario">Salario ' + chip(e, ['salario']) + '</label>'
+      + '<input class="form-control num' + clase(e, ['salario']) + '" type="number" min="0" step="0.01" id="ehSalario" data-campo="salario" value="' + esc(s.salario) + '">'
+      + '<button type="button" class="accion-mini" id="ehEscala"><i class="fas fa-calculator me-1"></i>Usar escala actual</button></div>'
+      + '<div class="col-6"><label class="form-label" for="ehOtros">Otros ' + chip(e, ['otros']) + '</label>'
+      + '<input class="form-control num' + clase(e, ['otros']) + '" type="number" min="0" step="0.01" id="ehOtros" data-campo="otros" value="' + esc(s.otros) + '">'
+      + (DATOS.tiene_contrato ? '<button type="button" class="accion-mini" id="ehOtrosHoy"><i class="fas fa-sync-alt me-1"></i>Recalcular a hoy</button>' : '') + '</div>'
+      + '</div><div class="ayuda">Se escriben a mano: la escala ha cambiado con los años.</div></div>'
+      + '<div><label class="form-label" for="ehObs">Observaciones ' + chip(e, ['observaciones']) + '</label>'
+      + '<textarea class="form-control' + clase(e, ['observaciones']) + '" id="ehObs" data-campo="observaciones" rows="2">' + esc(e.observaciones) + '</textarea></div>'
+      + (meses.length ? '<div class="aviso-cierres"><i class="fas fa-calendar-check"></i><div>Lo que deja este evento sale en <b>'
+         + meses.length + (meses.length === 1 ? ' mes cerrado' : ' meses cerrados') + '</b> (' + esc(meses.join(', ')) + '). Si lo corrige, al guardar se corregirá también en esas fotografías y cada cierre quedará marcado como corregido.</div></div>' : '');
+  }
+
+  function mesaDeBaja(e) {
+    let opciones = '';
+    let encontrada = false;
+    CAT.causas.forEach(function (c) {
+      if (c.alta && c.id !== e.causa_baja_id) return;
+      if (c.id === e.causa_baja_id) encontrada = true;
+      opciones += opcion(c.id, c.descripcion, c.id === e.causa_baja_id);
+    });
+    if (!encontrada) opciones = opcion('', vacio(e.causa_baja) ? 'Elija la causa' : e.causa_baja, true) + opciones;
+    return ''
+      + '<div><div class="grupo-titulo">Baja</div><div class="row g-2">'
+      + '<div class="col-6"><label class="form-label" for="ehFecha">Fecha de baja ' + chip(e, ['fecha']) + '</label><input class="form-control num' + clase(e, ['fecha']) + '" type="date" id="ehFecha" data-campo="fecha" value="' + esc(e.fecha) + '"></div>'
+      + '<div class="col-6"><label class="form-label" for="ehFechaDoc">Fecha del documento ' + chip(e, ['fecha_documento']) + '</label><input class="form-control num' + clase(e, ['fecha_documento']) + '" type="date" id="ehFechaDoc" data-campo="fecha_documento" value="' + esc(e.fecha_documento) + '"></div>'
+      + '<div class="col-12"><label class="form-label" for="ehCausa">Causa ' + chip(e, ['causa_baja']) + '</label><select class="form-select' + clase(e, ['causa_baja']) + '" id="ehCausa" data-campo="causa_baja_id">' + opciones + '</select></div>'
+      + '</div><div class="ayuda">Se corrige a la vez en el registro de la baja y en su movimiento. Una baja no se borra.</div></div>'
+      + '<div><label class="form-label" for="ehObs">Observaciones ' + chip(e, ['observaciones']) + '</label>'
+      + '<textarea class="form-control' + clase(e, ['observaciones']) + '" id="ehObs" data-campo="observaciones" rows="2">' + esc(e.observaciones) + '</textarea></div>';
+  }
+
+  function pintarMesa() {
+    const mesa = document.getElementById('ehMesa');
+    const e = seleccion ? evento(seleccion) : null;
+    if (window.jQuery && jQuery.fn.select2) jQuery('#ehCargo').filter('.select2-hidden-accessible').select2('destroy');
+    if (!e) {
+      mesa.innerHTML = '<div class="mesa-vacia"><i class="fas fa-hand-pointer d-block mb-2" style="font-size:1.4rem"></i>'
+        + 'Elija un evento de la línea de tiempo para corregirlo.</div>';
+      return;
+    }
+    let boton = '';
+    if (e.borrado) boton = '<button type="button" class="btn-deshacer" id="ehDeshacer"><i class="fas fa-undo me-1"></i>Deshacer el borrado</button>';
+    else if (e.nuevo) boton = '<button type="button" class="btn-borrar" id="ehBorrar"><i class="fas fa-times me-1"></i>Quitar</button>';
+    else if (e.tipo !== 'BAJA') boton = '<button type="button" class="btn-borrar" id="ehBorrar"><i class="fas fa-trash-alt me-1"></i>Borrar</button>';
+    const sub = e.tipo === 'BAJA' ? 'La baja y su documento' : (e.nuevo ? 'Movimiento nuevo: parte de lo que había antes' : 'Lo que quedó después del ' + (e.tipo === 'ALTA' ? 'alta' : 'movimiento'));
+    mesa.innerHTML = '<div class="mesa-cab"><div><div class="eyebrow">' + (e.borrado ? 'Marcado para borrar' : 'Corrigiendo') + '</div>'
+      + '<h3>' + esc(titulo(e)) + '</h3><div class="sub">' + sub + '</div></div>' + boton + '</div>'
+      + (e.borrado ? '<div class="mesa-vacia">Este evento se borrará al guardar. Los que vienen detrás tomarán como «antes» lo que dejó el anterior.</div>'
+         : '<div class="mesa-cuerpo">' + (e.tipo === 'BAJA' ? mesaDeBaja(e) : mesaDeMovimiento(e)) + '</div>');
+
+    mesa.querySelectorAll('[data-campo]').forEach(function (campo) {
+      if (campo.id === 'ehCargo') return;
+      campo.addEventListener('change', function () {
+        let valor = campo.value;
+        if (campo.dataset.campo === 'tipo_id' && !valor) return;
+        if (campo.dataset.campo === 'causa_baja_id' && !valor) return;
+        if ((campo.dataset.campo === 'salario' || campo.dataset.campo === 'otros') && valor === '') valor = '0';
+        fijar(e.clave, campo.dataset.campo, valor);
+      });
+    });
+    const cargo = document.getElementById('ehCargo');
+    if (cargo) {
+      const alCambiar = function () { if (cargo.value) fijar(e.clave, 'cargo_id', cargo.value); };
+      if (window.jQuery && jQuery.fn.select2) {
+        jQuery(cargo).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Buscar cargo...' }).on('change', alCambiar);
+      } else cargo.addEventListener('change', alCambiar);
+    }
+    const borrar = document.getElementById('ehBorrar');
+    if (borrar) borrar.addEventListener('click', function () { confirmarBorrado(e); });
+    const deshacer = document.getElementById('ehDeshacer');
+    if (deshacer) deshacer.addEventListener('click', function () { deshacerBorrado(e.clave); });
+    const escala = document.getElementById('ehEscala');
+    if (escala) escala.addEventListener('click', function () { calcular(e, 'salario'); });
+    const otrosHoy = document.getElementById('ehOtrosHoy');
+    if (otrosHoy) otrosHoy.addEventListener('click', function () { calcular(e, 'otros'); });
+  }
+
+  function confirmarBorrado(e) {
+    if (e.nuevo) { marcarBorrado(e.clave); return; }
+    const texto = e.tipo === 'ALTA'
+      ? 'Un alta solo se puede borrar si borra también el resto de su contrato. Si era lo único que quedaba de la persona, volverá a la lista de aspirantes.'
+      : 'El evento siguiente tomará como «antes» lo que dejó el anterior. Lo verá en el resumen.';
+    if (!window.Swal) { marcarBorrado(e.clave); return; }
+    Swal.fire({
+      icon: 'warning', title: 'Borrar ' + titulo(e).toLowerCase(),
+      html: 'Quedará <b>tachado</b> en el borrador; todavía no se borra nada.<br><br>' + esc(texto),
+      showCancelButton: true, confirmButtonText: 'Marcar como borrado', cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626'
+    }).then(function (r) { if (r.isConfirmed) marcarBorrado(e.clave); });
+  }
+
+  function calcular(e, que) {
+    const params = new URLSearchParams({
+      cargo: (document.getElementById('ehCargo') || {}).value || '',
+      tipo_salario: (document.getElementById('ehTipoSal') || {}).value || '',
+      tridente: (document.getElementById('ehTridente') || {}).value || ''
+    });
+    fetch(URL_BASE + 'calcular/?' + params.toString()).then(function (r) { return r.json(); }).then(function (datos) {
+      const valor = datos[que];
+      if (valor === null || valor === undefined) {
+        aviso('info', 'No se puede calcular', que === 'salario'
+          ? 'Con ese cargo, tipo de salario y tridente la escala de hoy no da un salario. Escríbalo a mano.'
+          : 'La persona no tiene contrato vigente del que sacar los Otros de hoy.');
+        return;
+      }
+      fijar(e.clave, que, valor);
+    }).catch(function () { aviso('error', 'Sin conexión', 'No se pudo consultar la escala.'); });
+  }
+
+  function pintarBorrador(comprobando) {
+    const n = cuantos();
+    const barra = document.getElementById('ehBorrador');
+    barra.hidden = !n;
+    document.getElementById('ehContador').textContent = n;
+    document.getElementById('ehContadorTexto').textContent = n + (n === 1 ? ' cambio en borrador' : ' cambios en borrador');
+    const sub = document.getElementById('ehBorradorSub');
+    const errores = (previa.errores || []).length;
+    sub.classList.toggle('mal', !comprobando && errores > 0);
+    sub.textContent = comprobando ? 'Comprobando…' : (errores
+      ? (errores === 1 ? 'Hay 1 problema que resolver antes de guardar' : 'Hay ' + errores + ' problemas que resolver antes de guardar')
+      : 'Todavía no se ha guardado nada');
+    document.getElementById('ehRevisarBtn').disabled = comprobando || errores > 0;
+  }
+
+  // ---------------- revisar y guardar ----------------
+  function abrirRevisar() {
+    const r = previa.resumen || { cambios: [], ajustes: [], meses: [] };
+    let html = '<div class="comprobado"><i class="fas fa-check-circle"></i>Las reglas se cumplen: la cronología es correcta y cada «antes» encadena con el evento anterior.</div>';
+    html += '<div class="seccion-modal">Lo que ha cambiado</div>';
+    html += r.cambios.length ? '<div class="table-responsive"><table class="table table-sm tabla-cambios mb-0"><thead><tr><th>Evento</th><th>Dato</th><th>Antes</th><th>Después</th></tr></thead><tbody>'
+      + r.cambios.map(function (c) { return '<tr><td>' + esc(c[0]) + '</td><td>' + esc(c[1]) + '</td><td class="antes num">' + esc(c[2]) + '</td><td class="despues num">' + esc(c[3]) + '</td></tr>'; }).join('')
+      + '</tbody></table></div>' : '<p class="small text-muted mb-0">Ningún dato tocado a mano.</p>';
+    html += '<div class="seccion-modal">Ajustes automáticos</div><ul class="small mb-0">'
+      + (r.ajustes.length ? r.ajustes.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') : '<li>Ninguno.</li>')
+      + (r.estado_persona ? '<li>La ficha pasa de <b>' + esc(ESTADOS[r.estado_persona[0]] || r.estado_persona[0]) + '</b> a <b>' + esc(ESTADOS[r.estado_persona[1]] || r.estado_persona[1]) + '</b>.</li>' : '')
+      + '</ul>';
+    html += '<div class="seccion-modal">Meses cerrados que se corregirán</div>';
+    html += (r.meses || []).length ? '<ul class="small mb-1">' + r.meses.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
+      + '<p class="small text-muted mb-0">Cada cierre queda marcado «Corregido» con el motivo y se avisa a su moderador.</p>'
+      : '<p class="small text-muted mb-0">Ningún mes cerrado cambia.</p>';
+    html += '<label class="form-label mt-3 fw-semibold" for="ehMotivoCorreccion">Motivo de la corrección (obligatorio)</label>'
+      + '<textarea class="form-control" id="ehMotivoCorreccion" rows="2" maxlength="500" placeholder="Ej.: el movimiento de marzo se registró con el cargo equivocado según la resolución 45/26."></textarea>'
+      + '<div id="ehGuardarErrores" class="con-errores mt-2" hidden></div>';
+    document.getElementById('ehRevisarCuerpo').innerHTML = html;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('ehRevisar')).show();
+  }
+
+  let guardando = false;
+  function guardar() {
+    if (guardando) return;
+    const motivo = (document.getElementById('ehMotivoCorreccion').value || '').trim();
+    const cajaErrores = document.getElementById('ehGuardarErrores');
+    if (!motivo) {
+      cajaErrores.hidden = false; cajaErrores.textContent = 'Escriba el motivo de la corrección.';
+      document.getElementById('ehMotivoCorreccion').focus(); return;
+    }
+    guardando = true;
+    const boton = document.getElementById('ehGuardar');
+    boton.disabled = true; boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+    fetch(URL_BASE + 'guardar/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cambios: listaDeCambios(), motivo: motivo, version: DATOS.version })
+    }).then(function (r) { return r.json(); }).then(function (datos) {
+      if (datos.ok) {
+        borrador = { ediciones: {}, borrados: [], inserciones: [] };
+        const meses = (datos.resumen.meses || []).length;
+        Swal.fire({
+          icon: 'success', title: 'Histórico corregido',
+          text: 'Se guardó todo' + (meses ? ' y se corrigieron ' + meses + (meses === 1 ? ' mes cerrado.' : ' meses cerrados.') : '.'),
+          confirmButtonColor: '#696cff'
+        }).then(function () { window.location.reload(); });
+        return;
+      }
+      cajaErrores.hidden = false;
+      cajaErrores.innerHTML = '<b>No se guardó nada:</b> ' + (datos.errores || []).map(esc).join(' ');
+    }).catch(function () {
+      cajaErrores.hidden = false;
+      cajaErrores.textContent = 'No se pudo contactar con el servidor. No se ha guardado nada.';
+    }).finally(function () {
+      guardando = false;
+      boton.disabled = false; boton.innerHTML = '<i class="fas fa-check me-1"></i>Guardar todo';
+    });
+  }
+
+  // ---------------- insertar ----------------
+  let insertarTras = null;
+  function abrirInsertar(tras) {
+    insertarTras = tras;
+    const vivos = eventos.filter(function (e) { return !e.borrado; });
+    const i = vivos.findIndex(function (e) { return e.clave === tras; });
+    const anterior = vivos[i], siguiente = vivos[i + 1];
+    document.getElementById('ehInsertarAyuda').innerHTML = 'La fecha tiene que quedar <b>después del ' + fecha(anterior.fecha) + '</b>'
+      + (siguiente ? ' y <b>antes del ' + fecha(siguiente.fecha) + '</b>' : ' y no puede ser futura')
+      + ', sin coincidir con ningún otro evento. Su «antes» será lo que había tras el ' + esc(titulo(anterior).toLowerCase()) + '.';
+    const campo = document.getElementById('ehNuevaFecha');
+    campo.value = '';
+    // Solo se ofrecen los días posibles: después del anterior y antes del siguiente (o de hoy).
+    const dia = function (iso, desfase) {
+      const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + desfase);
+      return d.toISOString().slice(0, 10);
+    };
+    const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset());
+    campo.min = dia(anterior.fecha, 1);
+    campo.max = siguiente ? dia(siguiente.fecha, -1) : hoy.toISOString().slice(0, 10);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('ehInsertar')).show();
+  }
+  document.getElementById('ehInsertarOk').addEventListener('click', function () {
+    const valor = document.getElementById('ehNuevaFecha').value;
+    if (!valor) { document.getElementById('ehNuevaFecha').focus(); return; }
+    borrador.inserciones.push({ tras: insertarTras, fecha: valor, campos: {} });
+    seleccion = 'nuevo:' + borrador.inserciones.length;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('ehInsertar')).hide();
+    actualizar();
+  });
+
+  // ---------------- eventos de la página ----------------
+  document.getElementById('ehLinea').addEventListener('click', function (ev) {
+    const ins = ev.target.closest('.insertar');
+    if (ins) { abrirInsertar(ins.dataset.tras); return; }
+    const caja = ev.target.closest('.evento');
+    if (caja) { seleccion = caja.dataset.clave; pintarLinea(); pintarMesa(); }
+  });
+  document.getElementById('ehLinea').addEventListener('keydown', function (ev) {
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList.contains('tarjeta')) {
+      ev.preventDefault(); ev.target.click();
+    }
+  });
+  document.getElementById('ehDescartar').addEventListener('click', function () {
+    Swal.fire({
+      icon: 'question', title: 'Descartar el borrador', text: 'Se pierden todos los cambios sin guardar.',
+      showCancelButton: true, confirmButtonText: 'Descartar todo', cancelButtonText: 'Seguir editando',
+      confirmButtonColor: '#dc2626'
+    }).then(function (r) {
+      if (!r.isConfirmed) return;
+      borrador = { ediciones: {}, borrados: [], inserciones: [] };
+      if (seleccion && seleccion.indexOf('nuevo:') === 0) seleccion = null;
+      actualizar();
+    });
+  });
+  document.getElementById('ehRevisarBtn').addEventListener('click', abrirRevisar);
+  document.getElementById('ehGuardar').addEventListener('click', guardar);
+  window.addEventListener('beforeunload', function (ev) {
+    if (cuantos() && !guardando) { ev.preventDefault(); ev.returnValue = ''; }
+  });
+
+  // Datos antiguos que ya no cumplen las reglas: se avisan para corregirlos aquí.
+  if (DATOS.anomalias && DATOS.anomalias.length) {
+    const caja = document.getElementById('ehAnomalias');
+    caja.hidden = false;
+    caja.innerHTML = '<i class="fas fa-exclamation-circle mt-1"></i><div><b>Este histórico ya tiene datos que no cumplen las reglas.</b> '
+      + 'Para poder guardar, corríjalos en el borrador:<ul>'
+      + DATOS.anomalias.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul></div>';
+  }
+
+  const vivos = eventos.filter(function (e) { return !e.borrado; });
+  seleccion = vivos.length ? vivos[vivos.length - 1].clave : null;
+  pintar();
+})();
+</script>
+{% endblock %}

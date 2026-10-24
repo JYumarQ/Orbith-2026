@@ -1,0 +1,16 @@
+{% comment %}
+  Pie común de las ventanas de la Dashboard (24-10-2026): «Ver más» lleva a la lista
+  con los mismos filtros y «Excel» descarga lo que se ve. Contexto: `excel_url` y
+  `ver_mas` ([(texto, url)]), de `dashboard.ventanas.pie_de_ventana`.
+{% endcomment %}
+<div class="modal-footer d-flex flex-wrap gap-2 justify-content-between">
+  <a href="{{ excel_url }}" class="btn btn-sm btn-success" data-excel-ventana title="Descargar en Excel lo que se ve en la ventana">
+    <i class="bx bx-spreadsheet me-1"></i>Excel
+  </a>
+  <div class="d-flex flex-wrap gap-2">
+    {% for texto, url in ver_mas %}
+    <a href="{{ url }}" class="btn btn-sm btn-primary">{{ texto }} <i class="bx bx-right-arrow-alt ms-1"></i></a>
+    {% endfor %}
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+  </div>
+</div>

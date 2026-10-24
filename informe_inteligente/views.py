@@ -28,6 +28,7 @@ from . import exportacion
 from .documentos import documento_word_del_informe, libro_excel_del_informe
 from .metadata import (
     REGISTRO_MODELOS,
+    definicion_viva,
     PLANTILLAS_RAPIDAS,
     DESGLOSES_ESPECIALES_POR_MODELO,
     FUENTES_HISTORICAS,
@@ -148,7 +149,7 @@ def campos_del_modelo(request, modelo_raiz):
     el usuario cambia de modelo (por ahora solo hay CAlta, pero esto ya
     queda listo para cuando se añadan más modelos raíz).
     """
-    definicion = REGISTRO_MODELOS.get(modelo_raiz)
+    definicion = definicion_viva(modelo_raiz)
     if not definicion:
         return JsonResponse({"error": "Modelo no reconocido"}, status=400)
 
@@ -613,7 +614,7 @@ _normalizar_desglose = _normalizar_lista
 
 def _obtener_definicion(modelo_raiz):
     """Busca el modelo raíz en el registro, con error controlado si no existe."""
-    definicion = REGISTRO_MODELOS.get(modelo_raiz)
+    definicion = definicion_viva(modelo_raiz)
     if not definicion:
         raise ConfiguracionInformeInvalida(
             "El tipo de informe seleccionado ya no está disponible en el sistema."

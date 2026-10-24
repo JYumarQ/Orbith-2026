@@ -151,17 +151,16 @@ def piramide_edades_json(request):
     })
 
 
-def piramide_detalle_html(request):
-    """Ventana de una barra de la Pirámide de Edades: los hombres o las mujeres
-    (`sexo`) activos del tramo `tramo` (índice, con los mismos `cortes` y unidades
-    que la tarjeta)."""
+def datos_piramide(request):
+    """`(titulo, filas)` de una barra de la Pirámide de Edades, o None si el tramo
+    no vale. Lo comparten la ventana y su Excel (`dashboard/ventanas.py`)."""
     uo_ids, _ = resolver_filtros(request)
     cortes = _cortes_edad_desde_request(request)
     categorias = _categorias_edad(cortes)
     sexo = request.GET.get('sexo')
     tramo = request.GET.get('tramo', '')
     if sexo not in ('M', 'F') or not tramo.isdigit() or int(tramo) >= len(categorias):
-        return HttpResponse('Tramo no válido.', status=400)
+        return None
     tramo = int(tramo)
 
     activos = _filtrar_por_uo(
@@ -177,8 +176,20 @@ def piramide_detalle_html(request):
         filas.append({'expediente': contrato.no_expediente, 'nombre': _nombre(contrato.aspirante),
                       'aspirante_id': contrato.aspirante_id, 'edad': edad, 'cargo': cargo, 'unidad': unidad})
     filas.sort(key=lambda f: (f['edad'], f['nombre']))
+    return f"{'Hombres' if sexo == 'M' else 'Mujeres'} de {categorias[tramo]} años", filas
+
+
+def piramide_detalle_html(request):
+    """Ventana de una barra de la Pirámide de Edades: los hombres o las mujeres
+    (`sexo`) activos del tramo `tramo` (índice, con los mismos `cortes` y unidades
+    que la tarjeta)."""
+    from .ventanas import pie_de_ventana
+    datos = datos_piramide(request)
+    if datos is None:
+        return HttpResponse('Tramo no válido.', status=400)
+    titulo, filas = datos
     return render(request, 'pages/dashboard/partials/piramide_detalle.html', {
-        'filas': filas, 'titulo': f"{'Hombres' if sexo == 'M' else 'Mujeres'} de {categorias[tramo]} años"})
+        'filas': filas, 'titulo': titulo, **pie_de_ventana(request, 'piramide')})
 
 
 def antiguedad_html(request):
@@ -252,10 +263,9 @@ def _antiguedad_qs(request):
     return qs.order_by(F('fecha_alta_entidad').asc(nulls_last=True))
 
 
-def antiguedad_detalle_html(request):
-    """Ventana «Ver más» de Años de Servicio: los mismos trabajadores que la tarjeta
-    (mismo filtro) con unidad, cargo, F. alta entidad, años y el importe que les
-    corresponde por la escala. La escala se lee UNA vez, no una por persona."""
+def datos_antiguedad(request):
+    """`(filas, rango)` de la ventana «Ver más» de Años de Servicio. La escala se lee
+    UNA vez, no una por persona."""
     from prenomina.models import NEscalaAnnosServicio
 
     escala = NEscalaAnnosServicio.como_diccionario()
@@ -273,8 +283,17 @@ def antiguedad_detalle_html(request):
         rango = f'hasta {hasta} años'
     else:
         rango = ''
+    return filas, rango
+
+
+def antiguedad_detalle_html(request):
+    """Ventana «Ver más» de Años de Servicio: los mismos trabajadores que la tarjeta
+    (mismo filtro) con unidad, cargo, F. alta entidad, años y el importe que les
+    corresponde por la escala."""
+    from .ventanas import pie_de_ventana
+    filas, rango = datos_antiguedad(request)
     return render(request, 'pages/dashboard/partials/antiguedad_detalle.html', {
-        'filas': filas, 'rango': rango})
+        'filas': filas, 'rango': rango, **pie_de_ventana(request, 'antiguedad')})
 
 
 MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
@@ -326,18 +345,19 @@ def _cargo_y_unidad(registro):
             unidad.descripcion if unidad else '—')
 
 
-def altas_bajas_mes_html(request):
-    """Ventana del gráfico «Evolución Altas y Bajas»: las altas y bajas del mes
-    pulsado, en orden cronológico. Mismo criterio que el gráfico: las altas son
-    `CAlta.fecha_alta` más `CBaja.fecha_alta` (quien entró y ya se fue también fue
-    un alta ese mes) y las bajas, `CBaja.fecha_baja`; con el alcance de unidades
-    del resto de la Dashboard."""
+def datos_mes(request):
+    """`(titulo, filas, inicio, fin)` de las altas y bajas del mes pulsado en
+    «Evolución Altas y Bajas», o None si el mes no vale. Mismo criterio que el
+    gráfico: las altas son `CAlta.fecha_alta` más `CBaja.fecha_alta` (quien entró y
+    ya se fue también fue un alta ese mes) y las bajas, `CBaja.fecha_baja`; con el
+    alcance de unidades del resto de la Dashboard. `fin` es el primer día del mes
+    siguiente."""
     uo_ids, _ = resolver_filtros(request)
     try:
         anno, mes = int(request.GET.get('anno')), int(request.GET.get('mes'))
         inicio = date(anno, mes, 1)
     except (TypeError, ValueError):
-        return HttpResponse('Mes no válido.', status=400)
+        return None
     fin = date(anno + 1, 1, 1) if mes == 12 else date(anno, mes + 1, 1)
     relaciones = ('aspirante', 'cargo__ncargo', 'cargo__departamento__unidad_organizativa')
 
@@ -348,24 +368,35 @@ def altas_bajas_mes_html(request):
         for registro in qs:
             cargo, unidad = _cargo_y_unidad(registro)
             yield {'fecha': getattr(registro, campo_fecha), 'tipo': tipo,
-                   'expediente': registro.no_expediente or '—',
+                   'expediente': registro.no_expediente or '—', 'aspirante_id': registro.aspirante_id,
                    'nombre': _nombre(registro.aspirante), 'cargo': cargo, 'unidad': unidad}
 
     lista = (list(filas(CAlta.objects.all(), 'fecha_alta', 'alta'))
              + list(filas(CBaja.objects.all(), 'fecha_alta', 'alta'))
              + list(filas(CBaja.objects.all(), 'fecha_baja', 'baja')))
     lista.sort(key=lambda f: (f['fecha'], f['tipo'] == 'baja', f['nombre']))
+    return f'{MESES_LARGOS[mes - 1]} {anno}', lista, inicio, fin
+
+
+def altas_bajas_mes_html(request):
+    """Ventana del gráfico «Evolución Altas y Bajas» (ver `datos_mes`)."""
+    from .ventanas import pie_de_ventana
+    datos = datos_mes(request)
+    if datos is None:
+        return HttpResponse('Mes no válido.', status=400)
+    titulo, lista, _inicio, _fin = datos
     return render(request, 'pages/dashboard/partials/altas_bajas_mes.html', {
-        'filas': lista, 'titulo': f'{MESES_LARGOS[mes - 1]} {anno}',
+        'filas': lista, 'titulo': titulo,
         'total_altas': sum(f['tipo'] == 'alta' for f in lista),
         'total_bajas': sum(f['tipo'] == 'baja' for f in lista),
+        **pie_de_ventana(request, 'mes'),
     })
 
 
-def salario_desglose_html(request):
-    """Ventana de «Salario Escala Promedio»: el promedio por unidad y por
-    categoría ocupacional de los activos, con el mismo cálculo que la tarjeta
-    (`salario_total`) y el mismo alcance de unidades."""
+def datos_salario(request):
+    """El promedio por unidad y por categoría ocupacional de los activos, con el
+    mismo cálculo que la tarjeta «Salario Escala Promedio» (`salario_total`) y el
+    mismo alcance de unidades."""
     from nomencladores.models import NCargo
 
     uo_ids, _ = resolver_filtros(request)
@@ -393,11 +424,18 @@ def salario_desglose_html(request):
                  for k, (s, n) in grupo.items()]
         return sorted(filas, key=lambda f: -f['promedio'])
 
-    return render(request, 'pages/dashboard/partials/salario_desglose.html', {
+    return {
         'tablas': [('Por unidad', 'Unidad', tabla(por_unidad)),
                    ('Por categoría ocupacional', 'Categoría', tabla(por_categoria))],
         'promedio': round(total / cuantos, 2) if cuantos else 0, 'personas': cuantos,
-    })
+    }
+
+
+def salario_desglose_html(request):
+    """Ventana de «Salario Escala Promedio» (ver `datos_salario`)."""
+    from .ventanas import pie_de_ventana
+    return render(request, 'pages/dashboard/partials/salario_desglose.html', {
+        **datos_salario(request), **pie_de_ventana(request, 'salario')})
 
 
 def cumpleanos_html(request):
@@ -451,10 +489,9 @@ VISTAS_PLAZAS = [('vacantes', 'Con vacantes'), ('llenas', 'Plazas llenas'),
                  ('inactivos', 'Inactivos'), ('todas', 'Todas')]
 
 
-def plazas_html(request):
-    """Ventana «Plazas» de las tarjetas Vacantes Libres y Ocupación de Plazas
-    (decisiones de RRHH del 12-10-2026): los cargos EN plantilla con sus plazas
-    aprobadas, ocupadas y vacantes, con el mismo alcance de unidades que la
+def datos_plazas(request):
+    """`(cargos, vista, q)` de la ventana «Plazas»: los cargos EN plantilla con sus
+    plazas aprobadas, ocupadas y vacantes, con el mismo alcance de unidades que la
     Dashboard. `vista`: vacantes / llenas / inactivos (sin plazas aprobadas, como
     los llama el Gestor) / todas. `q` busca por el nombre del cargo."""
     uo_ids, _ = resolver_filtros(request)
@@ -477,6 +514,14 @@ def plazas_html(request):
                                   'departamento__orden_informe', 'orden_informe'))
     for cargo in cargos:
         cargo.vacantes = max((cargo.cant_aprobada or 0) - (cargo.cant_cubierta or 0), 0)
+    return cargos, vista, q
+
+
+def plazas_html(request):
+    """Ventana «Plazas» de las tarjetas Vacantes Libres y Ocupación de Plazas
+    (decisiones de RRHH del 12-10-2026). Ver `datos_plazas`."""
+    from .ventanas import pie_de_ventana
+    cargos, vista, q = datos_plazas(request)
 
     plantilla = ('pages/dashboard/partials/plazas_filas.html' if request.GET.get('solo_filas')
                  else 'pages/dashboard/partials/plazas.html')
@@ -489,6 +534,7 @@ def plazas_html(request):
         'cargos': cargos, 'vista': vista, 'vistas': VISTAS_PLAZAS, 'q': q,
         'qs_base': base.urlencode(),
         'total_vacantes': sum(c.vacantes for c in cargos),
+        **pie_de_ventana(request, 'plazas'),
     })
 
 
@@ -770,9 +816,13 @@ class DashboardView(TemplateView):
         context['severidad_actual'] = ctx_advertencias['severidades_actuales']
 
         # Top 5 Causas de Baja y Tipos de Contrato
+        # Clave (id, nombre): el id abre la ventana de esa causa al pulsar la barra
+        # (`ventanas.SIN_CAUSA` para las bajas sin causa).
+        from .ventanas import SIN_CAUSA
         causas_baja_dict = {}
         for b in todas_bajas:
-            causa = b.causa_baja.descripcion if b.causa_baja else 'Sin Causa'
+            causa = ((str(b.causa_baja_id), b.causa_baja.descripcion) if b.causa_baja
+                     else (SIN_CAUSA, 'Sin Causa'))
             causas_baja_dict[causa] = causas_baja_dict.get(causa, 0) + 1
         causas_baja_ordenada = sorted(causas_baja_dict.items(), key=lambda x: x[1], reverse=True)[:5]
 
@@ -847,7 +897,8 @@ class DashboardView(TemplateView):
         ]
         context['grado_cientifico_codigos'] = json.dumps(['MC', 'DC', 'NINGUNO'])
 
-        context['causas_baja_labels'] = json.dumps([item[0] for item in causas_baja_ordenada])
+        context['causas_baja_labels'] = json.dumps([item[0][1] for item in causas_baja_ordenada])
+        context['causas_baja_ids'] = json.dumps([item[0][0] for item in causas_baja_ordenada])
         context['causas_baja_data'] = [item[1] for item in causas_baja_ordenada]
 
         # --- 4. GRÁFICO HISTÓRICO ---

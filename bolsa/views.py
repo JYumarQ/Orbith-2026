@@ -191,7 +191,12 @@ def _filtrar_bajas(request, qs):
     desde = fecha_de(request, 'baja_desde')
     hasta = fecha_de(request, 'baja_hasta')
     unidades = expandir([v for v in request.GET.getlist('unidad') if v])
-    if not (desde or hasta or unidades):
+    # Causa de la baja (24-10-2026): llega desde «Top causas de baja» de la
+    # Dashboard. Un id de la causa, o `ninguna` para las bajas sin causa.
+    causa = (request.GET.get('causa') or '').strip()
+    if causa and not (causa.isdigit() or causa == 'ninguna'):
+        causa = ''
+    if not (desde or hasta or unidades or causa):
         return qs
     if desde or hasta:
         # Para la nota «2 bajas en el período» de la fila.
@@ -204,6 +209,10 @@ def _filtrar_bajas(request, qs):
         bajas = bajas.filter(fecha_baja__lte=hasta)
     if unidades:
         bajas = bajas.filter(cargo__departamento__unidad_organizativa_id__in=unidades)
+    if causa == 'ninguna':
+        bajas = bajas.filter(causa_baja__isnull=True)
+    elif causa:
+        bajas = bajas.filter(causa_baja_id=causa)
     return qs.filter(pk__in=bajas.values('aspirante_id'))
 
 
@@ -299,6 +308,10 @@ class BajaListView(ListView):
         context['filtro_unidad'] = self.request.GET.getlist('unidad')
         context['filtro_baja_desde'] = self.request.GET.get('baja_desde', '')
         context['filtro_baja_hasta'] = self.request.GET.get('baja_hasta', '')
+        # Causa de la baja (24-10-2026, desde «Top causas de baja» de la Dashboard).
+        from nomencladores.models import NCausaAltaBaja
+        context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False).order_by('descripcion')
+        context['filtro_causa'] = self.request.GET.get('causa', '')
         context.update(_aviso_recontratados(self.request))
 
         return context

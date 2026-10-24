@@ -123,3 +123,14 @@ class RegistroErrores(models.Model):
         default_permissions = ('view',)
         verbose_name = 'Registro de errores'
         verbose_name_plural = 'Registro de errores'
+
+
+class DiagnosticoServidor(models.Model):
+    """Sin tabla: da a «Diagnóstico del servidor» un sitio en el admin de Django
+    (ver `DiagnosticoServidorAdmin` y `core/diagnostico.py`)."""
+
+    class Meta:
+        managed = False
+        default_permissions = ('view',)
+        verbose_name = 'Diagnóstico del servidor'
+        verbose_name_plural = 'Diagnóstico del servidor'

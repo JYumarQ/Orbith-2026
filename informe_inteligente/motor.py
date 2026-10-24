@@ -22,6 +22,8 @@ from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
 from .metadata import (
     REGISTRO_MODELOS,
+    PREFIJO_CONTRATOS_POR_TIPO,
+    definicion_viva,
     LOOKUP_POR_OPERADOR,
     OPERADORES_MULTIVALOR,
     INDICADORES_POR_MODELO,
@@ -54,7 +56,7 @@ class ConfiguracionInformeInvalida(Exception):
 
 
 def _obtener_definicion_modelo(modelo_raiz):
-    definicion = REGISTRO_MODELOS.get(modelo_raiz)
+    definicion = definicion_viva(modelo_raiz)
     if not definicion:
         raise ConfiguracionInformeInvalida(
             "El tipo de informe seleccionado ya no está disponible en el sistema."
@@ -134,7 +136,7 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
             queryset = queryset.annotate(
                 vacantes=F("cant_aprobada") - F("cant_cubierta"),
             )
-        elif key in CONTEOS_DE_CONTRATOS:
+        elif key in CONTEOS_DE_CONTRATOS or key.startswith(PREFIJO_CONTRATOS_POR_TIPO):
             queryset = queryset.annotate(**{key: _conteo_de_contratos(queryset.model, key)})
         elif key in ("maestria", "doctorado"):
             # El importe ya no vive en el contrato (23-10-2026): el del grado
@@ -525,8 +527,6 @@ CONTEOS_DE_CONTRATOS = {
     'contratos_activos': {},
     'contratos_ocupan_plaza': {'ocupa_plaza': True},
     'contratos_no_ocupan_plaza': {'ocupa_plaza': False},
-    'contratos_determinados': {'requiere_motivo': True},
-    'contratos_indeterminados': {'requiere_motivo': False},
 }
 
 
@@ -534,16 +534,22 @@ def _conteo_de_contratos(modelo, key):
     """Subconsulta con el número de contratos del cargo de cada fila."""
     from django.db.models import Count, IntegerField, OuterRef, Subquery
 
-    filtro = CONTEOS_DE_CONTRATOS[key]
-    if modelo._meta.model_name == 'cierrecargo':
+    historico = modelo._meta.model_name == 'cierrecargo'
+    if key.startswith(PREFIJO_CONTRATOS_POR_TIPO):
+        # Una columna por tipo de contrato: la fotografía guarda el id original.
+        tipo_id = int(key[len(PREFIJO_CONTRATOS_POR_TIPO):])
+        filtro_vivo = {'tipo_id': tipo_id}
+        filtro_historico = {'tipo_id_original': tipo_id}
+    else:
+        filtro_historico = CONTEOS_DE_CONTRATOS[key]
+        filtro_vivo = {'tipo__' + campo: valor for campo, valor in filtro_historico.items()}
+    if historico:
         from cierres.models import CierreContrato
-        contratos = CierreContrato.objects.filter(cierre_cargo=OuterRef('pk'), **filtro)
+        contratos = CierreContrato.objects.filter(cierre_cargo=OuterRef('pk'), **filtro_historico)
         agrupar = 'cierre_cargo'
     else:
         from contratos.models import CAlta
-        contratos = CAlta.objects.filter(
-            cargo=OuterRef('pk'), aspirante__estado='ACTIVO',
-            **{'tipo__' + campo: valor for campo, valor in filtro.items()})
+        contratos = CAlta.objects.filter(cargo=OuterRef('pk'), aspirante__estado='ACTIVO', **filtro_vivo)
         agrupar = 'cargo'
     total = (contratos.order_by().values(agrupar).annotate(n=Count('pk')).values('n')[:1])
     return Coalesce(Subquery(total, output_field=IntegerField()), Value(0))

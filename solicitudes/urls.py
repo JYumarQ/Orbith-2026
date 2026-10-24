@@ -13,7 +13,7 @@ distinguir entre «entrar al módulo» y «decidir».
 from django.contrib.auth.decorators import login_required
 from django.urls import path
 
-from . import views
+from . import personalizadas, views
 
 urlpatterns = [
     # Listado y búsqueda
@@ -35,4 +35,14 @@ urlpatterns = [
     path('<int:pk>/rechazar/', login_required(views.rechazar_solicitud), name='rechazar_solicitud'),
     path('<int:pk>/cancelar/', login_required(views.cancelar_revision), name='cancelar_revision'),
     path('<int:pk>/devolver/', login_required(views.devolver_solicitud), name='devolver_solicitud'),
+
+    # Solicitudes personalizadas: mensaje directo Moderador → Administrador (24-10-2026)
+    path('personalizadas/', login_required(personalizadas.lista_personalizadas),
+         name='list_solicitudes_personalizadas'),
+    path('personalizadas/nueva/', login_required(personalizadas.crear_personalizada),
+         name='add_solicitud_personalizada'),
+    path('personalizadas/<int:pk>/', login_required(personalizadas.ver_personalizada),
+         name='ver_solicitud_personalizada'),
+    path('personalizadas/<int:pk>/responder/', login_required(personalizadas.responder_personalizada),
+         name='responder_solicitud_personalizada'),
 ]

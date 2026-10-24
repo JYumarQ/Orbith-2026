@@ -1,0 +1,52 @@
+{% load dashboard_ventanas %}
+{% comment %}
+  Tablas de la ventana genérica. Cambiar de página o buscar recarga solo esto
+  (`?solo_tabla=1`). El botón Excel del pie añade al pulsarlo lo escrito en el
+  buscador (script de #modalDashboard en dashboard.html).
+{% endcomment %}
+{% for t in tablas %}
+  {% if tablas|length > 1 %}<h6 class="fw-bold mt-2 mb-2">{{ t.tabla.nombre }}</h6>{% endif %}
+  <div class="orb-tabla-scroll orb-tabla-alto text-nowrap">
+    <table class="table orb-tabla">
+      <thead><tr>
+        {% for rotulo, clave, tipo in t.tabla.columnas %}
+        <th{% if tipo == 'num' or tipo == 'dinero' %} class="text-end"{% endif %}>{{ rotulo }}</th>
+        {% endfor %}
+      </tr></thead>
+      <tbody>
+        {% for fila in t.pagina %}
+        <tr{% if fila.aspirante_id %} class="cursor-pointer" title="Doble clic para ver su histórico"
+            ondblclick="abrirModalHistorico('{% url 'historico_trabajador' fila.aspirante_id %}')"{% endif %}>
+          {% for rotulo, clave, tipo in t.tabla.columnas %}
+          {% with valor=fila|campo:clave %}
+          <td{% if tipo == 'num' or tipo == 'dinero' %} class="text-end"{% endif %}>
+            {% if clave == 'expediente' %}<strong>{{ valor }}</strong>
+            {% elif tipo == 'fecha' %}{{ valor|date:"d/m/Y"|default:"—" }}
+            {% elif tipo == 'dinero' %}{% if valor is not None %}${{ valor|floatformat:2 }}{% else %}—{% endif %}
+            {% else %}{{ valor|default_if_none:"—" }}{% endif %}
+          </td>
+          {% endwith %}
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ t.tabla.columnas|length }}" class="text-center text-muted p-4">
+          {% if q %}Nada coincide con «{{ q }}».{% else %}No hay nada que mostrar.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+    <span class="text-muted small">{{ t.total }} registro{{ t.total|pluralize }}{% if q %} con «{{ q }}»{% endif %}.</span>
+    {% if t.pagina.has_other_pages %}
+    <div class="btn-group btn-group-sm" role="group" aria-label="Páginas">
+      <button type="button" class="btn btn-outline-secondary" {% if not t.pagina.has_previous %}disabled{% endif %}
+              hx-get="{{ url_tabla }}&solo_tabla=1&q={{ q|urlencode }}&page={% if t.pagina.has_previous %}{{ t.pagina.previous_page_number }}{% endif %}"
+              hx-target="#ventana-tabla" aria-label="Página anterior"><i class="bx bx-chevron-left"></i></button>
+      <span class="btn btn-outline-secondary disabled">Página {{ t.pagina.number }} de {{ t.pagina.paginator.num_pages }}</span>
+      <button type="button" class="btn btn-outline-secondary" {% if not t.pagina.has_next %}disabled{% endif %}
+              hx-get="{{ url_tabla }}&solo_tabla=1&q={{ q|urlencode }}&page={% if t.pagina.has_next %}{{ t.pagina.next_page_number }}{% endif %}"
+              hx-target="#ventana-tabla" aria-label="Página siguiente"><i class="bx bx-chevron-right"></i></button>
+    </div>
+    {% endif %}
+  </div>
+{% endfor %}

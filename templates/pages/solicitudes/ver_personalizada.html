@@ -1,0 +1,69 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Solicitud personalizada{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <div class="container-xxl grow container-p-y">
+        <h4 class="fw-bold py-3 mb-3">
+            <span class="text-muted fw-light">
+                <a href="{% url 'list_solicitudes_personalizadas' %}" class="text-muted">Solicitudes</a> /
+            </span>
+            Solicitud personalizada
+        </h4>
+
+        <div class="card mb-4" style="max-width: 900px;">
+            <div class="card-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <h5 class="mb-1">{{ solicitud.asunto }}</h5>
+                    <div class="text-muted small">
+                        <span class="me-3"><i class="fas fa-user-circle me-1"></i>{{ solicitud.solicitante_nombre|default:'—' }}</span>
+                        <span class="me-3"><i class="far fa-calendar me-1"></i>{{ solicitud.created_at|date:'d/m/Y H:i' }}</span>
+                        {% if solicitud.unidad %}<span><i class="fas fa-sitemap me-1"></i>{{ solicitud.unidad.descripcion }}</span>{% endif %}
+                    </div>
+                </div>
+                {% if solicitud.estado == 'ABI' %}<span class="badge bg-label-info">Abierta</span>
+                {% elif solicitud.estado == 'ATE' %}<span class="badge bg-label-success">Atendida</span>
+                {% else %}<span class="badge bg-label-secondary">Cerrada sin cambios</span>{% endif %}
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-1">Trabajador</p>
+                <p class="fw-semibold">
+                    {% if solicitud.contrato_id %}
+                        {{ solicitud.trabajador_texto }}
+                        {% if es_admin %}<a class="ms-2 small" href="{% url 'updt_contrato' solicitud.contrato_id %}" target="_blank">Abrir contrato <i class="fas fa-external-link-alt"></i></a>{% endif %}
+                    {% else %}{{ solicitud.trabajador_texto|default:'Ninguno en concreto' }}{% endif %}
+                </p>
+                <p class="small text-muted mb-1">Descripción</p>
+                <div class="p-3 bg-lighter rounded mb-3" style="white-space: pre-wrap;">{{ solicitud.descripcion }}</div>
+
+                {% if not solicitud.abierta %}
+                <p class="small text-muted mb-1">Respuesta del administrador
+                    {% if solicitud.respondida_por %} · {{ solicitud.respondida_por.get_full_name|default:solicitud.respondida_por.username }}{% endif %}
+                    · {{ solicitud.fecha_respuesta|date:'d/m/Y H:i' }}</p>
+                <div class="p-3 border rounded" style="white-space: pre-wrap;">{{ solicitud.respuesta }}</div>
+                {% elif es_admin %}
+                {% comment %} Una sola respuesta y se cierra (decisión de RRHH). La corrección del
+                   contrato o del histórico la hace el administrador por su cuenta. {% endcomment %}
+                <form method="post" action="{% url 'responder_solicitud_personalizada' solicitud.pk %}" novalidate>
+                    {% csrf_token %}
+                    <label class="form-label" for="{{ form_respuesta.respuesta.id_for_label }}">{{ form_respuesta.respuesta.label }}</label>
+                    {{ form_respuesta.respuesta }}
+                    {% for error in form_respuesta.respuesta.errors %}<div class="text-danger small mt-1">{{ error }}</div>{% endfor %}
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="submit" name="accion" value="cerrar" class="btn btn-label-secondary">
+                            <i class="fas fa-times me-1"></i> Cerrar sin cambios
+                        </button>
+                        <button type="submit" name="accion" value="atender" class="btn btn-success">
+                            <i class="fas fa-check me-1"></i> Marcar como atendida
+                        </button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="alert alert-secondary small mb-0"><i class="fas fa-hourglass-half me-1"></i> Pendiente de respuesta del administrador.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

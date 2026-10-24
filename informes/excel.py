@@ -374,7 +374,14 @@ def _escribir_portada(hoja, context, periodo, titulo='Altas y Bajas del Mes',
     el límite de ancho de una cabecera impresa—, así que la lista de unidades se
     escribe completa en vez de recortada en «y N más».
     """
-    _poner_logo(hoja, context.get('config'))
+    if _poner_logo(hoja, context.get('config')):
+        # La fila 1 tiene que medir lo que el logo (px → puntos), o el logo se
+        # monta encima del nombre de la empresa y del título. Los Informes RRHH ya
+        # la agrandaban en `LibroInforme.portada`; los Anexos no, y ahí se
+        # solapaba (24-10-2026). Aquí vale para todos.
+        alto = ALTO_DEL_LOGO * 0.75 + 6
+        if (hoja.row_dimensions[1].height or 0) < alto:
+            hoja.row_dimensions[1].height = alto
 
     hoja['B2'] = context.get('nombre_empresa') or ''
     hoja['B2'].font = FUENTE_PORTADA

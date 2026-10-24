@@ -1,0 +1,93 @@
+{% extends "admin/base_site.html" %}
+{% comment %} Diagnóstico del servidor (24-10-2026): ver core/diagnostico.py. {% endcomment %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; Diagnóstico del servidor
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .diag td, .diag th { padding: .4rem .6rem; vertical-align: top; }
+  .diag .ok { color: #15803d; font-weight: bold; }
+  .diag .mal { color: #b91c1c; font-weight: bold; }
+  .diag code { word-break: break-all; }
+  #resultado-prueba { padding: .8rem 1rem; border-radius: 6px; background: var(--darkened-bg, #f8f8f8); }
+</style>
+
+<p>Esta página ayuda a averiguar por qué el logo de la empresa y los avatares desaparecen tras
+   actualizar Orbith en el servidor. Haga una captura de toda la página y envíesela al desarrollador.</p>
+
+<h2>1. ¿Quién sirve los ficheros subidos (/media/)?</h2>
+<div id="resultado-prueba">Comprobando…</div>
+
+<h2>2. Dónde se está ejecutando Orbith</h2>
+<table class="diag">
+  <tr><th>Carpeta de esta versión</th><td><code>{{ d.base_dir }}</code></td></tr>
+  <tr><th>Carpeta que la contiene</th><td><code>{{ d.carpeta_superior }}</code></td></tr>
+  <tr><th>Modo depuración (DEBUG)</th><td>{% if d.debug %}<span class="mal">Activado</span> (no debería en el servidor){% else %}<span class="ok">Desactivado</span>{% endif %}</td></tr>
+</table>
+
+<p><strong>Carpetas que hay al lado</strong> (y cuántos ficheros subidos tiene cada una en su <code>media/</code>):</p>
+<table class="diag">
+  <tr><th>Carpeta</th><th>Ficheros en media/</th></tr>
+  {% for h in d.hermanas %}
+  <tr><td><code>{{ h.nombre }}</code>{% if h.actual %} <strong>← la que está en marcha</strong>{% endif %}</td>
+      <td>{% if h.media_ficheros is None %}sin carpeta media{% else %}{{ h.media_ficheros }}{% endif %}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>3. Ficheros subidos</h2>
+<table class="diag">
+  <tr><th>Carpeta donde los guarda Orbith</th><td><code>{{ d.media.ruta }}</code>
+      {% if d.media_desde_env %}(indicada en <code>core/.env</code> con MEDIA_DIR){% else %}(la de dentro de esta versión){% endif %}</td></tr>
+  <tr><th>¿Existe?</th><td>{% if d.media.existe %}<span class="ok">Sí</span>{% else %}<span class="mal">No</span>{% endif %}</td></tr>
+  <tr><th>¿Se puede escribir en ella?</th><td>{% if d.media.escribible %}<span class="ok">Sí</span>{% else %}<span class="mal">No</span>{% endif %}</td></tr>
+  <tr><th>Ficheros que contiene</th><td>{{ d.media.ficheros }}</td></tr>
+  <tr><th>Logo de la empresa</th><td>
+      {% if not d.logo %}No hay logo configurado.
+      {% else %}<code>{{ d.logo.nombre }}</code> —
+        {% if d.logo.existe %}<span class="ok">el fichero existe</span>{% else %}<span class="mal">el fichero NO existe en esa carpeta</span>{% endif %}
+      {% endif %}</td></tr>
+  <tr><th>Avatares</th><td>{{ d.avatares_total }} usuarios con avatar;
+      {% if d.avatares_faltan %}<span class="mal">faltan {{ d.avatares_faltan|length }} ficheros</span>{% else %}<span class="ok">todos existen</span>{% endif %}</td></tr>
+</table>
+
+<script>
+(function () {
+  const caja = document.getElementById('resultado-prueba');
+  const url = {% if url_prueba %}"{{ url_prueba }}?t=" + Date.now(){% else %}null{% endif %};
+  if (!url) {
+    caja.innerHTML = '<span class="mal">Orbith no pudo escribir el fichero de prueba en su carpeta de ficheros subidos.</span> ' +
+      'Revise que la carpeta exista y que el usuario con el que se ejecuta Orbith pueda escribir en ella.';
+    return;
+  }
+  fetch(url, { cache: 'no-store' }).then(function (r) {
+    return r.text().then(function (texto) {
+      const servidor = r.headers.get('Server') || '';
+      const deNginx = /nginx/i.test(servidor) || /<center>nginx/i.test(texto);
+      if (r.ok && texto.indexOf('Orbith') === 0) {
+        caja.innerHTML = '<span class="ok">Correcto:</span> los ficheros subidos se sirven desde la misma carpeta en la que Orbith los guarda' +
+          (deNginx ? ' (los sirve nginx).' : '.') +
+          ' Si el logo desaparece tras actualizar, es porque cada versión nueva trae su propia carpeta <code>media/</code> vacía o distinta: se resuelve guardándolos fuera de las versiones.';
+      } else if (r.status === 404 && deNginx) {
+        caja.innerHTML = '<span class="mal">Aquí está el problema:</span> nginx sirve <code>/media/</code> desde OTRA carpeta, no desde ' +
+          '<code>{{ d.media.ruta|escapejs }}</code>, que es donde Orbith guarda el logo y los avatares. Quien administre el servidor tiene que ' +
+          'revisar en la configuración de nginx la línea <code>location /media/</code> y hacer que apunte a la carpeta de ficheros subidos de Orbith ' +
+          '(mejor una carpeta fija, fuera de las carpetas de versión).';
+      } else if (r.status === 404) {
+        caja.innerHTML = '<span class="mal">Nadie sirve los ficheros subidos:</span> la petición llegó a Orbith y Orbith, con DEBUG desactivado, no los entrega. ' +
+          'Hace falta que nginx los sirva (línea <code>location /media/</code>) o que Orbith lo haga.';
+      } else {
+        caja.innerHTML = 'Respuesta inesperada: código ' + r.status + (servidor ? ' · servidor «' + servidor + '»' : '') + '.';
+      }
+    });
+  }).catch(function () {
+    caja.innerHTML = '<span class="mal">No se pudo hacer la prueba</span> (error de red).';
+  });
+})();
+</script>
+{% endblock %}

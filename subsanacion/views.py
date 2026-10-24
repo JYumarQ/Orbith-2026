@@ -41,7 +41,7 @@ from .constantes import (
     color_de_indice,
 )
 from .contexto import ContextoAnalisis
-from .enlaces import enlace_de_hallazgo
+from .enlaces import destino_de_regla, enlace_de_hallazgo
 from .exportar import exportar_a_excel, exportar_a_pdf
 from .filtros import (
     filtrar_hallazgos,
@@ -341,6 +341,7 @@ def detalle_hallazgo(request, pk, aviso_correccion=''):
     # La regla puede haber desaparecido del código (se retiró en una versión
     # posterior). El hallazgo histórico sigue siendo válido y se muestra sin la guía.
     regla = obtener_regla(hallazgo.codigo_regla)
+    destino, texto_boton = destino_de_regla(regla, request.user)
 
     return render(request, 'pages/subsanacion/partials/detalle_hallazgo.html', {
         'hallazgo': hallazgo,
@@ -348,7 +349,7 @@ def detalle_hallazgo(request, pk, aviso_correccion=''):
         'puede_corregir': _puede_corregir(request.user, hallazgo, regla),
         'aviso_correccion': aviso_correccion,
         'enlace': enlace_de_hallazgo(
-            hallazgo, forzar_url=regla.enlace_url if regla else None,
+            hallazgo, forzar_url=destino, etiqueta=texto_boton,
             # `detalle_hallazgo` se abre vía HTMX dentro de un modal sobre el panel de
             # hallazgos: `request.get_full_path()` sería la URL de este propio
             # fragmento, no la página real que ve el usuario (con sus filtros). HTMX
@@ -557,13 +558,14 @@ def problemas_registro(request, modelo, pk):
     problemas = []
     for hallazgo in hallazgos_del_registro(modelo, objeto):
         regla = obtener_regla(hallazgo.codigo_regla)
+        destino, texto_boton = destino_de_regla(regla, request.user)
         problemas.append({
             'hallazgo': hallazgo,
             'regla': regla,
             'critico': hallazgo.criticidad <= CRITICIDAD_CRITICA,
             'de_la_ficha': hallazgo.content_type.model == 'aspirante',
             'enlace': enlace_de_hallazgo(
-                hallazgo, forzar_url=regla.enlace_url if regla else None,
+                hallazgo, forzar_url=destino, etiqueta=texto_boton,
                 next_url=volver, origen_label='la lista', usuario=request.user),
         })
     return render(request, 'pages/subsanacion/partials/problemas_registro.html', {

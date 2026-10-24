@@ -39,6 +39,33 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.6.0",
+        "fecha": "2026-10-24",
+        "titulo": "Editor del histórico, ventanas de la Dashboard con Excel y filtros más sencillos",
+        "cambios": [
+            ("nuevo", "Editor del histórico (solo Administrador): corrige todo el histórico de una persona —fechas, cargo, tipo, motivo, salario, Otros, bajas—, inserta movimientos que faltaron y borra los sobrantes. Se edita en borrador, se revisa y se guarda todo junto con un motivo obligatorio. Se abre con «Editar histórico» en la ventana del histórico."),
+            ("nuevo", "Al corregir el histórico se corrigen también los meses ya cerrados en los que estaba vigente: sus fotografías, plazas y totales. Cada cierre queda marcado «Corregido el … por …: motivo» y se avisa al moderador de la unidad."),
+            ("nuevo", "Solicitudes personalizadas: el Moderador explica al Administrador un problema que no tiene solicitud propia (pestaña «Personalizadas»); el Administrador responde y la cierra."),
+            ("nuevo", "Dashboard: toda tarjeta y gráfico abre primero una ventana con las personas o las cifras de detrás, con buscador, «Ver más» hacia la lista con los mismos filtros y exportación a Excel con portada."),
+            ("nuevo", "Dashboard: «Top causas de baja», «Unidades organizativas» y «Departamentos» ahora se pueden pulsar; los gráficos de distribución responden también al pulsar la porción, no solo la leyenda."),
+            ("nuevo", "Subsanación: regla MOV-015 «Histórico que no encaja» (tipo de contrato, cargo, unidad, departamento, motivo o tridente). Su botón lleva al editor del histórico y el aviso se cierra solo al corregirlo."),
+            ("nuevo", "Lista de Bajas: filtro por causa de la baja."),
+            ("nuevo", "Página de diagnóstico del servidor en el admin de Django (Soporte) para revisar dónde se guardan los ficheros subidos."),
+            ("mejorado", "Contratos y Bajas: filtros básicos a la vista y el resto en «Filtros avanzados»; encima de la tabla se ven los filtros en uso y cada uno se quita con su ✕."),
+            ("mejorado", "Movimiento de nómina rediseñado: situación actual al 40 % y propuesta al 60 %, por bloques, resoluciones siempre visibles y aviso de si el salario sube, baja o no varía."),
+            ("mejorado", "Editar contrato: unidad, departamento, cargo, tipo, motivo, tipo de salario, tridente y F. de contratación solo se cambian con un movimiento de nómina; el aviso ofrece hacerlo o enviar una solicitud personalizada."),
+            ("mejorado", "Informe Inteligente: una columna por cada tipo de contrato del nomenclador en lugar de «Determinados» e «Indeterminados»."),
+            ("mejorado", "El expediente es uno por persona: al corregirlo en el contrato cambia en todo su histórico, bajas y cierres."),
+            ("seguridad", "El salario del movimiento y del alta lo calcula el servidor con la escala, no se toma el que manda el navegador."),
+            ("seguridad", "Dos usuarios que guardan a la vez un movimiento, una baja o un alta de la misma persona ya no pueden dejar el histórico desordenado: el segundo espera y vuelve a comprobar."),
+            ("corregido", "El asistente de contratación guardaba el Alta Inicial sin tipo de contrato, motivo ni duración."),
+            ("corregido", "Se podía terminar un contrato sin tipo de contrato: ahora es obligatorio."),
+            ("corregido", "Contratos: al llegar con municipio o especialidad en la dirección, el filtro se perdía al buscar o cambiar de página."),
+            ("corregido", "El logo de los Excel ya no se monta sobre el nombre de la empresa, y el triángulo de problemas «alto» se ve en amarillo."),
+            ("eliminado", "El informe antiguo del Anexo 17 que ya no se usaba."),
+        ],
+    },
+    {
         "version": "3.5.0",
         "fecha": "2026-10-24",
         "titulo": "Anexos 17, De Confianza, modalidad de trabajo, «Otros» y nombres de fichero claros",
@@ -490,19 +517,6 @@ CHANGELOG = [
             ("mejorado", "Recodificación y deduplicación de eventos de notificaciones para evitar duplicados y mejorar el rendimiento."),
             ("mejorado", "Actualización masiva de vistas, formularios y plantillas en contratos, subsanación y solicitudes."),
             ("corregido", "Corrección en la gestión de cumpleaños y jubilaciones en el sistema de notificaciones."),
-        ],
-    },
-    {
-        "version": "2.4.1",
-        "fecha": "2026-08-11",
-        "titulo": "Modo mantenimiento, notificaciones y reportes mejorados",
-        "cambios": [
-            ("nuevo", "Modo mantenimiento: los usuarios no administradores ven una pantalla de mantenimiento cuando está activo."),
-            ("nuevo", "Reporte de problemas: los usuarios pueden adjuntar hasta 4 imágenes y pegar el error de consola del navegador (F12) para facilitar la depuración."),
-            ("nuevo", "Sistema 100% offline: vendorizados Sortable.js y Chart.js, eliminada la dependencia de CDN externos."),
-            ("mejorado", "Integración del centro de notificaciones con el módulo de subsanación."),
-            ("mejorado", "Eliminados paquetes no usados del proyecto (google-generativeai, requests)."),
-            ("corregido", "Validación de imágenes en reportes con mensajes en español."),
         ],
     },
 ]

@@ -6,11 +6,13 @@
 <style>
     .triangulo-problema { border: 0; background: transparent; padding: 0 .15rem; line-height: 1; cursor: pointer; }
     .triangulo-problema.critico { color: #dc2626; }
-    .triangulo-problema.alto { color: #d97706; }
+    /* Alta en AMARILLO (24-10-2026): el naranja anterior apenas se distinguía del
+       rojo. El contorno oscuro lo hace visible también sobre fondo blanco. */
+    .triangulo-problema.alto { color: #eab308; filter: drop-shadow(0 0 .6px #a16207); }
     .triangulo-problema:hover { transform: scale(1.15); }
     .triangulo-problema:focus-visible { outline: 2px solid currentColor; border-radius: 4px; }
     .problema-critico { border-left: 4px solid #dc2626 !important; }
-    .problema-alto { border-left: 4px solid #d97706 !important; }
+    .problema-alto { border-left: 4px solid #eab308 !important; }
 </style>
 <div class="modal fade" id="modalProblemas" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable modal-lg">

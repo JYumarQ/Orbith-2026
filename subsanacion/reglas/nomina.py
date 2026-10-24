@@ -1116,3 +1116,119 @@ class ContratoSinAltaInicial(ReglaBase):
                 datos={'fecha_de_contratacion': alta},
                 unidad_organizativa_id=fila.get('cargo__departamento__unidad_organizativa_id'),
             )
+
+
+# El «antes» de cada movimiento tiene que ser el «después» del anterior. MOV-001 ya
+# lo comprueba con el salario; MOV-015 con estos datos (decisión del 24-10-2026).
+# «Otros» queda fuera a propósito: las altas anteriores al 24-10-2026 no lo guardaban.
+CAMPOS_ENCADENADOS = (
+    ('Tipo de contrato', 'tipo_contrato_anterior', 'tipo_contrato_nuevo'),
+    ('Cargo', 'cargo_anterior', 'cargo_nuevo'),
+    ('Unidad', 'unidad_anterior', 'unidad_nueva'),
+    ('Departamento', 'departamento_anterior', 'departamento_nuevo'),
+    ('Motivo', 'motivo_anterior', 'motivo_nuevo'),
+    ('Tridente', 'tridente_anterior', 'tridente_nuevo'),
+)
+
+
+def _texto_del_historico(valor):
+    """Mismo criterio que el editor del histórico: vacío y «---» son lo mismo."""
+    valor = (valor or '').strip()
+    return valor or '---'
+
+
+class HistoricoQueNoEncaja(ReglaBase):
+    """MOV-015: el «antes» de un movimiento no coincide con lo que dejó el anterior.
+
+    Un hallazgo por PERSONA (no por movimiento): el arreglo se hace de una vez en el
+    editor del histórico, que reencadena todo al guardar. Por eso el botón lleva al
+    editor, y solo lo ve el Administrador (los demás ven el de la ficha).
+    """
+
+    codigo = 'MOV-015'
+    nombre = 'Histórico que no encaja de un movimiento al siguiente'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'bolsa.Aspirante'
+    enlace_url = 'editor_historico'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
+
+    descripcion = (
+        'Recorre el histórico de cada trabajador en orden y comprueba que lo que un '
+        'movimiento dice que había ANTES (tipo de contrato, cargo, unidad, departamento, '
+        'motivo y tridente) sea lo que dejó el movimiento anterior.')
+    causa_probable = (
+        'Hasta el 24-10-2026 el asistente de contratación creaba el «Alta Inicial» sin el '
+        'tipo de contrato ni el motivo. También aparece cuando se cambió un dato del '
+        'contrato sin hacer un movimiento de nómina, o con datos antiguos importados.')
+    impacto = (
+        'El histórico se contradice: un movimiento dice que la persona venía de un tipo '
+        'de contrato, cargo o unidad que el anterior no registra. Los certificados, '
+        'informes y cierres que lean el histórico pueden salir con datos distintos.')
+    solucion = (
+        'Un Administrador abre el editor del histórico de la persona («Abrir el editor del '
+        'histórico»), corrige el movimiento que tenga el dato equivocado, revisa los '
+        'cambios y guarda con el motivo. Al guardar, el editor encadena los «antes» y el '
+        'aviso desaparece. Un Moderador puede pedirlo con una solicitud personalizada.')
+
+    def ejecutar(self, contexto):
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+        orden = [F('fecha_efectiva').asc(), F('id').asc()]
+        previos = {
+            f'previo_{i}': Window(expression=Lag(nuevo), partition_by=[F('aspirante_id')],
+                                  order_by=orden)
+            for i, (_, _, nuevo) in enumerate(CAMPOS_ENCADENADOS)
+        }
+        columnas = [c for _, anterior, nuevo in CAMPOS_ENCADENADOS for c in (anterior, nuevo)]
+        filas = (TMovimiento.objects
+                 .filter(aspirante_id__in=self.base_queryset().values('pk'))
+                 .annotate(hay_previo=Window(expression=Lag('id'), partition_by=[F('aspirante_id')],
+                                             order_by=orden), **previos)
+                 .values('id', 'aspirante_id', 'fecha_efectiva', 'tipo_movimiento',
+                         'hay_previo', 'unidad_nueva_fk_id', 'unidad_anterior_fk_id',
+                         'aspirante__nombre', 'aspirante__papellido', 'aspirante__sapellido',
+                         'aspirante__doc_identidad', *columnas, *previos)
+                 .order_by('aspirante_id', 'fecha_efectiva', 'id')
+                 .iterator(chunk_size=TAMANO_LOTE))
+
+        actual, saltos, ultima = None, [], None
+
+        def hallazgo():
+            datos = {f'salto_{n}': texto for n, texto in enumerate(saltos[:10], start=1)}
+            if len(saltos) > 10:
+                datos['otros_saltos'] = str(len(saltos) - 10)
+            referencia = referencia_trabajador(
+                actual.get('aspirante__nombre'), actual.get('aspirante__papellido'),
+                actual.get('aspirante__sapellido'), actual.get('aspirante__doc_identidad'))
+            cuantos = len(saltos)
+            return HallazgoDetectado(
+                object_id=str(actual['aspirante_id']),
+                titulo=f'{referencia} · el histórico no encaja en '
+                       f'{cuantos} {"punto" if cuantos == 1 else "puntos"}',
+                detalle=('Algún movimiento dice que antes había un dato distinto del que dejó '
+                         'el movimiento anterior: ' + '; '.join(saltos[:3])
+                         + ('…' if cuantos > 3 else '.')),
+                datos=datos,
+                unidad_organizativa_id=ultima,
+            )
+
+        for fila in filas:
+            if actual is not None and fila['aspirante_id'] != actual['aspirante_id']:
+                if saltos:
+                    yield hallazgo()
+                saltos, ultima = [], None
+            actual = fila
+            ultima = fila.get('unidad_nueva_fk_id') or fila.get('unidad_anterior_fk_id') or ultima
+            # Un Alta Inicial (o recontratación) empieza de cero: no parte de nada.
+            if fila['hay_previo'] is None or 'ALTA' in (fila.get('tipo_movimiento') or '').upper():
+                continue
+            fecha = _fecha_texto(fila['fecha_efectiva'])
+            for i, (etiqueta, anterior, _) in enumerate(CAMPOS_ENCADENADOS):
+                dice = _texto_del_historico(fila.get(anterior))
+                dejo = _texto_del_historico(fila.get(f'previo_{i}'))
+                if dice != dejo:
+                    saltos.append(f'{fila.get("tipo_movimiento") or "Movimiento"} del {fecha}: '
+                                  f'{etiqueta.lower()} «{dice}», pero el anterior dejó «{dejo}»')
+        if actual is not None and saltos:
+            yield hallazgo()

@@ -637,7 +637,9 @@ class DashboardInteractivaTests(TestCase):
         respuesta = self.client.get(reverse('dashboard'), {'uo': self.unidad.pk})
         self.assertEqual(respuesta.context['qs_unidades'], f'&unidad={self.unidad.pk}')
         self.assertEqual(str(respuesta.context['unidad_unica']), str(self.unidad.pk))
-        self.assertContains(respuesta, f'?sexo=F&amp;unidad={self.unidad.pk}')
+        # Desde el 24-10-2026 el género abre primero la ventana (con la unidad elegida
+        # en `uo`); la ventana es la que lleva a Contratos con `unidad=`.
+        self.assertContains(respuesta, "abrirVentanaDe('activos', 'sexo=F')")
         sin_filtro = self.client.get(reverse('dashboard'))
         self.assertEqual(sin_filtro.context['qs_unidades'], '')
         self.assertIsNone(sin_filtro.context['unidad_unica'])
@@ -783,3 +785,68 @@ class PiramideDetalleTests(DashboardInteractivaTests):
                 self.assertEqual(len(r.context['filas']), cantidad, (sexo, tramo))
         self.assertEqual(self.client.get(reverse('dashboard_piramide_detalle'),
                                          {'tramo': 99, 'sexo': 'M'}).status_code, 400)
+
+
+class VentanasDashboardTests(DashboardInteractivaTests):
+    """Ventanas con «Ver más» y Excel (24-10-2026): cuentan lo mismo que su tarjeta,
+    «Ver más» lleva a la lista con los mismos filtros y el Excel saca lo que se ve."""
+
+    def ventana(self, clave, **params):
+        respuesta = self.client.get(reverse('dashboard_ventana', args=[clave]), params)
+        self.assertEqual(respuesta.status_code, 200)
+        return respuesta
+
+    def nombres(self, clave, **params):
+        return sorted(f['nombre'] for f in self.ventana(clave, **params).context['tablas'][0]['tabla'].filas)
+
+    def test_activos_con_los_filtros_de_contratos_y_su_ver_mas(self):
+        self.assertEqual(len(self.nombres('activos')), 3)
+        self.assertEqual(self.nombres('activos', sexo='M'), ['Persona2 Prueba Test'])
+        respuesta = self.ventana('activos', sexo='F', uo=self.unidad.pk)
+        self.assertEqual([f['nombre'] for f in respuesta.context['tablas'][0]['tabla'].filas],
+                         ['Persona1 Prueba Test'])
+        self.assertIn('Mujeres', respuesta.context['ventana'].titulo)
+        texto, url = respuesta.context['ver_mas'][0]
+        self.assertEqual(url, f"{reverse('list_contrato')}?sexo=F&unidad={self.unidad.pk}")
+
+    def test_buscar_y_paginar(self):
+        self.assertEqual(self.nombres('activos', q='persona3'), ['Persona3 Prueba Test'])
+        self.assertEqual(self.nombres('activos', q='00002'), ['Persona2 Prueba Test'])
+        solo = self.client.get(reverse('dashboard_ventana', args=['activos']), {'solo_tabla': 1})
+        self.assertTemplateUsed(solo, 'pages/dashboard/partials/ventana_tabla.html')
+        self.assertTemplateNotUsed(solo, 'pages/dashboard/partials/ventana.html')
+
+    def test_bajas_por_causa_y_su_lista(self):
+        self.assertEqual(self.nombres('causa', causa='ninguna'), ['Persona4 Prueba Test'])
+        self.assertEqual(self.client.get(reverse('dashboard_ventana', args=['causa']),
+                                         {'causa': 'x'}).status_code, 404)
+        lista = self.client.get(reverse('list_baja'), {'causa': 'ninguna'})
+        self.assertEqual([a.nombre for a in lista.context['aspirantes']], ['Persona4'])
+
+    def test_unidades_con_sus_plazas(self):
+        filas = {f['nombre']: f for f in self.ventana('unidades').context['tablas'][0]['tabla'].filas}
+        self.assertEqual((filas['UEB Central']['aprobadas'], filas['UEB Central']['trabajadores']), (10, 2))
+        self.assertIn('Gestor de Plantilla', self.ventana('unidades').context['ver_mas'][0][0])
+
+    def test_el_excel_saca_todas_las_filas_con_portada(self):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+        respuesta = self.client.get(reverse('dashboard_ventana_excel', args=['activos']), {'sexo': 'F'})
+        self.assertEqual(respuesta.status_code, 200)
+        libro = load_workbook(BytesIO(respuesta.content))
+        self.assertEqual(libro.sheetnames, ['Portada', 'Empleados'])
+        hoja = libro['Empleados']
+        self.assertEqual(hoja['B4'].value, 'Nombre')
+        self.assertEqual(sorted(hoja.cell(row=f, column=2).value for f in (5, 6)),
+                         ['Persona1 Prueba Test', 'Persona3 Prueba Test'])
+
+    def test_las_ventanas_que_ya_existian_llevan_el_pie(self):
+        for url, params in ((reverse('dashboard_salario'), {}),
+                            (reverse('dashboard_altas_bajas_mes'), {'anno': 2026, 'mes': 6}),
+                            (reverse('dashboard_piramide_detalle'), {'sexo': 'M', 'tramo': 0})):
+            respuesta = self.client.get(url, params)
+            self.assertContains(respuesta, 'data-excel-ventana')
+        mes = self.client.get(reverse('dashboard_altas_bajas_mes'), {'anno': 2026, 'mes': 6})
+        self.assertIn('alta_desde=2026-06-01&alta_hasta=2026-06-30', mes.context['ver_mas'][0][1])
+

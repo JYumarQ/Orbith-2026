@@ -69,6 +69,31 @@ post_save.connect(invalidar_importes_de_grado, sender=NImporteGradoCientifico, d
 post_delete.connect(invalidar_importes_de_grado, sender=NImporteGradoCientifico, dispatch_uid='contratos_grado_delete')
 
 
+# --- Modo «corrección del histórico» (editor del histórico, 24-10-2026) ---------
+# Mientras el editor guarda, borrar un movimiento o un contrato NO es una baja ni
+# un «vaciado» del histórico: es corregir un error. Así que se apagan los dos
+# automatismos pensados para esos casos (el cierre automático de
+# `_al_eliminar_movimiento` y el aviso de baja de `CAlta.delete`). El editor deja
+# a la persona en el estado que corresponde y audita cada cambio con su motivo.
+import contextlib as _contextlib
+import contextvars as _contextvars
+
+_CORRECCION_HISTORICO = _contextvars.ContextVar('correccion_historico', default=False)
+
+
+@_contextlib.contextmanager
+def correccion_de_historico():
+    token = _CORRECCION_HISTORICO.set(True)
+    try:
+        yield
+    finally:
+        _CORRECCION_HISTORICO.reset(token)
+
+
+def en_correccion_de_historico():
+    return _CORRECCION_HISTORICO.get()
+
+
 def invalidar_escala_salarial(**kwargs):
     _local_escala.valores = None
 
@@ -540,6 +565,30 @@ class CAlta(ContratoBase):
                         no_expediente=self.no_expediente)
                 .exclude(tipo_movimiento__iexact=TIPO_MOVIMIENTO_BAJA))
 
+    def propagar_expediente(self):
+        """Lleva el expediente de este contrato a TODO lo de la persona.
+
+        Decisión de RRHH del 24-10-2026: el número de expediente es único e
+        irrepetible y una persona nunca tiene dos, aunque cause baja y la
+        recontraten. Si se corrige es porque estaba mal, así que cambia en todas
+        partes: sus movimientos de todos los ciclos, sus bajas, sus cambios externos
+        y las fotografías de los cierres. Va con `update()`: es un cambio derivado
+        del que ya registra Auditoría (el expediente del contrato).
+        """
+        nuevo = self.no_expediente
+        TMovimiento.objects.filter(
+            models.Q(contrato=self) | models.Q(aspirante_id=self.aspirante_id)
+        ).exclude(no_expediente=nuevo).update(no_expediente=nuevo)
+        if not self.aspirante_id:
+            return
+        CBaja.objects.filter(aspirante_id=self.aspirante_id).exclude(
+            no_expediente=nuevo).update(no_expediente=nuevo)
+        CambioExterno.objects.filter(aspirante_id=self.aspirante_id).exclude(
+            no_expediente=nuevo).update(no_expediente=nuevo)
+        from cierres.models import CierreContrato
+        CierreContrato.objects.filter(aspirante_id_original=self.aspirante_id).exclude(
+            no_expediente=nuevo).update(no_expediente=nuevo)
+
     def reenganchar_movimientos_huerfanos(self):
         """Reasocia a este contrato su histórico suelto. Devuelve cuántos reenganchó."""
         return self.movimientos_huerfanos_reenganchables().update(contrato=self)
@@ -603,8 +652,7 @@ class CAlta(ContratoBase):
                     concepto__in=resueltos, importe_nomenclador__isnull=True).delete()
 
             if expediente_anterior is not None and expediente_anterior != self.no_expediente:
-                self.trazabilidad.exclude(no_expediente=self.no_expediente).update(
-                    no_expediente=self.no_expediente)
+                self.propagar_expediente()
 
             if es_nuevo:
                 # Recontratación: recuperar el histórico que se quedó huérfano cuando se
@@ -694,10 +742,12 @@ class CAlta(ContratoBase):
 
             # Aviso de baja ANTES de super().delete(): tiene que apuntar al
             # Aspirante (que sigue existiendo), no a este CAlta, que a partir de
-            # aquí queda inaccesible.
+            # aquí queda inaccesible. No hay aviso si el contrato se borra al
+            # corregir el histórico: no es una baja, nunca debió existir.
             try:
-                from notificaciones.avisos import avisar_baja_contrato
-                avisar_baja_contrato(self)
+                if not en_correccion_de_historico():
+                    from notificaciones.avisos import avisar_baja_contrato
+                    avisar_baja_contrato(self)
             except Exception:
                 logger.exception(
                     "No se pudo notificar la baja del contrato %s.", self.pk)
@@ -808,6 +858,28 @@ class CBaja(ContratoBase):
     
 
 # En contratos/models.py
+
+def salario_de_escala_para(cargo, tipo_salario, tridente_id):
+    """Salario de escala de HOY para ese cargo, tipo de salario y tridente, o None si
+    la escala no da ninguno. Es el mismo cálculo que enseña la pantalla del
+    movimiento (`cargar_salario`) y que guarda el contrato (`calcular_salario_escala`).
+
+    Desde el 24-10-2026 el movimiento de nómina y el asistente de contratación guardan
+    ESTE salario, calculado en el servidor, y no el que manda el navegador: si el
+    JavaScript fallaba o alguien alteraba la página, se guardaba un salario equivocado.
+    """
+    if cargo is None:
+        return None
+    ncargo = cargo.ncargo
+    return calcular_salario(
+        tipo_salario=tipo_salario or 'DIN', tiene_cargo=True,
+        es_cuadro=bool(ncargo.es_cuadro) if ncargo else False,
+        grupo_escala_id=ncargo.grupo_escala_id if ncargo else None,
+        rol_id_cargo=cargo.rol_id, tridente_id=tridente_id,
+        salario_basico=ncargo.salario_basico if ncargo else None,
+        buscar_monto=CAlta._buscar_monto_salario,
+    )
+
 
 class TMovimiento(models.Model):
     contrato = models.ForeignKey(CAlta, on_delete=models.SET_NULL, null=True, blank=True, related_name='trazabilidad')
@@ -961,6 +1033,11 @@ def _al_eliminar_movimiento(sender, instance, **kwargs):
     from auditoria.middleware import get_current_user
     from auditoria.models import AccionAuditoria
     from auditoria.servicios import registrar as registrar_auditoria
+
+    # El editor del histórico audita él mismo cada borrado (con su motivo) y decide
+    # cómo queda la persona: aquí no hay nada que hacer.
+    if en_correccion_de_historico():
+        return
 
     usuario_actual = get_current_user()
 
@@ -1153,6 +1230,7 @@ class CambioExterno(models.Model):
         UNIDAD = 'UNI', 'Unidad organizativa'
         IMPORTE = 'IMP', 'Importe de nomenclador'
         FICHA = 'FIC', 'Ficha del trabajador'
+        HISTORICO = 'HIS', 'Corrección del histórico'
 
     contrato = models.ForeignKey(
         CAlta, on_delete=models.SET_NULL, null=True, blank=True,

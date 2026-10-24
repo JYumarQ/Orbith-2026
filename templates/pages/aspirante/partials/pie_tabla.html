@@ -4,4 +4,4 @@ Pie de la tabla de Aspirantes y de Bajas (comparten plantilla): el común de Orb
 Bajas. Incluye los mismos filtros que el buscador para no perderlos al paginar.
 {% endcomment %}
 {% url search_url as url_buscar %}
-{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_aspirantes_results' incluir='#search, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_unidad, #filter_baja_desde, #filter_baja_hasta' nombre=es_baja_view|yesno:'bajas,aspirantes' %}
+{% include 'base/partials/tabla_paginacion.html' with url=url_buscar objetivo='#filter_aspirantes_results' incluir='#search, #filter_provincia_select, #filter_municipio_select, #filter_nivel_select, #filter_especialidad, #filter_sexo, #filter_raza, #filter_grado, #filter_unidad, #filter_baja_desde, #filter_baja_hasta, #filter_causa' nombre=es_baja_view|yesno:'bajas,aspirantes' %}

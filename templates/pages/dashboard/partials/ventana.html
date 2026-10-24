@@ -1,0 +1,22 @@
+{% comment %}
+  Ventana genérica de la Dashboard (dashboard.ventanas.ventana_html): título,
+  buscador, tabla paginada y pie con «Ver más» y «Excel». Se pinta en #modalDashboard.
+{% endcomment %}
+<div class="modal-header">
+  <h5 class="modal-title">{{ ventana.titulo }}</h5>
+  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+</div>
+<div class="modal-body pt-2">
+  {% if ventana.nota %}<p class="small text-muted mb-2"><i class="bx bx-info-circle me-1"></i>{{ ventana.nota }}</p>{% endif %}
+  {% if ventana.buscable %}
+  <div class="input-group input-group-sm mb-2" style="max-width: 360px;">
+    <span class="input-group-text"><i class="bx bx-search"></i></span>
+    <input type="search" name="q" class="form-control" value="{{ q }}" autocomplete="off"
+           placeholder="{{ ventana.pista }}" aria-label="Buscar en la ventana"
+           hx-get="{{ url_tabla }}&solo_tabla=1" hx-trigger="input changed delay:400ms, search"
+           hx-target="#ventana-tabla" hx-swap="innerHTML">
+  </div>
+  {% endif %}
+  <div id="ventana-tabla">{% include 'pages/dashboard/partials/ventana_tabla.html' %}</div>
+</div>
+{% include 'pages/dashboard/partials/ventana_pie.html' %}

@@ -111,3 +111,34 @@ class RegistroErroresTests(TestCase):
         self.assertEqual(descarga.status_code, 200)
         self.assertEqual(self.client.get(reverse('admin:soporte_registroerrores_descargar',
                                                  args=['..%2Fsettings.py'])).status_code, 404)
+
+
+class DiagnosticoServidorTests(TestCase):
+    """Diagnóstico del servidor en el admin de Django (24-10-2026): solo el
+    Administrador, y deja el fichero de prueba en la carpeta de ficheros subidos."""
+
+    def setUp(self):
+        import tempfile
+        from django.test import override_settings
+        ajuste = override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+        ajuste.enable()
+        self.addCleanup(ajuste.disable)
+
+    def test_solo_el_administrador_y_escribe_el_fichero_de_prueba(self):
+        from pathlib import Path
+        from django.conf import settings
+        from django.urls import reverse
+        from core.diagnostico import FICHERO_PRUEBA
+        url = reverse('admin:soporte_diagnosticoservidor_changelist')
+
+        moderador = CustomUser.objects.create_user(username='mod_diag', password='x',
+                                                   es_moderador=True, is_staff=True)
+        self.client.force_login(moderador)
+        self.assertNotEqual(self.client.get(url).status_code, 200)
+
+        admin = CustomUser.objects.create_user(username='adm_diag', password='x',
+                                               es_admin=True, is_staff=True)
+        self.client.force_login(admin)
+        respuesta = self.client.get(url)
+        self.assertContains(respuesta, 'Diagnóstico del servidor')
+        self.assertTrue((Path(settings.MEDIA_ROOT) / FICHERO_PRUEBA).is_file())

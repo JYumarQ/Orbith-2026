@@ -129,9 +129,16 @@ def _con_enlace(notificacion, next_url=None, origen_label=None, usuario=None):
     # Subsanación sobre CAlta siguen abriendo «Editar contrato».
     forzar_url = ('movimiento_contrato'
                    if notificacion.codigo_regla in ('REC-CONTRATO', 'REC-ANTIGUEDAD') else None)
+    # Advertencias de Subsanación cuya regla lleva a otra pantalla (MOV-015 → editor
+    # del histórico, solo para el Administrador).
+    texto_boton = None
+    if forzar_url is None:
+        from subsanacion.enlaces import destino_de_regla
+        from subsanacion.reglas import obtener_regla
+        forzar_url, texto_boton = destino_de_regla(obtener_regla(notificacion.codigo_regla), usuario)
     notificacion.enlace = construir_enlace(
         etiqueta, notificacion.object_id, forzar_url=forzar_url,
-        next_url=next_url, origen_label=origen_label, usuario=usuario
+        next_url=next_url, origen_label=origen_label, usuario=usuario, etiqueta=texto_boton
     ) if etiqueta else None
     return notificacion
 

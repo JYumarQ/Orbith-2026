@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from dashboard import views as dashboard_views
+from dashboard import ventanas as dashboard_ventanas
 from django.urls import path, include
 from usuarios.views import CustomLoginView
 
@@ -21,6 +22,10 @@ urlpatterns = [
     path('dashboard/plazas/', dashboard_views.plazas_html, name='dashboard_plazas'),
     path('dashboard/plazas/<int:cargo_id>/ocupantes/', dashboard_views.plazas_ocupantes_html,
          name='dashboard_plazas_ocupantes'),
+    # Ventanas de la Dashboard con «Ver más» y Excel (24-10-2026), ver dashboard/ventanas.py.
+    path('dashboard/ventana/<slug:clave>/', dashboard_ventanas.ventana_html, name='dashboard_ventana'),
+    path('dashboard/ventana/<slug:clave>/excel/', dashboard_ventanas.ventana_excel,
+         name='dashboard_ventana_excel'),
 
     ## ---------------------------------------------------------
     # LA NUEVA APP DE INFORMES (Esta línea sustituye a todas las anteriores)

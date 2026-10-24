@@ -1010,9 +1010,10 @@ def _campos_cargoplantilla():
         # contrato. Son CONTEOS y no columnas del contrato a propósito: unir cada
         # cargo con sus contratos repetiría el cargo una vez por contrato y
         # multiplicaría sus plazas aprobadas y vacantes. Así cada cargo sigue
-        # siendo una sola fila. Para «cargos con determinados», filtre
-        # «Contratos Determinados» mayor que 0. Los calcula el motor por anotación
-        # (ver `CONTEOS_DE_CONTRATOS` en motor.py).
+        # siendo una sola fila. Además hay una columna por cada TIPO de contrato del
+        # nomenclador («Contratos: Adiestrado»…), que se añade al consultar el
+        # catálogo (`definicion_viva`). Los calcula el motor por anotación (ver
+        # `CONTEOS_DE_CONTRATOS` en motor.py).
         "contratos_activos": {
             "label": "Contratos Activos",
             "ruta_orm": None,
@@ -1031,22 +1032,6 @@ def _campos_cargoplantilla():
         },
         "contratos_no_ocupan_plaza": {
             "label": "Contratos que No Ocupan Plaza",
-            "ruta_orm": None,
-            "tipo": "numero",
-            "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": False,
-            "sensible": False,
-        },
-        "contratos_determinados": {
-            "label": "Contratos Determinados",
-            "ruta_orm": None,
-            "tipo": "numero",
-            "categoria": "contrato",
-            "filtrable": True, "ordenable": True, "agrupable": False,
-            "sensible": False,
-        },
-        "contratos_indeterminados": {
-            "label": "Contratos No Determinados",
             "ruta_orm": None,
             "tipo": "numero",
             "categoria": "contrato",
@@ -1666,8 +1651,7 @@ def _campos_historico_contrato():
 
 #: Los conteos de contratos de «Estructura y Plantilla Aprobada» (24-10-2026).
 CONTEOS_DE_CONTRATOS_CLAVES = ('contratos_activos', 'contratos_ocupan_plaza',
-                               'contratos_no_ocupan_plaza', 'contratos_determinados',
-                               'contratos_indeterminados')
+                               'contratos_no_ocupan_plaza')
 
 
 def _campos_historico_cargo():
@@ -1771,9 +1755,55 @@ FUENTES_HISTORICAS = {
 }
 
 
+#: Prefijo de las columnas «Contratos: <tipo>» (una por tipo del nomenclador).
+PREFIJO_CONTRATOS_POR_TIPO = 'contratos_tipo_'
+
+
+def _campos_por_tipo_de_contrato():
+    """Una columna por cada tipo de contrato del nomenclador (24-10-2026), con la
+    clave `contratos_tipo_<id>`. Se construyen al consultar, no al arrancar: los
+    tipos los crea el usuario y el catálogo de arriba se arma antes de poder leer
+    la base de datos. Si un tipo se borra, un informe guardado que lo usara avisa
+    de que ese campo ya no existe (`motor._obtener_campo`)."""
+    try:
+        from nomencladores.models import NTipoContrato
+        tipos = list(NTipoContrato.objects.order_by('descripcion').values_list('pk', 'descripcion'))
+    except Exception:
+        return {}
+    return {
+        '%s%d' % (PREFIJO_CONTRATOS_POR_TIPO, pk): {
+            "label": "Contratos: %s" % descripcion,
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        }
+        for pk, descripcion in tipos
+    }
+
+
+def _con_tipos(definicion):
+    copia = dict(definicion)
+    copia["campos"] = {**definicion["campos"], **_campos_por_tipo_de_contrato()}
+    return copia
+
+
+def definicion_viva(modelo_raiz):
+    """El catálogo de una fuente en tiempo real, o None. «Estructura y Plantilla
+    Aprobada» lleva además sus columnas por tipo de contrato, al día."""
+    definicion = REGISTRO_MODELOS.get(modelo_raiz)
+    if definicion and modelo_raiz == "CargoPlantilla":
+        return _con_tipos(definicion)
+    return definicion
+
+
 def definicion_historica(modelo_raiz):
     """Gemela histórica de un modelo raíz, o None si no tiene fotografía."""
-    return FUENTES_HISTORICAS.get(modelo_raiz)
+    historica = FUENTES_HISTORICAS.get(modelo_raiz)
+    if historica and modelo_raiz == "CargoPlantilla":
+        return _con_tipos(historica)
+    return historica
 
 
 def campos_sin_historico(modelo_raiz):

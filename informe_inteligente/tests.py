@@ -556,6 +556,26 @@ class IndicadoresYEvolucionTests(TestCase):
                 {'campo': 'contratos_activos', 'operador': 'mayor', 'valor': '1'}]}, self.admin)
         self.assertEqual(con_dos.count(), 1)
 
+    def test_una_columna_por_cada_tipo_de_contrato(self):
+        """Una columna por tipo del nomenclador, también los que cree el usuario
+        después (24-10-2026). Cada cargo sigue siendo UNA fila."""
+        from contratos.models import CAlta
+        from informe_inteligente import motor
+        from informe_inteligente.metadata import definicion_viva
+        from nomencladores.models import NTipoContrato
+
+        nuevo = NTipoContrato.objects.create(descripcion='Tipo Nuevo del Usuario')
+        clave = 'contratos_tipo_%d' % nuevo.pk
+        self.assertEqual(definicion_viva('CargoPlantilla')['campos'][clave]['label'],
+                         'Contratos: Tipo Nuevo del Usuario')
+        contrato = CAlta.objects.filter(aspirante__estado='ACTIVO').first()
+        CAlta.objects.filter(pk=contrato.pk).update(tipo=nuevo)
+
+        queryset = motor.construir_queryset(
+            'CargoPlantilla', {'campos': ['cargo', clave], 'filtros': [
+                {'campo': clave, 'operador': 'mayor', 'valor': '0'}]}, self.admin)
+        self.assertEqual(list(queryset.values_list(clave, flat=True)), [1])
+
     # --- Condiciones por lista, cruzadas y razones ------------------------
 
     def test_una_condicion_por_lista_agrupa_varios_codigos(self):

@@ -461,6 +461,13 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     {% include 'pages/solicitudes/partials/boton_guardar.html' %}
                 </div>
+                {% comment %} Campos bloqueados (los cambia un movimiento de nómina, 24-10-2026):
+                   un campo deshabilitado no viaja, pero el cálculo del salario
+                   (`cargar_salarios`, vía `hx-include="#contratoForm"`) necesita estos tres.
+                   Al guardar el servidor los IGNORA: usa siempre los del contrato. {% endcomment %}
+                <input type="hidden" name="cargo" value="{{ object.cargo_id|default_if_none:'' }}" data-solo-para-calculo>
+                <input type="hidden" name="tridente" value="{{ object.tridente_id|default_if_none:'' }}" data-solo-para-calculo>
+                <input type="hidden" name="tipo_salario" value="{{ object.tipo_salario|default_if_none:'' }}" data-solo-para-calculo>
             </form>
         </div>
     </div>
@@ -1102,4 +1109,87 @@
         window.initOrbithEdicion(); 
     });
 
+</script>
+
+{% comment %} Aviso al intentar cambiar un campo que solo cambia un movimiento de nómina
+   (24-10-2026). Un control deshabilitado no recibe clics, así que se tapa con una capa
+   transparente que es la que muestra el aviso. {% endcomment %}
+<script>
+(function () {
+    const MOVIMIENTO_URL = "{% url 'movimiento_contrato' object.pk %}";
+    const SOLICITUD_URL = "{% url 'add_solicitud_personalizada' %}?contrato={{ object.pk }}";
+    const ES_MODERADOR = {% if user.es_moderador and not user.es_admin %}true{% else %}false{% endif %};
+    const CAMPOS = {
+        id_unidad: 'la Unidad Organizativa', id_departamento: 'el Departamento',
+        id_cargo: 'el Cargo', id_tipo: 'el Tipo de Contrato', id_motivo: 'el Motivo de Contrato',
+        id_tipo_salario: 'el Tipo de Salario', id_tridente: 'el Tridente',
+    };
+
+    function avisar(nombre, esFecha) {
+        let html;
+        if (esFecha) {
+            html = 'La F. de Contratación es la fecha del Alta Inicial en el histórico del trabajador y no se cambia aquí.<br><br>' +
+                (ES_MODERADOR
+                    ? 'Si hay un error en la F. de Contratación, contacte al administrador mediante una <strong>solicitud personalizada</strong>.'
+                    : 'Si hay un error, corríjalo desde el admin de Django.');
+        } else {
+            html = 'Para modificar <strong>' + nombre + '</strong> debe realizar un <strong>movimiento de nómina</strong>.<br><br>' +
+                (ES_MODERADOR
+                    ? 'Si hay un error en el contrato actual, envíe una <strong>solicitud personalizada</strong> al administrador desde Solicitudes explicando el problema.'
+                    : 'Si hay un error en el contrato actual, corríjalo desde el admin de Django.');
+        }
+        const asunto = encodeURIComponent('Error en ' + (esFecha ? 'la F. de Contratación' : nombre));
+        Swal.fire({
+            icon: 'info',
+            title: esFecha ? 'F. de Contratación' : 'Campo del movimiento de nómina',
+            html: html,
+            showConfirmButton: !esFecha,
+            confirmButtonText: '<i class="fas fa-exchange-alt me-1"></i> Hacer movimiento de nómina',
+            showDenyButton: ES_MODERADOR,
+            denyButtonText: '<i class="fas fa-paper-plane me-1"></i> Solicitud personalizada',
+            denyButtonColor: '#03c3ec',
+            showCancelButton: true,
+            cancelButtonText: 'Cerrar',
+        }).then(function (r) {
+            if (r.isConfirmed) window.location.href = MOVIMIENTO_URL;
+            else if (r.isDenied) window.location.href = SOLICITUD_URL + '&asunto=' + asunto;
+        });
+    }
+
+    function tapar(elemento, nombre, esFecha) {
+        const caja = elemento && elemento.parentElement;
+        if (!caja || caja.querySelector('.capa-campo-bloqueado')) return;
+        caja.style.position = 'relative';
+        const capa = document.createElement('div');
+        capa.className = 'capa-campo-bloqueado';
+        capa.title = esFecha ? 'La F. de Contratación no se cambia aquí'
+                             : 'Se cambia con un movimiento de nómina';
+        capa.style.cssText = 'position:absolute;inset:0;z-index:5;cursor:not-allowed;';
+        capa.addEventListener('click', function (e) { e.preventDefault(); avisar(nombre, esFecha); });
+        caja.appendChild(capa);
+    }
+
+    function aplicar() {
+        Object.keys(CAMPOS).forEach(function (id) {
+            const campo = document.getElementById(id);
+            tapar(campo, CAMPOS[id], false);
+            // El código de la pantalla reactiva Motivo y Tridente según el tipo y el
+            // salario; aquí se vuelven a ver bloqueados (el servidor los ignora igual).
+            if (!campo || campo.dataset.vigilado) return;
+            campo.dataset.vigilado = '1';
+            const bloquear = function () {
+                if (!campo.disabled) { campo.disabled = true; if (window.jQuery) jQuery(campo).trigger('change.select2'); }
+            };
+            bloquear();
+            new MutationObserver(bloquear).observe(campo, { attributes: true, attributeFilter: ['disabled'] });
+        });
+        // La F. de Contratación se ve en un input suelto (el real va oculto).
+        const fecha = document.querySelector('#contratoForm input[type="date"][disabled]:not([name])');
+        tapar(fecha, 'la F. de Contratación', true);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aplicar);
+    else aplicar();
+    // Select2 vuelve a pintar sus cajas al iniciarse: se repasa por si acaso.
+    setTimeout(aplicar, 800);
+})();
 </script>

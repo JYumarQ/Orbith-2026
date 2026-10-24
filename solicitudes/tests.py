@@ -1330,18 +1330,17 @@ class ContratoDesviado(BaseDepartamento):
         self.assertFalse(self.contrato.c_formal)
         self.assertEqual(Solicitud.objects.count(), 1)
 
-    def test_el_moderador_guarda_directo_si_solo_cambia_motivo(self):
-        """`motivo` también está en `campos_libres`. A diferencia del formulario de
-        propuesta (que lo vería siempre como "sin cambios" por su widget deshabilitado
-        en `Meta.widgets`), el atajo se decide con el ModelForm normal, que sí refleja
-        el valor real que el Moderador quiso guardar."""
+    def test_el_motivo_ya_no_se_cambia_editando_el_contrato(self):
+        """Desde el 24-10-2026 el motivo, como el cargo o el tipo, solo lo cambia un
+        movimiento de nómina: va al histórico. Editar el contrato lo ignora, y no
+        nace ninguna solicitud por él."""
         self.client.force_login(self.moderador)
 
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
                          self._datos_contrato(motivo=self.motivo.pk), HTTP_HX_REQUEST='true')
 
         self.contrato.refresh_from_db()
-        self.assertEqual(self.contrato.motivo, self.motivo)
+        self.assertIsNone(self.contrato.motivo)
         self.assertEqual(Solicitud.objects.count(), 0)
 
     def test_el_moderador_guarda_directo_si_solo_cambia_fecha_alta_entidad(self):
@@ -1431,37 +1430,6 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(solicitud.datos_propuestos['reg_militar'], 'IMP')
         self.assertEqual(solicitud.datos_propuestos['instructor_nomenclador'],
                          self.instructor.pk)
-
-    def test_el_motivo_propuesto_sobrevive_a_la_propuesta_y_a_la_aprobacion(self):
-        """`motivo` es `campos_condicionales`: su widget nace deshabilitado igual que
-        `fecha_alta` (ver `contratos/forms.py::CAltaForm.Meta.widgets`), pero a
-        diferencia de ese sí debe aplicarse el valor que el Moderador eligió, no el que
-        ya tenía el contrato. Se combina con `instructor_nomenclador` (sensible) para que NO entre por
-        el atajo de `campos_libres` y pase por el flujo normal de propuesta/aprobación,
-        que es donde antes se perdía en silencio."""
-        self.client.force_login(self.moderador)
-        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(motivo=self.motivo.pk,
-                                              instructor_nomenclador=self.instructor.pk),
-                         HTTP_HX_REQUEST='true')
-
-        solicitud = Solicitud.objects.get()
-        # La propuesta ya lo capturó bien: no quedó en el valor anterior (None).
-        self.assertEqual(solicitud.datos_propuestos['motivo'], self.motivo.pk)
-
-        servicios.iniciar_revision(solicitud, self.admin)
-        self.client.force_login(self.admin)
-        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
-                         self._datos_contrato(motivo=self.motivo.pk,
-                                              instructor_nomenclador=self.instructor.pk))
-
-        self.contrato.refresh_from_db()
-        self.assertEqual(self.contrato.motivo, self.motivo)
-        self.assertEqual(self.contrato.instructor_nomenclador_id, self.instructor.pk)
-        # El importe se copia del nomenclador, no viene del POST.
-        self.assertEqual(self.contrato.importe_instructor, self.instructor.importe)
-        solicitud.refresh_from_db()
-        self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
     def test_al_aprobar_se_aplica_y_el_rol_sale_del_cargo(self):
         """`ContratoUpdateView.form_valid` deriva el rol del cargo en lugar de tomarlo
@@ -1702,3 +1670,70 @@ class SolicitudDeEliminacion(BaseDepartamento):
         solicitud.refresh_from_db()
         self.assertIn('Contabilidad', solicitud.descriptor)
         self.assertIsNone(solicitud.objeto_afectado)
+
+
+class SolicitudPersonalizadaTests(TestCase):
+    """Mensaje directo Moderador → Administrador (24-10-2026): solo el Moderador la
+    envía, el Administrador responde una vez y la cierra; avisos en la campana."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from usuarios.models import CustomUser
+        cls.admin = CustomUser.objects.create_user(username='adm_pers', password='x', es_admin=True)
+        cls.moderador = CustomUser.objects.create_user(username='mod_pers', password='x', es_moderador=True)
+        cls.otro_moderador = CustomUser.objects.create_user(username='mod2_pers', password='x', es_moderador=True)
+
+    def _crear(self, usuario, **datos):
+        self.client.force_login(usuario)
+        datos.setdefault('asunto', 'Error en el cargo')
+        datos.setdefault('descripcion', 'Se puso otro cargo al contratar.')
+        return self.client.post(reverse('add_solicitud_personalizada'), datos)
+
+    def test_el_moderador_la_envia_y_avisa_a_los_administradores(self):
+        from notificaciones.models import Notificacion
+        from solicitudes.models import SolicitudPersonalizada
+        self._crear(self.moderador)
+        solicitud = SolicitudPersonalizada.objects.get()
+        self.assertEqual((solicitud.solicitante, solicitud.estado), (self.moderador, 'ABI'))
+        self.assertTrue(Notificacion.objects.filter(destinatario=self.admin,
+                                                    codigo_regla='SOL-PERS-NUEVA').exists())
+
+    def test_el_administrador_no_la_envia(self):
+        from solicitudes.models import SolicitudPersonalizada
+        self._crear(self.admin)
+        self.assertFalse(SolicitudPersonalizada.objects.exists())
+
+    def test_el_administrador_responde_una_vez_y_avisa_al_moderador(self):
+        from notificaciones.models import Notificacion
+        from solicitudes.models import SolicitudPersonalizada
+        self._crear(self.moderador)
+        solicitud = SolicitudPersonalizada.objects.get()
+        url = reverse('responder_solicitud_personalizada', args=[solicitud.pk])
+
+        self.client.force_login(self.moderador)
+        self.client.post(url, {'respuesta': 'yo', 'accion': 'atender'})
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, 'ABI')  # el moderador no puede responder
+
+        self.client.force_login(self.admin)
+        self.client.post(url, {'respuesta': 'Corregido.', 'accion': 'cerrar'})
+        solicitud.refresh_from_db()
+        self.assertEqual((solicitud.estado, solicitud.respuesta, solicitud.respondida_por),
+                         ('CER', 'Corregido.', self.admin))
+        self.assertTrue(Notificacion.objects.filter(destinatario=self.moderador,
+                                                    codigo_regla='SOL-PERS-RESPUESTA').exists())
+        # Una sola respuesta: un segundo intento no cambia nada.
+        self.client.post(url, {'respuesta': 'Otra', 'accion': 'atender'})
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.respuesta, 'Corregido.')
+
+    def test_cada_moderador_ve_solo_las_suyas_y_el_admin_todas(self):
+        from solicitudes.models import SolicitudPersonalizada
+        self._crear(self.moderador)
+        solicitud = SolicitudPersonalizada.objects.get()
+        self.client.force_login(self.otro_moderador)
+        self.assertEqual(self.client.get(reverse('ver_solicitud_personalizada', args=[solicitud.pk])).status_code, 404)
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('list_solicitudes_personalizadas'))
+        self.assertContains(respuesta, 'Error en el cargo')
+        self.assertContains(respuesta, 'Personalizadas')

@@ -81,7 +81,7 @@
             {% for pestana in pestanas %}
             <li class="nav-item">
                 <a class="nav-link {% if tab_activa == pestana.clave %}active{% endif %}"
-                   href="{% url 'list_solicitudes' %}?tab={{ pestana.clave }}">
+                   href="{{ pestana.url }}">
                     {{ pestana.etiqueta }}
                     <span class="badge {% if tab_activa == pestana.clave %}bg-white text-primary{% else %}bg-label-secondary{% endif %} rounded-pill ms-1">
                         {{ pestana.total }}

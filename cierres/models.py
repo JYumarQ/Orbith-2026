@@ -90,6 +90,12 @@ class CierreUnidad(Base):
     total_plazas_cubiertas = models.PositiveIntegerField(default=0)
     total_contratos = models.PositiveIntegerField(default=0)
 
+    # Correcciones del histórico que tocaron esta fotografía después de declarada
+    # (editor del histórico, 24-10-2026). Una línea por corrección: «Corregido el
+    # dd/mm/aaaa por X: motivo». Al redeclarar se vacía: la fotografía nueva ya
+    # sale de los datos corregidos.
+    correcciones = models.TextField(blank=True, default='')
+
     class Meta:
         verbose_name = 'Cierre de Unidad'
         verbose_name_plural = 'Cierres de Unidades'

@@ -270,3 +270,58 @@ class Solicitud(Base):
         if getattr(usuario, 'es_admin', False) or usuario.is_superuser:
             return True
         return self.puede_retirarla(usuario)
+
+
+class EstadoPersonalizada(models.TextChoices):
+    ABIERTA = 'ABI', 'Abierta'
+    ATENDIDA = 'ATE', 'Atendida'
+    CERRADA = 'CER', 'Cerrada sin cambios'
+
+
+class SolicitudPersonalizada(Base):
+    """Mensaje directo del Moderador al Administrador (decisión de RRHH del
+    24-10-2026), para lo que no tiene una solicitud propia: sobre todo, un error
+    en el contrato vigente (cargo, tipo, fecha de contratación…) que no se puede
+    corregir editando el contrato porque falsearía el histórico. El Administrador
+    responde una vez y la cierra; la corrección en sí la hace él (admin de Django
+    o, más adelante, el editor del histórico).
+
+    No toca ningún registro: es solo la comunicación, con su respuesta.
+    """
+
+    asunto = models.CharField(max_length=150)
+    descripcion = models.TextField(verbose_name='Descripción')
+    # El trabajador del que se habla, si lo hay. SET_NULL: si causa baja, el contrato
+    # se borra y la solicitud tiene que seguir explicándose sola (`trabajador_texto`).
+    contrato = models.ForeignKey(
+        'contratos.CAlta', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_personalizadas', verbose_name='Trabajador')
+    trabajador_texto = models.CharField(max_length=200, blank=True, default='')
+    unidad = models.ForeignKey(
+        'strorganizativa.UnidadOrganizativa', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+')
+
+    estado = models.CharField(max_length=3, choices=EstadoPersonalizada.choices,
+                              default=EstadoPersonalizada.ABIERTA, db_index=True)
+    solicitante = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='solicitudes_personalizadas')
+    solicitante_nombre = models.CharField(max_length=150, blank=True, default='')
+
+    respuesta = models.TextField(blank=True, default='')
+    respondida_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+')
+    fecha_respuesta = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Solicitud personalizada'
+        verbose_name_plural = 'Solicitudes personalizadas'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.asunto
+
+    @property
+    def abierta(self):
+        return self.estado == EstadoPersonalizada.ABIERTA

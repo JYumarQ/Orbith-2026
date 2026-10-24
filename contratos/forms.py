@@ -45,6 +45,12 @@ CAMPOS_FECHA_CONTRATO = (
 #: 23-10-2026). Las de vencimiento no están: son futuras por naturaleza.
 CAMPOS_FECHA_NO_FUTURA = ('fecha_alta', 'fecha_alta_entidad')
 
+#: Lo que solo se cambia con un movimiento de nómina (o, si es un error, el
+#: Administrador): al editar el contrato van bloqueados (24-10-2026). La F. de
+#: Contratación tampoco: es la fecha de su Alta Inicial en el histórico.
+CAMPOS_SOLO_POR_MOVIMIENTO = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo',
+                              'tipo_salario', 'tridente', 'fecha_alta')
+
 #: Datos que solo existen con el switch Misión activo: `clean()` los vacía al apagarlo.
 CAMPOS_DE_MISION = ('pais', 'mision_dias', 'mision_importe')
 
@@ -137,7 +143,23 @@ class SelectCargosConPlazasWidget(forms.Select):
             except Exception:
                 pass
         return option
+def _dueno_del_expediente(expediente, excluir_aspirante_id):
+    """Nombre de la otra persona que ya tiene ese expediente (en un contrato, una
+    baja o un movimiento), o None si nadie más lo usa."""
+    from .models import CBaja, TMovimiento
+    for modelo in (CAlta, CBaja, TMovimiento):
+        fila = (modelo.objects.filter(no_expediente=expediente)
+                .exclude(aspirante_id=excluir_aspirante_id).exclude(aspirante__isnull=True)
+                .select_related('aspirante').first())
+        if fila is not None:
+            a = fila.aspirante
+            return f'{a.nombre} {a.papellido} {a.sapellido or ""}'.strip()
+    return None
+
+
 class CAltaForm(forms.ModelForm):
+    #: Al editar un contrato, `CAMPOS_SOLO_POR_MOVIMIENTO` van bloqueados.
+    BLOQUEA_CAMPOS_DE_MOVIMIENTO = True
     
     funcionario = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
     designado = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
@@ -360,6 +382,14 @@ class CAltaForm(forms.ModelForm):
 
         self._preparar_importes()
 
+        # El tipo de contrato es OBLIGATORIO (24-10-2026). En el modelo es opcional
+        # solo por la migración inicial, y ningún formulario lo exigía: un envío
+        # sin tipo (por ejemplo, el segundo paso del asistente) BORRABA el que ya
+        # tenía el contrato. Subsanación lo marca en rojo (CTR-003).
+        if 'tipo' in self.fields:
+            self.fields['tipo'].required = True
+            self.fields['tipo'].error_messages['required'] = 'Seleccione el tipo de contrato.'
+
         f_unidad = self.fields['unidad']
 
         if user and isinstance(f_unidad, forms.ModelChoiceField):
@@ -468,6 +498,37 @@ class CAltaForm(forms.ModelForm):
         for nombre in CAMPOS_FECHA_NO_FUTURA:
             if nombre in self.fields:
                 self.fields[nombre].widget.attrs['max'] = hoy_html
+
+        # --- CAMPOS QUE SOLO CAMBIA UN MOVIMIENTO DE NÓMINA (24-10-2026) ---
+        # Al EDITAR un contrato no se pueden cambiar: hacerlo falsearía el histórico
+        # del trabajador. Se cambian con un movimiento de nómina; si lo que hay es un
+        # ERROR del contrato, el Moderador lo comunica con una solicitud personalizada y
+        # el Administrador lo corrige (admin de Django o editor del histórico).
+        # `disabled` hace que Django IGNORE lo que llegue en el envío y use el valor
+        # actual, así que ni manipulando la petición se pueden cambiar. El valor actual
+        # tiene que estar entre las opciones del desplegable para validarse, y como un
+        # campo bloqueado no viaja, se añade aquí. No afecta al alta (sin `pk`) ni a
+        # `MovimientoForm`, que es justo quien sí los cambia.
+        if self.BLOQUEA_CAMPOS_DE_MOVIMIENTO and self.instance and self.instance.pk:
+            cargo = self.instance.cargo if self.instance.cargo_id else None
+            departamento = cargo.departamento if cargo else None
+            valores = {
+                'unidad': departamento.unidad_organizativa if departamento else None,
+                'departamento': departamento,
+                'cargo': cargo,
+                'tipo': self.instance.tipo, 'motivo': self.instance.motivo,
+                'tridente': self.instance.tridente,
+            }
+            for nombre in CAMPOS_SOLO_POR_MOVIMIENTO:
+                campo = self.fields.get(nombre)
+                if campo is None:
+                    continue
+                campo.disabled = True
+                campo.required = False
+                valor = valores.get(nombre)
+                if isinstance(campo, forms.ModelChoiceField) and valor is not None:
+                    campo.queryset = (campo.queryset | type(valor).objects.filter(pk=valor.pk)).distinct()
+                    self.initial[nombre] = valor.pk
 
         # --- EL ESCUDO DEL SERVIDOR ---
         # Si la instancia ya existe y es de salario Fijo, bloqueamos el tridente desde Python
@@ -599,7 +660,17 @@ class CAltaForm(forms.ModelForm):
                 raise forms.ValidationError("El expediente debe ser mayor que 0.")
         except ValueError:
             raise forms.ValidationError("El expediente solo puede contener números.")
-            
+
+        # Único e irrepetible (decisión de RRHH del 24-10-2026): un número que ya usó
+        # OTRA persona —aunque esté de baja— no se puede dar a nadie más. La misma
+        # persona sí lo recupera al recontratarla.
+        aspirante = self.aspirante or getattr(self.instance, 'aspirante', None)
+        if aspirante is not None and expediente != getattr(self.instance, 'no_expediente', None):
+            otro = _dueno_del_expediente(expediente, excluir_aspirante_id=aspirante.pk)
+            if otro is not None:
+                raise forms.ValidationError(
+                    f'El expediente {expediente} ya pertenece a {otro}. Cada expediente es '
+                    f'de una sola persona, aunque esté de baja.')
         return expediente
 
     def clean(self):
@@ -741,6 +812,8 @@ class CAltaForm(forms.ModelForm):
 
 
 class MovimientoForm(CAltaForm):
+    # El movimiento es precisamente quien cambia esos campos.
+    BLOQUEA_CAMPOS_DE_MOVIMIENTO = False
     fecha_efectiva = forms.DateField(
         label='Fecha Efectiva del Movimiento',
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),

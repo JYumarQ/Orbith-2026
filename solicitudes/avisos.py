@@ -135,3 +135,27 @@ def avisar_devuelta_a_espera(solicitud):
         titulo='Solicitud reabierta',
         mensaje=f'La solicitud "{solicitud.descriptor}" volvió a quedar en espera de revisión.',
     )
+
+
+# --- Solicitudes personalizadas (24-10-2026) ------------------------------------
+
+CODIGO_PERSONALIZADA_NUEVA = 'SOL-PERS-NUEVA'
+CODIGO_PERSONALIZADA_RESPUESTA = 'SOL-PERS-RESPUESTA'
+
+
+def avisar_personalizada_nueva(solicitud):
+    """Llega una solicitud personalizada: a los administradores."""
+    autor = solicitud.solicitante_nombre or 'Un moderador'
+    sobre = f' ({solicitud.trabajador_texto})' if solicitud.trabajador_texto else ''
+    _crear(solicitud, _administradores(), CODIGO_PERSONALIZADA_NUEVA,
+           titulo='Nueva solicitud personalizada',
+           mensaje=f'{autor}: «{solicitud.asunto}»{sobre}.')
+
+
+def avisar_personalizada_respondida(solicitud):
+    """El administrador respondió: al moderador que la envió."""
+    if solicitud.solicitante is None:
+        return
+    _crear(solicitud, [solicitud.solicitante], CODIGO_PERSONALIZADA_RESPUESTA,
+           titulo=f'Solicitud personalizada {solicitud.get_estado_display().lower()}',
+           mensaje=f'«{solicitud.asunto}»: {solicitud.respuesta}')

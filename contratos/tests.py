@@ -1735,6 +1735,13 @@ class AsistenteDeContratacionErroresTests(TestCase):
         self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
         self.assertTrue(CAlta.objects.filter(no_expediente='00902').exists())
 
+    def test_el_alta_inicial_guarda_el_tipo_de_contrato(self):
+        # Antes el Alta Inicial nacía sin tipo de contrato ni motivo, y el siguiente
+        # movimiento no encajaba con ella (regla MOV-015, 24-10-2026).
+        self._contratar(self.cargo_libre, '2026-10-01')
+        alta = TMovimiento.objects.get(no_expediente='00902', tipo_movimiento='Alta Inicial')
+        self.assertEqual((alta.tipo_contrato_nuevo, alta.motivo_nuevo), ('Indeterminado', '---'))
+
 
 class AvisosAlCausarBajaTests(TestCase):
     """Al causar baja se borran los avisos del contrato y las alertas de la ficha
@@ -2008,6 +2015,27 @@ class CronologiaDelHistoricoTests(TestCase):
         self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
         self.assertEqual(contrato.trazabilidad.count(), 2)
 
+    def test_el_movimiento_guarda_el_salario_de_la_escala_y_no_el_del_navegador(self):
+        # 24-10-2026: el salario lo calcula el servidor. Aunque la página mande otro,
+        # se guarda el de la escala (Fijo: el básico del cargo nuevo, 4 000).
+        contrato = self._contrato_activo()
+        datos = {'fecha_efectiva': (self.hace_10 + timedelta(days=1)).isoformat(),
+                 'unidad': self.cargo.departamento.unidad_organizativa_id,
+                 'departamento': self.cargo.departamento_id, 'cargo': self.otro_cargo.pk,
+                 'tipo': self.tipo.pk, 'tipo_salario': 'FIJ', 'salarioEscala': '99999'}
+        respuesta = self.client.post(reverse('movimiento_contrato', args=[contrato.pk]), datos, **self.xhr)
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        movimiento = contrato.trazabilidad.order_by('-fecha_efectiva').first()
+        self.assertEqual(movimiento.salario_nuevo, Decimal('4000.00'))
+
+    def test_sin_salario_en_la_escala_no_se_registra_el_movimiento(self):
+        contrato = self._contrato_activo()
+        NCargo.objects.filter(pk=self.otro_cargo.ncargo_id).update(salario_basico=0)
+        respuesta = self._movimiento(contrato, self.hace_10 + timedelta(days=1))
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('Salario no calculado', respuesta.json()['error_popup'])
+        self.assertEqual(contrato.trazabilidad.count(), 1)
+
     def _baja(self, contrato, fecha_baja, fecha_documento=None):
         return self.client.post(reverse('del_contrato', args=[contrato.pk]), {
             'fecha_baja': fecha_baja.isoformat(),
@@ -2185,3 +2213,108 @@ class ConfianzaResolucionesYOtrosTests(TestCase):
         self.contrato.confianza_res = '12/26'
         self.contrato.funcionario_res = '11/26'
         self.assertIsNone(FuncionarioODesignadoSinCodigo().evaluar_instancia(self.contrato))
+
+    # --- El tipo de contrato es obligatorio (24-10-2026): antes, un envío sin
+    # tipo —el segundo paso del asistente o un movimiento— lo BORRABA. ---
+
+    def test_un_movimiento_sin_tipo_se_rechaza_y_no_borra_el_tipo(self):
+        respuesta = self._movimiento(self.cargo_nuevo, tipo='')
+        self.assertNotEqual(respuesta.status_code, 200)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.tipo_id, self.tipo.pk)
+        self.assertEqual(self.contrato.trazabilidad.count(), 1)
+
+    def test_el_formulario_del_contrato_exige_el_tipo(self):
+        from .forms import CAltaForm
+        # Al CREAR (al editar, el tipo va bloqueado y conserva el suyo).
+        formulario = CAltaForm(data={}, user=self.admin)
+        self.assertFalse(formulario.is_valid())
+        self.assertEqual(formulario.errors['tipo'], ['Seleccione el tipo de contrato.'])
+
+
+class EdicionBloqueaCamposDelMovimientoTests(TestCase):
+    """Al editar un contrato, lo que solo cambia un movimiento de nómina va bloqueado
+    (24-10-2026): el servidor IGNORA esos campos aunque lleguen cambiados. La
+    duración sí se puede editar."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cargo = _crear_departamento_con_cargo()
+        cls.otro_cargo = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Otro Cargo', cat_ocupacional='TEC',
+                                         grupo_escala=cls.cargo.ncargo.grupo_escala, salario_basico=4000),
+            departamento=cls.cargo.departamento, cant_aprobada=5, orden_informe=2)
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(descripcion='Indeterminado', ocupa_plaza=False,
+                                                requiere_motivo=False)
+        cls.otro_tipo = NTipoContrato.objects.create(descripcion='Otro', ocupa_plaza=False,
+                                                     requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Luis', papellido='Gil', sapellido='Sol',
+            doc_identidad='80010114004', estado='ACTIVO', sexo='M', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_bloqueo', password='x', es_admin=True)
+
+    def test_el_servidor_ignora_los_campos_del_movimiento_y_guarda_la_duracion(self):
+        hace_un_mes = timezone.localdate() - timedelta(days=30)
+        contrato = CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente='01404', tipo=self.tipo, cargo=self.cargo,
+            tipo_salario='FIJ', fecha_alta=hace_un_mes, fecha_alta_entidad=hace_un_mes, duracion=90)
+        self.client.force_login(self.admin)
+        self.client.post(reverse('updt_contrato', args=[contrato.pk]), {
+            'no_expediente': '01404', 'tipo': self.otro_tipo.pk, 'cargo': self.otro_cargo.pk,
+            'unidad': self.cargo.departamento.unidad_organizativa_id,
+            'departamento': self.cargo.departamento_id, 'tipo_salario': 'DIN',
+            'fecha_alta': (hace_un_mes - timedelta(days=5)).isoformat(),
+            'fecha_alta_entidad': hace_un_mes.isoformat(), 'reg_militar': 'NIN', 'duracion': 120,
+        }, HTTP_HX_REQUEST='true')
+        contrato.refresh_from_db()
+        self.assertEqual(contrato.duracion, 120)
+        self.assertEqual((contrato.cargo_id, contrato.tipo_id, contrato.tipo_salario, contrato.fecha_alta),
+                         (self.cargo.pk, self.tipo.pk, 'FIJ', hace_un_mes))
+
+
+class ExpedienteUnicoDeLaPersonaTests(TestCase):
+    """El expediente es único e irrepetible y una persona nunca tiene dos (24-10-2026):
+    corregirlo en el contrato lo cambia en TODA la persona, y no se puede dar a otra."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(descripcion='Indeterminado')
+        cls.persona = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Eva', papellido='Ruiz', sapellido='Paz',
+            doc_identidad='80010114005', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.otra = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Otro', papellido='Gil', sapellido='Sol',
+            doc_identidad='80010114006', estado='BAJA', sexo='M', raza='BL',
+            provincia=provincia, municipio=municipio)
+        hoy = timezone.localdate()
+        # La otra persona, ya de baja, tuvo el 07777.
+        CBaja.objects.create(aspirante=cls.otra, no_expediente='07777', tipo=cls.tipo, cargo=cls.cargo,
+                             fecha_alta=hoy - timedelta(days=900), fecha_baja=hoy - timedelta(days=800))
+
+    def test_corregirlo_cambia_toda_la_persona(self):
+        hoy = timezone.localdate()
+        CBaja.objects.create(aspirante=self.persona, no_expediente='01405', tipo=self.tipo, cargo=self.cargo,
+                             fecha_alta=hoy - timedelta(days=700), fecha_baja=hoy - timedelta(days=600))
+        viejo = TMovimiento.objects.create(
+            aspirante=self.persona, no_expediente='01405', fecha_efectiva=hoy - timedelta(days=650),
+            cargo_anterior='x', cargo_nuevo='y', salario_anterior=0, salario_nuevo=0,
+            tipo_movimiento='Movimiento de Nómina')
+        contrato = CAlta.objects.create(aspirante=self.persona, no_expediente='01405', tipo=self.tipo,
+                                        cargo=self.cargo, fecha_alta=hoy - timedelta(days=100))
+        contrato.no_expediente = '01406'
+        contrato.save()
+        viejo.refresh_from_db()
+        self.assertEqual(viejo.no_expediente, '01406')
+        self.assertEqual(set(CBaja.objects.filter(aspirante=self.persona).values_list('no_expediente', flat=True)),
+                         {'01406'})
+
+    def test_no_se_puede_dar_el_de_otra_persona(self):
+        from .forms import CAltaForm
+        formulario = CAltaForm(data={'no_expediente': '07777'}, aspirante=self.persona)
+        formulario.is_valid()
+        self.assertIn('ya pertenece a Otro Gil Sol', formulario.errors['no_expediente'][0])

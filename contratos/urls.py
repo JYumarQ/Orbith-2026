@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import views, vistas_editor_historico
 from django.contrib.auth.decorators import login_required
 
 urlpatterns = [
@@ -49,6 +49,13 @@ urlpatterns = [
 
     path('ajax/historico/detalle/<int:pk>/', login_required(views.movimiento_detalle_readonly), name='movimiento_detalle_readonly'),
     path('exportar/historico/pdf/<int:aspirante_id>/', login_required(views.ExportarHistoricoPDFView.as_view()), name='exportar_historico_pdf'),
+
+    # Editor del histórico (solo Administrador): página, vista previa del borrador,
+    # guardado y «usar escala actual» / «recalcular a hoy».
+    path('editor-historico/<int:aspirante_id>/', vistas_editor_historico.editor_historico, name='editor_historico'),
+    path('editor-historico/<int:aspirante_id>/previa/', vistas_editor_historico.editor_historico_previa, name='editor_historico_previa'),
+    path('editor-historico/<int:aspirante_id>/guardar/', vistas_editor_historico.editor_historico_guardar, name='editor_historico_guardar'),
+    path('editor-historico/<int:aspirante_id>/calcular/', vistas_editor_historico.editor_historico_calcular, name='editor_historico_calcular'),
 
 
     path('cargar-cargos-contrato/', login_required(views.cargar_cargos_contrato), name='cargar_cargos_contrato'),

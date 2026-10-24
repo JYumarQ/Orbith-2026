@@ -90,6 +90,12 @@
                         <button id="btnExportarGeneral" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="exportarTodoPDF()">
                             <i class="fas fa-file-pdf me-1"></i> Exportar Todo
                         </button>
+                        {% if user.es_admin %}
+                        {# Editor del histórico: solo el Administrador corrige el histórico completo. #}
+                        <a id="btnEditarHistorico" href="#" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold d-none">
+                            <i class="fas fa-pen me-1"></i> Editar histórico
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -213,6 +219,11 @@
                     if(document.getElementById('histCI')) document.getElementById('histCI').innerText = encabezado.ci || '---';
                     if(document.getElementById('histExp')) document.getElementById('histExp').innerText = encabezado.expediente || '---';
                     aspiranteActualId = encabezado.id; 
+                    const btnEditar = document.getElementById('btnEditarHistorico');
+                    if (btnEditar && encabezado.id) {
+                        btnEditar.href = `/contrato/editor-historico/${encabezado.id}/`;
+                        btnEditar.classList.remove('d-none');
+                    }
                 }
 
                 if(tbody) tbody.innerHTML = '';

@@ -7,7 +7,7 @@ from django.views.generic import ListView, CreateView, DeleteView, UpdateView, V
 from django.conf import settings
 from core.mixins import AdvertenciasDelRegistroMixin, ModalOPaginaCompletaMixin, VolverAlOrigenMixin
 from bolsa.models import Aspirante
-from .models import CAlta, CBaja, TMovimiento
+from .models import CAlta, CBaja, TMovimiento, salario_de_escala_para
 from .tarifas import calcular_tarifas, parametros_de_tarifa, salario_de_combinacion
 from .forms import CAltaForm
 from strorganizativa.jerarquia import ordenar_con_jerarquia
@@ -23,7 +23,8 @@ from django.db import transaction
 from xhtml2pdf import pisa
 from datetime import datetime, timedelta
 from .forms import CAltaForm, MovimientoForm
-from .cronologia import ultimo_evento, validar_fecha_evento, validar_fecha_no_futura
+from .cronologia import (bloquear_historico, ultimo_evento, validar_fecha_evento,
+                         validar_fecha_no_futura)
 from docxtpl import DocxTemplate, RichText
 from io import BytesIO
 import os
@@ -63,6 +64,36 @@ CAT_MAP = {
     'CEJ': 'C',
 }
 #?ONTRATO
+def _cascadas_de_filtro(request):
+    """Municipio y especialidad dependen de otro desplegable (provincia y nivel
+    educacional) y se cargaban vacíos y DESACTIVADOS aunque la lista llegara con
+    ellos en la URL (p. ej. desde el «Ver más» de la Dashboard): la primera carga
+    salía filtrada, pero al buscar o cambiar de página el filtro se perdía
+    (24-10-2026). Aquí se preparan sus opciones para que salgan marcados."""
+    from nomencladores.models import NEspecialidad, NMunicipio
+
+    provincia = (request.GET.get('provincia') or '').strip()
+    municipio = (request.GET.get('municipio') or '').strip()
+    if not provincia.isdigit() and municipio.isdigit():
+        provincia = str(NMunicipio.objects.filter(pk=municipio).values_list('provincia_id', flat=True).first() or '')
+    nivel = request.GET.get('nivel_educ') or ''
+    especialidad = (request.GET.get('especialidad') or '').strip()
+    if nivel == 'NS':
+        especialidades = NEspecialidad.objects.filter(educ_superior=True)
+    elif nivel == 'TM':
+        especialidades = NEspecialidad.objects.filter(educ_superior=False)
+    elif especialidad.isdigit():
+        especialidades = NEspecialidad.objects.filter(pk=especialidad)
+    else:
+        especialidades = NEspecialidad.objects.none()
+    return {
+        'filtro_provincia': provincia if provincia.isdigit() else '',
+        'municipios_filtro': (NMunicipio.objects.filter(provincia_id=provincia).order_by('nombre')
+                              if provincia.isdigit() else []),
+        'especialidades_filtro': especialidades.order_by('nombre'),
+    }
+
+
 class ContratoListView(ListView):
     model = CAlta
     template_name = "pages/contrato/list_contrato.html"
@@ -143,6 +174,7 @@ class ContratoListView(ListView):
         context['filtro_baja_anterior_desde'] = self.request.GET.get('baja_anterior_desde', '')
         context['filtro_baja_anterior_hasta'] = self.request.GET.get('baja_anterior_hasta', '')
         context['filtro_jubilado'] = self.request.GET.get('jubilado', '')
+        context.update(_cascadas_de_filtro(self.request))
         context['altas_con_baja_total'] = _total_altas_con_baja(self.request)
         context['marcar_recontratados'] = marcar_recontratados(self.request)
 
@@ -1189,6 +1221,11 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
 
 
 
+SALARIO_NO_CALCULADO = (
+    'Salario no calculado: no se encontró un salario de escala para la combinación de '
+    'cargo, rol y tridente seleccionada. Revise esos datos antes de confirmar el movimiento.')
+
+
 class ContratoBajaView(RequiereEdicionMixin, DeleteView):
     """Da de BAJA un contrato: lo archiva en la lista de Bajas (`CBaja`), con su
     movimiento de nómina y su evento de Auditoría «Baja». No es borrar un
@@ -1258,6 +1295,19 @@ class ContratoBajaView(RequiereEdicionMixin, DeleteView):
             # del contrato con los datos de la baja), no como los cinco cambios que
             # hace por dentro (movimiento, CBaja, aspirante, plazas y el borrado).
             with transaction.atomic(), registro_automatico.sin_auditoria_automatica():
+                # Un evento de la persona cada vez (24-10-2026): con la ficha bloqueada se
+                # vuelve a comprobar que el contrato sigue y que la fecha aún vale (otro
+                # usuario pudo guardar un movimiento o la misma baja mientras tanto).
+                bloquear_historico(contrato.aspirante_id)
+                if not CAlta.objects.filter(pk=contrato.pk).exists():
+                    return JsonResponse({'success': False, 'message': (
+                        'Este contrato ya no está vigente: otro usuario le dio de baja mientras '
+                        'tanto. Recargue la lista.')}, status=409)
+                mensaje = validar_fecha_evento(fecha_baja, contrato.aspirante_id, contrato,
+                                               etiqueta='La fecha de baja')
+                if mensaje:
+                    return JsonResponse({'success': False, 'message': mensaje}, status=400)
+
                 # A. SALVAR EL HISTORIAL EXISTENTE
                 TMovimiento.objects.filter(contrato=contrato).update(
                     aspirante=contrato.aspirante,
@@ -1433,10 +1483,24 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
     @transaction.atomic
     @registro_automatico.sin_auditoria_automatica()
     def form_valid(self, form):
+        def rechazar(mensaje, campo=None):
+            if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
+            form.add_error(campo, mensaje)
+            return self.form_invalid(form)
+
         try:
             # 1. Obtener contrato y fecha nueva
             contrato = self.object
             nueva_fecha = form.cleaned_data.get('fecha_efectiva')
+
+            # Un evento de la persona cada vez (24-10-2026): si otro usuario guarda a la
+            # vez un movimiento, una baja o una corrección suya, este espera su turno y
+            # valida la fecha contra lo que el otro dejó.
+            bloquear_historico(contrato.aspirante_id)
+            if not CAlta.objects.filter(pk=contrato.pk).exists():
+                return rechazar('Este contrato ya no está vigente: otro usuario le dio de baja '
+                                'mientras tanto. Recargue la lista.')
 
             # =================================================================
             # PASO 1: VALIDACIÓN CRONOLÓGICA (EL PORTERO)
@@ -1501,7 +1565,15 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             unidad_nue_obj = cargo_nuevo_obj.departamento.unidad_organizativa if (cargo_nuevo_obj and cargo_nuevo_obj.departamento) else None
             unidad_nue = unidad_nue_obj.descripcion if unidad_nue_obj else "---"
 
-            salario_nue = float(self.request.POST.get('salarioEscala', 0))
+            # El salario lo calcula el servidor con la escala (24-10-2026), no se toma
+            # el que manda el navegador: es el mismo cálculo que enseña la pantalla.
+            tridente_obj = form.cleaned_data.get('tridente')
+            salario_calculado = salario_de_escala_para(
+                cargo_nuevo_obj, form.cleaned_data.get('tipo_salario'),
+                tridente_obj.pk if tridente_obj else None)
+            if not salario_calculado or salario_calculado <= 0:
+                return rechazar(SALARIO_NO_CALCULADO)
+            salario_nue = float(salario_calculado)
 
             observaciones_txt = form.cleaned_data.get('observaciones', '')
             fecha_solicitud_dt = form.cleaned_data.get('fecha_solicitud')
@@ -2196,6 +2268,15 @@ def finalizar_contrato_wizard(request, aspirante_id):
             # creación del contrato al final, ya con los datos del movimiento si lo
             # hubo (aquí el contrato se guarda dos veces y nace un TMovimiento).
             with transaction.atomic(), registro_automatico.sin_auditoria_automatica():
+                # Un evento de la persona cada vez (24-10-2026): si dos usuarios terminan
+                # a la vez el asistente con la misma persona, solo uno la contrata.
+                bloquear_historico(aspirante.pk)
+                if CAlta.objects.filter(aspirante=aspirante).exists():
+                    transaction.set_rollback(True)
+                    return JsonResponse({'form_is_valid': False, 'error_popup': (
+                        'Esta persona ya tiene un contrato vigente: otro usuario la contrató '
+                        'mientras tanto.')}, status=400)
+
                 # 1. CREAR CONTRATO (Siempre se hace)
                 contrato = CAlta(**borrador_db)
                 contrato.aspirante = aspirante
@@ -2270,7 +2351,16 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 form = MovimientoForm(request.POST, instance=contrato, user=request.user)
                 if form.is_valid():
                     cargo_nuevo = form.cleaned_data.get('cargo')
-                    salario_nue = float(request.POST.get('salarioEscala', 0))
+                    # El salario lo calcula el servidor (24-10-2026), como en el movimiento.
+                    tridente_obj = form.cleaned_data.get('tridente')
+                    salario_calculado = salario_de_escala_para(
+                        cargo_nuevo, form.cleaned_data.get('tipo_salario'),
+                        tridente_obj.pk if tridente_obj else None)
+                    if not salario_calculado or salario_calculado <= 0:
+                        transaction.set_rollback(True)
+                        return JsonResponse({'form_is_valid': False,
+                                             'error_popup': SALARIO_NO_CALCULADO}, status=400)
+                    salario_nue = float(salario_calculado)
 
                     tipo_sal_nue_val = dict(form.fields['tipo_salario'].choices).get(form.cleaned_data.get('tipo_salario'), "---")
                     mov_alta = TMovimiento.objects.create(
@@ -2295,6 +2385,12 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         tipo_salario_nuevo=tipo_sal_nue_val,
                         rol_nuevo=cargo_nuevo.rol.tipo if (cargo_nuevo and cargo_nuevo.rol) else "---",
                         tridente_nuevo=str(form.cleaned_data.get('tridente')) if form.cleaned_data.get('tridente') else "---",
+                        # El tipo de contrato, el motivo y la duración no se guardaban en
+                        # el Alta Inicial (24-10-2026): el siguiente movimiento decía venir
+                        # de un tipo que el alta no tenía (regla MOV-015).
+                        tipo_contrato_nuevo=str(form.cleaned_data.get('tipo')) if form.cleaned_data.get('tipo') else "---",
+                        motivo_nuevo=str(form.cleaned_data.get('motivo')) if form.cleaned_data.get('motivo') else "---",
+                        duracion_nueva=form.cleaned_data.get('duracion'),
                         salario_nuevo=salario_nue,
                         unidad_nueva=cargo_nuevo.departamento.unidad_organizativa.descripcion if (cargo_nuevo and cargo_nuevo.departamento) else "---",
                         unidad_nueva_fk=cargo_nuevo.departamento.unidad_organizativa if (cargo_nuevo and cargo_nuevo.departamento) else None,

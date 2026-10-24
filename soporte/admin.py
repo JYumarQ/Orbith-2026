@@ -107,3 +107,28 @@ class RegistroErroresAdmin(admin.ModelAdmin):
             raise Http404
         return FileResponse(open(fichero, 'rb'), as_attachment=True, filename=fichero.name,
                             content_type='text/plain; charset=utf-8')
+
+
+from .models import DiagnosticoServidor  # noqa: E402
+
+
+@admin.register(DiagnosticoServidor)
+class DiagnosticoServidorAdmin(RegistroErroresAdmin):
+    """Dónde guarda Orbith los ficheros subidos, si existen y quién los sirve.
+    Mismos permisos que el Registro de errores: solo el Administrador."""
+
+    def get_urls(self):
+        return admin.ModelAdmin.get_urls(self)
+
+    def changelist_view(self, request, extra_context=None):
+        if not self._puede(request):
+            raise Http404
+        from core import diagnostico
+        contexto = {
+            **self.admin_site.each_context(request),
+            'title': 'Diagnóstico del servidor',
+            'opts': self.model._meta,
+            'd': diagnostico.datos(),
+            'url_prueba': diagnostico.escribir_fichero_de_prueba(),
+        }
+        return TemplateResponse(request, 'admin/soporte/diagnostico.html', contexto)

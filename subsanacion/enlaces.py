@@ -56,6 +56,8 @@ ENLACES_POR_MODELO = {
     # pendiente se modifica desde su propia pantalla, no desde aquí.
     'solicitudes.Solicitud': {
         'url': 'ver_solicitud', 'etiqueta': 'Abrir solicitud', 'editable': False},
+    'solicitudes.SolicitudPersonalizada': {
+        'url': 'ver_solicitud_personalizada', 'etiqueta': 'Abrir solicitud', 'editable': False},
 
     # Informe que otro usuario compartió (ver
     # `informe_inteligente.views.compartir_favorito`). `editable=False` porque el
@@ -102,8 +104,22 @@ ENLACES_POR_MODELO = {
 }
 
 
+def destino_de_regla(regla, usuario):
+    """`(forzar_url, etiqueta)` del botón para este usuario según la regla.
+
+    Una regla puede llevar a otra pantalla (`enlace_url`, con su `enlace_etiqueta`).
+    Si esa pantalla es solo del Administrador (`enlace_solo_admin`, p. ej. el editor
+    del histórico de MOV-015), a los demás se les ofrece el destino normal del modelo.
+    """
+    if regla is None or not regla.enlace_url:
+        return None, None
+    if getattr(regla, 'enlace_solo_admin', False) and not getattr(usuario, 'es_admin', False):
+        return None, None
+    return regla.enlace_url, getattr(regla, 'enlace_etiqueta', None)
+
+
 def construir_enlace(etiqueta_modelo, object_id, forzar_url=None, next_url=None,
-                     origen_label=None, usuario=None):
+                     origen_label=None, usuario=None, etiqueta=None):
     """Devuelve `{'href', 'etiqueta', 'editable'}` o None si no se puede construir.
 
     `etiqueta_modelo` es «app.Modelo». `object_id` es el valor guardado en el
@@ -154,13 +170,13 @@ def construir_enlace(etiqueta_modelo, object_id, forzar_url=None, next_url=None,
 
     return {
         'href': href,
-        'etiqueta': definicion['etiqueta'],
+        'etiqueta': etiqueta or definicion['etiqueta'],
         'editable': definicion.get('editable', False),
     }
 
 
 def enlace_de_hallazgo(hallazgo, forzar_url=None, next_url=None, origen_label=None,
-                       usuario=None):
+                       usuario=None, etiqueta=None):
     """Igual que `construir_enlace`, partiendo de un `Hallazgo`.
 
     Usa `content_type` sin resolver la GenericForeignKey, así que no dispara una
@@ -172,4 +188,4 @@ def enlace_de_hallazgo(hallazgo, forzar_url=None, next_url=None, origen_label=No
         return None
     return construir_enlace(
         etiqueta_modelo, hallazgo.object_id, forzar_url=forzar_url,
-        next_url=next_url, origen_label=origen_label, usuario=usuario)
+        next_url=next_url, origen_label=origen_label, usuario=usuario, etiqueta=etiqueta)

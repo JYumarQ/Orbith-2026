@@ -263,6 +263,7 @@ def declarar_actualizada(unidad, usuario, hoy=None):
     cierre.declarado_por = usuario
     cierre.declarado_por_nombre = nombre
     cierre.fecha_declaracion = timezone.now()
+    cierre.correcciones = ''
     cierre.en_plazo = periodos.fue_en_plazo(periodo, hoy)
     for campo, valor in captura.datos_de_unidad(unidad).items():
         setattr(cierre, campo, valor)

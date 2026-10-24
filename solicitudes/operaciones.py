@@ -469,7 +469,9 @@ OPERACIONES = {
         # suelen llegar semanas después del alta o del movimiento— y el switch
         # Jubilado recontratado. Activar Calificación formal sigue pidiendo solicitud;
         # Funcionario y Designado los decide el cargo, no el contrato.
-        'campos_libres': ('motivo', 'reg_militar', 'fecha_alta_entidad',
+        # `motivo` salió el 24-10-2026: ya no se cambia editando el contrato (va al
+        # histórico; solo lo cambia un movimiento de nómina).
+        'campos_libres': ('reg_militar', 'fecha_alta_entidad',
                           'mision_dias', 'mision_importe',
                           'c_formal_res', 'funcionario_res', 'designado_res',
                           'confianza_res', 'jubilado_recontratado',

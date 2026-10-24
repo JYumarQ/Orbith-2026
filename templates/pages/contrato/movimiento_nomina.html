@@ -13,6 +13,26 @@
         filter: grayscale(100%);
         user-select: none;
     }
+
+    /* Rediseño 24-10-2026: la situación actual ocupa el 40 % y la propuesta el 60 %
+       (antes 50/50). La columna izquierda no cambia por dentro. */
+    @media (min-width: 768px) {
+        #movColumnaActual { flex: 0 0 40%; max-width: 40%; }
+        #movColumnaNueva { flex: 0 0 60%; max-width: 60%; }
+    }
+    /* Títulos de los bloques de la propuesta */
+    #movColumnaNueva .mov-bloque {
+        font-size: .68rem; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+        color: #a1acb8; display: flex; align-items: center; gap: .5rem; margin: .9rem 0 .1rem;
+    }
+    #movColumnaNueva .mov-bloque:first-child { margin-top: 0; }
+    #movColumnaNueva .mov-bloque::after { content: ''; flex: 1; height: 1px; background: #e7e7ef; }
+    /* Recuadro de resoluciones, siempre visible */
+    #bloque-resoluciones-mov .mov-resoluciones {
+        background: #f5f5f9; border: 1px dashed #d9dee3; border-radius: .5rem; padding: .6rem .75rem;
+    }
+    /* Variación del salario nuevo respecto al anterior */
+    #movVariacion { font-size: .78rem; font-weight: 700; margin-top: .35rem; }
 </style>
 
 <div class="modal fade" id="modalMovimientoContrato" tabindex="-1" aria-hidden="true">
@@ -241,7 +261,7 @@
                                         <span class="input-group-text bg-secondary text-white border-secondary py-1"><i class="fas fa-dollar-sign"></i></span>
                                         
                                         <input type="text" 
-                                            class="form-control form-control-lg fs-3 fw-bold text-secondary bg-light border-secondary py-1" 
+                                            id="salarioAnteriorMostrado" class="form-control form-control-lg fs-3 fw-bold text-secondary bg-light border-secondary py-1" 
                                             value="{% if is_readonly %}{{ movimiento.salario_anterior|floatformat:2 }}{% else %}{{ salario_actual|default:'0.00'|floatformat:2 }}{% endif %}" 
                                             readonly>
                                             
@@ -268,6 +288,7 @@
                                     {% endcomment %}
                                     <div class="row g-2 m-0 p-0 w-100">
 
+                                        <div class="col-12 mov-bloque"><i class="fas fa-sitemap"></i> Estructura y cargo</div>
                                         <div class="col-12 {% if is_wizard %}wizard-bloqueado{% endif %}">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
                                                 <i class="fas fa-sitemap me-1 text-secondary"></i> Unidad Organizativa
@@ -302,7 +323,7 @@
                                             <small id="help-cargo-grupo" class="form-text text-info d-none fw-bold"></small>
                                         </div>
 
-                                        <div class="col-12"><hr class="text-muted opacity-25 my-3"></div>
+                                        <div class="col-12 mov-bloque"><i class="fas fa-id-badge"></i> Datos del cargo</div>
 
                                         <div class="col-md-3 {% if is_wizard %}wizard-bloqueado{% endif %}">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">Rol</label>
@@ -325,6 +346,7 @@
                                             {% endif %}
                                         </div>
 
+                                        <div class="col-12 mov-bloque"><i class="fas fa-calendar-alt"></i> Condiciones y fechas</div>
                                         <div class="col-md-7 mt-2 {% if is_wizard %}wizard-bloqueado{% endif %}">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">Motivo</label>
                                             {% if is_readonly %}
@@ -376,8 +398,9 @@
                                             {% endif %}
                                         </div>
 
-                                        {# Observaciones: fila completa, siempre editable salvo solo lectura #}
-                                        <div class="col-12 mt-2">
+                                        {# Observaciones con «Otros» (solo lectura) al lado; siempre editable salvo solo lectura #}
+                                        <div class="col-12 mov-bloque"><i class="far fa-sticky-note"></i> Notas y resoluciones</div>
+                                        <div class="{% if is_readonly or not is_wizard %}col-md-8{% else %}col-12{% endif %} mt-2">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
                                                 <i class="far fa-comment-dots me-1 text-secondary"></i> {% if is_readonly %}Observaciones{% else %}{{ form.observaciones.label }}{% endif %}
                                             </label>
@@ -405,10 +428,12 @@
                                         {% endif %}
 
                                         {% if not is_readonly and not is_wizard %}
-                                        <div class="col-12 mt-2 d-none" id="bloque-resoluciones-mov">
+                                        <div class="col-12 mt-3" id="bloque-resoluciones-mov">
+                                            <div class="mov-resoluciones">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
-                                                <i class="fas fa-stamp me-1 text-secondary"></i> Números de resolución <span class="text-muted text-lowercase fw-normal">(opcional)</span>
+                                                <i class="fas fa-stamp me-1 text-secondary"></i> Resoluciones <span class="text-muted text-lowercase fw-normal">(opcional)</span>
                                             </label>
+                                            <div class="small text-muted d-none" id="resoluciones-ninguna">Este cargo no necesita números de resolución.</div>
                                             <div class="row g-2">
                                                 <div class="col-md-3 d-none" data-resolucion="c_formal" data-c-formal="{% if contrato_actual.c_formal %}true{% else %}false{% endif %}">
                                                     <small class="text-muted">C. Formal</small>{{ form.c_formal_res }}
@@ -422,6 +447,7 @@
                                                 <div class="col-md-3 d-none" data-resolucion="de-confianza">
                                                     <small class="text-muted">De Confianza</small>{{ form.confianza_res }}
                                                 </div>
+                                            </div>
                                             </div>
                                         </div>
                                         <script>
@@ -439,7 +465,8 @@
                                                         caja.classList.toggle('d-none', !visible);
                                                         alguno = alguno || visible;
                                                     });
-                                                    bloque.classList.toggle('d-none', !alguno);
+                                                    // El recuadro se ve siempre; si el cargo no pide ninguna, lo dice.
+                                                    document.getElementById('resoluciones-ninguna').classList.toggle('d-none', alguno);
                                                 }
                                                 $(document).on('change', '#id_cargo', mostrar);
                                                 document.addEventListener('htmx:afterSwap', mostrar);
@@ -474,6 +501,34 @@
                                             id="salarioEscala" name="salarioEscala" readonly 
                                             value="{% if is_readonly %}{{ movimiento.salario_nuevo|floatformat:2 }}{% else %}{{ initial_salario_escala|floatformat:2 }}{% endif %}">
                                     </div>
+                                    {% if not is_wizard %}
+                                    {# Sube, baja o no varía respecto al salario anterior (columna izquierda). #}
+                                    <div id="movVariacion" aria-live="polite"></div>
+                                    <script>
+                                        (function () {
+                                            function numero(id) {
+                                                const campo = document.getElementById(id);
+                                                if (!campo) return NaN;
+                                                return parseFloat(String(campo.value).replace(/\s/g, '').replace(',', '.'));
+                                            }
+                                            function pintarVariacion() {
+                                                const caja = document.getElementById('movVariacion');
+                                                if (!caja) return;
+                                                const antes = numero('salarioAnteriorMostrado'), ahora = numero('salarioEscala');
+                                                if (isNaN(antes) || isNaN(ahora) || ahora <= 0) { caja.innerHTML = ''; return; }
+                                                const diferencia = Math.round((ahora - antes) * 100) / 100;
+                                                const partes = Math.abs(diferencia).toFixed(2).split('.');
+                                                const cifra = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ',' + partes[1];
+                                                if (diferencia > 0) caja.innerHTML = '<span class="text-success"><i class="fas fa-arrow-up me-1"></i>Sube ' + cifra + '</span>';
+                                                else if (diferencia < 0) caja.innerHTML = '<span class="text-danger"><i class="fas fa-arrow-down me-1"></i>Baja ' + cifra + '</span>';
+                                                else caja.innerHTML = '<span class="text-muted"><i class="fas fa-equals me-1"></i>No varía</span>';
+                                            }
+                                            // El salario nuevo lo rellena HTMX (cargar_salario.html) sin lanzar eventos.
+                                            document.addEventListener('htmx:afterSettle', pintarVariacion);
+                                            pintarVariacion();
+                                        })();
+                                    </script>
+                                    {% endif %}
                                 </div>
                                 
                                 {% if not is_readonly %}

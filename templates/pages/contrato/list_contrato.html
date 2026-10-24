@@ -244,7 +244,7 @@
                                `contratos/filtros.py`).
                             {% endcomment %}
                             <div class="dropdown-header-custom d-flex justify-content-between align-items-center">
-                                <span><i class="fas fa-sitemap me-1"></i> Estructura</span>
+                                <span><i class="fas fa-filter me-1"></i> Filtros básicos</span>
                                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="resetFiltros()" style="font-size: 0.7rem; padding: 0.1rem 0.5rem;">
                                     <i class="fas fa-undo-alt me-1"></i> Reset
                                 </button>
@@ -261,62 +261,8 @@
                                 <label class="small text-muted">Cargo</label>
                                 {% include 'base/partials/selector_unidades.html' with id_caja='filtro_cargo_contratos' campo='cargo' id_select='filter_cargo' unidades=cargos_filtro seleccionadas=filtro_cargo marcador='Todos' titulo='cargo' clase_extra='chip-multiselect--sm' %}
                             </div>
-
-                            <div class="dropdown-header-custom">
-                                <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
-                            </div>
-                            <div class="mb-2">
-                                <label class="small text-muted" for="filter_provincia_select">Provincia</label> <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
-                                    hx-get="{% url 'cargar_municipios' %}?for_filter=1" 
-                                    hx-target="#filter-municipio-container" 
-                                    hx-trigger="change"
-                                    onchange="triggerSearch()">
-                                    <option value="">Todas</option>
-                                    {% for p in provincias_list %}
-                                        <option value="{{ p.id }}">{{ p.nombre }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <label class="small text-muted" for="filter_municipio_select">Municipio</label> <div id="filter-municipio-container">
-                                    <select id="filter_municipio_select" name="municipio" class="form-select form-select-sm" disabled onchange="triggerSearch()">
-                                        <option value="">Todos</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="dropdown-header-custom mt-3"><i class="fas fa-user me-1"></i> Datos Personales</div>
                             <div class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <label class="small text-muted" for="filter_sexo">Sexo</label> <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
-                                        <option value="">Todos</option>
-                                        <option value="M" {% if filtro_sexo == 'M' %}selected{% endif %}>M</option>
-                                        <option value="F" {% if filtro_sexo == 'F' %}selected{% endif %}>F</option>
-                                    </select>
-                                </div>
-                                <div class="col-6">
-                                    <label class="small text-muted" for="filter_raza">Raza</label> <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
-                                        <option value="">Todas</option>
-                                        <option value="BL" {% if filtro_raza == 'BL' %}selected{% endif %}>Blanca</option>
-                                        <option value="NE" {% if filtro_raza == 'NE' %}selected{% endif %}>Negra</option>
-                                        <option value="ME" {% if filtro_raza == 'ME' %}selected{% endif %}>Mestiza</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="dropdown-header-custom mt-3"><i class="fas fa-briefcase me-1"></i> Contrato</div>
-                            <div class="row g-2 mb-2">
-                                <div class="col-6">
-                                    <label class="small text-muted" for="filter_cat_ocupacional">Cat. Ocupacional</label>
-                                    <select id="filter_cat_ocupacional" name="cat_ocupacional" class="form-select form-select-sm" onchange="triggerSearch()">
-                                        <option value="">Todas</option>
-                                        {% for k, v in categorias_ocupacionales %}
-                                        <option value="{{ k }}" {% if filtro_cat_ocupacional == k %}selected{% endif %}>{{ v }}</option>
-                                        {% endfor %}
-                                        <option value="CUA" {% if filtro_cat_ocupacional == 'CUA' %}selected{% endif %}>Cuadro (Directivo/Ejecutivo)</option>
-                                    </select>
-                                </div>
-                                <div class="col-6">
+                                <div class="col-7">
                                     <label class="small text-muted" for="filter_tipo">Tipo de Contrato</label>
                                     <select id="filter_tipo" name="tipo" class="form-select form-select-sm" onchange="triggerSearch()">
                                         <option value="">Todos</option>
@@ -325,6 +271,75 @@
                                         {% endfor %}
                                     </select>
                                 </div>
+                                <div class="col-5">
+                                    <label class="small text-muted" for="filter_sexo">Sexo</label>
+                                    <select id="filter_sexo" name="sexo" class="form-select form-select-sm" onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        <option value="M" {% if filtro_sexo == 'M' %}selected{% endif %}>Hombres</option>
+                                        <option value="F" {% if filtro_sexo == 'F' %}selected{% endif %}>Mujeres</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {% comment %} Filtros avanzados (24-10-2026): plegados para no abrumar. Se
+                               abren solos si alguno está en uso, y el botón dice cuántos hay
+                               (static/js/filtros_lista.js). Los nombres de los campos NO cambian:
+                               la búsqueda, la paginación y la sábana los recogen igual. {% endcomment %}
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100 mt-2 d-flex align-items-center justify-content-between"
+                                    data-bs-toggle="collapse" data-bs-target="#filtrosAvanzadosContratos" aria-expanded="false"
+                                    aria-controls="filtrosAvanzadosContratos" data-boton-avanzados>
+                                <span><i class="fas fa-sliders-h me-1"></i> Filtros avanzados
+                                    <span class="badge bg-primary ms-1 d-none" data-contador-avanzados></span></span>
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                            <div class="collapse" id="filtrosAvanzadosContratos" data-filtros-avanzados>
+
+                            <div class="dropdown-header-custom mt-3">
+                                <span><i class="fas fa-map-marker-alt me-1"></i> Ubicación</span>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_provincia_select">Provincia</label> <select id="filter_provincia_select" name="provincia" class="form-select form-select-sm"
+                                    hx-get="{% url 'cargar_municipios' %}?for_filter=1"
+                                    hx-target="#filter-municipio-container"
+                                    hx-trigger="change"
+                                    onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    {% for p in provincias_list %}
+                                        <option value="{{ p.id }}" {% if filtro_provincia == p.id|stringformat:"s" %}selected{% endif %}>{{ p.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_municipio_select">Municipio</label> <div id="filter-municipio-container">
+                                    <select id="filter_municipio_select" name="municipio" class="form-select form-select-sm" {% if not municipios_filtro %}disabled{% endif %} onchange="triggerSearch()">
+                                        <option value="">Todos</option>
+                                        {% for m in municipios_filtro %}
+                                        <option value="{{ m.pk }}" {% if filtro_municipio == m.pk|stringformat:"s" %}selected{% endif %}>{{ m.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="dropdown-header-custom mt-3"><i class="fas fa-user me-1"></i> Datos Personales</div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_raza">Raza</label> <select id="filter_raza" name="raza" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    <option value="BL" {% if filtro_raza == 'BL' %}selected{% endif %}>Blanca</option>
+                                    <option value="NE" {% if filtro_raza == 'NE' %}selected{% endif %}>Negra</option>
+                                    <option value="ME" {% if filtro_raza == 'ME' %}selected{% endif %}>Mestiza</option>
+                                </select>
+                            </div>
+
+                            <div class="dropdown-header-custom mt-3"><i class="fas fa-briefcase me-1"></i> Contrato</div>
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_cat_ocupacional">Cat. Ocupacional</label>
+                                <select id="filter_cat_ocupacional" name="cat_ocupacional" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todas</option>
+                                    {% for k, v in categorias_ocupacionales %}
+                                    <option value="{{ k }}" {% if filtro_cat_ocupacional == k %}selected{% endif %}>{{ v }}</option>
+                                    {% endfor %}
+                                    <option value="CUA" {% if filtro_cat_ocupacional == 'CUA' %}selected{% endif %}>Cuadro (Directivo/Ejecutivo)</option>
+                                </select>
                             </div>
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
@@ -359,21 +374,6 @@
                                     </select>
                                 </div>
                             </div>
-                            {% comment %} Con problemas (Fase 2): según los hallazgos abiertos de Subsanación del
-                               contrato y de la ficha. Rojo = crítico; ámbar = alto, sin crítico. {% endcomment %}
-                            <div class="row g-2 mb-2">
-                                <div class="col-12">
-                                    <label class="small text-muted" for="filter_problemas">
-                                        <i class="fas fa-triangle-exclamation text-danger me-1"></i>Con problemas
-                                    </label>
-                                    <select id="filter_problemas" name="problemas" class="form-select form-select-sm" onchange="triggerSearch()">
-                                        <option value="">Todos los contratos</option>
-                                        <option value="criticos" {% if filtro_problemas == 'criticos' %}selected{% endif %}>Críticos (rojo)</option>
-                                        <option value="altos" {% if filtro_problemas == 'altos' %}selected{% endif %}>Altos (ámbar)</option>
-                                        <option value="todos" {% if filtro_problemas == 'todos' %}selected{% endif %}>Críticos o altos</option>
-                                    </select>
-                                </div>
-                            </div>
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <label class="small text-muted" for="filter_baja_ant_desde">Baja anterior desde</label>
@@ -386,13 +386,26 @@
                                            value="{{ filtro_baja_anterior_hasta }}" onchange="triggerSearch()">
                                 </div>
                             </div>
+                            {% comment %} Con problemas (Fase 2): según los hallazgos abiertos de Subsanación del
+                               contrato y de la ficha. Rojo = crítico; ámbar = alto, sin crítico. {% endcomment %}
+                            <div class="mb-2">
+                                <label class="small text-muted" for="filter_problemas">
+                                    <i class="fas fa-triangle-exclamation text-danger me-1"></i>Con problemas
+                                </label>
+                                <select id="filter_problemas" name="problemas" class="form-select form-select-sm" onchange="triggerSearch()">
+                                    <option value="">Todos los contratos</option>
+                                    <option value="criticos" {% if filtro_problemas == 'criticos' %}selected{% endif %}>Críticos (rojo)</option>
+                                    <option value="altos" {% if filtro_problemas == 'altos' %}selected{% endif %}>Altos (ámbar)</option>
+                                    <option value="todos" {% if filtro_problemas == 'todos' %}selected{% endif %}>Críticos o altos</option>
+                                </select>
+                            </div>
 
                             <div class="dropdown-header-custom mt-3"><i class="fas fa-graduation-cap me-1"></i> Formación</div>
                             <div class="mb-2">
                                 <label class="small text-muted" for="filter_nivel_select">Nivel Educ.</label> <select id="filter_nivel_select" name="nivel_educ" class="form-select form-select-sm"
-                                    hx-get="{% url 'cargar_esp' %}?for_filter=1" 
-                                    hx-target="#filter_especialidad" 
-                                    hx-swap="outerHTML" 
+                                    hx-get="{% url 'cargar_esp' %}?for_filter=1"
+                                    hx-target="#filter_especialidad"
+                                    hx-swap="outerHTML"
                                     hx-trigger="change"
                                     onchange="triggerSearch()">
                                     <option value="">Todos</option>
@@ -402,8 +415,11 @@
                                 </select>
                             </div>
                             <div class="mb-2">
-                                <label class="small text-muted" for="filter_especialidad">Especialidad</label> <select id="filter_especialidad" name="especialidad" class="form-select form-select-sm" disabled onchange="triggerSearch()">
+                                <label class="small text-muted" for="filter_especialidad">Especialidad</label> <select id="filter_especialidad" name="especialidad" class="form-select form-select-sm" {% if not especialidades_filtro %}disabled{% endif %} onchange="triggerSearch()">
                                     <option value="">Todas</option>
+                                    {% for e in especialidades_filtro %}
+                                    <option value="{{ e.pk }}" {% if filtro_especialidad == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.nombre }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="mb-2">
@@ -411,8 +427,10 @@
                                     <option value="">Todos</option>
                                     <option value="MC" {% if filtro_grado_cientifico == 'MC' %}selected{% endif %}>Master</option>
                                     <option value="DC" {% if filtro_grado_cientifico == 'DC' %}selected{% endif %}>Doctor</option>
+                                    <option value="NINGUNO" {% if filtro_grado_cientifico == 'NINGUNO' %}selected{% endif %}>Ninguno</option>
                                 </select>
                             </div>
+                            </div>{# fin de los filtros avanzados #}
                         </div>
                     </div>
 
@@ -429,6 +447,8 @@
             </div>
 
             {% include 'pages/contrato/partials/aviso_altas_con_baja.html' %}
+            {# Filtros en uso, con ✕ para quitarlos (static/js/filtros_lista.js). #}
+            <div class="d-flex flex-wrap align-items-center gap-1 px-3 pb-2 d-none" data-filtros-activos aria-live="polite"></div>
 
             <div class="orb-tabla-scroll text-nowrap">
                 <table class="table orb-tabla">
@@ -503,6 +523,7 @@
 <script src="{% estatico 'js/recorrido_baja.js' %}"></script>
 <script src="{% estatico 'js/recorrido_exportar_contratos.js' %}"></script>
 <script src="{% estatico 'js/recorrido_busqueda.js' %}"></script>
+<script src="{% estatico 'js/filtros_lista.js' %}"></script>
 <script>
     var $ = jQuery.noConflict();
     

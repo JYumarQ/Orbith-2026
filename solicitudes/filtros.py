@@ -194,11 +194,21 @@ def pestanas_con_contadores(usuario):
         clave: Count('pk', filter=Q(estado__in=estados))
         for clave, estados in PESTANAS.items()
     })
-    return [
+    from django.urls import reverse
+
+    from .personalizadas import total_abiertas
+    pestanas = [
         {
             'clave': clave,
             'etiqueta': ETIQUETAS_PESTANA[clave],
             'total': totales.get(clave) or 0,
+            'url': '%s?tab=%s' % (reverse('list_solicitudes'), clave),
         }
         for clave in PESTANAS
     ]
+    # Cuarta pestaña (24-10-2026): mensajes directos del Moderador. Su cifra son
+    # las que siguen ABIERTAS, que es lo que hay que atender.
+    pestanas.append({'clave': 'personalizadas', 'etiqueta': 'Personalizadas',
+                     'total': total_abiertas(usuario),
+                     'url': reverse('list_solicitudes_personalizadas')})
+    return pestanas
