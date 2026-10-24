@@ -198,11 +198,15 @@ class CargoPlantilla(Base):
     # Un cargo «en plantilla» es la plaza aprobada por el organismo: es lo que
     # ha existido siempre y su lógica no cambia. En False significa que la plaza
     # existe y tiene gente, pero NO está en la plantilla aprobada: no suma en
-    # ningún total de plazas aprobadas (dashboard, Anexo 14, informes de
+    # ningún total de plazas aprobadas (dashboard, Anexo 17, informes de
     # plantilla, cierres) y no admite contratos que ocupen plaza.
     en_plantilla = models.BooleanField(default=True, verbose_name='En Plantilla')
     funcionario = models.BooleanField(default=False, verbose_name='Funcionario')
     designado = models.BooleanField(default=False, verbose_name='Designado')
+    # Decisión de RRHH del 24-10-2026: como Funcionario y Designado, es del CARGO
+    # (el contrato solo guarda su número de resolución) y, a diferencia de ellos,
+    # puede coincidir con cualquiera de los dos.
+    de_confianza = models.BooleanField(default=False, verbose_name='De Confianza')
     orden_informe = models.PositiveIntegerField(
         null=True, blank=True,
         verbose_name="Orden de prioridad"

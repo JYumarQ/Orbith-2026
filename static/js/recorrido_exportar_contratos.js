@@ -166,35 +166,28 @@
   // ------------------------------------------------------------------
   // Lista de contratos a Excel (solo en Contratos)
   // ------------------------------------------------------------------
-  const clicExcel = vigilarClic('#btnGenerarExcel');
+  // Desde el 24-10-2026 el botón descarga directamente lo que se ve en la lista
+  // (filtros, búsqueda y orden): ya no hay ventana para elegir unidades.
+  const clicExcel = vigilarClic('#btnExportarExcel');
 
   function pasosListaExcel() {
     return [
       {
-        id: 'excel', selector: 'button[data-bs-target="#modalExportarExcel"]', interactivo: true,
-        titulo: 'Exportar a Excel',
-        texto: 'Pulsa el botón verde de <strong>Excel</strong>: se abre una ventana para elegir qué contratos llevar.',
-        esperar: function () { return document.querySelector('#modalExportarExcel.show') ? 'abierto' : ''; },
+        selector: 'button[title="Filtros"]',
+        titulo: 'Primero, lo que quieres llevar',
+        texto: 'El Excel lleva <strong>exactamente lo que ves en la lista</strong>: si filtras (por unidad, tipo de contrato, sexo…) o buscas a alguien, solo sale eso. Sin filtros, salen todos los contratos de tu alcance.',
       },
       {
-        selector: '#modalExportarExcel .modal-body', interactivo: true, volver: { a: 'excel' },
-        titulo: '¿Qué unidades?',
-        texto: function () {
-          return document.getElementById('chkExportarTodasUO')
-            ? 'Con <strong>"Toda la aplicación"</strong> marcado salen los contratos de todas las unidades. Desmárcalo para elegir una o varias.'
-            : 'Elige una o varias de <strong>tus</strong> unidades: el Excel lleva sus contratos activos.';
-        },
-      },
-      {
-        selector: '#btnGenerarExcel', interactivo: true, volver: { a: 'excel' },
+        id: 'excel', selector: '#btnExportarExcel', interactivo: true,
         alEntrar: clicExcel.reiniciar,
-        titulo: 'Generar',
-        texto: 'Pulsa <strong>"Generar"</strong>: la ventana se cierra y se descarga el Excel con los contratos activos.',
+        titulo: 'Exportar a Excel',
+        texto: 'Pulsa el botón verde de <strong>Excel</strong>: se descarga la sábana con todas las columnas de cada contrato.',
+        textoEspera: 'Pulsa el botón verde de Excel.',
         esperar: clicExcel.pulsado,
         paciencia: 3000,
       },
       {
-        selector: 'button[data-bs-target="#modalExportarExcel"]',
+        selector: '#btnExportarExcel',
         titulo: '¡Excel en camino!',
         texto: 'Lo encontrarás en tus <strong>descargas</strong>. ¡Y consigues el logro!',
       },
@@ -416,7 +409,7 @@
     window.OrbithRecorridos['exportar_movimiento_nomina:' + sufijo] = function () { iniciar(pasosMovimiento()); };
     window.OrbithRecorridos['exportar_historico_trabajador:' + sufijo] = function () { iniciar(pasosHistorico()); };
   }
-  if (enContratos && document.getElementById('modalExportarExcel')) {
+  if (enContratos && document.getElementById('btnExportarExcel')) {
     window.OrbithRecorridos['exportar_lista_contratos:contratos'] = function () { iniciar(pasosListaExcel()); };
   }
   if (enAsistente) {

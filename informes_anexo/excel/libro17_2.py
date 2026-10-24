@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""El libro de Excel del Anexo 14-B.
+"""El libro de Excel del Anexo 17.2.
 
-POR QUÉ NO COMPARTE PLANTILLA CON EL 14 Y EL 14-A
+POR QUÉ NO COMPARTE PLANTILLA CON EL 17 Y EL 17.1
 -------------------------------------------------
-Se decidió que el 14-B va en libro APARTE, y además su hoja tiene otra forma: 17
+Se decidió que el 17.2 va en libro APARTE, y además su hoja tiene otra forma: 17
 columnas en vez de 6 o 7, la cabecera a dos alturas —«Salario» abarcando siete
 columnas y sus subtítulos debajo—, una fila de numeración, y DOS filas por plaza
 en vez de una. Forzar todo eso dentro del molde de los otros dos habría llenado
@@ -32,10 +32,10 @@ from informes.excel import FUENTE_PIE, IZQUIERDA, _escribir_portada, ruta_de_pla
 
 from .libro import HOJA_PORTADA, _nombre_de_hoja, respuesta_excel  # noqa: F401
 
-NOMBRE_PLANTILLA = 'anexo_14b_template.xlsx'
-MOLDE = 'Modelo 14B'
+NOMBRE_PLANTILLA = 'anexo_17_2_template.xlsx'
+MOLDE = 'Modelo 17.2'
 
-TITULO = ('ANEXO No.14 B De la plantilla de cargos '
+TITULO = ('ANEXO No.17.2 De la plantilla de cargos '
           'y el registro de trabajadores')
 
 #: Los 17 rótulos, repartidos en las dos alturas de la cabecera. Los siete del
@@ -43,7 +43,7 @@ TITULO = ('ANEXO No.14 B De la plantilla de cargos '
 ROTULOS_FIJOS = ['No.', 'Descripción órganos y cargos', 'Categoría ocupacional',
                  'Nombre y apellidos\ndel trabajador', 'Sexo',
                  'Carné de Identidad', 'Nivel de preparación', 'Grupo escala']
-ROTULOS_SALARIO = ['Total', 'Escala', 'CLA', 'Turnos nocturnos\ny mixtos',
+ROTULOS_SALARIO = ['Total', 'Escala', 'CLA', 'T. noct y mixtos',
                    'Maestría\no doctorado', 'Años de servicio',
                    'Otros (CNCI, Pago Instructores)']
 ROTULOS_COLA = ['Rol', 'Tridente']
@@ -53,7 +53,7 @@ PRIMERA_SALARIO = len(ROTULOS_FIJOS) + 1   # columna I
 ULTIMA_SALARIO = PRIMERA_SALARIO + len(ROTULOS_SALARIO) - 1  # columna O
 
 # Dónde está cada cosa. Compartido con
-# `plantillas_excel/generadores/crear_anexo_14b.py`.
+# `plantillas_excel/generadores/crear_anexo_17_2.py`.
 FILA_TITULO = 1
 FILA_ENTIDAD = 2
 FILA_FECHA = 3
@@ -64,9 +64,22 @@ FILA_DATOS = 7
 #: La segunda fila modelo: la de la tarifa horaria que va bajo cada plaza.
 FILA_MODELO_TARIFA = 8
 
-ANCHOS = [9, 44, 11, 30, 7, 15, 30, 11,
-          11, 11, 10, 13, 12, 12, 16,
-          8, 9]
+#: Formato del modelo que entregó RRHH el 24-10-2026: casi todas las cabeceras
+#: van giradas 90° (ver `ROTULOS_HORIZONTALES`), así que las columnas pueden ser
+#: estrechas y la hoja cabe en el ancho de la página.
+ANCHOS = [7.4, 28.3, 6.6, 29, 5.4, 11.7, 24.1, 5.9,
+          7.6, 8.9, 7.1, 8.1, 10.1, 8.7, 9.3,
+          3.4, 3.9]
+
+#: Las únicas cabeceras que NO van giradas: las de texto largo y «Salario», que
+#: abarca siete columnas.
+ROTULOS_HORIZONTALES = {'Descripción órganos y cargos',
+                        'Nombre y apellidos\ndel trabajador', 'Salario'}
+#: Alto de las dos filas de la cabecera: la de abajo, alta para el texto girado.
+ALTO_CABECERA_ALTA = 31.5
+ALTO_CABECERA_BAJA = 122.25
+#: Tamaño de letra de toda la hoja, como en el modelo.
+TAMANO_LETRA = 12
 
 
 def _estilos(hoja):
@@ -188,10 +201,10 @@ def _rellenar(hoja, datos, hoja_datos, fondo):
     celda.alignment = IZQUIERDA
 
 
-def libro_del_anexo_14b(datos):
+def libro_del_anexo_17_2(datos):
     """El libro completo: portada y una hoja por departamento de cada unidad.
 
-    Sin hoja de Resumen: ese conteo es el del 14-A y en un registro de
+    Sin hoja de Resumen: ese conteo es el del 17.1 y en un registro de
     trabajadores no dice gran cosa.
     """
     libro = load_workbook(ruta_de_plantilla(NOMBRE_PLANTILLA))
@@ -202,7 +215,7 @@ def libro_del_anexo_14b(datos):
     contexto_portada = dict(datos, fecha_generacion=datos.get('fecha_texto') or '')
     _escribir_portada(libro[HOJA_PORTADA], contexto_portada,
                       datos.get('fecha_texto') or '',
-                      titulo='Anexo 14B',
+                      titulo='Anexo 17.2',
                       cifras=datos.get('cifras_portada') or [])
 
     for hoja_datos in datos['hojas']:

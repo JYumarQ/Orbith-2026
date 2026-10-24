@@ -77,6 +77,7 @@ def _fila_de_cargo(cierre, cargo):
         en_plantilla=bool(cargo.en_plantilla),
         funcionario=bool(cargo.funcionario),
         designado=bool(cargo.designado),
+        de_confianza=bool(cargo.de_confianza),
         orden_informe=cargo.orden_informe,
         rol_tipo=cargo.rol.tipo if cargo.rol else '',
         nivel_preparacion_nombre=(
@@ -144,6 +145,10 @@ def _fila_de_contrato(cierre, contrato, cierre_cargo):
         c_formal=bool(contrato.c_formal),
         funcionario_res=contrato.funcionario_res or '',
         designado_res=contrato.designado_res or '',
+        confianza_res=contrato.confianza_res or '',
+        trabajo_distancia=bool(contrato.trabajo_distancia),
+        teletrabajo=bool(contrato.teletrabajo),
+        pluriempleo=bool(contrato.pluriempleo),
         c_formal_res=contrato.c_formal_res or '',
         fecha_vence_lic=contrato.fecha_vence_lic,
         fecha_vence_recal=contrato.fecha_vence_recal,

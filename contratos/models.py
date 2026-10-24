@@ -150,6 +150,13 @@ class CAlta(ContratoBase):
     c_formal_res = models.TextField(max_length=7, null=True, blank=True)    
     funcionario_res = models.TextField(max_length=7, null=True, blank=True)    
     designado_res = models.TextField(max_length=7, null=True, blank=True)
+    confianza_res = models.TextField(max_length=7, null=True, blank=True)
+
+    #?MODALIDAD DE TRABAJO (decisión de RRHH del 24-10-2026). Pueden coincidir
+    # entre sí mientras no haya otra indicación.
+    trabajo_distancia = models.BooleanField(default=False, verbose_name='Trab. a distancia')
+    teletrabajo = models.BooleanField(default=False, verbose_name='Teletrabajo')
+    pluriempleo = models.BooleanField(default=False, verbose_name='Pluriempleo')
     
     #?SALARIO
     tipo_salario = models.CharField(max_length=3, choices=[
@@ -423,6 +430,25 @@ class CAlta(ContratoBase):
     @property
     def designado(self):
         return self.cargo.designado if self.cargo else False
+
+    @property
+    def de_confianza(self):
+        return self.cargo.de_confianza if self.cargo else False
+
+    @property
+    def importe_annos_servicio(self):
+        """Pago por años de servicio a hoy (nomenclador), o 0 sin F. Alta Entidad."""
+        from .annos_servicio import annos_y_pago
+        _, pago = annos_y_pago(self.fecha_alta_entidad)
+        return pago or Decimal('0.00')
+
+    @property
+    def importe_otros(self):
+        """«Otros» del movimiento de nómina (decisión de RRHH del 24-10-2026):
+        grado científico (Maestría o Doctorado) + Instructor + CNCI + Años de
+        servicio. El movimiento lo CONGELA al crearse (`TMovimiento.otros_*`)."""
+        return (self.importe_maestria + self.importe_doctorado + self.importe_instructor
+                + self.importe_cnci + self.importe_annos_servicio)
     
     @property
     def fecha_vencimiento(self):
@@ -843,6 +869,12 @@ class TMovimiento(models.Model):
     motivo_nuevo = models.CharField(max_length=255, null=True, blank=True)
     
     duracion_nueva = models.IntegerField(null=True, blank=True)
+
+    # «Otros» (grado científico + Instructor + CNCI + Años de servicio) antes y
+    # después, CONGELADO al crear el movimiento (24-10-2026): así su documento no
+    # cambia con el tiempo. Ver `CAlta.importe_otros`.
+    otros_anterior = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    otros_nuevo = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     # -------------------------------------------------------------
 
     tipo_movimiento = models.CharField(max_length=50, default="Movimiento de Nómina")

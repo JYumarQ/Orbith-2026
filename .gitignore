@@ -40,3 +40,6 @@ respaldos/
 # Volcados antiguos del esquema y del código: no se usan y no van al repositorio.
 esquema.sql
 orbith_contratos_nomencladores.txt
+
+# Registro de errores del servidor (core/registro_errores.py): datos de produccion.
+logs/

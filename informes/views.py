@@ -2,7 +2,6 @@
 import json
 import os
 import calendar
-import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -26,8 +25,9 @@ from xhtml2pdf import pisa
 # de `fuentes.py`, que es quien decide si sirve datos vivos o un cierre mensual.
 from cierres.periodos import Periodo
 from configuracion.models import Configuracion
+from core.nombres_descarga import nombre_de_informe
 from nomencladores.models import (NTipoFamilia, NFamiliaCargo, NCargo,
-                                  color_de_categoria)
+                                  color_de_categoria, color_legible)
 from strorganizativa.jerarquia import ordenar_con_jerarquia
 from strorganizativa.models import UnidadOrganizativa
 from usuarios.mixins import RequiereEdicionMixin, puede_editar
@@ -427,7 +427,7 @@ class ExportarConsolidadoWordView(InformeEconomiaView):
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
             response['Content-Disposition'] = (
                 'attachment; filename="%s"'
-                % _nombre_de_fichero(context, 'docx', 'Consolidado'))
+                % _nombre_de_fichero(context, 'docx', 'Consolidado_Fuerza_de_Trabajo'))
             doc.save(response)
             return response
         except Exception as e:
@@ -444,7 +444,7 @@ class ExportarConsolidadoPDFView(InformeEconomiaView):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = (
             'attachment; filename="%s"'
-            % _nombre_de_fichero(context, 'pdf', 'Consolidado'))
+            % _nombre_de_fichero(context, 'pdf', 'Consolidado_Fuerza_de_Trabajo'))
         if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
         return response
@@ -604,7 +604,9 @@ class ExportarResumenUEBWordView(InformeTrabajadoresUEBView):
         doc.render(context)
         
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-        response['Content-Disposition'] = f'attachment; filename="Resumen_Trabajadores_UEB_{mes}_{anno}.docx"'
+        response['Content-Disposition'] = 'attachment; filename="%s"' % nombre_de_informe(
+            'Resumen_Trabajadores_por_UEB', MESES_ES[int(mes) - 1] if str(mes).isdigit() and 1 <= int(mes) <= 12 else mes,
+            anno, extension='docx', fecha=False)
         doc.save(response)
         
         return response
@@ -625,7 +627,7 @@ class ExportarResumenUEBPDFView(InformeTrabajadoresUEBView):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = (
             'attachment; filename="%s"'
-            % _nombre_de_fichero(context, 'pdf', 'Trabajadores_UEB'))
+            % _nombre_de_fichero(context, 'pdf', 'Trabajadores_por_UEB'))
 
         if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
@@ -1040,8 +1042,8 @@ def _nombre_de_fichero(context, extension, informe='Puestos_Clave'):
         partes.append(str(context.get('mes_actual') or ''))
     partes.append(str(context.get('anno_actual') or ''))
 
-    limpio = re.sub(r'[^\w\-]+', '_', '_'.join(p for p in partes if p), flags=re.UNICODE)
-    return '%s.%s' % (limpio.strip('_'), extension)
+    # Sin tildes ni ñ y con guion bajo (core/nombres_descarga.py, 24-10-2026).
+    return nombre_de_informe(*partes, extension=extension, fecha=False)
 
 
 class PuestosClaveDetalleView(InformePuestosClaveView):
@@ -1335,7 +1337,7 @@ class ExportarMisionesWordView(ExportarMisionesMixin, InformeMisionesView):
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
             response['Content-Disposition'] = (
                 'attachment; filename="%s"'
-                % _nombre_de_fichero(context, 'docx', 'Misiones'))
+                % _nombre_de_fichero(context, 'docx', 'Misiones_Internacionales'))
             doc.save(response)
             return response
         except Exception as e:
@@ -1352,7 +1354,7 @@ class ExportarMisionesPDFView(ExportarMisionesMixin, InformeMisionesView):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = (
             'attachment; filename="%s"'
-            % _nombre_de_fichero(context, 'pdf', 'Misiones'))
+            % _nombre_de_fichero(context, 'pdf', 'Misiones_Internacionales'))
         if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
         return response
@@ -1540,7 +1542,7 @@ class ExportarRegistroDiarioWordView(RegistroDiarioView):
             response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
             response['Content-Disposition'] = (
                 'attachment; filename="%s"'
-                % _nombre_de_fichero(context, 'docx', 'Registro_Diario'))
+                % _nombre_de_fichero(context, 'docx', 'Registro_Diario_por_Trabajadores'))
             doc.save(response)
             return response
         except Exception as e:
@@ -1557,7 +1559,7 @@ class ExportarRegistroDiarioPDFView(RegistroDiarioView):
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = (
             'attachment; filename="%s"'
-            % _nombre_de_fichero(context, 'pdf', 'Registro_Diario'))
+            % _nombre_de_fichero(context, 'pdf', 'Registro_Diario_por_Trabajadores'))
         if pisa.CreatePDF(html, dest=response).err:
             return HttpResponse('Hubo un error al generar el PDF', status=500)
         return response
@@ -1660,6 +1662,9 @@ class InformeMotivosContratoView(GuiaInformeRRHHMixin, TemplateView):
             ueb_obj = fuente.unidad(c.unidad_id)
             ueb_desc = ueb_obj.descripcion if ueb_obj else "Sin Unidad Organizativa"
             ueb_color = ueb_obj.color if ueb_obj else "#697a8d"
+            # El icono conserva el color elegido; la LETRA va oscurecida si ese
+            # color es demasiado claro para leerse sobre blanco.
+            ueb_color_texto = color_legible(ueb_color)
 
             # 3. EXTRAER LAS BANDERAS PARA EL HTML
             es_p = ueb_obj.es_principal if ueb_obj else False
@@ -1683,11 +1688,13 @@ class InformeMotivosContratoView(GuiaInformeRRHHMixin, TemplateView):
             # una cabecera y pasa a ser una columna. `FilaContrato` es inmutable,
             # así que no se le puede colgar el nombre encima.
             datos_agrupados[tipo_desc]['motivos'][motivo_desc]['contratos'].append(
-                {'contrato': c, 'unidad': ueb_desc, 'color': ueb_color})
+                {'contrato': c, 'unidad': ueb_desc, 'color': ueb_color,
+                 'color_texto': ueb_color_texto})
 
             if ueb_desc not in datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs']:
                 datos_agrupados[tipo_desc]['motivos'][motivo_desc]['uebs'][ueb_desc] = {
                     'color': ueb_color,
+                    'color_texto': ueb_color_texto,
                     'es_p': es_p,  # <-- ENVIAMOS A HTML
                     'es_s': es_s,  # <-- ENVIAMOS A HTML
                     'contratos': []
@@ -2058,7 +2065,7 @@ class ExportarConsolidadoExcelView(InformeEconomiaView):
         libro.datos('Consolidado', self.COLUMNAS, filas,
                     anchos=[26] + [14] * 10,
                     centradas=tuple(range(2, 12)), total=total)
-        return _libro_a_respuesta(libro, context, 'Consolidado')
+        return _libro_a_respuesta(libro, context, 'Consolidado_Fuerza_de_Trabajo')
 
 
 class ExportarResumenUEBExcelView(InformeTrabajadoresUEBView):
@@ -2091,7 +2098,7 @@ class ExportarResumenUEBExcelView(InformeTrabajadoresUEBView):
                      '% del total'),
                     filas, anchos=[52, 16, 14, 14],
                     centradas=(2, 3, 4), total=total)
-        return _libro_a_respuesta(libro, context, 'Trabajadores_UEB')
+        return _libro_a_respuesta(libro, context, 'Trabajadores_por_UEB')
 
 
 class ExportarPuestosClaveExcelView(InformePuestosClaveView):
@@ -2248,7 +2255,7 @@ class ExportarMisionesExcelView(ExportarMisionesMixin, InformeMisionesView):
         if context['con_valores_manuales']:
             for hoja in (resumen, hoja_plana, hoja_niveles):
                 self._nota_valores_manuales(hoja, context['nota_valores_manuales'])
-        return _libro_a_respuesta(libro, context, 'Misiones')
+        return _libro_a_respuesta(libro, context, 'Misiones_Internacionales')
 
     def _formato_importe(self, hoja, columna):
         for fila in range(5, hoja.max_row + 1):
@@ -2294,7 +2301,7 @@ class ExportarRegistroDiarioExcelView(RegistroDiarioView):
                     ('Indicadores de Control', 'Trabajadores',
                      'De ellos, Mujeres'),
                     filas, anchos=[52, 18, 20], centradas=(2, 3), total=total)
-        return _libro_a_respuesta(libro, context, 'Registro_Diario')
+        return _libro_a_respuesta(libro, context, 'Registro_Diario_por_Trabajadores')
 
 
 class ExportarMotivosExcelView(InformeMotivosContratoView):

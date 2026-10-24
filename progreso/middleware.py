@@ -36,11 +36,11 @@ EXPORTACION_POR_RUTA = {
     # "Exportar Todo" del histórico. Se abre en otra pestaña (inline): por eso
     # no se exige `attachment`.
     'exportar_historico_pdf': ('exportar_historico_trabajador', None),
-    'informes_anexo:anexo14_excel': ('exportar_anexos', '14'),
-    'informes_anexo:anexo14a_excel': ('exportar_anexos', '14a'),
-    'informes_anexo:anexo14b_excel': ('exportar_anexos', '14b'),
-    # El libro combinado lleva el 14 y el 14A.
-    'informes_anexo:anexo_excel_combinado': ('exportar_anexos', ['14', '14a']),
+    'informes_anexo:anexo17_excel': ('exportar_anexos', '17'),
+    'informes_anexo:anexo17_1_excel': ('exportar_anexos', '17_1'),
+    'informes_anexo:anexo17_2_excel': ('exportar_anexos', '17_2'),
+    # El libro combinado lleva el 17 y el 17.1.
+    'informes_anexo:anexo_excel_combinado': ('exportar_anexos', ['17', '17_1']),
     'prenomina:exportar_reporte': ('exportar_prenomina', None),
 }
 

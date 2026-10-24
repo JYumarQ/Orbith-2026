@@ -1,4 +1,4 @@
-{% comment %} El contenido de UNA pestaña del Anexo 14-A, servido por HTMX.
+{% comment %} El contenido de UNA pestaña del Anexo 17.1, servido por HTMX.
 
    El conteo de la unidad: sus Direcciones como rótulo, sus Grupos con las cifras
    y el Subtotal que cierra cada bloque. Y al final, aparte y con su propio total,
@@ -13,7 +13,7 @@
     <span class="small">Cifras oficiales de la plantilla aprobada</span>
 </div>
 <div class="orb-tabla-scroll orb-tabla-alto">
-    {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=filas total=total %}
+    {% include "pages/informes_anexo/partials/tabla_17_1.html" with filas=filas total=total %}
 </div>
 
 {% if total_fuera.total %}
@@ -22,6 +22,6 @@
         <span class="small">No suman en el Total de arriba</span>
     </div>
     <div class="orb-tabla-scroll orb-tabla-alto">
-        {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=filas_fuera total=total_fuera %}
+        {% include "pages/informes_anexo/partials/tabla_17_1.html" with filas=filas_fuera total=total_fuera %}
     </div>
 {% endif %}

@@ -334,7 +334,7 @@ class AlcancePorUnidadDelObservadorTests(BaseObservadorTests):
         self.assertIn('unidad_organizativa',
                       str(contratos_visibles(self.acotado).query))
 
-    def test_anexo_14(self):
+    def test_anexo_17(self):
         from informes_anexo.views import _unidades_del_alcance
 
         self.assertIsNone(_unidades_del_alcance(self.observador))

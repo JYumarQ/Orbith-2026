@@ -1,12 +1,12 @@
-{% comment %} Bloque de firmas, compartido por el Anexo 14 y el Anexo 14-A.
+{% comment %} Bloque de firmas, compartido por el Anexo 17 y el Anexo 17.1.
 
    Los dos informes llevan los mismos dos firmantes institucionales —Capital
    Humano propone, el Director General aprueba—, así que el bloque es uno solo.
    Lo único que cambia entre ellos viaja por contexto: `url_firmas`, la vista a
    la que llaman los `<select>`, y `plantilla_acciones`, la botonera de
-   exportación que se reinyecta con la respuesta (el 14 tiene Excel y PDF; el
-   14-A, solo Excel). Los dos usan el mismo id de formulario,
-   `formFiltrosAnexo14`, que es lo que busca `hx-include`.
+   exportación que se reinyecta con la respuesta (el 17 tiene Excel y PDF; el
+   17.1, solo Excel). Los dos usan el mismo id de formulario,
+   `formFiltrosAnexo17`, que es lo que busca `hx-include`.
 
    Se aísla en un parcial para que elegir un firmante se resuelva por HTMX y no
    recargue la página entera: antes cada `<select>` hacía `form.submit()`, lo que
@@ -22,12 +22,12 @@
 
    `hx-swap="outerHTML"` reemplaza este mismo contenedor, así que el `id` debe estar
    en el elemento raíz del parcial. {% endcomment %}
-<div class="anx-panel p-4" id="bloqueFirmasAnexo14">
+<div class="anx-panel p-4" id="bloqueFirmasAnexo17">
     {% comment %} Firmantes ya elegidos: viajan como `hidden` DENTRO de este bloque para
        que se regeneren en cada intercambio. `form=` los enlaza al formulario de filtros,
        de modo que un envío tradicional (cambiar categoría, unidad…) también los arrastra. {% endcomment %}
-    {% if filtros.director_ch_id %}<input type="hidden" name="director_ch" value="{{ filtros.director_ch_id }}" form="formFiltrosAnexo14">{% endif %}
-    {% if filtros.director_gral_id %}<input type="hidden" name="director_gral" value="{{ filtros.director_gral_id }}" form="formFiltrosAnexo14">{% endif %}
+    {% if filtros.director_ch_id %}<input type="hidden" name="director_ch" value="{{ filtros.director_ch_id }}" form="formFiltrosAnexo17">{% endif %}
+    {% if filtros.director_gral_id %}<input type="hidden" name="director_gral" value="{{ filtros.director_gral_id }}" form="formFiltrosAnexo17">{% endif %}
 
     <div class="text-center mb-3">
         <span class="anx-firma-rotulo">Firmas y conformidad institucional</span>
@@ -44,12 +44,12 @@
                         {% if not director_ch.cargo_existe %}
                             <div class="small text-orange-500 fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director de Capital Humano" en el nomenclador.</div>
                         {% endif %}
-                        <select name="director_ch" form="formFiltrosAnexo14" class="form-select form-select-sm"
+                        <select name="director_ch" form="formFiltrosAnexo17" class="form-select form-select-sm"
                                 hx-get="{{ url_firmas }}"
-                                hx-target="#bloqueFirmasAnexo14"
+                                hx-target="#bloqueFirmasAnexo17"
                                 hx-swap="outerHTML"
-                                hx-include="#formFiltrosAnexo14, #bloqueFirmasAnexo14"
-                                hx-indicator="#bloqueFirmasAnexo14">
+                                hx-include="#formFiltrosAnexo17, #bloqueFirmasAnexo17"
+                                hx-indicator="#bloqueFirmasAnexo17">
                             <option value="">Seleccione manualmente...</option>
                             {% for a in aspirantes_cuadro %}
                                 <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>
@@ -70,12 +70,12 @@
                         {% if not director_gral.cargo_existe %}
                             <div class="small text-orange-500 fw-bold mb-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>No existe el cargo "Director General" en el nomenclador.</div>
                         {% endif %}
-                        <select name="director_gral" form="formFiltrosAnexo14" class="form-select form-select-sm"
+                        <select name="director_gral" form="formFiltrosAnexo17" class="form-select form-select-sm"
                                 hx-get="{{ url_firmas }}"
-                                hx-target="#bloqueFirmasAnexo14"
+                                hx-target="#bloqueFirmasAnexo17"
                                 hx-swap="outerHTML"
-                                hx-include="#formFiltrosAnexo14, #bloqueFirmasAnexo14"
-                                hx-indicator="#bloqueFirmasAnexo14">
+                                hx-include="#formFiltrosAnexo17, #bloqueFirmasAnexo17"
+                                hx-indicator="#bloqueFirmasAnexo17">
                             <option value="">Seleccione manualmente...</option>
                             {% for a in aspirantes_cuadro %}
                                 <option value="{{ a.pk }}">{{ a.nombre }} {{ a.papellido }} {{ a.sapellido }}</option>

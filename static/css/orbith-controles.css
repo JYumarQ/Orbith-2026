@@ -573,3 +573,11 @@ select.chip-multiselect-native { display: none !important; }
     content: '└'; position: absolute; left: 0.75rem;
     color: var(--orb-tenue); font-size: 0.8rem;
 }
+
+/* Switches que decide el CARGO (Funcionario, Designado): no se pueden tocar en el
+   contrato, pero tienen que verse como lo que son. Antes llevaban la opacidad de
+   Bootstrap para `disabled` más un 0.7 propio y se veían apagados aunque
+   estuvieran activos (24-10-2026). */
+.switch-del-cargo { pointer-events: none; }
+.switch-del-cargo .form-check-input:disabled,
+.switch-del-cargo .form-check-input:disabled ~ .form-check-label { opacity: 1; }

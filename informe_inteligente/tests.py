@@ -536,6 +536,26 @@ class IndicadoresYEvolucionTests(TestCase):
         vacantes = sorted(queryset.values_list('vacantes', flat=True))
         self.assertEqual(vacantes, [3, 8])
 
+    def test_conteos_de_contratos_por_cargo(self):
+        """«Datos del Contrato» de Estructura y Plantilla Aprobada (24-10-2026):
+        conteos por cargo, sin repetir el cargo una vez por contrato."""
+        from informe_inteligente import motor
+
+        queryset = motor.construir_queryset(
+            'CargoPlantilla', {'campos': ['cargo', 'contratos_activos', 'contratos_ocupan_plaza',
+                                          'contratos_no_ocupan_plaza'], 'filtros': []},
+            self.admin)
+        filas = sorted(queryset.values_list('contratos_activos', 'contratos_ocupan_plaza',
+                                            'contratos_no_ocupan_plaza'))
+        # Un cargo con 1 contrato y otro con 2: cada cargo es UNA fila.
+        self.assertEqual([f[0] for f in filas], [1, 2])
+        self.assertTrue(all(f[0] == f[1] + f[2] for f in filas))
+
+        con_dos = motor.construir_queryset(
+            'CargoPlantilla', {'campos': ['cargo'], 'filtros': [
+                {'campo': 'contratos_activos', 'operador': 'mayor', 'valor': '1'}]}, self.admin)
+        self.assertEqual(con_dos.count(), 1)
+
     # --- Condiciones por lista, cruzadas y razones ------------------------
 
     def test_una_condicion_por_lista_agrupa_varios_codigos(self):

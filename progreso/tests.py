@@ -163,7 +163,7 @@ class MiddlewareExportacionTests(TareaGuiaAisladaTestCase):
               partes='creacion,modificacion')
         crear(codigo='exportar_historico_trabajador', titulo='Histórico', categoria=TareaGuia.Categoria.EXPORTAR)
         crear(codigo='exportar_anexos', titulo='Anexos', categoria=TareaGuia.Categoria.EXPORTAR,
-              partes='14,14a,14b')
+              partes='17,17_1,17_2')
 
     def _procesar(self, ruta, content_type, metodo='get', datos=None, estado=200):
         from django.urls import resolve
@@ -205,9 +205,9 @@ class MiddlewareExportacionTests(TareaGuiaAisladaTestCase):
         self._procesar('/contrato/exportar_contrato/1/', WORD, metodo='post', datos={'tipo_documento': 'creacion'})
         self.assertTrue(self._completada('exportar_contrato_modificacion'))
 
-    def test_el_libro_combinado_cuenta_para_el_14_y_el_14a(self):
+    def test_el_libro_combinado_cuenta_para_el_17_y_el_17_1(self):
         self._procesar('/informes-anexo/anexo/excel/combinado/', EXCEL)
-        self.assertEqual(self._partes('exportar_anexos'), {'14', '14a'})
+        self.assertEqual(self._partes('exportar_anexos'), {'17', '17_1'})
 
     def test_tarea_sin_partes_se_completa_con_una_descarga_inline(self):
         # "Exportar Todo" abre el PDF en otra pestaña (inline): cuenta igual.

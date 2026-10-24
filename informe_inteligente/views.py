@@ -3,7 +3,6 @@ Vistas del módulo Informe Inteligente.
 """
 import io
 import json
-import re
 from datetime import datetime
 
 from django.contrib import messages
@@ -489,10 +488,11 @@ def _unidades_del_informe(request, datos):
 
 
 def _nombre_de_descarga(context, extension):
-    """«Escala_Salarial_20260903_1830.xlsx»: el nombre del informe, si lo tiene."""
-    base = context["informe_nombre"] or "Informe_Inteligente"
-    base = re.sub(r"[^\w\-]+", "_", base, flags=re.UNICODE).strip("_")
-    return "%s_%s.%s" % (base, datetime.now().strftime("%Y%m%d_%H%M"), extension)
+    """«Escala_Salarial_24-10-2026.xlsx»: el nombre del informe, si lo tiene, y la
+    fecha (core/nombres_descarga.py, 24-10-2026)."""
+    from core.nombres_descarga import nombre_de_informe
+    return nombre_de_informe(context["informe_nombre"] or "Informe_Inteligente",
+                             extension=extension)
 
 
 @login_required

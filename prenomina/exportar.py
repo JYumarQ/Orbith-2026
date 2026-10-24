@@ -33,7 +33,6 @@ from io import BytesIO
 
 from django.conf import settings
 from django.http import HttpResponse
-from django.utils.text import slugify
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Protection, Side
 from openpyxl.utils import get_column_letter
@@ -404,9 +403,13 @@ def nombre_de_archivo(reporte):
     reporte por su `pk`, y cambiarla invalidaría los ficheros exportados antes
     de existir las quincenas.
     """
-    unidad = slugify(reporte.unidad_descripcion) or 'unidad'
-    sufijo = f'_q{reporte.quincena}' if reporte.quincena else ''
-    return f'prenomina_{unidad}_{reporte.anno}_{reporte.mes:02d}{sufijo}.xlsx'
+    from core.nombres_descarga import NOMBRES_DE_MES, nombre_de_informe
+    partes = ['Prenomina', reporte.unidad_descripcion or 'Unidad',
+              NOMBRES_DE_MES[reporte.mes - 1] if 1 <= reporte.mes <= 12 else reporte.mes,
+              reporte.anno]
+    if reporte.quincena:
+        partes.append('Quincena_%s' % reporte.quincena)
+    return nombre_de_informe(*partes, extension='xlsx', fecha=False)
 
 
 def exportar(reporte):

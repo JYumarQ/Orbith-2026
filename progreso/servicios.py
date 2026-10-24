@@ -24,9 +24,9 @@ ETIQUETAS_PARTE = {
     'excel': 'Excel',
     'creacion': 'Contrato de Trabajo',
     'modificacion': 'Modificación',
-    '14': 'Anexo 14',
-    '14a': 'Anexo 14A',
-    '14b': 'Anexo 14B',
+    '17': 'Anexo 17',
+    '17_1': 'Anexo 17.1',
+    '17_2': 'Anexo 17.2',
 }
 
 

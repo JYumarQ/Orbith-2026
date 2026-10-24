@@ -1,5 +1,5 @@
 {% load informe_inteligente_extras %}
-{% comment %} La tabla del Anexo 14-A.
+{% comment %} La tabla del Anexo 17.1.
 
    El mismo trozo sirve para las dos pestañas —plantilla aprobada y cargos fuera
    de ella—, que son idénticas salvo por las cifras, así que se incluye dos veces
@@ -7,10 +7,10 @@
 
    Es `inf-tabla`, la misma tabla de Puestos Clave y de Altas y Bajas: cabecera
    en gris sobre blanco, cifras tabulares, ceros apagados y fila de totales
-   oscura con el filo naranja. Lo único propio del 14-A son los tres niveles de
+   oscura con el filo naranja. Lo único propio del 17.1 son los tres niveles de
    fila (`anx-f-*`), que define `partials/estilos_anexo.html`.
 
-   `filas` llega como una lista PLANA desde `informes_anexo/anexo14a.py`: cada fila
+   `filas` llega como una lista PLANA desde `informes_anexo/anexo17_1.py`: cada fila
    trae su `nivel` («bloque», «detalle» o «subtotal») y la plantilla se limita a
    pintarla según ese nivel. La jerarquía se ve por el tinte y la sangría, no por
    tablas anidadas: una tabla dentro de otra no se puede leer en columna ni se
@@ -23,7 +23,7 @@
     <thead>
         <tr>
             <th class="text-start">Denominación</th>
-            {% for clave, rotulo, nombre, categorias in columnas_14a %}
+            {% for clave, rotulo, nombre, categorias in columnas_17_1 %}
                 <th class="text-center anx-th-cat" data-cat="{{ clave }}" title="{{ nombre }}">{{ rotulo }}</th>
             {% endfor %}
             <th class="th-grupo-indigo">Total de Cargos</th>
@@ -34,9 +34,9 @@
             <tr class="anx-f-{{ fila.nivel }}">
                 <td class="td-nombre">{{ fila.denominacion }}</td>
                 {% if fila.nivel == "bloque" %}
-                    <td colspan="{{ columnas_14a|length|add:1 }}"></td>
+                    <td colspan="{{ columnas_17_1|length|add:1 }}"></td>
                 {% else %}
-                    {% for clave, rotulo, nombre, categorias in columnas_14a %}
+                    {% for clave, rotulo, nombre, categorias in columnas_17_1 %}
                         <td class="td-cifra {% if fila|get_item:clave %}td-cifra--fuerte{% else %}td-cifra--cero{% endif %}">{{ fila|get_item:clave }}</td>
                     {% endfor %}
                     <td class="td-cifra {% if fila.total %}td-cifra--azul{% else %}td-cifra--cero{% endif %}">{{ fila.total }}</td>
@@ -44,14 +44,14 @@
             </tr>
         {% empty %}
             <tr class="fila-vacia">
-                <td colspan="{{ columnas_14a|length|add:2 }}">No hay plantilla registrada en este nivel.</td>
+                <td colspan="{{ columnas_17_1|length|add:2 }}">No hay plantilla registrada en este nivel.</td>
             </tr>
         {% endfor %}
     </tbody>
     <tfoot>
         <tr class="fila-total">
             <td class="td-nombre">{{ total.denominacion }}</td>
-            {% for clave, rotulo, nombre, categorias in columnas_14a %}
+            {% for clave, rotulo, nombre, categorias in columnas_17_1 %}
                 <td class="td-cifra">{{ total|get_item:clave }}</td>
             {% endfor %}
             <td class="td-cifra">{{ total.total }}</td>

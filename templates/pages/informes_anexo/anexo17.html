@@ -2,7 +2,7 @@
 {% load static %}
 {% load informe_inteligente_extras %}
 
-{% block title %}Anexo 14{% endblock %}
+{% block title %}Anexo 17{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
@@ -17,11 +17,11 @@
         <div class="d-flex align-items-center gap-3">
             <span class="inf-hero-icono"><i class="bi bi-diagram-3-fill"></i></span>
             <div>
-                <h1 class="h4 mb-0 d-flex align-items-center flex-wrap gap-2"><span>Anexo 14 — Estructura Jerárquica y Plantilla Aprobada</span>{% include 'pages/informes_anexo/partials/ayuda_recorrido_anexo.html' with anexo='14' %}</h1>
+                <h1 class="h4 mb-0 d-flex align-items-center flex-wrap gap-2"><span>Anexo 17 — Estructura Jerárquica y Plantilla Aprobada</span>{% include 'pages/informes_anexo/partials/ayuda_recorrido_anexo.html' with anexo='17' etiqueta='17' %}</h1>
                 <p>Documento oficial de estructura organizativa y plantilla de cargos aprobada.</p>
             </div>
         </div>
-        {% include "pages/informes_anexo/partials/acciones_export.html" with url_propio='informes_anexo:anexo14_excel' nombre_propio='Anexo 14' %}
+        {% include "pages/informes_anexo/partials/acciones_export.html" with url_propio='informes_anexo:anexo17_excel' nombre_propio='Anexo 17' %}
     </div>
 
     {% comment %} Los `hidden` que conservan los firmantes ya elegidos NO viven aquí sino
@@ -29,7 +29,7 @@
        si se quedaran en este formulario (que no se intercambia) mantendrían el valor
        del render inicial — al elegir el segundo firmante se perdía el primero. Se
        enlazan a este formulario con el atributo `form=`. {% endcomment %}
-    <form method="get" id="formFiltrosAnexo14">
+    <form method="get" id="formFiltrosAnexo17">
 
         <!-- ===== METADATOS INSTITUCIONALES ===== -->
         <div class="anx-panel">
@@ -163,19 +163,19 @@
                 </div>
                 <div class="col-md-2 d-flex gap-2">
                     <button type="submit" class="btn btn-outline-primary btn-sm w-100"><i class="bi bi-funnel-fill me-1"></i>Filtrar</button>
-                    <a href="{% url 'informes_anexo:anexo14' %}" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-arrow-counterclockwise"></i></a>
+                    <a href="{% url 'informes_anexo:anexo17' %}" class="btn btn-outline-secondary btn-sm w-100"><i class="bi bi-arrow-counterclockwise"></i></a>
                 </div>
             </div>
         </div>
     </form>
 
     <!-- ===== SELECTOR, PESTAÑAS Y HOJAS ===== -->
-    {% include "pages/informes_anexo/partials/selector_y_pestanas.html" with url_panel='informes_anexo:anexo14_panel_unidad' titulo_res='Resumen' %}
+    {% include "pages/informes_anexo/partials/selector_y_pestanas.html" with url_panel='informes_anexo:anexo17_panel_unidad' titulo_res='Resumen' %}
 
     <div class="anx-panel">
         <div class="tab-content">
-            {% comment %} El Resumen es el conteo del 14-A sobre las unidades elegidas.
-               Va también aquí, y no solo en el 14-A, porque el libro de los tres
+            {% comment %} El Resumen es el conteo del 17.1 sobre las unidades elegidas.
+               Va también aquí, y no solo en el 17.1, porque el libro de los tres
                informes empieza igual: pantalla y Excel tienen las mismas divisiones. {% endcomment %}
             <div class="tab-pane fade show active" id="hoja-resumen" role="tabpanel">
                 <div class="anx-tree-padre">
@@ -183,7 +183,7 @@
                     <span class="small">Cifras oficiales de la plantilla aprobada</span>
                 </div>
                 <div class="orb-tabla-scroll orb-tabla-alto">
-                    {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=resumen.filas total=resumen.total %}
+                    {% include "pages/informes_anexo/partials/tabla_17_1.html" with filas=resumen.filas total=resumen.total %}
                 </div>
 
                 {% if resumen_fuera.total.total %}
@@ -192,7 +192,7 @@
                         <span class="small">No suman en el Total de arriba</span>
                     </div>
                     <div class="orb-tabla-scroll orb-tabla-alto">
-                        {% include "pages/informes_anexo/partials/tabla_14a.html" with filas=resumen_fuera.filas total=resumen_fuera.total %}
+                        {% include "pages/informes_anexo/partials/tabla_17_1.html" with filas=resumen_fuera.filas total=resumen_fuera.total %}
                     </div>
                 {% endif %}
             </div>

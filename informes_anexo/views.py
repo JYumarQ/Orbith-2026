@@ -1,11 +1,11 @@
 """
 Vistas del módulo Anexo: la Plantilla de Cargos en sus dos modelos oficiales.
 
-* ANEXO 14 — Estructura Jerárquica y Plantilla Aprobada: el detalle, una fila
+* ANEXO 17 — Estructura Jerárquica y Plantilla Aprobada: el detalle, una fila
   por cargo con su rol, su nivel de preparación y su grupo escala.
-* ANEXO 14-A — Resumen de la Plantilla de Cargos: el conteo, una fila por unidad
+* ANEXO 17.1 — Resumen de la Plantilla de Cargos: el conteo, una fila por unidad
   o por departamento con sus plazas por categoría ocupacional. Las cifras las
-  agrega `informes_anexo/anexo14a.py`; aquí vive solo su vista.
+  agrega `informes_anexo/anexo17_1.py`; aquí vive solo su vista.
 
 Los dos son reportes "en vivo" (sin persistencia): siempre reflejan el estado
 actual de UnidadOrganizativa / Departamento / CargoPlantilla, comparten el
@@ -21,7 +21,7 @@ punto donde se acota el árbol:
 * Observador con unidades asignadas, y Moderador: solo sus Unidades
   Principales, con los departamentos y cargos que cuelgan de ellas.
 
-En ese segundo caso el Anexo 14 sale PARCIAL a propósito: los KPIs se calculan
+En ese segundo caso el Anexo 17 sale PARCIAL a propósito: los KPIs se calculan
 sobre el árbol ya acotado (`_calcular_kpis` recorre lo que le llega), así que un
 Moderador nunca ve los totales de la empresa. Las firmas, en cambio, siguen
 siendo las institucionales —Director General y Director de Capital Humano—:
@@ -32,10 +32,10 @@ mano `?padre=` con el id de una unidad ajena recibe la primera de las suyas, no
 la que pidió.
 """
 from datetime import date
-from . import anexo14a, anexo14b
-from .excel.libro import (MODO_14, MODO_14A, MODO_14B, MODO_AMBOS,
+from . import anexo17_1, anexo17_2
+from .excel.libro import (MODO_17, MODO_17_1, MODO_17_2, MODO_AMBOS,
                          libro_del_anexo, nombre_de_fichero, respuesta_excel)
-from .excel.libro14b import libro_del_anexo_14b
+from .excel.libro17_2 import libro_del_anexo_17_2
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -60,7 +60,7 @@ NOMBRE_CARGO_DIRECTOR_GENERAL = "Director General"
 # La SIGLA es la letra del modelo oficial y es la que rotula la tarjeta de cifra;
 # la ETIQUETA es la palabra entera, que va debajo. Están separadas porque
 # «Administrativos (A)» no cabe en el rótulo de una tarjeta y salía recortado a
-# «ADMINISTRATI». Es el mismo reparto que usa `anexo14a.COLUMNAS_14A`.
+# «ADMINISTRATI». Es el mismo reparto que usa `anexo17_1.COLUMNAS_17_1`.
 CATEGORIAS_KPI = [
     ("cuadros", "C", "Cuadros (C)", ["CDI", "CEJ"]),
     ("tecnicos", "T", "Técnicos (T)", ["TEC"]),
@@ -107,7 +107,7 @@ def _titulo_director(plantilla, aspirante):
 
 
 class PermisoAnexoMixin(UserPassesTestMixin):
-    """Los tres roles pueden consultar el Anexo 14; cada uno ve su alcance.
+    """Los tres roles pueden consultar el Anexo 17; cada uno ve su alcance.
 
     El Moderador antes estaba bloqueado por completo. Se le abre porque el
     informe es de solo lectura y ahora sale acotado a sus unidades
@@ -123,7 +123,7 @@ class PermisoAnexoMixin(UserPassesTestMixin):
         return ve_toda_la_empresa(self.request.user) or tiene_alcance_acotado(self.request.user)
 
     def handle_no_permission(self):
-        raise PermissionDenied("El Anexo 14 solo está disponible para usuarios con un rol asignado.")
+        raise PermissionDenied("El Anexo 17 solo está disponible para usuarios con un rol asignado.")
 
 
 def _queryset_aspirantes_cuadro():
@@ -217,7 +217,7 @@ def _construir_hijas(unidad_padre, filtros, en_plantilla=True, permitidas=None):
     Solo incluye Departamentos que, tras el filtro, quedaron con al menos
     un cargo.
 
-    `en_plantilla` elige de qué lado se construye el árbol: el Anexo 14 lo llama
+    `en_plantilla` elige de qué lado se construye el árbol: el Anexo 17 lo llama
     dos veces, una para la plantilla aprobada (el informe de siempre) y otra para
     los cargos que quedaron fuera de ella, que se listan en una sección aparte
     con su propio subtotal y NO suman en las cifras oficiales.
@@ -334,7 +334,7 @@ def _calcular_kpis(hijas):
 def _secciones_por_unidad(hijas, hijas_fuera):
     """Une las dos ramas del árbol en una sola lista, una entrada por subunidad.
 
-    El Anexo 14 construye por separado la plantilla aprobada y los cargos que
+    El Anexo 17 construye por separado la plantilla aprobada y los cargos que
     quedaron fuera de ella. En pantalla, sin embargo, cada subunidad es una
     PESTAÑA y necesita las dos cosas juntas: no tendría sentido navegar las
     unidades por un lado para lo aprobado y por otro para lo que no lo está.
@@ -470,7 +470,7 @@ def _unidades_elegidas(request, raices):
 def _contexto_de_unidades(request):
     """El selector, las pestañas y las cifras de cabecera. Común a los dos anexos.
 
-    Las cifras salen de `anexo14a.filas_de_empresa()` y no de recorrer el árbol:
+    Las cifras salen de `anexo17_1.filas_de_empresa()` y no de recorrer el árbol:
     es una sola consulta agregada sobre las unidades elegidas, así que abrir la
     pantalla no depende de cuántos cargos tenga la plantilla.
     """
@@ -478,14 +478,14 @@ def _contexto_de_unidades(request):
     raices = _raices_del_alcance(request.user)
     elegidas = _unidades_elegidas(request, raices)
 
-    # Los filtros de cargo mandan también aquí. Si el Anexo 14 está filtrado por
+    # Los filtros de cargo mandan también aquí. Si el Anexo 17 está filtrado por
     # «Obrero», las tarjetas de cifra y el Resumen tienen que contar obreros: son
     # el encabezado de lo que se está mirando, no un total ajeno al filtro. El
-    # 14-A no tiene estos filtros, así que allí esto no acota nada.
+    # 17.1 no tiene estos filtros, así que allí esto no acota nada.
     filtros = _obtener_filtros(request)
 
-    resumen = anexo14a.filas_de_empresa(elegidas, permitidas, filtros=filtros)
-    resumen_fuera = anexo14a.filas_de_empresa(
+    resumen = anexo17_1.filas_de_empresa(elegidas, permitidas, filtros=filtros)
+    resumen_fuera = anexo17_1.filas_de_empresa(
         elegidas, permitidas, en_plantilla=False, filtros=filtros)
 
     return {
@@ -494,7 +494,7 @@ def _contexto_de_unidades(request):
         "unidades_marcadas": [str(u.pk) for u in elegidas] if len(elegidas) != len(raices) else [],
         "marcador_unidades": _marcador_de_unidades(request.user, raices),
         "unidades": elegidas,
-        "columnas_14a": anexo14a.COLUMNAS_14A,
+        "columnas_17_1": anexo17_1.COLUMNAS_17_1,
         "resumen": resumen,
         "resumen_fuera": resumen_fuera,
     }
@@ -528,7 +528,7 @@ def _obtener_filtros(request):
 
 def _obtener_datos_reporte(request):
     """
-    Construye todo el contexto de datos del Anexo 14 (árbol, KPIs,
+    Construye todo el contexto de datos del Anexo 17 (árbol, KPIs,
     firmantes, metadatos institucionales) a partir de los parámetros GET de
     `request`. Función compartida entre la vista HTML y las 2 exportaciones,
     para que ambas siempre reflejen exactamente los mismos filtros.
@@ -544,7 +544,7 @@ def _obtener_datos_reporte(request):
     # `tipo__es_principal=True` y eso dejaba fuera del informe a las UEB —que no
     # son Principales ni subunidades, y cuelgan de nadie—: ni salían en el
     # selector ni se podían consultar, aunque tuvieran plantilla aprobada. El
-    # Anexo 14-A las necesita porque su Resumen es, precisamente, una fila por
+    # Anexo 17.1 las necesita porque su Resumen es, precisamente, una fila por
     # unidad raíz.
     padres = (
         UnidadOrganizativa.objects.filter(padre__isnull=True)
@@ -608,14 +608,14 @@ def _obtener_datos_reporte(request):
         # recorre la pantalla para pintar una pestaña por cada una.
         "secciones": _secciones_por_unidad(hijas, hijas_fuera),
         "categorias_kpi": CATEGORIAS_KPI,
-        # Las tarjetas de cifra las alimenta la MISMA definición que usa el 14-A
-        # (`anexo14a.COLUMNAS_14A`), que trae para cada categoría su letra del
+        # Las tarjetas de cifra las alimenta la MISMA definición que usa el 17.1
+        # (`anexo17_1.COLUMNAS_17_1`), que trae para cada categoría su letra del
         # modelo oficial y su nombre entero. `CATEGORIAS_KPI` solo tiene el nombre
         # largo, y en una tarjeta de 9 píxeles «Administrativos (A)» no cabe:
         # salía recortado a la letra final por puro desbordamiento, no por
         # decisión de nadie. Las claves son las mismas, así que `kpis.conteos`
         # responde igual a las dos listas.
-        "columnas_14a": anexo14a.COLUMNAS_14A,
+        "columnas_17_1": anexo17_1.COLUMNAS_17_1,
         "etiquetas_categoria": ETIQUETAS_CATEGORIA,
         "opciones_filtro_categoria": OPCIONES_FILTRO_CATEGORIA,
         "filtros": filtros,
@@ -623,13 +623,13 @@ def _obtener_datos_reporte(request):
         "director_gral": director_gral,
         "aspirantes_cuadro": _queryset_aspirantes_cuadro() if necesita_select_manual else Aspirante.objects.none(),
         "fecha_generacion": date.today(),
-        # El bloque de firmas es el mismo parcial en el Anexo 14 y en el 14-A.
+        # El bloque de firmas es el mismo parcial en el Anexo 17 y en el 17.1.
         # Lo único que cambia entre los dos es a qué vista apunta el HTMX de los
         # `<select>` y qué botonera de exportación se reinyecta con él, así que
         # ambos viajan por contexto en vez de duplicar la plantilla.
-        "url_firmas": reverse("informes_anexo:anexo14"),
-        "url_excel_propio": "informes_anexo:anexo14_excel",
-        "nombre_informe": "Anexo 14",
+        "url_firmas": reverse("informes_anexo:anexo17"),
+        "url_excel_propio": "informes_anexo:anexo17_excel",
+        "nombre_informe": "Anexo 17",
         # Con filtros de cargo puestos, exportar deja de ser una sola cosa: puede
         # querer decir «la plantilla» o «lo que estoy viendo». La pantalla lo
         # pregunta antes de descargar en vez de elegir por su cuenta.
@@ -656,10 +656,10 @@ class _PanelDeUnidadMixin(PermisoAnexoMixin):
         return unidad
 
 
-class PanelUnidadAnexo14View(_PanelDeUnidadMixin, TemplateView):
-    """El contenido de una pestaña del Anexo 14: sus subunidades y sus cargos."""
+class PanelUnidadAnexo17View(_PanelDeUnidadMixin, TemplateView):
+    """El contenido de una pestaña del Anexo 17: sus subunidades y sus cargos."""
 
-    template_name = "pages/informes_anexo/partials/panel_unidad_14.html"
+    template_name = "pages/informes_anexo/partials/panel_unidad_17.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -683,10 +683,10 @@ class PanelUnidadAnexo14View(_PanelDeUnidadMixin, TemplateView):
         return context
 
 
-class PanelUnidadAnexo14AView(_PanelDeUnidadMixin, TemplateView):
-    """El contenido de una pestaña del Anexo 14-A: el conteo de esa unidad."""
+class PanelUnidadAnexo17_1View(_PanelDeUnidadMixin, TemplateView):
+    """El contenido de una pestaña del Anexo 17.1: el conteo de esa unidad."""
 
-    template_name = "pages/informes_anexo/partials/panel_unidad_14a.html"
+    template_name = "pages/informes_anexo/partials/panel_unidad_17_1.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -694,12 +694,12 @@ class PanelUnidadAnexo14AView(_PanelDeUnidadMixin, TemplateView):
         unidad = self.unidad_o_404(request, kwargs["codigo"])
         permitidas = _unidades_del_alcance(request.user)
 
-        aprobada = anexo14a.filas_de_unidad(unidad, permitidas)
-        fuera = anexo14a.filas_de_unidad(unidad, permitidas, en_plantilla=False)
+        aprobada = anexo17_1.filas_de_unidad(unidad, permitidas)
+        fuera = anexo17_1.filas_de_unidad(unidad, permitidas, en_plantilla=False)
 
         context.update({
             "unidad": unidad,
-            "columnas_14a": anexo14a.COLUMNAS_14A,
+            "columnas_17_1": anexo17_1.COLUMNAS_17_1,
             "filas": aprobada["filas"],
             "total": aprobada["total"],
             "filas_fuera": fuera["filas"],
@@ -708,8 +708,8 @@ class PanelUnidadAnexo14AView(_PanelDeUnidadMixin, TemplateView):
         return context
 
 
-class AnexoCatorceView(PermisoAnexoMixin, TemplateView):
-    template_name = "pages/informes_anexo/anexo14.html"
+class AnexoDiecisieteView(PermisoAnexoMixin, TemplateView):
+    template_name = "pages/informes_anexo/anexo17.html"
     #: Solo el bloque de firmas, para las peticiones HTMX de los `<select>` de
     #: firmantes. Elegir un firmante no cambia el árbol de unidades ni los KPIs, así
     #: que repintar la página entera (lo que hacía el `form.submit()` anterior) era
@@ -735,14 +735,14 @@ class AnexoCatorceView(PermisoAnexoMixin, TemplateView):
 
 
 # ==========================================================================
-# ANEXO 14-A — Resumen cuantitativo de la Plantilla de Cargos
+# ANEXO 17.1 — Resumen cuantitativo de la Plantilla de Cargos
 # ==========================================================================
-# Comparte con el Anexo 14 el alcance por rol, el selector de unidad y los dos
+# Comparte con el Anexo 17 el alcance por rol, el selector de unidad y los dos
 # firmantes institucionales; cambia el CONTENIDO: aquí no se lista ni un cargo,
 # solo se cuentan plazas por categoría ocupacional. El detalle de cómo se
-# agregan las cifras está en `informes_anexo/anexo14a.py`.
+# agregan las cifras está en `informes_anexo/anexo17_1.py`.
 #
-# Tampoco lleva los filtros de búsqueda, categoría y rol del Anexo 14: filtrar
+# Tampoco lleva los filtros de búsqueda, categoría y rol del Anexo 17: filtrar
 # por categoría un informe cuyas columnas SON las categorías vaciaría el resto
 # del modelo y el papel dejaría de cuadrar.
 
@@ -772,11 +772,11 @@ def _cabecera_institucional(config, unidad):
     }
 
 
-def _datos_anexo14a(request):
-    """Todo el contexto del Anexo 14-A, compartido por la pantalla y el Excel.
+def _datos_anexo17_1(request):
+    """Todo el contexto del Anexo 17.1, compartido por la pantalla y el Excel.
 
     Sin `?padre=` sale el RESUMEN DE EMPRESA —una fila por unidad raíz—, y con
-    él, el 14-A de esa unidad. Es la diferencia con el Anexo 14, que sin unidad
+    él, el 17.1 de esa unidad. Es la diferencia con el Anexo 17, que sin unidad
     elegida cae en la primera: allí el informe no existe sin una unidad, y aquí
     el nivel de empresa es un informe por derecho propio.
     """
@@ -801,11 +801,11 @@ def _datos_anexo14a(request):
             (p for p in padres_lista if str(p.pk) == unidad_pedida), None)
 
     if padre_actual:
-        aprobada = anexo14a.filas_de_unidad(padre_actual, permitidas)
-        fuera = anexo14a.filas_de_unidad(padre_actual, permitidas, en_plantilla=False)
+        aprobada = anexo17_1.filas_de_unidad(padre_actual, permitidas)
+        fuera = anexo17_1.filas_de_unidad(padre_actual, permitidas, en_plantilla=False)
     else:
-        aprobada = anexo14a.filas_de_empresa(padres_lista, permitidas)
-        fuera = anexo14a.filas_de_empresa(padres_lista, permitidas, en_plantilla=False)
+        aprobada = anexo17_1.filas_de_empresa(padres_lista, permitidas)
+        fuera = anexo17_1.filas_de_empresa(padres_lista, permitidas, en_plantilla=False)
 
     director_ch_id = request.GET.get("director_ch")
     director_gral_id = request.GET.get("director_gral")
@@ -822,12 +822,12 @@ def _datos_anexo14a(request):
         "padres": padres_lista,
         "padre_actual": padre_actual,
         "es_resumen_empresa": padre_actual is None,
-        "columnas_14a": anexo14a.COLUMNAS_14A,
+        "columnas_17_1": anexo17_1.COLUMNAS_17_1,
         "filas": aprobada["filas"],
         "total": aprobada["total"],
         "filas_fuera_plantilla": fuera["filas"],
         "total_fuera_plantilla": fuera["total"],
-        # El bloque de firmas es el mismo parcial que el del Anexo 14; estas dos
+        # El bloque de firmas es el mismo parcial que el del Anexo 17; estas dos
         # claves son las que lo redirigen a esta vista.
         "filtros": {"director_ch_id": director_ch_id,
                     "director_gral_id": director_gral_id},
@@ -835,19 +835,19 @@ def _datos_anexo14a(request):
         "director_gral": director_gral,
         "aspirantes_cuadro": (_queryset_aspirantes_cuadro()
                               if necesita_select_manual else Aspirante.objects.none()),
-        "url_firmas": reverse("informes_anexo:anexo14a"),
-        "url_excel_propio": "informes_anexo:anexo14a_excel",
-        "nombre_informe": "Anexo 14A",
+        "url_firmas": reverse("informes_anexo:anexo17_1"),
+        "url_excel_propio": "informes_anexo:anexo17_1_excel",
+        "nombre_informe": "Anexo 17.1",
         "fecha_generacion": date.today(),
     }
     contexto.update(_cabecera_institucional(config, padre_actual))
     return contexto
 
 
-class AnexoCatorceAView(PermisoAnexoMixin, TemplateView):
-    """El 14-A en pantalla. Mismo alcance por rol que el Anexo 14."""
+class AnexoDiecisieteUnoView(PermisoAnexoMixin, TemplateView):
+    """El 17.1 en pantalla. Mismo alcance por rol que el Anexo 17."""
 
-    template_name = "pages/informes_anexo/anexo14a.html"
+    template_name = "pages/informes_anexo/anexo17_1.html"
     #: Solo el bloque de firmas, para las peticiones HTMX de los `<select>` de
     #: firmantes: elegir un firmante no cambia ni una cifra del resumen.
     template_name_firmas = "pages/informes_anexo/partials/bloque_firmas.html"
@@ -859,7 +859,7 @@ class AnexoCatorceAView(PermisoAnexoMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(_datos_anexo14a(self.request))
+        context.update(_datos_anexo17_1(self.request))
         context.update(_contexto_de_unidades(self.request))
         context["intercambio_oob"] = bool(getattr(self.request, "htmx", False))
         return context
@@ -898,19 +898,19 @@ def _datos_del_libro(request, modo):
     elegidas = _unidades_elegidas(request, raices)
     filtros = _obtener_filtros(request)
 
-    resumen = anexo14a.filas_de_empresa(elegidas, permitidas, filtros=filtros)
-    resumen_fuera = anexo14a.filas_de_empresa(
+    resumen = anexo17_1.filas_de_empresa(elegidas, permitidas, filtros=filtros)
+    resumen_fuera = anexo17_1.filas_de_empresa(
         elegidas, permitidas, en_plantilla=False, filtros=filtros)
 
     # El detalle solo se construye si el libro lo lleva: cargar el árbol de cargos
     # de treinta unidades para un libro que solo trae conteos sería tirar el
     # trabajo, y es lo caro de toda la exportación.
-    necesita_detalle = modo in (MODO_14, MODO_AMBOS)
+    necesita_detalle = modo in (MODO_17, MODO_AMBOS)
 
     unidades = []
     for unidad in elegidas:
-        conteo = anexo14a.filas_de_unidad(unidad, permitidas, filtros=filtros)
-        conteo_fuera = anexo14a.filas_de_unidad(
+        conteo = anexo17_1.filas_de_unidad(unidad, permitidas, filtros=filtros)
+        conteo_fuera = anexo17_1.filas_de_unidad(
             unidad, permitidas, en_plantilla=False, filtros=filtros)
 
         if not conteo["total"]["total"] and not conteo_fuera["total"]["total"]:
@@ -950,7 +950,7 @@ def _datos_del_libro(request, modo):
         "cab_exportado_por": (getattr(request.user, "nombre_completo", None)
                               or getattr(request.user, "username", "") or "—"),
         "cifras_portada": [(nombre, resumen["total"][clave])
-                           for clave, _, nombre, _ in anexo14a.COLUMNAS_14A],
+                           for clave, _, nombre, _ in anexo17_1.COLUMNAS_17_1],
 
         "director_ch": _resolver_firmante(
             NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano",
@@ -968,7 +968,7 @@ def _datos_del_libro(request, modo):
 
 
 class ExportarAnexoExcelView(PermisoAnexoMixin, View):
-    """Los tres libros: el Anexo 14 solo, el 14-A solo, y los dos juntos.
+    """Los tres libros: el Anexo 17 solo, el 17.1 solo, y los dos juntos.
 
     Una sola vista y no tres porque lo único que cambia entre ellos es qué hojas
     de unidad se escriben; la portada, el Resumen y el alcance son idénticos.
@@ -979,8 +979,8 @@ class ExportarAnexoExcelView(PermisoAnexoMixin, View):
     """
 
     #: Lo pone la URL. `MODO_AMBOS` es el fichero que imita al original de
-    #: Capital Humano, con el 14 y el 14-A de cada unidad en el mismo libro.
-    modo = MODO_14A
+    #: Capital Humano, con el 17 y el 17.1 de cada unidad en el mismo libro.
+    modo = MODO_17_1
 
     def get(self, request, *args, **kwargs):
         modo = kwargs.get("modo") or self.modo
@@ -991,15 +991,15 @@ class ExportarAnexoExcelView(PermisoAnexoMixin, View):
 
 
 # ==========================================================================
-# ANEXO 14-B — La plantilla de cargos con el registro de trabajadores
+# ANEXO 17.2 — La plantilla de cargos con el registro de trabajadores
 # ==========================================================================
 # Se navega igual que los otros dos —mismo selector múltiple y mismas pestañas
-# por unidad— pero su libro va APARTE: no entra en el combinado de 14 + 14A.
-# Las cifras las arma `informes_anexo/anexo14b.py`.
+# por unidad— pero su libro va APARTE: no entra en el combinado de 17 + 17.1.
+# Las cifras las arma `informes_anexo/anexo17_2.py`.
 
 
-def _datos_anexo14b(request):
-    """El contexto de la pantalla del 14-B."""
+def _datos_anexo17_2(request):
+    """El contexto de la pantalla del 17.2."""
     director_ch_id = request.GET.get("director_ch")
     director_gral_id = request.GET.get("director_gral")
     config = Configuracion.objects.select_related("provincia_entidad").first()
@@ -1018,11 +1018,11 @@ def _datos_anexo14b(request):
         "director_gral": director_gral,
         "aspirantes_cuadro": (_queryset_aspirantes_cuadro()
                               if necesita_select_manual else Aspirante.objects.none()),
-        "url_firmas": reverse("informes_anexo:anexo14b"),
-        "url_excel_propio": "informes_anexo:anexo14b_excel",
-        "nombre_informe": "Anexo 14B",
+        "url_firmas": reverse("informes_anexo:anexo17_2"),
+        "url_excel_propio": "informes_anexo:anexo17_2_excel",
+        "nombre_informe": "Anexo 17.2",
         "sin_combinado": True,
-        # El 14-B no tiene filtros de cargo, así que su botón nunca pregunta.
+        # El 17.2 no tiene filtros de cargo, así que su botón nunca pregunta.
         "hay_filtros_activos": False,
         "fecha_generacion": date.today(),
     }
@@ -1030,10 +1030,10 @@ def _datos_anexo14b(request):
     return contexto
 
 
-class AnexoCatorceBView(PermisoAnexoMixin, TemplateView):
-    """El 14-B en pantalla. Mismo alcance por rol que los otros dos."""
+class AnexoDiecisieteDosView(PermisoAnexoMixin, TemplateView):
+    """El 17.2 en pantalla. Mismo alcance por rol que los otros dos."""
 
-    template_name = "pages/informes_anexo/anexo14b.html"
+    template_name = "pages/informes_anexo/anexo17_2.html"
     template_name_firmas = "pages/informes_anexo/partials/bloque_firmas.html"
 
     def get_template_names(self):
@@ -1043,16 +1043,16 @@ class AnexoCatorceBView(PermisoAnexoMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(_datos_anexo14b(self.request))
+        context.update(_datos_anexo17_2(self.request))
         context.update(_contexto_de_unidades(self.request))
         context["intercambio_oob"] = bool(getattr(self.request, "htmx", False))
         return context
 
 
-class PanelUnidadAnexo14BView(_PanelDeUnidadMixin, TemplateView):
-    """El contenido de una pestaña del 14-B: las hojas de esa unidad."""
+class PanelUnidadAnexo17_2View(_PanelDeUnidadMixin, TemplateView):
+    """El contenido de una pestaña del 17.2: las hojas de esa unidad."""
 
-    template_name = "pages/informes_anexo/partials/panel_unidad_14b.html"
+    template_name = "pages/informes_anexo/partials/panel_unidad_17_2.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1062,16 +1062,16 @@ class PanelUnidadAnexo14BView(_PanelDeUnidadMixin, TemplateView):
 
         context.update({
             "unidad": unidad,
-            "hojas": anexo14b.hojas_de_unidad(unidad, permitidas),
+            "hojas": anexo17_2.hojas_de_unidad(unidad, permitidas),
         })
         return context
 
 
-class ExportarAnexo14BExcelView(PermisoAnexoMixin, View):
-    """El libro del 14-B: portada y una hoja por departamento de cada unidad.
+class ExportarAnexo17_2ExcelView(PermisoAnexoMixin, View):
+    """El libro del 17.2: portada y una hoja por departamento de cada unidad.
 
-    Va aparte del de 14 + 14A por decisión expresa. Y sin hoja de Resumen: ese
-    conteo es el del 14-A y en un registro de trabajadores no dice gran cosa.
+    Va aparte del de 17 + 17.1 por decisión expresa. Y sin hoja de Resumen: ese
+    conteo es el del 17.1 y en un registro de trabajadores no dice gran cosa.
     """
 
     def get(self, request, *args, **kwargs):
@@ -1083,7 +1083,7 @@ class ExportarAnexo14BExcelView(PermisoAnexoMixin, View):
 
         hojas = []
         for unidad in elegidas:
-            for hoja in anexo14b.hojas_de_unidad(unidad, permitidas):
+            for hoja in anexo17_2.hojas_de_unidad(unidad, permitidas):
                 hoja["unidad"] = unidad
                 hojas.append(hoja)
 
@@ -1116,6 +1116,6 @@ class ExportarAnexo14BExcelView(PermisoAnexoMixin, View):
         datos.update(_cabecera_institucional(
             config, elegidas[0] if len(elegidas) == 1 else None))
 
-        libro = libro_del_anexo_14b(datos)
-        nombre = nombre_de_fichero(datos, MODO_14B)
+        libro = libro_del_anexo_17_2(datos)
+        nombre = nombre_de_fichero(datos, MODO_17_2)
         return respuesta_excel(libro, nombre)

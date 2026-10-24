@@ -210,11 +210,12 @@
                 </div>
 
                 <div class="d-flex ms-auto gap-2">
+                    {% comment %} Descarga directa de la sábana con los MISMOS filtros, búsqueda y
+                       orden de la tabla (24-10-2026): ya no hay ventana intermedia. {% endcomment %}
                     <button type="button"
                         class="btn btn-success"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalExportarExcel"
-                        title="Exportar a Excel">
+                        id="btnExportarExcel"
+                        title="Exportar a Excel lo que se ve en la lista (con sus filtros)">
                             <i class="fas fa-file-excel"></i>
                     </button>
 
@@ -484,47 +485,6 @@
 <div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>
 <div class="modal fade" id="crear_empl" tabindex="-1" aria-hidden="true"></div>
 <div class="modal fade" id="editar_aspir" tabindex="-1" aria-hidden="true"></div>
-
-<!-- ============ EXPORTAR EXCEL: selección previa de Unidad Organizativa ============ -->
-<div class="modal fade" id="modalExportarExcel" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-label-success">
-                <h5 class="modal-title"><i class="fas fa-file-excel me-2"></i>Exportar a Excel</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                {% if mostrar_opcion_todas_uo %}
-                <div class="form-check mb-3">
-                    <input class="form-check-input" type="checkbox" id="chkExportarTodasUO" checked>
-                    <label class="form-check-label fw-semibold" for="chkExportarTodasUO">
-                        Toda la aplicación (todas las Unidades Organizativas)
-                    </label>
-                </div>
-                {% endif %}
-                <div id="bloqueExportarUnidades" {% if mostrar_opcion_todas_uo %}class="d-none"{% endif %}>
-                    <label class="form-label" for="selectExportarUnidades">
-                        {% if mostrar_opcion_todas_uo %}Seleccione una o varias Unidades Organizativas{% else %}Sus Unidades Organizativas asignadas{% endif %}
-                    </label>
-                    <select id="selectExportarUnidades" class="form-select" multiple>
-                        {% for unidad in unidades_export %}
-                            <option value="{{ unidad.pk }}">{{ unidad.descripcion }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if not unidades_export %}
-                        <small class="text-danger d-block mt-1">No tiene Unidades Organizativas asignadas.</small>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-success" id="btnGenerarExcel">
-                    <i class="fas fa-file-excel me-1"></i>Generar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 {# Formulario de Baja compartido con el Gestor de Plantilla. #}
 {% include 'pages/contrato/partials/modal_baja.html' %}
@@ -840,49 +800,34 @@ document.addEventListener('keydown', function(e) {
     }
 
     // ---------------------------------------------------------------
-    // EXPORTAR EXCEL: paso intermedio de selección de Unidad Organizativa
+    // EXPORTAR EXCEL: la sábana con lo que se ve en la lista (24-10-2026)
     // ---------------------------------------------------------------
+    // Envía los mismos campos que la búsqueda de la tabla: el buscador y todo
+    // lo de su `hx-include` (filtros y orden). Se leen de ese atributo para que
+    // un filtro nuevo de la lista entre solo también en la exportación.
     (function () {
-        const $modal = $('#modalExportarExcel');
-        const $selectUnidades = $('#selectExportarUnidades');
-        const $chkTodas = $('#chkExportarTodasUO');
-        const $bloqueUnidades = $('#bloqueExportarUnidades');
-        const $btnGenerar = $('#btnGenerarExcel');
+        const boton = document.getElementById('btnExportarExcel');
+        const buscador = document.querySelector('input[name="filter_contrato"]');
+        if (!boton || !buscador) return;
 
-        $modal.on('shown.bs.modal', function () {
-            if ($selectUnidades.length && !$selectUnidades.hasClass('select2-hidden-accessible')) {
-                $selectUnidades.select2({
-                    dropdownParent: $modal,
-                    width: '100%',
-                    placeholder: 'Buscar unidades...',
-                    theme: 'bootstrap-5'
-                });
-            }
-        });
-
-        if ($chkTodas.length) {
-            $chkTodas.on('change', function () {
-                $bloqueUnidades.toggleClass('d-none', this.checked);
-            });
-        }
-
-        $btnGenerar.on('click', function () {
-            const todas = $chkTodas.length ? $chkTodas.is(':checked') : false;
-            let params = '';
-
-            if (!todas) {
-                const seleccion = $selectUnidades.val() || [];
-                if (seleccion.length === 0) {
-                    window.mostrarToast('Seleccione al menos una Unidad Organizativa.', 'warning');
-                    return;
+        boton.addEventListener('click', function () {
+            const params = new URLSearchParams();
+            const campos = [buscador].concat(Array.from(
+                document.querySelectorAll(buscador.getAttribute('hx-include') || '')));
+            campos.forEach(function (campo) {
+                if (!campo.name || campo.disabled) return;
+                if ((campo.type === 'checkbox' || campo.type === 'radio') && !campo.checked) return;
+                if (campo.tagName === 'SELECT' && campo.multiple) {
+                    Array.from(campo.selectedOptions).forEach(function (o) {
+                        if (o.value) params.append(campo.name, o.value);
+                    });
+                } else if (campo.value) {
+                    params.append(campo.name, campo.value);
                 }
-                params = seleccion.map(id => 'unidades=' + encodeURIComponent(id)).join('&');
-            }
-
+            });
             window.mostrarToast('Preparando documento…', 'info');
-            const url = "{% url 'exportar_contratos_excel' %}" + (params ? '?' + params : '');
-            window.location.href = url;
-            $modal.modal('hide');
+            const consulta = params.toString();
+            window.location.href = "{% url 'exportar_contratos_excel' %}" + (consulta ? '?' + consulta : '');
         });
     })();
 

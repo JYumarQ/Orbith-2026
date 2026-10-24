@@ -67,7 +67,9 @@ def _filas(consulta):
 
 
 def _nombre_archivo(extension):
-    return f'subsanacion_hallazgos_{timezone.localtime():%Y%m%d_%H%M}.{extension}'
+    """`Subsanacion_Hallazgos_24-10-2026.xlsx` (core/nombres_descarga.py)."""
+    from core.nombres_descarga import nombre_de_informe
+    return nombre_de_informe('Subsanacion_Hallazgos', extension=extension)
 
 
 def _resumen_filtros(filtros):

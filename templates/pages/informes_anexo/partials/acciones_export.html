@@ -1,4 +1,4 @@
-{% comment %} Botonera de exportación. La comparten el Anexo 14 y el 14-A.
+{% comment %} Botonera de exportación. La comparten el Anexo 17 y el 17.1.
 
    DOS BOTONES, Y SE DISTINGUEN A SIMPLE VISTA
    -------------------------------------------
@@ -11,15 +11,15 @@
    los firmantes—, así que al resolver un firmante por HTMX el parcial se reenvía
    con `hx-swap-oob` para que no queden apuntando a la selección anterior.
 
-   No hay botón de PDF: el Anexo 14 lo tenía y se retiró.
+   No hay botón de PDF: el Anexo 17 lo tenía y se retiró.
 
    PARÁMETROS
    ----------
      url_propio    Ruta del libro de ESTE informe.
-     nombre_propio Cómo se llama en el botón («Anexo 14» o «Anexo 14A»).
+     nombre_propio Cómo se llama en el botón («Anexo 17» o «Anexo 17.1»).
 {% endcomment %}
 <div class="d-flex align-items-center gap-2 flex-wrap mt-3 mt-md-0"
-     id="accionesExportAnexo14"{% if intercambio_oob %} hx-swap-oob="true"{% endif %}>
+     id="accionesExportAnexo17"{% if intercambio_oob %} hx-swap-oob="true"{% endif %}>
 
     <a class="btn anx-btn-export anx-btn-export--propio btn-sm d-inline-flex align-items-center gap-2"
        href="{% url url_propio %}?{{ request.GET.urlencode }}"
@@ -30,16 +30,16 @@
         <span>Solo {{ nombre_propio }}</span>
     </a>
 
-    {% comment %} El combinado solo existe para el 14 y el 14-A. El 14-B va en libro
+    {% comment %} El combinado solo existe para el 17 y el 17.1. El 17.2 va en libro
        aparte por decisión expresa, así que su pantalla no ofrece este botón. {% endcomment %}
     {% if not sin_combinado %}
     <a class="btn anx-btn-export anx-btn-export--combinado btn-sm d-inline-flex align-items-center gap-2"
        href="{% url 'informes_anexo:anexo_excel_combinado' %}?{{ request.GET.urlencode }}"
        data-filtros-activos="{% if hay_filtros_activos %}1{% else %}0{% endif %}"
        data-bs-toggle="tooltip" data-bs-placement="bottom"
-       title="Descarga el Anexo 14 y el 14A en un mismo libro, con las dos hojas de cada unidad. Es el fichero que se entrega al organismo.">
+       title="Descarga el Anexo 17 y el 17.1 en un mismo libro, con las dos hojas de cada unidad. Es el fichero que se entrega al organismo.">
         <i class="bx bx-layer"></i>
-        <span>Anexo 14 y 14A</span>
+        <span>Anexo 17 y 17.1</span>
     </a>
     {% endif %}
 </div>
@@ -49,7 +49,7 @@
        intercambio HTMX porque el parcial se vuelve a pintar entero y los de antes
        se quedan huérfanos. */
     (function () {
-        var botones = document.querySelectorAll('#accionesExportAnexo14 [data-bs-toggle="tooltip"]');
+        var botones = document.querySelectorAll('#accionesExportAnexo17 [data-bs-toggle="tooltip"]');
         if (!window.bootstrap) return;
         botones.forEach(function (boton) {
             var previo = bootstrap.Tooltip.getInstance(boton);

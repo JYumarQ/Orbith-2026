@@ -411,3 +411,29 @@ class ProteccionCsrfTests(TestCase):
         self.assertEqual(con.status_code, 200)
         self.tridente.refresh_from_db()
         self.assertEqual(self.tridente.tipo, 'II')
+
+
+class ColoresLegiblesTests(TestCase):
+    """El color de un tipo de unidad lo elige el usuario: como letra sobre blanco
+    se oscurece lo justo para leerse, sin cambiar de tono (24-10-2026)."""
+
+    def test_un_color_oscuro_se_deja_igual(self):
+        from .models import color_legible, es_color_claro
+        self.assertFalse(es_color_claro('#1e3a8a'))
+        self.assertEqual(color_legible('#1e3a8a'), '#1e3a8a')
+
+    def test_un_amarillo_se_oscurece_hasta_leerse(self):
+        from .models import CONTRASTE_MINIMO, color_legible, contraste_con_blanco, es_color_claro
+        self.assertTrue(es_color_claro('#ffff00'))
+        oscuro = color_legible('#ffff00')
+        self.assertGreaterEqual(contraste_con_blanco(oscuro), CONTRASTE_MINIMO)
+        # Mismo tono: rojo y verde iguales y sin azul, como el amarillo de partida.
+        self.assertEqual(oscuro[1:3], oscuro[3:5])
+        self.assertEqual(oscuro[5:7], '00')
+
+    def test_valores_raros_no_rompen(self):
+        from .models import color_legible, es_color_claro
+        self.assertEqual(color_legible('#fff'), color_legible('#ffffff'))
+        self.assertEqual(color_legible(None), None)
+        self.assertEqual(color_legible('rojo'), 'rojo')
+        self.assertFalse(es_color_claro(''))

@@ -13,11 +13,12 @@
     <div class="container-xxl flex-grow-1 container-p-y">
       <h4 class="fw-bold py-3 mb-4"><span class="text-muted fw-light">Configuración /</span> Parámetros Generales</h4>
 
-      <!-- Hoverable Table rows -->
-      <div class="card">
-        <div class="card-body"> 
-          <div class="nav-align-top mb-4">
-            <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
+      {% comment %} «Justa en la pantalla», como las listas (static/css/orbith-tablas.css):
+         la tarjeta mide lo que queda de pantalla y lo que se desplaza es el
+         CONTENIDO de cada pestaña, así que las pestañas quedan siempre arriba. En
+         Salario también quedan fijos sus botones y la cabecera de la tabla. {% endcomment %}
+      <div class="card orb-tabla-card orb-config">
+            <ul class="nav nav-pills nav-fill orb-config-pestanas" role="tablist">
               <li class="nav-item">
                 <button
                   type="button"
@@ -74,12 +75,9 @@
                 <!--NOMENCLADORES-->
                 {% include 'pages/config/nomencladores/nomencladores_base.html' %}
 
-                
+
             </div>
-          </div>
-        </div>
       </div>
-      <!--/ Hoverable Table rows -->
 
       
     </div>

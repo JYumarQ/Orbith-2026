@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Anexo 14-A: el resumen cuantitativo de la Plantilla de Cargos.
+"""Anexo 17.1: el resumen cuantitativo de la Plantilla de Cargos.
 
 QUÉ ES
 ------
-Si el Anexo 14 es el detalle —una fila por cargo, con su rol, su nivel de
-preparación y su grupo escala—, el 14-A es el CONTEO: cuántas plazas hay por
+Si el Anexo 17 es el detalle —una fila por cargo, con su rol, su nivel de
+preparación y su grupo escala—, el 17.1 es el CONTEO: cuántas plazas hay por
 categoría ocupacional, sin nombrar ni un solo cargo. Es el modelo que se
-acompaña al organismo junto al 14.
+acompaña al organismo junto al 17.
 
 Viene en dos niveles, y los dos se sirven desde aquí:
 
@@ -23,7 +23,7 @@ LAS COLUMNAS
 ------------
 El modelo en papel parte los Cuadros en tres columnas (Dirección Superior,
 Directivo y Ejecutivo). Orbith solo distingue dos categorías de Cuadro
-(`CDI`/`CEJ`) y ya las presenta juntas en todo el módulo Anexo 14
+(`CDI`/`CEJ`) y ya las presenta juntas en todo el módulo Anexo 17
 (`views.ETIQUETAS_CATEGORIA`), así que aquí se escribe UNA columna «Cuadros» con
 la suma de ambas. Se prefiere una columna honrada a tres de las que una saldría
 siempre en cero: este documento se archiva, y una columna vacía en un modelo
@@ -31,8 +31,8 @@ oficial se lee como un dato que falta, no como un dato que no existe.
 
 POR QUÉ NO REUTILIZA `_construir_hijas()`
 -----------------------------------------
-El Anexo 14 necesita cada `CargoPlantilla` en memoria porque los imprime uno a
-uno. El 14-A solo necesita SUMAS. Cargar el árbol entero para contarlo sería
+El Anexo 17 necesita cada `CargoPlantilla` en memoria porque los imprime uno a
+uno. El 17.1 solo necesita SUMAS. Cargar el árbol entero para contarlo sería
 traerse miles de filas a Python para reducirlas a seis números por unidad. Aquí
 se suma en PostgreSQL con `Sum()` y una consulta agregada por nivel, así que el
 coste no crece con el tamaño de la plantilla.
@@ -51,7 +51,7 @@ from strorganizativa.models import CargoPlantilla, Departamento, UnidadOrganizat
 #
 # Cuadros es «C» y no «Cuadros»: las cinco columnas son una fila de siglas y
 # escribir una de ellas entera la hacía parecer de otra clase que las demás.
-COLUMNAS_14A = [
+COLUMNAS_17_1 = [
     ("cuadros", "C", "Cuadros (C)", ("CDI", "CEJ")),
     ("tecnicos", "T", "Técnicos (T)", ("TEC",)),
     ("administrativos", "A", "Administrativos (A)", ("ADM",)),
@@ -62,7 +62,7 @@ COLUMNAS_14A = [
 # Índice inverso, para no recorrer la lista por cada fila agregada.
 _CLAVE_POR_CATEGORIA = {
     categoria: clave
-    for clave, _, _, categorias in COLUMNAS_14A
+    for clave, _, _, categorias in COLUMNAS_17_1
     for categoria in categorias
 }
 
@@ -74,9 +74,9 @@ NIVEL_SUBTOTAL = "subtotal"      # cierre del bloque
 
 
 def _fila(denominacion, nivel=NIVEL_DETALLE):
-    """Una fila del 14-A con todas sus columnas a cero."""
+    """Una fila del 17.1 con todas sus columnas a cero."""
     fila = {"denominacion": denominacion, "nivel": nivel, "total": 0}
-    fila.update({clave: 0 for clave, _, _, _ in COLUMNAS_14A})
+    fila.update({clave: 0 for clave, _, _, _ in COLUMNAS_17_1})
     return fila
 
 
@@ -85,7 +85,7 @@ def _sumar(fila, categoria, cantidad):
 
     Una categoría que no esté en ninguna columna se ignora en vez de romper: las
     opciones de `NCargo.cat_ocupacional` están cerradas y todas tienen columna,
-    pero si mañana se añadiera una sin actualizar `COLUMNAS_14A`, es preferible
+    pero si mañana se añadiera una sin actualizar `COLUMNAS_17_1`, es preferible
     que el informe salga (y no cuadre) a que reviente con un KeyError.
     """
     clave = _CLAVE_POR_CATEGORIA.get(categoria)
@@ -97,7 +97,7 @@ def _sumar(fila, categoria, cantidad):
 
 def _acumular_en(destino, origen):
     """Suma `origen` sobre `destino`, columna a columna. Para los subtotales."""
-    for clave, _, _, _ in COLUMNAS_14A:
+    for clave, _, _, _ in COLUMNAS_17_1:
         destino[clave] += origen[clave]
     destino["total"] += origen["total"]
 
@@ -110,10 +110,10 @@ def _cargos_agregados(en_plantilla, permitidas, unidades_ids=None, filtros=None)
     mismo contrato que en `views._unidades_del_alcance()`: `None` no acota nada y
     un conjunto vacío no deja pasar ni una fila.
 
-    `filtros` son los del Anexo 14 (búsqueda, categoría y rol). Se aplican aquí
+    `filtros` son los del Anexo 17 (búsqueda, categoría y rol). Se aplican aquí
     con los mismos criterios que en `views._construir_hijas()` para que las dos
-    pantallas no puedan discrepar: si el Anexo 14 está filtrado por «Obrero», la
-    cifra que el 14-A pone en la pestaña de una unidad tiene que ser la de los
+    pantallas no puedan discrepar: si el Anexo 17 está filtrado por «Obrero», la
+    cifra que el 17.1 pone en la pestaña de una unidad tiene que ser la de los
     obreros de esa unidad, no su total de siempre.
     """
     consulta = CargoPlantilla.objects.filter(activo=True, en_plantilla=en_plantilla)
@@ -153,7 +153,7 @@ def filas_de_empresa(raices, permitidas, en_plantilla=True, filtros=None):
     """El Resumen: una fila por unidad raíz, más la fila de total general.
 
     `raices` son las unidades que el usuario puede ver, ya ordenadas y en
-    memoria (las mismas que alimentan el selector del Anexo 14). Se respeta ese
+    memoria (las mismas que alimentan el selector del Anexo 17). Se respeta ese
     orden y se listan TODAS, también las que no tienen ni una plaza: en un
     resumen oficial, una unidad que no aparece se confunde con una unidad que se
     olvidó.
@@ -187,7 +187,7 @@ def filas_de_empresa(raices, permitidas, en_plantilla=True, filtros=None):
 
 
 def filas_de_unidad(raiz, permitidas, en_plantilla=True, filtros=None):
-    """El 14-A de UNA unidad: sus bloques, sus departamentos y sus subtotales.
+    """El 17.1 de UNA unidad: sus bloques, sus departamentos y sus subtotales.
 
     Devuelve una lista plana de filas, cada una con su `nivel`, porque es lo que
     recorren igual la pantalla y el Excel. Los bloques se ordenan por
@@ -255,7 +255,7 @@ def filas_de_unidad(raiz, permitidas, en_plantilla=True, filtros=None):
 
 
 def libro_completo(raices, permitidas):
-    """Todas las hojas del Anexo 14-A, en el orden del modelo oficial.
+    """Todas las hojas del Anexo 17.1, en el orden del modelo oficial.
 
     Devuelve una lista de bloques —el Resumen primero y detrás una hoja por
     unidad raíz—, cada uno con sus dos conteos: la plantilla aprobada y los

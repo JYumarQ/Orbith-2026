@@ -101,17 +101,43 @@
 
   const btnBuscar = document.getElementById('btn-buscar-incidencias');
   if (btnBuscar) {
+    // Por trozos, un módulo de reglas por petición (24-10-2026): de una vez podía
+    // superar el tiempo máximo del servidor. Ver notificaciones.views.buscar_incidencias.
     btnBuscar.addEventListener('click', function () {
+      const textoOriginal = btnBuscar.innerHTML;
+      let total = 0;
       btnBuscar.disabled = true;
-      fetch("{% url 'buscar_incidencias' %}", { method: 'POST', headers: { 'X-CSRFToken': csrftoken } })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          window.mostrarToast(data.mensaje, 'success');
+
+      function pedir(parte) {
+        const datos = new FormData();
+        datos.append('parte', parte);
+        return fetch("{% url 'buscar_incidencias' %}", {
+          method: 'POST', headers: { 'X-CSRFToken': csrftoken }, body: datos
+        }).then(function (res) {
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        }).then(function (data) {
+          if (data.mensaje && data.partes === 0) return data.mensaje;  // sin unidades
+          total += data.total || 0;
+          if (data.siguiente !== null && data.siguiente !== undefined) {
+            btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando… '
+              + (data.siguiente + 1) + '/' + data.partes;
+            return pedir(data.siguiente);
+          }
+          return total + ' incidencia(s) encontrada(s) y notificada(s).';
+        });
+      }
+
+      btnBuscar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Buscando…';
+      pedir(0)
+        .then(function (mensaje) {
+          window.mostrarToast(mensaje, 'success');
           setTimeout(function () { window.location.reload(); }, 1200);
         })
         .catch(function () {
           btnBuscar.disabled = false;
-          window.mostrarToast('No se pudo completar el escaneo.', 'error');
+          btnBuscar.innerHTML = textoOriginal;
+          window.mostrarToast('No se pudo completar la búsqueda de incidencias. Inténtelo de nuevo.', 'error');
         });
     });
   }

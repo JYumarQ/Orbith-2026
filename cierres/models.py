@@ -166,6 +166,7 @@ class CierreCargo(models.Model):
     en_plantilla = models.BooleanField(default=True)
     funcionario = models.BooleanField(default=False)
     designado = models.BooleanField(default=False)
+    de_confianza = models.BooleanField(default=False)
     orden_informe = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
@@ -296,7 +297,12 @@ class CierreContrato(models.Model):
     c_formal = models.BooleanField(default=False)
     funcionario_res = models.CharField(max_length=50, blank=True)
     designado_res = models.CharField(max_length=50, blank=True)
+    confianza_res = models.CharField(max_length=50, blank=True)
     c_formal_res = models.CharField(max_length=50, blank=True)
+    # Modalidad de trabajo (24-10-2026). Los cierres anteriores salen en «No».
+    trabajo_distancia = models.BooleanField(default=False)
+    teletrabajo = models.BooleanField(default=False)
+    pluriempleo = models.BooleanField(default=False)
     fecha_vence_lic = models.DateField(null=True, blank=True)
     fecha_vence_recal = models.DateField(null=True, blank=True)
     fecha_vence_seg = models.DateField(null=True, blank=True)

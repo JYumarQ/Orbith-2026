@@ -169,6 +169,61 @@ class BusquedaAutomaticaTests(BaseFase2):
             ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=31))
         self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar')).json()['hecho'])
 
+    def _avisos(self, usuario):
+        from notificaciones.models import Notificacion
+        return set(Notificacion.objects.filter(destinatario=usuario, estado=Notificacion.Estado.ACTIVA,
+                                               tipo=Notificacion.Tipo.ALERTA)
+                   .values_list('codigo_regla', 'object_id'))
+
+    def test_por_trozos_deja_lo_mismo_que_de_una_vez(self):
+        """La búsqueda por trozos (24-10-2026) crea las mismas notificaciones que
+        la de una sola petición, y cada trozo es un módulo."""
+        from notificaciones.escaneo import escanear_para_usuario, partes_de_la_busqueda
+        self.contrato(fecha_alta=date.today() - timedelta(days=40), duracion=30)
+        escanear_para_usuario(self.admin)
+        de_una_vez = self._avisos(self.admin)
+        self.assertTrue(de_una_vez)
+        from notificaciones.models import Notificacion
+        Notificacion.objects.filter(destinatario=self.admin, tipo=Notificacion.Tipo.ALERTA).delete()
+
+        self.client.force_login(self.admin)
+        partes = partes_de_la_busqueda()
+        parte, vistas = 0, 0
+        while parte is not None:
+            datos = self.client.post(reverse('subsanacion:auto_buscar'), {'parte': parte}).json()
+            self.assertTrue(datos['hecho'])
+            self.assertEqual(datos['partes'], len(partes))
+            parte, vistas = datos['siguiente'], vistas + 1
+        self.assertEqual(vistas, len(partes))
+        self.assertEqual(self._avisos(self.admin), de_una_vez)
+
+    def test_un_trozo_suelto_no_vale_sin_una_busqueda_empezada(self):
+        self.client.force_login(self.admin)
+        self.assertFalse(self.client.post(reverse('subsanacion:auto_buscar'),
+                                          {'parte': 1}).json()['hecho'])
+        CustomUser.objects.filter(pk=self.admin.pk).update(
+            ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=11))
+        self.assertFalse(self.client.post(reverse('subsanacion:auto_buscar'),
+                                          {'parte': 1}).json()['hecho'])
+        CustomUser.objects.filter(pk=self.admin.pk).update(
+            ultima_busqueda_incidencias=timezone.now() - timedelta(minutes=2))
+        self.assertTrue(self.client.post(reverse('subsanacion:auto_buscar'),
+                                         {'parte': 1}).json()['hecho'])
+
+    def test_boton_de_advertencias_por_trozos(self):
+        from notificaciones.escaneo import partes_de_la_busqueda
+        self.contrato(fecha_alta=date.today() - timedelta(days=40), duracion=30)
+        self.client.force_login(self.admin)
+        url = reverse('buscar_incidencias')
+        parte, total = 0, 0
+        while parte is not None:
+            datos = self.client.post(url, {'parte': parte}).json()
+            total += datos['total']
+            parte = datos['siguiente']
+        self.assertGreater(total, 0)
+        self.assertIn('CTR-018', {c for c, _ in self._avisos(self.admin)})
+        self.assertEqual(self.client.post(url, {'parte': len(partes_de_la_busqueda())}).status_code, 400)
+
     def test_despues_de_las_4_no_se_comprueba_nada(self):
         self.en_horario.return_value = False
         self.client.force_login(self.admin)

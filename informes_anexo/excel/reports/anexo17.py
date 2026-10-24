@@ -113,9 +113,9 @@ def _escribir_fila_cargo(ws, fila, cargo, etiquetas_cat):
     return cant_aprobada
 
 
-class Anexo14Report(BaseExcelReport):
-    title = "ANEXO 14 — ESTRUCTURA JERÁRQUICA Y PLANTILLA APROBADA"
-    filename = "Anexo_14_Plantilla.xlsx"
+class Anexo17Report(BaseExcelReport):
+    title = "ANEXO 17 — ESTRUCTURA JERÁRQUICA Y PLANTILLA APROBADA"
+    filename = "Anexo_17_Plantilla.xlsx"
 
     def generate(self, datos):
         config = datos.get("configuracion")

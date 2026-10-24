@@ -130,7 +130,7 @@
                                 </div>
 
                                 <!--CALIFICACIONES-->
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.c_formal }}
                                         <label class="form-check-label" for="id_c_formal">
@@ -142,7 +142,7 @@
                                     </div>
                                 </div>
 
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.funcionario }}
                                         <label class="form-check-label" for="id_funcionario">
@@ -154,7 +154,7 @@
                                     </div>
                                 </div>
                                 
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="form-check form-switch mb-2">
                                         {{ form.designado }}
                                         <label class="form-check-label" for="id_designado">
@@ -163,6 +163,18 @@
                                     </div>
                                     <div class="col-auto">
                                         {{ form.designado_res }}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-3" id="bloqueConfianza">
+                                    <div class="form-check form-switch mb-2">
+                                        {{ form.de_confianza }}
+                                        <label class="form-check-label" for="id_de_confianza">
+                                            {{ form.de_confianza.label }}
+                                        </label>
+                                    </div>
+                                    <div class="col-auto">
+                                        {{ form.confianza_res }}
                                     </div>
                                 </div>
                                 
@@ -183,6 +195,32 @@
                                                 <label class="form-check-label" for="id_jubilado_recontratado">
                                                     {{ form.jubilado_recontratado.label }}
                                                 </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {% comment %} Modalidad de trabajo (24-10-2026). Pueden coincidir entre
+                                   sí; el Moderador las cambia sin solicitud. {% endcomment %}
+                                <div class="col-md-12">
+                                    <small class="text-muted fw-semibold d-block mb-1">Modalidad de trabajo</small>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.trabajo_distancia }}
+                                                <label class="form-check-label" for="id_trabajo_distancia">{{ form.trabajo_distancia.label }}</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.teletrabajo }}
+                                                <label class="form-check-label" for="id_teletrabajo">{{ form.teletrabajo.label }}</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.pluriempleo }}
+                                                <label class="form-check-label" for="id_pluriempleo">{{ form.pluriempleo.label }}</label>
                                             </div>
                                         </div>
                                     </div>
@@ -356,6 +394,38 @@
                                     <label class="form-label" for="id_cnci_nomenclador">{{ form.cnci_nomenclador.label }}</label>
                                     {{ form.cnci_nomenclador }}
                                 </div>
+                                {% comment %} «Otros» (24-10-2026): grado científico (Maestría o Doctorado)
+                                   + Instructor + CNCI + Pago Años de Servicio. Solo lectura y sin
+                                   `name`: se calcula en pantalla con esas cuatro cifras; el movimiento
+                                   de nómina lo congela al crearse. {% endcomment %}
+                                <div class="col-md-3 mb-3">
+                                    <label class="form-label fw-bold" for="txt_otros">Otros</label>
+                                    <input type="text" class="form-control bg-light fw-bold" readonly id="txt_otros" placeholder="0.00"
+                                           title="Grado científico + Instructor + CNCI + Años de servicio">
+                                </div>
+                                <script>
+                                    (function () {
+                                        function cifra(texto) {
+                                            const n = parseFloat(String(texto || '').replace(',', '.'));
+                                            return isNaN(n) ? 0 : n;
+                                        }
+                                        function importeElegido(id) {
+                                            const opcion = $('#' + id).find('option:selected');
+                                            return cifra(opcion.attr('data-importe'));
+                                        }
+                                        function calcularOtros() {
+                                            const caja = document.getElementById('txt_otros');
+                                            if (!caja) return;
+                                            const total = cifra($('#txt_maestria').val()) + cifra($('#txt_doctorado').val())
+                                                + importeElegido('id_instructor_nomenclador') + importeElegido('id_cnci_nomenclador')
+                                                + cifra($('#pagoAnnosServicio').val());
+                                            caja.value = total.toFixed(2);
+                                        }
+                                        $(document).on('change', '#id_instructor_nomenclador, #id_cnci_nomenclador', calcularOtros);
+                                        document.addEventListener('htmx:afterSwap', calcularOtros);
+                                        $(calcularOtros);
+                                    })();
+                                </script>
 
                                 <!-- CONDICIONES LABORALES ANORMALES Y NOCTURNIDADES -->
                                 <!-- (Movido correctamente a la pestaña de Salario) -->
@@ -492,6 +562,9 @@
         const $checkDesig = $('#id_designado');
         const $codFunc = $('#id_funcionario_res');
         const $codDesig = $('#id_designado_res');
+        // De Confianza (24-10-2026): mismo trato que Funcionario y Designado.
+        const $checkConf = $('#id_de_confianza');
+        const $codConf = $('#id_confianza_res');
         
         // Referencias exactas a los campos del Chofer
         const $checkChofer = $('#id_profesional');
@@ -502,11 +575,15 @@
         // BLOQUEO VISUAL Y FÍSICO (SOLO para Funcionario y Designado)
         if ($checkFunc.length) {
             $checkFunc.prop('disabled', true).prop('readonly', true);
-            $checkFunc.closest('.form-check').css({'pointer-events': 'none', 'opacity': '0.7'});
+            $checkFunc.closest('.form-check').addClass('switch-del-cargo').attr('title', 'Lo decide el cargo (Gestor de Plantilla)');
         }
         if ($checkDesig.length) {
             $checkDesig.prop('disabled', true).prop('readonly', true);
-            $checkDesig.closest('.form-check').css({'pointer-events': 'none', 'opacity': '0.7'});
+            $checkDesig.closest('.form-check').addClass('switch-del-cargo').attr('title', 'Lo decide el cargo (Gestor de Plantilla)');
+        }
+        if ($checkConf.length) {
+            $checkConf.prop('disabled', true).prop('readonly', true);
+            $checkConf.closest('.form-check').addClass('switch-del-cargo').attr('title', 'Lo decide el cargo (Gestor de Plantilla)');
         }
         // Nota: El switch del Chofer queda libre y clicleable para el usuario
 
@@ -545,19 +622,24 @@
             if (!$option.length || !$option.val()) {
                 if ($checkFunc.length) $checkFunc.prop('checked', false).trigger('change');
                 if ($checkDesig.length) $checkDesig.prop('checked', false).trigger('change');
+                if ($checkConf.length) $checkConf.prop('checked', false).trigger('change');
                 manejarInputCodigo($codFunc, false, esCambioManual, 'Funcionario');
                 manejarInputCodigo($codDesig, false, esCambioManual, 'Designado');
+                manejarInputCodigo($codConf, false, esCambioManual, 'De Confianza');
                 return;
             }
 
             const isFunc = $option.attr('data-funcionario') === 'true';
             const isDesig = $option.attr('data-designado') === 'true';
+            const isConf = $option.attr('data-de-confianza') === 'true';
 
             if ($checkFunc.length) $checkFunc.prop('checked', isFunc).trigger('change');
             if ($checkDesig.length) $checkDesig.prop('checked', isDesig).trigger('change');
+            if ($checkConf.length) $checkConf.prop('checked', isConf).trigger('change');
 
             manejarInputCodigo($codFunc, isFunc, esCambioManual, 'Funcionario');
             manejarInputCodigo($codDesig, isDesig, esCambioManual, 'Designado');
+            manejarInputCodigo($codConf, isConf, esCambioManual, 'De Confianza');
         }
 
         $('#id_cargo').on('change.sincro', function() { sincronizarEstadosEspeciales(true); });
@@ -575,7 +657,7 @@
         });
         
         // Reactividad en vivo para los colores al escribir
-        $codFunc.add($codDesig).add($licencia).add($recal).add($seguro).on('input change', function() { 
+        $codFunc.add($codDesig).add($codConf).add($licencia).add($recal).add($seguro).on('input change', function() { 
             evaluarColorCodigo($(this)); 
         });
 

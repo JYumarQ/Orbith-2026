@@ -1007,7 +1007,7 @@ class TrabajadoresPorUEB(BaseInformes):
         respuesta = self.client.get(reverse('exportar_resumen_ueb_pdf'))
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta['Content-Type'], 'application/pdf')
-        self.assertIn('Trabajadores_UEB', respuesta['Content-Disposition'])
+        self.assertIn('Trabajadores_por_UEB', respuesta['Content-Disposition'])
 
     def test_exporta_a_word(self):
         respuesta = self.client.get(reverse('exportar_resumen_ueb_word'))

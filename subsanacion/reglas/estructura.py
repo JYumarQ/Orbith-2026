@@ -39,7 +39,7 @@ class ConteoDePlazasDesincronizado(ReglaBase):
     impacto = (
         'La plantilla informa mal de su ocupación: pueden aparecer plazas libres que en '
         'realidad están ocupadas (y permitir una contratación de más) o plazas '
-        'ocupadas que están libres (y bloquear una contratación legítima). El Anexo 14 '
+        'ocupadas que están libres (y bloquear una contratación legítima). El Anexo 17 '
         'y los informes de plantilla arrastran el mismo error.')
     solucion = (
         'Abra el cargo y guárdelo: al guardar, Orbith recalcula el número de plazas '
@@ -211,7 +211,7 @@ class ReglaOrdenDePrioridad(ReglaBase):
         'vacío al crear el registro.')
     impacto = (
         'El orden de prioridad decide en qué posición aparece el registro en '
-        'el organigrama, en el Gestor de Plantilla y en el Anexo 14. Sin él, '
+        'el organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él, '
         'su posición en esos listados depende del orden en que la base de '
         'datos devuelva las filas, que no está garantizado.')
     solucion = 'Abra el registro y asigne su orden de prioridad dentro de su nivel.'
@@ -307,7 +307,7 @@ class CargoSinNivelDePreparacion(ReglaBase):
         'cargo, así que puede quedarse vacío al crear el cargo y nada avisa después.')
     impacto = (
         'El nivel de preparación es el requisito de formación que exige el cargo. Sin '
-        'él, el Anexo 14 y los informes de plantilla salen con la columna en blanco, y '
+        'él, el Anexo 17 y los informes de plantilla salen con la columna en blanco, y '
         'no se puede comparar lo que el cargo exige con la preparación real del '
         'trabajador que lo ocupa.')
     solucion = (

@@ -80,7 +80,7 @@ class CargoPlantillaForm(forms.ModelForm):
     
     class Meta:
         model = CargoPlantilla
-        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo', 'en_plantilla', 'funcionario', 'designado', 'orden_informe')
+        fields = ('ncargo', 'departamento', 'rol', 'nivel_preparacion', 'cant_aprobada', 'cant_cubierta', 'activo', 'en_plantilla', 'funcionario', 'designado', 'de_confianza', 'orden_informe')
         labels = {
             'ncargo': 'Cargo', 
             'departamento': 'Departamento', 
@@ -90,6 +90,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'cant_cubierta': 'Cantidad Cubierta', 
             'activo': 'Estado (Automático)',
             'en_plantilla': 'En Plantilla',
+            'de_confianza': 'De Confianza',
             'orden_informe': 'Orden de Prioridad',
         }
         widgets = {
@@ -103,6 +104,7 @@ class CargoPlantillaForm(forms.ModelForm):
             'en_plantilla': forms.CheckboxInput(attrs={'class':'form-check-input', 'role': 'switch', 'id': 'id_en_plantilla'}),
             'funcionario': forms.CheckboxInput(attrs={'class':'form-check-input', 'id': 'id_funcionario'}),
             'designado': forms.CheckboxInput(attrs={'class':'form-check-input', 'id': 'id_designado'}),
+            'de_confianza': forms.CheckboxInput(attrs={'class':'form-check-input', 'id': 'id_de_confianza'}),
             'orden_informe': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'placeholder': 'Ej: 1 (Mayor prioridad)'}),
         }
     

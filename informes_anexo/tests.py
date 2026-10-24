@@ -1,4 +1,4 @@
-"""Pruebas del Anexo 14.
+"""Pruebas del Anexo 17.
 
 Se centran en el contrato de la vista (permisos y respuesta HTMX parcial), no en el
 contenido del árbol de unidades: ese depende de datos de estructura organizativa que
@@ -14,8 +14,8 @@ from usuarios.models import CustomUser
 from .views import _unidades_del_alcance
 
 
-class PermisosAnexo14Tests(TestCase):
-    """El Anexo 14 lo consultan los tres roles; cada uno ve su alcance.
+class PermisosAnexo17Tests(TestCase):
+    """El Anexo 17 lo consultan los tres roles; cada uno ve su alcance.
 
     Antes el Moderador recibía un 403. Se le abrió al acotar el informe por
     unidad: lo que se le negaba era ver la plantilla de la empresa entera, y eso
@@ -41,20 +41,20 @@ class PermisosAnexo14Tests(TestCase):
 
     def test_admin_accede(self):
         self.client.force_login(self.admin)
-        self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('informes_anexo:anexo17')).status_code, 200)
 
     def test_observador_accede(self):
         self.client.force_login(self.observador)
-        self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('informes_anexo:anexo17')).status_code, 200)
 
     def test_moderador_accede(self):
         """Antes era un 403. Ahora entra, pero acotado a sus unidades: eso lo
-        verifica `AlcanceAnexo14Tests`."""
+        verifica `AlcanceAnexo17Tests`."""
         self.client.force_login(self.moderador)
-        self.assertEqual(self.client.get(reverse('informes_anexo:anexo14')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('informes_anexo:anexo17')).status_code, 200)
 
     def test_un_anonimo_sigue_fuera(self):
-        """Abrir el Anexo 14 a los tres roles no lo abre a quien no ha entrado.
+        """Abrir el Anexo 17 a los tres roles no lo abre a quien no ha entrado.
 
         Al anónimo lo ataja el middleware de sesión ANTES que el mixin, así que
         la respuesta es una redirección al login (302) y no un 403: es lo
@@ -66,13 +66,13 @@ class PermisosAnexo14Tests(TestCase):
         rechaza incluso con un `update()` directo. Que exista esa restricción es
         precisamente lo que hace que ese caso no pueda darse en producción.
         """
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'))
         self.assertEqual(respuesta.status_code, 302)
         self.assertIn('/login', respuesta['Location'])
 
 
-class AlcanceAnexo14Tests(TestCase):
-    """El árbol del Anexo 14 se acota a las unidades asignadas.
+class AlcanceAnexo17Tests(TestCase):
+    """El árbol del Anexo 17 se acota a las unidades asignadas.
 
     `_unidades_del_alcance()` es el único punto que lo decide, así que se prueba
     él directamente y además una vez por la URL, para que no quede solo en la
@@ -114,13 +114,13 @@ class AlcanceAnexo14Tests(TestCase):
 
     def test_el_selector_de_unidades_no_ofrece_la_ajena(self):
         self.client.force_login(self.acotado)
-        html = self.client.get(reverse('informes_anexo:anexo14')).content.decode()
+        html = self.client.get(reverse('informes_anexo:anexo17')).content.decode()
         self.assertIn('Direccion Propia Anexo', html)
         self.assertNotIn('Direccion Ajena Anexo', html)
 
     def test_el_administrador_las_sigue_viendo_todas(self):
         self.client.force_login(self.admin)
-        html = self.client.get(reverse('informes_anexo:anexo14')).content.decode()
+        html = self.client.get(reverse('informes_anexo:anexo17')).content.decode()
         self.assertIn('Direccion Propia Anexo', html)
         self.assertIn('Direccion Ajena Anexo', html)
 
@@ -128,7 +128,7 @@ class AlcanceAnexo14Tests(TestCase):
         """El acotado se hace en el servidor, no limitando el desplegable."""
         self.client.force_login(self.acotado)
         respuesta = self.client.get(
-            reverse('informes_anexo:anexo14'), {'padre': self.ajena.pk})
+            reverse('informes_anexo:anexo17'), {'padre': self.ajena.pk})
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.context['padre_actual'], self.propia)
 
@@ -146,29 +146,29 @@ class FirmasHtmxTests(TestCase):
         self.client.force_login(self.admin)
 
     def test_peticion_normal_devuelve_pagina_completa(self):
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'))
         plantillas = [t.name for t in respuesta.templates if t.name]
-        self.assertIn('pages/informes_anexo/anexo14.html', plantillas)
+        self.assertIn('pages/informes_anexo/anexo17.html', plantillas)
         # El bloque de firmas se incluye, pero NO como respuesta suelta.
         self.assertIn('pages/informes_anexo/partials/bloque_firmas.html', plantillas)
 
     def test_peticion_htmx_devuelve_solo_el_bloque_de_firmas(self):
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'), HTTP_HX_REQUEST='true')
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'), HTTP_HX_REQUEST='true')
         plantillas = [t.name for t in respuesta.templates if t.name]
         self.assertIn('pages/informes_anexo/partials/bloque_firmas.html', plantillas)
-        self.assertNotIn('pages/informes_anexo/anexo14.html', plantillas)
+        self.assertNotIn('pages/informes_anexo/anexo17.html', plantillas)
 
     def test_htmx_reenvia_la_botonera_fuera_de_banda(self):
         """Sin esto los enlaces de Excel/PDF conservarían el firmante anterior."""
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'), HTTP_HX_REQUEST='true')
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'), HTTP_HX_REQUEST='true')
         self.assertContains(respuesta, 'hx-swap-oob="true"')
-        self.assertContains(respuesta, 'id="accionesExportAnexo14"')
+        self.assertContains(respuesta, 'id="accionesExportAnexo17"')
 
     def test_pagina_completa_no_duplica_la_botonera(self):
         """El `hx-swap-oob` solo debe aparecer en las respuestas HTMX."""
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'))
         self.assertNotContains(respuesta, 'hx-swap-oob')
-        self.assertEqual(respuesta.content.decode().count('id="accionesExportAnexo14"'), 1)
+        self.assertEqual(respuesta.content.decode().count('id="accionesExportAnexo17"'), 1)
 
     def test_el_firmante_ya_elegido_se_conserva_en_el_bloque_intercambiado(self):
         """Regresión: al elegir el 2º firmante se perdía el 1º.
@@ -178,19 +178,19 @@ class FirmasHtmxTests(TestCase):
         conservan el valor del render inicial — vacío — y la selección anterior se cae.
         """
         respuesta = self.client.get(
-            reverse('informes_anexo:anexo14'), {'director_ch': '999'}, HTTP_HX_REQUEST='true')
+            reverse('informes_anexo:anexo17'), {'director_ch': '999'}, HTTP_HX_REQUEST='true')
         cuerpo = respuesta.content.decode()
         self.assertIn('name="director_ch" value="999"', cuerpo)
-        self.assertIn('form="formFiltrosAnexo14"', cuerpo)
+        self.assertIn('form="formFiltrosAnexo17"', cuerpo)
 
     def test_htmx_incluye_el_bloque_de_firmas_al_enviar(self):
         """Sin este `hx-include` los `hidden` del bloque no viajarían en la petición."""
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
-        self.assertContains(respuesta, 'hx-include="#formFiltrosAnexo14, #bloqueFirmasAnexo14"')
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'))
+        self.assertContains(respuesta, 'hx-include="#formFiltrosAnexo17, #bloqueFirmasAnexo17"')
 
     def test_los_selects_de_firmante_ya_no_recargan_la_pagina(self):
         """Regresión: antes usaban `form.submit()`, que repintaba todo el informe."""
-        respuesta = self.client.get(reverse('informes_anexo:anexo14'))
+        respuesta = self.client.get(reverse('informes_anexo:anexo17'))
         cuerpo = respuesta.content.decode()
-        self.assertNotIn("getElementById('formFiltrosAnexo14').submit()", cuerpo)
-        self.assertIn('hx-target="#bloqueFirmasAnexo14"', cuerpo)
+        self.assertNotIn("getElementById('formFiltrosAnexo17').submit()", cuerpo)
+        self.assertIn('hx-target="#bloqueFirmasAnexo17"', cuerpo)

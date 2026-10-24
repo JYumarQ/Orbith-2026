@@ -355,7 +355,8 @@ class ExportarMovimientoDesdeHistoricoTests(TestCase):
         respuesta = self.client.get(
             reverse('imprimir_movimiento', kwargs={'pk': self.movimiento_a.pk}))
         self.assertEqual(respuesta.status_code, 200)
-        self.assertIn('Movimiento_00011.docx', respuesta['Content-Disposition'])
+        self.assertIn('_00011.docx', respuesta['Content-Disposition'])
+        self.assertIn('MOV_Ana_Perez_Gomez', respuesta['Content-Disposition'])
 
     def test_ruta_generica_es_la_que_confundia_los_trabajadores(self):
         """Documenta el bug tal cual ocurría en producción: por la ruta vieja
@@ -367,7 +368,7 @@ class ExportarMovimientoDesdeHistoricoTests(TestCase):
         respuesta = self.client.get(
             reverse('imprimir_modelo_movimiento', kwargs={'pk': self.movimiento_a.pk}))
         self.assertEqual(respuesta.status_code, 200)
-        self.assertIn('Movimiento_00012.docx', respuesta['Content-Disposition'])
+        self.assertIn('_00012.docx', respuesta['Content-Disposition'])
 
     def test_el_boton_del_historico_ya_no_referencia_la_ruta_ambigua(self):
         """Guarda contra reintroducir la URL hardcodeada `.../reporte/modelo_movimiento/`
@@ -997,7 +998,7 @@ class BotonesSoloLecturaContratosTests(TestCase):
         self.assertNotIn('disabled', etiqueta)
 
     def test_observador_si_conserva_la_exportacion_a_excel(self):
-        self.assertIn('modalExportarExcel', self._html(self.observador))
+        self.assertIn('id="btnExportarExcel"', self._html(self.observador))
 
     def test_observador_no_ve_el_boton_nuevo(self):
         self.assertNotIn('id="btn-nuevo-contrato"', self._html(self.observador))
@@ -2040,3 +2041,147 @@ class CronologiaDelHistoricoTests(TestCase):
         form.is_valid()
         self.assertIn('fecha_efectiva', form.errors)
         self.assertIn('fecha_solicitud', form.errors)
+
+
+class SabanaExcelTests(TestCase):
+    """La sábana de Excel exporta lo que se ve en la lista: mismos filtros, misma
+    búsqueda y el alcance del usuario (24-10-2026). Y el nombre del fichero."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from bolsa.models import Aspirante
+        from nomencladores.models import NTipoContrato
+        from usuarios.models import CustomUser
+        cls.cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        tipo = NTipoContrato.objects.create(descripcion='Indeterminado')
+        for doc, nombre, exp in (('80010113197', 'Ana', '03001'), ('80010113198', 'Berta', '03002')):
+            aspirante = Aspirante.objects.create(
+                nivel_educ='SA', nombre=nombre, papellido='Pérez', sapellido='Gómez',
+                doc_identidad=doc, estado='ACTIVO', sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio, direccion='Calle 1')
+            CAlta.objects.create(aspirante=aspirante, no_expediente=exp, tipo=tipo, cargo=cls.cargo,
+                                 fecha_alta=date(2026, 1, 15), fecha_alta_entidad=date(2020, 1, 1),
+                                 tipo_salario='FIJ')
+        cls.admin = CustomUser.objects.create_user(username='adm_sab', password='x', es_admin=True)
+        cls.moderador = CustomUser.objects.create_user(username='mod_sab', password='x', es_moderador=True)
+
+    def _filas(self, usuario, **params):
+        import io
+        import openpyxl
+        self.client.force_login(usuario)
+        respuesta = self.client.get(reverse('exportar_contratos_excel'), params)
+        self.assertEqual(respuesta.status_code, 200)
+        hoja = openpyxl.load_workbook(io.BytesIO(respuesta.content)).active
+        filas = list(hoja.iter_rows(values_only=True))
+        return respuesta, filas[0], filas[1:]
+
+    def test_exporta_todo_y_cada_cabecera_con_su_dato(self):
+        respuesta, cabecera, filas = self._filas(self.admin)
+        self.assertEqual(len(filas), 2)
+        self.assertTrue(all(len(f) == len(cabecera) for f in filas))
+        for columna in ('Serie CI', 'F. Alta Entidad', 'Otros', 'Años de Servicio', 'No. Res. Designado'):
+            self.assertIn(columna, cabecera)
+        self.assertEqual(filas[0][cabecera.index('Dirección')], 'Calle 1')
+        self.assertRegex(respuesta['Content-Disposition'],
+                         r'filename="Sabana_Contratos_\d{2}-\d{2}-\d{4}\.xlsx"')
+
+    def test_respeta_la_busqueda_de_la_lista(self):
+        respuesta, cabecera, filas = self._filas(self.admin, filter_contrato='Berta')
+        self.assertEqual([f[cabecera.index('Nombre')] for f in filas], ['Berta'])
+        self.assertIn('filtrado', respuesta['Content-Disposition'])
+
+    def test_el_moderador_sin_esa_unidad_no_exporta_nada(self):
+        _, _, filas = self._filas(self.moderador)
+        self.assertEqual(filas, [])
+        self.moderador.unidades.add(self.cargo.departamento.unidad_organizativa)
+        _, _, filas = self._filas(self.moderador)
+        self.assertEqual(len(filas), 2)
+
+
+class ConfianzaResolucionesYOtrosTests(TestCase):
+    """Bloque del 24-10-2026: De Confianza (del cargo), números de resolución desde el
+    movimiento de nómina y «Otros» congelado en el movimiento."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from decimal import Decimal
+        from nomencladores.models import NImporteGradoCientifico, NPagoAdicional
+        cls.cargo = _crear_departamento_con_cargo()
+        cls.cargo_nuevo = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Jefe de Grupo', cat_ocupacional='TEC',
+                                         grupo_escala=cls.cargo.ncargo.grupo_escala, salario_basico=4500),
+            departamento=cls.cargo.departamento, cant_aprobada=5, orden_informe=2,
+            funcionario=True, de_confianza=True)
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(descripcion='Indeterminado', ocupa_plaza=True,
+                                                requiere_motivo=False)
+        NImporteGradoCientifico.objects.create(grado='MC', importe=Decimal('300.00'))
+        cls.instructor = NPagoAdicional.objects.create(
+            tipo=NPagoAdicional.INSTRUCTOR, descripcion='Instructor', importe=Decimal('150.00'))
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='NS', nombre='Rosa', papellido='Mora', sapellido='Paz', grado_cientifico='MC',
+            doc_identidad='80010114003', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_b4', password='x', es_admin=True)
+
+    def setUp(self):
+        self.hace_10 = timezone.localdate() - timedelta(days=10)
+        self.contrato = CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente='01403', tipo=self.tipo, cargo=self.cargo,
+            tipo_salario='FIJ', fecha_alta=self.hace_10, instructor_nomenclador=self.instructor,
+            designado_res='99/25')
+        TMovimiento.objects.create(contrato=self.contrato, aspirante=self.aspirante, no_expediente='01403',
+                                   fecha_efectiva=self.hace_10, cargo_anterior='---', cargo_nuevo='x',
+                                   salario_anterior=0, salario_nuevo=4000, tipo_movimiento='Alta Inicial')
+        self.client.force_login(self.admin)
+
+    def _movimiento(self, cargo, **extra):
+        datos = {'fecha_efectiva': (self.hace_10 + timedelta(days=1)).isoformat(),
+                 'unidad': cargo.departamento.unidad_organizativa_id,
+                 'departamento': cargo.departamento_id, 'cargo': cargo.pk,
+                 'tipo': self.tipo.pk, 'tipo_salario': 'FIJ', 'salarioEscala': '4500',
+                 'designado_res': '99/25'}
+        datos.update(extra)
+        return self.client.post(reverse('movimiento_contrato', args=[self.contrato.pk]), datos,
+                                HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+
+    def test_de_confianza_es_del_cargo(self):
+        self.assertFalse(self.contrato.de_confianza)
+        self.contrato.cargo = self.cargo_nuevo
+        self.assertTrue(self.contrato.de_confianza)
+
+    def test_el_movimiento_escribe_las_resoluciones_que_pide_el_cargo_nuevo(self):
+        respuesta = self._movimiento(self.cargo_nuevo, funcionario_res='11/26', confianza_res='12/26')
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.funcionario_res, self.contrato.confianza_res), ('11/26', '12/26'))
+        # El cargo nuevo no es Designado: su número deja de aplicar y se vacía.
+        self.assertIsNone(self.contrato.designado_res)
+
+    def test_solo_escribir_resoluciones_no_es_un_movimiento(self):
+        respuesta = self._movimiento(self.cargo, funcionario_res='11/26')
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn('No se ha aplicado ningún cambio', respuesta.json()['error_popup'])
+
+    def test_otros_queda_congelado_en_el_movimiento(self):
+        from decimal import Decimal
+        from nomencladores.models import NPagoAdicional
+        self.assertEqual(self.contrato.importe_otros, Decimal('450.00'))  # 300 Maestría + 150 Instructor
+        self.assertTrue(self._movimiento(self.cargo_nuevo).json()['form_is_valid'])
+        movimiento = self.contrato.trazabilidad.get(tipo_movimiento='Movimiento de Nómina')
+        self.assertEqual((movimiento.otros_anterior, movimiento.otros_nuevo),
+                         (Decimal('450.00'), Decimal('450.00')))
+        # Sube el nomenclador: el movimiento ya emitido no cambia.
+        NPagoAdicional.objects.filter(pk=self.instructor.pk).update(importe=Decimal('999.00'))
+        movimiento.refresh_from_db()
+        self.assertEqual(movimiento.otros_nuevo, Decimal('450.00'))
+
+    def test_falta_la_resolucion_de_confianza_avisa(self):
+        from subsanacion.reglas.contratos import FuncionarioODesignadoSinCodigo
+        self.contrato.cargo = self.cargo_nuevo
+        claves = {h.clave_extra for h in FuncionarioODesignadoSinCodigo().evaluar_instancia(self.contrato)}
+        self.assertIn('confianza_sin_codigo', claves)
+        self.contrato.confianza_res = '12/26'
+        self.contrato.funcionario_res = '11/26'
+        self.assertIsNone(FuncionarioODesignadoSinCodigo().evaluar_instancia(self.contrato))

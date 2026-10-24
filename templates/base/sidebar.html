@@ -177,7 +177,7 @@
       {% if user.es_admin or user.es_moderador or user.es_observador or user.is_staff %}
           {% comment %} A diferencia de «Administración», este ítem SÍ tiene página
              propia, así que lleva `active` cuando estás en ella y `orb-padre-activo`
-             cuando estás en uno de sus sub-ítems (Anexo 14, Cierres Mensuales).
+             cuando estás en uno de sus sub-ítems (Anexo 17, Cierres Mensuales).
              `cierres` no declara `app_name`, por eso se compara el prefijo de la ruta
              con `slice` en vez de `namespace`: '/cierres/' son 9 caracteres. {% endcomment %}
           <li class="menu-item gestor-plantilla-item orb-acordeon-item {% if request.resolver_match.view_name == 'gestor_plantilla' %} active {% elif request.resolver_match.namespace == 'informes_anexo' or request.path|slice:':9' == '/cierres/' %} orb-padre-activo abierto {% endif %}" id="menuItemGestorPlantilla">
@@ -207,23 +207,23 @@
                 </span>
               </li>
               {% endif %}
-{% comment %} El Anexo 14 lo consultan los tres roles. El Moderador lo tenia oculto
+{% comment %} El Anexo 17 lo consultan los tres roles. El Moderador lo tenia oculto
                  y cerrado con un 403; ahora entra, pero el informe le sale acotado a
                  sus unidades (informes_anexo/views.py::_unidades_del_alcance), que era
                  el motivo real de cerrarselo. {% endcomment %}
               <li class="gestor-plantilla-subitem">
-                <a href="{% url 'informes_anexo:anexo14' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14' %}activo{% endif %}">
-                  <i class="bx bx-spreadsheet me-1"></i>Anexo 14
+                <a href="{% url 'informes_anexo:anexo17' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo17' %}activo{% endif %}">
+                  <i class="bx bx-spreadsheet me-1"></i>Anexo 17
                 </a>
               </li>
               <li class="gestor-plantilla-subitem">
-                <a href="{% url 'informes_anexo:anexo14a' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14a' %}activo{% endif %}">
-                  <i class="bx bx-file me-1"></i>Anexo 14A
+                <a href="{% url 'informes_anexo:anexo17_1' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo17_1' %}activo{% endif %}">
+                  <i class="bx bx-file me-1"></i>Anexo 17.1
                 </a>
               </li>
               <li class="gestor-plantilla-subitem">
-                <a href="{% url 'informes_anexo:anexo14b' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo14b' %}activo{% endif %}">
-                  <i class="bx bx-file-blank me-1"></i>Anexo 14B
+                <a href="{% url 'informes_anexo:anexo17_2' %}" class="gestor-plantilla-sublink {% if request.resolver_match.view_name == 'informes_anexo:anexo17_2' %}activo{% endif %}">
+                  <i class="bx bx-file-blank me-1"></i>Anexo 17.2
                 </a>
               </li>
               {% comment %} Cierres es donde el Moderador declara su plantilla al día y
@@ -784,7 +784,7 @@
     background: rgba(105, 108, 255, .06);
   }
   /* Mismo resaltado que `.orb-acordeon-sublink.activo`: hasta ahora este acordeón no
-     marcaba en cuál de sus páginas estabas, así que abrir «Anexo 14» o «Cierres
+     marcaba en cuál de sus páginas estabas, así que abrir «Anexo 17» o «Cierres
      Mensuales» dejaba toda la barra sin ninguna señal. */
   a.gestor-plantilla-sublink.activo {
     color: #696cff;

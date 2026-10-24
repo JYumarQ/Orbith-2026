@@ -41,6 +41,7 @@ from usuarios.mixins import RequiereEdicionMixin, requiere_edicion
 from auditoria.models import AccionAuditoria
 from auditoria import registro_automatico
 from core.busqueda import interpretar, normalizar, sin_acentos, solo_digitos_sin_ceros
+from core.nombres_descarga import documento_de_trabajador, nombre_de_informe, nombre_de_persona
 from .filtros import (anotar_movimientos_del_periodo, aplicar_filtros, altas_que_causaron_baja,
                       anotar_recontratado, contratos_visibles, marcar_recontratados, personas_de)
 from .annos_servicio import annos_y_pago
@@ -186,18 +187,6 @@ class ContratoListView(ListView):
         context['filtro_departamento'] = self.request.GET.getlist('departamento')
         context['filtro_cargo'] = self.request.GET.getlist('cargo')
 
-        # Modal de exportación a Excel filtrada por Unidad Organizativa (ver
-        # exportar_contratos_excel): quien ve toda la empresa puede elegir
-        # "Todas" o una/varias UO de toda la app; quien tiene el alcance acotado
-        # —el Moderador, y el Observador con unidades asignadas— solo puede
-        # elegir entre las suyas (mismo criterio que contratos_visibles()).
-        usuario = self.request.user
-        if tiene_alcance_acotado(usuario):
-            context['unidades_export'] = usuario.unidades.all().order_by('descripcion')
-            context['mostrar_opcion_todas_uo'] = False
-        else:
-            context['unidades_export'] = UnidadOrganizativa.objects.all().order_by('descripcion')
-            context['mostrar_opcion_todas_uo'] = True
         return context
     
 
@@ -411,7 +400,11 @@ def altas_con_baja_html(request):
                   {'bajas': sorted(por_persona.values(), key=lambda b: (b.fecha_alta, b.fecha_baja))})
 
 
-def search_contratos(request):
+def _contratos_de_la_lista(request, *relaciones_extra):
+    """Los contratos de la lista con sus filtros, su búsqueda y su orden, ya como
+    lista. La usan la tabla (`search_contratos`) y la sábana de Excel
+    (`exportar_contratos_excel`): así lo que se exporta es EXACTAMENTE lo que se
+    ve, filtros y orden incluidos (decisión de RRHH del 24-10-2026)."""
     # 1. Obtener parámetros de filtros
     query = request.GET.get('filter_contrato', '').strip()
 
@@ -424,7 +417,8 @@ def search_contratos(request):
         'cargo__ncargo',
         'cargo__ncargo__grupo_escala',
         'cargo__rol',
-        'tridente'
+        'tridente',
+        *relaciones_extra
     ).order_by('-fecha_alta')
     # La fecha mínima de la Baja de cada fila y si es una recontratación, en la
     # misma consulta.
@@ -475,6 +469,12 @@ def search_contratos(request):
             # contrato). Antes se llamaba a calcular_salario_escala() por cada registro,
             # lo que suponía una consulta a NSalario por fila del listado completo.
             contratos_list.sort(key=lambda x: x.salario_actual or 0, reverse=reverse_sort)
+
+    return contratos_list
+
+
+def search_contratos(request):
+    contratos_list = _contratos_de_la_lista(request)
 
     # 6. Paginación SOBRE la lista ya ordenada (común: core/paginacion.py)
     from core.paginacion import paginar
@@ -930,7 +930,8 @@ class ExportarHistoricoPDFView(View):
         template = get_template('pages/reportes/pdf_historico_trabajador.html')
         html = template.render(context)
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="Historico_{aspirante.doc_identidad}.pdf"'
+        response['Content-Disposition'] = 'inline; filename="%s"' % nombre_de_informe(
+            'HISTORICO', nombre_de_persona(aspirante), extension='pdf')
         
         pisa.CreatePDF(html, dest=response)
         return response
@@ -1293,6 +1294,8 @@ class ContratoBajaView(RequiereEdicionMixin, DeleteView):
                     unidad_anterior=unidad_ant_str,
                     unidad_anterior_fk=unidad_ant_obj,
                     salario_anterior=salario_ant_val,
+                    # «Otros» congelado al darse de baja (24-10-2026).
+                    otros_anterior=contrato.importe_otros,
 
                     cargo_nuevo="---",
                     salario_nuevo=0,
@@ -1454,8 +1457,14 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             # =================================================================
             # PASO 1.5: VALIDACIÓN DE CAMBIOS REALES PARA MOVIMIENTO
             # =================================================================
-            # Django sabe automáticamente si se modificó algún campo del formulario
-            if not form.has_changed():
+            # Solo cuenta lo que cambia el CONTRATO (cargo, tipo, motivo, duración,
+            # tipo de salario, tridente). Antes se miraba `form.has_changed()`, que
+            # daba siempre «sí» porque la fecha efectiva, la de solicitud y las
+            # observaciones no tienen valor inicial, así que este aviso nunca
+            # saltaba (24-10-2026). Escribir solo un número de resolución tampoco es
+            # un movimiento: eso se hace editando el contrato.
+            cambios = [c for c in form.changed_data if c in MovimientoForm.CAMPOS_DEL_MOVIMIENTO]
+            if not cambios:
                 mensaje = "No se ha aplicado ningún cambio válido. Modifique algún dato para generar un movimiento."
                 
                 if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -1520,6 +1529,8 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 rol_anterior=rol_ant_str,       
                 tridente_anterior=tri_ant_str,  
                 salario_anterior=salario_ant,
+                # «Otros» congelado (24-10-2026); el «A» se anota tras guardar.
+                otros_anterior=contrato_previo.importe_otros,
                 unidad_anterior=unidad_ant,
                 unidad_anterior_fk=unidad_ant_obj,
                 tipo_contrato_anterior=tipo_ant_str, # <--- NUEVO
@@ -1547,6 +1558,9 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             antes_auditoria = registro_automatico.fotografia(contrato_previo, con_vacios=True)
             form.instance.en_proceso_movimiento = False
             self.object = form.save()
+            # Releído de la base: así las fechas ya son fechas y no el texto del formulario.
+            TMovimiento.objects.filter(pk=nuevo_mov.pk).update(
+                otros_nuevo=CAlta.objects.get(pk=self.object.pk).importe_otros)
             registro_automatico.registrar(
                 self.object, AccionAuditoria.MOVIMIENTO, antes=antes_auditoria,
                 despues=registro_automatico.fotografia(self.object, con_vacios=True))
@@ -1778,14 +1792,14 @@ class ModeloMovimientoDocxView(View):
         salario_str = f"{salario_base_num:.2f} ({tarifa_base_num:.5f})" if salario_base_num > 0 else ""
 
         # --- OTROS Y TOTAL ---
+        # Desde el 24-10-2026 «Otros» (grado científico + Instructor + CNCI + Años
+        # de servicio) va CONGELADO en el movimiento: el documento no cambia con
+        # el tiempo. Sin movimiento (contrato suelto) se calcula a hoy.
         suma_otros_num = 0
-        if contrato_base:
-            suma_otros_num = (
-                float(getattr(contrato_base, 'importe_maestria', 0) or 0) +
-                float(getattr(contrato_base, 'importe_doctorado', 0) or 0) +
-                float(getattr(contrato_base, 'importe_instructor', 0) or 0) +
-                float(getattr(contrato_base, 'importe_cnci', 0) or 0)
-            )
+        if es_movimiento_real and getattr(obj, 'otros_nuevo', None) is not None:
+            suma_otros_num = float(obj.otros_nuevo)
+        elif contrato_base is not None and not es_movimiento_real:
+            suma_otros_num = float(contrato_base.importe_otros)
 
         if suma_otros_num > 0:
             tarifa_otros_num = suma_otros_num / fondo if fondo else 0
@@ -1859,14 +1873,8 @@ class ModeloMovimientoDocxView(View):
             sal_ant_num = float(getattr(obj, 'salario_anterior', 0) or 0)
             tarifa_ant_num = sal_ant_num / fondo if fondo else 0
             
-            # Usamos los pagos extras del registro de baja si es baja, o del contrato actual si es mov
-            base_ant = baja_record if es_baja else contrato_base
-            suma_otros_ant = 0
-            if base_ant:
-                suma_otros_ant = (
-                    float(getattr(base_ant, 'importe_maestria', 0) or 0) + float(getattr(base_ant, 'importe_doctorado', 0) or 0) +
-                    float(getattr(base_ant, 'importe_instructor', 0) or 0) + float(getattr(base_ant, 'importe_cnci', 0) or 0)
-                )
+            # «Otros» de antes, congelado en el movimiento (24-10-2026).
+            suma_otros_ant = float(getattr(obj, 'otros_anterior', None) or 0)
 
             if suma_otros_ant > 0:
                 tarifa_otros_ant = suma_otros_ant / fondo if fondo else 0
@@ -1905,7 +1913,14 @@ class ModeloMovimientoDocxView(View):
             doc.save(buffer)
             buffer.seek(0)
             
-            filename = f"Movimiento_{obj.no_expediente}.docx"
+            # `MOV_`, `ALTA_` o `BAJA_` + nombre + expediente (core/nombres_descarga.py).
+            if es_baja:
+                prefijo = 'BAJA'
+            elif es_alta or 'RECONTRAT' in t_mov_str:
+                prefijo = 'ALTA'
+            else:
+                prefijo = 'MOV'
+            filename = documento_de_trabajador(prefijo, obj.aspirante, obj.no_expediente, 'docx')
             response = HttpResponse(buffer.getvalue(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
@@ -2270,6 +2285,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                         
                         cargo_anterior="---",
                         salario_anterior=0,
+                        otros_anterior=0,
                         unidad_anterior="---",
                         
                         cargo_nuevo=cargo_nuevo.ncargo.descripcion if cargo_nuevo else "---",
@@ -2287,6 +2303,10 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     )
                     form.instance.en_proceso_movimiento = False
                     contrato = form.save()
+                    # «Otros» congelado del alta (24-10-2026).
+                    # Releído de la base: en el asistente las fechas aún llegan como texto.
+                    TMovimiento.objects.filter(pk=mov_alta.pk).update(
+                        otros_nuevo=CAlta.objects.get(pk=contrato.pk).importe_otros)
                     # Apuntamos al movimiento recién creado, no al contrato: así el
                     # documento no depende de resolver un pk ambiguo entre tablas.
                     pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
@@ -2344,91 +2364,150 @@ def finalizar_contrato_wizard(request, aspirante_id):
             return JsonResponse({'form_is_valid': False, 'error_popup': str(e)}, status=500)
 
 def exportar_contratos_excel(request):
+    """Sábana de Excel de la lista de Contratos.
+
+    Desde el 24-10-2026 (decisión de RRHH) exporta las MISMAS filas que se ven en
+    la lista, con sus filtros, su búsqueda y su orden (`_contratos_de_la_lista`):
+    ya no hay paso intermedio para elegir unidades, porque la lista ya filtra por
+    Unidad Organizativa. El Moderador solo ve (y exporta) lo de sus unidades.
+
+    Cada columna se declara UNA vez con su cabecera y su valor (`COLUMNAS_SABANA`),
+    así la cabecera y el dato no se pueden descolocar (antes el Móvil salía bajo
+    «Fijo» y al revés).
+    """
+    from core.nombres_descarga import nombre_de_informe
+    from prenomina.captura import annos_de_servicio
+    from prenomina.models import NEscalaAnnosServicio
+
+    contratos = _contratos_de_la_lista(
+        request, 'aspirante__municipio', 'aspirante__provincia', 'aspirante__especialidad',
+        'tipo', 'motivo', 'cargo__departamento__unidad_organizativa',
+        'cnci_nomenclador', 'instructor_nomenclador')
+
+    # La escala de años de servicio se lee UNA vez, no una por trabajador.
+    escala_annos = NEscalaAnnosServicio.como_diccionario()
+
+    def si_no(valor):
+        return "Sí" if valor else "No"
+
+    def importe(valor):
+        return float(valor) if valor else 0
+
+    def annos(c):
+        return annos_de_servicio(c.fecha_alta_entidad) if c.fecha_alta_entidad else None
+
+    def pago_annos(c):
+        anos = annos(c)
+        if anos is None:
+            return None
+        pago = NEscalaAnnosServicio.cuantia_de(escala_annos, anos)
+        return float(pago) if pago is not None else None
+
+    def grado(c):
+        return importe(c.importe_maestria) + importe(c.importe_doctorado)
+
+    def otros(c):
+        # Misma suma que el «Otros» del movimiento de nómina: grado científico
+        # (Maestría o Doctorado) + Instructor + CNCI + Años de servicio.
+        return grado(c) + importe(c.importe_instructor) + importe(c.importe_cnci) + (pago_annos(c) or 0)
+
+    def fecha(valor):
+        return valor.strftime('%d/%m/%Y') if valor else ""
+
+    def cargo(c, ruta):
+        valor = c.cargo
+        for paso in ruta.split('.'):
+            valor = getattr(valor, paso, None) if valor is not None else None
+        return valor or ""
+
+    COLUMNAS_SABANA = [
+        ("No. Expediente", lambda c, a: c.no_expediente),
+        ("Nombre", lambda c, a: a.nombre),
+        ("1er Apellido", lambda c, a: a.papellido),
+        ("2do Apellido", lambda c, a: a.sapellido),
+        ("Unidad Organizativa", lambda c, a: cargo(c, 'departamento.unidad_organizativa.descripcion')),
+        ("Departamento", lambda c, a: cargo(c, 'departamento.descripcion')),
+        ("Cargo", lambda c, a: cargo(c, 'ncargo.descripcion')),
+        ("Cat. Ocupacional", lambda c, a: CAT_MAP.get(cargo(c, 'ncargo.cat_ocupacional'),
+                                                      cargo(c, 'ncargo.cat_ocupacional')[:1])),
+        ("Tipo de Contrato", lambda c, a: getattr(c.tipo, 'descripcion', '')),
+        ("Motivo", lambda c, a: getattr(c.motivo, 'descripcion', '')),
+        ("Fecha Alta", lambda c, a: fecha(c.fecha_alta)),
+        ("F. Alta Entidad", lambda c, a: fecha(c.fecha_alta_entidad)),
+        ("Duración (Días)", lambda c, a: c.duracion or ""),
+        ("C. Formal", lambda c, a: si_no(c.c_formal)),
+        ("No. Res. C. Formal", lambda c, a: c.c_formal_res or ""),
+        ("Funcionario", lambda c, a: si_no(c.funcionario)),
+        ("No. Res. Funcionario", lambda c, a: c.funcionario_res or ""),
+        ("Designado", lambda c, a: si_no(c.designado)),
+        ("No. Res. Designado", lambda c, a: c.designado_res or ""),
+        ("De Confianza", lambda c, a: si_no(c.de_confianza)),
+        ("No. Res. De Confianza", lambda c, a: c.confianza_res or ""),
+        ("Trab. a distancia", lambda c, a: si_no(c.trabajo_distancia)),
+        ("Teletrabajo", lambda c, a: si_no(c.teletrabajo)),
+        ("Pluriempleo", lambda c, a: si_no(c.pluriempleo)),
+        ("Chofer Prof.", lambda c, a: si_no(c.profesional)),
+        ("Jubilado Recontratado", lambda c, a: si_no(c.jubilado_recontratado)),
+        ("Misión", lambda c, a: si_no(c.mision)),
+        ("País Misión", lambda c, a: c.pais or ""),
+        ("Días Misión", lambda c, a: c.mision_dias or ""),
+        ("Importe Misión", lambda c, a: importe(c.mision_importe) if c.mision_importe is not None else ""),
+        ("Reg. Militar", lambda c, a: c.get_reg_militar_display() if c.reg_militar else ""),
+        ("Grupo Escala", lambda c, a: cargo(c, 'ncargo.grupo_escala.nivel')),
+        ("Rol", lambda c, a: cargo(c, 'rol.tipo')),
+        ("Tridente", lambda c, a: getattr(c.tridente, 'tipo', '')),
+        ("Salario Escala", lambda c, a: importe(c.salario_actual)),
+        ("Maestría o Doctorado", lambda c, a: grado(c)),
+        ("Instructor", lambda c, a: importe(c.importe_instructor)),
+        ("CNCI", lambda c, a: importe(c.importe_cnci)),
+        ("Años de Servicio", lambda c, a: annos(c) if annos(c) is not None else ""),
+        ("Pago Años de Servicio", lambda c, a: pago_annos(c) if pago_annos(c) is not None else ""),
+        ("Otros", lambda c, a: otros(c)),
+        ("Carnet de Ident.", lambda c, a: a.doc_identidad),
+        ("Serie CI", lambda c, a: a.serie_ci or ""),
+        ("Edad", lambda c, a: a.get_edad or ""),
+        ("Sexo", lambda c, a: a.get_sexo_display()),
+        ("Raza", lambda c, a: a.get_raza_display()),
+        ("Nivel Educacional", lambda c, a: a.get_nivel_educ_display()),
+        ("Especialidad", lambda c, a: getattr(a.especialidad, 'nombre', '')),
+        ("Título de Oro", lambda c, a: si_no(a.titulo_oro)),
+        ("Grado Científico", lambda c, a: a.get_grado_cientifico_display() if a.grado_cientifico else ""),
+        ("Provincia", lambda c, a: getattr(a.provincia, 'nombre', '')),
+        ("Municipio", lambda c, a: getattr(a.municipio, 'nombre', '')),
+        ("Dirección", lambda c, a: a.direccion or ""),
+        ("Fijo", lambda c, a: a.fijo_personal or ""),
+        ("Móvil", lambda c, a: a.movil_personal or ""),
+        ("Talla Pantalón/Falda", lambda c, a: a.tpantalon or ""),
+        ("Talla Camisa/Blusa", lambda c, a: a.tcamisa or ""),
+        ("Talla Zapatos", lambda c, a: a.tzapatos or ""),
+    ]
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Trabajadores Activos"
+    ws.append([cabecera for cabecera, _ in COLUMNAS_SABANA])
 
-    # Estilos
     negrita_centrado = Font(bold=True, color="FFFFFF")
     fondo_azul = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
-    alineacion_centro = Alignment(horizontal="center", vertical="center")
-
-    # Cabeceras (Se añaden las tallas al final)
-    cabeceras = [
-        "No. Expediente", "Nombre", "1er Apellido", "2do Apellido",
-        "Unidad Organizativa", "Departamento", "Cargo", "Cat. Ocupacional", "Tipo de Contrato", "Motivo",
-        "Fecha Alta", "Duración (Dias)", "C. Formal", "Funcionario", "Designado",
-        "Chofer Prof.", "Jubilado Recontratado", "Misión", "País Misión", "Reg. Militar",
-        "Grupo Escala", "Rol", "Tridente", "Instructor", "CNCI",
-        "Carnet de Ident.", "Serie CI", "Edad", "Sexo", "Raza", "Nivel Educacional", "Especialidad", "Título de Oro",
-        "Grado Científico", "Provincia", "Municipio", "Dirección", "Fijo", "Movil",
-        "Talla Pantalón/Falda", "Talla Camisa/Blusa", "Talla Zapatos" # <--- NUEVAS COLUMNAS
-    ]
-    ws.append(cabeceras)
-
-    # Formato cabeceras
+    alineacion_centro = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for col_num, cell in enumerate(ws[1], 1):
         cell.font = negrita_centrado
         cell.fill = fondo_azul
         cell.alignment = alineacion_centro
         ws.column_dimensions[get_column_letter(col_num)].width = 20
 
-    # Consulta Optimizada, acotada al alcance del usuario
-    # (ver contratos/filtros.py::contratos_visibles). Si además viene una
-    # selección explícita de Unidades Organizativas (paso intermedio del modal
-    # de exportación), se acota más: para el Moderador esto es una intersección
-    # con su propio alcance (nunca puede ampliarlo, aunque manipule la URL),
-    # porque contratos_visibles() ya lo limitó a sus UO antes de este filtro.
-    unidades_ids = [u for u in request.GET.getlist('unidades') if u.isdigit()]
-    qs = contratos_visibles(request.user).filter(aspirante__estado='ACTIVO')
-    if unidades_ids:
-        qs = qs.filter(cargo__departamento__unidad_organizativa_id__in=unidades_ids)
-
-    contratos = qs.select_related(
-        'aspirante', 'aspirante__municipio', 'aspirante__provincia', 'aspirante__especialidad',
-        'tipo', 'motivo', 'cargo', 'cargo__ncargo', 'cargo__ncargo__grupo_escala',
-        'cargo__departamento', 'cargo__departamento__unidad_organizativa', 'cargo__rol', 'tridente',
-        'cnci_nomenclador', 'instructor_nomenclador'
-    ).order_by('cargo__departamento__unidad_organizativa__descripcion', 'aspirante__papellido')
-
-    def si_no(valor): return "Sí" if valor else "No"
-
     for c in contratos:
-        asp = c.aspirante
+        ws.append([valor(c, c.aspirante) for _, valor in COLUMNAS_SABANA])
 
-        # --- Obtener la categoría mapeada (más claro) ---
-        cat_sigla = getattr(c.cargo.ncargo, 'cat_ocupacional', '') if c.cargo and c.cargo.ncargo else ''
-        cat_valor = CAT_MAP.get(cat_sigla, cat_sigla[:1])  # Si no está en el mapa, usa la primera letra
+    # Cabecera fija y filtros de Excel en cada columna.
+    ws.freeze_panes = 'B2'
+    ws.auto_filter.ref = ws.dimensions
 
-        fila = [
-            c.no_expediente, asp.nombre, asp.papellido, asp.sapellido,
-            getattr(c.cargo.departamento.unidad_organizativa, 'descripcion', '') if c.cargo and c.cargo.departamento else "",
-            getattr(c.cargo.departamento, 'descripcion', '') if c.cargo else "",
-            getattr(c.cargo.ncargo, 'descripcion', '') if c.cargo else "",
-            cat_valor,   # <--- AHORA SÍ SE USA LA VARIABLE
-            getattr(c.tipo, 'descripcion', ''), getattr(c.motivo, 'descripcion', ''),
-            c.fecha_alta.strftime('%d/%m/%Y') if c.fecha_alta else "", c.duracion or "",
-            si_no(c.c_formal), si_no(c.funcionario), si_no(c.designado),
-            si_no(c.profesional), si_no(c.jubilado_recontratado), si_no(c.mision), c.pais or "", c.reg_militar or "",
-            # Grupo Escala
-            getattr(c.cargo.ncargo.grupo_escala, 'nivel', '') if c.cargo and c.cargo.ncargo and getattr(c.cargo.ncargo, 'grupo_escala', None) else "",
-            getattr(c.cargo.rol if c.cargo else None, 'tipo', ''), getattr(c.tridente, 'tipo', ''),
-            c.importe_instructor or 0, c.importe_cnci or 0,
-            asp.doc_identidad, asp.serie_ci or "", asp.get_edad or "", asp.get_sexo_display(), asp.get_raza_display(),
-            asp.get_nivel_educ_display(), getattr(asp.especialidad, 'nombre', ''), si_no(asp.titulo_oro),
-            asp.grado_cientifico or "", getattr(asp.provincia, 'nombre', ''), getattr(asp.municipio, 'nombre', ''),
-            # El orden debe seguir la cabecera: Dirección, Fijo, Móvil.
-            # Antes se escribía el móvil bajo "Fijo" y viceversa.
-            asp.direccion or "", asp.fijo_personal or "", asp.movil_personal or "",
-            # Tallas
-            asp.tpantalon or "",
-            asp.tcamisa or "",
-            asp.tzapatos or ""
-        ]
-        ws.append(fila)
-
+    hay_filtros = any(v for k, v in request.GET.items() if k not in ('sort', 'order'))
+    nombre = nombre_de_informe('Sabana_Contratos', 'filtrado' if hay_filtros else '',
+                               extension='xlsx')
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename="Listado_Activos_{datetime.now().strftime("%d_%m_%Y")}.xlsx"'
+    response['Content-Disposition'] = 'attachment; filename="%s"' % nombre
     wb.save(response)
     return response
 
@@ -2762,8 +2841,9 @@ class ExportarContratoWordView(FormView):
         doc.save(buffer)
         buffer.seek(0)
         
-        prefijo = "Modificacion" if tipo == 'modificacion' else "Contrato_Trabajo"
-        filename = f"{prefijo}_{contrato.aspirante.nombre}_{contrato.aspirante.papellido}.docx"
+        # `CON_` o `MOD_CON_` + nombre + expediente (core/nombres_descarga.py).
+        prefijo = 'MOD_CON' if tipo == 'modificacion' else 'CON'
+        filename = documento_de_trabajador(prefijo, contrato.aspirante, contrato.no_expediente, 'docx')
         response = HttpResponse(buffer.read(), content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         

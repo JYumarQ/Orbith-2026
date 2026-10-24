@@ -125,6 +125,16 @@
                             <label class="btn btn-outline-primary" for="id_designado">Designado</label>
                         </div>
                     </div>
+
+                    {% comment %} De Confianza (24-10-2026): aparte de Funcionario/Designado
+                       porque puede coincidir con cualquiera de los dos. {% endcomment %}
+                    <div class="col-md-6">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <div class="btn-group w-100" role="group">
+                            {{ form.de_confianza }}
+                            <label class="btn btn-outline-primary" for="id_de_confianza">De Confianza</label>
+                        </div>
+                    </div>
                 </div>
 
                 <input type="hidden" name="autoriza_desplazamiento" id="autoriza_desplazamiento" value="false">
@@ -157,6 +167,8 @@
         // Fuerza las clases visuales de los botones (Segmented Buttons de Bootstrap)
         if (checkFuncionario) checkFuncionario.className = 'btn-check';
         if (checkDesignado) checkDesignado.className = 'btn-check';
+        const checkConfianza = document.getElementById('id_de_confianza');
+        if (checkConfianza) checkConfianza.className = 'btn-check';
 
         // --- 2. Inicialización Select2 ---
 

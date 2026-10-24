@@ -5,7 +5,8 @@
  * abre cada usuario (ver subsanacion/automatico.py):
  *   - Análisis completo diario de Subsanación: el primer inicio de sesión del día,
  *     de cualquier rol. Va módulo a módulo, una petición por módulo.
- *   - Búsqueda ligera de su alcance (Administrador y Moderador), como mucho cada 4 h.
+ *   - Búsqueda ligera de su alcance: Administrador cada 2 h, Moderador cada 30 min,
+ *     por trozos (un módulo por petición). Nada a partir de las 16:00.
  * Todo en segundo plano: si algo falla, no molesta al usuario; lo retoma el
  * siguiente que entre.
  */
@@ -75,6 +76,24 @@
         }).catch(function () { /* silencioso: lo retoma el siguiente */ }).then(ocultar, ocultar);
     }
 
+    // La búsqueda ligera va por trozos, un módulo de reglas por petición, para no
+    // superar el tiempo máximo del servidor (24-10-2026).
+    function busquedaPorTrozos() {
+        function pedir(parte) {
+            var datos = new FormData();
+            datos.append('parte', parte);
+            return fetch(URL_BUSCAR, { method: 'POST', headers: { 'X-CSRFToken': csrf() },
+                                       credentials: 'same-origin', body: datos })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d && d.hecho && d.siguiente !== null && d.siguiente !== undefined) {
+                        return pedir(d.siguiente);
+                    }
+                });
+        }
+        return pedir(0);
+    }
+
     function empezar() {
         fetch(URL_ESTADO, { credentials: 'same-origin' })
             .then(function (r) { return r.ok ? r.json() : null; })
@@ -82,7 +101,7 @@
                 if (!e) return;
                 var cadena = Promise.resolve();
                 if (e.analizar) cadena = cadena.then(analisisDiario);
-                if (e.buscar) cadena = cadena.then(function () { return post(URL_BUSCAR); });
+                if (e.buscar) cadena = cadena.then(busquedaPorTrozos);
                 return cadena;
             })
             .catch(function () { /* silencioso */ });

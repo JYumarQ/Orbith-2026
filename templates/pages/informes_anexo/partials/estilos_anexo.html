@@ -1,6 +1,6 @@
-{% comment %} Hoja de estilo compartida por el Anexo 14 y el Anexo 14-A.
+{% comment %} Hoja de estilo compartida por el Anexo 17 y el Anexo 17.1.
 
-   Vivía dentro de `anexo14.html`. Se saca a un parcial cuando nace el 14-A porque
+   Vivía dentro de `anexo17.html`. Se saca a un parcial cuando nace el 17.1 porque
    los dos informes son el mismo documento a dos niveles de detalle y tienen que
    verse igual: con la hoja duplicada, cualquier retoque en uno dejaría al otro
    desparejado sin que nadie lo notara hasta imprimirlos juntos.
@@ -104,7 +104,7 @@
         .row-cols-xl-7 > * { flex: 0 0 auto; width: 14.2857142857%; }
     }
 
-    /* ===== ÁRBOL DEL ANEXO 14 ===== */
+    /* ===== ÁRBOL DEL ANEXO 17 ===== */
     /* Las tres bandas eran moradas. Ahora la unidad es una cabecera blanca con
        el nombre en índigo, y los dos niveles de dentro se distinguen por tintes
        fríos cada vez más suaves, no por color. */
@@ -182,11 +182,11 @@
        La FUENTE de estos colores es `nomencladores.COLORES_CAT_OCUPACIONAL`, y
        `informes-rrhh.css` los publica como las variables `--cat-*`. Aquí no se
        repite ni un código: solo se dice qué variable le toca a cada columna del
-       14-A, que se identifica por su clave.
+       17.1, que se identifica por su clave.
 
        Importa que sean ESTOS y no unos cualesquiera: un cargo Técnico sale del
-       mismo turquesa en su insignia del Anexo 14, en la tarjeta de cifra del
-       14-A y en las barras del Dashboard. Antes estas tarjetas usaban los
+       mismo turquesa en su insignia del Anexo 17, en la tarjeta de cifra del
+       17.1 y en las barras del Dashboard. Antes estas tarjetas usaban los
        modificadores genéricos de `inf-kpi` (azul, verde, naranja) y una misma
        categoría cambiaba de color según la pantalla. */
     .anx-kpi-cat[data-cat="cuadros"]         { --anx-cat: var(--cat-cua); }
@@ -205,7 +205,7 @@
     }
     .anx-kpi-cat .inf-kpi-rotulo { color: var(--anx-cat); }
 
-    /* La cabecera de la tabla del 14-A, con la letra de cada columna en el color
+    /* La cabecera de la tabla del 17.1, con la letra de cada columna en el color
        de su categoría: es lo que une la tabla con las tarjetas de arriba. */
     .anx-th-cat[data-cat="cuadros"]         { color: var(--cat-cua) !important; }
     .anx-th-cat[data-cat="tecnicos"]        { color: var(--cat-tec) !important; }
@@ -213,10 +213,10 @@
     .anx-th-cat[data-cat="servicio"]        { color: var(--cat-ser) !important; }
     .anx-th-cat[data-cat="obreros"]         { color: var(--cat-ope) !important; }
 
-    /* ===== NIVELES DE FILA DEL ANEXO 14-A ===== */
+    /* ===== NIVELES DE FILA DEL ANEXO 17.1 ===== */
     /* La tabla es `inf-tabla`, la misma de Puestos Clave y Altas y Bajas. Aquí
        solo se añade lo que esa tabla no tiene: los tres niveles de fila propios
-       del 14-A —el rótulo de la Dirección, el Grupo y el Subtotal que cierra el
+       del 17.1 —el rótulo de la Dirección, el Grupo y el Subtotal que cierra el
        bloque—. Se distinguen por tinte y sangría, no por colores distintos: son
        el mismo dato a tres alturas. */
     .anx-f-bloque td {
@@ -292,7 +292,7 @@
 </style>
 
 <style>
-    /* La fila de una plaza VACANTE en el Anexo 14-B. Apagada, no roja: una
+    /* La fila de una plaza VACANTE en el Anexo 17.2. Apagada, no roja: una
        vacante no es un error, es una plaza que espera a alguien. */
     .anx-f-vacante td { background: var(--inf-gris-50); color: var(--inf-gris-400); }
     .anx-f-vacante .td-nombre { font-weight: 600; color: var(--inf-gris-500); }
@@ -303,6 +303,6 @@
     }
     /* Diecisiete columnas no caben en una pantalla: la tabla se desplaza dentro
        de su caja y nunca empuja el ancho de la página. */
-    .anx-14b { min-width: 1400px; font-size: .82rem; }
-    .anx-14b th { white-space: nowrap; }
+    .anx-17_2 { min-width: 1400px; font-size: .82rem; }
+    .anx-17_2 th { white-space: nowrap; }
 </style>

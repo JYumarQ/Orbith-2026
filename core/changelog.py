@@ -23,6 +23,9 @@ Cada cambio es una tupla (tipo, descripción). Los tipos válidos están en
 TIPOS_CAMBIO; si usas uno que no existe, se muestra con estilo neutro.
 No hace falta migración ni reinicio de base de datos: basta con editar este
 archivo y desplegar.
+
+Se conservan las 10 ÚLTIMAS versiones (decisión del 24-10-2026; antes eran 5):
+al añadir la undécima, se borra la más antigua del final de la lista.
 """
 
 # Etiqueta y color (clase de Bootstrap) de cada tipo de cambio.
@@ -35,6 +38,32 @@ TIPOS_CAMBIO = {
 }
 
 CHANGELOG = [
+    {
+        "version": "3.5.0",
+        "fecha": "2026-10-24",
+        "titulo": "Anexos 17, De Confianza, modalidad de trabajo, «Otros» y nombres de fichero claros",
+        "cambios": [
+            ("nuevo", "Los Anexos 17, 17.1 y 17.2 se llaman ahora Anexo 17, 17.1 y 17.2 en toda la aplicación: menú, pantallas, Excel y Guía."),
+            ("nuevo", "El Excel del Anexo 17.2 sigue el modelo nuevo: cabeceras en vertical, columnas ajustadas y letra 12."),
+            ("nuevo", "Switch «De Confianza» en el cargo (Gestor de Plantilla), con su No. de resolución en el contrato. Puede coincidir con Funcionario o Designado."),
+            ("nuevo", "Contrato: «Modalidad de trabajo» con Trab. a distancia, Teletrabajo y Pluriempleo. El Moderador los cambia sin solicitud."),
+            ("nuevo", "Campo «Otros» (grado científico + Instructor + CNCI + años de servicio) en el contrato y en el movimiento de nómina. El movimiento lo guarda, así su documento no cambia con el tiempo."),
+            ("nuevo", "Movimiento de nómina: números de resolución (C. Formal, Funcionario, Designado y De Confianza), opcionales. Si se escriben, sustituyen a los del contrato."),
+            ("nuevo", "Informe Inteligente: Dirección en «Datos del Trabajador»; De Confianza, su resolución y la modalidad de trabajo; y cuántos contratos tiene cada cargo en «Estructura y Plantilla Aprobada»."),
+            ("nuevo", "Registro de errores del servidor, que el Administrador consulta y descarga desde el admin de Django (Soporte → Registro de errores)."),
+            ("mejorado", "Los ficheros descargados se reconocen por su nombre: MOV_, ALTA_, BAJA_, CON_ o MOD_CON_ + nombre + expediente; los informes llevan su nombre, la unidad o el período y la fecha."),
+            ("mejorado", "La sábana de Excel de Contratos exporta lo que se ve en la lista (filtros, búsqueda y orden), sin ventana intermedia y con columnas nuevas."),
+            ("mejorado", "«Buscar incidencias» y la búsqueda automática van por partes: ya no se cortan por exceder el tiempo en el servidor."),
+            ("mejorado", "Búsqueda automática: Administrador cada 2 horas, Moderador cada 30 minutos y solo sus registros, y ninguna a partir de las 16:00."),
+            ("mejorado", "El Moderador guarda sin solicitud los números de resolución y el switch Jubilado recontratado."),
+            ("mejorado", "Parámetros Generales: las pestañas siempre a la vista; en Salario, también los botones y la cabecera de la tabla."),
+            ("mejorado", "Si el color de una unidad es muy claro, su nombre se oscurece solo para leerse, y el nomenclador avisa al elegirlo."),
+            ("mejorado", "Histórico: ninguna fecha futura, nunca dos eventos el mismo día y recontratar como pronto al día siguiente de la baja."),
+            ("corregido", "Un texto técnico aparecía al principio de todas las pantallas."),
+            ("corregido", "Los switches Funcionario y Designado se veían apagados aunque estuvieran activos."),
+            ("corregido", "El aviso «no se ha aplicado ningún cambio» del movimiento de nómina nunca saltaba."),
+        ],
+    },
     {
         "version": "3.4.0",
         "fecha": "2026-10-24",
@@ -163,18 +192,18 @@ CHANGELOG = [
     {
         "version": "3.2.0",
         "fecha": "2026-10-12",
-        "titulo": "Anexo 14-B, Ranking Mensual, auditoría completa y tablas a pantalla justa",
+        "titulo": "Anexo 17.2, Ranking Mensual, auditoría completa y tablas a pantalla justa",
         "cambios": [
-            ("nuevo", "Anexo 14-B «Formación y Desarrollo», con pantalla propia y "
+            ("nuevo", "Anexo 17.2 «Formación y Desarrollo», con pantalla propia y "
                     "Excel: una hoja por departamento más las de Adiestrados, "
                     "Contratados y Fuera de plantilla. Una fila por plaza "
                     "aprobada, también las vacantes, con el importe mensual y "
                     "la tarifa horaria, el nivel de preparación, los años de "
                     "servicio y la CLA y nocturnidad del último reporte de "
                     "Pre-Nómina cerrado."),
-            ("nuevo", "Anexos 14 y 14-A: una pestaña por unidad que se carga al "
+            ("nuevo", "Anexos 17 y 17.1: una pestaña por unidad que se carga al "
                     "abrirla, selector de varias unidades a la vez y Excel con "
-                    "portada y resumen. Nuevo botón para bajar el 14 y el 14-A "
+                    "portada y resumen. Nuevo botón para bajar el 17 y el 17.1 "
                     "en un solo libro. Si hay filtros puestos, Orbith pregunta "
                     "si exportar la plantilla completa o solo lo filtrado."),
             ("nuevo", "Días e Importe de la misión en el contrato. Se pueden "
@@ -235,7 +264,7 @@ CHANGELOG = [
                         "Observaciones ni ofrecía el PDF al terminar."),
             ("mejorado", "Cierres Mensuales adopta los colores de los Informes "
                         "RRHH."),
-            ("corregido", "El Anexo 14 dejaba fuera las unidades que no son "
+            ("corregido", "El Anexo 17 dejaba fuera las unidades que no son "
                         "Principales, como las UEB de Florida, Nuevitas y "
                         "Despacho."),
             ("corregido", "Al exportar el Contrato de Trabajo o su Modificación, "
@@ -254,7 +283,7 @@ CHANGELOG = [
             ("seguridad", "Los avisos de la campana muestran su texto tal cual: "
                         "un título o mensaje con código ya no puede ejecutarse "
                         "en el navegador de quien lo abre."),
-            ("eliminado", "La exportación a PDF del Anexo 14, que no se usaba."),
+            ("eliminado", "La exportación a PDF del Anexo 17, que no se usaba."),
         ],
     },
 
@@ -285,7 +314,7 @@ CHANGELOG = [
                     "que se puede mostrar y filtrar, también sobre un período "
                     "cerrado. Las tarjetas del resumen y el desglose por unidad "
                     "ignoran siempre los cargos fuera de plantilla."),
-            ("nuevo", "El Anexo 14 lista los cargos fuera de la plantilla "
+            ("nuevo", "El Anexo 17 lista los cargos fuera de la plantilla "
                     "aprobada en una sección aparte, con su propio subtotal y "
                     "sin sumar al total oficial, tanto en pantalla como en PDF "
                     "y Excel."),
@@ -386,6 +415,94 @@ CHANGELOG = [
             ("corregido", "Registro Diario: el campo del Plan se veía más alto "
                         "que las otras tres cifras de su tarjeta, y el "
                         "cumplimiento se partía en dos líneas."),
+        ],
+    },
+    {
+        "version": "3.0.1",
+        "fecha": "2026-09-02",
+        "titulo": "Informes por unidad, filtros unificados y validación de formularios",
+        "cambios": [
+            ("nuevo", "Puestos Clave: el informe se puede ver repartido por Unidad Organizativa —cada unidad con sus totales y sus cargos debajo, y las direcciones principales encabezando su rama— o consolidado, sumando cada cargo de todas las unidades. Se elige con el conmutador «Desglosado / Consolidado» de la barra de filtros, que recuerda su última posición."),
+            ("nuevo", "Puestos Clave en Word y PDF: encabezado con el logo, la provincia, el municipio y la unidad del informe, quién lo exportó, el período y «Hoja X de Y» en todas las páginas. El nombre del fichero lleva la unidad y el mes."),
+            ("nuevo", "Filtro por Unidad Organizativa en TODOS los informes de RRHH, con selección múltiple. Elegir una unidad principal incluye sus subunidades, y cada subunidad se puede consultar por separado."),
+            ("nuevo", "Lista de Contratos: filtros por Unidad Organizativa, Departamento y Cargo, todos de selección múltiple."),
+            ("nuevo", "Nomencladores de importes: Maestría, Doctorado, Instructor y CNCI. El contrato toma de ahí sus importes en vez de escribirlos a mano, y una regla de Subsanación avisa de los contratos cuyo importe ya no coincide."),
+            ("nuevo", "Informe Inteligente: dieciséis medidas para Contratos —cuadros, mujeres en puestos clave, grado científico, nivel superior, título de oro, profesionales, jubilados recontratados, contratos determinados, antigüedad y misiones— y ocho para Estructura y Plantilla, con la cobertura de la plantilla y las plazas vacantes. Todas se pueden dibujar en la Evolución mensual."),
+            ("nuevo", "Informe Inteligente: campos nuevos de Puesto Clave y Contrato Determinado en Contratos, y Puesto Clave y Plazas Vacantes en Estructura y Plantilla."),
+            ("nuevo", "Selector de período unificado en Informes RRHH e Informe Inteligente: una rejilla de meses que marca en gris los que no tienen cierre declarado."),
+            ("nuevo", "Usuarios: columna de Rol en el listado y botón «Actualizar conexiones» para ver al momento quién está dentro."),
+            ("nuevo", "Usuarios: al asignar una Unidad Principal a un moderador entran también sus subunidades, y las unidades que ya lleva otro moderador aparecen apagadas en el desplegable. Una subunidad nueva se reparte sola, sin tener que reabrir la ficha del moderador."),
+            ("nuevo", "Subsanación: siete reglas nuevas —cargo sin nivel de preparación, unidad que no declaró su cierre mensual, moderador sin todas las subunidades de su principal, subunidad sin su principal, contrato determinado vencido con el trabajador activo, fecha de alta en la entidad imposible, importe distinto al del nomenclador y fórmula de Pago por Importe que ya no es válida."),
+            ("mejorado", "Un solo criterio de color en todos los formularios: amarillo el campo obligatorio que falta, rojo el dato escrito que no es válido y verde el correcto. El botón de guardar espera a que no quede nada pendiente. Los campos opcionales ya no se pintan de amarillo."),
+            ("mejorado", "Todos los desplegables de la aplicación se ven y se manejan igual, con buscador para escribir en vez de recorrer la lista."),
+            ("mejorado", "El selector de unidades del Dashboard, de Informes RRHH y de Informe Inteligente es el mismo control, con las subunidades indentadas bajo su principal y búsqueda por rama."),
+            ("mejorado", "Informes RRHH: el desplegable de tipo de informe conserva la fuente de datos —si está mirando un cierre de agosto, sigue en agosto al cambiar de informe."),
+            ("mejorado", "El Observador deja de tener acceso al panel de Notificaciones; conserva sus avisos personales en la campana."),
+            ("corregido", "La exportación a Word del Resumen de Puestos Clave y del Resumen por UEB no generaba el documento."),
+            ("corregido", "Puestos Clave: exportar a Word o PDF con el filtro de unidades puesto devolvía un error."),
+            ("corregido", "Lista de Contratos: al cambiar de página se perdían los filtros aplicados."),
+            ("corregido", "El panel de filtros de la Lista de Contratos se cerraba al elegir en un desplegable."),
+            ("corregido", "Informe Inteligente: el selector de Unidad Organizativa no respondía, y la pantalla saltaba al final al recuperar un informe guardado."),
+            ("corregido", "Parámetros Generales: el REUP no se validaba en el navegador."),
+            ("corregido", "Formulario de Baja: «Causa de Baja» es obligatorio y no se marcaba como tal."),
+            ("corregido", "Cierres mensuales: la fotografía guardaba los importes sin decimales."),
+            ("corregido", "Aspirantes: el sexo deducido del carné de identidad no se daba por válido, y los desplegables encadenados del contrato se quedaban en verde después de vaciarse."),
+            ("corregido", "Corregida la errata «Maetría» en el formulario de contrato."),
+            ("eliminado", "Retirada la pantalla de Cargos a página completa de Nomencladores: estaba rota y duplicaba Configuración → Familias de Cargos."),
+        ],
+    },
+    {
+        "version": "3.0.0",
+        "fecha": "2026-08-31",
+        "titulo": "Pre-Nómina, seguridad del acceso y saneamiento de estáticos",
+        "cambios": [
+            ("nuevo", "Pre-Nómina: módulo completo de Reportes de Pago, con conceptos por horas, conceptos por importe y claves de ausencia, más importación y exportación de datos."),
+            ("nuevo", "Pre-Nómina → Calendario: definición de jornadas, calendarios de pago y asignación de calendario a cada trabajador."),
+            ("nuevo", "Pre-Nómina → Mis Plantillas: plantillas de reporte reutilizables por usuario."),
+            ("nuevo", "Nomencladores propios de Pre-Nómina: Pago Asociado por Horas, Pago Asociado por Importe, Escala de Años de Servicio y Claves de Ausencia."),
+            ("nuevo", "Pantalla de acceso y cambio de contraseña: botón para mostrar u ocultar la contraseña mientras se escribe. Solo muestra lo que usted teclea: nunca una contraseña rellenada por el navegador, para que nadie pueda leer en un equipo compartido una clave guardada que no conoce."),
+            ("nuevo", "Pantalla de acceso: el enlace «¿Problemas para acceder?» abre un formulario que envía la incidencia a la bandeja del Administrador sin necesidad de iniciar sesión."),
+            ("seguridad", "Bloqueo por intentos fallidos: 10 fallos en 5 minutos bloquean la cuenta. Protege también el panel de administración de Django, y el Administrador puede desbloquear una cuenta al instante."),
+            ("seguridad", "Auditoría de accesos: los inicios de sesión, los intentos fallidos y los cierres de sesión quedan registrados. Nunca se guarda la contraseña."),
+            ("seguridad", "Caducidad de sesión: se cierra a los 60 minutos de inactividad, con un techo de 12 horas, y la sesión termina al cerrar el navegador. Antes duraba dos semanas."),
+            ("seguridad", "Retiradas las páginas de cambio y reseteo de contraseña que Django publica de serie: estaban accesibles sin iniciar sesión y sin plantilla, así que devolvían un error 500."),
+            ("seguridad", "El sistema arranca en modo seguro si falta el fichero de configuración del entorno, en lugar de mostrar trazas con detalles internos."),
+            ("seguridad", "La cookie de sesión pasa a ser inaccesible desde JavaScript y no viaja en peticiones de otros sitios."),
+            ("seguridad", "Las contraseñas siguen ahora un único criterio en los tres sitios donde se fijan: alta de usuario, cambio desde «Mi Perfil» y panel de administración. Antes el cambio aceptaba contraseñas que el alta rechazaba, entre ellas algunas de las más usadas del mundo. Se mantienen las exigencias de longitud, mayúscula y número, y se añaden el rechazo de contraseñas comunes y de las parecidas al nombre de usuario."),
+            ("corregido", "Los avisos de contraseña al dar de alta un usuario salían en inglés. Ahora están en español, como el resto del sistema."),
+            ("corregido", "Estáticos: la carpeta generada por «collectstatic» estaba versionada y desactualizada, de modo que en producción faltaban recursos que carga toda la aplicación. Ahora se genera en cada despliegue."),
+            ("corregido", "Pantalla de acceso: el usuario ya no se borra al fallar el intento, los avisos de éxito dejan de mostrarse en rojo como si fueran errores y el teclado del móvil ya no fuerza la mayúscula inicial."),
+            ("corregido", "Quien ya tiene la sesión abierta y vuelve a la pantalla de acceso va directo al inicio, en lugar de ver otra vez el formulario."),
+            ("mejorado", "Los gestores de contraseñas del navegador ya reconocen los campos de la pantalla de acceso."),
+            ("eliminado", "Nomencladores «Horario» y «Jornada»: sus tablas estaban vacías, ninguna pantalla los usaba y ningún contrato tenía jornada asignada. El tiempo de trabajo se gestiona ahora desde Pre-Nómina → Calendario."),
+        ],
+    },
+    {
+        "version": "2.5.0",
+        "fecha": "2026-08-18",
+        "titulo": "Guía de progreso, permisos granulares y auditoría en admin",
+        "cambios": [
+            ("nuevo", "Guía de Progreso: sistema de tareas guiadas para nuevos usuarios, con seguimiento de pasos completados, instrucciones contextuales y barra de progreso."),
+            ("nuevo", "Permisos granulares en contratos y subsanación para un control más fino de accesos."),
+            ("nuevo", "Mixins de auditoría en el panel de administración para registrar automáticamente quién crea o modifica registros."),
+            ("nuevo", "Campo 'fecha_alta_entidad' en contratos para registrar la fecha real de alta en la entidad."),
+            ("mejorado", "Reestructuración de templates del Dashboard para facilitar su mantenimiento."),
+            ("mejorado", "Recodificación y deduplicación de eventos de notificaciones para evitar duplicados y mejorar el rendimiento."),
+            ("mejorado", "Actualización masiva de vistas, formularios y plantillas en contratos, subsanación y solicitudes."),
+            ("corregido", "Corrección en la gestión de cumpleaños y jubilaciones en el sistema de notificaciones."),
+        ],
+    },
+    {
+        "version": "2.4.1",
+        "fecha": "2026-08-11",
+        "titulo": "Modo mantenimiento, notificaciones y reportes mejorados",
+        "cambios": [
+            ("nuevo", "Modo mantenimiento: los usuarios no administradores ven una pantalla de mantenimiento cuando está activo."),
+            ("nuevo", "Reporte de problemas: los usuarios pueden adjuntar hasta 4 imágenes y pegar el error de consola del navegador (F12) para facilitar la depuración."),
+            ("nuevo", "Sistema 100% offline: vendorizados Sortable.js y Chart.js, eliminada la dependencia de CDN externos."),
+            ("mejorado", "Integración del centro de notificaciones con el módulo de subsanación."),
+            ("mejorado", "Eliminados paquetes no usados del proyecto (google-generativeai, requests)."),
+            ("corregido", "Validación de imágenes en reportes con mensajes en español."),
         ],
     },
 ]

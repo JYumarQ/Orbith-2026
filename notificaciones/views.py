@@ -346,15 +346,33 @@ def panel_recordatorios(request):
 @require_POST
 def buscar_incidencias(request):
     """Botón «Buscar incidencias»: escaneo bajo demanda, alcance según el rol de
-    quien lo pulsa (ver `notificaciones/escaneo.py::escanear_para_usuario`)."""
-    total = escanear_para_usuario(request.user)
+    quien lo pulsa (ver `notificaciones/escaneo.py::escanear_para_usuario`).
+
+    Va por trozos, un módulo de reglas por petición (24-10-2026): de una vez podía
+    superar el tiempo máximo del servidor. El navegador manda `parte=0, 1, 2…`
+    hasta que la respuesta trae `siguiente: null`, y suma los totales. Sin `parte`,
+    todo de una vez (lo conservan las llamadas internas y las pruebas antiguas)."""
+    from .escaneo import partes_de_la_busqueda
 
     if not request.user.es_admin and not request.user.unidades.exists():
-        mensaje = 'No tiene ninguna unidad asignada, así que no hay nada que buscar en su alcance.'
-    else:
-        mensaje = f'{total} incidencia(s) encontrada(s) y notificada(s).'
+        return JsonResponse({'ok': True, 'total': 0, 'siguiente': None, 'partes': 0, 'mensaje':
+                             'No tiene ninguna unidad asignada, así que no hay nada que buscar en su alcance.'})
 
-    return JsonResponse({'ok': True, 'total': total, 'mensaje': mensaje})
+    parte = request.POST.get('parte')
+    if parte is None:
+        total = escanear_para_usuario(request.user)
+        return JsonResponse({'ok': True, 'total': total, 'siguiente': None, 'partes': 1,
+                             'mensaje': f'{total} incidencia(s) encontrada(s) y notificada(s).'})
+
+    partes = partes_de_la_busqueda()
+    try:
+        indice = int(parte)
+        modulo = partes[indice]
+    except (ValueError, IndexError):
+        return JsonResponse({'ok': False, 'mensaje': 'Parte de la búsqueda no válida.'}, status=400)
+    total = escanear_para_usuario(request.user, modulo=modulo)
+    return JsonResponse({'ok': True, 'total': total, 'partes': len(partes),
+                         'siguiente': indice + 1 if indice + 1 < len(partes) else None})
 
 
 @write_required

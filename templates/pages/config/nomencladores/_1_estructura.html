@@ -242,6 +242,12 @@
                     <div id="zona_color_principal" class="mb-2 d-none p-3 bg-label-primary rounded border border-primary border-opacity-25">
                       <label class="form-label fw-bold text-primary"><i class="fas fa-palette me-2"></i>Color Identificativo</label>
                       <input type="color" name="color" id="color_picker" class="form-control form-control-color w-100 border-0 shadow-sm" title="Elige un color base">
+                      {% comment %} Mismo cálculo que `nomencladores.models.es_color_claro`: como
+                         letra sobre blanco ese color no se leería. En los informes la letra
+                         se oscurece sola; aquí solo se avisa (24-10-2026). {% endcomment %}
+                      <div id="aviso_color_claro" class="small text-warning fw-semibold mt-2 d-none">
+                        <i class="fas fa-exclamation-triangle me-1"></i>Este color es muy claro y como letra puede leerse mal. En los informes se mostrará algo más oscuro.
+                      </div>
                     </div>
 
                     <div id="zona_color_subunidad" class="mb-2 d-none p-3 bg-label-info rounded border border-info border-opacity-25">
@@ -399,10 +405,28 @@
     // Por defecto no hay nada marcado (es tipo Normal), así que mostramos color
     document.getElementById('zona_color_principal').classList.remove('d-none');
     document.getElementById('zona_color_subunidad').classList.add('d-none');
-    
+    avisarColorClaro();
+
     var myModal = new bootstrap.Modal(document.getElementById('modalTipoUnidad'));
     myModal.show();
   }
+
+  // Contraste del color con el blanco (pautas WCAG): por debajo de 4.5 una letra
+  // de ese color no se lee bien. Igual que `nomencladores.models.es_color_claro`.
+  function avisarColorClaro() {
+    const hex = (document.getElementById('color_picker').value || '').replace('#', '');
+    const aviso = document.getElementById('aviso_color_claro');
+    if (!aviso || hex.length !== 6) return;
+    const lin = [0, 2, 4].map(function (i) {
+      const c = parseInt(hex.substr(i, 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    const luminancia = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+    aviso.classList.toggle('d-none', 1.05 / (luminancia + 0.05) >= 4.5);
+  }
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === 'color_picker') avisarColorClaro();
+  });
 
   // 2. ABRIR EL MODAL (PARA EDITAR)
   function editarTipoUnidad(id, descripcion, es_temporal, es_principal, es_subunidad, color, padre_id) {
@@ -425,6 +449,7 @@
         document.getElementById('zona_color_subunidad').classList.add('d-none');
         document.getElementById('color_picker').value = color || '#000000';
     }
+    avisarColorClaro();
 
     var myModal = new bootstrap.Modal(document.getElementById('modalTipoUnidad'));
     myModal.show();

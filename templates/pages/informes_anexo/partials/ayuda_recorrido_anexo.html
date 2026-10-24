@@ -4,7 +4,8 @@
 
    PARÁMETROS
    ----------
-     anexo   '14', '14a' o '14b'.
+     anexo     '17', '17_1' o '17_2' (clave interna del recorrido).
+     etiqueta  '17', '17.1' o '17.2' (lo que se lee).
 {% endcomment %}
 <span class="d-inline-flex align-items-center gap-2 anx-no-print" style="font-size: 1rem; letter-spacing: normal;">
     <button type="button" class="btn btn-icon btn-sm btn-label-info rounded-circle" id="btnAyudaAnexo"
@@ -18,7 +19,7 @@
         </button>
         <ul class="dropdown-menu" style="font-size: .875rem;">
             <li><button type="button" class="dropdown-item" data-recorrido="exportar_anexos:anexo{{ anexo }}">
-                <i class="bx bx-spreadsheet me-1"></i>Recorrer el Anexo {{ anexo|upper }} y exportarlo</button></li>
+                <i class="bx bx-spreadsheet me-1"></i>Recorrer el Anexo {{ etiqueta }} y exportarlo</button></li>
         </ul>
     </span>
 </span>

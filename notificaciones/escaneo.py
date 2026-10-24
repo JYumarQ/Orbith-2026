@@ -121,6 +121,16 @@ def reglas_de_la_busqueda():
             if r.evaluable_en_caliente or r.codigo in REGLAS_POR_REGISTRO]
 
 
+def partes_de_la_busqueda():
+    """Los módulos de reglas en los que se parte la búsqueda (24-10-2026), en el
+    orden de Subsanación. Hacerla de una vez podía superar el tiempo máximo de una
+    petición en el servidor (gunicorn corta a los 30 s) y el usuario veía «Error al
+    buscar incidencias»; por trozos, cada petición hace un módulo."""
+    from subsanacion.constantes import CLAVES_MODULOS
+    presentes = {r.modulo for r in reglas_de_la_busqueda()}
+    return [clave for clave in CLAVES_MODULOS if clave in presentes]
+
+
 def _registros_de_unidades(unidades):
     """Ids de los contratos, fichas y cargos de esas unidades, para `solo_registros`."""
     from django.db.models import Q
@@ -143,16 +153,23 @@ def _registros_de_unidades(unidades):
     }
 
 
-def escanear_para_usuario(usuario):
+def escanear_para_usuario(usuario, modulo=None):
     """Escaneo del usuario: el botón «Buscar incidencias» y la búsqueda automática
-    al iniciar sesión (como mucho cada 4 horas, ver `subsanacion.automatico`).
+    al iniciar sesión (Administrador cada 2 h, Moderador cada 30 min, ver
+    `subsanacion.automatico`).
 
     Admin -> alcance global (sin filtro). Moderador -> sus unidades asignadas
     (`usuario.unidades`); si no tiene ninguna, el alcance es un conjunto VACÍO (no
     global) y el escaneo no encuentra nada en su nombre. Devuelve el total de
     incidencias notificadas.
+
+    Con `modulo`, solo las reglas de ese módulo: es un trozo de la búsqueda (ver
+    `partes_de_la_busqueda`). Cada trozo crea y resuelve SOLO las notificaciones de
+    sus reglas (`codigos_relevantes`), así que los trozos no se pisan entre sí.
     """
     reglas = reglas_de_la_busqueda()
+    if modulo is not None:
+        reglas = [r for r in reglas if r.modulo == modulo]
     unidades = None if usuario.es_admin else list(
         usuario.unidades.values_list('pk', flat=True))
     if unidades is None:

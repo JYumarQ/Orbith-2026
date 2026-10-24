@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Genera la plantilla .xlsx del Anexo 14-B.
+"""Genera la plantilla .xlsx del Anexo 17.2.
 
-    .venv/Scripts/python.exe plantillas_excel/generadores/crear_anexo_14b.py
+    .venv/Scripts/python.exe plantillas_excel/generadores/crear_anexo_17_2.py
 
-Escribe `plantillas_excel/informes_rrhh/anexo_14b_template.xlsx`, que rellena
-`informes_anexo.excel.libro14b`.
+Escribe `plantillas_excel/informes_rrhh/anexo_17_2_template.xlsx`, que rellena
+`informes_anexo.excel.libro17_2`.
 
 DOS HOJAS MOLDE
 ---------------
   * `Portada`    — la rellena `informes.excel._escribir_portada()`, la misma de
                    los siete informes de RRHH. Aquí solo se reserva la hoja.
-  * `Modelo 14B` — el registro. Se copia una vez por departamento y al final el
+  * `Modelo 17.2` — el registro. Se copia una vez por departamento y al final el
                    molde se retira del libro.
 
 LA CABECERA VA A DOS ALTURAS
@@ -47,7 +47,10 @@ from informes.excel import (CENTRADO, FILA_ALTERNA, FUENTE_CABECERA,  # noqa: E4
                             RELLENO_SUBCABECERA)
 
 from informes_anexo.excel.libro import HOJA_PORTADA  # noqa: E402
-from informes_anexo.excel.libro14b import (ANCHOS, COLUMNAS,  # noqa: E402
+from informes_anexo.excel.libro17_2 import (ALTO_CABECERA_ALTA,  # noqa: E402
+                                           ALTO_CABECERA_BAJA, ANCHOS,
+                                           COLUMNAS, ROTULOS_HORIZONTALES,
+                                           TAMANO_LETRA,
                                            FILA_CABECERA_ALTA,
                                            FILA_CABECERA_BAJA, FILA_DATOS,
                                            FILA_ENTIDAD, FILA_FECHA,
@@ -67,14 +70,28 @@ DESTINO = os.path.join(RAIZ, 'plantillas_excel', 'informes_rrhh',
 CENTRADAS = {1, 3, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17}
 
 
+def _a_tamano(fuente):
+    """La misma fuente común de los informes, al tamaño de letra del modelo."""
+    return Font(name=fuente.name, size=TAMANO_LETRA, bold=fuente.b, italic=fuente.i,
+                color=fuente.color)
+
+
+LETRA_CABECERA = _a_tamano(FUENTE_CABECERA)
+LETRA_DATO = _a_tamano(FUENTE_DATO)
+LETRA_ROTULO = _a_tamano(FUENTE_ROTULO)
+LETRA_TITULO = _a_tamano(FUENTE_TITULO)
+#: Cabecera girada 90°, como en el modelo de RRHH (24-10-2026).
+GIRADO = Alignment(horizontal='center', vertical='center', wrap_text=True, text_rotation=90)
+
+
 def rotulo(hoja, fila, columna, texto, combinar_hasta_fila=None,
            combinar_hasta_col=None):
     """Una celda de cabecera, opcionalmente combinada con sus vecinas."""
     celda = hoja.cell(row=fila, column=columna)
     celda.value = texto
-    celda.font = FUENTE_CABECERA
+    celda.font = LETRA_CABECERA
     celda.fill = RELLENO_CABECERA
-    celda.alignment = CENTRADO
+    celda.alignment = CENTRADO if texto in ROTULOS_HORIZONTALES else GIRADO
     celda.border = REJILLA
 
     if combinar_hasta_fila or combinar_hasta_col:
@@ -104,7 +121,7 @@ hoja.merge_cells(start_row=FILA_TITULO, start_column=1,
                  end_row=FILA_TITULO, end_column=COLUMNAS)
 celda = hoja.cell(row=FILA_TITULO, column=1)
 celda.value = TITULO
-celda.font = FUENTE_TITULO
+celda.font = LETRA_TITULO
 celda.alignment = CENTRADO
 
 for fila, desde, hasta in ((FILA_ENTIDAD, 1, 3), (FILA_ENTIDAD, 4, COLUMNAS),
@@ -112,7 +129,7 @@ for fila, desde, hasta in ((FILA_ENTIDAD, 1, 3), (FILA_ENTIDAD, 4, COLUMNAS),
     hoja.merge_cells(start_row=fila, start_column=desde,
                      end_row=fila, end_column=hasta)
     c = hoja.cell(row=fila, column=desde)
-    c.font = FUENTE_DATO
+    c.font = LETRA_DATO
     c.alignment = IZQUIERDA
 
 # --- Cabecera a dos alturas ---
@@ -129,14 +146,14 @@ for desplazamiento, texto in enumerate(ROTULOS_COLA):
     rotulo(hoja, FILA_CABECERA_ALTA, ULTIMA_SALARIO + 1 + desplazamiento, texto,
            combinar_hasta_fila=FILA_CABECERA_BAJA)
 
-hoja.row_dimensions[FILA_CABECERA_ALTA].height = 18
-hoja.row_dimensions[FILA_CABECERA_BAJA].height = 32
+hoja.row_dimensions[FILA_CABECERA_ALTA].height = ALTO_CABECERA_ALTA
+hoja.row_dimensions[FILA_CABECERA_BAJA].height = ALTO_CABECERA_BAJA
 
 # --- La numeración del 1 al 17 que usa el organismo en sus instrucciones ---
 for columna in range(1, COLUMNAS + 1):
     celda = hoja.cell(row=FILA_NUMEROS, column=columna)
     celda.value = columna
-    celda.font = FUENTE_ROTULO
+    celda.font = LETRA_ROTULO
     celda.fill = RELLENO_SUBCABECERA
     celda.alignment = CENTRADO
     celda.border = REJILLA
@@ -144,17 +161,17 @@ for columna in range(1, COLUMNAS + 1):
 # --- Las dos filas modelo ---
 for columna in range(1, COLUMNAS + 1):
     celda = hoja.cell(row=FILA_DATOS, column=columna)
-    celda.font = FUENTE_DATO
+    celda.font = LETRA_DATO
     celda.fill = PatternFill('solid', fgColor=FILA_ALTERNA)
     celda.border = REJILLA
     celda.alignment = CENTRADO if columna in CENTRADAS else Alignment(
         horizontal='left', vertical='center', wrap_text=True)
 
-    # La tarifa horaria: misma rejilla, letra más pequeña y en gris. Es una
-    # continuación de la fila de arriba, no una plaza nueva, y tiene que leerse
-    # como tal sin necesidad de explicarlo.
+    # La tarifa horaria: misma rejilla, en cursiva y gris. Es una continuación
+    # de la fila de arriba, no una plaza nueva, y tiene que leerse como tal sin
+    # necesidad de explicarlo. Mismo tamaño que el resto, como en el modelo.
     celda = hoja.cell(row=FILA_MODELO_TARIFA, column=columna)
-    celda.font = Font(name='Calibri', size=8, italic=True, color=GRIS)
+    celda.font = Font(name='Calibri', size=TAMANO_LETRA, italic=True, color=GRIS)
     celda.border = REJILLA
     celda.alignment = CENTRADO
     # Cinco decimales: con cuatro, dos salarios distintos pueden dar la

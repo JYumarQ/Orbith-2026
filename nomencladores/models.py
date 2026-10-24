@@ -205,6 +205,71 @@ def color_de_sexo(codigo):
 
 
 # --------------------------------------------------------------------------
+# COLORES QUE ELIGE EL USUARIO: QUE SE PUEDAN LEER
+# --------------------------------------------------------------------------
+# El color de cada tipo de unidad lo elige el usuario en el nomenclador. Como
+# fondo o como icono vale cualquiera, pero como LETRA sobre blanco un amarillo o
+# un verde limón no se lee (informe de contratos determinados, 24-10-2026).
+# Se mide con el contraste de las pautas de accesibilidad (WCAG): 4.5 es el
+# mínimo recomendado para texto normal.
+
+CONTRASTE_MINIMO = 4.5
+
+
+def _luminancia(hexadecimal):
+    """Luminancia relativa (0 = negro, 1 = blanco) de un color «#RRGGBB»."""
+    canales = []
+    for i in (1, 3, 5):
+        c = int(hexadecimal[i:i + 2], 16) / 255
+        canales.append(c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4)
+    r, g, b = canales
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def contraste_con_blanco(hexadecimal):
+    return 1.05 / (_luminancia(hexadecimal) + 0.05)
+
+
+def _normalizar_hex(color):
+    """«#abc» o «#AABBCC» → «#aabbcc»; None si no es un color hexadecimal."""
+    texto = (color or '').strip().lower()
+    if len(texto) == 4 and texto.startswith('#'):
+        texto = '#' + ''.join(c * 2 for c in texto[1:])
+    if len(texto) != 7 or not texto.startswith('#'):
+        return None
+    try:
+        int(texto[1:], 16)
+    except ValueError:
+        return None
+    return texto
+
+
+def es_color_claro(color):
+    """¿Este color, como letra sobre blanco, se lee mal?"""
+    normal = _normalizar_hex(color)
+    return bool(normal) and contraste_con_blanco(normal) < CONTRASTE_MINIMO
+
+
+def color_legible(color):
+    """El mismo color, oscurecido lo justo para leerse como letra sobre blanco.
+
+    Conserva el tono (un amarillo pasa a mostaza, un verde claro a verde oscuro)
+    mezclándolo poco a poco con negro hasta llegar al contraste mínimo. Un color
+    que ya se lee se devuelve tal cual, y uno que no es hexadecimal también.
+    """
+    normal = _normalizar_hex(color)
+    if not normal or contraste_con_blanco(normal) >= CONTRASTE_MINIMO:
+        return color
+    r, g, b = (int(normal[i:i + 2], 16) for i in (1, 3, 5))
+    for paso in range(1, 21):
+        factor = 1 - paso * 0.05
+        oscuro = '#%02x%02x%02x' % (round(r * factor), round(g * factor), round(b * factor))
+        if contraste_con_blanco(oscuro) >= CONTRASTE_MINIMO:
+            return oscuro
+    return '#000000'
+
+
+# --------------------------------------------------------------------------
 # NIVEL EDUCACIONAL: LA SIGLA QUE SE MUESTRA
 # --------------------------------------------------------------------------
 # La base guarda unos códigos y la aplicación enseña OTROS. No es un descuido:

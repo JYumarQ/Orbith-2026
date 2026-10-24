@@ -1,4 +1,4 @@
-{% comment %} El selector de unidades y las pestañas. Lo comparten el Anexo 14 y el 14-A.
+{% comment %} El selector de unidades y las pestañas. Lo comparten el Anexo 17 y el 17.1.
 
    Dos mandos, cada uno con su trabajo y sin pisarse:
 
@@ -35,7 +35,7 @@
     </div>
 
     <ul class="nav nav-tabs anx-tabs px-3" role="tablist">
-        {% comment %} El 14-B no lleva Resumen: ese conteo es el del 14-A y en un
+        {% comment %} El 17.2 no lleva Resumen: ese conteo es el del 17.1 y en un
            registro de trabajadores no dice gran cosa. {% endcomment %}
         {% if not sin_resumen %}
         <li class="nav-item" role="presentation">
@@ -51,7 +51,7 @@
                 {% comment %} `click once` es lo que hace la carga diferida: HTMX pide el
                    panel la primera vez que se pulsa la pestaña y no vuelve a pedirlo.
                    El query string entero viaja con la petición para que los filtros de
-                   cargo del Anexo 14 se apliquen también dentro del panel. {% endcomment %}
+                   cargo del Anexo 17 se apliquen también dentro del panel. {% endcomment %}
                 <button class="nav-link {% if sin_resumen and forloop.first %}active{% endif %}" data-bs-toggle="tab"
                         data-bs-target="#hoja-u{{ u.pk }}" type="button" role="tab"
                         hx-get="{% url url_panel u.pk %}?{{ request.GET.urlencode }}"

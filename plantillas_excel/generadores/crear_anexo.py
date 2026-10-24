@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Genera la plantilla .xlsx de los Anexos 14 y 14-A.
+"""Genera la plantilla .xlsx de los Anexos 17 y 17.1.
 
     .venv/Scripts/python.exe plantillas_excel/generadores/crear_anexo.py
 
@@ -13,8 +13,8 @@ ninguna se entrega tal cual:
 
   * `Portada`     — la rellena `informes.excel._escribir_portada()`, la misma de
                     los siete informes de RRHH. Aquí solo se reserva la hoja.
-  * `Modelo 14`   — el detalle: una fila por cargo, seis columnas.
-  * `Modelo 14A`  — el conteo: una fila por unidad o departamento, siete columnas.
+  * `Modelo 17`   — el detalle: una fila por cargo, seis columnas.
+  * `Modelo 17.1`  — el conteo: una fila por unidad o departamento, siete columnas.
 
 Al exportar se copia el molde que toque una vez por unidad, se renombra y se
 rellena; al final los moldes se retiran del libro. Copiarlos en vez de dibujar
@@ -61,7 +61,7 @@ from informes_anexo.excel.libro import (DISENOS, FILA_CABECERA,  # noqa: E402
                                         FILA_EMPRESA, FILA_MODELO,
                                         FILA_ORGANISMO, FILA_UNIDAD,
                                         HOJA_PORTADA, NOMBRE_PLANTILLA)
-from informes_anexo.anexo14a import (NIVEL_BLOQUE, NIVEL_DETALLE,  # noqa: E402
+from informes_anexo.anexo17_1 import (NIVEL_BLOQUE, NIVEL_DETALLE,  # noqa: E402
                                      NIVEL_SUBTOTAL)
 
 DESTINO = os.path.join(RAIZ, 'plantillas_excel', 'informes_rrhh',

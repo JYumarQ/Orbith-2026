@@ -35,6 +35,8 @@ INTERVALO_ADMIN = timedelta(hours=2)
 INTERVALO_MODERADOR = timedelta(minutes=30)
 #: A partir de esta hora (local) no se lanza ninguna comprobación automática.
 HORA_LIMITE = 16
+#: Una búsqueda por trozos empezada hace más de esto ya no admite más trozos.
+DURACION_MAXIMA = timedelta(minutes=10)
 
 
 def _en_horario():
@@ -125,22 +127,47 @@ def finalizar(request, pk):
 
 @require_POST
 def buscar(request):
+    """Búsqueda ligera del usuario, por trozos (24-10-2026): un módulo de reglas por
+    petición, como el botón «Buscar incidencias» de Advertencias, para no superar el
+    tiempo máximo del servidor. `parte=0` la empieza (y anota la hora, que es lo que
+    limita la frecuencia); las siguientes solo se aceptan si ESTE usuario empezó una
+    hace menos de `DURACION_MAXIMA`. Sin `parte`, todo de una vez."""
     if not request.user.is_authenticated:
         return _sin_sesion()
     usuario = request.user
-    if not _busqueda_pendiente(usuario):
-        return JsonResponse({'hecho': False})
-    from notificaciones.escaneo import escanear_para_usuario
+    from django.db.models import Q
+
+    from notificaciones.escaneo import escanear_para_usuario, partes_de_la_busqueda
     from usuarios.models import CustomUser
 
-    # Se anota ANTES de buscar y de forma condicional: si dos pestañas abren a la
-    # vez, la actualización solo «gana» en una y la otra no busca.
-    from django.db.models import Q
-    limite = timezone.now() - _intervalo(usuario)
-    ganada = CustomUser.objects.filter(
-        Q(ultima_busqueda_incidencias__isnull=True) | Q(ultima_busqueda_incidencias__lte=limite),
-        pk=usuario.pk).update(ultima_busqueda_incidencias=timezone.now())
-    if not ganada:
+    parte = request.POST.get('parte')
+    if parte in (None, '0'):
+        if not _busqueda_pendiente(usuario):
+            return JsonResponse({'hecho': False})
+        # Se anota ANTES de buscar y de forma condicional: si dos pestañas abren a la
+        # vez, la actualización solo «gana» en una y la otra no busca.
+        limite = timezone.now() - _intervalo(usuario)
+        ganada = CustomUser.objects.filter(
+            Q(ultima_busqueda_incidencias__isnull=True) | Q(ultima_busqueda_incidencias__lte=limite),
+            pk=usuario.pk).update(ultima_busqueda_incidencias=timezone.now())
+        if not ganada:
+            return JsonResponse({'hecho': False})
+        if parte is None:
+            return JsonResponse({'hecho': True, 'incidencias': escanear_para_usuario(usuario)})
+        indice = 0
+    else:
+        ultima = usuario.ultima_busqueda_incidencias
+        if (_intervalo(usuario) is None or ultima is None
+                or timezone.now() - ultima > DURACION_MAXIMA):
+            return JsonResponse({'hecho': False})
+        try:
+            indice = int(parte)
+        except ValueError:
+            return JsonResponse({'hecho': False})
+
+    partes = partes_de_la_busqueda()
+    if not 0 <= indice < len(partes):
         return JsonResponse({'hecho': False})
-    total = escanear_para_usuario(usuario)
-    return JsonResponse({'hecho': True, 'incidencias': total})
+    total = escanear_para_usuario(usuario, modulo=partes[indice])
+    return JsonResponse({'hecho': True, 'incidencias': total, 'partes': len(partes),
+                         'siguiente': indice + 1 if indice + 1 < len(partes) else None})

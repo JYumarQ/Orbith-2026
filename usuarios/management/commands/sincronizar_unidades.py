@@ -20,7 +20,7 @@ Django o un `set()` directo. Y cuando los datos se descuadran, el fallo es
 SILENCIOSO y caro:
 
   * el usuario deja de ver a los trabajadores de esa subunidad en Contratos,
-    Informes, Dashboard, Anexo 14, Pre-Nómina y Notificaciones;
+    Informes, Dashboard, Anexo 17, Pre-Nómina y Notificaciones;
   * y el moderador no puede declarar su cierre mensual, porque
     `cierres.permisos.puede_declarar` exige tener la unidad asignada y NIEGA
     declarar directamente la principal.

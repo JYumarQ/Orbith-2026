@@ -1,16 +1,16 @@
 {% extends 'base/base.html' %}
 {% load static %}
 
-{% comment %} Anexo 14-B: la plantilla de cargos CON el registro de trabajadores.
+{% comment %} Anexo 17.2: la plantilla de cargos CON el registro de trabajadores.
 
-   El tercero de la familia. Se navega igual que el 14 y el 14-A —mismo selector
+   El tercero de la familia. Se navega igual que el 17 y el 17.1 —mismo selector
    múltiple de unidades y una pestaña por cada una, con carga diferida— pero su
-   libro va APARTE: no entra en el combinado de 14 + 14A.
+   libro va APARTE: no entra en el combinado de 17 + 17.1.
 
    No tiene filtros de cargo ni pestaña de Resumen: aquí no se cuentan plazas, se
    registra quién las ocupa. {% endcomment %}
 
-{% block title %}Anexo 14B{% endblock %}
+{% block title %}Anexo 17.2{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'vendor/fonts/bootstrap-icons.css' %}">
@@ -24,14 +24,14 @@
         <div class="d-flex align-items-center gap-3">
             <span class="inf-hero-icono"><i class="bi bi-people-fill"></i></span>
             <div>
-                <h1 class="h4 mb-0 d-flex align-items-center flex-wrap gap-2"><span>Anexo 14B — Plantilla de Cargos y Registro de Trabajadores</span>{% include 'pages/informes_anexo/partials/ayuda_recorrido_anexo.html' with anexo='14b' %}</h1>
+                <h1 class="h4 mb-0 d-flex align-items-center flex-wrap gap-2"><span>Anexo 17.2 — Plantilla de Cargos y Registro de Trabajadores</span>{% include 'pages/informes_anexo/partials/ayuda_recorrido_anexo.html' with anexo='17_2' etiqueta='17.2' %}</h1>
                 <p>Quién ocupa cada plaza aprobada y cuánto cobra, con el salario desglosado.</p>
             </div>
         </div>
-        {% include "pages/informes_anexo/partials/acciones_export.html" with url_propio='informes_anexo:anexo14b_excel' nombre_propio='Anexo 14B' sin_combinado=True %}
+        {% include "pages/informes_anexo/partials/acciones_export.html" with url_propio='informes_anexo:anexo17_2_excel' nombre_propio='Anexo 17.2' sin_combinado=True %}
     </div>
 
-    <form method="get" id="formFiltrosAnexo14">
+    <form method="get" id="formFiltrosAnexo17">
 
         <div class="anx-panel">
             <div class="anx-panel-head">
@@ -79,7 +79,7 @@
             </div>
         </div>
 
-        {% include "pages/informes_anexo/partials/selector_y_pestanas.html" with url_panel='informes_anexo:anexo14b_panel_unidad' sin_resumen=True %}
+        {% include "pages/informes_anexo/partials/selector_y_pestanas.html" with url_panel='informes_anexo:anexo17_2_panel_unidad' sin_resumen=True %}
 
         <div class="anx-panel">
             <div class="tab-content">

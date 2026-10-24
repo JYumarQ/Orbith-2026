@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Los libros de Excel de los Anexos 14 y 14-A.
+"""Los libros de Excel de los Anexos 17 y 17.1.
 
 TRES LIBROS, UN SOLO MOLDE
 --------------------------
 Se exportan tres cosas distintas y las tres salen de aquí:
 
-  * `MODO_14`    — el Anexo 14 solo, el detalle.
-  * `MODO_14A`   — el Anexo 14-A solo, el conteo.
+  * `MODO_17`    — el Anexo 17 solo, el detalle.
+  * `MODO_17_1`   — el Anexo 17.1 solo, el conteo.
   * `MODO_AMBOS` — los dos juntos, como el fichero que entregó Capital Humano.
 
 Los tres empiezan igual: **Portada** y **Resumen**. Detrás van las hojas de cada
-unidad —`Oficina Central 14`, `Oficina Central 14A`, `Florida 14`…— según el modo.
+unidad —`Oficina Central 17`, `Oficina Central 17.1`, `Florida 17`…— según el modo.
 
 POR QUÉ NO SE DIBUJA LA HOJA
 ----------------------------
@@ -41,24 +41,24 @@ from informes.excel import (FUENTE_DATO, FUENTE_PIE, IZQUIERDA,
                             LARGO_MAXIMO_HOJA, TIPO_MIME, _escribir_portada,
                             ruta_de_plantilla)
 
-from ..anexo14a import (COLUMNAS_14A, NIVEL_BLOQUE, NIVEL_DETALLE,
+from ..anexo17_1 import (COLUMNAS_17_1, NIVEL_BLOQUE, NIVEL_DETALLE,
                         NIVEL_SUBTOTAL)
 
 NOMBRE_PLANTILLA = 'anexo_template.xlsx'
 HOJA_PORTADA = 'Portada'
 HOJA_RESUMEN = 'Resumen'
 
-MODO_14 = '14'
-MODO_14A = '14a'
-MODO_14B = '14b'
+MODO_17 = '17'
+MODO_17_1 = '17_1'
+MODO_17_2 = '17_2'
 MODO_AMBOS = 'ambos'
 
 #: Cómo se llama cada informe en el nombre del fichero y en el de la hoja.
 NOMBRES_DE_INFORME = {
-    MODO_14: 'Anexo 14',
-    MODO_14A: 'Anexo 14A',
-    MODO_14B: 'Anexo 14B',
-    MODO_AMBOS: 'Anexo 14 y 14A',
+    MODO_17: 'Anexo 17',
+    MODO_17_1: 'Anexo 17.1',
+    MODO_17_2: 'Anexo 17.2',
+    MODO_AMBOS: 'Anexo 17 y 17.1',
 }
 
 # --------------------------------------------------------------------------
@@ -83,30 +83,30 @@ FILA_DATOS = FILA_MODELO[NIVEL_DETALLE]
 #: Los rótulos de las columnas de conteo salen de la MISMA definición que usa la
 #: pantalla, y no de una lista escrita aquí a mano: duplicarlos era la forma
 #: segura de que un día el papel y la pantalla dejaran de llamar igual a lo mismo.
-ROTULOS_14A = (['Denominación']
-               + [rotulo for _, rotulo, _, _ in COLUMNAS_14A]
+ROTULOS_17_1 = (['Denominación']
+               + [rotulo for _, rotulo, _, _ in COLUMNAS_17_1]
                + ['Total de Cargos'])
 
-ROTULOS_14 = ['Cargos actual', 'Categ. ocup.', 'Cantidad de cargos', 'Rol',
+ROTULOS_17 = ['Cargos actual', 'Categ. ocup.', 'Cantidad de cargos', 'Rol',
               'Nivel de preparación', 'Grupo Escala']
 
 DISENOS = {
-    MODO_14: {
-        'molde': 'Modelo 14',
-        'sufijo': '14',
-        'titulo': 'Anexo No 14',
-        'rotulos': ROTULOS_14,
+    MODO_17: {
+        'molde': 'Modelo 17',
+        'sufijo': '17',
+        'titulo': 'Anexo No 17',
+        'rotulos': ROTULOS_17,
         # Ancho en caracteres. La primera carga con nombres de cargo largos.
         'anchos': [52, 12, 14, 14, 26, 12],
         'centradas': (2, 3, 4, 6),
         'columna_derecha': 5,
         'orientacion': 'landscape',
     },
-    MODO_14A: {
-        'molde': 'Modelo 14A',
-        'sufijo': '14A',
-        'titulo': 'Anexo No 14-A',
-        'rotulos': ROTULOS_14A,
+    MODO_17_1: {
+        'molde': 'Modelo 17.1',
+        'sufijo': '17.1',
+        'titulo': 'Anexo No 17.1',
+        'rotulos': ROTULOS_17_1,
         'anchos': [46, 11, 8, 8, 8, 8, 16],
         'centradas': (2, 3, 4, 5, 6, 7),
         'columna_derecha': 5,
@@ -138,7 +138,7 @@ def _nombre_de_hoja(nombre, usados):
 
     Excel rechaza los de más de 31 caracteres y los que llevan `/ \\ ? * : [ ]`.
     El nombre de la unidad va ENTERO y solo se recorta si no cabe: abreviarlo
-    siempre —«Oficina C 14»— ahorraba cuatro letras a costa de que dos unidades
+    siempre —«Oficina C 17»— ahorraba cuatro letras a costa de que dos unidades
     de nombre parecido se confundieran.
 
     Y rechaza dos hojas con el mismo nombre: dos unidades pueden coincidir en los
@@ -272,7 +272,7 @@ def _titulo_firmante(firmante, defecto):
 # --------------------------------------------------------------------------
 
 def _filas_de_conteo(bloque_filas):
-    """Las filas del 14-A, ya como `(nivel, valores)`.
+    """Las filas del 17.1, ya como `(nivel, valores)`.
 
     Las de rótulo van sin cifras: sus números son los del `Subtotal` que cierra
     su bloque, y repetirlos arriba haría que la columna pareciera sumar el doble.
@@ -280,17 +280,17 @@ def _filas_de_conteo(bloque_filas):
     salida = []
     for fila in bloque_filas:
         if fila['nivel'] == NIVEL_BLOQUE:
-            valores = [fila['denominacion']] + [None] * len(COLUMNAS_14A) + [None]
+            valores = [fila['denominacion']] + [None] * len(COLUMNAS_17_1) + [None]
         else:
             valores = ([fila['denominacion']]
-                       + [fila[clave] for clave, _, _, _ in COLUMNAS_14A]
+                       + [fila[clave] for clave, _, _, _ in COLUMNAS_17_1]
                        + [fila['total']])
         salida.append((fila['nivel'], valores))
     return salida
 
 
 def _filas_de_detalle(secciones, etiquetas):
-    """Las filas del Anexo 14: rótulos de subunidad y departamento, y sus cargos.
+    """Las filas del Anexo 17: rótulos de subunidad y departamento, y sus cargos.
 
     Devuelve también el total de plazas, que es lo que cierra la hoja. Los cargos
     fuera de plantilla NO entran aquí: van en su propio bloque, después del Total.
@@ -420,10 +420,10 @@ def libro_del_anexo(datos, modo):
 
     # --- Resumen. Lo llevan los TRES libros: el conteo por unidad es la puerta
     # de entrada al documento, se pida el detalle o se pida el resumen. ---
-    diseno_resumen = DISENOS[MODO_14A]
-    hoja = libro.copy_worksheet(moldes[MODO_14A])
+    diseno_resumen = DISENOS[MODO_17_1]
+    hoja = libro.copy_worksheet(moldes[MODO_17_1])
     hoja.title = _nombre_de_hoja(HOJA_RESUMEN, usados)
-    _ajustes_de_impresion(hoja, moldes[MODO_14A])
+    _ajustes_de_impresion(hoja, moldes[MODO_17_1])
     resumen = datos['resumen']
     resumen_fuera = datos['resumen_fuera']
     _rellenar(
@@ -435,7 +435,7 @@ def libro_del_anexo(datos, modo):
         'CARGOS FUERA DE LA PLANTILLA APROBADA (no incluidos en el total anterior)')
 
     # --- Una hoja por unidad y modo. ---
-    modos = [MODO_14, MODO_14A] if modo == MODO_AMBOS else [modo]
+    modos = [MODO_17, MODO_17_1] if modo == MODO_AMBOS else [modo]
 
     for entrada in datos['unidades']:
         unidad = entrada['unidad']
@@ -446,7 +446,7 @@ def libro_del_anexo(datos, modo):
                 '%s %s' % (unidad.descripcion, diseno['sufijo']), usados)
             _ajustes_de_impresion(hoja, moldes[clave])
 
-            if clave == MODO_14A:
+            if clave == MODO_17_1:
                 aprobada, fuera = entrada['conteo'], entrada['conteo_fuera']
                 _rellenar(
                     hoja, datos, unidad, diseno,
@@ -476,7 +476,10 @@ def libro_del_anexo(datos, modo):
 
 
 def nombre_de_fichero(datos, modo, filtrado=False):
-    """`<Alcance> Anexo 14 15-09-2026.xlsx`, con el alcance de verdad.
+    """`Anexo_17_Toda_la_Empresa_15-09-2026.xlsx`, con el alcance de verdad.
+
+    Primero el informe, después el alcance y la fecha, como el resto de
+    descargas de Orbith (core/nombres_descarga.py, 24-10-2026).
 
     El alcance no puede ser el nombre de «la» unidad desde que el selector admite
     varias: con dos marcadas, cualquiera de los dos nombres mentiría. Se dice lo
@@ -487,17 +490,13 @@ def nombre_de_fichero(datos, modo, filtrado=False):
     plantilla de la unidad: es un recorte, y confundirlos en un documento que se
     entrega al organismo sería grave.
     """
-    partes = [datos.get('alcance_fichero') or 'Informe',
-              NOMBRES_DE_INFORME[modo]]
+    from core.nombres_descarga import nombre_de_informe
+    partes = [NOMBRES_DE_INFORME[modo], datos.get('alcance_fichero') or 'Informe']
     if filtrado:
-        partes.append('(filtrado)')
+        partes.append('filtrado')
     partes.append((datos.get('fecha_generacion').strftime('%d-%m-%Y')
                    if datos.get('fecha_generacion') else ''))
-
-    limpio = ' '.join(p for p in partes if p)
-    for prohibido in '/\\?*:[]"<>|':
-        limpio = limpio.replace(prohibido, '-')
-    return '%s.xlsx' % limpio
+    return nombre_de_informe(*partes, extension='xlsx', fecha=False)
 
 
 def respuesta_excel(libro, nombre_fichero):

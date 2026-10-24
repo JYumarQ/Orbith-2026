@@ -233,6 +233,16 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": True,
         },
+        # Pedida por RRHH el 24-10-2026. Bajas la hereda (`_campos_cbaja`). En un
+        # período cerrado se lee de la ficha viva, como la serie del carné.
+        "direccion": {
+            "label": "Dirección",
+            "ruta_orm": "aspirante__direccion",
+            "tipo": "texto",
+            "categoria": "trabajador",
+            "filtrable": True, "ordenable": False, "agrupable": False,
+            "sensible": True,
+        },
         "sexo": {
             "label": "Sexo",
             "ruta_orm": "aspirante__sexo",
@@ -443,6 +453,15 @@ def _campos_calta():
             "filtrable": True, "ordenable": False, "agrupable": True,
             "sensible": False,
         },
+        # 24-10-2026: como Funcionario y Designado, es del cargo.
+        "de_confianza": {
+            "label": "De Confianza",
+            "ruta_orm": "cargo__de_confianza",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
         "cant_aprobada": {
             "label": "Cantidad de Plazas Aprobadas",
             "ruta_orm": "cargo__cant_aprobada",
@@ -609,6 +628,39 @@ def _campos_calta():
             "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
         },
+        "confianza_res": {
+            "label": "No. Res. De Confianza",
+            "ruta_orm": "confianza_res",
+            "tipo": "texto",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        # Modalidad de trabajo (24-10-2026).
+        "trabajo_distancia": {
+            "label": "Trab. a distancia",
+            "ruta_orm": "trabajo_distancia",
+            "tipo": "booleano",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+        "teletrabajo": {
+            "label": "Teletrabajo",
+            "ruta_orm": "teletrabajo",
+            "tipo": "booleano",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+        "pluriempleo": {
+            "label": "Pluriempleo",
+            "ruta_orm": "pluriempleo",
+            "tipo": "booleano",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
         "c_formal_res": {
             "label": "No. Res. Calif. Formal",
             "ruta_orm": "c_formal_res",
@@ -736,7 +788,8 @@ def _campos_cbaja():
         "cnci", "instructor",
         "fecha_vence_lic", "fecha_vence_recal", "fecha_vence_seg",
         "jubilado_recontratado", "salario",
-        "c_formal", "funcionario_res", "designado_res", "c_formal_res",
+        "c_formal", "funcionario_res", "designado_res", "c_formal_res", "confianza_res",
+        "trabajo_distancia", "teletrabajo", "pluriempleo",
         # La Misión es un dato del contrato vigente: no existe en `CBaja`.
         "mision", "pais", "mision_dias", "mision_importe",
     }
@@ -807,7 +860,7 @@ def _campos_cbaja():
 def _campos_cargoplantilla():
     """
     Catálogo de CargoPlantilla (la plaza/estructura, sin importar quién la
-    ocupa). Mismos campos de estructura ya usados en el módulo Anexo 14:
+    ocupa). Mismos campos de estructura ya usados en el módulo Anexo 17:
     categoría ocupacional, rol, nivel de preparación y grupo escala.
     """
     return {
@@ -900,6 +953,14 @@ def _campos_cargoplantilla():
             "filtrable": True, "ordenable": False, "agrupable": True,
             "sensible": False,
         },
+        "de_confianza": {
+            "label": "De Confianza",
+            "ruta_orm": "de_confianza",
+            "tipo": "booleano",
+            "categoria": "cargo",
+            "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
         "activo": {
             "label": "Activo",
             "ruta_orm": "activo",
@@ -942,6 +1003,54 @@ def _campos_cargoplantilla():
             "tipo": "booleano",
             "categoria": "cargo",
             "filtrable": True, "ordenable": False, "agrupable": True,
+            "sensible": False,
+        },
+        # ---------------- DATOS DEL CONTRATO (24-10-2026) ----------------
+        # Cuántos contratos activos tiene cada cargo, por grupo de tipo de
+        # contrato. Son CONTEOS y no columnas del contrato a propósito: unir cada
+        # cargo con sus contratos repetiría el cargo una vez por contrato y
+        # multiplicaría sus plazas aprobadas y vacantes. Así cada cargo sigue
+        # siendo una sola fila. Para «cargos con determinados», filtre
+        # «Contratos Determinados» mayor que 0. Los calcula el motor por anotación
+        # (ver `CONTEOS_DE_CONTRATOS` en motor.py).
+        "contratos_activos": {
+            "label": "Contratos Activos",
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "contratos_ocupan_plaza": {
+            "label": "Contratos que Ocupan Plaza",
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "contratos_no_ocupan_plaza": {
+            "label": "Contratos que No Ocupan Plaza",
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "contratos_determinados": {
+            "label": "Contratos Determinados",
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
+            "sensible": False,
+        },
+        "contratos_indeterminados": {
+            "label": "Contratos No Determinados",
+            "ruta_orm": None,
+            "tipo": "numero",
+            "categoria": "contrato",
+            "filtrable": True, "ordenable": True, "agrupable": False,
             "sensible": False,
         },
         "vacantes": {
@@ -1467,6 +1576,10 @@ _RUTAS_HISTORICAS_CONTRATO = {
     "mision_importe": "mision_importe",
     "funcionario_res": "funcionario_res",
     "designado_res": "designado_res",
+    "confianza_res": "confianza_res",
+    "trabajo_distancia": "trabajo_distancia",
+    "teletrabajo": "teletrabajo",
+    "pluriempleo": "pluriempleo",
     "c_formal": "c_formal",
     "c_formal_res": "c_formal_res",
     "fecha_vence_lic": "fecha_vence_lic",
@@ -1486,12 +1599,14 @@ _RUTAS_HISTORICAS_CONTRATO = {
     "nivel_preparacion": "cierre_cargo__nivel_preparacion_nombre",
     "funcionario": "cierre_cargo__funcionario",
     "designado": "cierre_cargo__designado",
+    "de_confianza": "cierre_cargo__de_confianza",
     "cant_aprobada": "cierre_cargo__cant_aprobada",
     "cant_cubierta": "cierre_cargo__cant_cubierta",
     # Datos personales que no son historia: se leen del registro vivo, para que
     # corregir hoy un dato mal cargado arregle también los meses ya cerrados.
     "serie_ci": "aspirante_vivo__serie_ci",
     "raza": "aspirante_vivo__raza",
+    "direccion": "aspirante_vivo__direccion",
 }
 
 _RUTAS_HISTORICAS_CARGO = {
@@ -1503,6 +1618,7 @@ _RUTAS_HISTORICAS_CARGO = {
     "unidad_organizativa": "cierre__unidad_descripcion",
     "funcionario": "funcionario",
     "designado": "designado",
+    "de_confianza": "de_confianza",
     "activo": "activo",
     "en_plantilla": "en_plantilla",
     "cant_aprobada": "cant_aprobada",
@@ -1548,12 +1664,22 @@ def _campos_historico_contrato():
     return campos
 
 
+#: Los conteos de contratos de «Estructura y Plantilla Aprobada» (24-10-2026).
+CONTEOS_DE_CONTRATOS_CLAVES = ('contratos_activos', 'contratos_ocupan_plaza',
+                               'contratos_no_ocupan_plaza', 'contratos_determinados',
+                               'contratos_indeterminados')
+
+
 def _campos_historico_cargo():
     campos_vivos = _campos_cargoplantilla()
     campos = _campos_historico(campos_vivos, _RUTAS_HISTORICAS_CARGO)
     # Derivado: la fotografía congela aprobadas y cubiertas, y la resta la hace
     # el motor con una anotación, igual que en la fuente viva.
     campos["vacantes"] = _clonar_campo(campos_vivos["vacantes"], None)
+    # Los conteos de contratos también los anota el motor, contando los
+    # contratos de la MISMA fotografía (CierreContrato.cierre_cargo).
+    for clave in CONTEOS_DE_CONTRATOS_CLAVES:
+        campos[clave] = _clonar_campo(campos_vivos[clave], None)
     # Mismo caso que en el histórico de contratos: la fotografía congeló el
     # nivel en romano, no el número con el que la fuente viva ordena.
     campos["grupo_escala"] = _clonar_campo(

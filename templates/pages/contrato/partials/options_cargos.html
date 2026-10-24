@@ -6,6 +6,7 @@
             data-grupo="{{ c.ncargo.grupo_escala.nivel|default:'' }}"
             data-funcionario="{% if c.funcionario %}true{% else %}false{% endif %}"
             data-designado="{% if c.designado %}true{% else %}false{% endif %}"
+            data-de-confianza="{% if c.de_confianza %}true{% else %}false{% endif %}"
             {% comment %} Imprescindible, y con el mismo nombre que emite
                `SelectCargosConPlazasWidget`: este partial es el que rellena el
                desplegable por la cascada HTMX (unidad -> departamento -> cargo),

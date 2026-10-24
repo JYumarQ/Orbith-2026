@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% comment %} Registro de errores (24-10-2026): ver soporte/admin.py::RegistroErroresAdmin
+   y core/registro_errores.py. {% endcomment %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; Registro de errores
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .reg-errores { display: flex; gap: 1.5rem; align-items: flex-start; }
+  .reg-errores ul { list-style: none; padding: 0; margin: 0; min-width: 15rem; }
+  .reg-errores li { padding: .35rem .5rem; border-bottom: 1px solid var(--hairline-color, #eee); }
+  .reg-errores li.actual { background: var(--selected-row, #ffc); font-weight: bold; }
+  .reg-errores pre { flex: 1; margin: 0; max-height: 70vh; overflow: auto; white-space: pre-wrap;
+                     word-break: break-word; font-size: 12px; padding: 1rem;
+                     background: var(--darkened-bg, #f8f8f8); border: 1px solid var(--hairline-color, #eee); }
+</style>
+
+<p>Cada día con algún error tiene su propio fichero. Se guardan los últimos {{ dias }} días;
+   los anteriores se borran solos. Si algo falla en Orbith, descargue el fichero de ese día y
+   envíelo al desarrollador.</p>
+
+{% if not carpeta_ok %}
+  <p class="errornote">La carpeta del registro no existe o no se puede escribir en ella, así que
+     los errores no se están guardando. Revise el permiso de escritura de la carpeta <code>logs</code>
+     del proyecto (o la indicada en <code>LOG_DIR</code>).</p>
+{% elif not ficheros %}
+  <p><strong>No hay errores registrados.</strong></p>
+{% else %}
+  <div class="reg-errores">
+    <ul>
+      {% for f in ficheros %}
+        <li {% if f.nombre == elegido %}class="actual"{% endif %}>
+          <a href="?f={{ f.nombre|urlencode }}">{{ f.nombre }}</a> <small>({{ f.kb }} KB)</small>
+          · <a href="{% url 'admin:soporte_registroerrores_descargar' f.nombre %}">Descargar</a>
+        </li>
+      {% endfor %}
+    </ul>
+    <div style="flex: 1; min-width: 0;">
+      {% if recortado %}<p class="help">El fichero es grande: se muestra solo el final. Descárguelo para verlo entero.</p>{% endif %}
+      <pre>{{ contenido }}</pre>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

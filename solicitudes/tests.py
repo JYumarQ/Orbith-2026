@@ -1290,6 +1290,46 @@ class ContratoDesviado(BaseDepartamento):
         self.assertEqual(self.contrato.reg_militar, 'IMP')
         self.assertEqual(Solicitud.objects.count(), 0)
 
+    def test_el_moderador_guarda_directo_las_resoluciones_y_jubilado_recontratado(self):
+        """Desde el 24-10-2026 (decisión de RRHH) los números de resolución y el
+        switch Jubilado recontratado también son `campos_libres`: los números llegan
+        semanas después y no tiene sentido una solicitud por cada uno."""
+        self.client.force_login(self.moderador)
+
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(c_formal_res='12/26', funcionario_res='34/26',
+                                              designado_res='56/26',
+                                              jubilado_recontratado='on'),
+                         HTTP_HX_REQUEST='true')
+
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.c_formal_res, self.contrato.funcionario_res,
+                          self.contrato.designado_res, self.contrato.jubilado_recontratado),
+                         ('12/26', '34/26', '56/26', True))
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_el_moderador_guarda_directo_confianza_y_modalidad(self):
+        """De Confianza (su número) y la modalidad de trabajo también son libres
+        (24-10-2026)."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(confianza_res='77/26', teletrabajo='on', pluriempleo='on'),
+                         HTTP_HX_REQUEST='true')
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.confianza_res, self.contrato.teletrabajo,
+                          self.contrato.pluriempleo, self.contrato.trabajo_distancia),
+                         ('77/26', True, True, False))
+        self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_activar_calificacion_formal_sigue_pidiendo_solicitud(self):
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(c_formal='on', c_formal_res='12/26'),
+                         HTTP_HX_REQUEST='true')
+        self.contrato.refresh_from_db()
+        self.assertFalse(self.contrato.c_formal)
+        self.assertEqual(Solicitud.objects.count(), 1)
+
     def test_el_moderador_guarda_directo_si_solo_cambia_motivo(self):
         """`motivo` también está en `campos_libres`. A diferencia del formulario de
         propuesta (que lo vería siempre como "sin cambios" por su widget deshabilitado

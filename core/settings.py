@@ -218,7 +218,13 @@ STORAGES = {
     },
 }
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / "media"
+# Los ficheros SUBIDOS (logo de la empresa, avatares, imágenes de los reportes)
+# no están en git: si cada actualización sustituye la carpeta del proyecto, se
+# pierden (puntos 4 y 9 de las inconformidades, 24-10-2026). Con MEDIA_DIR en
+# `core/.env` viven en una carpeta FUERA del proyecto que ninguna actualización
+# toca, por ejemplo `MEDIA_DIR=/srv/orbith_media`. Sin esa línea, todo sigue como
+# siempre (`media/` dentro del proyecto).
+MEDIA_ROOT = Path(env('MEDIA_DIR', default=str(BASE_DIR / "media")))
 
 # El default de Django (2.5 MB) se queda corto para el reporte de problemas,
 # que admite hasta 4 imágenes de 2 MB cada una más el texto del mensaje.
@@ -330,3 +336,16 @@ LOGIN_REDIRECT_URL = '/'  # Redirige a la página principal
 
 
 
+
+# Registro de errores (24-10-2026): un fichero por día en `logs/`, que el
+# Administrador consulta en el admin de Django (Soporte → Registro de errores).
+# Se puede llevar a otra carpeta con LOG_DIR en `core/.env`. Si la carpeta no se
+# puede crear, Orbith arranca igual, solo con la consola. Ver core/registro_errores.py.
+from core.registro_errores import configuracion_logging  # noqa: E402
+
+import sys  # noqa: E402
+
+CARPETA_REGISTRO_ERRORES = env('LOG_DIR', default=str(BASE_DIR / 'logs'))
+# Las pruebas provocan errores A PROPÓSITO: no deben llenar el registro real.
+_EJECUTANDO_PRUEBAS = len(sys.argv) > 1 and sys.argv[1] == 'test'
+LOGGING = configuracion_logging(None if _EJECUTANDO_PRUEBAS else CARPETA_REGISTRO_ERRORES)

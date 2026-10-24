@@ -134,6 +134,8 @@ def _aplicar_anotaciones_necesarias(queryset, definicion_modelo, keys_campos_usa
             queryset = queryset.annotate(
                 vacantes=F("cant_aprobada") - F("cant_cubierta"),
             )
+        elif key in CONTEOS_DE_CONTRATOS:
+            queryset = queryset.annotate(**{key: _conteo_de_contratos(queryset.model, key)})
         elif key in ("maestria", "doctorado"):
             # El importe ya no vive en el contrato (23-10-2026): el del grado
             # científico del trabajador según el nomenclador, o 0 si no lo tiene.
@@ -513,6 +515,38 @@ def _expresion_de_campo(campo, key_campo, ruta_aspirante=None):
         return F("cant_aprobada") - F("cant_cubierta")
 
     return F(campo["ruta_orm"] or key_campo)
+
+
+#: Conteos de contratos por cargo («Estructura y Plantilla Aprobada»,
+#: 24-10-2026): clave -> filtro sobre el contrato. Valen igual en la fuente viva
+#: (CAlta, solo trabajadores activos) que en la fotografía del cierre
+#: (CierreContrato), porque las dos guardan `ocupa_plaza` y `requiere_motivo`.
+CONTEOS_DE_CONTRATOS = {
+    'contratos_activos': {},
+    'contratos_ocupan_plaza': {'ocupa_plaza': True},
+    'contratos_no_ocupan_plaza': {'ocupa_plaza': False},
+    'contratos_determinados': {'requiere_motivo': True},
+    'contratos_indeterminados': {'requiere_motivo': False},
+}
+
+
+def _conteo_de_contratos(modelo, key):
+    """Subconsulta con el número de contratos del cargo de cada fila."""
+    from django.db.models import Count, IntegerField, OuterRef, Subquery
+
+    filtro = CONTEOS_DE_CONTRATOS[key]
+    if modelo._meta.model_name == 'cierrecargo':
+        from cierres.models import CierreContrato
+        contratos = CierreContrato.objects.filter(cierre_cargo=OuterRef('pk'), **filtro)
+        agrupar = 'cierre_cargo'
+    else:
+        from contratos.models import CAlta
+        contratos = CAlta.objects.filter(
+            cargo=OuterRef('pk'), aspirante__estado='ACTIVO',
+            **{'tipo__' + campo: valor for campo, valor in filtro.items()})
+        agrupar = 'cargo'
+    total = (contratos.order_by().values(agrupar).annotate(n=Count('pk')).values('n')[:1])
+    return Coalesce(Subquery(total, output_field=IntegerField()), Value(0))
 
 
 def _condiciones_de(spec):

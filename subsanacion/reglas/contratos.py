@@ -77,7 +77,7 @@ class ContratoSinCargo(ReglaContratos):
     impacto = (
         'Sin cargo no se puede calcular el salario por escala, el trabajador no ocupa '
         'plaza en la plantilla y no aparece en los informes que agrupan por cargo, '
-        'categoría ocupacional o unidad organizativa (incluido el Anexo 14).')
+        'categoría ocupacional o unidad organizativa (incluido el Anexo 17).')
     solucion = (
         'Abra el contrato y asigne el cargo de plantilla que corresponde. Si el cargo '
         'todavía no existe, créelo primero en el Gestor de Plantilla. Al guardar el '
@@ -613,16 +613,20 @@ class NocturnidadSinConfigurar(ReglaContratos):
                 )
 
 
-def _funcionario_o_designado_sin_codigo(es_funcionario, es_designado, funcionario_res, designado_res):
+def _funcionario_o_designado_sin_codigo(es_funcionario, es_designado, funcionario_res, designado_res,
+                                        es_de_confianza=False, confianza_res=None):
     """Pura: la usan `ejecutar()` y `evaluar_instancia()` sin repetir la condición.
 
     Devuelve una lista de `(clave_extra, etiqueta, campo)` — vacía si no hay problema.
+    De Confianza se añadió el 24-10-2026 (decisión de RRHH).
     """
     problemas = []
     if es_funcionario and not (funcionario_res or '').strip():
         problemas.append(('funcionario_sin_codigo', 'Funcionario', 'funcionario_res'))
     if es_designado and not (designado_res or '').strip():
         problemas.append(('designado_sin_codigo', 'Designado', 'designado_res'))
+    if es_de_confianza and not (confianza_res or '').strip():
+        problemas.append(('confianza_sin_codigo', 'De Confianza', 'confianza_res'))
     return problemas
 
 
@@ -636,7 +640,7 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
     """
 
     codigo = 'CTR-012'
-    nombre = 'Funcionario o designado sin código de resolución'
+    nombre = 'Funcionario, designado o de confianza sin código de resolución'
     criticidad = CRITICIDAD_BAJA
     # Evaluable en caliente: O(1) — un único salto de FK (`instancia.cargo`, ya
     # resuelto por las @property `funcionario`/`designado` de CAlta) más dos campos
@@ -644,8 +648,8 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
     evaluable_en_caliente = True
 
     descripcion = (
-        'Cuando el cargo del contrato es Funcionario o Designado, el contrato debe '
-        'tener registrado el código de la resolución correspondiente.')
+        'Cuando el cargo del contrato es Funcionario, Designado o De Confianza, el '
+        'contrato debe tener registrado el código de la resolución correspondiente.')
     causa_probable = (
         'El cargo se marcó como Funcionario o Designado en la Plantilla después de '
         'crear el contrato, o el contrato se guardó antes de que llegara la '
@@ -657,7 +661,8 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
         'ausencia prolongada deja el expediente incompleto.')
     solucion = (
         'Cuando llegue la resolución, abra el contrato y registre el código '
-        'correspondiente (funcionario_res o designado_res, según el tipo de cargo).')
+        'correspondiente (Funcionario, Designado o De Confianza, según el cargo). '
+        'El Moderador puede hacerlo sin solicitud, también desde el movimiento de nómina.')
 
     def _hallazgo(self, object_id, clave_extra, etiqueta, campo, titulo, unidad_organizativa_id=None):
         return HallazgoDetectado(
@@ -674,17 +679,20 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
 
     def ejecutar(self, contexto):
         columnas = self.COLUMNAS_BASE + (
-            'cargo__funcionario', 'cargo__designado', 'funcionario_res', 'designado_res')
+            'cargo__funcionario', 'cargo__designado', 'funcionario_res', 'designado_res',
+            'cargo__de_confianza', 'confianza_res')
 
         filas = (self.base_queryset()
-                 .filter(Q(cargo__funcionario=True) | Q(cargo__designado=True))
+                 .filter(Q(cargo__funcionario=True) | Q(cargo__designado=True)
+                         | Q(cargo__de_confianza=True))
                  .values(*columnas)
                  .iterator(chunk_size=TAMANO_LOTE))
 
         for fila in filas:
             problemas = _funcionario_o_designado_sin_codigo(
                 fila.get('cargo__funcionario'), fila.get('cargo__designado'),
-                fila.get('funcionario_res'), fila.get('designado_res'))
+                fila.get('funcionario_res'), fila.get('designado_res'),
+                fila.get('cargo__de_confianza'), fila.get('confianza_res'))
 
             for clave_extra, etiqueta, campo in problemas:
                 yield self._hallazgo(
@@ -697,7 +705,8 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
         # (un único salto de FK, ya cargado por Django al acceder a `contrato.cargo`).
         problemas = _funcionario_o_designado_sin_codigo(
             contrato.funcionario, contrato.designado,
-            contrato.funcionario_res, contrato.designado_res)
+            contrato.funcionario_res, contrato.designado_res,
+            getattr(contrato, 'de_confianza', False), getattr(contrato, 'confianza_res', None))
         if not problemas:
             return None
 
@@ -1320,8 +1329,8 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
     datos, un `update()` sobre `cargo` o `tipo`—.
 
     Es Crítica por el mismo motivo que un contrato vencido: alguien cobra
-    ocupando una plaza que el organismo no aprobó, y eso descuadra el Anexo 14 y
-    el 14-A contra la plantilla real que se entrega.
+    ocupando una plaza que el organismo no aprobó, y eso descuadra el Anexo 17 y
+    el 17.1 contra la plantilla real que se entrega.
     """
 
     codigo = 'CTR-020'
@@ -1337,8 +1346,8 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
         'script). También ocurre si el cargo se sacó de la plantilla DESPUÉS de '
         'contratar a alguien en él.')
     impacto = (
-        'El trabajador ocupa una plaza que el organismo no aprobó. El Anexo 14 y el '
-        '14-A cuentan esa plaza fuera de la plantilla oficial mientras la nómina la '
+        'El trabajador ocupa una plaza que el organismo no aprobó. El Anexo 17 y el '
+        '17.1 cuentan esa plaza fuera de la plantilla oficial mientras la nómina la '
         'paga como si estuviera dentro, así que los dos documentos dejan de cuadrar '
         'con la realidad.')
     solucion = (

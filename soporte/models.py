@@ -110,3 +110,16 @@ class ImagenReporteProblema(models.Model):
 
     def __str__(self):
         return f"Imagen de {self.reporte_id}"
+
+
+class RegistroErrores(models.Model):
+    """Sin tabla: solo da a la sección «Registro de errores» un sitio en el admin
+    de Django (ver `RegistroErroresAdmin`). Los errores están en ficheros, uno por
+    día (`core/registro_errores.py`), no en la base de datos: un error dentro de
+    una transacción que se deshace se perdería con ella."""
+
+    class Meta:
+        managed = False
+        default_permissions = ('view',)
+        verbose_name = 'Registro de errores'
+        verbose_name_plural = 'Registro de errores'

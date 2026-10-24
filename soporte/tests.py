@@ -48,3 +48,66 @@ class AuditoriaAdminTests(TestCase):
         evento = EventoAuditoria.objects.filter(
             object_id=str(reporte.pk), accion='UPD').latest('fecha')
         self.assertEqual(evento.usuario_id, self.admin.pk)
+
+
+class RegistroErroresTests(TestCase):
+    """Registro de errores en ficheros diarios, visible en el admin de Django solo
+    para el Administrador (24-10-2026)."""
+
+    def setUp(self):
+        import tempfile
+        from django.test import override_settings
+        self.carpeta = tempfile.mkdtemp()
+        ajuste = override_settings(CARPETA_REGISTRO_ERRORES=self.carpeta)
+        ajuste.enable()
+        self.addCleanup(ajuste.disable)
+
+    def _registrar(self, mensaje):
+        import logging
+        from core.registro_errores import ManejadorDiario
+        manejador = ManejadorDiario()
+        manejador.setFormatter(logging.Formatter('%(message)s'))
+        manejador.emit(logging.makeLogRecord({'msg': mensaje, 'levelno': logging.ERROR}))
+
+    def test_cada_error_va_al_fichero_del_dia_y_los_viejos_se_borran(self):
+        from datetime import timedelta
+        from pathlib import Path
+        from django.utils import timezone
+        from core import registro_errores
+        viejo = registro_errores.fichero_del_dia(timezone.localdate() - timedelta(days=40))
+        viejo.write_text('antiguo', encoding='utf-8')
+        self._registrar('Fallo de prueba')
+        hoy = registro_errores.fichero_del_dia(timezone.localdate())
+        self.assertIn('Fallo de prueba', Path(hoy).read_text(encoding='utf-8'))
+        self.assertFalse(viejo.exists())
+
+    def test_sin_carpeta_utilizable_no_rompe(self):
+        from core.registro_errores import configuracion_logging
+        import os
+        fichero = os.path.join(self.carpeta, 'no_es_carpeta')
+        open(fichero, 'w').close()
+        config = configuracion_logging(os.path.join(fichero, 'logs'))
+        self.assertEqual(config['root']['handlers'], ['consola'])
+
+    def test_solo_el_administrador_lo_ve_y_descarga(self):
+        from django.urls import reverse
+        from django.utils import timezone
+        from usuarios.models import CustomUser
+        self._registrar('Fallo visible')
+        nombre = 'orbith-%s.log' % timezone.localdate().strftime('%Y-%m-%d')
+        url = reverse('admin:soporte_registroerrores_changelist')
+
+        moderador = CustomUser.objects.create_user(username='mod_reg', password='x',
+                                                   es_moderador=True, is_staff=True)
+        self.client.force_login(moderador)
+        self.assertNotEqual(self.client.get(url).status_code, 200)
+
+        admin = CustomUser.objects.create_user(username='adm_reg', password='x',
+                                               es_admin=True, is_staff=True)
+        self.client.force_login(admin)
+        respuesta = self.client.get(url)
+        self.assertContains(respuesta, 'Fallo visible')
+        descarga = self.client.get(reverse('admin:soporte_registroerrores_descargar', args=[nombre]))
+        self.assertEqual(descarga.status_code, 200)
+        self.assertEqual(self.client.get(reverse('admin:soporte_registroerrores_descargar',
+                                                 args=['..%2Fsettings.py'])).status_code, 404)

@@ -110,6 +110,10 @@ def _designado_de_cargo(cargo):
     return bool(cargo.designado) if cargo else False
 
 
+def _de_confianza_de_cargo(cargo):
+    return bool(cargo.de_confianza) if cargo else False
+
+
 # ----------------------------------------------------------------------
 # Descriptores legibles
 # ----------------------------------------------------------------------
@@ -460,8 +464,17 @@ OPERACIONES = {
         # el Moderador los mantiene al día —también desde el informe de Misiones
         # Internacionales— y no tocan nómina ni estructura. Activar o desactivar la
         # propia `mision`, o cambiar el `pais`, sigue pasando por el Administrador.
+        #
+        # 24-10-2026 (decisión de RRHH): también los números de resolución —que
+        # suelen llegar semanas después del alta o del movimiento— y el switch
+        # Jubilado recontratado. Activar Calificación formal sigue pidiendo solicitud;
+        # Funcionario y Designado los decide el cargo, no el contrato.
         'campos_libres': ('motivo', 'reg_militar', 'fecha_alta_entidad',
-                          'mision_dias', 'mision_importe'),
+                          'mision_dias', 'mision_importe',
+                          'c_formal_res', 'funcionario_res', 'designado_res',
+                          'confianza_res', 'jubilado_recontratado',
+                          # Modalidad de trabajo (24-10-2026): también libres.
+                          'trabajo_distancia', 'teletrabajo', 'pluriempleo'),
         # Todos estos nacen deshabilitados en `CAltaForm.Meta.widgets` y un JavaScript
         # propio los habilita según otra elección del formulario: `motivo` si el tipo de
         # contrato lo exige, `duracion` si el tipo no es indeterminado, `c_formal_res`/
@@ -482,7 +495,7 @@ OPERACIONES = {
         # corregirla.
         'campos_condicionales': (
             'motivo', 'duracion', 'c_formal_res', 'funcionario_res', 'designado_res',
-            'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais',
+            'confianza_res', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais',
             'mision_dias', 'mision_importe', 'fecha_alta_entidad',
         ),
         # Ver el bloque «Campos calculados desde el Cargo» más arriba: `rol` y
@@ -495,6 +508,7 @@ OPERACIONES = {
             'grupo_escala': _grupo_escala_de_cargo,
             'funcionario': _funcionario_de_cargo,
             'designado': _designado_de_cargo,
+            'de_confianza': _de_confianza_de_cargo,
         },
     },
 

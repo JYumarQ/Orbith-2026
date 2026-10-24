@@ -96,6 +96,24 @@ class SelectUnidadWidget(forms.Select):
                 pass
         return option
     
+class SelectConImporteWidget(forms.Select):
+    """Desplegable de Instructor o CNCI con el importe de cada entrada en
+    `data-importe`, para calcular «Otros» en pantalla sin otra petición
+    (24-10-2026). `importes` lo rellena el formulario: `{pk: importe}`."""
+
+    importes = {}
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        try:
+            pk = int(getattr(value, 'value', value)) if value else None
+        except (TypeError, ValueError):
+            pk = None
+        if pk is not None and pk in self.importes:
+            option['attrs']['data-importe'] = str(self.importes[pk])
+        return option
+
+
 class SelectCargosConPlazasWidget(forms.Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
@@ -109,6 +127,7 @@ class SelectCargosConPlazasWidget(forms.Select):
                     option['attrs']['data-grupo'] = datos.get('grupo', '')
                     option['attrs']['data-funcionario'] = 'true' if datos.get('funcionario') else 'false'
                     option['attrs']['data-designado'] = 'true' if datos.get('designado') else 'false'
+                    option['attrs']['data-de-confianza'] = 'true' if datos.get('de_confianza') else 'false'
                     # 🔥 NUEVO: data-chofer
                     option['attrs']['data-chofer'] = 'true' if datos.get('chofer') else 'false'
                     # Un cargo fuera de la plantilla aprobada no puede sostener un
@@ -122,6 +141,9 @@ class CAltaForm(forms.ModelForm):
     
     funcionario = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
     designado = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+    # Como Funcionario y Designado: lo decide el CARGO; aquí solo se muestra.
+    de_confianza = forms.BooleanField(required=False, label='De Confianza',
+                                      widget=forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_de_confianza'}))
 
     unidad = forms.ModelChoiceField(
         label='Unidad Organizativa',
@@ -208,7 +230,8 @@ class CAltaForm(forms.ModelForm):
             'no_expediente', 'tipo', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion', 'cargo', 'reg_militar',
             'tridente', 'profesional', 'fecha_vence_lic', 'fecha_vence_recal', 
             'fecha_vence_seg', 'c_formal', 
-            'c_formal_res', 'funcionario_res', 'designado_res', 'tipo_salario',
+            'c_formal_res', 'funcionario_res', 'designado_res', 'confianza_res', 'tipo_salario',
+            'trabajo_distancia', 'teletrabajo', 'pluriempleo',
             'instructor_nomenclador', 'cnci_nomenclador', 'jubilado_recontratado',
             'mision', 'pais', 'mision_dias', 'mision_importe',
             'cla', 'nocturnidad_1', 'nocturnidad_2'
@@ -232,6 +255,10 @@ class CAltaForm(forms.ModelForm):
             'c_formal_res': 'No. Res. C. Formal',
             'funcionario_res': 'No. Res. Funcionario',
             'designado_res':'No. Res. Designado',
+            'confianza_res': 'No. Res. De Confianza',
+            'trabajo_distancia': 'Trab. a distancia',
+            'teletrabajo': 'Teletrabajo',
+            'pluriempleo': 'Pluriempleo',
             'tipo_salario': 'Tipo de Salario',
             'instructor_nomenclador': 'Instructor',
             'cnci_nomenclador': 'CNCI',
@@ -291,6 +318,10 @@ class CAltaForm(forms.ModelForm):
             'funcionario_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_funcionario_res', 'disabled': 'disabled'}),
             'designado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_designado'}), 
             'designado_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_designado_res', 'disabled': 'disabled'}),
+            'confianza_res': forms.TextInput(attrs={'class':'form-control', 'placeholder' : '###/AA', 'id': 'id_confianza_res', 'disabled': 'disabled'}),
+            'trabajo_distancia': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_trabajo_distancia'}),
+            'teletrabajo': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_teletrabajo'}),
+            'pluriempleo': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_pluriempleo'}),
             'tipo_salario': forms.Select(attrs={
                 'class': 'form-select',
                 'hx-get': reverse_lazy('cargar_salarios'),
@@ -302,8 +333,8 @@ class CAltaForm(forms.ModelForm):
             # Los cuatro importes no son campos del contrato: Maestría y Doctorado salen
             # del grado científico del trabajador + nomenclador, e Instructor y CNCI de
             # la entrada elegida en estos desplegables (decisión de RRHH, 23-10-2026).
-            'instructor_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_instructor_nomenclador'}),
-            'cnci_nomenclador': forms.Select(attrs={'class': 'form-select', 'id': 'id_cnci_nomenclador'}),
+            'instructor_nomenclador': SelectConImporteWidget(attrs={'class': 'form-select', 'id': 'id_instructor_nomenclador'}),
+            'cnci_nomenclador': SelectConImporteWidget(attrs={'class': 'form-select', 'id': 'id_cnci_nomenclador'}),
             'jubilado_recontratado': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_jubilado_recontratado'}),
             'mision': forms.CheckboxInput(attrs={'class': 'form-check-input', 'id': 'id_mision'}),
             'pais': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_pais', 'disabled': 'disabled'}),
@@ -469,6 +500,7 @@ class CAltaForm(forms.ModelForm):
                     'grupo': grupo,
                     'funcionario': getattr(c, 'funcionario', False),
                     'designado': getattr(c, 'designado', False),
+                    'de_confianza': getattr(c, 'de_confianza', False),
                     'chofer': es_chofer,
                     'en_plantilla': getattr(c, 'en_plantilla', True)
                 }
@@ -523,11 +555,15 @@ class CAltaForm(forms.ModelForm):
                 NPagoAdicional.objects.filter(tipo=NPagoAdicional.INSTRUCTOR))
             self.fields['instructor_nomenclador'].required = False
             self.fields['instructor_nomenclador'].empty_label = 'Sin instructor'
+            self.fields['instructor_nomenclador'].widget.importes = dict(
+                self.fields['instructor_nomenclador'].queryset.values_list('pk', 'importe'))
         if 'cnci_nomenclador' in self.fields:
             self.fields['cnci_nomenclador'].queryset = (
                 NPagoAdicional.objects.filter(tipo=NPagoAdicional.CNCI))
             self.fields['cnci_nomenclador'].required = False
             self.fields['cnci_nomenclador'].empty_label = 'Sin CNCI'
+            self.fields['cnci_nomenclador'].widget.importes = dict(
+                self.fields['cnci_nomenclador'].queryset.values_list('pk', 'importe'))
 
         grado = getattr(self.aspirante, 'grado_cientifico', None) if self.aspirante else None
         importe = self._importe_del_grado(grado)
@@ -723,8 +759,9 @@ class MovimientoForm(CAltaForm):
     )
 
     class Meta(CAltaForm.Meta):
-        fields = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo', 'duracion', 
-                  'tipo_salario', 'tridente', 'fecha_efectiva', 'fecha_solicitud', 'observaciones')
+        fields = ('unidad', 'departamento', 'cargo', 'tipo', 'motivo', 'duracion',
+                  'tipo_salario', 'tridente', 'fecha_efectiva', 'fecha_solicitud', 'observaciones',
+                  'c_formal_res', 'funcionario_res', 'designado_res', 'confianza_res')
 
     def clean_fecha_efectiva(self):
         """Misma regla que las fechas del contrato (`ANO_MINIMO_FECHAS`): un «0026»
@@ -824,6 +861,9 @@ class MovimientoForm(CAltaForm):
                     'aprobadas': c.cant_aprobada, 
                     'ocupadas': c.plazas_fijas,
                     'grupo': grupo,
+                    'funcionario': getattr(c, 'funcionario', False),
+                    'designado': getattr(c, 'designado', False),
+                    'de_confianza': getattr(c, 'de_confianza', False),
                     'en_plantilla': getattr(c, 'en_plantilla', True)
                 }
             
@@ -836,6 +876,40 @@ class MovimientoForm(CAltaForm):
             self.fields['cargo'].widget.__class__ = SelectCargosConPlazasWidget
             self.fields['cargo'].widget.mapa_plazas = mapa
             self.fields['cargo'].widget.attrs.update({'class': 'form-select select2-cargo'})
+
+        # Números de resolución (24-10-2026): en el movimiento NUNCA van
+        # deshabilitados. Un campo deshabilitado no viaja en el envío y Django lo
+        # guardaría vacío, borrando el número que ya tenía el contrato. Los que no
+        # aplican al cargo nuevo se OCULTAN en la plantilla, sin perder su valor.
+        for campo in self.CAMPOS_RESOLUCION:
+            if campo in self.fields:
+                self.fields[campo].widget.attrs.pop('disabled', None)
+                self.fields[campo].required = False
+
+    #: Los números de resolución que se pueden escribir desde el movimiento. Son
+    #: opcionales (a veces llegan semanas después) y sustituyen a los del contrato.
+    CAMPOS_RESOLUCION = ('c_formal_res', 'funcionario_res', 'designado_res', 'confianza_res')
+    #: Lo que de verdad cambia un movimiento de nómina: sin ninguno de estos, no
+    #: hay movimiento que registrar.
+    CAMPOS_DEL_MOVIMIENTO = ('cargo', 'tipo', 'motivo', 'duracion', 'tipo_salario', 'tridente')
+
+    def clean(self):
+        """Cada número solo se guarda si el cargo NUEVO (o la Calificación formal del
+        contrato) lo pide; el que deja de aplicar se vacía, igual que hace el
+        formulario del contrato al cambiar de cargo."""
+        cleaned_data = super().clean()
+        cargo = cleaned_data.get('cargo') or getattr(self.instance, 'cargo', None)
+        aplica = {
+            'c_formal_res': bool(getattr(self.instance, 'c_formal', False)),
+            'funcionario_res': bool(cargo and cargo.funcionario),
+            'designado_res': bool(cargo and cargo.designado),
+            'confianza_res': bool(cargo and cargo.de_confianza),
+        }
+        for campo, si_aplica in aplica.items():
+            if campo in cleaned_data:
+                valor = (cleaned_data.get(campo) or '').strip()
+                cleaned_data[campo] = valor if (si_aplica and valor) else None
+        return cleaned_data
 
 
 class ExportarContratoWordForm(forms.Form):

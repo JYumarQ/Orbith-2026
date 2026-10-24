@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Anexo 14-B: la plantilla de cargos CON el registro de trabajadores.
+"""Anexo 17.2: la plantilla de cargos CON el registro de trabajadores.
 
 QUÉ ES, Y EN QUÉ SE DIFERENCIA DE LOS OTROS DOS
 -----------------------------------------------
-El Anexo 14 dice qué plazas hay. El 14-A las cuenta. El 14-B dice **quién ocupa
+El Anexo 17 dice qué plazas hay. El 17.1 las cuenta. El 17.2 dice **quién ocupa
 cada una y cuánto cobra**: nombre, carné, formación y el salario desglosado en
 siete conceptos.
 
@@ -11,7 +11,7 @@ LA UNIDAD DE LA FILA ES LA PLAZA, NO LA PERSONA
 -----------------------------------------------
 Un cargo con tres plazas aprobadas y dos cubiertas ocupa TRES filas: dos con su
 ocupante y una con las columnas de trabajador vacías. Así el documento cuadra con
-el Anexo 14 —las mismas plazas— y enseña las vacantes, que es media razón de ser
+el Anexo 17 —las mismas plazas— y enseña las vacantes, que es media razón de ser
 de un registro de plantilla. Está comprobado contra el fichero real de Capital
 Humano, donde las vacantes salen con su cargo, su grupo escala y su rol, y el
 salario en cero.
@@ -28,7 +28,7 @@ Hubo una tercera, `Fuera de plantilla`, y se retiró: no contenía a nadie. Sus
 trabajadores ya caían en las dos anteriores —se enrutan por TIPO DE CONTRATO, no
 por si la plaza está aprobada—, así que lo único que quedaba dentro eran plazas
 vacantes de cargos no aprobados. Una plaza que ni está aprobada ni tiene a nadie
-no es un registro de trabajadores: se cuenta en el Anexo 14 y en el 14-A, que son
+no es un registro de trabajadores: se cuenta en el Anexo 17 y en el 17.1, que son
 los que cuentan plazas, y aquí no sale.
 
 EL SALARIO NO PASA POR PRE-NÓMINA
@@ -45,7 +45,7 @@ from datetime import date
 from bolsa.models import Aspirante  # noqa: F401  (documenta el origen de la persona)
 # El pago por años de servicio no se calcula aquí: lo resuelve el mismo módulo
 # que alimenta el campo «Pago Años de Servicio» de la pestaña Salarios del
-# formulario de contrato. Así el Anexo 14-B y ese campo no pueden discrepar, y de
+# formulario de contrato. Así el Anexo 17.2 y ese campo no pueden discrepar, y de
 # paso `informes_anexo` no importa NADA de Pre-Nómina.
 from contratos.annos_servicio import annos_y_pago
 from contratos.models import CAlta
@@ -72,7 +72,7 @@ def _formacion(aspirante):
     Sale como «N.S Ingeniero Eléctrico» — la sigla del nivel educacional y, si la
     tiene, su especialidad. Es lo que trae el fichero de Capital Humano, y por eso
     no se usa aquí `CargoPlantilla.nivel_preparacion`, que es el requisito del
-    cargo y es lo que imprime el Anexo 14.
+    cargo y es lo que imprime el Anexo 17.
     """
     if aspirante is None:
         return ''
@@ -161,7 +161,7 @@ def _unidades_de(raiz, permitidas):
     """La unidad y sus subunidades: de ahí cuelgan todos sus departamentos.
 
     Una UEB no tiene subunidades y sus departamentos cuelgan de ella misma; una
-    Unidad Principal los tiene repartidos entre sus Direcciones. El 14-B no
+    Unidad Principal los tiene repartidos entre sus Direcciones. El 17.2 no
     distingue: sus hojas son departamentos, vengan de donde vengan.
     """
     ids = [raiz.pk]
@@ -174,7 +174,7 @@ def _unidades_de(raiz, permitidas):
 
 
 def hojas_de_unidad(raiz, permitidas):
-    """Todas las hojas del 14-B de una unidad, en el orden del libro.
+    """Todas las hojas del 17.2 de una unidad, en el orden del libro.
 
     Devuelve una lista de dicts `{nombre, departamento, filas}`: primero una hoja
     por departamento con plazas, y detrás las dos especiales, que solo se crean si

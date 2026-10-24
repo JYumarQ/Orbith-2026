@@ -164,6 +164,7 @@ def _filas_de_comparacion(solicitud, usuario, formulario=None):
             _NUMERO_RES_POR_CONDICION = {
                 'funcionario': 'funcionario_res',
                 'designado': 'designado_res',
+                'de_confianza': 'confianza_res',
             }
             for nombre_condicion, nombre_numero in _NUMERO_RES_POR_CONDICION.items():
                 if nombre_condicion in campos_calculados and nombre_numero in formulario.fields:

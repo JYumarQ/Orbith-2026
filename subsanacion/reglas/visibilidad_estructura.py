@@ -28,7 +28,7 @@ class SubunidadSinPadre(ReglaBase):
     impacto = (
         'El Gestor de Plantilla muestra en el primer nivel solo las unidades sin superior, '
         'así que esta subunidad aparece ahí como si fuera principal, fuera de su rama '
-        'real. El organigrama y el Anexo 14 la sitúan en el lugar equivocado.')
+        'real. El organigrama y el Anexo 17 la sitúan en el lugar equivocado.')
     solucion = (
         'Abra la unidad y asígnele la unidad superior a la que pertenece. Si en realidad '
         'es una unidad principal, cambie su tipo de unidad.')
