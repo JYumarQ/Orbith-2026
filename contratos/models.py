@@ -1249,6 +1249,10 @@ class CambioExterno(models.Model):
     descripcion = models.TextField()
     valor_anterior = models.CharField(max_length=150, blank=True, default='')
     valor_nuevo = models.CharField(max_length=150, blank=True, default='')
+    #: Cómo quedó el contrato DESPUÉS del cambio (25-10-2026): unidad, departamento,
+    #: cargo y salario. El histórico lo enseña debajo del cambio («Actualizado por
+    #: cambio externo») y en el último movimiento cuando se ocultan los cambios.
+    situacion = models.JSONField(null=True, blank=True)
     motivo = models.TextField(blank=True, default='')
     error_humano = models.BooleanField(default=False)
     anulado = models.BooleanField(default=False)

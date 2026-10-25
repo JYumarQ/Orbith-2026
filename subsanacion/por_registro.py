@@ -43,8 +43,8 @@ REGLAS_POR_REGISTRO = (
     # Contrato
     'CTR-001', 'CTR-002', 'CTR-003', 'CTR-004', 'CTR-010', 'CTR-016', 'CTR-017',
     'CTR-018', 'CTR-020', 'CTR-022', 'CTR-024', 'SAL-001', 'SAL-002',
-    # Ficha del trabajador (MOV-015 mira su histórico: se cierra al guardar el editor)
-    'ASP-001', 'ASP-007', 'VIS-001', 'MOV-015',
+    # Ficha del trabajador (MOV-015 y MOV-016 miran su histórico: se cierran al guardar el editor)
+    'ASP-001', 'ASP-007', 'VIS-001', 'MOV-015', 'MOV-016',
     # Cargo
     'EST-001', 'EST-002', 'EST-008', 'VIS-006',
 )

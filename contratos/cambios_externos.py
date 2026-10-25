@@ -110,8 +110,14 @@ def registrar_cambio(origen, objeto_origen, afectados):
         if ultimo:
             CambioExterno.objects.filter(lote=ultimo).update(anulado=True)
 
+    # Cómo quedó cada contrato: se llama después de guardar el cambio, así que la
+    # base ya tiene la unidad, el departamento, el cargo y el salario nuevos.
+    from .situacion import situaciones_de_contratos
+    situaciones = situaciones_de_contratos([a.contrato.pk for a in afectados])
+
     CambioExterno.objects.bulk_create([
         CambioExterno(
+            situacion=situaciones.get(a.contrato.pk),
             contrato=a.contrato, aspirante_id=a.contrato.aspirante_id,
             no_expediente=a.contrato.no_expediente or '',
             origen=origen, origen_content_type=tipo, origen_object_id=str(objeto_origen.pk),

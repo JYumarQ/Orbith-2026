@@ -1232,3 +1232,77 @@ class HistoricoQueNoEncaja(ReglaBase):
                                   f'{etiqueta.lower()} «{dice}», pero el anterior dejó «{dejo}»')
         if actual is not None and saltos:
             yield hallazgo()
+
+
+class HistoricoSinTipoDeContrato(ReglaBase):
+    """MOV-016: un Alta o un Movimiento de Nómina sin tipo de contrato, o sin motivo
+    cuando su tipo lo pide (25-10-2026).
+
+    Los dos son obligatorios: el editor del histórico no deja guardar sin ellos. Los
+    que se podían saber con certeza los rellenó `manage.py reparar_tipos_historico`;
+    esta regla avisa de los que quedan. Un hallazgo por PERSONA, como MOV-015.
+    """
+
+    codigo = 'MOV-016'
+    nombre = 'Histórico sin tipo de contrato o sin motivo'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'bolsa.Aspirante'
+    enlace_url = 'editor_historico'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
+
+    descripcion = (
+        'Busca las Altas Iniciales, recontrataciones y Movimientos de Nómina del histórico '
+        'que no tienen guardado el tipo de contrato, o el motivo cuando su tipo lo pide.')
+    causa_probable = (
+        'Hasta la versión 3.6.0 el asistente de contratación creaba el «Alta Inicial» sin el '
+        'tipo de contrato ni el motivo, y los movimientos antiguos no los guardaban. El comando '
+        '«reparar_tipos_historico» rellenó los que se podían saber con certeza; estos no.')
+    impacto = (
+        'El histórico no dice qué tipo de contrato (o qué motivo) tenía la persona en ese momento: los '
+        'certificados, informes y cierres que lo lean salen incompletos.')
+    solucion = (
+        'Un Administrador abre el editor del histórico de la persona, elige el tipo de '
+        'contrato o el motivo de cada evento marcado «falta el tipo de contrato» o «falta el '
+        'motivo» y guarda con el motivo de la corrección. '
+        'Un Moderador puede pedirlo con una solicitud personalizada.')
+
+    def ejecutar(self, contexto):
+        from contratos.tipos_historico import SIN_DATO, incompletos_q
+
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+        ids = self.base_queryset().values('pk')
+        filas = (TMovimiento.objects.filter(incompletos_q())
+                 .filter(Q(aspirante_id__in=ids) | Q(contrato__aspirante_id__in=ids))
+                 .values('aspirante_id', 'contrato__aspirante_id', 'fecha_efectiva', 'tipo_movimiento',
+                         'unidad_nueva_fk_id', 'tipo_contrato_nuevo')
+                 .order_by('fecha_efectiva', 'id'))
+        por_persona = {}
+        for fila in filas:
+            persona = fila['aspirante_id'] or fila['contrato__aspirante_id']
+            por_persona.setdefault(persona, []).append(fila)
+        if not por_persona:
+            return
+        Aspirante = apps.get_model('bolsa', 'Aspirante')
+        nombres = {a['id']: a for a in Aspirante.objects.filter(pk__in=por_persona).values(
+            'id', 'nombre', 'papellido', 'sapellido', 'doc_identidad')}
+        for persona, eventos in por_persona.items():
+            datos_persona = nombres.get(persona) or {}
+            referencia = referencia_trabajador(
+                datos_persona.get('nombre'), datos_persona.get('papellido'),
+                datos_persona.get('sapellido'), datos_persona.get('doc_identidad'))
+            textos = ['%s del %s (%s)' % (
+                e['tipo_movimiento'] or 'Movimiento', _fecha_texto(e['fecha_efectiva']),
+                'sin motivo' if (e['tipo_contrato_nuevo'] or '').strip() not in ('', SIN_DATO)
+                else 'sin tipo de contrato') for e in eventos]
+            cuantos = len(eventos)
+            unidad = next((e['unidad_nueva_fk_id'] for e in reversed(eventos) if e['unidad_nueva_fk_id']), None)
+            yield HallazgoDetectado(
+                object_id=str(persona),
+                titulo=f'{referencia} · {cuantos} {"evento" if cuantos == 1 else "eventos"} '
+                       f'del histórico sin tipo de contrato o sin motivo',
+                detalle='Incompletos: ' + '; '.join(textos[:5]) + ('…' if cuantos > 5 else '.'),
+                datos={f'evento_{n}': t for n, t in enumerate(textos[:10], start=1)},
+                unidad_organizativa_id=unidad,
+            )

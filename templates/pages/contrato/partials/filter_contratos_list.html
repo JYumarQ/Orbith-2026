@@ -67,7 +67,11 @@
         </td>
 
         <td>
-            {{ c.calcular_salario_escala }}
+            {# Sin escala para la combinación: «Sin salario» en ámbar, nunca «None» (25-10-2026). #}
+            {% with salario=c.calcular_salario_escala %}
+            {% if salario is not None %}{{ salario }}{% else %}<span class="fw-semibold" style="color: #b26b00; cursor: help;"
+                title="La escala salarial no tiene importe para este cargo con su tipo de salario y tridente (en un cuadro, la columna Cuadros de su grupo escala). Lo avisa Subsanación."><i class="fas fa-exclamation-triangle me-1"></i>Sin salario</span>{% endif %}
+            {% endwith %}
         </td>
 
         <td></td>

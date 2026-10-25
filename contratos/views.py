@@ -744,6 +744,7 @@ def historico_trabajador(request, aspirante_id):
         if mov_alta_real and mov_alta_real.cargo_nuevo and mov_alta_real.cargo_nuevo != "---":
             cargo_inicial = mov_alta_real.cargo_nuevo
             unidad_inicial = mov_alta_real.unidad_nueva or "---"
+            departamento_inicial = mov_alta_real.departamento_nuevo or "---"
             salario_inicial = mov_alta_real.salario_nuevo
         else:
             primer_mov = primer_movimiento_real(contrato=a)
@@ -751,10 +752,12 @@ def historico_trabajador(request, aspirante_id):
             if primer_mov and primer_mov.cargo_anterior != "---":
                 cargo_inicial = primer_mov.cargo_anterior
                 unidad_inicial = primer_mov.unidad_anterior or "---"
+                departamento_inicial = primer_mov.departamento_anterior or "---"
                 salario_inicial = primer_mov.salario_anterior
             else:
                 cargo_inicial = a.cargo.ncargo.descripcion if a.cargo else "---"
                 unidad_inicial = a.cargo.departamento.unidad_organizativa.descripcion if (a.cargo and a.cargo.departamento) else "---"
+                departamento_inicial = a.cargo.departamento.descripcion if (a.cargo and a.cargo.departamento) else "---"
                 salario_inicial = a.calcular_salario_escala()
 
         hitos.append({
@@ -764,6 +767,7 @@ def historico_trabajador(request, aspirante_id):
             'evento': 'ALTA_PENDIENTE', 
             'expediente': a.no_expediente,
             'unidad': unidad_inicial,
+            'departamento': departamento_inicial,
             'cargo': cargo_inicial,
             'salario': fmt_dinero(salario_inicial),
             'es_baja': False
@@ -785,6 +789,7 @@ def historico_trabajador(request, aspirante_id):
             if mov_alta_real and mov_alta_real.cargo_nuevo and mov_alta_real.cargo_nuevo != "---":
                 cargo_baja_ini = mov_alta_real.cargo_nuevo
                 unidad_baja_ini = mov_alta_real.unidad_nueva or "---"
+                departamento_baja_ini = mov_alta_real.departamento_nuevo or "---"
                 salario_baja_ini = mov_alta_real.salario_nuevo
             else:
                 # CORRECCIÓN: Igual que arriba, ignoramos "Alta Inicial"
@@ -793,10 +798,12 @@ def historico_trabajador(request, aspirante_id):
                 if primer_mov_baja and primer_mov_baja.cargo_anterior != "---":
                     cargo_baja_ini = primer_mov_baja.cargo_anterior
                     unidad_baja_ini = primer_mov_baja.unidad_anterior or "---"
+                    departamento_baja_ini = primer_mov_baja.departamento_anterior or "---"
                     salario_baja_ini = primer_mov_baja.salario_anterior
                 else:
                     cargo_baja_ini = b.cargo.ncargo.descripcion if b.cargo else "---"
                     unidad_baja_ini = b.cargo.departamento.unidad_organizativa.descripcion if (b.cargo and b.cargo.departamento) else "---"
+                    departamento_baja_ini = b.cargo.departamento.descripcion if (b.cargo and b.cargo.departamento) else "---"
                     salario_baja_ini = b.cargo.ncargo.salario_basico if b.cargo else 0
 
             hitos.append({
@@ -806,6 +813,7 @@ def historico_trabajador(request, aspirante_id):
                 'evento': 'ALTA_PENDIENTE',
                 'expediente': b.no_expediente,
                 'unidad': unidad_baja_ini,
+                'departamento': departamento_baja_ini,
                 'cargo': cargo_baja_ini,
                 'salario': fmt_dinero(salario_baja_ini),
                 'es_baja': False
@@ -819,6 +827,7 @@ def historico_trabajador(request, aspirante_id):
                 'evento': 'Baja',
                 'expediente': b.no_expediente,
                 'unidad': "---",
+                'departamento': "---",
                 'cargo': "---",
                 'salario': "---",
                 'es_baja': True
@@ -842,6 +851,7 @@ def historico_trabajador(request, aspirante_id):
             'evento': tipo,
             'expediente': m.no_expediente,
             'unidad': m.unidad_nueva or "---",
+            'departamento': m.departamento_nuevo or "---",
             'cargo': m.cargo_nuevo,
             'salario': fmt_dinero(m.salario_nuevo),
             'es_baja': False
@@ -925,7 +935,8 @@ def historico_trabajador(request, aspirante_id):
             'evento': 'Cambio externo', 'origen': cambio.get_origen_display(),
             'fecha_orden': dia, 'fecha_inicio': dia,
             'fecha_inicio_str': dia.strftime('%d/%m/%Y'), 'fecha_fin': '',
-            'expediente': cambio.no_expediente, 'unidad': '---',
+            'expediente': cambio.no_expediente, 'unidad': '---', 'departamento': '---',
+            'situacion': cambio.situacion,
             'cargo': cambio.descripcion, 'descripcion': cambio.descripcion,
             'motivo': cambio.motivo, 'usuario': cambio.usuario_nombre,
             'valor_anterior': cambio.valor_anterior, 'valor_nuevo': cambio.valor_nuevo,
@@ -933,8 +944,75 @@ def historico_trabajador(request, aspirante_id):
         })
     # Orden estable: en el mismo día, el movimiento va antes que el cambio externo.
     lista_final.sort(key=lambda x: (x['fecha_orden'], bool(x.get('es_cambio_externo'))))
+    lista_final = _con_situaciones(lista_final)
 
     return JsonResponse({'data': lista_final, 'encabezado': encabezado})
+
+
+def _con_situaciones(lista):
+    """Situación tras los cambios externos (decisión de RRHH del 25-10-2026).
+
+    * Debajo de cada cambio externo va una fila «Actualizado por cambio externo» con
+      cómo quedó la persona (unidad, departamento, cargo y salario) y las MISMAS
+      fechas del movimiento al que afecta. Se ve solo con los cambios externos a la
+      vista: es la fila que explica el cambio.
+    * Cada movimiento guarda en `final` la situación tras los cambios externos que
+      le siguen sin otro movimiento por medio. Con los cambios externos ocultos, el
+      movimiento enseña esa situación final en lugar de la suya.
+
+    Un cambio que llega después de una baja no actualiza nada: ya no hay contrato.
+
+    Con la situación final, `cambios_final` dice qué dato cambió respecto al del
+    propio movimiento: `{dato: {'antes', 'despues', 'veces', 'fecha'}}`. Con eso la
+    ventana marca esas celdas y el PDF lo explica en una nota al pie.
+    """
+    resultado = []
+    vigente = None   # el último movimiento (no baja) al que afectan los cambios
+    for item in lista:
+        resultado.append(item)
+        if not item.get('es_cambio_externo'):
+            vigente = None if item.get('es_baja') else item
+            continue
+        situacion = item.get('situacion')
+        if vigente is None or not situacion:
+            continue
+        previa = vigente.get('final') or {c: vigente.get(c, '---') for c in DATOS_DE_SITUACION}
+        detalle = vigente.setdefault('cambios_final', {})
+        for campo in DATOS_DE_SITUACION:
+            if str(previa.get(campo, '---')) != str(situacion.get(campo, '---')):
+                dato = detalle.setdefault(campo, {'antes': vigente.get(campo, '---'), 'veces': 0})
+                dato['veces'] += 1
+                dato['fecha'] = item['fecha_inicio_str']
+        vigente['final'] = situacion
+        resultado.append({
+            'id': None, 'es_situacion': True, 'evento': 'Actualizado por cambio externo',
+            'fecha_orden': item['fecha_orden'], 'fecha_inicio': vigente['fecha_inicio'],
+            'fecha_inicio_str': vigente['fecha_inicio_str'], 'fecha_fin': vigente.get('fecha_fin', ''),
+            'expediente': vigente.get('expediente'),
+            'unidad': situacion.get('unidad', '---'), 'departamento': situacion.get('departamento', '---'),
+            'cargo': situacion.get('cargo', '---'), 'salario': situacion.get('salario', '---'),
+            'es_baja': False, 'estado_clase': vigente.get('estado_clase', ''),
+        })
+    # Solo cuenta lo que al final es distinto del movimiento (un dato que cambió y
+    # volvió a ser el mismo no se marca).
+    for item in resultado:
+        detalle = item.get('cambios_final')
+        if not detalle:
+            continue
+        for campo in list(detalle):
+            despues = str(item['final'].get(campo, '---'))
+            if despues == str(item.get(campo, '---')):
+                del detalle[campo]
+            else:
+                detalle[campo]['despues'] = despues
+        if not detalle:
+            del item['cambios_final']
+    return resultado
+
+
+#: Datos de la situación que puede cambiar un cambio externo, con su nombre.
+DATOS_DE_SITUACION = {'unidad': 'unidad', 'departamento': 'departamento', 'cargo': 'cargo',
+                      'salario': 'salario'}
 
 # --- 2. NUEVA VISTA PARA EXPORTAR HISTORIAL COMPLETO (PDF) ---
 class ExportarHistoricoPDFView(View):
@@ -949,14 +1027,33 @@ class ExportarHistoricoPDFView(View):
         respuesta = historico_trabajador(request, aspirante_id)
         datos_historial = json.loads(respuesta.content)['data']
         # Lo mismo que se ve en pantalla: con o sin los cambios externos.
+        # Sin ellos, cada movimiento enseña su situación final (25-10-2026).
+        notas = []
         if request.GET.get('externos') == '0':
-            datos_historial = [d for d in datos_historial if not d.get('es_cambio_externo')]
+            datos_historial = [d for d in datos_historial
+                               if not d.get('es_cambio_externo') and not d.get('es_situacion')]
+            for d in datos_historial:
+                d.update(d.get('final') or {})
+                # Fila actualizada por cambios externos (25-10-2026): «*» y una nota al
+                # pie con lo que decía el movimiento y en qué cambió.
+                if d.get('cambios_final'):
+                    notas.append({
+                        'marca': '*' * (len(notas) + 1),
+                        'evento': '%s del %s' % (d.get('evento'), d.get('fecha_inicio_str')),
+                        'cambios': ['%s «%s» → «%s» (%s %s, el último el %s)' % (
+                            campo, dato['antes'], dato['despues'], dato['veces'],
+                            'cambio externo' if dato['veces'] == 1 else 'cambios externos', dato['fecha'])
+                            for campo, dato in ((c, d['cambios_final'][c]) for c in DATOS_DE_SITUACION
+                                                if c in d['cambios_final'])],
+                    })
+                    d['marca'] = notas[-1]['marca']
         
         context = {
             'aspirante': aspirante,
             'config': config,
             'fecha_hoy': datetime.now(),
-            'historial': datos_historial
+            'historial': datos_historial,
+            'notas': notas,
         }
         
         template = get_template('pages/reportes/pdf_historico_trabajador.html')
@@ -2568,7 +2665,8 @@ def exportar_contratos_excel(request):
         ("Grupo Escala", lambda c, a: cargo(c, 'ncargo.grupo_escala.nivel')),
         ("Rol", lambda c, a: cargo(c, 'rol.tipo')),
         ("Tridente", lambda c, a: getattr(c.tridente, 'tipo', '')),
-        ("Salario Escala", lambda c, a: importe(c.salario_actual)),
+        # Sin escala para la combinación: «Sin salario», no un 0 que parece un importe.
+        ("Salario Escala", lambda c, a: importe(c.salario_actual) if c.salario_actual is not None else "Sin salario"),
         ("Maestría o Doctorado", lambda c, a: grado(c)),
         ("Instructor", lambda c, a: importe(c.importe_instructor)),
         ("CNCI", lambda c, a: importe(c.importe_cnci)),

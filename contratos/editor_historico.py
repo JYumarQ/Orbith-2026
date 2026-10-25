@@ -491,9 +491,40 @@ def encadenar(historico):
     return ajustados
 
 
+def _errores_de_tipo(historico):
+    """Todo Alta y Movimiento tiene un tipo de contrato del nomenclador (25-10-2026).
+    Antes el editor ofrecía «Sin tipo» como si fuera uno más y dejaba guardar así."""
+    from nomencladores.models import NTipoContrato
+
+    from nomencladores.models import NMotivoContrato
+
+    tipos = {t.descripcion: t for t in NTipoContrato.objects.all()}
+    motivos = set(NMotivoContrato.objects.values_list('tipo_contrato__descripcion', 'descripcion'))
+    errores = []
+    for e in historico.vivos():
+        if e.tipo == BAJA:
+            continue
+        tipo = (e.estado.get('tipo_contrato') or SIN_DATO).strip()
+        if tipo == SIN_DATO:
+            errores.append('%s: falta el tipo de contrato. Elíjalo en el evento.' % e.nombre)
+        elif tipo not in tipos:
+            errores.append('%s: el tipo de contrato «%s» ya no existe en el nomenclador. Elija otro.'
+                           % (e.nombre, tipo))
+        elif tipos[tipo].requiere_motivo:
+            # Mismo criterio para el motivo cuando el tipo lo pide (25-10-2026).
+            motivo = (e.estado.get('motivo') or SIN_DATO).strip()
+            if motivo == SIN_DATO:
+                errores.append('%s: el tipo «%s» pide motivo y no lo tiene. Elíjalo en el evento.'
+                               % (e.nombre, tipo))
+            elif (tipo, motivo) not in motivos:
+                errores.append('%s: el motivo «%s» no existe para el tipo «%s». Elija otro.'
+                               % (e.nombre, motivo, tipo))
+    return errores
+
+
 def comprobar(historico):
     """Errores del histórico propuesto (lista vacía si todo está bien)."""
-    return _errores_de_borrado(historico) + _errores_de_orden(historico)
+    return _errores_de_borrado(historico) + _errores_de_orden(historico) + _errores_de_tipo(historico)
 
 
 # --------------------------------------------------------------------------

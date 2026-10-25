@@ -63,6 +63,23 @@
     
 </style>
 
+<style>
+    /* Situación final de un movimiento con los cambios externos ocultos (25-10-2026). */
+    #tablaHistoricoBody .vista-sin-externos { display: none; }
+    #tablaHistoricoBody.sin-externos .vista-sin-externos { display: inline; }
+    #tablaHistoricoBody.sin-externos .vista-con-externos { display: none; }
+    #tablaHistoricoBody tr.fila-situacion td { background: #f8f9fb; }
+    /* Señal de la fila actualizada por cambios externos (25-10-2026). */
+    #tablaHistoricoBody.sin-externos .insignia-actualizado { display: inline-block; }
+    #tablaHistoricoBody .insignia-actualizado { margin-top: .3rem; font-size: .7rem; font-weight: 600;
+        color: #b26b00; background: #fff4e0; border-radius: 1rem; padding: .1rem .55rem; cursor: help; }
+    #tablaHistoricoBody .celda-actualizada { font-style: italic; cursor: help; }
+    #tablaHistoricoBody.sin-externos .celda-actualizada { display: inline-flex; align-items: center; gap: .35rem; }
+    #tablaHistoricoBody .celda-actualizada::before { content: '\2022'; color: #e6a100; font-weight: 700;
+        font-style: normal; flex: none; }
+    #tablaHistoricoBody tr:not(.fila-cambio-externo) td.text-end,
+    #tablaHistoricoBody tr.fila-situacion td.text-end { white-space: nowrap; }
+</style>
 <div class="modal fade" id="modalHistorico" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
@@ -106,6 +123,7 @@
                                 <tr>
                                     <th>Evento</th>
                                     <th>Unidad Organizativa</th>
+                                    <th>Departamento</th>
                                     <th>Cargo</th>
                                     <th class="text-end">Salario</th>
                                     <th class="text-center">Periodo (Inicio / Fin)</th>
@@ -182,6 +200,13 @@
         if (recordar) {
             try { localStorage.setItem('historicoCambiosExternos', ver ? '1' : '0'); } catch (e) { }
         }
+        const tbody = document.getElementById('tablaHistoricoBody');
+        if (tbody) tbody.classList.toggle('sin-externos', !ver);
+        // Las filas «Actualizado por cambio externo» no tienen `data-id`: no son eventos
+        // y no cuentan en el total, pero se ocultan con los cambios externos.
+        document.querySelectorAll('#tablaHistoricoBody tr.fila-situacion').forEach(fila => {
+            fila.style.display = ver ? '' : 'none';
+        });
         const filas = document.querySelectorAll('#tablaHistoricoBody tr[data-id]');
         let visibles = 0;
         filas.forEach(fila => {
@@ -258,7 +283,7 @@
                                         <div class="badge-modern badge-slate"><i class="fas fa-gears"></i> Cambio externo</div>
                                         <div class="small text-muted mt-1">${esc(item.origen)}</div>
                                     </td>
-                                    <td colspan="2">
+                                    <td colspan="3">
                                         <div class="text-dark small">${esc(item.descripcion)}</div>${motivo}
                                     </td>
                                     <td class="text-end">${valores}</td>
@@ -272,10 +297,30 @@
                             return;
                         }
 
-                        const isSalarioCero = (item.salario === '---' || item.salario === '0.00');
-                        const salarioHtml = isSalarioCero 
-                            ? `<span class="text-muted">${item.salario}</span>`
-                            : `<span class="text-success fw-bold"><i class="fas fa-dollar-sign small me-1"></i>${item.salario}</span>`;
+                        const escH = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                        const pintarSalario = (valor) => (valor === '---' || valor === '0.00' || valor == null)
+                            ? `<span class="text-muted">${escH(valor || '---')}</span>`
+                            : `<span class="text-success fw-bold"><i class="fas fa-dollar-sign small me-1"></i>${escH(valor)}</span>`;
+                        const pintarUnidad = (valor) => `<div class="d-flex align-items-center gap-2"><i class="fas fa-building text-muted opacity-50"></i><span class="${valor === '---' ? 'text-muted fst-italic' : 'text-dark fw-medium'}">${escH(valor)}</span></div>`;
+                        const pintarDepartamento = (valor) => `<span class="${valor === '---' ? 'text-muted fst-italic' : 'text-dark'}">${escH(valor)}</span>`;
+                        const pintarCargo = (valor) => `<span class="${valor === '---' ? 'text-muted' : 'text-dark fw-bold'}">${escH(valor)}</span>`;
+                        // Con los cambios externos ocultos, el movimiento enseña su situación
+                        // final (25-10-2026); con ellos a la vista, la suya.
+                        // La celda que cambió lleva un punto y va en cursiva; al pasar el ratón
+                        // dice el dato del movimiento y cuántos cambios externos hubo.
+                        const cambios = item.cambios_final || {};
+                        const doble = (pintar, propio, final, campo) => {
+                            if (!(item.final && final !== undefined && final !== propio)) return pintar(propio);
+                            const dato = cambios[campo];
+                            const ayuda = dato ? `En el movimiento: ${dato.antes}. Cambió por ${dato.veces} ${dato.veces === 1 ? 'cambio externo' : 'cambios externos'}, el último el ${dato.fecha}.` : '';
+                            return `<span class="vista-con-externos">${pintar(propio)}</span>`
+                                 + `<span class="vista-sin-externos celda-actualizada" title="${escH(ayuda)}">${pintar(final)}</span>`;
+                        };
+                        const fin = item.final || {};
+                        const unidadHtml = doble(pintarUnidad, item.unidad, fin.unidad, 'unidad');
+                        const departamentoHtml = doble(pintarDepartamento, item.departamento || '---', fin.departamento, 'departamento');
+                        const cargoHtml = doble(pintarCargo, item.cargo, fin.cargo, 'cargo');
+                        const salarioHtml = doble(pintarSalario, item.salario, fin.salario, 'salario');
 
                         let finHtml = '';
                         
@@ -292,21 +337,30 @@
                             finHtml = `<div class="date-pill ${colorFinClase} px-2 fw-bold"><i class="fas fa-calendar-alt opacity-50"></i> ${item.fecha_fin}</div>`;
                         }
 
+                        // Situación tras un cambio externo (25-10-2026): no es un evento, no se
+                        // selecciona ni se exporta; lleva las fechas del movimiento al que afecta.
+                        const esSituacion = !!item.es_situacion;
+                        const insignia = esSituacion
+                            ? `<div class="badge-modern badge-slate"><i class="fas fa-rotate"></i> Actualizado por cambio externo</div>`
+                            : `<div class="badge-modern badge-${cssType}"><i class="fas ${icon}"></i> ${item.evento}</div>`
+                              + (Object.keys(cambios).length
+                                  ? `<div class="vista-sin-externos insignia-actualizado" title="Datos actualizados por cambios externos posteriores al movimiento. Active «Incluir cambios externos» para verlos."><i class="fas fa-rotate"></i> actualizado</div>`
+                                  : '');
+                        const abrir = esSituacion ? 'class="fila-cambio-externo fila-situacion" title="Situación tras el cambio externo de arriba"'
+                            : `data-id="${item.id}" onclick="seleccionarFila(this)" ondblclick="abrirCapsula(${item.id})"`;
                         const fila = `
-                            <tr data-id="${item.id}" onclick="seleccionarFila(this)" ondblclick="abrirCapsula(${item.id})">
+                            <tr ${abrir}>
                                 <td>
-                                    <div class="badge-modern badge-${cssType}">
-                                        <i class="fas ${icon}"></i> ${item.evento}
-                                    </div>
+                                    ${insignia}
                                 </td>
                                 <td>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-building text-muted opacity-50"></i>
-                                        <span class="${item.unidad === '---' ? 'text-muted fst-italic' : 'text-dark fw-medium'}">${item.unidad}</span>
-                                    </div>
+                                    ${unidadHtml}
                                 </td>
                                 <td>
-                                    <span class="${item.cargo === '---' ? 'text-muted' : 'text-dark fw-bold'}">${item.cargo}</span>
+                                    ${departamentoHtml}
+                                </td>
+                                <td>
+                                    ${cargoHtml}
                                 </td>
                                 <td class="text-end">
                                     ${salarioHtml}

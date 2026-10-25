@@ -133,6 +133,9 @@
   @media (max-width: 991px) { .eh .mesa { position: static; } }
   @media (max-width: 575px) { .eh .cifra { border-left: 0; padding-left: 0; } }
   @media (prefers-reduced-motion: reduce) { .eh * { transition: none !important; } }
+  /* Tipo de contrato que falta (25-10-2026). */
+  .falta-tipo { color: #b26b00; font-weight: 600; }
+  select.falta-dato, select.falta-dato + .select2-container .select2-selection { border-color: #f4b400 !important; }
 </style>
 {% endblock %}
 
@@ -412,8 +415,17 @@
     let cargo = '<b>' + esc(s.cargo) + '</b>';
     if (e.tipo === 'MOV' && !vacio(a.cargo) && a.cargo !== s.cargo) cargo = '<span class="antes">' + esc(a.cargo) + '</span> → ' + cargo;
     const partes = [cargo];
+    if (!vacio(s.departamento)) partes.push(esc(s.departamento));
     if (!vacio(s.unidad)) partes.push(esc(s.unidad));
+    // El tipo de contrato es obligatorio (25-10-2026): si el evento no lo tiene
+    // guardado, la tarjeta lo dice para que se vea cuál hay que completar.
     if (!vacio(s.tipo_contrato)) partes.push(esc(s.tipo_contrato));
+    else partes.push('<span class="falta-tipo"><i class="fas fa-exclamation-triangle me-1"></i>falta el tipo de contrato</span>');
+    const tipoDelEvento = CAT.tipos.find(function (t) { return t.descripcion === s.tipo_contrato; });
+    if (tipoDelEvento && tipoDelEvento.requiere_motivo) {
+      if (vacio(s.motivo)) partes.push('<span class="falta-tipo"><i class="fas fa-exclamation-triangle me-1"></i>falta el motivo</span>');
+      else partes.push(esc(s.motivo));
+    }
     if (!vacio(s.tridente)) partes.push(esc(s.tridente).toLowerCase());
     return partes.join(' · ');
   }
@@ -504,16 +516,25 @@
     if (unidad !== null) opcionesCargo += '</optgroup>';
 
     const tipo = tipoElegido(e);
-    let opcionesTipo = tipo ? '' : opcion('', vacio(s.tipo_contrato) ? 'Sin tipo' : '«' + s.tipo_contrato + '» (ya no existe)', true);
+    // Sin «Sin tipo» (25-10-2026): si el evento no tiene un tipo del nomenclador, el
+    // desplegable avisa con una línea que no se puede elegir y no deja guardar.
+    let opcionesTipo = tipo ? '' : '<option value="" disabled selected>' + esc(vacio(s.tipo_contrato)
+      ? '— Elija el tipo de contrato —' : '— «' + s.tipo_contrato + '» ya no existe: elija otro —') + '</option>';
     CAT.tipos.forEach(function (t) { opcionesTipo += opcion(t.id, t.descripcion, tipo && t.id === tipo.id); });
     const motivos = tipo ? CAT.motivos.filter(function (m) { return m.tipo_contrato_id === tipo.id; }) : [];
-    let opcionesMotivo = opcion('', tipo && tipo.requiere_motivo ? 'Elija el motivo' : 'No lo pide este tipo', vacio(s.motivo));
-    let motivoEncontrado = vacio(s.motivo);
+    // Si el tipo pide motivo, es obligatorio (25-10-2026): sin «Elija el motivo»
+    // elegible; un aviso que no se puede elegir y no deja guardar.
+    const pideMotivo = !!(tipo && tipo.requiere_motivo);
+    let opcionesMotivo = pideMotivo ? '' : opcion('', 'No lo pide este tipo', vacio(s.motivo));
+    let motivoEncontrado = !pideMotivo && vacio(s.motivo);
     motivos.forEach(function (m) {
       const sel = m.descripcion === s.motivo; if (sel) motivoEncontrado = true;
       opcionesMotivo += opcion(m.id, m.descripcion, sel);
     });
-    if (!motivoEncontrado) opcionesMotivo += opcion('', '«' + s.motivo + '» (ya no existe)', true);
+    const faltaMotivo = pideMotivo && !motivoEncontrado;
+    if (faltaMotivo) opcionesMotivo = '<option value="" disabled selected>' + esc(vacio(s.motivo)
+      ? '— Elija el motivo —' : '— «' + s.motivo + '» no vale para este tipo: elija otro —') + '</option>' + opcionesMotivo;
+    else if (!motivoEncontrado && !vacio(s.motivo)) opcionesMotivo += opcion('', '«' + s.motivo + '» (no lo pide este tipo)', true);
     const tsal = s.tipo_salario === 'Fijo' ? 'FIJ' : (s.tipo_salario === 'Dinámico' ? 'DIN' : '');
     let opcionesTridente = opcion('', 'Sin tridente', vacio(s.tridente));
     CAT.tridentes.forEach(function (t) { opcionesTridente += opcion(t.id, t.texto.replace('Tridente ', ''), t.texto === s.tridente); });
@@ -529,13 +550,15 @@
       + '<select class="form-select' + clase(e, ['cargo', 'departamento', 'unidad']) + '" id="ehCargo" data-campo="cargo_id">' + opcionesCargo + '</select>'
       + '<div class="ayuda">Unidad, departamento, categoría, grupo y rol salen del cargo.</div>'
       + '<div class="row g-2 mt-1">'
-      + '<div class="col-5"><label class="form-label" for="ehUnidad">Unidad</label><input class="form-control derivado" id="ehUnidad" value="' + esc(s.unidad) + '" readonly></div>'
-      + '<div class="col-3"><label class="form-label" for="ehGrupo">Grupo</label><input class="form-control derivado num" id="ehGrupo" value="' + esc(s.grupo_escala) + '" readonly></div>'
-      + '<div class="col-4"><label class="form-label" for="ehRol">Rol</label><input class="form-control derivado" id="ehRol" value="' + esc(s.rol) + '" readonly></div>'
+      + '<div class="col-6"><label class="form-label" for="ehUnidad">Unidad</label><input class="form-control derivado" id="ehUnidad" value="' + esc(s.unidad) + '" readonly></div>'
+      + '<div class="col-6"><label class="form-label" for="ehDepartamento">Departamento</label><input class="form-control derivado" id="ehDepartamento" value="' + esc(s.departamento) + '" readonly></div>'
+      + '<div class="col-6"><label class="form-label" for="ehGrupo">Grupo</label><input class="form-control derivado num" id="ehGrupo" value="' + esc(s.grupo_escala) + '" readonly></div>'
+      + '<div class="col-6"><label class="form-label" for="ehRol">Rol</label><input class="form-control derivado" id="ehRol" value="' + esc(s.rol) + '" readonly></div>'
       + '</div></div>'
       + '<div><div class="grupo-titulo">Contrato</div><div class="row g-2">'
-      + '<div class="col-6"><label class="form-label" for="ehTipo">Tipo de contrato ' + chip(e, ['tipo_contrato']) + '</label><select class="form-select' + clase(e, ['tipo_contrato']) + '" id="ehTipo" data-campo="tipo_id">' + opcionesTipo + '</select></div>'
-      + '<div class="col-6"><label class="form-label" for="ehMotivo">Motivo ' + chip(e, ['motivo']) + '</label><select class="form-select' + clase(e, ['motivo']) + '" id="ehMotivo" data-campo="motivo_id"' + (tipo && tipo.requiere_motivo ? '' : ' disabled') + '>' + opcionesMotivo + '</select></div>'
+      + '<div class="col-6"><label class="form-label" for="ehTipo">Tipo de contrato ' + chip(e, ['tipo_contrato']) + '</label><select class="form-select' + clase(e, ['tipo_contrato']) + (tipo ? '' : ' falta-dato') + '" id="ehTipo" data-campo="tipo_id">' + opcionesTipo + '</select>'
+      + (tipo ? '' : '<div class="ayuda falta-tipo">Obligatorio: este evento no tiene el tipo guardado.</div>') + '</div>'
+      + '<div class="col-6"><label class="form-label" for="ehMotivo">Motivo ' + chip(e, ['motivo']) + '</label><select class="form-select' + clase(e, ['motivo']) + (faltaMotivo ? ' falta-dato' : '') + '" id="ehMotivo" data-campo="motivo_id"' + (tipo && tipo.requiere_motivo ? '' : ' disabled') + '>' + opcionesMotivo + '</select>' + (faltaMotivo ? '<div class="ayuda falta-tipo">Obligatorio: este tipo de contrato pide motivo.</div>' : '') + '</div>'
       + '<div class="col-4"><label class="form-label" for="ehDuracion">Duración ' + chip(e, ['duracion']) + '</label><input class="form-control num' + clase(e, ['duracion']) + '" type="number" min="0" step="1" id="ehDuracion" data-campo="duracion" placeholder="días" value="' + esc(e.duracion == null ? '' : e.duracion) + '"></div>'
       + '<div class="col-4"><label class="form-label" for="ehTipoSal">Tipo de salario ' + chip(e, ['tipo_salario']) + '</label><select class="form-select' + clase(e, ['tipo_salario']) + '" id="ehTipoSal" data-campo="tipo_salario">'
       + (tsal ? '' : opcion('', 'Sin dato', true)) + opcion('DIN', 'Dinámico', tsal === 'DIN') + opcion('FIJ', 'Fijo', tsal === 'FIJ') + '</select></div>'

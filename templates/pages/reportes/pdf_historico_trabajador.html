@@ -64,12 +64,14 @@
     <table class="data-table">
         <thead>
             <tr>
-                <th>Evento</th>
-                <th class="text-center">Exp.</th>
-                <th>Cargo</th>
-                <th class="text-right">Salario</th>
-                <th class="text-center">Inicio</th>
-                <th class="text-center">Fin</th>
+                <th style="width: 13%;">Evento</th>
+                <th class="text-center" style="width: 8%;">Exp.</th>
+                <th style="width: 14%;">Unidad</th>
+                <th style="width: 16%;">Departamento</th>
+                <th style="width: 15%;">Cargo</th>
+                <th class="text-right" style="width: 10%;">Salario</th>
+                <th class="text-center" style="width: 12%;">Inicio</th>
+                <th class="text-center" style="width: 12%;">Fin</th>
             </tr>
         </thead>
         <tbody>
@@ -78,7 +80,7 @@
             <tr style="background-color: #f1f5f9; color: #475569;">
                 <td><strong>Cambio externo</strong><br><span style="font-size: 7pt;">{{ item.origen }}</span></td>
                 <td class="text-center">{{ item.expediente }}</td>
-                <td colspan="2">
+                <td colspan="4">
                     {{ item.descripcion }}
                     {% if item.valor_anterior or item.valor_nuevo %}<br><span style="font-size: 7pt;">{{ item.valor_anterior }} → {{ item.valor_nuevo }}</span>{% endif %}
                     {% if item.motivo %}<br><span style="font-size: 7pt;">Motivo: {{ item.motivo }}</span>{% endif %}
@@ -87,13 +89,13 @@
                 <td class="text-center">—</td>
             </tr>
             {% else %}
-            <tr>
-                <td><strong>{{ item.evento }}</strong></td>
+            {# «Actualizado por cambio externo» (25-10-2026): cómo quedó la persona tras el cambio de arriba. #}
+            <tr{% if item.es_situacion %} style="background-color: #f8fafc; color: #475569;"{% endif %}>
+                <td>{% if item.es_situacion %}<span style="font-size: 7.5pt;">Actualizado por cambio externo</span>{% else %}<strong>{{ item.evento }}</strong>{% if item.marca %} {{ item.marca }}{% endif %}{% endif %}</td>
                 <td class="text-center">{{ item.expediente }}</td>
-                <td>
-                    {{ item.cargo }}<br>
-                    <span style="font-size: 7pt; color: #666;">{{ item.unidad }}</span>
-                </td>
+                <td>{{ item.unidad }}</td>
+                <td>{{ item.departamento|default:'---' }}</td>
+                <td>{{ item.cargo }}</td>
                 <td class="text-right">${{ item.salario }}</td>
                 <td class="text-center">{{ item.fecha_inicio_str }}</td>
                 <td class="text-center">
@@ -109,11 +111,21 @@
             {% endif %}
             {% empty %}
             <tr>
-                <td colspan="6" class="text-center">No hay historial registrado para este trabajador.</td>
+                <td colspan="8" class="text-center">No hay historial registrado para este trabajador.</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+
+    {% if notas %}
+    {# Filas actualizadas por cambios externos (25-10-2026): lo que decía el movimiento y en qué cambió. #}
+    <div style="margin-top: 14px; font-size: 7.5pt; color: #475569;">
+        {% for nota in notas %}
+        <p style="margin: 0 0 4px 0;"><strong>{{ nota.marca }} {{ nota.evento }}:</strong> datos actualizados por
+            cambios externos posteriores al movimiento: {% for cambio in nota.cambios %}{{ cambio }}{% if not forloop.last %}; {% else %}.{% endif %}{% endfor %}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <div id="footerContent" style="text-align: right; font-size: 8pt; color: #777;">
         Página <pdf:pagenumber> de <pdf:pagecount> | Generado por el Sistema Orbith
