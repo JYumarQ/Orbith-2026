@@ -98,6 +98,54 @@ def _contexto_dashboard():
     }
 
 
+def _contexto_dashboard_moderador(usuario):
+    """El Dashboard del Moderador (24-10-2026): los hallazgos pendientes de SUS
+    unidades, por gravedad, por categoría y por unidad. Solo cuenta lo que ya está
+    guardado —no analiza nada— y no enseña nada de la empresa entera: ni el índice de
+    salud ni el último análisis, que describen el barrido completo. Mismo alcance y
+    mismos criterios que su pestaña Hallazgos (sin Extras), así cada cifra coincide
+    con lo que se ve al pulsarla."""
+    from django.db.models import Count
+
+    from .constantes import CRITICIDAD_ALTA
+
+    unidades = list(permisos.unidades_visibles(usuario).order_by('orden_informe', 'descripcion'))
+    pendientes = (Hallazgo.objects
+                  .filter(vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS,
+                          unidad_organizativa_id__in=[u.pk for u in unidades])
+                  .exclude(modulo=MODULO_EXTRAS))
+
+    por_criticidad = dict(pendientes.values_list('criticidad').annotate(n=Count('id')))
+    tarjetas_criticidad = [{
+        'valor': valor, 'etiqueta': etiqueta, 'total': por_criticidad.get(valor, 0),
+        'color': COLOR_POR_CRITICIDAD.get(valor, 'gris'),
+        'icono': ICONO_POR_CRITICIDAD.get(valor, 'bi-dash-circle'),
+    } for valor, etiqueta in CRITICIDADES]
+
+    por_modulo = dict(pendientes.values_list('modulo').annotate(n=Count('id')))
+    modulos = [{'clave': clave, 'etiqueta': etiqueta, 'icono': icono, 'total': por_modulo.get(clave, 0)}
+               for clave, etiqueta, icono in MODULOS if clave != MODULO_EXTRAS]
+
+    por_unidad = {}
+    for unidad_id, criticidad, n in (pendientes.values_list('unidad_organizativa_id', 'criticidad')
+                                     .annotate(n=Count('id'))):
+        fila = por_unidad.setdefault(unidad_id, {'total': 0, 'graves': 0})
+        fila['total'] += n
+        if criticidad <= CRITICIDAD_ALTA:   # Crítica y Alta
+            fila['graves'] += n
+    filas_unidades = [{'unidad': u, **por_unidad.get(u.pk, {'total': 0, 'graves': 0})}
+                      for u in unidades]
+
+    return {
+        'tarjetas_criticidad': tarjetas_criticidad,
+        'modulos': modulos,
+        'unidades': filas_unidades,
+        'total_pendientes': sum(por_criticidad.values()),
+        'total_vigentes': sum(por_criticidad.values()),
+        'total_reglas': total_reglas(),
+    }
+
+
 def _contexto_listado(request):
     consulta, filtros = filtrar_hallazgos(request)
     # Filas por página del usuario, comunes a todas las tablas (core/paginacion.py).
@@ -156,17 +204,18 @@ def index(request):
         contexto['claves_modulos'] = CLAVES_MODULOS
         return render(request, 'pages/subsanacion/index.html', contexto)
 
-    contexto = _contexto_listado(request)
-    contexto['total_reglas'] = total_reglas()
-    contexto['total_vigentes'] = contexto['total_resultados']
-    contexto['tab_activo'] = 'hallazgos'
-    return render(request, 'pages/subsanacion/index.html', contexto)
+    # Moderador (24-10-2026): entra a su Dashboard de «mis unidades».
+    return render(request, 'pages/subsanacion/index.html', _contexto_dashboard_moderador(request.user))
 
 
-@permisos.solo_admin_subsanacion
+@permisos.acceso_subsanacion
 def panel_dashboard(request):
-    return render(request, 'pages/subsanacion/partials/panel_dashboard.html',
-                  _contexto_dashboard())
+    """Administrador: el de toda la empresa. Moderador: el de sus unidades."""
+    if permisos.es_administrador(request.user):
+        return render(request, 'pages/subsanacion/partials/panel_dashboard.html',
+                      _contexto_dashboard())
+    return render(request, 'pages/subsanacion/partials/panel_dashboard_moderador.html',
+                  _contexto_dashboard_moderador(request.user))
 
 
 @permisos.acceso_subsanacion

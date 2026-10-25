@@ -160,7 +160,7 @@
           <a class="btn btn-sm btn-outline-secondary py-0 px-2" href="#"
              hx-get="{% url 'subsanacion:panel_hallazgos' %}?modulo={{ modulo.clave }}"
              hx-target="#paneHallazgos" hx-swap="innerHTML"
-             onclick="document.querySelector('[data-bs-target=\'#paneHallazgos\']').click()"
+             onclick="mostrarPestanaHallazgos()"
              title="Ver los hallazgos de esta categoría">
             <i class="bi bi-arrow-right"></i>
           </a>

@@ -1143,10 +1143,27 @@ class PermisosSubsanacionTests(TestCase):
 
     # --- Paneles exclusivos de Administrador (barrido completo) -------------
 
-    def test_moderador_no_accede_al_dashboard(self):
+    def test_moderador_ve_el_dashboard_de_sus_unidades(self):
+        # 24-10-2026: el Moderador tiene su propio Dashboard, solo con lo de sus
+        # unidades y sin el índice de salud ni el análisis de toda la empresa.
         self.client.force_login(self.moderador)
         respuesta = self.client.get(reverse('subsanacion:panel_dashboard'))
-        self.assertEqual(respuesta.status_code, 403)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertTemplateUsed(respuesta, 'pages/subsanacion/partials/panel_dashboard_moderador.html')
+        self.assertEqual(respuesta.context['total_pendientes'], 1)
+        self.assertEqual([f['unidad'] for f in respuesta.context['unidades']], [self.uo_propia])
+        self.assertNotContains(respuesta, 'Salud general')
+        # Y entra en Subsanación por ese Dashboard.
+        self.assertTemplateUsed(self.client.get(reverse('subsanacion:index')),
+                                'pages/subsanacion/partials/panel_dashboard_moderador.html')
+
+    def test_el_filtro_por_unidad_no_ensancha_el_alcance(self):
+        self.client.force_login(self.moderador)
+        ajena = self.client.get(reverse('subsanacion:panel_hallazgos'), {'unidad': self.uo_ajena.pk})
+        self.assertEqual(ajena.context['total_resultados'], 0)
+        propia = self.client.get(reverse('subsanacion:panel_hallazgos'), {'unidad': self.uo_propia.pk})
+        self.assertEqual(propia.context['total_resultados'], 1)
+        self.assertContains(propia, 'Unidad: UEB del moderador')
 
     def test_moderador_no_accede_a_estadisticas(self):
         self.client.force_login(self.moderador)

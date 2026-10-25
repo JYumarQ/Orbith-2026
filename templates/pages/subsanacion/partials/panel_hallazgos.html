@@ -17,6 +17,17 @@
     </div>
 
     <div class="p-3">
+      {% if filtros.unidad %}
+        {% comment %} Solo una unidad (desde el Dashboard del Moderador). Viaja oculta con
+           el resto de filtros; «Quitar» vuelve a todas las unidades visibles. {% endcomment %}
+        <input type="hidden" name="unidad" value="{{ filtros.unidad }}">
+        <div class="small mb-2">
+          <span class="badge bg-label-primary">Unidad: {{ filtros.unidad_nombre|default:filtros.unidad }}</span>
+          <a href="#" class="ms-1"
+             hx-get="{% url 'subsanacion:panel_hallazgos' %}" hx-target="#paneHallazgos"
+             hx-swap="innerHTML" hx-push-url="true">Quitar</a>
+        </div>
+      {% endif %}
       <div class="row g-2 align-items-end">
         <div class="col-12 col-lg-5">
           <label class="form-label small mb-1" for="buscadorHallazgos">Búsqueda</label>

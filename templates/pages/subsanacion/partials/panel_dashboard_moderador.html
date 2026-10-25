@@ -1,0 +1,98 @@
+{% comment %}
+  Dashboard del Moderador (24-10-2026): los hallazgos pendientes de SUS unidades.
+  Solo cuenta lo ya guardado (no analiza nada) y no enseña cifras de la empresa
+  entera. Cada cifra abre la pestaña Hallazgos con ese filtro: lo que se cuenta aquí
+  es exactamente lo que se ve allí.
+{% endcomment %}
+<div class="alert alert-info d-flex align-items-center gap-2 py-2" role="note">
+  <i class="bi bi-info-circle"></i>
+  <div class="small">
+    Problemas pendientes de <strong>sus unidades</strong>. Se actualizan solos con la búsqueda
+    automática y al corregir cada registro. Pulse una cifra para ver esos problemas.
+  </div>
+</div>
+
+<div class="sub-panel">
+  <div class="sub-panel-head sub-color-indigo">
+    <span class="sub-icono-chip"><i class="bi bi-bar-chart-steps"></i></span>
+    <h6 class="sub-panel-title">Problemas pendientes por gravedad</h6>
+    <span class="badge bg-label-secondary ms-auto">{{ total_pendientes }} en total</span>
+  </div>
+  <div class="row g-2 p-3">
+    {% for tarjeta in tarjetas_criticidad %}
+      <div class="col-6 col-md-4 col-xl">
+        <a href="#" class="d-block text-decoration-none sub-kpi sub-color-{{ tarjeta.color }}"
+           title="Ver los problemas de gravedad {{ tarjeta.etiqueta|lower }}"
+           hx-get="{% url 'subsanacion:panel_hallazgos' %}?criticidad={{ tarjeta.valor }}"
+           hx-target="#paneHallazgos" hx-swap="innerHTML"
+           onclick="mostrarPestanaHallazgos()">
+          <span class="sub-kpi-icono"><i class="bi {{ tarjeta.icono }}"></i></span>
+          <div class="sub-kpi-valor">{{ tarjeta.total }}</div>
+          <div class="sub-kpi-label">{{ tarjeta.etiqueta }}</div>
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="sub-panel h-100">
+      <div class="sub-panel-head sub-color-azul">
+        <span class="sub-icono-chip"><i class="bi bi-diagram-2"></i></span>
+        <h6 class="sub-panel-title">Por categoría</h6>
+      </div>
+      {% for modulo in modulos %}
+        <div class="sub-modulo sub-color-{% if modulo.total %}rojo{% else %}verde{% endif %}">
+          <span class="sub-icono-chip"><i class="bi {{ modulo.icono }}"></i></span>
+          <div class="sub-modulo-nombre">{{ modulo.etiqueta }}</div>
+          <div class="sub-modulo-valor {% if not modulo.total %}text-muted{% endif %}">
+            {% if modulo.total %}{{ modulo.total }} problema{{ modulo.total|pluralize }}{% else %}Sin problemas{% endif %}
+          </div>
+          {% if modulo.total %}
+            <a class="btn btn-sm btn-outline-secondary py-0 px-2" href="#"
+               hx-get="{% url 'subsanacion:panel_hallazgos' %}?modulo={{ modulo.clave }}"
+               hx-target="#paneHallazgos" hx-swap="innerHTML"
+               onclick="mostrarPestanaHallazgos()"
+               title="Ver los problemas de esta categoría"><i class="bi bi-arrow-right"></i></a>
+          {% else %}
+            <span class="d-inline-block" style="width: 34px;"></span>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="sub-panel h-100">
+      <div class="sub-panel-head sub-color-azul">
+        <span class="sub-icono-chip"><i class="bi bi-building"></i></span>
+        <h6 class="sub-panel-title">Por unidad</h6>
+        <span class="badge bg-label-secondary ms-auto">{{ unidades|length }} unidad{{ unidades|length|pluralize:"es" }}</span>
+      </div>
+      {% for fila in unidades %}
+        <div class="sub-modulo sub-color-{% if fila.graves %}rojo{% elif fila.total %}naranja{% else %}verde{% endif %}">
+          <span class="sub-icono-chip"><i class="bi bi-building"></i></span>
+          <div class="sub-modulo-nombre">
+            {{ fila.unidad.descripcion }}
+            {% if fila.graves %}<div class="text-danger fw-normal" style="font-size: .6875rem;">{{ fila.graves }} crítico{{ fila.graves|pluralize }} o alto{{ fila.graves|pluralize }}</div>{% endif %}
+          </div>
+          <div class="sub-modulo-valor {% if not fila.total %}text-muted{% endif %}">
+            {% if fila.total %}{{ fila.total }} problema{{ fila.total|pluralize }}{% else %}Sin problemas{% endif %}
+          </div>
+          {% if fila.total %}
+            <a class="btn btn-sm btn-outline-secondary py-0 px-2" href="#"
+               hx-get="{% url 'subsanacion:panel_hallazgos' %}?unidad={{ fila.unidad.pk }}"
+               hx-target="#paneHallazgos" hx-swap="innerHTML"
+               onclick="mostrarPestanaHallazgos()"
+               title="Ver los problemas de esta unidad"><i class="bi bi-arrow-right"></i></a>
+          {% else %}
+            <span class="d-inline-block" style="width: 34px;"></span>
+          {% endif %}
+        </div>
+      {% empty %}
+        <div class="sub-vacio small">No tiene unidades asignadas.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>

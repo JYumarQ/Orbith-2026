@@ -97,6 +97,18 @@ def filtrar_hallazgos(request):
         # salud en `servicios.finalizar_ejecucion()`).
         consulta = consulta.exclude(modulo=MODULO_EXTRAS)
 
+    # Una unidad concreta (24-10-2026): llega desde el Dashboard del Moderador al
+    # pulsar una de sus unidades. Va DESPUÉS del alcance: nunca lo ensancha.
+    unidad = (parametros.get('unidad') or '').strip()
+    unidad_nombre = ''
+    if unidad.isdigit():
+        consulta = consulta.filter(unidad_organizativa_id=unidad)
+        from strorganizativa.models import UnidadOrganizativa
+        unidad_nombre = (UnidadOrganizativa.objects.filter(pk=unidad)
+                         .values_list('descripcion', flat=True).first() or '')
+    else:
+        unidad = ''
+
     if busqueda:
         consulta = aplicar_busqueda(consulta, busqueda)
 
@@ -107,9 +119,11 @@ def filtrar_hallazgos(request):
         'estados': estados,
         'solo_criticos': solo_criticos,
         'archivados': incluir_archivados,
+        'unidad': unidad,
+        'unidad_nombre': unidad_nombre,
         'hay_filtros': bool(
             busqueda or criticidades or modulos or estados
-            or solo_criticos or incluir_archivados),
+            or solo_criticos or incluir_archivados or unidad),
     }
     return consulta, filtros
 

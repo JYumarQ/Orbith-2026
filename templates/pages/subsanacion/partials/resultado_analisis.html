@@ -88,7 +88,7 @@
   <button class="btn btn-sm btn-primary"
           hx-get="{% url 'subsanacion:panel_hallazgos' %}"
           hx-target="#paneHallazgos" hx-swap="innerHTML"
-          onclick="document.querySelector('[data-bs-target=\'#paneHallazgos\']').click()">
+          onclick="mostrarPestanaHallazgos()">
     <i class="bi bi-list-check me-1"></i>Ver los hallazgos
   </button>
   <button class="btn btn-sm btn-outline-secondary"

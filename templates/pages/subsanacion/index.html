@@ -205,11 +205,10 @@
   </div>
 
   <ul class="nav nav-tabs mb-3" role="tablist">
-    {% comment %} Dashboard, Historial de revisiones, Estadísticas y Ejecutar análisis
-       describen o lanzan el barrido COMPLETO de toda la empresa — son exclusivos del
-       Administrador (ver `subsanacion/permisos.py`). Un Moderador solo tiene la
-       pestaña de Hallazgos, ya acotada a sus propias Unidades Organizativas. {% endcomment %}
-    {% if user.es_admin %}
+    {% comment %} Historial de revisiones, Estadísticas y Ejecutar análisis describen o
+       lanzan el barrido COMPLETO de toda la empresa — son exclusivos del Administrador
+       (ver `subsanacion/permisos.py`). El Dashboard lo tienen los dos (24-10-2026): el
+       Administrador, el de toda la empresa; el Moderador, el de sus unidades. {% endcomment %}
     <li class="nav-item">
       <button class="nav-link{% if tab_activo != 'hallazgos' %} active{% endif %}"
               data-bs-toggle="tab" data-bs-target="#paneDashboard" type="button"
@@ -218,9 +217,8 @@
         <i class="bi bi-speedometer2 me-1"></i>Dashboard
       </button>
     </li>
-    {% endif %}
     <li class="nav-item">
-      <button class="nav-link{% if tab_activo == 'hallazgos' or not user.es_admin %} active{% endif %}"
+      <button class="nav-link{% if tab_activo == 'hallazgos' %} active{% endif %}"
               data-bs-toggle="tab" data-bs-target="#paneHallazgos" type="button"
               hx-get="{% url 'subsanacion:panel_hallazgos' %}"
               hx-target="#paneHallazgos" hx-swap="innerHTML" hx-push-url="true">
@@ -262,15 +260,19 @@
   </ul>
 
   <div class="tab-content p-0">
-    {% if user.es_admin %}
     {% comment %} El dashboard se pinta ya renderizado: no hace falta una segunda petición para
        ver la pantalla principal. {% endcomment %}
     <div class="tab-pane fade{% if tab_activo != 'hallazgos' %} show active{% endif %}" id="paneDashboard">
-      {% include 'pages/subsanacion/partials/panel_dashboard.html' %}
+      {% if tab_activo != 'hallazgos' %}
+        {% if user.es_admin %}
+          {% include 'pages/subsanacion/partials/panel_dashboard.html' %}
+        {% else %}
+          {% include 'pages/subsanacion/partials/panel_dashboard_moderador.html' %}
+        {% endif %}
+      {% endif %}
     </div>
-    {% endif %}
-    <div class="tab-pane fade{% if tab_activo == 'hallazgos' or not user.es_admin %} show active{% endif %}" id="paneHallazgos">
-      {% if tab_activo == 'hallazgos' or not user.es_admin %}
+    <div class="tab-pane fade{% if tab_activo == 'hallazgos' %} show active{% endif %}" id="paneHallazgos">
+      {% if tab_activo == 'hallazgos' %}
         {% comment %} Llegada por navegación completa (p. ej. al volver aquí tras
            corregir un hallazgo desde otra pestaña — ver
            `core.mixins.VolverAlOrigenMixin` y `subsanacion.views.panel_hallazgos`), o
@@ -315,4 +317,13 @@
 <script src="{% estatico 'js/orbith_recorrido.js' %}"></script>
 <script src="{% estatico 'js/recorrido_subsanacion.js' %}"></script>
 <script src="{% estatico 'js/recorrido_busqueda.js' %}"></script>
+<script>
+  // Muestra la pestaña Hallazgos SIN volver a pedir su lista (24-10-2026). Antes se
+  // «pulsaba» la pestaña, que lanza su propia petición sin filtros: si llegaba después
+  // de la filtrada (la de la cifra pulsada), la tapaba y se veían todos los hallazgos.
+  function mostrarPestanaHallazgos() {
+    const boton = document.querySelector('[data-bs-target="#paneHallazgos"]');
+    if (boton) bootstrap.Tab.getOrCreateInstance(boton).show();
+  }
+</script>
 {% endblock %}
