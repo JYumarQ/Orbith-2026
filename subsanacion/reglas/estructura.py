@@ -390,3 +390,56 @@ class CargoSinRol(ReglaBase):
                 unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
                 campo_formulario='rol',
             )
+
+
+class GrupoDeNominaRepetido(ReglaBase):
+    """EST-009 (24-10-2026): dos unidades que no son subunidades con el mismo grupo
+    de nómina. Solo lo comparten una unidad principal y sus subunidades, que lo
+    heredan (EST-003 vigila esa herencia). El formulario y el importador ya no lo
+    dejan repetir; esta regla encuentra los repetidos que ya existían."""
+
+    codigo = 'EST-009'
+    nombre = 'Grupo de nómina repetido en dos unidades'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'strorganizativa.UnidadOrganizativa'
+
+    descripcion = (
+        'Busca unidades principales o normales que comparten el mismo grupo de nómina. '
+        'Solo debe repetirse entre una unidad principal y sus subunidades.')
+    causa_probable = (
+        'Hasta el 24-10-2026 el formulario de unidades no lo impedía, o el grupo se '
+        'escribió por error al crear la unidad.')
+    impacto = (
+        'Los informes y la Pre-Nómina que agrupan por grupo de nómina juntarían a los '
+        'trabajadores de unidades distintas en un mismo grupo.')
+    solucion = (
+        'Abra cada unidad del aviso y póngale su grupo de nómina correcto, distinto del '
+        'de las demás unidades. También se puede corregir de una vez con «Exportar Excel» '
+        'e «Importar Excel» en el admin (Unidades Organizativas).')
+
+    def ejecutar(self, contexto):
+        no_subunidades = self.base_queryset().filter(grupo_nomina__isnull=False).exclude(
+            tipo__es_subunidad=True)
+        repetidos = set(no_subunidades.values('grupo_nomina').annotate(n=Count('pk'))
+                        .filter(n__gt=1).values_list('grupo_nomina', flat=True))
+        if not repetidos:
+            return
+        filas = list(no_subunidades.filter(grupo_nomina__in=repetidos)
+                     .values('codigo_interno', 'descripcion', 'grupo_nomina')
+                     .order_by('grupo_nomina', 'descripcion'))
+        por_grupo = {}
+        for fila in filas:
+            por_grupo.setdefault(fila['grupo_nomina'], []).append(fila['descripcion'])
+        for fila in filas:
+            otras = [n for n in por_grupo[fila['grupo_nomina']] if n != fila['descripcion']]
+            yield HallazgoDetectado(
+                object_id=str(fila['codigo_interno']),
+                titulo=(f'{fila["descripcion"]} (código {fila["codigo_interno"]}) · grupo de nómina '
+                        f'{fila["grupo_nomina"]} repetido'),
+                detalle=(f'Tiene el grupo de nómina {fila["grupo_nomina"]}, igual que '
+                         f'{", ".join("«%s»" % n for n in otras)}.'),
+                datos={'grupo_de_nomina': fila['grupo_nomina'],
+                       'tambien_lo_tienen': ', '.join(otras)},
+                unidad_organizativa_id=fila['codigo_interno'],
+            )

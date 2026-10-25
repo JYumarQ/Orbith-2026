@@ -90,15 +90,16 @@
         titulo: 'Condiciones especiales',
         texto: 'Solo hace falta rellenar lo que se encienda:' +
                '<ul class="ps-3 mb-0 mt-1">' +
-               '<li><strong>C. Formal</strong>: al marcarlo, escribe su No. de Resolución.</li>' +
-               '<li><strong>Funcionario</strong> y <strong>Designado</strong> se marcan solos según el cargo; si se marcan, escribe su No. de Resolución.</li>' +
+               '<li><strong>C. Formal</strong>: al marcarlo se enciende su No. de Resolución.</li>' +
+               '<li><strong>Funcionario</strong> y <strong>Designado</strong> se marcan solos según el cargo y encienden su No. de Resolución.</li>' +
+               '<li>Los <strong>números de resolución</strong> son opcionales: si aún no los tienes, déjalos vacíos. Puedes escribirlos en el Alta Inicial o más tarde; Subsanación te recordará los que falten.</li>' +
                '<li><strong>Chofer Profesional</strong>: al marcarlo son obligatorios los vencimientos de licencia, recalificación y seguro.</li>' +
                '<li><strong>Jubilado Recontratado</strong>: márcalo si corresponde.</li>' +
                '<li><strong>Misión</strong>: al marcarlo, elige el País.</li>' +
                '</ul>',
         esperar: function () {
-          return listos('#contratoForm', ['c_formal_res', 'funcionario_res', 'designado_res',
-                                          'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais']);
+          // Los números de resolución no se esperan: son opcionales (25-10-2026).
+          return listos('#contratoForm', ['fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais']);
         },
       },
       {
@@ -156,10 +157,11 @@
                'Si algo está mal, cierra la ventana con la <strong>X</strong>: todavía no se ha guardado nada. Ojo: "Cancelar" pregunta si quieres guardar el contrato sin movimiento.',
       },
       {
-        selector: MOV + '[name="fecha_solicitud"], ' + MOV + '[name="observaciones"]',
+        selector: MOV + '[name="fecha_solicitud"], ' + MOV + '[name="observaciones"], #bloque-resoluciones-mov',
         interactivo: true, avanceManual: true, textoEspera: ESPERA_CAMPOS, volver: VOLVER,
         titulo: 'Fecha de Solicitud',
-        texto: 'Escribe la <strong>Fecha de Solicitud</strong>. Las <strong>Observaciones</strong> son opcionales.',
+        texto: 'Escribe la <strong>Fecha de Solicitud</strong>. Las <strong>Observaciones</strong> son opcionales. ' +
+               'En <strong>Resoluciones</strong> llegan los números escritos en el contrato: puedes completarlos o corregirlos aquí, y lo que quede en esta ventana es lo que se guarda.',
         esperar: function () { return listos('#movimientoForm', ['fecha_solicitud']); },
       },
       {

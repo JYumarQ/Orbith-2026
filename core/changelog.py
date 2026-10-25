@@ -39,6 +39,21 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.7.0",
+        "fecha": "2026-10-25",
+        "titulo": "Firmantes en el perfil, Excel en la administración y resoluciones en el Alta Inicial",
+        "cambios": [
+            ("nuevo", "Firmantes de los Anexos 17 en Configuración: cada Administrador y Moderador elige qué plaza de cuadro firma «Propuesto por» y «Aprobado por» y el título que se imprime. Firma quien ocupe la plaza ese día, con el título en femenino si es una mujer."),
+            ("nuevo", "Administración de Django: importar y exportar en Excel el nomenclador de cargos y la estructura (unidades y departamentos). Se puede simular antes, es todo o nada y nunca borra; lo exportado se vuelve a importar sin cambios."),
+            ("nuevo", "El grupo de nómina ya no se repite entre unidades: solo lo comparten una unidad principal y sus subunidades. Lo comprueban el formulario y el importador, y Subsanación avisa de los repetidos (regla EST-009)."),
+            ("mejorado", "El movimiento de nómina del Alta Inicial tiene ahora los mismos campos que el movimiento normal: «Otros» y los números de resolución, que llegan rellenos con lo escrito en el contrato y se pueden completar o corregir. Lo que quede en esa ventana es lo que se guarda."),
+            ("mejorado", "Registrar y Editar contrato: «Otros» va en la misma fila que Salario Escala, Tarifa Horaria, Tarifa Horas Extras y Pago Años de Servicio."),
+            ("mejorado", "Pre-nómina: «Relacionado con» vale también para importes fijos y escalas; esos importes solo los cobra quien tenga horas en el concepto relacionado."),
+            ("corregido", "Los números de resolución escritos al contratar se perdían al confirmar el Alta Inicial."),
+            ("corregido", "El número de resolución de la C. Formal se exigía para continuar con el contrato; los cuatro números son opcionales y Subsanación recuerda los que falten."),
+        ],
+    },
+    {
         "version": "3.6.0",
         "fecha": "2026-10-24",
         "titulo": "Editor del histórico, ventanas de la Dashboard con Excel y filtros más sencillos",
@@ -504,21 +519,6 @@ CHANGELOG = [
             ("corregido", "Quien ya tiene la sesión abierta y vuelve a la pantalla de acceso va directo al inicio, en lugar de ver otra vez el formulario."),
             ("mejorado", "Los gestores de contraseñas del navegador ya reconocen los campos de la pantalla de acceso."),
             ("eliminado", "Nomencladores «Horario» y «Jornada»: sus tablas estaban vacías, ninguna pantalla los usaba y ningún contrato tenía jornada asignada. El tiempo de trabajo se gestiona ahora desde Pre-Nómina → Calendario."),
-        ],
-    },
-    {
-        "version": "2.5.0",
-        "fecha": "2026-08-18",
-        "titulo": "Guía de progreso, permisos granulares y auditoría en admin",
-        "cambios": [
-            ("nuevo", "Guía de Progreso: sistema de tareas guiadas para nuevos usuarios, con seguimiento de pasos completados, instrucciones contextuales y barra de progreso."),
-            ("nuevo", "Permisos granulares en contratos y subsanación para un control más fino de accesos."),
-            ("nuevo", "Mixins de auditoría en el panel de administración para registrar automáticamente quién crea o modifica registros."),
-            ("nuevo", "Campo 'fecha_alta_entidad' en contratos para registrar la fecha real de alta en la entidad."),
-            ("mejorado", "Reestructuración de templates del Dashboard para facilitar su mantenimiento."),
-            ("mejorado", "Recodificación y deduplicación de eventos de notificaciones para evitar duplicados y mejorar el rendimiento."),
-            ("mejorado", "Actualización masiva de vistas, formularios y plantillas en contratos, subsanación y solicitudes."),
-            ("corregido", "Corrección en la gestión de cumpleaños y jubilaciones en el sistema de notificaciones."),
         ],
     },
 ]

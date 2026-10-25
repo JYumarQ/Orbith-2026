@@ -118,7 +118,17 @@ def importe_de(concepto, trabajador, horas, avisos=None):
     pago no puede tener. Ninguno de los dos se calla: si se pasa `avisos` (una
     lista), se le añade un mensaje en español para enseñarlo al usuario, y
     siempre queda en el log.
+
+    Un importe fijo o una escala **relacionados** con un concepto por horas solo
+    se pagan a quien tenga horas en él (decisión del 24-10-2026): sin esto, un
+    «plus fijo de nocturnidad» lo cobraría también quien no hizo ninguna hora
+    nocturna. La fórmula no lo necesita: ya decide ella con `{{horas}}`.
     """
+    if (concepto.tipo_valor != TipoValorImporte.FORMULA
+            and concepto.relacionado_con_codigo is not None
+            and Decimal(horas or CERO) <= CERO):
+        return CERO
+
     if concepto.tipo_valor == TipoValorImporte.IMPORTE:
         return redondear(concepto.importe_fijo or CERO)
 

@@ -1,0 +1,26 @@
+{% comment %}
+  Firmas de los Anexos 17 en Configuración (usuarios.views.firmas_preferencias,
+  25-10-2026). Se elige la PLAZA de cuadro que firma (se imprime quien la ocupe en
+  cada momento) y el título. Cada cambio se guarda al momento.
+{% endcomment %}
+<h6 class="fw-bold text-uppercase text-muted mb-1 mt-4" style="font-size: .7rem;">Firmas de los Anexos 17</h6>
+<p class="text-muted small mb-2">
+  Elija la plaza de cuadro que firma sus Anexos: se imprime <b>quien la ocupe en cada momento</b>.
+  Sin elegir nada, Orbith las busca como hasta ahora y se pueden escoger al exportar.
+</p>
+{% for b in bloques %}
+<div class="mb-3">
+  <label class="form-label small fw-semibold mb-1" for="pref_{{ b.campo }}">{{ b.etiqueta }}</label>
+  <select id="pref_{{ b.campo }}" class="form-select form-select-sm mb-1" data-pref-firma="{{ b.campo }}" data-sin-select2>
+    <option value="">— Sin elegir (como antes) —</option>
+    {% for pk, texto in opciones %}
+    <option value="{{ pk }}" {% if pk == b.elegida %}selected{% endif %}>{{ texto }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" class="form-control form-control-sm" maxlength="100" data-pref-firma="{{ b.campo_titulo }}"
+         value="{{ b.titulo }}" placeholder="Título que se imprime, p. ej. «{{ b.ejemplo }}» (vacío: el nombre del cargo)"
+         aria-label="Título de {{ b.etiqueta }}">
+</div>
+{% empty %}
+{% endfor %}
+{% if not opciones %}<p class="small text-warning mb-0">No hay plazas de cuadro en sus unidades.</p>{% endif %}

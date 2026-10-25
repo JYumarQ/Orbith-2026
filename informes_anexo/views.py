@@ -189,6 +189,26 @@ def _resolver_firmante(descripcion_cargo, plantilla_titulo, aspirante_manual_id=
     return resultado
 
 
+def _firmante(request, cual, aspirante_manual_id=None):
+    """El firmante «propuesto» (Capital Humano) o «aprobado» (General) de un Anexo.
+
+    Orden (25-10-2026): la persona elegida a mano en la pantalla; si no, la plaza
+    que el usuario configuró en sus preferencias (`informes_anexo/firmantes.py`);
+    si no configuró ninguna, lo de siempre: el cargo por su nombre.
+    """
+    from .firmantes import firmante_configurado
+
+    if not aspirante_manual_id:
+        configurado = firmante_configurado(getattr(request, 'user', None), cual)
+        if configurado is not None:
+            return configurado
+    if cual == 'propuesto':
+        return _resolver_firmante(NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano",
+                                  aspirante_manual_id)
+    return _resolver_firmante(NOMBRE_CARGO_DIRECTOR_GENERAL, "Director{sufijo} General",
+                              aspirante_manual_id)
+
+
 def _unidades_del_alcance(usuario):
     """Ids de las unidades que este usuario puede ver, o `None` si todas.
 
@@ -585,12 +605,8 @@ def _obtener_datos_reporte(request):
                    if padre_actual else [])
     kpis_fuera = _calcular_kpis(hijas_fuera)
 
-    director_ch = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano", filtros["director_ch_id"]
-    )
-    director_gral = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_GENERAL, "Director{sufijo} General", filtros["director_gral_id"]
-    )
+    director_ch = _firmante(request, 'propuesto', filtros["director_ch_id"])
+    director_gral = _firmante(request, 'aprobado', filtros["director_gral_id"])
 
     necesita_select_manual = not director_ch["aspirante"] or not director_gral["aspirante"]
 
@@ -809,10 +825,8 @@ def _datos_anexo17_1(request):
 
     director_ch_id = request.GET.get("director_ch")
     director_gral_id = request.GET.get("director_gral")
-    director_ch = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano", director_ch_id)
-    director_gral = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_GENERAL, "Director{sufijo} General", director_gral_id)
+    director_ch = _firmante(request, 'propuesto', director_ch_id)
+    director_gral = _firmante(request, 'aprobado', director_gral_id)
     necesita_select_manual = not director_ch["aspirante"] or not director_gral["aspirante"]
 
     config = Configuracion.objects.select_related("provincia_entidad").first()
@@ -952,12 +966,8 @@ def _datos_del_libro(request, modo):
         "cifras_portada": [(nombre, resumen["total"][clave])
                            for clave, _, nombre, _ in anexo17_1.COLUMNAS_17_1],
 
-        "director_ch": _resolver_firmante(
-            NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano",
-            filtros["director_ch_id"]),
-        "director_gral": _resolver_firmante(
-            NOMBRE_CARGO_DIRECTOR_GENERAL, "Director{sufijo} General",
-            filtros["director_gral_id"]),
+        "director_ch": _firmante(request, 'propuesto', filtros["director_ch_id"]),
+        "director_gral": _firmante(request, 'aprobado', filtros["director_gral_id"]),
     }
     datos.update(_cabecera_institucional(config, elegidas[0] if len(elegidas) == 1 else None))
 
@@ -1004,10 +1014,8 @@ def _datos_anexo17_2(request):
     director_gral_id = request.GET.get("director_gral")
     config = Configuracion.objects.select_related("provincia_entidad").first()
 
-    director_ch = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_CH, "Director{sufijo} de Capital Humano", director_ch_id)
-    director_gral = _resolver_firmante(
-        NOMBRE_CARGO_DIRECTOR_GENERAL, "Director{sufijo} General", director_gral_id)
+    director_ch = _firmante(request, 'propuesto', director_ch_id)
+    director_gral = _firmante(request, 'aprobado', director_gral_id)
     necesita_select_manual = not director_ch["aspirante"] or not director_gral["aspirante"]
 
     contexto = {

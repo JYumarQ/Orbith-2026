@@ -1,11 +1,9 @@
 {% extends "admin/change_list.html" %}
+{% comment %} Importar/Exportar el nomenclador de cargos en Excel (nomencladores/importacion.py). {% endcomment %}
 {% block object-tools %}
     <ul class="object-tools">
-        <li>
-            <a href="importar/" class="addlink">
-                Importar Excel
-            </a>
-        </li>
+        <li><a href="{% url 'admin:importar-ncargo' %}" class="addlink">Importar Excel</a></li>
+        <li><a href="{% url 'admin:exportar-ncargo' %}">Exportar Excel</a></li>
         {{ block.super }}
     </ul>
 {% endblock %}

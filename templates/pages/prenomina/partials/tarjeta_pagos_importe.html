@@ -14,7 +14,7 @@
           <th style="width: 55px;">Código</th>
           <th>Descripción</th>
           <th>Valor</th>
-          <th>Toma horas de</th>
+          <th>Relacionado con</th>
           <th class="text-center" style="width: 70px;">Acción</th>
         </tr>
       </thead>
@@ -36,7 +36,7 @@
             </td>
             <td class="text-slate-500">
               {% if pago.relacionado_con %}
-                <span title="Este importe se añade solo al reporte cuando se seleccione ese concepto por horas">
+                <span title="{% if pago.tipo_valor == 'FOR' %}La fórmula toma sus horas de este concepto y el importe se añade solo al reporte cuando se seleccione{% else %}Se añade solo al reporte cuando se seleccione este concepto y solo lo cobra quien tenga horas en él{% endif %}">
                   <i class="fas fa-link me-1" style="color: #a855f7;"></i>{{ pago.relacionado_con.descripcion }}
                 </span>
               {% else %}—{% endif %}

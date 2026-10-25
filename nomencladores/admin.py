@@ -1,13 +1,10 @@
 from django.contrib import admin, messages
-from django.shortcuts import render, redirect
-from .forms import ImportarCargosForm
 from import_export import resources, fields
 from import_export.widgets import ForeignKeyWidget
 from import_export.admin import ImportExportModelAdmin
 
 from auditoria.admin_mixins import AuditoriaAdminMixin
 
-from .utils import importar_cargos_excel
 from .models import (
     NTridente, NRol, NGrupoEscala, NSalario, NCargo,
     NProvincia, NMunicipio, NEspecialidad,
@@ -66,56 +63,41 @@ class NMunicipioAdmin(AuditoriaAdminMixin, ImportExportModelAdmin):
     list_select_related = ('provincia',)
 @admin.register(NCargo)
 class NCargoAdmin(AuditoriaAdminMixin, admin.ModelAdmin):
-    # NOTA: `importar_cargos_view` (import desde Excel) crea/actualiza registros
-    # llamando directo a `importar_cargos_excel()`, sin pasar por save_model, así
-    # que esos cambios NO quedan auditados. El CRUD normal del Admin sí.
+    # Importar/Exportar Excel (24-10-2026, `nomencladores/importacion.py`): todo o
+    # nada, con simulación; cada cargo se guarda con `save()`, así que Auditoría lo
+    # registra con el usuario del admin.
     modulo_auditoria = 'nomencladores'
     list_display = ('descripcion', 'cat_ocupacional', 'grupo_escala', 'salario_basico')
     search_fields = ('descripcion',)
     list_filter = ('cat_ocupacional', 'grupo_escala')
     list_select_related = ('grupo_escala',)
-
-    # CORRECCIÓN 1: Ruta exacta a tu archivo existente
     change_list_template = "pages/catalogos/ncargo/admin_change_list.html"
 
     def get_urls(self):
         from django.urls import path
-        urls = super().get_urls()
-        my_urls = [
-            # CORRECCIÓN: Ahora dice 'importar/' para coincidir con tu template
-            path('importar/', self.admin_site.admin_view(self.importar_cargos_view), name='importar-ncargo'),
+        propias = [
+            path('importar/', self.admin_site.admin_view(self.importar_view), name='importar-ncargo'),
+            path('exportar/', self.admin_site.admin_view(self.exportar_view), name='exportar-ncargo'),
         ]
-        return my_urls + urls
+        return propias + super().get_urls()
 
-    def importar_cargos_view(self, request):
-        if request.method == "POST":
-            form = ImportarCargosForm(request.POST, request.FILES)
-            if form.is_valid():
-                archivo = request.FILES['archivo_excel']
-                estrategia = form.cleaned_data['estrategia']
+    def importar_view(self, request):
+        from django.urls import reverse
 
-                res = importar_cargos_excel(archivo, estrategia)
+        from core.excel_admin import vista_importar
+        from .importacion import importar_cargos
+        return vista_importar(
+            self, request, importar_cargos, 'Importar cargos desde Excel',
+            'Hoja <b>CARGOS_CODIGO</b> (o la primera) con las columnas <b>Cargos</b>, <b>Grupo Escala</b>, '
+            '<b>Categoría Ocupacional</b> y <b>Salario Básico</b>. Un cargo se reconoce por su nombre '
+            '(sin tener en cuenta tildes ni mayúsculas).',
+            reverse('admin:exportar-ncargo'))
 
-                if 'fatal' in res:
-                    messages.error(request, f"Error crítico: {res['fatal']}")
-                else:
-                    msg = f"Importación: {res['creados']} creados, {res['actualizados']} actualizados. {res['saltados']} saltados."
-                    if res['errores']:
-                        msg += f" Errores detectados: {len(res['errores'])}."
-                        for err in res['errores'][:5]:
-                            messages.warning(request, err)
-                    messages.success(request, msg)
-                return redirect("..")
-        else:
-            form = ImportarCargosForm()
-
-        context = dict(
-            self.admin_site.each_context(request),
-            form=form,
-            title="Importar Cargos desde Excel"
-        )
-        # CORRECCIÓN 2: Ruta exacta a tu archivo existente
-        return render(request, "pages/catalogos/ncargo/admin_import_form.html", context)
+    def exportar_view(self, request):
+        from core.excel_admin import descarga
+        from core.nombres_descarga import nombre_de_informe
+        from .importacion import exportar_cargos
+        return descarga(exportar_cargos(), nombre_de_informe('Nomenclador_de_cargos', extension='xlsx'))
 
 @admin.register(NTipoUnidadOrganizativa)
 class NTipoUnidadAdmin(AuditoriaAdminMixin, admin.ModelAdmin):

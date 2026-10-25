@@ -437,3 +437,64 @@ class ColoresLegiblesTests(TestCase):
         self.assertEqual(color_legible(None), None)
         self.assertEqual(color_legible('rojo'), 'rojo')
         self.assertFalse(es_color_claro(''))
+
+
+class ExcelCargosTests(TestCase):
+    """Importar/Exportar el nomenclador de cargos (24-10-2026). Un cargo se reconoce
+    por NOMBRE y GRUPO: en la empresa hay cargos con el mismo nombre y otro grupo."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from .models import NGrupoEscala
+        NGrupoEscala.objects.create(nivel='XI')
+        NGrupoEscala.objects.create(nivel='XIV')
+
+    def excel(self, filas):
+        import io
+
+        from openpyxl import Workbook
+        libro = Workbook()
+        hoja = libro.active
+        hoja.title = 'CARGOS_CODIGO'
+        hoja.append(['Cargos', 'Grupo  Escala', 'Categoría Ocupacional', 'Salario Básico'])
+        for fila in filas:
+            hoja.append(list(fila))
+        salida = io.BytesIO()
+        libro.save(salida)
+        salida.seek(0)
+        return salida
+
+    def test_mismo_nombre_con_otro_grupo_son_dos_cargos(self):
+        from .importacion import importar_cargos
+        from .models import NCargo
+        resultado = importar_cargos(self.excel([
+            ('Especialista A (EP)', 'XI', 'Técnico', 3410),
+            ('Especialista A (EP)', 'XIV', 'Técnico', 4010),
+            ('Especialista A (EP)', 'XIV', 'Técnico', 4010)]))
+        self.assertEqual(len(resultado['creados']), 2)
+        self.assertEqual(len(resultado['repetidos']), 1)
+        self.assertEqual(NCargo.objects.filter(descripcion='Especialista A (EP)').count(), 2)
+
+    def test_un_error_no_guarda_nada_y_actualizar_cambia_el_salario(self):
+        from .importacion import importar_cargos
+        from .models import NCargo
+        malo = importar_cargos(self.excel([('Chofer', 'XI', 'Operario', 3000), ('Otro', 'ZZ', 'Operario', 1)]))
+        self.assertTrue(malo['errores'])
+        self.assertFalse(NCargo.objects.exists())
+        importar_cargos(self.excel([('Chofer', 'XI', 'Operario', 3000)]))
+        saltar = importar_cargos(self.excel([('chofer', 'XI', 'Operario', 3500)]), 'SALTAR')
+        self.assertEqual(len(saltar['saltados']), 1)
+        importar_cargos(self.excel([('chofer', 'XI', 'Operario', 3500)]), 'ACTUALIZAR')
+        self.assertEqual(NCargo.objects.get().salario_basico, 3500)
+
+    def test_lo_exportado_se_vuelve_a_importar_sin_cambios(self):
+        import io
+        from .importacion import exportar_cargos, importar_cargos
+        importar_cargos(self.excel([('Chofer', 'XI', 'Operario', 3000),
+                                    ('Jefe', 'XIV', 'Cuadro Directivo', 6000)]))
+        salida = io.BytesIO()
+        exportar_cargos().save(salida)
+        salida.seek(0)
+        resultado = importar_cargos(salida, 'ACTUALIZAR')
+        self.assertEqual((resultado['creados'], resultado['actualizados'], resultado['sin_cambios']),
+                         ([], [], 2))

@@ -212,6 +212,24 @@ class PreferenciasUsuario(models.Model):
         verbose_name="Reporte de pago — Aprobado por"
     )
 
+    # --- Firmas de los Anexos 17 (25-10-2026) ---
+    # Cada usuario elige qué PLAZA firma «Propuesto por» y «Aprobado por» en sus
+    # Anexos: se imprime quien la ocupe en cada momento, así que si cambia la
+    # persona, la firma cambia sola. Solo plazas de cuadros. El título es texto
+    # libre porque el nombre del cargo en el nomenclador no siempre es el que se
+    # firma («Director Funcional» → «Directora de Capital Humano»). Vacío = como
+    # antes: Orbith busca el cargo por su nombre o se elige a mano al exportar.
+    firma_propuesto = models.ForeignKey(
+        'strorganizativa.CargoPlantilla', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', verbose_name="Anexos — Propuesto por (plaza)")
+    firma_propuesto_titulo = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Anexos — Propuesto por (título)")
+    firma_aprobado = models.ForeignKey(
+        'strorganizativa.CargoPlantilla', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', verbose_name="Anexos — Aprobado por (plaza)")
+    firma_aprobado_titulo = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Anexos — Aprobado por (título)")
+
     fecha_actualizado = models.DateTimeField(auto_now=True)
 
     class Meta:

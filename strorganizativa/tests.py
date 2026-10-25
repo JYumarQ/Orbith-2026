@@ -317,3 +317,111 @@ class ListadoDelGestorNoOcultaNadaTests(TestCase):
     def test_el_administrador_sigue_viendo_solo_las_raices(self):
         """Lo ve todo, así que el padre siempre es visible: nada cambia."""
         self.assertEqual(self._listado(self.admin), ['Oficina Central'])
+
+
+class ExcelEstructuraTests(TestCase):
+    """Importar/Exportar la estructura en Excel desde el admin (24-10-2026): todo o
+    nada, simular, nunca borra y lo exportado se vuelve a importar sin cambios."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from .models import Departamento
+        cls.ueb = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+        cls.unidad = UnidadOrganizativa.objects.create(descripcion='UEB Florida', tipo=cls.ueb,
+                                                       grupo_nomina=1, orden_informe=1)
+        Departamento.objects.create(descripcion='Dirección', unidad_organizativa=cls.unidad, orden_informe=1)
+        cls.admin = CustomUser.objects.create_user(username='admin_excel', password='x', es_admin=True)
+
+    def libro(self, unidades=(), departamentos=()):
+        import io
+        from .importacion import exportar_estructura
+        libro = exportar_estructura()
+        for fila in unidades:
+            libro['Unidades'].append(list(fila))
+        for fila in departamentos:
+            libro['Departamentos'].append(list(fila))
+        salida = io.BytesIO()
+        libro.save(salida)
+        salida.seek(0)
+        return salida
+
+    def test_lo_exportado_se_vuelve_a_importar_sin_cambios(self):
+        from .importacion import importar_estructura
+        resultado = importar_estructura(self.libro(), 'ACTUALIZAR')
+        self.assertEqual((resultado['errores'], resultado['creados'], resultado['actualizados']), ([], [], []))
+        self.assertEqual(resultado['sin_cambios'], 2)
+
+    def test_crea_unidades_y_departamentos_y_simular_no_guarda(self):
+        from .importacion import importar_estructura
+        from .models import Departamento
+        nuevo = self.libro([(None, 'UEB Najasa', 'ueb', '', '', 2, None)],
+                           [('UEB Najasa', 'Grupo Comercial', None)])
+        simulado = importar_estructura(nuevo, simular=True)
+        self.assertEqual(len(simulado['creados']), 2)
+        self.assertFalse(UnidadOrganizativa.objects.filter(descripcion='UEB Najasa').exists())
+        nuevo.seek(0)
+        importar_estructura(nuevo)
+        unidad = UnidadOrganizativa.objects.get(descripcion='UEB Najasa')
+        self.assertEqual(unidad.orden_informe, 2)   # sin posición: al final
+        self.assertTrue(Departamento.objects.filter(unidad_organizativa=unidad,
+                                                    descripcion='Grupo Comercial').exists())
+
+    def test_un_error_no_deja_guardar_nada(self):
+        from .importacion import importar_estructura
+        resultado = importar_estructura(self.libro([(None, 'UEB Najasa', 'UEB', '', '', 2, None),
+                                                    (None, 'UEB Rara', 'No existe', '', '', 1, None)]))
+        self.assertIn('el tipo «No existe» no existe', resultado['errores'][0])
+        self.assertFalse(UnidadOrganizativa.objects.filter(descripcion='UEB Najasa').exists())
+
+    def test_con_el_codigo_se_renombra_y_saltar_no_toca_lo_existente(self):
+        from .importacion import importar_estructura
+        fila = [(self.unidad.pk, 'UEB Florida Norte', 'UEB', '', '', 1, 1)]
+        importar_estructura(self.libro(fila), 'SALTAR')
+        self.unidad.refresh_from_db()
+        self.assertEqual(self.unidad.descripcion, 'UEB Florida')
+        importar_estructura(self.libro(fila), 'ACTUALIZAR')
+        self.unidad.refresh_from_db()
+        self.assertEqual(self.unidad.descripcion, 'UEB Florida Norte')
+
+    def test_botones_del_admin(self):
+        self.client.force_login(self.admin)
+        self.assertContains(self.client.get(reverse('admin:strorganizativa_unidadorganizativa_changelist')),
+                            'Importar Excel')
+        respuesta = self.client.get(reverse('admin:exportar-estructura'))
+        self.assertEqual(respuesta['Content-Type'],
+                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        self.assertEqual(self.client.get(reverse('admin:importar-estructura')).status_code, 200)
+
+
+class GrupoDeNominaUnicoTests(TestCase):
+    """El grupo de nómina no se repite entre unidades principales o normales; solo lo
+    comparten una principal y sus subunidades (24-10-2026)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.ueb = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+        cls.sub = NTipoUnidadOrganizativa.objects.create(descripcion='Subunidad', es_subunidad=True)
+        cls.florida = UnidadOrganizativa.objects.create(descripcion='UEB Florida', tipo=cls.ueb,
+                                                        grupo_nomina=7, orden_informe=1)
+
+    def test_otra_unidad_normal_no_puede_usar_el_mismo_grupo(self):
+        from .models import unidad_con_el_grupo_de_nomina
+        self.assertEqual(unidad_con_el_grupo_de_nomina(7, self.ueb), self.florida)
+        self.assertIsNone(unidad_con_el_grupo_de_nomina(7, self.ueb, excluir_pk=self.florida.pk))
+        self.assertIsNone(unidad_con_el_grupo_de_nomina(8, self.ueb))
+
+    def test_una_subunidad_si_lo_comparte(self):
+        from .models import unidad_con_el_grupo_de_nomina
+        self.assertIsNone(unidad_con_el_grupo_de_nomina(7, self.sub))
+
+    def test_el_importador_rechaza_el_grupo_repetido(self):
+        import io
+        from .importacion import exportar_estructura, importar_estructura
+        libro = exportar_estructura()
+        libro['Unidades'].append([None, 'UEB Najasa', 'UEB', '', '', 7, None])
+        salida = io.BytesIO()
+        libro.save(salida)
+        salida.seek(0)
+        resultado = importar_estructura(salida)
+        self.assertTrue(any('el grupo de nómina 7 ya lo tiene' in e for e in resultado['errores']))
+        self.assertFalse(UnidadOrganizativa.objects.filter(descripcion='UEB Najasa').exists())

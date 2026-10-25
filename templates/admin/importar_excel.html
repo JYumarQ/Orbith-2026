@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Pantalla común de «Importar Excel» del admin (core/excel_admin.py): cargos y
+  estructura organizativa. Revisa todo antes de guardar, permite simular y enseña
+  qué se creó, qué se cambió y qué no.
+{% endcomment %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a> ›
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> ›
+  <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a> ›
+  {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" style="max-width: 980px;">
+  <div class="module aligned" style="padding: 12px 16px;">
+    <p>{{ ayuda|safe }}</p>
+    <ul style="margin-left: 1.2em;">
+      <li><b>Todo o nada:</b> si una sola fila tiene un error, no se guarda nada y se dice cuál es.</li>
+      <li><b>Nunca borra:</b> lo que no esté en el Excel se queda como está.</li>
+      <li>Empiece con <b>«Solo simular»</b> marcado; si el resultado es el esperado, desmárquelo y vuelva a importar.</li>
+      <li>¿No sabe el formato? <a href="{{ url_exportar }}"><b>Descargue el Excel actual</b></a>: es exactamente lo que el importador espera.</li>
+    </ul>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="module" style="padding: 12px 16px;">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <input type="submit" value="Importar" class="default" style="padding: 8px 20px;">
+  </form>
+
+  {% if resultado %}
+  <div class="module" style="padding: 12px 16px;">
+    {% if resultado.errores %}
+      <h2 style="color:#b91c1c;">No se ha guardado nada: hay {{ resultado.errores|length }} error{{ resultado.errores|length|pluralize:"es" }}</h2>
+      <ul>{% for e in resultado.errores %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% elif resultado.simulado %}
+      <h2 style="color:#1d4ed8;">Simulación: esto es lo que pasaría (no se ha guardado nada)</h2>
+    {% else %}
+      <h2 style="color:#15803d;">Importación guardada</h2>
+    {% endif %}
+
+    {% if not resultado.errores %}
+    <p>
+      <b>{{ resultado.creados|length }}</b> nuevo{{ resultado.creados|length|pluralize }} ·
+      <b>{{ resultado.actualizados|length }}</b> cambiado{{ resultado.actualizados|length|pluralize }} ·
+      <b>{{ resultado.saltados|length }}</b> con diferencias que se dejan como están ·
+      <b>{{ resultado.sin_cambios }}</b> ya estaban igual
+    </p>
+    {% endif %}
+
+    {% if resultado.repetidos %}
+      <h3 style="color:#b45309;">Repetidos en el Excel ({{ resultado.repetidos|length }})</h3>
+      <p>Solo se usa la primera vez que aparece cada nombre. Si son cargos distintos, póngales nombres distintos en el Excel.</p>
+      <ul>{% for r in resultado.repetidos %}<li>{{ r }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if resultado.creados and not resultado.errores %}
+      <details><summary><b>Nuevos ({{ resultado.creados|length }})</b></summary>
+        <ul>{% for c in resultado.creados %}<li>{{ c }}</li>{% endfor %}</ul></details>
+    {% endif %}
+    {% if resultado.actualizados and not resultado.errores %}
+      <details open><summary><b>Cambiados ({{ resultado.actualizados|length }})</b></summary>
+        <ul>{% for c in resultado.actualizados %}<li>{{ c }}</li>{% endfor %}</ul></details>
+    {% endif %}
+    {% if resultado.saltados and not resultado.errores %}
+      <details><summary><b>Con diferencias que se dejaron como estaban ({{ resultado.saltados|length }})</b></summary>
+        <p>Para aplicarlas, importe con «Ponerlo como dice el Excel».</p>
+        <ul>{% for c in resultado.saltados %}<li>{{ c }}</li>{% endfor %}</ul></details>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

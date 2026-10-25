@@ -99,22 +99,14 @@ class NPagoImporteForm(forms.ModelForm):
         # El texto del modelo no cambia para no generar una migración solo por
         # una ayuda; la que ve el usuario es esta.
         self.fields['relacionado_con'].help_text = (
-            'Concepto por horas del que la fórmula toma {{horas}}. Además, este '
-            'importe se añadirá solo al reporte cuando se seleccione ese concepto.')
+            'Si se indica, este importe se añade solo al reporte cuando se '
+            'seleccione ese concepto por horas. Con importe fijo o escala, solo '
+            'cobra quien tenga horas en él; en una fórmula, {{horas}} toma sus horas.')
         self.fields['importe_fijo'].required = False
         self.fields['formula'].required = False
         self.fields['formula'].help_text = (
             'Puede escribir los decimales con coma o con punto. El resultado no '
             'puede ser negativo.')
-
-        # Conceptos guardados ANTES de que la relación fuera solo para fórmulas:
-        # al guardarlos se les quita, y el modal lo avisa en vez de hacerlo en
-        # silencio, porque dejarán de añadirse solos al reporte.
-        instancia = self.instance
-        self.relacion_que_se_pierde = (
-            instancia.relacionado_con
-            if instancia.pk and instancia.relacionado_con_id
-            and instancia.tipo_valor != TipoValorImporte.FORMULA else None)
 
     def clean(self):
         """Limpia los campos que el tipo elegido deja sin sentido.
@@ -132,7 +124,6 @@ class NPagoImporteForm(forms.ModelForm):
             datos['importe_fijo'] = None
         if tipo != TipoValorImporte.FORMULA:
             datos['formula'] = ''
-            datos['relacionado_con'] = None
         else:
             datos['formula'] = (datos.get('formula') or '').strip()
 

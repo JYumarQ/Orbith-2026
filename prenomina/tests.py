@@ -416,43 +416,22 @@ class NomencladoresDeConfiguracion(TestCase):
         self.assertTrue(formulario.is_valid(), formulario.errors)
         self.assertEqual(formulario.cleaned_data['formula'], '')
 
-    # --- «Relacionado con» es solo para fórmulas ---------------------------
+    # --- «Relacionado con» vale para los tres tipos -------------------------
 
-    def test_un_importe_fijo_no_puede_relacionarse_con_un_concepto_por_horas(self):
+    def test_un_importe_fijo_o_una_escala_pueden_relacionarse(self):
+        """Decisión del 24-10-2026: la relación no es exclusiva de las fórmulas."""
+        NEscalaAnnosServicio.objects.get_or_create(
+            annos=1, defaults={'cuantia': Decimal('200')})
         for tipo in (TipoValorImporte.IMPORTE, TipoValorImporte.ESCALA):
             with self.subTest(tipo=tipo):
-                NEscalaAnnosServicio.objects.get_or_create(
-                    annos=1, defaults={'cuantia': Decimal('200')})
-                pago = NPagoImporte(
-                    codigo=30, descripcion='Relacionado', tipo_valor=tipo,
-                    importe_fijo=(Decimal('10') if tipo == TipoValorImporte.IMPORTE
-                                  else None),
-                    relacionado_con=self.extras)
-                with self.assertRaises(ValidationError) as caja:
-                    pago.full_clean()
-                self.assertIn('relacionado_con', caja.exception.message_dict)
-
-    def test_el_formulario_quita_la_relacion_si_no_es_formula(self):
-        formulario = NPagoImporteForm(data={
-            'codigo': 31, 'descripcion': 'Fijo', 'tipo_valor': TipoValorImporte.IMPORTE,
-            'importe_fijo': '10', 'relacionado_con': self.extras.pk,
-        })
-        self.assertTrue(formulario.is_valid(), formulario.errors)
-        self.assertIsNone(formulario.cleaned_data['relacionado_con'])
-
-    def test_el_formulario_avisa_de_la_relacion_heredada_que_se_pierde(self):
-        """Conceptos guardados antes de la regla: el modal lo dice, no lo calla."""
-        heredado = NPagoImporte.objects.create(
-            codigo=32, descripcion='Heredado', tipo_valor=TipoValorImporte.IMPORTE,
-            importe_fijo=Decimal('10'), relacionado_con=self.extras)
-        self.assertEqual(NPagoImporteForm(instance=heredado).relacion_que_se_pierde,
-                         self.extras)
-
-        por_formula = NPagoImporte.objects.create(
-            codigo=33, descripcion='Fórmula', tipo_valor=TipoValorImporte.FORMULA,
-            formula='{{horas}} * 2', relacionado_con=self.extras)
-        self.assertIsNone(
-            NPagoImporteForm(instance=por_formula).relacion_que_se_pierde)
+                formulario = NPagoImporteForm(data={
+                    'codigo': 30, 'descripcion': 'Relacionado', 'tipo_valor': tipo,
+                    'importe_fijo': '10' if tipo == TipoValorImporte.IMPORTE else '',
+                    'relacionado_con': self.extras.pk,
+                })
+                self.assertTrue(formulario.is_valid(), formulario.errors)
+                self.assertEqual(formulario.cleaned_data['relacionado_con'],
+                                 self.extras)
 
     # --- Relaciones protegidas ---------------------------------------------
 
@@ -1988,6 +1967,30 @@ class CalculoDeImportes(BaseConConceptos):
                          Decimal('0'))
         self.assertEqual(len(guardado.avisos_importe), 1)
         self.assertIn('negativo', guardado.avisos_importe[0])
+
+    def test_un_fijo_o_una_escala_relacionados_solo_los_cobra_quien_tiene_horas(self):
+        """Un «plus fijo de nocturnidad» no lo cobra quien no hizo horas nocturnas."""
+        NPagoImporte.objects.create(
+            codigo=41, descripcion='Plus fijo', tipo_valor=TipoValorImporte.IMPORTE,
+            importe_fijo=Decimal('50'), relacionado_con=self.h_extra)
+        NPagoImporte.objects.create(
+            codigo=42, descripcion='Escala ligada', tipo_valor=TipoValorImporte.ESCALA,
+            relacionado_con=self.h_extra)
+        reporte = self.preparar()   # selecciona Horas Extra: los dos entran solos
+        fila = self.fila(reporte)
+
+        sin_horas = {v.concepto.codigo: v.importe
+                     for v in fila.valores_importe.select_related('concepto')}
+        self.assertEqual(sin_horas[41], Decimal('0'))
+        self.assertEqual(sin_horas[42], Decimal('0'))
+        # El de escala sin relación sigue pagándose a todos.
+        self.assertEqual(sin_horas[9], Decimal('1080.00'))
+
+        servicios.guardar_valores(fila.pk, self.moderador, horas={2: Decimal('3')})
+        con_horas = {v.concepto.codigo: v.importe
+                     for v in fila.valores_importe.select_related('concepto')}
+        self.assertEqual(con_horas[41], Decimal('50.00'))
+        self.assertEqual(con_horas[42], Decimal('1080.00'))
 
     def test_las_variables_nuevas_salen_de_la_fila_congelada(self):
         reporte = self.preparar()

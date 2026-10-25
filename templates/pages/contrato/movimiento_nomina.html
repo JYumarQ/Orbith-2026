@@ -400,7 +400,7 @@
 
                                         {# Observaciones con «Otros» (solo lectura) al lado; siempre editable salvo solo lectura #}
                                         <div class="col-12 mov-bloque"><i class="far fa-sticky-note"></i> Notas y resoluciones</div>
-                                        <div class="{% if is_readonly or not is_wizard %}col-md-8{% else %}col-12{% endif %} mt-2">
+                                        <div class="col-md-8 mt-2">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">
                                                 <i class="far fa-comment-dots me-1 text-secondary"></i> {% if is_readonly %}Observaciones{% else %}{{ form.observaciones.label }}{% endif %}
                                             </label>
@@ -415,9 +415,10 @@
                                            semanas después del movimiento. Si se escriben, sustituyen a los del
                                            contrato. Solo se ve el que pide el cargo NUEVO (o la Calificación formal
                                            del contrato); los demás se ocultan pero NO se deshabilitan, para que
-                                           viajen con su valor y no se borren. No van en ningún Word. En el asistente
-                                           de contratación ya se escriben en el paso del contrato. {% endcomment %}
-                                        {% if is_readonly or not is_wizard %}
+                                           viajen con su valor y no se borren. No van en ningún Word. En el Alta
+                                           Inicial (25-10-2026) llegan rellenos con lo escrito en el contrato y lo que
+                                           diga esta ventana es lo que se guarda, igual que en un movimiento normal:
+                                           si aquí se vacía un número, el contrato queda sin él. {% endcomment %}
                                         <div class="col-md-4 mt-2">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;"
                                                    title="Grado científico + Instructor + CNCI + Años de servicio">Otros</label>
@@ -425,9 +426,8 @@
                                                    value="{% if is_readonly %}{{ movimiento.otros_nuevo|default_if_none:'---' }}{% else %}{{ contrato_actual.importe_otros|floatformat:2 }}{% endif %}"
                                                    title="Grado científico (Maestría o Doctorado) + Instructor + CNCI + Años de servicio. Se guarda con el movimiento.">
                                         </div>
-                                        {% endif %}
 
-                                        {% if not is_readonly and not is_wizard %}
+                                        {% if not is_readonly %}
                                         <div class="col-12 mt-3" id="bloque-resoluciones-mov">
                                             <div class="mov-resoluciones">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">

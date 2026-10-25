@@ -2159,6 +2159,14 @@ def finalizar_contrato_wizard(request, aspirante_id):
         elif k not in campos_validos and k not in atributos_validos:
             borrador_db.pop(k)
 
+    # La sesión guarda las fechas como texto ISO. Se convierten aquí, una vez, porque
+    # la ventana del Alta Inicial calcula «Otros» con la F. Alta Entidad (25-10-2026).
+    from django.db.models import DateField
+    from django.utils.dateparse import parse_date
+    for campo in CAlta._meta.get_fields():
+        if isinstance(campo, DateField) and isinstance(borrador_db.get(campo.name), str):
+            borrador_db[campo.name] = parse_date(borrador_db[campo.name]) or None
+
     # GET: Construir el modal vacío (La columna izquierda oculta)
     if request.method == 'GET':
         try:
@@ -2348,7 +2356,15 @@ def finalizar_contrato_wizard(request, aspirante_id):
                 # 23-10-2026). Ya no existe «Omitir movimiento»: todo contrato nace con
                 # su Alta Inicial en el histórico. Si el formulario no es válido, no se
                 # guarda nada (ni el contrato).
-                form = MovimientoForm(request.POST, instance=contrato, user=request.user)
+                # Números de resolución (25-10-2026): manda lo que diga la ventana del
+                # Alta Inicial, también si se vació. Si la ventana no los envía (una
+                # pestaña abierta antes de esta versión), se conservan los del contrato;
+                # antes se guardaban vacíos y se perdía lo escrito en el paso 1.
+                datos_movimiento = request.POST.copy()
+                for campo in MovimientoForm.CAMPOS_RESOLUCION:
+                    if campo not in datos_movimiento:
+                        datos_movimiento[campo] = borrador.get(campo) or ''
+                form = MovimientoForm(datos_movimiento, instance=contrato, user=request.user)
                 if form.is_valid():
                     cargo_nuevo = form.cleaned_data.get('cargo')
                     # El salario lo calcula el servidor (24-10-2026), como en el movimiento.

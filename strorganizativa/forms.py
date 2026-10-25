@@ -496,5 +496,17 @@ class UnidadOrganizativaForm(forms.ModelForm):
                 'Defina la provincia de la entidad en Parámetros Generales para habilitar este campo.'
             )
 
+    def clean(self):
+        datos = super().clean()
+        # El grupo de nómina no se repite entre unidades principales o normales:
+        # solo lo comparten una principal y sus subunidades (24-10-2026).
+        from .models import unidad_con_el_grupo_de_nomina
+        otra = unidad_con_el_grupo_de_nomina(datos.get('grupo_nomina'), datos.get('tipo'),
+                                             excluir_pk=self.instance.pk)
+        if otra is not None:
+            self.add_error('grupo_nomina', 'El grupo de nómina %s ya lo tiene «%s». Solo lo comparten una '
+                                           'unidad principal y sus subunidades.' % (datos.get('grupo_nomina'), otra))
+        return datos
+
     
         

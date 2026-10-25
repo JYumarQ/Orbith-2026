@@ -1743,6 +1743,70 @@ class AsistenteDeContratacionErroresTests(TestCase):
         self.assertEqual((alta.tipo_contrato_nuevo, alta.motivo_nuevo), ('Indeterminado', '---'))
 
 
+class ResolucionesEnElAltaInicialTests(TestCase):
+    """Números de resolución en el Alta Inicial (25-10-2026). Llegan rellenos con lo
+    escrito en el contrato y manda lo que diga la ventana del movimiento, también si
+    se vacía. Antes la ventana no los enviaba y el contrato se guardaba sin ellos."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        cls.indeterminado = NTipoContrato.objects.create(
+            descripcion='Indeterminado', ocupa_plaza=True, requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Nueva', papellido='P', sapellido='T', doc_identidad='80010112911',
+            estado='ASPIRANTE', sexo='F', raza='BL', provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_resoluciones', password='x', es_admin=True)
+
+    def _paso1(self, **extra):
+        self.client.force_login(self.admin)
+        self.datos = {
+            'no_expediente': '00911', 'fecha_alta_entidad': '2026-10-01', 'fecha_alta': '2026-10-01',
+            'cargo': self.cargo.pk, 'reg_militar': 'NIN', 'tipo_salario': 'FIJ',
+            'unidad': self.cargo.departamento.unidad_organizativa_id,
+            'departamento': self.cargo.departamento_id, 'tipo': self.indeterminado.pk,
+            'c_formal': 'on', **extra}
+        paso1 = self.client.post(reverse('add_contrato', args=[self.aspirante.doc_identidad]), self.datos,
+                                 HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertTrue(paso1.json().get('redirect_to_wizard'), paso1.content[:300])
+
+    def _paso2(self, **resoluciones):
+        """Lo que envía la ventana del movimiento: sus campos, no los del contrato."""
+        respuesta = self.client.post(reverse('finalizar_contrato_wizard', args=[self.aspirante.doc_identidad]), {
+            'fecha_efectiva': '2026-10-01', 'fecha_solicitud': '2026-10-01',
+            'unidad': self.datos['unidad'], 'departamento': self.datos['departamento'], 'cargo': self.cargo.pk,
+            'tipo_salario': 'FIJ', 'tipo': self.indeterminado.pk, **resoluciones},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertTrue(respuesta.json().get('form_is_valid'), respuesta.content[:300])
+        return CAlta.objects.get(no_expediente='00911')
+
+    def test_la_c_formal_no_es_obligatoria_en_el_contrato(self):
+        self._paso1()
+        self.assertIsNone(self._paso2().c_formal_res)
+
+    def test_la_ventana_del_alta_trae_el_numero_del_contrato_para_editarlo(self):
+        self._paso1(c_formal_res='15/26')
+        ventana = self.client.get(reverse('wizard_movimiento_nomina', args=[self.aspirante.doc_identidad]),
+                                  HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertContains(ventana, 'id="bloque-resoluciones-mov"')
+        self.assertContains(ventana, 'value="15/26"')
+        # La fecha efectiva sigue llegando en el formato del campo de fecha.
+        self.assertRegex(ventana.content.decode(), r'name="fecha_efectiva"[^>]*value="2026-10-01"')
+
+    def test_si_la_ventana_no_lo_envia_se_conserva_el_del_contrato(self):
+        self._paso1(c_formal_res='15/26')
+        self.assertEqual(self._paso2().c_formal_res, '15/26')
+
+    def test_manda_el_numero_de_la_ventana(self):
+        self._paso1(c_formal_res='15/26')
+        self.assertEqual(self._paso2(c_formal_res='20/26').c_formal_res, '20/26')
+
+    def test_si_la_ventana_lo_vacia_el_contrato_queda_sin_el(self):
+        self._paso1(c_formal_res='15/26')
+        self.assertIsNone(self._paso2(c_formal_res='').c_formal_res)
+
+
 class AvisosAlCausarBajaTests(TestCase):
     """Al causar baja se borran los avisos del contrato y las alertas de la ficha
     (no los Eventos), el análisis no las vuelve a crear, y un enlace a un contrato

@@ -44,7 +44,7 @@
                `required`, porque en este formulario media docena de campos nacen
                deshabilitados y se habilitan según otra elección. {% endcomment %}
               data-validacion-visual
-              data-obligatorios="no_expediente,tipo,tipo_salario,motivo,fecha_alta,fecha_alta_entidad,duracion,unidad,departamento,cargo,tridente,c_formal_res,fecha_vence_lic,fecha_vence_recal,fecha_vence_seg,pais,reg_militar"
+              data-obligatorios="no_expediente,tipo,tipo_salario,motivo,fecha_alta,fecha_alta_entidad,duracion,unidad,departamento,cargo,tridente,fecha_vence_lic,fecha_vence_recal,fecha_vence_seg,pais,reg_militar"
               >                
                 {% csrf_token %}
                 
@@ -303,11 +303,21 @@
                                    Por eso `#resultados_salariales` (el destino de HTMX, que se
                                    vacía entero en cada intercambio) envuelve SOLO a las tres, y
                                    el cuarto campo queda fuera de él aunque dentro del mismo
-                                   recuadro. El 9 + 3 de fuera con el 4 + 4 + 4 de dentro deja las
-                                   cuatro columnas del mismo ancho. {% endcomment %}
+                                   recuadro. «Otros» (25-10-2026) va en la misma fila, al final: con
+                                   `.cinco-cifras` las tres de dentro ocupan el 60 % y cada una de
+                                   las otras dos el 20 %, así las cinco quedan del mismo ancho. En
+                                   pantallas estrechas se apilan como siempre. {% endcomment %}
+                                <style>
+                                    @media (min-width: 768px) {
+                                        #bloqueCalculosSalario.cinco-cifras > .tres-cifras { flex: 0 0 auto; width: 60%; }
+                                        #bloqueCalculosSalario.cinco-cifras > .una-cifra { flex: 0 0 auto; width: 20%; }
+                                        /* Las cinco etiquetas en una línea: si no, «Pago Años de Servicio» se parte y descuadra la fila. */
+                                        #bloqueCalculosSalario.cinco-cifras label { font-size: .8125rem; white-space: nowrap; }
+                                    }
+                                </style>
                                 <div class="col-12">
-                                    <div class="row g-3 mt-2 p-3 border rounded bg-light" id="bloqueCalculosSalario">
-                                        <div class="col-md-9">
+                                    <div class="row g-3 mt-2 p-3 border rounded bg-light cinco-cifras" id="bloqueCalculosSalario">
+                                        <div class="tres-cifras">
                                             <div class="row g-3" id="resultados_salariales">
                                                 <div class="col-md-4">
                                                     <label for="salarioEscala" class="fw-bold text-primary">Salario Escala</label>
@@ -323,9 +333,18 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <div class="col-md-3" id="pago_annos_servicio">
+                                        <div class="una-cifra" id="pago_annos_servicio">
                                             <label for="pagoAnnosServicio">Pago Años de Servicio</label>
                                             <input class="form-control" id="pagoAnnosServicio" readonly placeholder="---">
+                                        </div>
+                                        {% comment %} «Otros» (24-10-2026): grado científico (Maestría o Doctorado)
+                                           + Instructor + CNCI + Pago Años de Servicio. Solo lectura y sin
+                                           `name`: se calcula en pantalla con esas cuatro cifras; el movimiento
+                                           de nómina lo congela al crearse. {% endcomment %}
+                                        <div class="una-cifra">
+                                            <label for="txt_otros">Otros</label>
+                                            <input type="text" class="form-control fw-bold" readonly id="txt_otros" placeholder="0.00"
+                                                   title="Grado científico + Instructor + CNCI + Años de servicio">
                                         </div>
                                     </div>
                                 </div>
@@ -387,15 +406,6 @@
                                 <div class="col-md-3 mb-3">
                                     <label class="form-label" for="id_cnci_nomenclador">{{ form.cnci_nomenclador.label }}</label>
                                     {{ form.cnci_nomenclador }}
-                                </div>
-                                {% comment %} «Otros» (24-10-2026): grado científico (Maestría o Doctorado)
-                                   + Instructor + CNCI + Pago Años de Servicio. Solo lectura y sin
-                                   `name`: se calcula en pantalla con esas cuatro cifras; el movimiento
-                                   de nómina lo congela al crearse. {% endcomment %}
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label fw-bold" for="txt_otros">Otros</label>
-                                    <input type="text" class="form-control bg-light fw-bold" readonly id="txt_otros" placeholder="0.00"
-                                           title="Grado científico + Instructor + CNCI + Años de servicio">
                                 </div>
                                 <script>
                                     (function () {
@@ -950,7 +960,7 @@
         // 6. VALIDACIÓN VISUAL UNIVERSAL
         const reglas = {
             numericos: ['duracion', 'no_expediente'],
-            obligatorios: [ 'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion', 'unidad', 'departamento', 'cargo', 'tridente', 'c_formal_res', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar' ]
+            obligatorios: [ 'no_expediente', 'tipo', 'tipo_salario', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion', 'unidad', 'departamento', 'cargo', 'tridente', 'fecha_vence_lic', 'fecha_vence_recal', 'fecha_vence_seg', 'pais', 'reg_militar' ]
         };
 
         var timerExp = null;

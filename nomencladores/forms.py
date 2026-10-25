@@ -77,27 +77,6 @@ class RegistrarSalariosForm(forms.Form):
         self.fields['grupo_escala'].queryset = queryset_filtrado
         self.fields['grupo_escala'].choices = [(g.pk, str(g)) for g in lista_ordenada]
 
-
-class ImportarCargosForm(forms.Form):
-    archivo_excel = forms.FileField(
-        label="Seleccionar Excel de Cargos",
-        help_text="El archivo debe tener una hoja llamada 'CARGOS_CODIGO' o ser la primera hoja."
-    )
-    
-    ESTRATEGIA_CHOICES = [
-        ('SALTAR', 'Saltar duplicados (Conservar los datos actuales de la BD)'),
-        ('ACTUALIZAR', 'Sobrescribir todo (Actualizar la BD con los datos del Excel)'),
-    ]
-    
-    estrategia = forms.ChoiceField(
-        label="Si el cargo ya existe...",
-        choices=ESTRATEGIA_CHOICES,
-        widget=forms.RadioSelect,
-        initial='SALTAR'
-    )
-
-# Agregar esto al final de forms.py
-
 class EditarSalariosForm(forms.Form):
     # Campo oculto o de solo lectura para mostrar qué grupo estamos editando
     grupo_nombre = forms.CharField(

@@ -194,3 +194,111 @@ class FirmasHtmxTests(TestCase):
         cuerpo = respuesta.content.decode()
         self.assertNotIn("getElementById('formFiltrosAnexo17').submit()", cuerpo)
         self.assertIn('hx-target="#bloqueFirmasAnexo17"', cuerpo)
+
+
+class FirmantesConfiguradosTests(TestCase):
+    """Firmantes de los Anexos elegidos en Configuración (`informes_anexo/firmantes.py`).
+
+    Cada Administrador o Moderador elige qué plaza de cuadro firma «Propuesto por» y
+    «Aprobado por». El Anexo usa a quien la ocupa hoy, con el título escrito en
+    femenino si es una mujer. Un Moderador solo puede elegir plazas de sus unidades.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
+                                          NTipoContrato)
+        from strorganizativa.models import CargoPlantilla, Departamento
+
+        tipo = NTipoUnidadOrganizativa.objects.create(
+            descripcion='UEB', es_principal=False, es_subunidad=False)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            descripcion='UEB Norte', tipo=tipo, grupo_nomina=1, orden_informe=1)
+        cls.otra = UnidadOrganizativa.objects.create(
+            descripcion='UEB Sur', tipo=tipo, grupo_nomina=2, orden_informe=2)
+        grupo = NGrupoEscala.objects.create(nivel='XX')
+        director = NCargo.objects.create(descripcion='Director UEB', cat_ocupacional='CDI',
+                                         grupo_escala=grupo, salario_basico=5310)
+        tecnico = NCargo.objects.create(descripcion='Técnico A', cat_ocupacional='TEC',
+                                        grupo_escala=grupo, salario_basico=4000)
+
+        def plaza(unidad, ncargo):
+            departamento = Departamento.objects.create(
+                descripcion='Dirección %s' % ncargo.pk, unidad_organizativa=unidad,
+                orden_informe=Departamento.objects.count() + 1)
+            return CargoPlantilla.objects.create(ncargo=ncargo, departamento=departamento,
+                                                 cant_aprobada=1, orden_informe=1)
+
+        cls.plaza_norte = plaza(cls.unidad, director)
+        cls.plaza_sur = plaza(cls.otra, director)
+        cls.plaza_tecnico = plaza(cls.unidad, tecnico)
+
+        provincia = NProvincia.objects.create(nombre='Camagüey', siglas='CMG')
+        municipio = NMunicipio.objects.create(nombre='Florida', provincia=provincia, siglas='FLO')
+        cls.directora = Aspirante.objects.create(
+            nivel_educ='NS', nombre='Maritza', papellido='Céspedes', sapellido='Lugones',
+            doc_identidad='80010112345', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        CAlta.objects.create(aspirante=cls.directora, no_expediente='00001',
+                             tipo=NTipoContrato.objects.create(descripcion='Indeterminado'),
+                             cargo=cls.plaza_norte)
+
+        cls.admin = CustomUser(username='firmas_admin', es_admin=True, is_active=True)
+        cls.admin.set_password('Clave12345!')
+        cls.admin.save()
+        cls.moderador = CustomUser(username='firmas_moderador', es_moderador=True, is_active=True)
+        cls.moderador.set_password('Clave12345!')
+        cls.moderador.save()
+        cls.moderador.unidades.add(cls.unidad)
+        cls.observador = CustomUser(username='firmas_observador', es_observador=True, is_active=True)
+        cls.observador.set_password('Clave12345!')
+        cls.observador.save()
+
+    def _guardar(self, usuario, datos):
+        self.client.force_login(usuario)
+        return self.client.post(reverse('guardar_preferencias'), datos)
+
+    def test_solo_se_ofrecen_plazas_de_cuadro_del_alcance(self):
+        from .firmantes import plazas_para_firmar
+
+        self.assertEqual(set(plazas_para_firmar(self.admin)), {self.plaza_norte, self.plaza_sur})
+        self.assertEqual(list(plazas_para_firmar(self.moderador)), [self.plaza_norte])
+
+    def test_la_plaza_configurada_firma_con_su_ocupante_y_titulo_en_femenino(self):
+        from .firmantes import firmante_configurado
+
+        respuesta = self._guardar(self.admin, {'firma_aprobado': str(self.plaza_norte.pk),
+                                               'firma_aprobado_titulo': 'Director de la UEB Norte'})
+        self.assertEqual(respuesta.status_code, 200)
+        firmante = firmante_configurado(self.admin, 'aprobado')
+        self.assertEqual(firmante['aspirante'], self.directora)
+        self.assertEqual(firmante['titulo'], 'Directora de la UEB Norte')
+        self.assertTrue(firmante['configurado'])
+
+    def test_plaza_vacante_firma_sin_nombre(self):
+        from .firmantes import firmante_configurado
+
+        self._guardar(self.admin, {'firma_propuesto': str(self.plaza_sur.pk)})
+        firmante = firmante_configurado(self.admin, 'propuesto')
+        self.assertIsNone(firmante['aspirante'])
+        self.assertEqual(firmante['titulo'], 'Director UEB')
+
+    def test_sin_configurar_se_usa_lo_de_siempre(self):
+        from .firmantes import firmante_configurado
+
+        self.assertIsNone(firmante_configurado(self.admin, 'propuesto'))
+
+    def test_el_moderador_no_puede_elegir_una_plaza_ajena(self):
+        respuesta = self._guardar(self.moderador, {'firma_aprobado': str(self.plaza_sur.pk)})
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIsNone(self.moderador.obtener_preferencias().firma_aprobado)
+
+    def test_una_plaza_que_no_es_de_cuadro_se_rechaza(self):
+        respuesta = self._guardar(self.admin, {'firma_aprobado': str(self.plaza_tecnico.pk)})
+        self.assertEqual(respuesta.status_code, 400)
+
+    def test_el_observador_no_configura_firmas(self):
+        respuesta = self._guardar(self.observador, {'firma_aprobado': str(self.plaza_norte.pk)})
+        self.assertEqual(respuesta.status_code, 403)

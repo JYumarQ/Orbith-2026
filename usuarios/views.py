@@ -673,6 +673,29 @@ def guardar_preferencias(request):
         preferencias.filas_por_pagina = filas
         campos.append('filas_por_pagina')
 
+    # Firmas de los Anexos 17 (25-10-2026): solo Administrador y Moderador, y solo
+    # plazas de cuadro de su alcance (`informes_anexo/firmantes.py`).
+    from informes_anexo.firmantes import FIRMAS, plazas_para_firmar
+    for cual, datos in FIRMAS.items():
+        if datos['campo'] not in request.POST and datos['titulo'] not in request.POST:
+            continue
+        if not (request.user.es_admin or request.user.es_moderador):
+            return JsonResponse({'exito': False, 'mensaje': 'Las firmas solo las configuran '
+                                 'Administradores y Moderadores.'}, status=403)
+        if datos['campo'] in request.POST:
+            valor = (request.POST.get(datos['campo']) or '').strip()
+            plaza = None
+            if valor:
+                plaza = plazas_para_firmar(request.user).filter(pk=valor if valor.isdigit() else 0).first()
+                if plaza is None:
+                    return JsonResponse({'exito': False, 'mensaje': 'Esa plaza no es de un cuadro de sus '
+                                         'unidades.'}, status=400)
+            setattr(preferencias, datos['campo'], plaza)
+            campos.append(datos['campo'])
+        if datos['titulo'] in request.POST:
+            setattr(preferencias, datos['titulo'], (request.POST.get(datos['titulo']) or '').strip()[:100])
+            campos.append(datos['titulo'])
+
     if not campos:
         return JsonResponse({'exito': False, 'mensaje': 'No se recibió ninguna preferencia.'}, status=400)
 
@@ -686,6 +709,28 @@ def guardar_preferencias(request):
         'mostrar_distincion': preferencias.mostrar_distincion,
         'filas_por_pagina': preferencias.filas_por_pagina,
     })
+
+@login_required
+def firmas_preferencias(request):
+    """La sección «Firmas de los Anexos 17» del modal Configuración (25-10-2026). Se
+    carga al abrir el modal para no consultar la plantilla en cada página."""
+    from django.http import HttpResponse
+    from django.shortcuts import render
+
+    from informes_anexo.firmantes import FIRMAS, opciones
+
+    if not (request.user.es_admin or request.user.es_moderador):
+        return HttpResponse('')
+    preferencias = request.user.obtener_preferencias()
+    bloques = [{
+        'cual': cual, 'etiqueta': datos['etiqueta'], 'ejemplo': datos['ejemplo'],
+        'campo': datos['campo'], 'campo_titulo': datos['titulo'],
+        'elegida': getattr(preferencias, datos['campo'] + '_id'),
+        'titulo': getattr(preferencias, datos['titulo']),
+    } for cual, datos in FIRMAS.items()]
+    return render(request, 'base/partials/preferencias_firmas.html',
+                  {'bloques': bloques, 'opciones': opciones(request.user)})
+
 
 # =========================================================================
 # «EJECUTAR TODOS LOS ANÁLISIS» (solo Administrador)

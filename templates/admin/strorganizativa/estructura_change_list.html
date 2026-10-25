@@ -1,0 +1,10 @@
+{% extends "admin/change_list.html" %}
+{% comment %} Importar/Exportar la estructura (unidades y departamentos) en Excel:
+   strorganizativa/importacion.py. Las mismas direcciones desde las dos listas. {% endcomment %}
+{% block object-tools %}
+    <ul class="object-tools">
+        <li><a href="{% url 'admin:importar-estructura' %}" class="addlink">Importar Excel</a></li>
+        <li><a href="{% url 'admin:exportar-estructura' %}">Exportar Excel</a></li>
+        {{ block.super }}
+    </ul>
+{% endblock %}

@@ -128,6 +128,24 @@ class UnidadOrganizativa(Base):
     def __str__(self):
         return self.descripcion
     
+def unidad_con_el_grupo_de_nomina(grupo, tipo, excluir_pk=None):
+    """La unidad que ya usa ese grupo de nómina, o None (24-10-2026).
+
+    Regla: el grupo de nómina NO se repite entre unidades principales o normales;
+    solo lo comparten una unidad principal y sus subunidades, que lo heredan. Así
+    que solo se comprueba cuando la unidad no es subunidad, y solo contra las que
+    tampoco lo son. La usan el formulario de unidades y el importador de Excel; no
+    va en `save()` para que un dato viejo repetido no impida guardar la unidad
+    (lo avisa Subsanación, EST-009).
+    """
+    if not grupo or (tipo is not None and tipo.es_subunidad):
+        return None
+    otras = UnidadOrganizativa.objects.filter(grupo_nomina=grupo).exclude(tipo__es_subunidad=True)
+    if excluir_pk:
+        otras = otras.exclude(pk=excluir_pk)
+    return otras.order_by('orden_informe').first()
+
+
 class Departamento(Base):
 
     descripcion = models.CharField(max_length=150, blank=False, null=False)

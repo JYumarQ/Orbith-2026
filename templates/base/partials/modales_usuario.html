@@ -225,6 +225,14 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
           </label>
         </div>
 
+        {% if user.es_admin or user.es_moderador %}
+        {# Firmas de los Anexos 17: se cargan al abrir el modal (usuarios.views.firmas_preferencias). #}
+        <div id="prefFirmas" hx-get="{% url 'firmas_preferencias' %}"
+             hx-trigger="shown.bs.modal from:#modalPreferencias once" hx-swap="innerHTML">
+          <div class="text-muted small mt-4"><span class="spinner-border spinner-border-sm me-1"></span>Cargando las firmas…</div>
+        </div>
+        {% endif %}
+
         <div id="avisoPreferencias" class="alert alert-success py-2 px-3 mt-3 d-none" style="font-size: .8125rem;">
           <i class="bx bx-check-circle me-1"></i><span></span>
         </div>
@@ -673,6 +681,17 @@ las páginas autenticadas sin que cada vista tenga que inyectar nada.
       });
     });
   }
+
+  // Firmas de los Anexos 17: plaza y título, cada cambio se guarda al momento.
+  document.addEventListener('change', function (e) {
+    const campo = e.target.closest('#prefFirmas [data-pref-firma]');
+    if (!campo) return;
+    const datos = {};
+    datos[campo.dataset.prefFirma] = campo.value;
+    window.orbithGuardarPreferencias(datos, d => {
+      mostrarAvisoPref(d.exito ? 'Firma guardada.' : d.mensaje, !d.exito);
+    });
+  });
 
   // ---------------------------------------------------------------
   // REPORTAR PROBLEMA

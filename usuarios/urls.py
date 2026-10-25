@@ -48,5 +48,6 @@ urlpatterns = [
     path('perfil/avatar/', views.actualizar_avatar, name='actualizar_avatar'),
     path('perfil/avatar/eliminar/', views.eliminar_avatar, name='eliminar_avatar'),
     path('preferencias/', views.guardar_preferencias, name='guardar_preferencias'),
+    path('preferencias/firmas/', views.firmas_preferencias, name='firmas_preferencias'),
 ]
 

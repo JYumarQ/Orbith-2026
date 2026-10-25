@@ -33,32 +33,16 @@
           </div>
         {% endif %}
 
-        {% if form.relacion_que_se_pierde %}
-          {% comment %}
-            Concepto guardado antes de que «Relacionado con» fuera solo para
-            fórmulas. Se avisa en vez de quitar la relación en silencio: deja de
-            añadirse solo al reporte y hay que ponerlo en las plantillas.
-          {% endcomment %}
-          <div class="alert alert-warning d-flex align-items-start p-2 mb-3" role="alert">
-            <i class="fas fa-triangle-exclamation me-2 mt-1"></i>
-            <div class="small">
-              Este concepto está relacionado con «{{ form.relacion_que_se_pierde }}», pero
-              ya solo los conceptos por fórmula pueden tener esa relación. Al guardarlo se
-              quitará y dejará de añadirse solo a los reportes: inclúyalo en sus
-              plantillas si lo necesita.
-            </div>
-          </div>
-        {% endif %}
-
         <div class="row g-3">
           {% for campo in form %}
             {% comment %}
               `data-segun-tipo` lo leen el script de abajo para enseñar solo los
               campos del tipo de valor elegido. Solo lo llevan los pagos por
               importe (`con_formula`); en los otros tres nomencladores no hay tipo.
+              «Relacionado con» no lo lleva: vale para los tres tipos.
             {% endcomment %}
             <div class="{% if campo.name == 'descripcion' or campo.name == 'formula' %}col-12{% else %}col-md-6{% endif %}"
-                 {% if con_formula %}{% if campo.name == 'importe_fijo' %}data-segun-tipo="IMP"{% elif campo.name == 'formula' or campo.name == 'relacionado_con' %}data-segun-tipo="FOR"{% endif %}{% endif %}>
+                 {% if con_formula %}{% if campo.name == 'importe_fijo' %}data-segun-tipo="IMP"{% elif campo.name == 'formula' %}data-segun-tipo="FOR"{% endif %}{% endif %}>
               {% if campo.field.widget.input_type == 'checkbox' %}
                 <div class="form-check form-switch mt-4">
                   {{ campo }}
@@ -125,7 +109,8 @@
                 <i class="fas fa-table-list me-2 mt-1 text-slate-500"></i>
                 <div class="small text-slate-500">
                   La cuantía de cada trabajador se toma de la Escala de Años de Servicio,
-                  según sus años de servicio al cerrar el período del reporte.
+                  según sus años de servicio al cerrar el período del reporte. Si indica
+                  «Relacionado con», solo la cobra quien tenga horas en ese concepto.
                 </div>
               </div>
             </div>
