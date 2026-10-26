@@ -1,3 +1,4 @@
+import json
 import re
 
 from django.contrib.admin.sites import AdminSite
@@ -367,3 +368,58 @@ class FiltrosDeBajasTests(TestCase):
 
     def test_los_datos_personales_ya_filtran_en_bajas(self):
         self.assertEqual(self.nombres('search_bajas', sexo='M'), ['Baja2'])
+
+    def test_prefijo_u_busca_la_unidad_de_la_baja(self):
+        """La persona no guarda unidad (campo eliminado el 26-10-2026): U: en Bajas
+        busca la unidad donde causó baja."""
+        self.assertEqual(self.nombres('search_bajas', filter_aspirante='U:norte'), ['Baja2'])
+        self.assertEqual(self.nombres('search_bajas', filter_aspirante='U:central'), ['Baja1', 'Baja3'])
+
+
+class EliminarPersonaTests(TestCase):
+    """La papelera de Aspirantes y Bajas (26-10-2026). La persona no tiene unidad, así
+    que el Moderador pide la eliminación de cualquiera por solicitud; con el permiso
+    especial «Editar sin solicitud» borra directamente. Antes el Moderador recibía un
+    403 «Fuera de su UO asignada» que no se veía en pantalla y no pasaba nada."""
+
+    @classmethod
+    def setUpTestData(cls):
+        provincia = NProvincia.objects.create(nombre='La Habana', siglas='LHA')
+        municipio = NMunicipio.objects.create(nombre='Playa', provincia=provincia, siglas='PLA')
+        cls.personas = {}
+        for seq, estado in enumerate(('ASPIRANTE', 'BAJA'), start=1):
+            cls.personas[estado] = Aspirante.objects.create(
+                nivel_educ='SA', nombre=f'Persona{seq}', papellido='P', sapellido='T',
+                doc_identidad=f'8601011230{seq}', estado=estado, sexo='F', raza='BL',
+                provincia=provincia, municipio=municipio)
+        cls.moderador = CustomUser.objects.create_user(
+            username='mod_borrar', password='x', es_moderador=True)
+
+    def borrar(self, persona):
+        self.client.force_login(self.moderador)
+        return self.client.post(reverse('del_aspir', args=[persona.pk]), HTTP_HX_REQUEST='true')
+
+    def test_moderador_pide_la_eliminacion_de_cualquiera(self):
+        from solicitudes.models import Solicitud
+
+        for estado, persona in self.personas.items():
+            with self.subTest(estado=estado):
+                respuesta = self.borrar(persona)
+                self.assertEqual(respuesta.status_code, 204)
+                aviso = json.loads(respuesta['HX-Trigger'])['showMessage']['text']
+                self.assertIn('Solicitud de eliminación enviada', aviso)
+                self.assertTrue(Aspirante.objects.filter(pk=persona.pk).exists())
+                self.assertTrue(Solicitud.objects.filter(
+                    operacion="aspirante_del", object_id=str(persona.pk)).exists())
+
+    def test_moderador_con_permiso_especial_borra_directamente(self):
+        from solicitudes.models import Solicitud
+        from usuarios.models import PerfilPermisos
+
+        perfil = PerfilPermisos.objects.create(nombre='Edita', editar_sin_solicitud=True)
+        CustomUser.objects.filter(pk=self.moderador.pk).update(perfil_permisos=perfil)
+        persona = self.personas['ASPIRANTE']
+        respuesta = self.borrar(persona)
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(Aspirante.objects.filter(pk=persona.pk).exists())
+        self.assertFalse(Solicitud.objects.exists())

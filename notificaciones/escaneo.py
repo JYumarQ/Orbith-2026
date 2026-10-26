@@ -132,18 +132,16 @@ def partes_de_la_busqueda():
 
 
 def _registros_de_unidades(unidades):
-    """Ids de los contratos, fichas y cargos de esas unidades, para `solo_registros`."""
-    from django.db.models import Q
+    """Ids de los contratos, fichas y cargos de esas unidades, para `solo_registros`.
 
-    from bolsa.models import Aspirante
+    Las fichas son las de quien tiene contrato en ellas: la persona no guarda unidad
+    propia (campo eliminado el 26-10-2026)."""
     from contratos.models import CAlta
     from strorganizativa.models import CargoPlantilla
 
     contratos = list(CAlta.objects.filter(
         cargo__departamento__unidad_organizativa__in=unidades).values_list('pk', 'aspirante_id'))
-    fichas = set(Aspirante.objects.filter(
-        Q(unidad_organizativa__in=unidades) | Q(pk__in=[a for _, a in contratos])
-    ).values_list('pk', flat=True))
+    fichas = {a for _, a in contratos}
     cargos = CargoPlantilla.objects.filter(
         departamento__unidad_organizativa__in=unidades).values_list('pk', flat=True)
     return {

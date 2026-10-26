@@ -163,7 +163,8 @@ MODELOS = {
     'contratos.TMovimientoAgrupado': _MOVIMIENTO,
     'bolsa.Aspirante': {
         'modulo': 'aspirantes', 'nombre': 'Aspirante',
-        'unidad': lambda o: o.unidad_organizativa_id,
+        # La persona no tiene unidad (campo eliminado el 26-10-2026).
+        'unidad': lambda o: None,
     },
     'strorganizativa.UnidadOrganizativa': {
         'modulo': 'estructura', 'nombre': 'Unidad Organizativa',

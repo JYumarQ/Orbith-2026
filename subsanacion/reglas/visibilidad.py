@@ -34,7 +34,7 @@ class ReglaTrabajadorOculto(ReglaBase):
 
     COLUMNAS = (
         'id', 'nombre', 'papellido', 'sapellido', 'doc_identidad', 'estado',
-        'unidad_organizativa_id', 'unidad_organizativa__descripcion',
+        'unidad_organizativa_id', 'unidad_descripcion',
     )
 
     @staticmethod
@@ -94,7 +94,7 @@ class BajaConContratoActivo(ReglaTrabajadorOculto):
                     'estado_registrado': 'BAJA',
                     'tiene_contrato_de_alta': 'Sí',
                     'unidad_organizativa': (
-                        fila.get('unidad_organizativa__descripcion') or 'Sin asignar'),
+                        fila.get('unidad_descripcion') or 'Sin asignar'),
                 },
                 unidad_organizativa_id=fila.get('unidad_organizativa_id'),
             )
@@ -198,7 +198,7 @@ class TrabajadorActivoSinContrato(ReglaBase):
                  .filter(tiene_contrato=False)
                  .values('id', 'nombre', 'papellido', 'sapellido', 'doc_identidad',
                          'unidad_organizativa_id',
-                         'unidad_organizativa__descripcion')
+                         'unidad_descripcion')
                  .iterator(chunk_size=TAMANO_LOTE))
 
         for fila in filas:
@@ -217,7 +217,7 @@ class TrabajadorActivoSinContrato(ReglaBase):
                     'estado_registrado': 'ACTIVO',
                     'contratos_de_alta': 0,
                     'unidad_organizativa': (
-                        fila.get('unidad_organizativa__descripcion') or 'Sin asignar'),
+                        fila.get('unidad_descripcion') or 'Sin asignar'),
                 },
                 unidad_organizativa_id=fila.get('unidad_organizativa_id'),
             )

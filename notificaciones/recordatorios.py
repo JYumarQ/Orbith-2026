@@ -58,12 +58,9 @@ class RecordatorioDetectado:
 
 
 def _unidad_del_contrato(contrato):
-    """Mismo criterio de respaldo que `notificaciones/avisos.py::_unidad_del_contrato`
-    (la del cargo si tiene, si no la del aspirante)."""
+    """Mismo criterio que `notificaciones/avisos.py::_unidad_del_contrato`: la del cargo."""
     if contrato.cargo_id and contrato.cargo.departamento_id:
         return contrato.cargo.departamento.unidad_organizativa_id
-    if contrato.aspirante_id:
-        return contrato.aspirante.unidad_organizativa_id
     return None
 
 

@@ -1745,13 +1745,6 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 self.object, AccionAuditoria.MOVIMIENTO, antes=antes_auditoria,
                 despues=registro_automatico.fotografia(self.object, con_vacios=True))
 
-            # La ficha del trabajador sigue su unidad: si el movimiento lo cambió de
-            # unidad, la ficha también (decisión de RRHH, 23-10-2026). Es parte del
-            # mismo movimiento, así que va con update() y sin evento propio.
-            if unidad_nue_obj and self.object.aspirante.unidad_organizativa_id != unidad_nue_obj.pk:
-                Aspirante.objects.filter(pk=self.object.aspirante_id).update(
-                    unidad_organizativa=unidad_nue_obj)
-
             messages.success(self.request, 'Movimiento de Nómina registrado correctamente.')
 
             # La unidad ANTERIOR del contrato (antes de este cambio) ya era una de

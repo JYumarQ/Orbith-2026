@@ -22,17 +22,13 @@ logger = logging.getLogger(__name__)
 
 
 def _unidad_del_contrato(contrato):
-    """Unidad organizativa de un contrato: la del cargo si tiene, si no la del aspirante.
+    """Unidad organizativa de un contrato: la de su cargo (None si no tiene).
 
-    Mismo criterio de respaldo que ya usa `ReglaContratos.unidad_de()` en Subsanación
-    (subsanacion/reglas/contratos.py), reimplementado aquí sobre la instancia real en
-    vez de sobre un dict de `.values()` — son dos formas de acceder al mismo dato, no
-    dos criterios distintos.
+    Mismo criterio que `ReglaContratos.unidad_de()` en Subsanación. La persona no
+    guarda unidad propia (campo eliminado el 26-10-2026).
     """
     if contrato.cargo_id and contrato.cargo.departamento_id:
         return contrato.cargo.departamento.unidad_organizativa
-    if contrato.aspirante_id:
-        return contrato.aspirante.unidad_organizativa
     return None
 
 

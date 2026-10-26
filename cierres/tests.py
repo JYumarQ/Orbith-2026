@@ -153,7 +153,6 @@ class BaseCierres(TestCase):
         cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
-            unidad_organizativa=cls.unidad,
             provincia=cls.provincia, municipio=cls.municipio)
         cls.contrato = CAlta.objects.create(
             aspirante=cls.aspirante, no_expediente='00100',

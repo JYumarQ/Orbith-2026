@@ -30,9 +30,11 @@
       return '<tr><td class="fw-bold pe-2">' + clave + ':</td><td>' + p[0] +
         '<div class="text-muted"><code>' + p[1] + '</code></div></td></tr>';
     }).join('');
+    // El ejemplo de combinar usa solo prefijos de esta pantalla (en Aspirantes no hay U:).
+    const ejemplo = validos.indexOf('U') >= 0 ? 'N:Juan U:Florida' : 'N:Juan CI:85';
     return '<table class="mb-2" style="font-size:.8rem">' + filas + '</table>' +
       '<div style="font-size:.75rem" class="text-muted">' +
-      'Se pueden combinar: <code>N:Juan U:Florida</code>. Cada prefijo abarca hasta el ' +
+      'Se pueden combinar: <code>' + ejemplo + '</code>. Cada prefijo abarca hasta el ' +
       'siguiente. Lo escrito antes del primer prefijo se busca como siempre. ' +
       'Da igual mayúsculas o acentos.</div>';
   }

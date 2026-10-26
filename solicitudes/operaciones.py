@@ -77,7 +77,9 @@ def _unidad_de_contrato(objeto, datos):
 
 
 def _unidad_de_aspirante(objeto, datos):
-    return objeto.unidad_organizativa if objeto is not None else None
+    """Ninguna: un aspirante no tiene unidad y una baja ya no la tiene, así que
+    cualquier Moderador puede pedir que se elimine (decisión del 26-10-2026)."""
+    return None
 
 
 # ----------------------------------------------------------------------
@@ -514,7 +516,7 @@ OPERACIONES = {
         },
     },
 
-    # --- Eliminar trabajador desde la Lista de Bajas ---
+    # --- Eliminar persona desde la Lista de Aspirantes o la de Bajas ---
     # Es lo que RRHH llama «eliminar contrato»: el botón de esa lista, que borra el
     # registro del trabajador y con él su historial. El borrado por defecto basta; si
     # algo lo protege todavía —un contrato activo—, el error sube y se muestra al aprobar.

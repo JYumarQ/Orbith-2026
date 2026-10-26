@@ -41,12 +41,16 @@ CHANGELOG = [
     {
         "version": "3.8.1",
         "fecha": "2026-10-26",
-        "titulo": "Correcciones en Usuarios, permisos especiales y contrato",
+        "titulo": "Correcciones en Usuarios, permisos especiales, contrato y Aspirantes",
         "cambios": [
             ("mejorado", "Permisos especiales: el Moderador con «Resolver solicitudes» puede aprobar o rechazar también sus propias solicitudes, incluidas las que envió antes de tener el permiso."),
             ("mejorado", "Registrar y Editar contrato: «Modalidad de trabajo» pasa arriba y «Chofer Profesional» y «Jubilado Recontratado» debajo."),
             ("corregido", "Los selectores de varias opciones (unidades del usuario, del Dashboard, de Informes…) no enseñaban la «×» de cada elemento elegido: ahora se ve y se quita con un clic, sin abrir la lista."),
             ("corregido", "Al editar un usuario, su propio nombre aparecía como «El usuario ya existe»."),
+            ("corregido", "Aspirantes y Bajas: el Moderador pulsaba Eliminar, confirmaba y no pasaba nada. Ahora envía la solicitud de eliminación de cualquier persona de la lista (con el permiso especial «Editar sin solicitud» elimina directamente)."),
+            ("mejorado", "Búsqueda con prefijos: en Bajas, «U:» busca la unidad donde la persona causó baja; en Aspirantes ya no se ofrece, porque un aspirante no pertenece a ninguna unidad."),
+            ("mejorado", "Subsanación: los avisos sobre los datos personales de un trabajador llegan al Moderador de la unidad de su contrato."),
+            ("eliminado", "La ficha de la persona ya no guarda una unidad propia (era un dato duplicado e incoherente): la unidad es siempre la del cargo de su contrato."),
         ],
     },
     {

@@ -142,6 +142,25 @@ def solo_registros(mapa):
         _restriccion.mapa = anterior
 
 
+def con_unidad_del_contrato(consulta):
+    """Personas con la unidad de su contrato de alta (`unidad_organizativa_id` y
+    `unidad_descripcion`), para que el aviso llegue al Moderador de esa unidad.
+
+    La persona no guarda unidad propia (campo eliminado el 26-10-2026): un aspirante
+    o una baja no tienen, y su aviso solo lo ve el Administrador. Con varios
+    contratos (VIS/CTR los avisan aparte) se toma el más reciente.
+    """
+    from django.db.models import OuterRef, Subquery
+
+    CAlta = apps.get_model('contratos', 'CAlta')
+    contrato = CAlta.objects.filter(aspirante_id=OuterRef('pk')).order_by('-pk')
+    return consulta.annotate(
+        unidad_organizativa_id=Subquery(
+            contrato.values('cargo__departamento__unidad_organizativa_id')[:1]),
+        unidad_descripcion=Subquery(
+            contrato.values('cargo__departamento__unidad_organizativa__descripcion')[:1]))
+
+
 def restringir(queryset, etiqueta):
     mapa = getattr(_restriccion, 'mapa', None)
     if mapa is None or etiqueta.lower() not in mapa:
@@ -228,7 +247,10 @@ class ReglaBase:
         (ver el docstring de `subsanacion.servicios`); el alcance por unidad se
         aplica al LEER el listado, no al detectar.
         """
-        return restringir(self.obtener_modelo()._default_manager.all(), self.modelo)
+        consulta = restringir(self.obtener_modelo()._default_manager.all(), self.modelo)
+        if self.modelo == 'bolsa.Aspirante':
+            consulta = con_unidad_del_contrato(consulta)
+        return consulta
 
     def ejecutar(self, contexto) -> Iterator[HallazgoDetectado]:
         """Produce los hallazgos. Debe ser un generador y no debe escribir en la BD."""

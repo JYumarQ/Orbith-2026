@@ -153,16 +153,6 @@ class AspiranteForm(forms.ModelForm):
         self.fields['raza'].empty_label = "Seleccione una raza..."
         self.fields['raza'].required = True
 
-        # ✅ Lógica de Moderador (Protegida y Tipada)
-        # Solo se ejecuta si el campo existe en el formulario (escalabilidad)
-        if 'unidad_organizativa' in self.fields:
-            # Cast para que Pylance sepa que es un ModelChoiceField
-            uo_field = cast(ModelChoiceField, self.fields['unidad_organizativa'])
-            
-            # Lógica de negocio
-            if user and getattr(user, 'es_moderador', False):
-                uo_field.queryset = user.unidades.all()
-
         # --- Especialidad dependiente del nivel_educ ---
         nivel = self.data.get('nivel_educ') or getattr(self.instance, 'nivel_educ', None)
         

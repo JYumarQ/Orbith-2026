@@ -36,20 +36,18 @@ class ReglaContratos(ReglaBase):
         'aspirante__papellido',
         'aspirante__sapellido',
         'aspirante__doc_identidad',
-        'aspirante__unidad_organizativa_id',
         'cargo__departamento__unidad_organizativa_id',
     )
 
     @staticmethod
     def unidad_de(fila):
-        """Unidad organizativa del contrato.
+        """Unidad organizativa del contrato: la de su cargo.
 
-        Se toma primero la del cargo, que es la real; si el contrato no tiene cargo
-        (justo el caso de CTR-001) se usa la del trabajador para que el hallazgo no
-        quede sin unidad y siga siendo visible para el moderador de esa unidad.
+        Un contrato sin cargo (CTR-001) queda sin unidad y solo lo ve el
+        Administrador: la persona no guarda unidad propia (campo eliminado el
+        26-10-2026) y los formularios no dejan guardar un contrato sin cargo.
         """
-        return (fila.get('cargo__departamento__unidad_organizativa_id')
-                or fila.get('aspirante__unidad_organizativa_id'))
+        return fila.get('cargo__departamento__unidad_organizativa_id')
 
     @staticmethod
     def titulo_de(fila, sufijo):
@@ -357,9 +355,7 @@ class AspiranteConMultiplesContratos(ReglaContratos):
     modelo = 'bolsa.Aspirante'
 
     def ejecutar(self, contexto):
-        Aspirante = self.obtener_modelo()
-
-        duplicados = (Aspirante.objects
+        duplicados = (self.base_queryset()
                       .annotate(total=Count('calta_contratos'))
                       .filter(total__gt=1)
                       .values('id', 'nombre', 'papellido', 'sapellido',

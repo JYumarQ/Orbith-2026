@@ -78,7 +78,6 @@ class BaseInformes(TestCase):
         cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad='85010112345', estado='ACTIVO', sexo='F', raza='BL',
-            unidad_organizativa=cls.unidad,
             provincia=cls.provincia, municipio=cls.municipio)
         cls.contrato = CAlta.objects.create(
             aspirante=cls.aspirante, no_expediente='00100',
@@ -592,7 +591,7 @@ class OrdenEstable(BaseInformes):
             aspirante = Aspirante.objects.create(nivel_educ='SA', 
                 nombre=nombre, papellido='Ruiz', sapellido='Paz',
                 doc_identidad=f'8501011234{i + 6}', estado='ACTIVO',
-                sexo='M', raza='BL', unidad_organizativa=self.unidad,
+                sexo='M', raza='BL',
                 provincia=self.provincia, municipio=self.municipio)
             CAlta.objects.create(
                 aspirante=aspirante, no_expediente=f'0020{i}',
@@ -1267,7 +1266,6 @@ class AltasYBajasDelMes(BaseInformes):
         self.aspirante_activo = Aspirante.objects.create(
             nivel_educ='NS', nombre='Luis', papellido='Ruiz', sapellido='Mora',
             doc_identidad='90020254321', estado='ACTIVO', sexo='M', raza='BL',
-            unidad_organizativa=self.unidad,
             provincia=self.provincia, municipio=self.municipio)
         CAlta.objects.create(
             aspirante=self.aspirante_activo, no_expediente='00200',
@@ -1278,7 +1276,6 @@ class AltasYBajasDelMes(BaseInformes):
         self.aspirante_ida = Aspirante.objects.create(
             nivel_educ='NG', nombre='Rosa', papellido='Lima', sapellido='Paz',
             doc_identidad='88030398765', estado='BAJA', sexo='F', raza='BL',
-            unidad_organizativa=self.unidad,
             provincia=self.provincia, municipio=self.municipio)
         self.baja = CBaja.objects.create(
             aspirante=self.aspirante_ida, no_expediente='00300',
@@ -1545,7 +1542,6 @@ class MisionesDiasEImporte(BaseInformes):
         aspirante_norte = Aspirante.objects.create(
             nivel_educ='SA', nombre='Luis', papellido='Díaz', sapellido='Mora',
             doc_identidad='85010112399', estado='ACTIVO', sexo='M', raza='BL',
-            unidad_organizativa=cls.otra_unidad,
             provincia=cls.provincia, municipio=cls.municipio)
         # Sin días ni importe registrados: cuentan como 0.
         cls.contrato_norte = CAlta.objects.create(
@@ -1787,7 +1783,7 @@ class ConsolidadoInteractivo(BaseInformes):
             asp = Aspirante.objects.create(
                 nivel_educ='SA', nombre=f'Inter{seq}', papellido='P', sapellido='T',
                 doc_identidad=f'8601011234{seq}', estado='ACTIVO', sexo=sexo, raza='BL',
-                unidad_organizativa=cls.unidad, provincia=cls.provincia, municipio=cls.municipio)
+                provincia=cls.provincia, municipio=cls.municipio)
             CAlta.objects.create(aspirante=asp, no_expediente=f'0020{seq}', tipo=tipo,
                                  cargo=cls.cargo, fecha_alta=date(2026, 2, 1))
         cls.cargo.refrescar_conteo_plazas()

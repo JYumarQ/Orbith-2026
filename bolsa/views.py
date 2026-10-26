@@ -1,6 +1,6 @@
 from datetime import date
 
-from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, HttpResponseNotAllowed, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, HttpResponseNotAllowed, JsonResponse
 from django.template.loader import render_to_string
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
@@ -123,12 +123,18 @@ def _aplicar_busqueda(qs, texto, con_baja=False):
             qs = qs.filter(_nombre__contains=normalizar(palabra))
     for valor in busqueda.valores('CI'):
         qs = qs.filter(doc_identidad__startswith=valor.replace(' ', ''))
-    if busqueda.valores('U'):
-        qs = qs.alias(_unidad=sin_acentos('unidad_organizativa__descripcion'))
-        for valor in busqueda.valores('U'):
-            qs = qs.filter(_unidad__contains=normalizar(valor))
+    if busqueda.valores('U') and not con_baja:
+        # Un aspirante no tiene unidad: «U:» no puede encontrar a ninguno.
+        return qs.none()
 
     if con_baja:
+        # U: la unidad donde causó baja (la persona no guarda unidad propia). Por
+        # subconsulta, como E:, para no repetir a quien tiene varias bajas.
+        for valor in busqueda.valores('U'):
+            bajas = (CBaja.objects
+                     .alias(_unidad=sin_acentos('cargo__departamento__unidad_organizativa__descripcion'))
+                     .filter(_unidad__contains=normalizar(valor)))
+            qs = qs.filter(pk__in=bajas.values('aspirante_id'))
         # Por subconsulta y no por JOIN: quien tiene varias bajas saldría repetido.
         for valor in busqueda.valores('E'):
             numero = solo_digitos_sin_ceros(valor)
@@ -443,7 +449,7 @@ class AspiranteCreateView(CreateView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['user'] = self.request.user   # pasar user al form (para limitar UO si es moderador)
+        kwargs['user'] = self.request.user
         return kwargs
 
     def form_valid(self, form):
@@ -547,22 +553,16 @@ class AspiranteDeleteView(DeleteView):
     """Eliminar un trabajador. Es el botón «Eliminar» de la Lista de Bajas, que RRHH
     llama «eliminar contrato»: borra la persona y con ella su historial.
 
-    Para un Moderador genera una solicitud; el registro no se toca hasta que un
-    Administrador la apruebe.
+    Para un Moderador genera una solicitud, sea quien sea la persona (un aspirante no
+    tiene unidad y una baja ya no la tiene): el registro no se toca hasta que un
+    Administrador la apruebe. El Moderador con el permiso especial «Editar sin
+    solicitud» borra directamente (ver `desviar_borrado`). Decisión del 26-10-2026.
     """
     model = Aspirante
     http_method_names = ['post']  # SOLO POST
 
     def post(self, request, *args, **kwargs):
         aspirante = get_object_or_404(Aspirante, pk=kwargs['pk'])
-
-        # Moderador: solo en sus UO. Se comprueba ANTES del desvío para que no pueda
-        # siquiera solicitar la eliminación de alguien fuera de su alcance.
-        if getattr(request.user, 'es_moderador', False):
-            permitidas = set(getattr(request.user, 'unidades').values_list('pk', flat=True))
-            uo_id = getattr(aspirante, 'unidad_organizativa_id')
-            if uo_id not in permitidas:
-                return HttpResponseForbidden("Fuera de su UO asignada.")
 
         desvio = desviar_borrado(self, request)
         if desvio is not None:

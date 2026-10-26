@@ -1,7 +1,7 @@
 import logging
 
 from django.db import models
-from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
+from strorganizativa.models import CargoPlantilla
 from nomencladores.models import NEspecialidad, NMunicipio, NProvincia
 from django.core.validators import MinValueValidator, RegexValidator
 from datetime import date, timedelta
@@ -64,12 +64,6 @@ class Aspirante(Contacto):
         ('ACTIVO', 'Activo'),
         ('BAJA', 'Baja'),
     ]
-
-    unidad_organizativa = models.ForeignKey(
-        UnidadOrganizativa,
-        on_delete=models.RESTRICT,
-        null=True, blank=True
-    )
 
     estado = models.CharField(max_length=20, choices=ESTADOS, default='ASPIRANTE')
 

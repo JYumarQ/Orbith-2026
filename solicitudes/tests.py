@@ -1222,7 +1222,6 @@ class ContratoDesviado(BaseDepartamento):
         cls.aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Carlos', papellido='Soto', sapellido='Lima',
             doc_identidad='90010154321', estado='ACTIVO', sexo='M', raza='BL',
-            unidad_organizativa=cls.unidad,
             provincia=cls.provincia, municipio=cls.municipio)
         cls.contrato = CAlta.objects.create(
             aspirante=cls.aspirante, no_expediente='00500',
@@ -1502,7 +1501,6 @@ class ContratoDesviado(BaseDepartamento):
         otro_aspirante = Aspirante.objects.create(nivel_educ='SA', 
             nombre='Luis', papellido='Diaz', sapellido='Rey',
             doc_identidad='90020198765', estado='ACTIVO', sexo='M', raza='BL',
-            unidad_organizativa=otra_unidad,
             provincia=self.provincia, municipio=self.municipio)
         ajeno = CAlta.objects.create(
             aspirante=otro_aspirante, no_expediente='00999',
@@ -1549,11 +1547,10 @@ class BorradoDeTrabajador(BaseDepartamento):
         cls.municipio = NMunicipio.objects.create(
             nombre='Playa', provincia=cls.provincia, siglas='PLA')
 
-    def _crear_aspirante(self, doc='85010112345', estado='BAJA', unidad=None):
+    def _crear_aspirante(self, doc='85010112345', estado='BAJA'):
         return Aspirante.objects.create(nivel_educ='SA', 
             nombre='Ana', papellido='Pérez', sapellido='Gómez',
             doc_identidad=doc, estado=estado, sexo='F', raza='BL',
-            unidad_organizativa=unidad or self.unidad,
             provincia=self.provincia, municipio=self.municipio)
 
     def _dar_de_baja(self, aspirante, expediente='00101'):
@@ -1608,7 +1605,8 @@ class BorradoDeTrabajador(BaseDepartamento):
         self.assertEqual(solicitud.operacion, 'aspirante_del')
         self.assertTrue(solicitud.es_eliminacion)
         self.assertIn('Ana', solicitud.descriptor)
-        self.assertEqual(solicitud.unidad, self.unidad)
+        # La persona no tiene unidad (26-10-2026): la solicitud tampoco.
+        self.assertIsNone(solicitud.unidad)
 
     def test_al_aprobar_se_elimina_de_verdad(self):
         aspirante = self._crear_aspirante()
@@ -1626,16 +1624,23 @@ class BorradoDeTrabajador(BaseDepartamento):
         # El descriptor sobrevive al borrado, para el listado y la notificación.
         self.assertIn('Ana', solicitud.descriptor)
 
-    def test_el_moderador_no_puede_solicitar_fuera_de_su_unidad(self):
+    def test_el_moderador_lo_solicita_aunque_la_baja_fuera_en_otra_unidad(self):
+        """Decisión del 26-10-2026: cualquiera de la lista, por solicitud. Antes
+        respondía 403 «Fuera de su UO asignada» y en pantalla no pasaba nada."""
         otra_unidad = UnidadOrganizativa.objects.create(
             descripcion='UEB Ajena', tipo=self.tipo, grupo_nomina=2)
-        ajeno = self._crear_aspirante(doc='85010177777', unidad=otra_unidad)
+        otro_cargo = CargoPlantilla.objects.create(
+            ncargo=self.ncargo, cant_aprobada=1, orden_informe=1,
+            departamento=Departamento.objects.create(
+                descripcion='Ajeno', unidad_organizativa=otra_unidad, orden_informe=1))
+        ajeno = self._crear_aspirante(doc='85010177777')
+        CBaja.objects.create(aspirante=ajeno, no_expediente='00777',
+                             tipo=self.tipo_contrato, cargo=otro_cargo)
         self.client.force_login(self.moderador)
 
-        respuesta = self.client.post(reverse('del_aspir', args=[ajeno.pk]))
+        self.client.post(reverse('del_aspir', args=[ajeno.pk]), HTTP_HX_REQUEST='true')
 
-        self.assertEqual(respuesta.status_code, 403)
-        self.assertEqual(Solicitud.objects.count(), 0)
+        self.assertEqual(Solicitud.objects.get().operacion, 'aspirante_del')
         self.assertTrue(Aspirante.objects.filter(pk=ajeno.pk).exists())
 
 

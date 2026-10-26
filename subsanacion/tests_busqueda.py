@@ -89,7 +89,7 @@ class Base(TestCase):
                 return Aspirante.objects.create(
                     nivel_educ='SA', nombre=nombre, papellido=papellido, sapellido='Ruiz',
                     doc_identidad=ci, estado=estado, sexo='M', raza='BL',
-                    provincia=provincia, municipio=municipio, unidad_organizativa=unidad)
+                    provincia=provincia, municipio=municipio)
 
             cls.juan = persona('Juan', 'Pérez', '85010112345', cls.florida)
             cls.ana = persona('Ana', 'Núñez', '90020254321', cls.nuevitas)
