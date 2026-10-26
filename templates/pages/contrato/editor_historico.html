@@ -449,7 +449,8 @@
       if (vacio(s.motivo)) partes.push('<span class="falta-tipo"><i class="fas fa-exclamation-triangle me-1"></i>falta el motivo</span>');
       else partes.push(esc(s.motivo));
     }
-    if (!vacio(s.tridente)) partes.push(esc(s.tridente).toLowerCase());
+    // Tal cual («Tridente I»): en minúsculas el número romano salía «i».
+    if (!vacio(s.tridente)) partes.push(esc(s.tridente));
     return partes.join(' · ');
   }
 

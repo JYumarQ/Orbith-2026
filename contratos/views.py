@@ -1245,6 +1245,9 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
         context['aspirante'] = contrato.aspirante
 
         context['fecha_contratacion_actual'] = contrato.fecha_ultima_accion
+        # La casilla muestra la situación actual (último movimiento); debajo, en
+        # pequeño, la del Alta Inicial cuando son distintas (decisión del 26-10-2026).
+        context['fecha_alta_inicial'] = contrato.fecha_alta
 
         # Salario, tarifa y horas extras con el cálculo ÚNICO de la app (el mismo del
         # Word, los informes y la Pre-Nómina). Antes esta pantalla consultaba la escala

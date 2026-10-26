@@ -91,6 +91,9 @@
                                 <div class="col-md-4">
                                     {{ form.fecha_alta.label }}
                                     <input type="date" class="form-control" value="{{ fecha_contratacion_actual|date:'Y-m-d' }}" disabled>
+                                    {% if fecha_alta_inicial and fecha_alta_inicial != fecha_contratacion_actual %}
+                                    <small class="text-muted d-block mt-1" style="font-size: .7rem;">Alta inicial: {{ fecha_alta_inicial|date:'d/m/Y' }}</small>
+                                    {% endif %}
                                     {{ form.fecha_alta.as_hidden }}
                                 </div>
                                 <div class="col-md-4">

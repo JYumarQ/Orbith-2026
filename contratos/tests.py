@@ -1519,6 +1519,18 @@ class FechaEfectivaDeFirmaTests(TestCase):
         self._movimiento(date(2026, 9, 20), expediente='1213')
         self.assertEqual(self.contrato.fecha_ultima_accion, date(2026, 9, 20))
 
+    def test_editar_contrato_muestra_el_alta_inicial_debajo(self):
+        """Decisión del 26-10-2026: «F. de Contratación» enseña la situación actual
+        (último movimiento) y, si es distinta, una nota con la del Alta Inicial."""
+        admin = CustomUser.objects.create_user(username='admin_nota_alta', password='x', es_admin=True)
+        self.client.force_login(admin)
+        url = reverse('updt_contrato', kwargs={'pk': self.contrato.pk})
+        self.assertNotIn('Alta inicial:', self.client.get(url).content.decode())
+        self._movimiento(date(2026, 9, 20))
+        html = self.client.get(url).content.decode()
+        self.assertIn('value="2026-09-20" disabled', html)
+        self.assertIn('Alta inicial: 20/08/2026', html)
+
     def test_en_la_lista_se_calcula_sin_una_consulta_por_fila(self):
         self._movimiento(date(2026, 9, 20), expediente='1213')
         contrato = CAlta.con_fecha_ultimo_movimiento(CAlta.objects.filter(pk=self.contrato.pk)).get()
