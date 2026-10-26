@@ -1163,10 +1163,10 @@
     function avisar(nombre, esFecha) {
         let html;
         if (esFecha) {
-            html = 'La F. de Contratación es la fecha del Alta Inicial en el histórico del trabajador y no se cambia aquí.<br><br>' +
+            html = 'La F. de Contratación muestra desde cuándo rige la situación actual del trabajador (su último movimiento de nómina); la del Alta Inicial se ve debajo y en el histórico. No se cambia aquí.<br><br>' +
                 (ES_MODERADOR
-                    ? 'Si la F. de Contratación tiene un error, envíe una <strong>solicitud personalizada</strong>: el Administrador la corregirá en el editor del histórico.'
-                    : 'Si tiene un error, corríjala en el <strong>editor del histórico</strong>: al cambiar la fecha del Alta se actualiza también el contrato.');
+                    ? 'Si una de esas fechas tiene un error, envíe una <strong>solicitud personalizada</strong>: el Administrador la corregirá en el editor del histórico.'
+                    : 'Si una de esas fechas tiene un error, corríjala en el <strong>editor del histórico</strong>: al cambiar la fecha del evento se actualiza también el contrato.');
         } else {
             html = 'Para modificar <strong>' + nombre + '</strong> debe realizar un <strong>movimiento de nómina</strong>.<br><br>' +
                 (ES_MODERADOR

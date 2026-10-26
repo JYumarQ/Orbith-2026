@@ -376,7 +376,7 @@
                                         <div class="col-md-4 mt-2 {% if is_wizard %}wizard-bloqueado{% endif %}">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">Fecha Efectiva</label>
                                             {% if is_readonly %}
-                                                <input class="form-control bg-light fw-bold" value="{{ movimiento.fecha_efectiva|date:'Y-m-d' }}" readonly>
+                                                <input class="form-control bg-light fw-bold" value="{{ movimiento.fecha_efectiva|date:'d/m/Y' }}" readonly>
                                             {% else %}
                                                 {{ form.fecha_efectiva }}
                                             {% endif %}
@@ -384,7 +384,7 @@
                                         <div class="col-md-4 mt-2">
                                             <label class="form-label fw-bold text-dark text-uppercase mb-1" style="font-size: 0.7rem;">Fecha Solicitud</label>
                                             {% if is_readonly %}
-                                                <input class="form-control bg-light" value="{{ movimiento.fecha_solicitud|date:'Y-m-d'|default:'---' }}" readonly>
+                                                <input class="form-control bg-light" value="{{ movimiento.fecha_solicitud|date:'d/m/Y'|default:'---' }}" readonly>
                                             {% else %}
                                                 {{ form.fecha_solicitud }}
                                             {% endif %}
