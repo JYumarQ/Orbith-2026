@@ -50,7 +50,9 @@ def _administradores():
     que partir (es un nomenclador global).
     """
     from usuarios.models import CustomUser
-    return CustomUser.objects.filter(es_admin=True, is_active=True)
+    from usuarios.permisos_especiales import usuarios_con_permiso
+    # También los Moderadores con el permiso especial «Resolver solicitudes» (25-10-2026).
+    return CustomUser.objects.filter(es_admin=True, is_active=True) | usuarios_con_permiso('resolver_solicitudes')
 
 
 def _crear(solicitud, destinatarios, codigo, titulo, mensaje):

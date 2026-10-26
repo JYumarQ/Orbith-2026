@@ -169,6 +169,7 @@
          color: #00838f !important; /* Asegurar que los textos secundarios también se oscurezcan */
     }
 
+    .btn-add-aviso { opacity: .45; cursor: help; }
 </style>
 
 <div class="container-fluid h-100 p-0 d-flex flex-column">
@@ -271,7 +272,7 @@
                                     hx-on::after-request="procesarRespuestaEliminar(event)" title="Eliminar"><i class="fas fa-trash"></i></button>
                             {% endif %}
                         </div>
-                        {% if user.es_admin %}
+                        {% if permisos.gestor_completo %}
                         <div class="vr mx-1 opacity-25"></div>
                         <button class="btn btn-xs btn-primary px-2" id="btn-create-unit" onclick="abrir_modal_creacion('{% url 'add_uniorg' %}')" title="Añadir Unidad"><i class="fas fa-plus"></i></button>
                         {% endif %}
@@ -316,7 +317,7 @@
                                     hx-on::after-request="procesarRespuestaEliminar(event)"><i class="fas fa-trash"></i></button>
                         </div>
                         <div class="vr mx-1 opacity-25"></div>
-                        <button class="btn btn-xs btn-primary px-2 btn-add-disabled" id="btn-create-dept" onclick="abrir_modal_creacion(this.dataset.url)"><i class="fas fa-plus"></i></button>
+                        <button class="btn btn-xs btn-primary px-2 btn-add-disabled" id="btn-create-dept" onclick="crearOAvisar(this)"><i class="fas fa-plus"></i></button>
                         {% endif %}
                     </div>
                 </div>
@@ -637,6 +638,8 @@
         if (esPrincipal === 'true') {
             // Si es Unidad Principal: Bloqueamos botón y NO cargamos HTMX de departamentos
             disableAddBtn('btn-create-dept');
+            avisoEnBoton('btn-create-dept', '«' + item.dataset.desc + '» es una unidad principal: no tiene ' +
+                         'departamentos propios. Los departamentos se crean en sus subunidades.');
             resetPanel('col-departamentos', 'Las Unidades Principales no tienen departamentos directos.');
         } else {
             // Si es Subunidad o Normal: Habilitamos botón y cargamos departamentos
@@ -819,13 +822,39 @@
 
     function enableAddBtn(btnId, url) {
         let btn = document.getElementById(btnId);
-        if(btn) { btn.classList.remove('btn-add-disabled'); btn.dataset.url = url; }
+        if(btn) { quitarAviso(btn); btn.classList.remove('btn-add-disabled'); btn.dataset.url = url; }
     }
 
     function disableAddBtn(btnId) {
         let btn = document.getElementById(btnId);
-        if(btn) { btn.classList.add('btn-add-disabled'); btn.dataset.url = ""; }
+        if(btn) { quitarAviso(btn); btn.classList.add('btn-add-disabled'); btn.dataset.url = ""; }
     }
+
+    // Botón apagado que SÍ explica por qué al pulsarlo (25-10-2026): se ve apagado
+    // pero recibe el clic (`btn-add-disabled` lo haría ignorar).
+    function avisoEnBoton(btnId, texto) {
+        let btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.classList.remove('btn-add-disabled');
+        btn.classList.add('btn-add-aviso');
+        btn.dataset.aviso = texto;
+        btn.title = texto;
+    }
+
+    function quitarAviso(btn) {
+        btn.classList.remove('btn-add-aviso');
+        delete btn.dataset.aviso;
+        btn.removeAttribute('title');
+    }
+
+    window.crearOAvisar = function (btn) {
+        if (btn.dataset.aviso) {
+            Swal.fire({ icon: 'info', title: 'Unidad principal', text: btn.dataset.aviso,
+                        confirmButtonText: 'Entendido' });
+            return;
+        }
+        abrir_modal_creacion(btn.dataset.url);
+    };
 
     function loadHtmx(inputId, url) {
         let input = document.querySelector(inputId);

@@ -75,6 +75,8 @@
           </label>
         </div>
 
+        {% include 'pages/usuarios/partials/bloque_permisos_especiales.html' %}
+
         <div class="mb-3">
           <label for="{{ form.password1.id_for_label }}" class="form-label">Contraseña</label>
           <div class="input-group">
@@ -143,6 +145,8 @@
       const isAdmin = $('#id_es_admin').is(':checked');
       const isModerador = $('#id_es_moderador').is(':checked');
       const isObservador = $('#id_es_observador').is(':checked');
+      // Permisos especiales: solo para Moderadores (25-10-2026).
+      $('#bloque_permisos_especiales').toggle(isModerador);
 
       // Quitar el disabled del select nativo antes de recrear Select2.
       $unidades.removeAttr('disabled');

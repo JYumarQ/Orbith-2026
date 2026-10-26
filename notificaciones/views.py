@@ -44,14 +44,42 @@ def _notificaciones_visibles(usuario):
         Q(unidad__in=unidades_usuario) | Q(destinatario=usuario))
 
 
+def _bandeja(usuario):
+    """La bandeja PERSONAL (decisión de RRHH del 25-10-2026): solo las copias que son
+    de este usuario.
+
+    Cada aviso se reparte en una copia por destinatario (el moderador de la unidad y
+    cada administrador). Antes el Administrador veía las copias de todos: cada aviso
+    salía repetido, su contador de «sin leer» sumaba lo de los demás y, al abrir o
+    «Marcar todas como leídas», marcaba también las de los moderadores sin que las
+    hubieran visto. Lo que tienen pendiente los moderadores lo ve en la pestaña
+    «Supervisión», de solo lectura.
+
+    Las filas sin destinatario (datos anteriores al reparto) se siguen viendo por
+    unidad, como antes; el Administrador, todas.
+    """
+    sin_destinatario = Q(destinatario__isnull=True)
+    if not usuario.es_admin:
+        sin_destinatario &= Q(unidad__in=usuario.unidades.all())
+    return Notificacion.objects.filter(Q(destinatario=usuario) | sin_destinatario)
+
+
 def _notificaciones_del_usuario(usuario):
-    """La bandeja: lo que aún no se ha leído. Antes de añadir `destinatario`, esta
-    consulta solo miraba `unidad__in`. Un administrador sin ninguna unidad asignada
-    (el caso más común: un admin gestiona todo, no una unidad concreta) nunca vería
-    un aviso dirigido a él por esa vía, así que las notificaciones personales entran
-    con un OR, no sustituyendo al filtro por unidad que ya usaban las notificaciones
-    existentes."""
-    return _notificaciones_visibles(usuario).filter(leido=False)
+    """La bandeja: lo que aún no se ha leído de las copias del usuario."""
+    return _bandeja(usuario).filter(leido=False)
+
+
+def copia_propia(usuario, notificacion):
+    """La copia de `usuario` del mismo aviso que `notificacion` (o ella misma si ya
+    es suya; None si no le llegó). Advertencias y Recordatorios agrupan las copias y
+    enseñan una sola fila: lo que se marque como leído es siempre la copia propia."""
+    if notificacion.destinatario_id in (None, usuario.pk):
+        return notificacion
+    return (_bandeja(usuario)
+            .filter(content_type_id=notificacion.content_type_id, object_id=notificacion.object_id,
+                    codigo_regla=notificacion.codigo_regla, clave_extra=notificacion.clave_extra,
+                    tipo=notificacion.tipo, titulo=notificacion.titulo)
+            .order_by('-fecha_creado').first())
 
 
 def _serializar(n):
@@ -96,10 +124,13 @@ def ultimas_notificaciones(request):
 @login_required
 @require_POST
 def marcar_leida(request, pk):
-    """Marca UNA notificación como leída. Nunca toca `estado`."""
-    notificacion = get_object_or_404(_notificaciones_visibles(request.user), pk=pk)
-    notificacion.leido = True
-    notificacion.save(update_fields=['leido'])
+    """Marca UNA notificación como leída, y solo la copia de quien la abre: nunca la
+    de otra persona (25-10-2026). Nunca toca `estado`."""
+    notificacion = copia_propia(request.user,
+                                get_object_or_404(_notificaciones_visibles(request.user), pk=pk))
+    if notificacion is not None and not notificacion.leido:
+        notificacion.leido = True
+        notificacion.save(update_fields=['leido'])
     return JsonResponse({'ok': True})
 
 
@@ -143,7 +174,9 @@ def _con_enlace(notificacion, next_url=None, origen_label=None, usuario=None):
     return notificacion
 
 
-TABS = ('notificaciones', 'advertencias', 'recordatorios')
+TABS = ('notificaciones', 'advertencias', 'recordatorios', 'supervision')
+#: «Supervisión» (solo Administrador): lo que recibieron los moderadores.
+SUBTABS_SUPERVISION = ('pendientes', 'todos')
 SUBTABS_RECORDATORIOS = ('sistema', 'administracion')
 
 
@@ -175,8 +208,9 @@ def _paginar_con_enlaces(request, queryset, origen_label):
 
 
 def _contexto_tab_notificaciones(request):
-    """Pestaña «Notificaciones»: solo eventos informativos, sin panel de filtros."""
-    notificaciones = (_notificaciones_visibles(request.user)
+    """Pestaña «Notificaciones»: solo eventos informativos, sin panel de filtros. Solo
+    las copias del usuario: cada aviso una vez."""
+    notificaciones = (_bandeja(request.user)
                       .filter(tipo=Notificacion.Tipo.EVENTO)
                       .select_related('content_type'))
     return {
@@ -271,7 +305,7 @@ def lista_notificaciones(request):
     exactamente aquí (ver `_con_enlace`/`core.mixins.VolverAlOrigenMixin`).
     """
     tab = request.GET.get('tab', 'notificaciones')
-    if tab not in TABS:
+    if tab not in TABS or (tab == 'supervision' and not request.user.es_admin):
         tab = 'notificaciones'
 
     contexto = {
@@ -283,10 +317,46 @@ def lista_notificaciones(request):
         contexto.update(_contexto_tab_advertencias(request))
     elif tab == 'recordatorios':
         contexto.update(_contexto_tab_recordatorios(request))
+    elif tab == 'supervision':
+        contexto.update(_contexto_tab_supervision(request))
     else:
         contexto.update(_contexto_tab_notificaciones(request))
 
     return render(request, 'pages/notificaciones/lista.html', contexto)
+
+
+def _contexto_tab_supervision(request):
+    """Pestaña «Supervisión» (solo Administrador, 25-10-2026): los avisos que
+    recibieron los moderadores, UNA fila por aviso, con a quién le llegó y quién lo
+    ha leído. Es de solo lectura: no marca nada por nadie.
+
+    Una sola consulta agrupada en la base (`ArrayAgg` de PostgreSQL) y solo cuando se
+    abre esta pestaña. Un aviso es el mismo para todos sus destinatarios: mismo
+    objeto, regla, clave, tipo, título y mensaje.
+    """
+    from django.contrib.postgres.aggregates import ArrayAgg
+    from django.db.models import Count, Max
+
+    from core.paginacion import filas_por_pagina
+
+    sub = request.GET.get('sub', 'pendientes')
+    if sub not in SUBTABS_SUPERVISION:
+        sub = 'pendientes'
+    grupos = (Notificacion.objects
+              .filter(destinatario__es_moderador=True)
+              .values('content_type_id', 'object_id', 'codigo_regla', 'clave_extra', 'tipo',
+                      'titulo', 'mensaje', 'unidad__descripcion')
+              .annotate(fecha=Max('fecha_creado'), total=Count('pk'),
+                        sin_leer=Count('pk', filter=Q(leido=False)),
+                        lectores=ArrayAgg('destinatario__username', ordering='destinatario__username'),
+                        leidos=ArrayAgg('leido', ordering='destinatario__username'))
+              .order_by('-fecha'))
+    if sub == 'pendientes':
+        grupos = grupos.filter(sin_leer__gt=0)
+    pagina = Paginator(grupos, filas_por_pagina(request)).get_page(request.GET.get('pagina'))
+    for grupo in pagina:
+        grupo['moderadores'] = [{'usuario': u, 'leido': l} for u, l in zip(grupo['lectores'], grupo['leidos'])]
+    return {'supervision': pagina, 'sub_supervision': sub}
 
 
 # Fragmento interno de `lista_notificaciones`: se cierra al Observador por el

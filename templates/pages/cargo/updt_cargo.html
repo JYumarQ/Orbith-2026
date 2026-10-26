@@ -22,7 +22,9 @@
               hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
               hx-target="#modal_generic"
               hx-swap="innerHTML"
-              id="cargoForm" class="px-4">
+              id="cargoForm" class="px-4"
+              data-validacion-visual
+              data-recomendados="orden_informe,rol,nivel_preparacion">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">
             <input type="hidden" name="origen" value="{{ origen }}">
@@ -115,7 +117,7 @@
 
                 <input type="hidden" name="autoriza_desplazamiento" id="autoriza_desplazamiento" value="false">
 
-                {% if not user.es_moderador or user.es_admin %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
+                {% if not user.es_moderador or user.es_admin or permisos.editar_sin_solicitud %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
 
                 <div class="modal-footer px-0 pb-3 mt-4">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>

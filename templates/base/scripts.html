@@ -71,6 +71,7 @@
 {% comment %} Criterio único de validación visual (amarillo = vacío, verde = con dato)
    de los formularios. Lo activa cada plantilla con su lista de campos. {% endcomment %}
 <script src="{% estatico 'js/validacion_visual.js' %}"></script>
+<script src="{% estatico 'js/aviso_guardar.js' %}"></script>
 {% comment %} Selector de período (año + mes) en rejilla de meses. Es global porque
    varias de las pantallas que lo usan lo reciben por HTMX o dentro de un modal, y
    un <script> incrustado ahí no se ejecutaría de forma fiable. {% endcomment %}

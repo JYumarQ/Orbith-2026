@@ -89,6 +89,11 @@ class UnidadOrganizativa(Base):
         else:
             # Principal o normal: no tiene padre y su Grupo de Nómina es propio
             self.padre = None
+            if (self.tipo and self.tipo.es_principal and self.pk
+                    and Departamento.objects.filter(unidad_organizativa_id=self.pk).exists()):
+                raise ValidationError({'tipo': (
+                    'Esta unidad tiene departamentos: no puede ser una unidad principal. Pase '
+                    'antes sus departamentos a sus subunidades.')})
             if not self.grupo_nomina:
                 raise ValidationError({
                     'grupo_nomina': 'Este campo es obligatorio para Unidades Principales o Normales.'
@@ -146,6 +151,11 @@ def unidad_con_el_grupo_de_nomina(grupo, tipo, excluir_pk=None):
     return otras.order_by('orden_informe').first()
 
 
+#: Mismo texto en el modelo, el formulario, el importador y el Gestor.
+MENSAJE_UNIDAD_PRINCIPAL = ('«%s» es una unidad principal: no tiene departamentos propios. '
+                            'Los departamentos se crean en sus subunidades.')
+
+
 class Departamento(Base):
 
     descripcion = models.CharField(max_length=150, blank=False, null=False)
@@ -161,11 +171,24 @@ class Departamento(Base):
         verbose_name="Posición dentro de la Unidad"
     )
 
+    def clean(self):
+        """Una unidad PRINCIPAL no tiene departamentos propios: los tienen sus
+        subunidades (25-10-2026). El Gestor ya apagaba el «+», pero el servidor no lo
+        comprobaba y entraban por el importador de Excel o el admin de Django."""
+        super().clean()
+        unidad = self.unidad_organizativa if self.unidad_organizativa_id else None
+        if unidad is not None and unidad.tipo_id and unidad.tipo.es_principal:
+            raise ValidationError({'unidad_organizativa': MENSAJE_UNIDAD_PRINCIPAL % unidad.descripcion})
+
     def save(self, *args, **kwargs):
         anterior = None
         if self.pk:
             anterior = (Departamento.objects.filter(pk=self.pk)
                         .select_related('unidad_organizativa').first())
+        # Solo al crearlo o al cambiarlo de unidad: los que ya estaban en una unidad
+        # principal (datos antiguos, los avisa EST-010) se pueden seguir moviendo.
+        if anterior is None or anterior.unidad_organizativa_id != self.unidad_organizativa_id:
+            self.clean()
         super().save(*args, **kwargs)
         if anterior is None:
             return

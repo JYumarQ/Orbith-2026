@@ -36,17 +36,34 @@ def autodescubrir_reglas():
     _descubiertas = True
 
 
+def codigos_desactivados():
+    """Códigos de las reglas que el Administrador desactivó (`EstadoRegla`, 25-10-2026).
+    Una consulta pequeña; si la tabla aún no existe (migraciones), ninguna."""
+    from django.db import DatabaseError
+
+    from ..models import EstadoRegla
+    try:
+        return set(EstadoRegla.objects.filter(activa=False).values_list('codigo', flat=True))
+    except DatabaseError:
+        return set()
+
+
 def obtener_reglas(modulo=None, solo_activas=True):
     """Devuelve instancias de reglas, en orden de declaración.
 
     Se instancian en cada llamada a propósito: las reglas son sin estado, y una
     instancia nueva por análisis evita que una regla arrastre datos de un barrido al
     siguiente.
+
+    `solo_activas` deja fuera también las que el Administrador desactivó en la
+    pantalla «Reglas» (25-10-2026): así ni el análisis completo, ni la revisión al
+    guardar, ni la búsqueda de la campana las ejecutan.
     """
     autodescubrir_reglas()
+    desactivadas = codigos_desactivados() if solo_activas else set()
     reglas = []
     for clase in _REGISTRO.values():
-        if solo_activas and not clase.activa:
+        if solo_activas and (not clase.activa or clase.codigo in desactivadas):
             continue
         if modulo is not None and clase.modulo != modulo:
             continue

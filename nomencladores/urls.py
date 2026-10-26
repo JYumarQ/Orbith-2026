@@ -16,7 +16,11 @@ pantallas sin cerrar ningún agujero, porque no modifican nada.
 from django.contrib.auth.decorators import login_required
 from django.urls import path
 
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Nomencladores y parámetros»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('nomencladores')
 
 from . import views, views_importes
 

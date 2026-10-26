@@ -91,7 +91,7 @@
             {% else %}
             {# «Actualizado por cambio externo» (25-10-2026): cómo quedó la persona tras el cambio de arriba. #}
             <tr{% if item.es_situacion %} style="background-color: #f8fafc; color: #475569;"{% endif %}>
-                <td>{% if item.es_situacion %}<span style="font-size: 7.5pt;">Actualizado por cambio externo</span>{% else %}<strong>{{ item.evento }}</strong>{% if item.marca %} {{ item.marca }}{% endif %}{% endif %}</td>
+                <td>{% if item.es_situacion %}<span style="font-size: 7.5pt;">Actualizado por cambio externo</span>{% else %}<strong>{{ item.evento }}</strong>{% if item.marca %} {{ item.marca }}{% endif %}{% if item.a_mano %}<br><span style="font-size: 7pt; color: #6d28d9;">escrito a mano &dagger;</span>{% endif %}{% endif %}</td>
                 <td class="text-center">{{ item.expediente }}</td>
                 <td>{{ item.unidad }}</td>
                 <td>{{ item.departamento|default:'---' }}</td>
@@ -125,6 +125,12 @@
             cambios externos posteriores al movimiento: {% for cambio in nota.cambios %}{{ cambio }}{% if not forloop.last %}; {% else %}.{% endif %}{% endfor %}</p>
         {% endfor %}
     </div>
+    {% endif %}
+
+    {% if hay_a_mano %}
+    {# Plazas escritas a mano en el editor del histórico (25-10-2026). #}
+    <p style="margin-top: 8px; font-size: 7.5pt; color: #475569;"><strong>&dagger; Escrito a mano:</strong> unidad,
+        departamento y cargo anotados a mano al corregir el histórico, porque esa plaza no está en la plantilla de hoy.</p>
     {% endif %}
 
     <div id="footerContent" style="text-align: right; font-size: 8pt; color: #777;">

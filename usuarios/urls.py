@@ -23,6 +23,9 @@ from .decorators import admin_required
 # =========================================================================
 urlpatterns = [
     path('list_usuarios/', admin_required(views.UsuarioListView.as_view()), name='list_usuarios'),
+    # Permisos especiales de Moderadores (25-10-2026): solo el Administrador.
+    path('perfiles/', admin_required(views.perfiles_permisos), name='perfiles_permisos'),
+    path('perfiles/<int:pk>/borrar/', admin_required(views.borrar_perfil_permisos), name='borrar_perfil_permisos'),
     path('add_usuario/', admin_required(views.CustomUserCreateView.as_view()), name='add_usuario'),
     path('updt_usuario/<pk>/', admin_required(views.CustomUserUpdateView.as_view()), name='updt_usuario'),
     path('usuarios/<pk>/cambiar-password/', login_required(views.CambiarPasswordView.as_view()), name='cambiar_password'),

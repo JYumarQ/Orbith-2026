@@ -160,6 +160,9 @@ def _dueno_del_expediente(expediente, excluir_aspirante_id):
 class CAltaForm(forms.ModelForm):
     #: Al editar un contrato, `CAMPOS_SOLO_POR_MOVIMIENTO` van bloqueados.
     BLOQUEA_CAMPOS_DE_MOVIMIENTO = True
+    #: Un contrato que ocupa plaza en un cargo sobregirado no se guarda (25-10-2026).
+    #: Ver `contratos/plazas.py`.
+    BLOQUEAR_SI_SOBREGIRADO = True
     
     funcionario = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
     designado = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
@@ -503,7 +506,7 @@ class CAltaForm(forms.ModelForm):
         # Al EDITAR un contrato no se pueden cambiar: hacerlo falsearía el histórico
         # del trabajador. Se cambian con un movimiento de nómina; si lo que hay es un
         # ERROR del contrato, el Moderador lo comunica con una solicitud personalizada y
-        # el Administrador lo corrige (admin de Django o editor del histórico).
+        # el Administrador lo corrige en el editor del histórico (el aviso le ofrece abrirlo).
         # `disabled` hace que Django IGNORE lo que llegue en el envío y use el valor
         # actual, así que ni manipulando la petición se pueden cambiar. El valor actual
         # tiene que estar entre las opciones del desplegable para validarse, y como un
@@ -720,16 +723,26 @@ class CAltaForm(forms.ModelForm):
                 f'admite contratos que ocupen plaza.'
             )
 
-        # --- 2. VALIDACIÓN DE CAPACIDAD (Intacta) ---
+        # --- 2. VALIDACIÓN DE CAPACIDAD ---
+        # Se cuentan los OTROS contratos que ocupan plaza en el cargo y se suma este
+        # (25-10-2026). Antes, si el cargo no cambiaba, no se miraba nada: pasar de
+        # Determinado a Indeterminado en un cargo lleno sobregiraba la plaza.
         if cargo and tipo_contrato and tipo_contrato.ocupa_plaza:
-            check_capacity = True
-            if self.instance and self.instance.pk:
-                if self.instance.cargo == cargo:
-                    check_capacity = False
-            
-            if check_capacity:
-                if cargo.cant_cubierta_real >= cargo.cant_aprobada:
-                    self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({cargo.cant_cubierta_real}/{cargo.cant_aprobada}).')
+            from .plazas import ocupantes
+            instancia = self.instance if (self.instance and self.instance.pk) else None
+            otros = ocupantes(cargo, excluir=instancia.pk if instancia else None).count()
+            if otros + 1 > cargo.cant_aprobada:
+                # En `clean()` la instancia aún tiene los datos de antes de guardar.
+                ya_ocupaba = bool(instancia and instancia.cargo_id == cargo.pk
+                                  and instancia.tipo_id and instancia.tipo.ocupa_plaza)
+                if not ya_ocupaba:
+                    self.add_error('cargo', f'El cargo "{cargo}" no tiene plazas disponibles ({otros}/{cargo.cant_aprobada}).')
+                elif self.BLOQUEAR_SI_SOBREGIRADO:
+                    self.add_error(None, (
+                        f'El cargo "{cargo}" está sobregirado: tiene {otros + 1} contratos que ocupan '
+                        f'plaza y solo {cargo.cant_aprobada} aprobadas. No se puede guardar hasta '
+                        f'resolverlo (movimiento de nómina, editor del histórico o subir las plazas '
+                        f'aprobadas del cargo).'))
 
         # --- 3. F. ALTA ENTIDAD NUNCA POSTERIOR A F. DE CONTRATACIÓN ---
         # Solo aplica al formulario normal: el Django Admin usa el ModelForm
@@ -814,6 +827,8 @@ class CAltaForm(forms.ModelForm):
 class MovimientoForm(CAltaForm):
     # El movimiento es precisamente quien cambia esos campos.
     BLOQUEA_CAMPOS_DE_MOVIMIENTO = False
+    # Y es una de las formas de resolver una plaza sobregirada: no se bloquea.
+    BLOQUEAR_SI_SOBREGIRADO = False
     fecha_efectiva = forms.DateField(
         label='Fecha Efectiva del Movimiento',
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),

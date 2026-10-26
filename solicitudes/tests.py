@@ -697,7 +697,7 @@ class BaseDepartamento(TestCase):
         from nomencladores.models import NTipoUnidadOrganizativa
 
         cls.tipo = NTipoUnidadOrganizativa.objects.create(
-            descripcion='Empresa', es_principal=True)
+            descripcion='Empresa')
         cls.unidad = UnidadOrganizativa.objects.create(
             descripcion='UEB Central', tipo=cls.tipo, grupo_nomina=1)
         cls.departamento = Departamento.objects.create(

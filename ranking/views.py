@@ -7,7 +7,11 @@ from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Auditoría y estadísticas»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('auditoria')
 
 from . import estadisticas
 from .servicios import datos_ventana

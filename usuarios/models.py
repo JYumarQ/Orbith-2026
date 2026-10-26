@@ -9,6 +9,39 @@ from django.db.models import Q, CheckConstraint
 
 UMBRAL_CONECTADO = timedelta(minutes=5)
 
+
+class PerfilPermisos(models.Model):
+    """Perfil de permisos especiales para Moderadores (25-10-2026).
+
+    Lo crea el Administrador con un nombre y marcando permisos; cada Moderador
+    tiene uno o ninguno. Cambiar el perfil cambia a todos los que lo tienen. Los
+    códigos y sus explicaciones viven en `usuarios/permisos_especiales.py`."""
+
+    nombre = models.CharField(max_length=80, unique=True, verbose_name='Nombre')
+    descripcion = models.CharField(max_length=255, blank=True, default='', verbose_name='Descripción')
+    resolver_solicitudes = models.BooleanField(default=False, verbose_name='Resolver solicitudes')
+    editar_sin_solicitud = models.BooleanField(default=False, verbose_name='Editar sin solicitud')
+    nomencladores = models.BooleanField(default=False, verbose_name='Nomencladores y parámetros')
+    gestor_completo = models.BooleanField(default=False, verbose_name='Gestor de plantilla completo')
+    editor_historico = models.BooleanField(default=False, verbose_name='Editor del histórico')
+    subsanacion = models.BooleanField(default=False, verbose_name='Subsanación como administrador')
+    auditoria = models.BooleanField(default=False, verbose_name='Auditoría y estadísticas')
+    fecha_creado = models.DateTimeField(auto_now_add=True)
+    fecha_actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Perfil de permisos'
+        verbose_name_plural = 'Perfiles de permisos'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def permisos_marcados(self):
+        """Nombres de los permisos que lleva, en el orden de `PERMISOS`."""
+        from .permisos_especiales import PERMISOS
+        return [nombre for codigo, nombre, _ in PERMISOS if getattr(self, codigo)]
+
 # --- Protección contra fuerza bruta en el inicio de sesión ---
 # Tras MAX_INTENTOS_FALLIDOS fallos dentro de VENTANA_BLOQUEO, la cuenta no admite
 # más intentos hasta que la ventana se vacía. Los valores viven aquí (y no en
@@ -33,6 +66,15 @@ class CustomUser(AbstractUser):
     es_observador = models.BooleanField(default=False)
     fecha_creado = models.DateField(auto_now_add=True)
     fecha_actualizado = models.DateTimeField(auto_now=True)
+
+    #? PERMISOS ESPECIALES (solo Moderadores, 25-10-2026)
+    # Ver `usuarios/permisos_especiales.py`. Caducidad y motivo son opcionales.
+    perfil_permisos = models.ForeignKey(
+        PerfilPermisos, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='moderadores', verbose_name='Perfil de permisos especiales')
+    perfil_vence = models.DateField(null=True, blank=True, verbose_name='Permisos especiales hasta')
+    perfil_motivo = models.CharField(max_length=255, blank=True, default='',
+                                     verbose_name='Motivo de los permisos especiales')
     # Última búsqueda automática de incidencias al iniciar sesión (Fase 2,
     # 23-10-2026): se repite como mucho cada 4 horas. Ver `subsanacion.automatico`.
     ultima_busqueda_incidencias = models.DateTimeField(null=True, blank=True, editable=False)
@@ -76,6 +118,10 @@ class CustomUser(AbstractUser):
             raise ValidationError("El usuario debe tener al menos un rol asignado (Administrador, Moderador o Observador).")
         if roles_activos > 1:
             raise ValidationError("El usuario no puede tener más de un rol activo.")
+        # Los permisos especiales son solo para Moderadores (ver `save`, que los
+        # quita al cambiar de rol).
+        if self.perfil_permisos_id and not self.es_moderador:
+            raise ValidationError({'perfil_permisos': 'Los permisos especiales son solo para Moderadores.'})
 #no levantar para permitir autocorreccion en save
 #if self.es_admin and self.es_moderador:
 #raise ValidationError('No puede ser Administrador y Moderador a la vez.')
@@ -88,6 +134,11 @@ class CustomUser(AbstractUser):
             self.es_observador = False
         if self.es_moderador and self.es_observador:
             self.es_observador = False
+        # Quien deja de ser Moderador pierde sus permisos especiales.
+        if not self.es_moderador:
+            self.perfil_permisos = None
+            self.perfil_vence = None
+            self.perfil_motivo = ''
 
         # Permisos de staff/superuser
         self.is_staff = bool(self.es_admin)

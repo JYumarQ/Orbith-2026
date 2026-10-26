@@ -7,7 +7,7 @@ Campo/Antes/Después sin ningún campo oculto u ofuscado.
 <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
         <div class="modal-header">
-            <h5 class="modal-title">{{ evento.get_accion_display }} — {{ evento.descriptor|default:"—" }}</h5>
+            <h5 class="modal-title">{{ evento.get_accion_display }} — {{ evento.descriptor|default:"—" }}{% if evento.permiso_especial %} <span class="badge bg-label-warning ms-1"><i class="fas fa-key me-1"></i>con permiso especial: {{ evento.permiso_especial }}</span>{% endif %}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">

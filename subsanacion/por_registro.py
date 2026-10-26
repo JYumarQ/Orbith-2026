@@ -46,7 +46,7 @@ REGLAS_POR_REGISTRO = (
     # Ficha del trabajador (MOV-015 y MOV-016 miran su histórico: se cierran al guardar el editor)
     'ASP-001', 'ASP-007', 'VIS-001', 'MOV-015', 'MOV-016',
     # Cargo
-    'EST-001', 'EST-002', 'EST-008', 'VIS-006',
+    'EST-001', 'EST-002', 'EST-008', 'EST-011', 'VIS-006',
 )
 
 _MODELO = {
@@ -75,10 +75,13 @@ def revisar_registros(contratos=(), aspirantes=(), cargos=()):
     }
     if not any(ids.values()):
         return
+    from .reglas import codigos_desactivados
+
     contexto = ContextoAnalisis()
+    desactivadas = codigos_desactivados()
     for codigo in REGLAS_POR_REGISTRO:
         regla = obtener_regla(codigo)
-        if regla is None:
+        if regla is None or codigo in desactivadas:
             continue
         grupo = _MODELO.get(regla.modelo.lower())
         if not grupo or not ids[grupo]:

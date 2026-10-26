@@ -53,6 +53,7 @@
                 <input type="hidden" name="origen" value="{{ origen }}">
 
                 {% include 'pages/solicitudes/partials/aviso_moderador.html' %}
+                {% if plaza_sobregirada %}{% include 'pages/contrato/partials/aviso_plaza_sobregirada.html' %}{% endif %}
 
                 <div class="nav-align-top mb-4">
                     <ul class="nav nav-pills mb-3 nav-fill" role="tablist">
@@ -784,6 +785,12 @@
             const $optionSeleccionada = $cargoSelect.find('option:selected');
             const aprobadas = parseInt($optionSeleccionada.data('aprobadas')) || 0;
             const ocupadas = parseInt($optionSeleccionada.data('ocupadas')) || 0;
+            // La plaza que este contrato YA ocupaba no se comprueba (25-10-2026): antes,
+            // en un cargo lleno, vaciaba el Cargo de su propio ocupante. Si el cargo está
+            // sobregirado lo explica el aviso de arriba (`aviso_plaza_sobregirada`).
+            const CARGO_ORIGINAL = "{{ object.cargo_id|default_if_none:'' }}";
+            const OCUPABA_PLAZA = {{ object.tipo.ocupa_plaza|yesno:"true,false" }};
+            if (OCUPABA_PLAZA && String(valCargo) === CARGO_ORIGINAL) return;
 
             if (ocupaPlazaOficial && (aprobadas - ocupadas <= 0)) {
                 $cargoSelect.val(null).trigger('change.select2'); 
@@ -970,6 +977,11 @@
         $form.off('input.val change.val').on('input.val change.val', 'input, select, textarea', function() {
             let $el = $(this); let name = this.name;
             if (!name) return;
+            // Las copias ocultas (`data-solo-para-calculo`: cargo, tridente y tipo de
+            // salario bloqueados) solo sirven para calcular el salario: no se pueden
+            // rellenar, así que no se validan. Antes el tridente oculto y vacío de un
+            // cuadro (Lisandra, Director de UEB) dejaba Guardar apagado para siempre.
+            if (this.type === 'hidden' || $el.is('[data-solo-para-calculo]')) return;
 
             if (reglas.numericos.includes(name)) {
                 let val = $el.val() || '';
@@ -1128,25 +1140,31 @@
 (function () {
     const MOVIMIENTO_URL = "{% url 'movimiento_contrato' object.pk %}";
     const SOLICITUD_URL = "{% url 'add_solicitud_personalizada' %}?contrato={{ object.pk }}";
-    const ES_MODERADOR = {% if user.es_moderador and not user.es_admin %}true{% else %}false{% endif %};
+    // «Moderador» aquí = quien NO puede abrir el editor: el Moderador con el permiso especial
+    // «Editor del histórico» (25-10-2026) va al editor como el Administrador.
+    const ES_MODERADOR = {% if user.es_moderador and not user.es_admin and not permisos.editor_historico %}true{% else %}false{% endif %};
     const CAMPOS = {
         id_unidad: 'la Unidad Organizativa', id_departamento: 'el Departamento',
         id_cargo: 'el Cargo', id_tipo: 'el Tipo de Contrato', id_motivo: 'el Motivo de Contrato',
         id_tipo_salario: 'el Tipo de Salario', id_tridente: 'el Tridente',
     };
 
+    // Los errores se corrigen en el editor del histórico (25-10-2026): el Administrador
+    // lo abre desde aquí y el Moderador se lo pide con una solicitud personalizada.
+    const EDITOR_URL = "{% url 'editor_historico' object.aspirante_id %}";
+
     function avisar(nombre, esFecha) {
         let html;
         if (esFecha) {
             html = 'La F. de Contratación es la fecha del Alta Inicial en el histórico del trabajador y no se cambia aquí.<br><br>' +
                 (ES_MODERADOR
-                    ? 'Si hay un error en la F. de Contratación, contacte al administrador mediante una <strong>solicitud personalizada</strong>.'
-                    : 'Si hay un error, corríjalo desde el admin de Django.');
+                    ? 'Si la F. de Contratación tiene un error, envíe una <strong>solicitud personalizada</strong>: el Administrador la corregirá en el editor del histórico.'
+                    : 'Si tiene un error, corríjala en el <strong>editor del histórico</strong>: al cambiar la fecha del Alta se actualiza también el contrato.');
         } else {
             html = 'Para modificar <strong>' + nombre + '</strong> debe realizar un <strong>movimiento de nómina</strong>.<br><br>' +
                 (ES_MODERADOR
-                    ? 'Si hay un error en el contrato actual, envíe una <strong>solicitud personalizada</strong> al administrador desde Solicitudes explicando el problema.'
-                    : 'Si hay un error en el contrato actual, corríjalo desde el admin de Django.');
+                    ? 'Si es un error del contrato, envíe una <strong>solicitud personalizada</strong>: el Administrador lo corregirá en el editor del histórico.'
+                    : 'Si es un error del contrato, corríjalo en el <strong>editor del histórico</strong>.');
         }
         const asunto = encodeURIComponent('Error en ' + (esFecha ? 'la F. de Contratación' : nombre));
         Swal.fire({
@@ -1155,14 +1173,16 @@
             html: html,
             showConfirmButton: !esFecha,
             confirmButtonText: '<i class="fas fa-exchange-alt me-1"></i> Hacer movimiento de nómina',
-            showDenyButton: ES_MODERADOR,
-            denyButtonText: '<i class="fas fa-paper-plane me-1"></i> Solicitud personalizada',
+            showDenyButton: true,
+            denyButtonText: ES_MODERADOR
+                ? '<i class="fas fa-paper-plane me-1"></i> Solicitud personalizada'
+                : '<i class="fas fa-pen me-1"></i> Abrir el editor del histórico',
             denyButtonColor: '#03c3ec',
             showCancelButton: true,
             cancelButtonText: 'Cerrar',
         }).then(function (r) {
             if (r.isConfirmed) window.location.href = MOVIMIENTO_URL;
-            else if (r.isDenied) window.location.href = SOLICITUD_URL + '&asunto=' + asunto;
+            else if (r.isDenied) window.location.href = ES_MODERADOR ? SOLICITUD_URL + '&asunto=' + asunto : EDITOR_URL;
         });
     }
 

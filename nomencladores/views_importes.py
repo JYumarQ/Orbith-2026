@@ -34,7 +34,11 @@ from django.shortcuts import get_object_or_404, render
 
 from contratos.cambios_externos import MotivoRequerido, motivo_de_cambio, motivo_del_post
 
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Nomencladores y parámetros»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('nomencladores')
 
 from .forms import NImporteGradoCientificoForm, NPagoAdicionalForm
 from .models import NImporteGradoCientifico, NPagoAdicional

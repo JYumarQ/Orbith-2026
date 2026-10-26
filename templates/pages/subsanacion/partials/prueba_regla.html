@@ -1,0 +1,26 @@
+{% comment %}
+Resultado de «Probar ahora» (25-10-2026): la regla se ejecutó una vez, sin crear avisos ni
+avisar a nadie (`subsanacion.views.probar_regla`). Desde aquí se puede reactivar.
+{% endcomment %}
+{% if error %}
+<div class="alert alert-danger py-2 px-3 small mb-0">La regla falló al probarla: {{ error }}</div>
+{% elif encontrados %}
+<div class="alert alert-warning py-2 px-3 small mb-0">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <span><i class="bi bi-exclamation-triangle me-1"></i>Encontraría <b>{{ encontrados }}</b> fallo{{ encontrados|pluralize }} ({{ segundos }} s). No se creó ningún aviso.</span>
+    {% if not activa %}
+    <form class="ms-auto" hx-post="{% url 'subsanacion:estado_regla' regla.codigo %}" hx-target="#paneReglas" hx-swap="innerHTML">
+      <input type="hidden" name="activa" value="1">
+      <input type="hidden" name="motivo" value="Reactivada: la prueba encontró {{ encontrados }} fallo{{ encontrados|pluralize }}">
+      <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-play-circle me-1"></i>Reactivar la regla</button>
+    </form>
+    {% endif %}
+  </div>
+  <ul class="mb-0 mt-1 ps-3">
+    {% for titulo in muestra %}<li>{{ titulo }}</li>{% endfor %}
+    {% if encontrados > muestra|length %}<li class="text-muted">… y {{ encontrados|add:0 }} en total.</li>{% endif %}
+  </ul>
+</div>
+{% else %}
+<div class="alert alert-success py-2 px-3 small mb-0"><i class="bi bi-check-circle me-1"></i>Sin fallos ({{ segundos }} s). No se creó ningún aviso.</div>
+{% endif %}

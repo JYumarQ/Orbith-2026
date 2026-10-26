@@ -11,7 +11,11 @@ escribiendo la URL aunque el menú lateral no las mostrara.
 
 from django.urls import path
 
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Nomencladores y parámetros»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('nomencladores')
 
 from . import views
 

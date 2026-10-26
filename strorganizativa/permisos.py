@@ -60,6 +60,12 @@ def unidades_visibles(usuario):
     if not getattr(usuario, 'is_authenticated', False):
         return UnidadOrganizativa.objects.none()
 
+    # Moderador con el permiso especial «Gestor de plantilla completo» (25-10-2026):
+    # trabaja en la plantilla de toda la empresa.
+    from usuarios.permisos_especiales import por_permiso_especial
+    if por_permiso_especial(usuario, 'gestor_completo'):
+        return UnidadOrganizativa.objects.all()
+
     asignadas = usuario.unidades.values_list('pk', flat=True)
     return UnidadOrganizativa.objects.filter(
         Q(pk__in=asignadas) | Q(padre_id__in=asignadas))

@@ -57,9 +57,17 @@ def requiere_solicitud(usuario):
     """¿Los guardados de este usuario deben convertirse en solicitud?
 
     Solo el Moderador. El Administrador conserva el comportamiento normal de los
-    formularios y no necesita pedirse permiso a sí mismo.
+    formularios y no necesita pedirse permiso a sí mismo. Tampoco el Moderador con el
+    permiso especial «Editar sin solicitud» (25-10-2026): guarda directamente y queda
+    en Auditoría marcado «con permiso especial».
     """
-    return es_moderador(usuario)
+    if not es_moderador(usuario):
+        return False
+    from usuarios.permisos_especiales import marcar_en_esta_peticion, por_permiso_especial
+    if por_permiso_especial(usuario, 'editar_sin_solicitud'):
+        marcar_en_esta_peticion('editar_sin_solicitud')
+        return False
+    return True
 
 
 def _fuera_de_alcance(usuario, definicion, objeto, datos):

@@ -40,7 +40,14 @@
     <span class="sub-icono-chip"><i class="bi bi-journal-text"></i></span>
     <h6 class="sub-panel-title">Índice de Reglas</h6>
     <span class="badge bg-label-secondary ms-auto" id="contadorReglas">{{ total }} regla{{ total|pluralize }}</span>
+    {% if desactivadas %}<span class="badge bg-label-dark ms-1">{{ desactivadas }} desactivada{{ desactivadas|pluralize }}</span>{% endif %}
   </div>
+  {% if puede_gestionar_reglas %}
+  <div class="px-3 pt-2 small text-muted">
+    Puede <b>desactivar</b> las reglas que ya están limpias para aliviar el análisis: no se borran, el análisis
+    deja de ejecutarlas y sus avisos ya abiertos siguen normales. «Probar ahora» las ejecuta una vez sin crear avisos.
+  </div>
+  {% endif %}
   <div class="p-3 pb-2">
     <div class="input-group input-group-sm">
       <span class="input-group-text"><i class="bi bi-funnel"></i></span>
@@ -62,8 +69,9 @@
     <details class="list-group-item regla-indice"
              data-texto="{{ regla.codigo }} {{ regla.nombre }} {{ regla.descripcion }} {{ regla.causa_probable }} {{ regla.impacto }} {{ regla.solucion }}">
       <summary class="d-flex flex-wrap align-items-center gap-2" style="cursor: pointer;">
-        <code class="fw-bold">{{ regla.codigo }}</code>
-        <span class="flex-grow-1">{{ regla.nombre }}</span>
+        <code class="fw-bold{% if not regla.activa %} text-muted{% endif %}">{{ regla.codigo }}</code>
+        <span class="flex-grow-1{% if not regla.activa %} text-muted{% endif %}">{{ regla.nombre }}</span>
+        {% if not regla.activa %}<span class="badge bg-label-dark" title="El análisis no la ejecuta{% if regla.estado.motivo %}. Motivo: {{ regla.estado.motivo }}{% endif %}"><i class="bi bi-pause-circle me-1"></i>Desactivada</span>{% endif %}
         <span class="sub-severidad sub-color-{{ regla.color }}">
           <i class="bi {{ regla.icono_criticidad }}"></i>{{ regla.criticidad }}
         </span>
@@ -83,6 +91,32 @@
         <dt class="col-sm-3">Impacto</dt><dd class="col-sm-9">{{ regla.impacto }}</dd>
         <dt class="col-sm-3">Cómo se corrige</dt><dd class="col-sm-9 mb-0">{{ regla.solucion }}</dd>
       </dl>
+      {% if puede_gestionar_reglas %}
+      <div class="border-top pt-2 mt-2 small">
+        <div class="d-flex flex-wrap gap-3 text-muted mb-2">
+          <span><i class="bi bi-exclamation-circle me-1"></i>Avisos abiertos: <b>{{ regla.abiertos }}</b></span>
+          <span><i class="bi bi-calendar-x me-1"></i>Último fallo: <b>{% if regla.estado.ultimo_fallo %}{{ regla.estado.ultimo_fallo|date:"d/m/Y" }} ({{ regla.estado.ultimo_fallo|timesince }}){% else %}ninguno registrado{% endif %}</b></span>
+          <span><i class="bi bi-stopwatch me-1"></i>Tarda: <b>{% if regla.estado.ultima_duracion_ms is not None %}{% if regla.estado.ultima_duracion_ms < 1000 %}{{ regla.estado.ultima_duracion_ms }} ms{% else %}{% widthratio regla.estado.ultima_duracion_ms 1000 1 %} s{% endif %}{% else %}sin medir{% endif %}</b></span>
+          {% if regla.estado.cambiado_en %}<span>{% if regla.activa %}Activada{% else %}Desactivada{% endif %} el {{ regla.estado.cambiado_en|date:"d/m/Y" }}{% if regla.estado.cambiado_por %} por {{ regla.estado.cambiado_por.username }}{% endif %}{% if regla.estado.motivo %} · «{{ regla.estado.motivo }}»{% endif %}</span>{% endif %}
+        </div>
+        <form class="d-flex flex-wrap gap-2 align-items-center"
+              hx-post="{% url 'subsanacion:estado_regla' regla.codigo %}" hx-target="#paneReglas" hx-swap="innerHTML">
+          <input type="hidden" name="activa" value="{% if regla.activa %}0{% else %}1{% endif %}">
+          <input type="text" name="motivo" maxlength="255" class="form-control form-control-sm" style="max-width: 22rem;"
+                 placeholder="Motivo (opcional)">
+          <button type="submit" class="btn btn-sm {% if regla.activa %}btn-outline-dark{% else %}btn-outline-success{% endif %}">
+            {% if regla.activa %}<i class="bi bi-pause-circle me-1"></i>Desactivar regla{% else %}<i class="bi bi-play-circle me-1"></i>Activar regla{% endif %}
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-primary"
+                  hx-post="{% url 'subsanacion:probar_regla' regla.codigo %}" hx-target="#prueba-{{ regla.codigo }}" hx-swap="innerHTML"
+                  hx-indicator="#prueba-{{ regla.codigo }}-cargando">
+            <i class="bi bi-lightning-charge me-1"></i>Probar ahora
+          </button>
+          <span id="prueba-{{ regla.codigo }}-cargando" class="htmx-indicator text-muted"><span class="spinner-border spinner-border-sm me-1"></span>Probando…</span>
+        </form>
+        <div id="prueba-{{ regla.codigo }}" class="mt-2"></div>
+      </div>
+      {% endif %}
     </details>
     {% endfor %}
   </div>

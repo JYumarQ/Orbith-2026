@@ -46,7 +46,10 @@ def registrar(*, usuario, accion, content_type=None, object_id=None, instancia=N
     if usuario is not None:
         nombre_usuario = usuario.get_full_name() or usuario.username
 
+    from usuarios.permisos_especiales import permiso_en_uso
+
     return EventoAuditoria.objects.create(
+        permiso_especial=permiso_en_uso(),
         usuario=usuario,
         usuario_nombre=nombre_usuario,
         accion=accion,

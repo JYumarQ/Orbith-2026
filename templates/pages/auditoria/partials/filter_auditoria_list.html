@@ -46,7 +46,8 @@ el módulo es de solo lectura, cada fila abre su propio detalle.
         {% endif %}
     </td>
 
-    <td>{{ evento.descriptor|default:"—" }}</td>
+    <td>{{ evento.descriptor|default:"—" }}{% if evento.permiso_especial %}
+        <span class="badge bg-label-warning ms-1" title="Lo hizo un Moderador gracias a su perfil de permisos especiales"><i class="fas fa-key me-1"></i>con permiso especial: {{ evento.permiso_especial }}</span>{% endif %}</td>
 
     <td>
         {% if evento.unidad %}

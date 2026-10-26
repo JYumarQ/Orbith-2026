@@ -123,6 +123,9 @@
           </button>
           {% endif %}
 
+          <a href="{% url 'perfiles_permisos' %}" class="btn btn-outline-primary" title="Permisos especiales para Moderadores">
+            <i class="fas fa-key"></i> Perfiles de permisos
+          </a>
           <button type="button"
                 class="btn btn-primary"
                 onclick="abrir_modal_creacion('{% url 'add_usuario' %}')">

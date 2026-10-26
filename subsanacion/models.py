@@ -344,3 +344,36 @@ class RevisionHallazgo(models.Model):
     def __str__(self):
         quien = self.usuario.username if self.usuario else 'el sistema'
         return f'{self.hallazgo_id}: {self.estado_anterior} → {self.estado_nuevo} por {quien}'
+
+
+class EstadoRegla(models.Model):
+    """Regla activada o desactivada por el Administrador (25-10-2026).
+
+    Pensado para las reglas que ya están limpias (detectaban fallos de versiones
+    antiguas ya arreglados) y solo cargan el servidor en cada análisis. Una regla
+    DESACTIVADA no se ejecuta en el análisis completo, ni al guardar, ni en la
+    búsqueda de la campana; sus avisos ya abiertos se quedan normales (visibles y se
+    resuelven como siempre). Sin fila = activa.
+
+    También guarda datos de la última vez que se ejecutó, para decidir: cuánto tardó
+    y cuándo encontró fallos por última vez."""
+
+    codigo = models.CharField(max_length=20, unique=True, verbose_name='Código de la regla')
+    activa = models.BooleanField(default=True)
+    motivo = models.CharField(max_length=255, blank=True, default='', verbose_name='Motivo del último cambio')
+    cambiado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                     blank=True, related_name='+')
+    cambiado_en = models.DateTimeField(null=True, blank=True)
+    ultima_duracion_ms = models.PositiveIntegerField(null=True, blank=True,
+                                                     verbose_name='Lo que tardó la última vez (ms)')
+    ultima_ejecucion = models.DateTimeField(null=True, blank=True)
+    ultimo_fallo = models.DateTimeField(null=True, blank=True,
+                                        verbose_name='Última vez que encontró algún fallo')
+
+    class Meta:
+        verbose_name = 'Estado de regla'
+        verbose_name_plural = 'Estados de reglas'
+        ordering = ['codigo']
+
+    def __str__(self):
+        return '%s (%s)' % (self.codigo, 'activa' if self.activa else 'desactivada')

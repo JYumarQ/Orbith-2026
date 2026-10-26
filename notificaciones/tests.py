@@ -1251,3 +1251,67 @@ class AuditoriaAdminTests(TestCase):
         evento = EventoAuditoria.objects.filter(
             object_id=str(notificacion.pk), accion='UPD').latest('fecha')
         self.assertEqual(evento.usuario_id, self.admin.pk)
+
+
+class BandejaPersonalTests(TestCase):
+    """Bandeja personal y «Supervisión» (decisión de RRHH del 25-10-2026). Cada aviso
+    se reparte en una copia por destinatario; el Administrador solo ve y marca las
+    suyas, y lo de los moderadores lo consulta en «Supervisión», sin tocarlo."""
+
+    def setUp(self):
+        from nomencladores.models import NTipoUnidadOrganizativa
+        from strorganizativa.models import UnidadOrganizativa
+        from usuarios.models import CustomUser
+
+        tipo = NTipoUnidadOrganizativa.objects.create(descripcion='Tipo bandeja')
+        self.unidad = UnidadOrganizativa.objects.create(
+            codigo_interno=299, descripcion='UEB Bandeja', tipo=tipo, grupo_nomina=2)
+        self.admin = CustomUser.objects.create_user(username='admin_bandeja', password='x', es_admin=True)
+        self.moderador = CustomUser.objects.create_user(
+            username='moderador_bandeja', password='x', es_moderador=True)
+        self.moderador.unidades.add(self.unidad)
+        provincia = NProvincia.objects.create(nombre='Provincia bandeja')
+        # El mismo aviso, una copia para cada uno.
+        self.copias = {
+            u.username: Notificacion.objects.create(
+                titulo='Nuevo contrato de alta', mensaje='Se ha creado el contrato 90031.',
+                tipo=Notificacion.Tipo.EVENTO, unidad=self.unidad, destinatario=u,
+                content_type=ContentType.objects.get_for_model(provincia), object_id=str(provincia.pk))
+            for u in (self.admin, self.moderador)}
+        self.client = Client()
+
+    def test_el_administrador_ve_cada_aviso_una_vez(self):
+        from .views import _bandeja
+        self.assertEqual(list(_bandeja(self.admin)), [self.copias['admin_bandeja']])
+
+    def test_marcar_todas_no_toca_las_del_moderador(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse('notificaciones_marcar_todas_leidas'))
+        for copia in self.copias.values():
+            copia.refresh_from_db()
+        self.assertTrue(self.copias['admin_bandeja'].leido)
+        self.assertFalse(self.copias['moderador_bandeja'].leido)
+
+    def test_abrir_la_copia_del_moderador_marca_la_propia(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse('notificacion_marcar_leida', args=[self.copias['moderador_bandeja'].pk]))
+        for copia in self.copias.values():
+            copia.refresh_from_db()
+        self.assertTrue(self.copias['admin_bandeja'].leido)
+        self.assertFalse(self.copias['moderador_bandeja'].leido)
+
+    def test_supervision_ensena_lo_que_tiene_pendiente_el_moderador(self):
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('lista_notificaciones') + '?tab=supervision')
+        avisos = list(respuesta.context['supervision'])
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual(avisos[0]['moderadores'], [{'usuario': 'moderador_bandeja', 'leido': False}])
+        # Cuando el moderador lo lee, deja de estar pendiente.
+        Notificacion.objects.filter(pk=self.copias['moderador_bandeja'].pk).update(leido=True)
+        respuesta = self.client.get(reverse('lista_notificaciones') + '?tab=supervision')
+        self.assertEqual(list(respuesta.context['supervision']), [])
+
+    def test_el_moderador_no_tiene_supervision(self):
+        self.client.force_login(self.moderador)
+        respuesta = self.client.get(reverse('lista_notificaciones') + '?tab=supervision')
+        self.assertEqual(respuesta.context['tab_activa'], 'notificaciones')

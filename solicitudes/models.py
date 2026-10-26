@@ -229,8 +229,10 @@ class Solicitud(Base):
     # mismas respuestas y no deben poder divergir entre sí.
 
     def es_visible_para(self, usuario):
-        """El Administrador ve todas; el Moderador solo las suyas."""
-        if getattr(usuario, 'es_admin', False) or usuario.is_superuser:
+        """El Administrador (y quien tiene el permiso «Resolver solicitudes») ve todas;
+        el Moderador solo las suyas."""
+        from usuarios.permisos_especiales import puede_resolver
+        if puede_resolver(usuario):
             return True
         if getattr(usuario, 'es_moderador', False):
             return self.solicitante_id == usuario.pk
@@ -257,8 +259,10 @@ class Solicitud(Base):
         return self.puede_editarla(usuario)
 
     def puede_revisarla(self, usuario):
-        """Cualquier Administrador, si está pendiente y no la tiene abierta otro."""
-        if not (getattr(usuario, 'es_admin', False) or usuario.is_superuser):
+        """Cualquier Administrador (o Moderador con «Resolver solicitudes», nunca la suya),
+        si está pendiente y no la tiene abierta otro."""
+        from usuarios.permisos_especiales import puede_resolver
+        if not puede_resolver(usuario, self):
             return False
         if not self.pendiente:
             return False

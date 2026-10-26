@@ -51,6 +51,9 @@ class PropuestaInvalida(ErrorDeSolicitud):
         super().__init__('Revise los campos marcados en la propuesta.')
 
 
+from usuarios.permisos_especiales import puede_resolver  # noqa: E402  (25-10-2026)
+
+
 def _bloquear(solicitud):
     """Recarga la solicitud con la fila bloqueada en base de datos.
 
@@ -250,8 +253,8 @@ def cancelar_revision(solicitud, usuario):
 
     if solicitud.decidida:
         raise ErrorDeSolicitud('Esta solicitud ya fue decidida.')
-    if not (getattr(usuario, 'es_admin', False) or usuario.is_superuser):
-        raise ErrorDeSolicitud('Solo un Administrador puede cancelar una revisión.')
+    if not puede_resolver(usuario, solicitud):
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede cancelar una revisión.')
 
     solicitud.estado = EstadoSolicitud.EN_ESPERA
     solicitud.revisor = None
@@ -298,8 +301,8 @@ def aprobar(solicitud, usuario, datos=None):
     if solicitud.decidida:
         raise ErrorDeSolicitud(
             f'Esta solicitud ya fue {solicitud.get_estado_display().lower()}.')
-    if not (getattr(usuario, 'es_admin', False) or usuario.is_superuser):
-        raise ErrorDeSolicitud('Solo un Administrador puede aprobar solicitudes.')
+    if not puede_resolver(usuario, solicitud):
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede aprobar solicitudes.')
     if solicitud.bloqueada and solicitud.revisor_id != usuario.pk:
         raise ErrorDeSolicitud(
             f'{solicitud.bloqueada_por_nombre} está revisando esta solicitud.')
@@ -388,8 +391,8 @@ def rechazar(solicitud, usuario, motivo=''):
     if solicitud.decidida:
         raise ErrorDeSolicitud(
             f'Esta solicitud ya fue {solicitud.get_estado_display().lower()}.')
-    if not (getattr(usuario, 'es_admin', False) or usuario.is_superuser):
-        raise ErrorDeSolicitud('Solo un Administrador puede rechazar solicitudes.')
+    if not puede_resolver(usuario, solicitud):
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede rechazar solicitudes.')
     if solicitud.bloqueada and solicitud.revisor_id != usuario.pk:
         raise ErrorDeSolicitud(
             f'{solicitud.bloqueada_por_nombre} está revisando esta solicitud.')
@@ -420,8 +423,8 @@ def devolver_a_espera(solicitud, usuario):
     """
     solicitud = _bloquear(solicitud)
 
-    if not (getattr(usuario, 'es_admin', False) or usuario.is_superuser):
-        raise ErrorDeSolicitud('Solo un Administrador puede devolver una solicitud a espera.')
+    if not puede_resolver(usuario, solicitud):
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede devolver una solicitud a espera.')
     if solicitud.estado != EstadoSolicitud.RECHAZADA:
         raise ErrorDeSolicitud('Solo se pueden devolver a espera las solicitudes rechazadas.')
 

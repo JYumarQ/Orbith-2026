@@ -1,0 +1,32 @@
+{% comment %}
+Plaza sobregirada (25-10-2026): el cargo tiene más contratos que ocupan plaza que
+plazas aprobadas. `data-bloqueo-guardar` deja Guardar inactivo (`static/js/aviso_guardar.js`)
+y su texto sale en el recuadro «No se puede guardar todavía». No tiene por qué ser este
+contrato el que sobra: se listan todos los que ocupan la plaza.
+{% endcomment %}
+{% with s=plaza_sobregirada %}
+<div class="alert alert-danger small mb-3" role="alert"
+     data-bloqueo-guardar="Plaza sobregirada: «{{ s.cargo.ncargo.descripcion }}» ({{ s.cargo.departamento.descripcion }} · {{ s.cargo.departamento.unidad_organizativa.descripcion }}) tiene {{ s.ocupadas }} contratos que ocupan plaza y solo {{ s.aprobadas }} aprobada{{ s.aprobadas|pluralize }}. Vea las soluciones arriba.">
+    <div class="fw-semibold mb-1"><i class="fas fa-users-slash me-1"></i>Plaza sobregirada: no se puede guardar este contrato</div>
+    <div>El cargo <b>{{ s.cargo.ncargo.descripcion }}</b> ({{ s.cargo.departamento.descripcion }} · {{ s.cargo.departamento.unidad_organizativa.descripcion }})
+        tiene <b>{{ s.ocupadas }}</b> contratos que ocupan plaza y solo <b>{{ s.aprobadas }}</b> plaza{{ s.aprobadas|pluralize }} aprobada{{ s.aprobadas|pluralize }}.
+        No tiene por qué ser este contrato el que sobra: revise quién ocupa la plaza indebidamente.</div>
+    <ul class="mb-2 mt-1 ps-3">
+        {% for c in s.ocupantes %}
+        <li>{{ c.aspirante.nombre }} {{ c.aspirante.papellido }} {{ c.aspirante.sapellido }} · exp. {{ c.no_expediente }} · alta {{ c.fecha_alta|date:"d/m/Y" }}{% if c.pk == object.pk %} <b>(este contrato)</b>{% endif %}
+            {% if permisos.editor_historico %} · <a href="{% url 'editor_historico' c.aspirante_id %}" target="_blank" rel="noopener">editor del histórico</a>{% endif %}</li>
+        {% endfor %}
+    </ul>
+    {% if user.es_moderador and not user.es_admin and not permisos.editor_historico %}
+    <div><b>Cómo resolverlo:</b> envíe una <a href="{% url 'add_solicitud_personalizada' %}?contrato={{ object.pk }}" target="_blank" rel="noopener">solicitud personalizada</a>
+        al Administrador indicando qué contrato ocupa la plaza por error. Él lo corregirá con un movimiento de nómina, en el editor del histórico o subiendo las plazas aprobadas.</div>
+    {% else %}
+    <div><b>Cómo resolverlo</b> (cualquiera de estas):</div>
+    <ol class="mb-0 ps-3">
+        <li>Haga un <b>movimiento de nómina</b> al contrato que no debe estar en esta plaza (a otro cargo o a un tipo que no ocupe plaza).</li>
+        <li>Si quedó aquí por un error del histórico, corríjalo en el <b>editor del histórico</b> de esa persona.</li>
+        <li>Si la plantilla aprobada tiene más plazas, suba la <b>Cantidad aprobada</b> del cargo en el Gestor de plantilla.</li>
+    </ol>
+    {% endif %}
+</div>
+{% endwith %}

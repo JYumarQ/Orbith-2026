@@ -36,13 +36,13 @@ def _catalogo_reglas():
     """`{codigo: nombre}` de TODAS las reglas conocidas, activas o no — una regla
     retirada puede seguir teniendo notificaciones históricas, que deben poder
     filtrarse/mostrar su nombre igual que las de una regla vigente."""
-    return {regla.codigo: regla.nombre for regla in obtener_reglas()}
+    return {regla.codigo: regla.nombre for regla in obtener_reglas(solo_activas=False)}
 
 
 def _codigos_del_modulo(modulos):
     """`Notificacion` no tiene columna de módulo — se resuelve indirectamente
     agrupando `codigo_regla` por el `modulo` de la regla que lo emitió."""
-    return {regla.codigo for regla in obtener_reglas() if regla.modulo in modulos}
+    return {regla.codigo for regla in obtener_reglas(solo_activas=False) if regla.modulo in modulos}
 
 
 def opciones_de_filtro(usuario):
@@ -53,7 +53,7 @@ def opciones_de_filtro(usuario):
 
     codigos_presentes = set(base.values_list('codigo_regla', flat=True).distinct())
     modulos_presentes = {
-        regla.modulo for regla in obtener_reglas() if regla.codigo in codigos_presentes}
+        regla.modulo for regla in obtener_reglas(solo_activas=False) if regla.codigo in codigos_presentes}
 
     content_types_presentes = ContentType.objects.filter(
         pk__in=base.values_list('content_type', flat=True).distinct())
@@ -92,7 +92,7 @@ def opciones_de_filtro(usuario):
     return opciones
 
 
-def _deduplicar(queryset):
+def _deduplicar(queryset, usuario=None):
     """Colapsa notificaciones que son el MISMO hallazgo notificado a varios
     destinatarios — misma clave natural salvo `destinatario`
     (`content_type`+`object_id`+`codigo_regla`+`clave_extra`, igual que usa
@@ -117,6 +117,10 @@ def _deduplicar(queryset):
         if clave not in grupos:
             grupos[clave] = [notificacion, 0]
             orden.append(clave)
+        elif usuario is not None and notificacion.destinatario_id == usuario.pk:
+            # La fila que se enseña es la copia PROPIA (25-10-2026): su «leído» es
+            # el de este usuario, y marcarla no toca la de otra persona.
+            grupos[clave][0] = notificacion
         grupos[clave][1] += 1
 
     resultado = []
@@ -203,7 +207,7 @@ def filtrar_advertencias(request, usuario):
             busqueda or modulos or codigos_regla or severidades
             or unidades or modelos or destinatarios),
     }
-    return _deduplicar(consulta), contexto
+    return _deduplicar(consulta, usuario), contexto
 
 
 def filtrar_recordatorios(request, usuario, origen):
@@ -249,4 +253,4 @@ def filtrar_recordatorios(request, usuario, origen):
         'prioridad_actual': prioridad,
         'hay_filtros': bool(busqueda or prioridad),
     }
-    return _deduplicar(consulta), contexto
+    return _deduplicar(consulta, usuario), contexto

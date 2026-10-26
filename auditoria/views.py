@@ -6,7 +6,11 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, render
 
 from core.paginacion import paginar as _paginar
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Auditoría y estadísticas»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('auditoria')
 
 from .filtros import filtrar_eventos, nombre_de_modulo
 from .limpieza import borrar_auditoria_antigua

@@ -113,7 +113,9 @@ def destino_de_regla(regla, usuario):
     """
     if regla is None or not regla.enlace_url:
         return None, None
-    if getattr(regla, 'enlace_solo_admin', False) and not getattr(usuario, 'es_admin', False):
+    # «Solo admin» = el editor del histórico: también el Moderador con ese permiso especial.
+    from usuarios.permisos_especiales import tiene_permiso
+    if getattr(regla, 'enlace_solo_admin', False) and not tiene_permiso(usuario, 'editor_historico'):
         return None, None
     return regla.enlace_url, getattr(regla, 'enlace_etiqueta', None)
 

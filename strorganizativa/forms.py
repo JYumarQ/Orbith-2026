@@ -248,7 +248,21 @@ class CargoPlantillaForm(forms.ModelForm):
                 'designado',
                 'No puede ser Funcionario y Designado simultáneamente.'
             )
-            
+
+        # --- No se aprueban menos plazas de las que están cubiertas (25-10-2026) ---
+        # Solo al BAJARLAS: un cargo ya sobregirado se puede seguir guardando (y
+        # subirle las plazas es una de las formas de resolverlo, ver EST-011).
+        aprobadas = cleaned_data.get('cant_aprobada')
+        if self.instance.pk and aprobadas is not None and aprobadas < (self.instance.cant_aprobada or 0):
+            from contratos.models import CAlta
+            cubiertas = CAlta.objects.filter(cargo=self.instance, aspirante__estado='ACTIVO',
+                                             tipo__ocupa_plaza=True).count()
+            if aprobadas < cubiertas:
+                self.add_error('cant_aprobada', (
+                    f'Este cargo tiene {cubiertas} plaza{"s" if cubiertas != 1 else ""} cubierta'
+                    f'{"s" if cubiertas != 1 else ""} por contratos que ocupan plaza: no puede aprobar '
+                    f'menos de {cubiertas}. Antes haga un movimiento de nómina o dé de baja a quien sobre.'))
+
         ncargo = cleaned_data.get('ncargo')
         rol = cleaned_data.get('rol')
 

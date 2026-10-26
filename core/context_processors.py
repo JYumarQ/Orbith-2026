@@ -51,6 +51,11 @@ def orbith(request):
         contexto['advertencias_pendientes'] = _contar_advertencias_pendientes(usuario)
         contexto['solicitudes_pendientes'] = _contar_solicitudes_pendientes(usuario)
         contexto.update(_progreso_guia(usuario))
+        # Permisos especiales (25-10-2026): `permisos.nomencladores`, etc. Verdadero
+        # para el Administrador y para el Moderador cuyo perfil lo lleva.
+        from usuarios.permisos_especiales import perfil_vigente, permisos_de
+        contexto['permisos'] = permisos_de(usuario)
+        contexto['perfil_especial'] = perfil_vigente(usuario)
 
     return contexto
 
@@ -134,11 +139,12 @@ def _contar_advertencias_pendientes(usuario):
     base = Notificacion.objects.filter(
         tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA, leido=False)
 
-    if usuario.es_admin:
-        return base.count()
-
-    unidades_usuario = usuario.unidades.all()
-    return base.filter(Q(unidad__in=unidades_usuario) | Q(destinatario=usuario)).count()
+    # Solo las copias del usuario (bandeja personal, 25-10-2026): antes el
+    # Administrador contaba también las de los moderadores.
+    sin_destinatario = Q(destinatario__isnull=True)
+    if not usuario.es_admin:
+        sin_destinatario &= Q(unidad__in=usuario.unidades.all())
+    return base.filter(Q(destinatario=usuario) | sin_destinatario).count()
 
 
 def _contar_solicitudes_pendientes(usuario):

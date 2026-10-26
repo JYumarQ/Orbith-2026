@@ -136,6 +136,11 @@
   /* Tipo de contrato que falta (25-10-2026). */
   .falta-tipo { color: #b26b00; font-weight: 600; }
   select.falta-dato, select.falta-dato + .select2-container .select2-selection { border-color: #f4b400 !important; }
+  input.falta-dato { border-color: #f4b400 !important; }
+  /* Plaza escrita a mano y grupo escala del cargo (25-10-2026). */
+  .eh .marca-a-mano { background: #ede9fe; color: #6d28d9; }
+  .eh .info-grupo { font-size: .74rem; font-weight: 600; color: #0891b2; margin-top: .3rem; }
+  .eh .a-mano-caja { border: 1px dashed #c4b5fd; border-radius: .6rem; padding: .7rem; background: #faf8ff; }
 </style>
 {% endblock %}
 
@@ -324,6 +329,13 @@
         const t = CAT.tridentes.find(function (x) { return String(x.id) === String(valor); });
         return !!t && t.texto === s.tridente;
       }
+      // «Escribir a mano» (25-10-2026)
+      case 'a_mano': return !!o.a_mano === !!valor;
+      case 'unidad_texto': return (s.unidad || '') === (valor || '').trim();
+      case 'departamento_texto': return (s.departamento || '') === (valor || '').trim();
+      case 'cargo_texto': return (s.cargo || '') === (valor || '').trim();
+      case 'grupo_escala': case 'cat_ocupacional': case 'rol': return (s[campo] || SIN) === (valor || SIN);
+      case 'unidad_id': return String(o.unidad_fk_id || '') === String(valor || '');
     }
     return false;
   }
@@ -357,6 +369,17 @@
       borrador.borrados.push(clave);
       delete borrador.ediciones[clave];
     }
+    actualizar();
+  }
+  // Quitar «Escribir a mano»: se olvida lo escrito y el evento vuelve a su plaza de antes
+  // (hasta que se elija un cargo en las listas).
+  function quitarAMano(clave) {
+    const n = indiceNuevo(clave);
+    const o = originales[clave];
+    const campos = n >= 0 ? borrador.inserciones[n].campos : (borrador.ediciones[clave] = borrador.ediciones[clave] || {});
+    CAMPOS_A_MANO.forEach(function (k) { delete campos[k]; });
+    if (n < 0 && o && o.a_mano) campos.a_mano = false; else delete campos.a_mano;
+    if (n < 0 && !Object.keys(campos).length) delete borrador.ediciones[clave];
     actualizar();
   }
   function deshacerBorrado(clave) {
@@ -459,6 +482,7 @@
         let marcas = '<span class="tipo tipo-' + e.tipo + '">' + nombreTipo(e) + '</span>';
         if (e.nuevo) marcas += '<span class="marca marca-corregido">nuevo</span>';
         else if (e.editado.length) marcas += '<span class="marca marca-corregido">corregido</span>';
+        if (e.a_mano) marcas += '<span class="marca marca-a-mano" title="Unidad, departamento y cargo escritos a mano">escrito a mano</span>';
         if (e.borrado) marcas += '<span class="marca marca-borrado">se borrará</span>';
         if (e.clave === ultimoVivo && e.tipo !== 'BAJA') marcas += '<span class="marca marca-vigente">último · contrato vigente</span>';
         const meses = e.meses_cerrados || [];
@@ -504,17 +528,115 @@
     return CAT.tipos.find(function (t) { return t.descripcion === e.estado.tipo_contrato; });
   }
 
+  // ---- Plaza: Unidad → Departamento → Cargo, o escrita a mano (25-10-2026) ----
+  // Lo elegido a medias (unidad o departamento sin cargo todavía) solo vive aquí:
+  // el borrador no cambia hasta que se elige el cargo.
+  const cascada = {};
+  const CAMPOS_A_MANO = ['unidad_texto', 'departamento_texto', 'cargo_texto', 'grupo_escala', 'cat_ocupacional', 'rol', 'unidad_id'];
+  function cargoPorId(id) { return CAT.cargos.find(function (c) { return String(c.id) === String(id); }); }
+  function unidadesDeLaPlantilla() {
+    const vistas = {}, lista = [];
+    CAT.cargos.forEach(function (c) {
+      if (c.unidad_id == null || vistas[c.unidad_id]) return;
+      vistas[c.unidad_id] = true; lista.push({ id: c.unidad_id, texto: c.unidad });
+    });
+    return lista;
+  }
+  function departamentosDe(unidadId) {
+    const vistos = {}, lista = [];
+    CAT.cargos.forEach(function (c) {
+      if (String(c.unidad_id) !== String(unidadId) || c.departamento_id == null || vistos[c.departamento_id]) return;
+      vistos[c.departamento_id] = true; lista.push({ id: c.departamento_id, texto: c.departamento });
+    });
+    return lista;
+  }
+  // «Escribir a mano» solo si la plantilla de hoy no reconoce la plaza o en un movimiento
+  // insertado; nunca en el último evento del contrato vigente (manda en el contrato de hoy).
+  function puedeAMano(e) {
+    const o = originales[e.clave];
+    return !e.ultimo_vigente && (e.nuevo || !e.plaza_reconocida || !!(o && o.a_mano));
+  }
+  function esCuadro(s) { return (s.cat_ocupacional || '').toUpperCase().indexOf('CUADRO') !== -1; }
+  function esIndeterminado(tipo) { return !!tipo && tipo.descripcion.toUpperCase().indexOf('INDETERMINADO') !== -1; }
+  function infoGrupo(grupo) {
+    return vacio(grupo) ? '' : '<div class="info-grupo"><i class="fas fa-info-circle me-1"></i>Este cargo pertenece al Grupo Escala ' + esc(grupo) + '</div>';
+  }
+  function lista(valores, actual, conVacio, textoVacio) {
+    let html = conVacio ? opcion('', textoVacio, vacio(actual)) : '';
+    let esta = vacio(actual);
+    valores.forEach(function (v) { if (v === actual) esta = true; html += opcion(v, v, v === actual); });
+    if (!esta) html = opcion(actual, actual + ' (ya no está en el nomenclador)', true) + html;
+    return html;
+  }
+
+  function bloquePlaza(e) {
+    const s = e.estado;
+    const casilla = puedeAMano(e)
+      ? '<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="ehAMano"' + (e.a_mano ? ' checked' : '') + '>'
+        + '<label class="form-check-label small" for="ehAMano">Escribir a mano <span class="text-muted">— '
+        + (e.nuevo ? 'para un movimiento que faltó' : 'la plaza de entonces no está en la plantilla de hoy') + '</span></label></div>'
+      : '';
+    const titulo = '<div class="grupo-titulo">Plaza ' + chip(e, ['cargo', 'departamento', 'unidad', 'a_mano', 'unidad_fk']) + '</div>';
+
+    if (e.a_mano) {
+      const falta = function (v) { return vacio(v) ? ' falta-dato' : ''; };
+      const texto = function (v) { return vacio(v) ? '' : v; };
+      let unidadesHoy = e.unidad_fk_id ? '' : '<option value="" disabled selected>— Elija la unidad de hoy —</option>';
+      CAT.unidades.forEach(function (u) { unidadesHoy += opcion(u.id, u.descripcion, u.id === e.unidad_fk_id); });
+      return '<div>' + titulo + casilla + '<div class="a-mano-caja"><div class="row g-2">'
+        + '<div class="col-6"><label class="form-label" for="ehUnidadTxt">Unidad (como se llamaba)</label><input class="form-control' + falta(s.unidad) + '" id="ehUnidadTxt" data-campo="unidad_texto" maxlength="255" value="' + esc(texto(s.unidad)) + '"></div>'
+        + '<div class="col-6"><label class="form-label" for="ehDeptoTxt">Departamento</label><input class="form-control' + falta(s.departamento) + '" id="ehDeptoTxt" data-campo="departamento_texto" maxlength="255" value="' + esc(texto(s.departamento)) + '"></div>'
+        + '<div class="col-12"><label class="form-label" for="ehCargoTxt">Cargo</label><input class="form-control' + falta(s.cargo) + '" id="ehCargoTxt" data-campo="cargo_texto" maxlength="255" value="' + esc(texto(s.cargo)) + '"></div>'
+        + '<div class="col-4"><label class="form-label" for="ehGrupoSel">Grupo escala</label><select class="form-select" id="ehGrupoSel" data-campo="grupo_escala">' + lista(CAT.grupos, s.grupo_escala, true, 'Sin dato') + '</select></div>'
+        + '<div class="col-4"><label class="form-label" for="ehCatSel">Categoría</label><select class="form-select" id="ehCatSel" data-campo="cat_ocupacional">' + lista(CAT.categorias, s.cat_ocupacional, true, 'Sin dato') + '</select></div>'
+        + '<div class="col-4"><label class="form-label" for="ehRolSel">Rol</label><select class="form-select" id="ehRolSel" data-campo="rol">' + lista(CAT.roles, s.rol, true, 'Sin rol') + '</select></div>'
+        + '<div class="col-12"><label class="form-label" for="ehUnidadHoy">A qué unidad de hoy corresponde (obligatorio)</label><select class="form-select' + (e.unidad_fk_id ? '' : ' falta-dato') + '" id="ehUnidadHoy" data-campo="unidad_id">' + unidadesHoy + '</select></div>'
+        + '</div><div class="ayuda">Se verá tal cual en el Histórico y en su PDF, con la marca «escrito a mano». Los informes no usan estos nombres; la unidad de hoy sirve para los filtros y para que lo vea el Moderador de esa unidad.</div></div></div>';
+    }
+
+    const id = cargoElegido(e);
+    const plaza = id ? cargoPorId(id) : null;
+    const pend = cascada[e.clave];
+    const guardado = !plaza && !pend;     // se enseña tal como se guardó
+    const unidadSel = pend ? String(pend.unidad_id || '') : (plaza ? String(plaza.unidad_id) : '');
+    const deptoSel = pend ? String(pend.departamento_id || '') : (plaza ? String(plaza.departamento_id) : '');
+    const cargoSel = pend ? '' : (plaza ? String(plaza.id) : '');
+
+    let opU = guardado ? opcion('', '«' + s.unidad + '» — como se guardó', true) : '';
+    unidadesDeLaPlantilla().forEach(function (u) { opU += opcion(u.id, u.texto, String(u.id) === unidadSel); });
+    let opD = guardado ? opcion('', '«' + s.departamento + '» — como se guardó', true)
+      : (deptoSel ? '' : '<option value="" disabled selected>— Elija el departamento —</option>');
+    if (unidadSel) departamentosDe(unidadSel).forEach(function (d) { opD += opcion(d.id, d.texto, String(d.id) === deptoSel); });
+    let opC = guardado ? opcion('', '«' + s.cargo + '» — como se guardó', true)
+      : (cargoSel ? '' : '<option value="" disabled selected>— Elija el cargo —</option>');
+    if (deptoSel) CAT.cargos.forEach(function (c) {
+      if (String(c.departamento_id) !== deptoSel) return;
+      opC += '<option value="' + c.id + '"' + (String(c.id) === cargoSel ? ' selected' : '') + ' data-grupo="' + esc(c.grupo) + '">'
+        + esc(c.cargo + (c.activo ? '' : ' (inactivo)')) + '</option>';
+    });
+
+    let ayuda = '';
+    if (pend) ayuda = '<div class="ayuda falta-tipo">Elija el departamento y el cargo: hasta entonces el evento se queda como estaba.</div>';
+    else if (guardado) ayuda = '<div class="ayuda">Se muestra tal como se guardó: la plantilla de hoy no tiene esta plaza (se renombró o ya no existe). '
+      + 'Si no la toca, se guarda igual. Para cambiarla, elija unidad, departamento y cargo de hoy'
+      + (puedeAMano(e) ? ' o marque «Escribir a mano».' : '.')
+      + (e.ultimo_vigente ? ' <b>Es el último evento del contrato vigente:</b> lo que elija pasará al contrato de hoy.' : '') + '</div>';
+    const claseCambio = clase(e, ['cargo', 'departamento', 'unidad']);
+    return '<div>' + titulo + casilla + '<div class="row g-2">'
+      + '<div class="col-6"><label class="form-label" for="ehUnidadSel">Unidad organizativa</label><select class="form-select' + claseCambio + '" id="ehUnidadSel">' + opU + '</select></div>'
+      + '<div class="col-6"><label class="form-label" for="ehDeptoSel">Departamento</label><select class="form-select' + claseCambio + (pend && !deptoSel ? ' falta-dato' : '') + '" id="ehDeptoSel"' + (unidadSel || guardado ? '' : ' disabled') + '>' + opD + '</select></div>'
+      + '<div class="col-12"><label class="form-label" for="ehCargo">Cargo</label><select class="form-select' + claseCambio + (pend ? ' falta-dato' : '') + '" id="ehCargo" data-sin-select2' + (deptoSel || guardado ? '' : ' disabled') + '>' + opC + '</select>'
+      + infoGrupo(plaza && !pend ? plaza.grupo : (guardado ? s.grupo_escala : '')) + '</div>'
+      + '</div>' + ayuda
+      + '<div class="row g-2 mt-1">'
+      + '<div class="col-4"><label class="form-label" for="ehGrupo">Grupo</label><input class="form-control derivado num" id="ehGrupo" value="' + esc(s.grupo_escala) + '" readonly></div>'
+      + '<div class="col-4"><label class="form-label" for="ehCat">Categoría</label><input class="form-control derivado" id="ehCat" value="' + esc(s.cat_ocupacional) + '" readonly></div>'
+      + '<div class="col-4"><label class="form-label" for="ehRol">Rol</label><input class="form-control derivado" id="ehRol" value="' + esc(s.rol) + '" readonly></div>'
+      + '</div><div class="ayuda">Grupo, categoría y rol salen del cargo elegido.</div></div>';
+  }
+
   function mesaDeMovimiento(e) {
     const s = e.estado;
-    const cargoId = cargoElegido(e);
-    let opcionesCargo = cargoId ? '' : opcion('', '«' + s.cargo + '» (' + s.departamento + ', ' + s.unidad + ') — no está en la plantilla actual', true);
-    let unidad = null;
-    CAT.cargos.forEach(function (c) {
-      if (c.unidad !== unidad) { if (unidad !== null) opcionesCargo += '</optgroup>'; unidad = c.unidad; opcionesCargo += '<optgroup label="' + esc(c.unidad) + '">'; }
-      opcionesCargo += opcion(c.id, c.cargo + ' · ' + c.departamento + (c.activo ? '' : ' (inactivo)'), String(c.id) === cargoId);
-    });
-    if (unidad !== null) opcionesCargo += '</optgroup>';
-
     const tipo = tipoElegido(e);
     // Sin «Sin tipo» (25-10-2026): si el evento no tiene un tipo del nomenclador, el
     // desplegable avisa con una línea que no se puede elegir y no deja guardar.
@@ -536,7 +658,17 @@
       ? '— Elija el motivo —' : '— «' + s.motivo + '» no vale para este tipo: elija otro —') + '</option>' + opcionesMotivo;
     else if (!motivoEncontrado && !vacio(s.motivo)) opcionesMotivo += opcion('', '«' + s.motivo + '» (no lo pide este tipo)', true);
     const tsal = s.tipo_salario === 'Fijo' ? 'FIJ' : (s.tipo_salario === 'Dinámico' ? 'DIN' : '');
-    let opcionesTridente = opcion('', 'Sin tridente', vacio(s.tridente));
+    // Mismas reglas que el contrato: el tridente solo con salario Dinámico en un cargo
+    // que no es cuadro (y entonces es obligatorio); la duración, salvo en el Indeterminado.
+    const cuadro = esCuadro(s);
+    const sinTridente = tsal === 'FIJ' || cuadro;
+    const faltaTridente = tsal === 'DIN' && !cuadro && vacio(s.tridente);
+    const indeterminado = esIndeterminado(tipo);
+    // Duración: vacía en el Indeterminado (como en el contrato); en los demás, 0 o más.
+    const faltaDuracion = false;
+    const usarDuracion = '';
+    let opcionesTridente = faltaTridente ? '<option value="" disabled selected>— Elija el tridente —</option>'
+      : opcion('', sinTridente ? (cuadro ? 'Un cuadro no lleva' : 'No lo lleva el Fijo') : 'Sin tridente', vacio(s.tridente));
     CAT.tridentes.forEach(function (t) { opcionesTridente += opcion(t.id, t.texto.replace('Tridente ', ''), t.texto === s.tridente); });
     const meses = e.meses_cerrados || [];
 
@@ -545,24 +677,16 @@
       + '<div class="col-6"><label class="form-label" for="ehFecha">Fecha efectiva ' + chip(e, ['fecha']) + '</label><input class="form-control num' + clase(e, ['fecha']) + '" type="date" id="ehFecha" data-campo="fecha" value="' + esc(e.fecha) + '"></div>'
       + '<div class="col-6"><label class="form-label" for="ehFechaSol">Fecha de solicitud ' + chip(e, ['fecha_solicitud']) + '</label><input class="form-control num' + clase(e, ['fecha_solicitud']) + '" type="date" id="ehFechaSol" data-campo="fecha_solicitud" value="' + esc(e.fecha_solicitud) + '"></div>'
       + '</div></div>'
-      + '<div><div class="grupo-titulo">Cargo</div>'
-      + '<label class="form-label" for="ehCargo">Cargo ' + chip(e, ['cargo', 'departamento', 'unidad']) + '</label>'
-      + '<select class="form-select' + clase(e, ['cargo', 'departamento', 'unidad']) + '" id="ehCargo" data-campo="cargo_id">' + opcionesCargo + '</select>'
-      + '<div class="ayuda">Unidad, departamento, categoría, grupo y rol salen del cargo.</div>'
-      + '<div class="row g-2 mt-1">'
-      + '<div class="col-6"><label class="form-label" for="ehUnidad">Unidad</label><input class="form-control derivado" id="ehUnidad" value="' + esc(s.unidad) + '" readonly></div>'
-      + '<div class="col-6"><label class="form-label" for="ehDepartamento">Departamento</label><input class="form-control derivado" id="ehDepartamento" value="' + esc(s.departamento) + '" readonly></div>'
-      + '<div class="col-6"><label class="form-label" for="ehGrupo">Grupo</label><input class="form-control derivado num" id="ehGrupo" value="' + esc(s.grupo_escala) + '" readonly></div>'
-      + '<div class="col-6"><label class="form-label" for="ehRol">Rol</label><input class="form-control derivado" id="ehRol" value="' + esc(s.rol) + '" readonly></div>'
-      + '</div></div>'
+      + bloquePlaza(e)
       + '<div><div class="grupo-titulo">Contrato</div><div class="row g-2">'
       + '<div class="col-6"><label class="form-label" for="ehTipo">Tipo de contrato ' + chip(e, ['tipo_contrato']) + '</label><select class="form-select' + clase(e, ['tipo_contrato']) + (tipo ? '' : ' falta-dato') + '" id="ehTipo" data-campo="tipo_id">' + opcionesTipo + '</select>'
       + (tipo ? '' : '<div class="ayuda falta-tipo">Obligatorio: este evento no tiene el tipo guardado.</div>') + '</div>'
       + '<div class="col-6"><label class="form-label" for="ehMotivo">Motivo ' + chip(e, ['motivo']) + '</label><select class="form-select' + clase(e, ['motivo']) + (faltaMotivo ? ' falta-dato' : '') + '" id="ehMotivo" data-campo="motivo_id"' + (tipo && tipo.requiere_motivo ? '' : ' disabled') + '>' + opcionesMotivo + '</select>' + (faltaMotivo ? '<div class="ayuda falta-tipo">Obligatorio: este tipo de contrato pide motivo.</div>' : '') + '</div>'
-      + '<div class="col-4"><label class="form-label" for="ehDuracion">Duración ' + chip(e, ['duracion']) + '</label><input class="form-control num' + clase(e, ['duracion']) + '" type="number" min="0" step="1" id="ehDuracion" data-campo="duracion" placeholder="días" value="' + esc(e.duracion == null ? '' : e.duracion) + '"></div>'
+      + '<div class="col-4"><label class="form-label" for="ehDuracion">Duración ' + chip(e, ['duracion']) + '</label><input class="form-control num' + clase(e, ['duracion']) + (faltaDuracion ? ' falta-dato' : '') + '" type="number" min="0" step="1" id="ehDuracion" data-campo="duracion" placeholder="' + (indeterminado ? 'no lleva' : 'días') + '" value="' + esc(indeterminado ? '' : (e.duracion == null ? 0 : e.duracion)) + '"' + (indeterminado ? ' disabled title="El contrato Indeterminado no lleva duración"' : '') + '>' + usarDuracion + '</div>'
       + '<div class="col-4"><label class="form-label" for="ehTipoSal">Tipo de salario ' + chip(e, ['tipo_salario']) + '</label><select class="form-select' + clase(e, ['tipo_salario']) + '" id="ehTipoSal" data-campo="tipo_salario">'
       + (tsal ? '' : opcion('', 'Sin dato', true)) + opcion('DIN', 'Dinámico', tsal === 'DIN') + opcion('FIJ', 'Fijo', tsal === 'FIJ') + '</select></div>'
-      + '<div class="col-4"><label class="form-label" for="ehTridente">Tridente ' + chip(e, ['tridente']) + '</label><select class="form-select' + clase(e, ['tridente']) + '" id="ehTridente" data-campo="tridente_id"' + (tsal === 'FIJ' ? ' disabled' : '') + '>' + opcionesTridente + '</select></div>'
+      + '<div class="col-4"><label class="form-label" for="ehTridente">Tridente ' + chip(e, ['tridente']) + '</label><select class="form-select' + clase(e, ['tridente']) + (faltaTridente ? ' falta-dato' : '') + '" id="ehTridente" data-campo="tridente_id"' + (sinTridente ? ' disabled' : '') + '>' + opcionesTridente + '</select>'
+      + (faltaTridente ? '<div class="ayuda falta-tipo">Obligatorio con salario Dinámico.</div>' : '') + '</div>'
       + '</div></div>'
       + '<div class="retribucion"><div class="grupo-titulo">Retribución</div><div class="row g-2">'
       + '<div class="col-6"><label class="form-label" for="ehSalario">Salario ' + chip(e, ['salario']) + '</label>'
@@ -616,23 +740,57 @@
       + (e.borrado ? '<div class="mesa-vacia">Este evento se borrará al guardar. Los que vienen detrás tomarán como «antes» lo que dejó el anterior.</div>'
          : '<div class="mesa-cuerpo">' + (e.tipo === 'BAJA' ? mesaDeBaja(e) : mesaDeMovimiento(e)) + '</div>');
 
+    // jQuery `.on('change')` recibe tanto el cambio nativo como el que lanza Select2.
+    const alCambiar = function (elemento, accion) {
+      if (window.jQuery) jQuery(elemento).on('change', accion); else elemento.addEventListener('change', accion);
+    };
     mesa.querySelectorAll('[data-campo]').forEach(function (campo) {
-      if (campo.id === 'ehCargo') return;
-      campo.addEventListener('change', function () {
+      alCambiar(campo, function () {
         let valor = campo.value;
         if (campo.dataset.campo === 'tipo_id' && !valor) return;
         if (campo.dataset.campo === 'causa_baja_id' && !valor) return;
-        if ((campo.dataset.campo === 'salario' || campo.dataset.campo === 'otros') && valor === '') valor = '0';
+        if (campo.dataset.campo === 'unidad_id' && !valor) return;
+        if ((campo.dataset.campo === 'salario' || campo.dataset.campo === 'otros' || campo.dataset.campo === 'duracion') && valor === '') valor = '0';
         fijar(e.clave, campo.dataset.campo, valor);
       });
     });
+    // Cascada: la unidad filtra los departamentos y el departamento, los cargos. Solo al
+    // elegir el cargo cambia el borrador. Se repinta fuera del evento de Select2.
+    const selUnidad = document.getElementById('ehUnidadSel');
+    const selDepto = document.getElementById('ehDeptoSel');
+    if (selUnidad) alCambiar(selUnidad, function () {
+      if (!selUnidad.value) return;
+      cascada[e.clave] = { unidad_id: selUnidad.value };
+      setTimeout(pintarMesa, 0);
+    });
+    if (selDepto) alCambiar(selDepto, function () {
+      if (!selDepto.value || !selUnidad.value) return;
+      cascada[e.clave] = { unidad_id: selUnidad.value, departamento_id: selDepto.value };
+      setTimeout(pintarMesa, 0);
+    });
     const cargo = document.getElementById('ehCargo');
     if (cargo) {
-      const alCambiar = function () { if (cargo.value) fijar(e.clave, 'cargo_id', cargo.value); };
+      const elegirCargo = function () {
+        if (!cargo.value) return;
+        delete cascada[e.clave];
+        fijar(e.clave, 'cargo_id', cargo.value);
+      };
       if (window.jQuery && jQuery.fn.select2) {
-        jQuery(cargo).select2({ theme: 'bootstrap-5', width: '100%', placeholder: 'Buscar cargo...' }).on('change', alCambiar);
-      } else cargo.addEventListener('change', alCambiar);
+        // Como en el contrato: el grupo escala aparece al pasar el ratón por cada cargo.
+        const conGrupo = function (estado) {
+          const grupo = estado.element && estado.element.dataset.grupo;
+          if (!grupo || grupo === SIN) return estado.text;
+          return jQuery('<span title="Grupo Escala: ' + esc(grupo) + '" style="cursor:help">' + esc(estado.text) + '</span>');
+        };
+        jQuery(cargo).select2({ theme: 'bootstrap-5', width: '100%', templateResult: conGrupo,
+                                templateSelection: function (s) { return s.text; } }).on('change', elegirCargo);
+      } else cargo.addEventListener('change', elegirCargo);
     }
+    const aMano = document.getElementById('ehAMano');
+    if (aMano) aMano.addEventListener('change', function () {
+      delete cascada[e.clave];
+      if (aMano.checked) fijar(e.clave, 'a_mano', true); else quitarAMano(e.clave);
+    });
     const borrar = document.getElementById('ehBorrar');
     if (borrar) borrar.addEventListener('click', function () { confirmarBorrado(e); });
     const deshacer = document.getElementById('ehDeshacer');

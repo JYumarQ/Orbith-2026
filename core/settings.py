@@ -64,6 +64,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'auditoria.middleware.CurrentUserMiddleware',
+    # Marca «con permiso especial» en Auditoría, limpia en cada petición (25-10-2026).
+    'usuarios.permisos_especiales.PermisoEspecialMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # Recoge los logros de la Guía de la petición y los entrega en una cookie

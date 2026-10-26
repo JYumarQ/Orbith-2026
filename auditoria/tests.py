@@ -76,7 +76,7 @@ class RegistroAlAprobar(BaseSolicitudes):
         from nomencladores.models import NTipoUnidadOrganizativa
 
         tipo = NTipoUnidadOrganizativa.objects.create(
-            descripcion='Empresa', es_principal=True)
+            descripcion='Empresa')
         unidad = UnidadOrganizativa.objects.create(
             descripcion='UEB Auditoría', tipo=tipo, grupo_nomina=9)
         departamento = Departamento.objects.create(

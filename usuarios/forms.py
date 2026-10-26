@@ -286,6 +286,41 @@ def validar_moderador_unico(formulario, cleaned):
     return cleaned
 
 
+def preparar_permisos_especiales(formulario):
+    """Campos del perfil de permisos especiales (25-10-2026): solo Moderadores."""
+    from datetime import date
+    from .models import PerfilPermisos
+    campo = formulario.fields['perfil_permisos']
+    campo.queryset = PerfilPermisos.objects.order_by('nombre')
+    campo.required = False
+    campo.empty_label = 'Sin permisos especiales'
+    campo.label = 'Perfil de permisos especiales'
+    campo.widget.attrs.update({'class': 'form-select', 'data-sin-select2': ''})
+    formulario.fields['perfil_vence'].widget = forms.DateInput(
+        attrs={'type': 'date', 'class': 'form-control', 'min': date.today().isoformat()}, format='%Y-%m-%d')
+    formulario.fields['perfil_vence'].label = 'Hasta (opcional)'
+    formulario.fields['perfil_motivo'].widget.attrs.update(
+        {'class': 'form-control', 'placeholder': 'Ej.: cubre las vacaciones del Administrador'})
+    formulario.fields['perfil_motivo'].label = 'Motivo (opcional)'
+
+
+def validar_permisos_especiales(formulario, cleaned):
+    """Solo un Moderador lleva perfil; la fecha de caducidad no puede haber pasado."""
+    from django.utils import timezone
+    if not cleaned.get('es_moderador'):
+        cleaned['perfil_permisos'] = None
+        cleaned['perfil_vence'] = None
+        cleaned['perfil_motivo'] = ''
+        return cleaned
+    vence = cleaned.get('perfil_vence')
+    if not cleaned.get('perfil_permisos'):
+        cleaned['perfil_vence'] = None
+        cleaned['perfil_motivo'] = ''
+    elif vence and vence < timezone.localdate() and vence != getattr(formulario.instance, 'perfil_vence', None):
+        formulario.add_error('perfil_vence', 'La fecha de caducidad no puede ser anterior a hoy.')
+    return cleaned
+
+
 class CustomUserCreationForm(UserCreationForm):
 
     # Declarado, no generado: ver `CampoUnidadesAsignables`.
@@ -299,7 +334,8 @@ class CustomUserCreationForm(UserCreationForm):
     )
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active')
+        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active',
+                  'perfil_permisos', 'perfil_vence', 'perfil_motivo')
         labels = {
             'es_admin': 'Es Administrador',
             'es_moderador': 'Es Moderador',
@@ -333,13 +369,14 @@ class CustomUserCreationForm(UserCreationForm):
         # `SelectUnidadesConDueno`). En el alta no hay instancia guardada, así
         # que se apagan todas las ocupadas: el usuario aún no lleva ninguna.
         self.fields['unidades'].marcar_ocupadas(self.instance)
+        preparar_permisos_especiales(self)
 
         self.fields['contrato'].label_from_instance = lambda obj: (
             f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
         )
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = validar_permisos_especiales(self, super().clean())
         # El orden importa: primero se añaden las hijas, y solo después se
         # comprueba que ninguna unidad tenga ya otro moderador. Al revés, un
         # choque en una subunidad no se detectaría.
@@ -360,7 +397,8 @@ class CustomUserChangeForm(UserChangeForm):
     )
     class Meta:
         model = CustomUser
-        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active')
+        fields = ('username', 'email', 'es_admin', 'es_moderador', 'es_observador', 'contrato', 'unidades', 'is_active',
+                  'perfil_permisos', 'perfil_vence', 'perfil_motivo')
 
         labels = {
             'es_admin': 'Es Administrador',
@@ -388,13 +426,14 @@ class CustomUserChangeForm(UserChangeForm):
         self.fields['unidades'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'})
         # Apaga las unidades que ya lleva otro moderador (ver `SelectUnidadesConDueno`).
         self.fields['unidades'].marcar_ocupadas(self.instance)
+        preparar_permisos_especiales(self)
         self.fields['contrato'].label_from_instance = lambda obj: (
             f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
         )
         
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = validar_permisos_especiales(self, super().clean())
         # Mismo orden que en el formulario de alta: expandir, comprobar el
         # invariante y solo entonces mirar si alguna unidad ya tiene moderador.
         cleaned = expandir_a_subunidades(cleaned)
@@ -583,3 +622,30 @@ class CustomAuthenticationForm(AuthenticationForm):
                     )
 
         return cleaned_data
+
+
+class PerfilPermisosForm(forms.ModelForm):
+    """Perfil de permisos especiales para Moderadores (25-10-2026)."""
+
+    class Meta:
+        from .models import PerfilPermisos
+        model = PerfilPermisos
+        fields = ('nombre', 'descripcion', 'resolver_solicitudes', 'editar_sin_solicitud', 'nomencladores',
+                  'gestor_completo', 'editor_historico', 'subsanacion', 'auditoria')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['nombre'].widget.attrs.update(
+            {'class': 'form-control', 'placeholder': 'Ej.: Jefe de RRHH municipal', 'maxlength': 80})
+        self.fields['descripcion'].widget.attrs.update(
+            {'class': 'form-control', 'placeholder': 'Para qué sirve este perfil (opcional)'})
+        for codigo in ('resolver_solicitudes', 'editar_sin_solicitud', 'nomencladores', 'gestor_completo',
+                       'editor_historico', 'subsanacion', 'auditoria'):
+            self.fields[codigo].widget.attrs.update({'class': 'form-check-input'})
+
+    def clean_nombre(self):
+        from .models import PerfilPermisos
+        nombre = ' '.join((self.cleaned_data.get('nombre') or '').split())
+        if PerfilPermisos.objects.exclude(pk=self.instance.pk).filter(nombre__iexact=nombre).exists():
+            raise forms.ValidationError('Ya existe un perfil con ese nombre.')
+        return nombre

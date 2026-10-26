@@ -107,8 +107,8 @@
                         <button id="btnExportarGeneral" class="btn btn-primary btn-sm rounded-pill px-3 fw-bold shadow-sm" onclick="exportarTodoPDF()">
                             <i class="fas fa-file-pdf me-1"></i> Exportar Todo
                         </button>
-                        {% if user.es_admin %}
-                        {# Editor del histórico: solo el Administrador corrige el histórico completo. #}
+                        {% if permisos.editor_historico %}
+                        {# Editor del histórico: el Administrador y el Moderador con ese permiso especial. #}
                         <a id="btnEditarHistorico" href="#" class="btn btn-outline-primary btn-sm rounded-pill px-3 fw-bold d-none">
                             <i class="fas fa-pen me-1"></i> Editar histórico
                         </a>
@@ -343,6 +343,9 @@
                         const insignia = esSituacion
                             ? `<div class="badge-modern badge-slate"><i class="fas fa-rotate"></i> Actualizado por cambio externo</div>`
                             : `<div class="badge-modern badge-${cssType}"><i class="fas ${icon}"></i> ${item.evento}</div>`
+                              + (item.a_mano
+                                  ? `<div class="small mt-1" style="color:#6d28d9" title="Unidad, departamento y cargo escritos a mano en el editor del histórico: esa plaza no está en la plantilla de hoy."><i class="fas fa-pen-nib"></i> escrito a mano</div>`
+                                  : '')
                               + (Object.keys(cambios).length
                                   ? `<div class="vista-sin-externos insignia-actualizado" title="Datos actualizados por cambios externos posteriores al movimiento. Active «Incluir cambios externos» para verlos."><i class="fas fa-rotate"></i> actualizado</div>`
                                   : '');

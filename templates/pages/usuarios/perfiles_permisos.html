@@ -1,0 +1,114 @@
+{% extends 'base/base.html' %}
+{% comment %}
+Perfiles de permisos especiales para Moderadores (25-10-2026). Solo el Administrador.
+Cada Moderador tiene un perfil o ninguno (se asigna en su ficha de Usuarios). Ver
+`usuarios/permisos_especiales.py`.
+{% endcomment %}
+
+{% block title %}Perfiles de permisos{% endblock %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <div class="me-auto">
+      <div class="small text-muted"><a href="{% url 'list_usuarios' %}">Usuarios</a> / Perfiles de permisos</div>
+      <h4 class="mb-0 mt-1"><i class="fas fa-key text-primary me-2"></i>Perfiles de permisos especiales</h4>
+    </div>
+  </div>
+
+  <div class="alert alert-info small">
+    Un perfil reúne permisos que normalmente son solo del Administrador. Se asigna a un <b>Moderador</b> en su
+    ficha de Usuarios (uno por Moderador, con fecha de caducidad y motivo opcionales). Valen para
+    <b>toda la empresa</b>. Nunca dan acceso al admin de Django, a Usuarios ni a estos perfiles, ni permiten
+    resolver una solicitud propia. Lo que se haga con ellos queda en Auditoría marcado «con permiso especial».
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">{% if editando %}Editar «{{ editando.nombre }}»{% else %}Nuevo perfil{% endif %}</h5>
+          {% if editando %}<a href="{% url 'perfiles_permisos' %}" class="small">Crear otro</a>{% endif %}
+        </div>
+        <div class="card-body">
+          <form method="post" id="perfilForm" data-validacion-visual>
+            {% csrf_token %}
+            {% if editando %}<input type="hidden" name="pk" value="{{ editando.pk }}">{% endif %}
+            <div class="mb-3">
+              <label class="form-label" for="{{ form.nombre.id_for_label }}">Nombre</label>
+              {{ form.nombre }}
+              {% if form.nombre.errors %}<div class="text-danger small">{{ form.nombre.errors }}</div>{% endif %}
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="{{ form.descripcion.id_for_label }}">Descripción</label>
+              {{ form.descripcion }}
+            </div>
+            <div class="small fw-semibold text-muted text-uppercase mb-2">Permisos</div>
+            {% for campo, nombre, ayuda in campos_permisos %}
+            <div class="form-check form-switch mb-2">
+              {{ campo }}
+              <label class="form-check-label" for="{{ campo.id_for_label }}"><b>{{ nombre }}</b>
+                <span class="d-block small text-muted">{{ ayuda }}</span></label>
+            </div>
+            {% endfor %}
+            {% if editando and editando.moderadores.exists %}
+            <div class="alert alert-warning small mt-3 mb-0">Lo tienen {{ editando.moderadores.count }} moderador(es): el cambio les afecta a todos y se les avisará.</div>
+            {% endif %}
+            <div class="d-flex justify-content-end gap-2 mt-3">
+              {% if editando %}<a href="{% url 'perfiles_permisos' %}" class="btn btn-secondary">Cancelar</a>{% endif %}
+              <button type="submit" class="btn btn-primary">Guardar perfil</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-header"><h5 class="mb-0">Perfiles creados</h5></div>
+        <div class="table-responsive">
+          <table class="table mb-0 align-middle">
+            <thead><tr><th>Perfil</th><th>Permisos</th><th>Moderadores</th><th></th></tr></thead>
+            <tbody>
+              {% for perfil in perfiles %}
+              <tr{% if editando and editando.pk == perfil.pk %} class="table-active"{% endif %}>
+                <td><b>{{ perfil.nombre }}</b>{% if perfil.descripcion %}<div class="small text-muted">{{ perfil.descripcion }}</div>{% endif %}</td>
+                <td>{% for nombre in perfil.permisos_marcados %}<span class="badge bg-label-primary me-1 mb-1">{{ nombre }}</span>{% empty %}<span class="text-muted small">Ninguno</span>{% endfor %}</td>
+                <td class="small">{% for m in perfil.moderadores.all %}{{ m.username }}{% if m.perfil_vence %} <span class="text-muted">(hasta {{ m.perfil_vence|date:"d/m/Y" }})</span>{% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-muted">Nadie</span>{% endfor %}</td>
+                <td class="text-end text-nowrap">
+                  <a href="?editar={{ perfil.pk }}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="fas fa-pen"></i></a>
+                  <form method="post" action="{% url 'borrar_perfil_permisos' perfil.pk %}" class="d-inline form-borrar-perfil"
+                        data-moderadores="{{ perfil.moderadores.count }}" data-nombre="{{ perfil.nombre }}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Borrar"><i class="fas fa-trash-alt"></i></button>
+                  </form>
+                </td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-4">Todavía no hay perfiles. Cree el primero a la izquierda.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.querySelectorAll('.form-borrar-perfil').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (form.dataset.confirmado) return;
+      e.preventDefault();
+      const n = parseInt(form.dataset.moderadores, 10) || 0;
+      Swal.fire({
+        icon: 'warning', title: 'Borrar el perfil «' + form.dataset.nombre + '»',
+        text: n ? 'Lo tienen ' + n + ' moderador(es): se quedarán sin permisos especiales y se les avisará.' : 'Nadie lo tiene asignado.',
+        showCancelButton: true, confirmButtonText: 'Borrar', cancelButtonText: 'Cancelar', confirmButtonColor: '#dc2626'
+      }).then(function (r) { if (r.isConfirmed) { form.dataset.confirmado = '1'; form.submit(); } });
+    });
+  });
+</script>
+{% endblock %}

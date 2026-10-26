@@ -857,6 +857,12 @@ def historico_trabajador(request, aspirante_id):
             'es_baja': False
         })
 
+    # Plaza escrita a mano en el editor del histórico (25-10-2026): se marca en la
+    # ventana y en el PDF para que se sepa que no salió de la plantilla.
+    for item in hitos:
+        mov = movs_por_pk.get(item['id'])
+        item['a_mano'] = bool(mov is not None and mov.escrito_a_mano)
+
     # --- ORDENACIÓN Y LÓGICA CRONOLÓGICA ---
     hitos.sort(key=lambda x: x['fecha_orden'])
 
@@ -1054,6 +1060,7 @@ class ExportarHistoricoPDFView(View):
             'fecha_hoy': datetime.now(),
             'historial': datos_historial,
             'notas': notas,
+            'hay_a_mano': any(d.get('a_mano') for d in datos_historial),
         }
         
         template = get_template('pages/reportes/pdf_historico_trabajador.html')
@@ -1246,6 +1253,10 @@ class ContratoUpdateView(RequiereEdicionMixin, AdvertenciasDelRegistroMixin, Mod
         context['initial_salario_escala'] = tarifas['salario'] if tarifas['salario'] is not None else ""
         context['initial_tarifa_horaria'] = tarifas['tarifa'] if tarifas['tarifa'] is not None else ""
         context['initial_tarifa_extras'] = tarifas['extras'] if tarifas['extras'] is not None else ""
+
+        # Plaza sobregirada (25-10-2026): Guardar queda inactivo y se explica por qué.
+        from .plazas import sobregiro_de
+        context['plaza_sobregirada'] = sobregiro_de(contrato)
 
         return context
 

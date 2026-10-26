@@ -1,0 +1,28 @@
+{% comment %}
+Permisos especiales (25-10-2026): solo para Moderadores. Se enseña al marcar «Es Moderador»
+(`toggleUnidades` en add_usuario.html y updt_usuario.html). Un perfil o ninguno; la caducidad
+y el motivo son opcionales. Ver `usuarios/permisos_especiales.py`.
+{% endcomment %}
+<div id="bloque_permisos_especiales" class="border rounded p-3 mb-3" style="display: none;">
+  <div class="d-flex align-items-center justify-content-between mb-2">
+    <span class="fw-semibold small"><i class="fas fa-key me-1 text-primary"></i>Permisos especiales</span>
+    <a href="{% url 'perfiles_permisos' %}" class="small" target="_blank" rel="noopener">Gestionar perfiles</a>
+  </div>
+  <div class="mb-2">
+    <label for="{{ form.perfil_permisos.id_for_label }}" class="form-label">{{ form.perfil_permisos.label }}</label>
+    {{ form.perfil_permisos }}
+    {% if form.perfil_permisos.errors %}<div class="text-danger small">{{ form.perfil_permisos.errors }}</div>{% endif %}
+  </div>
+  <div class="row g-2">
+    <div class="col-md-5">
+      <label for="{{ form.perfil_vence.id_for_label }}" class="form-label">{{ form.perfil_vence.label }}</label>
+      {{ form.perfil_vence }}
+      {% if form.perfil_vence.errors %}<div class="text-danger small">{{ form.perfil_vence.errors }}</div>{% endif %}
+    </div>
+    <div class="col-md-7">
+      <label for="{{ form.perfil_motivo.id_for_label }}" class="form-label">{{ form.perfil_motivo.label }}</label>
+      {{ form.perfil_motivo }}
+    </div>
+  </div>
+  <div class="form-text">Valen para toda la empresa. Sin fecha, no caducan. Se avisa al Moderador por la campana y queda en Auditoría.</div>
+</div>

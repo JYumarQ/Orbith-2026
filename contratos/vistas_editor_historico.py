@@ -20,7 +20,11 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET, require_POST
 
 from bolsa.models import Aspirante
-from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
+
+# Administrador, o Moderador con el permiso especial «Editor del histórico»
+# (25-10-2026, ver `usuarios/permisos_especiales.py`).
+admin_required = permiso_required('editor_historico')
 
 from . import editor_historico as eh
 
@@ -43,6 +47,7 @@ def _eventos_json(historico, meses=None):
     """Los eventos con su contrato (C1, C2…) para pintar la línea de tiempo."""
     meses = meses or {}
     grupos = eh.ciclos(historico, incluir_borrados=True)
+    ultimo = eh.ultimo_del_vigente(historico)
     salida = []
     for numero, grupo in enumerate(grupos, start=1):
         abierto = grupo[-1].tipo != eh.BAJA or grupo[-1].borrado
@@ -57,6 +62,9 @@ def _eventos_json(historico, meses=None):
                 'estado': _estado_json(e.estado), 'antes': _estado_json(e.antes),
                 'ids': e.ids, 'borrado': e.borrado, 'nuevo': e.nuevo, 'editado': sorted(e.editado),
                 'meses_cerrados': meses.get(e.clave, []),
+                'a_mano': e.a_mano, 'unidad_fk_id': e.unidad_fk_id, 'unidad_fk': e.unidad_fk,
+                'plaza_reconocida': e.plaza_reconocida,
+                'ultimo_vigente': ultimo is not None and e.clave == ultimo.clave,
             })
     return salida
 
@@ -64,8 +72,11 @@ def _eventos_json(historico, meses=None):
 def _catalogos():
     """Lo que se puede elegir en la mesa. Los cargos inactivos también: un movimiento
     antiguo pudo ser a un cargo que ya no existe en la plantilla de hoy."""
-    from nomencladores.models import NCausaAltaBaja, NMotivoContrato, NTipoContrato, NTridente
-    from strorganizativa.models import CargoPlantilla
+    from nomencladores.models import (NCargo, NCausaAltaBaja, NGrupoEscala, NMotivoContrato, NRol,
+                                      NTipoContrato, NTridente)
+    from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
+
+    from .views import nivel_romano_a_int
 
     cargos = []
     for c in (CargoPlantilla.objects
@@ -82,6 +93,11 @@ def _catalogos():
             'grupo': c.ncargo.grupo_escala.nivel if c.ncargo_id and c.ncargo.grupo_escala_id else eh.SIN_DATO,
             'rol': c.rol.tipo if c.rol_id else eh.SIN_DATO,
             'activo': bool(c.activo),
+            # Para la cascada Unidad → Departamento → Cargo y las reglas del contrato.
+            'departamento_id': departamento.pk if departamento else None,
+            'unidad_id': unidad.pk if unidad else None,
+            'cat': c.ncargo.get_cat_ocupacional_display() if c.ncargo_id else eh.SIN_DATO,
+            'es_cuadro': bool(c.ncargo_id and c.ncargo.es_cuadro),
         })
     return {
         'cargos': cargos,
@@ -89,6 +105,12 @@ def _catalogos():
         'motivos': list(NMotivoContrato.objects.order_by('descripcion').values('id', 'descripcion', 'tipo_contrato_id')),
         'tridentes': [{'id': t.pk, 'texto': str(t)} for t in NTridente.objects.order_by('pk')],
         'causas': list(NCausaAltaBaja.objects.order_by('descripcion').values('id', 'descripcion', 'alta')),
+        # «Escribir a mano»: la unidad de hoy a la que corresponde y las listas.
+        'unidades': [{'id': u.pk, 'descripcion': u.descripcion}
+                     for u in UnidadOrganizativa.objects.order_by('orden_informe', 'descripcion')],
+        'grupos': sorted(NGrupoEscala.objects.values_list('nivel', flat=True), key=nivel_romano_a_int),
+        'categorias': [etiqueta for _, etiqueta in NCargo._meta.get_field('cat_ocupacional').choices],
+        'roles': list(NRol.objects.order_by('tipo').values_list('tipo', flat=True)),
     }
 
 

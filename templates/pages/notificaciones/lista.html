@@ -67,12 +67,22 @@
           <i class="bx bx-calendar-event me-1"></i>Recordatorios
         </a>
       </li>
+      {% if user.es_admin %}
+      <li class="nav-item">
+        <a class="nav-link {% if tab_activa == 'supervision' %}active{% endif %}"
+           href="?tab=supervision" title="Lo que recibieron los moderadores y si ya lo leyeron">
+          <i class="bx bx-show me-1"></i>Supervisión
+        </a>
+      </li>
+      {% endif %}
     </ul>
 
     {% if tab_activa == 'advertencias' %}
       {% include 'pages/notificaciones/partials/tab_advertencias.html' %}
     {% elif tab_activa == 'recordatorios' %}
       {% include 'pages/notificaciones/partials/tab_recordatorios.html' %}
+    {% elif tab_activa == 'supervision' %}
+      {% include 'pages/notificaciones/partials/tab_supervision.html' %}
     {% else %}
       {% include 'pages/notificaciones/partials/tab_notificaciones.html' %}
     {% endif %}

@@ -26,6 +26,7 @@ modelo de negocio.
 import hashlib
 import json
 import logging
+import time
 from datetime import timedelta
 from decimal import Decimal
 
@@ -404,6 +405,20 @@ def reconciliar_hallazgos_en_caliente(instancia):
             estado_nuevo=Hallazgo.CORREGIDO, usuario=None, nota=nota, automatica=True)
 
 
+def anotar_ejecucion_de_regla(codigo, duracion_ms, fallos):
+    """Lo que tardó la regla y, si encontró algo, cuándo (pantalla «Reglas», 25-10-2026).
+    Nunca tumba el análisis."""
+    from .models import EstadoRegla
+    try:
+        ahora = timezone.now()
+        datos = {'ultima_duracion_ms': duracion_ms, 'ultima_ejecucion': ahora}
+        if fallos:
+            datos['ultimo_fallo'] = ahora
+        EstadoRegla.objects.update_or_create(codigo=codigo, defaults=datos)
+    except Exception:                                   # noqa: BLE001
+        logger.exception('Subsanación: no se pudo anotar la ejecución de %s', codigo)
+
+
 def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
     """Ejecuta todas las reglas de una categoría. Es la unidad de trabajo del barrido.
 
@@ -434,6 +449,7 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
     codigos_ok = []
 
     for regla in reglas:
+        inicio = time.monotonic()
         try:
             with transaction.atomic():
                 contadores = reconciliar_regla(regla, ejecucion, contexto)
@@ -444,6 +460,8 @@ def ejecutar_modulo(ejecucion, clave_modulo, contexto=None):
             resumen['errores'][regla.codigo] = mensaje
             continue
 
+        anotar_ejecucion_de_regla(regla.codigo, int((time.monotonic() - inicio) * 1000),
+                                  contadores['nuevos'] + contadores['persistentes'])
         resumen['reglas'] += 1
         resumen['nuevos'] += contadores['nuevos']
         resumen['persistentes'] += contadores['persistentes']
@@ -598,7 +616,10 @@ def archivar_hallazgos_de_reglas_retiradas(ejecucion):
     if not solicitados >= set(CLAVES_MODULOS) or solicitados != completados:
         return 0
 
-    codigos_vigentes = {regla.codigo for regla in obtener_reglas()}
+    # Las desactivadas por el Administrador NO son retiradas: sus avisos abiertos se
+    # quedan normales (decisión del usuario, 25-10-2026).
+    from .reglas import codigos_desactivados
+    codigos_vigentes = {regla.codigo for regla in obtener_reglas()} | codigos_desactivados()
     huerfanos = list(Hallazgo.objects
                      .filter(vigente=True)
                      .exclude(codigo_regla__in=codigos_vigentes))

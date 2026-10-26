@@ -181,6 +181,8 @@ MODELOS = {
         'unidad': lambda o: _id_unidad_de_departamento(o.departamento_id),
         'texto': lambda o: '%s (%s)' % (o.ncargo, o.departamento),
     },
+    # Permisos especiales de Moderadores (25-10-2026).
+    'usuarios.PerfilPermisos': {'modulo': 'usuarios', 'nombre': 'Perfil de permisos', 'unidad': lambda o: None},
 }
 
 # `NSalario` no está: la escala salarial se borra y se recrea entera en cada
@@ -222,6 +224,7 @@ NOMBRES_DE_MODULO = {
     'estructura': 'Estructura Organizativa',
     'nomencladores': 'Nomencladores',
     'auditoria': 'Panel de administración',
+    'usuarios': 'Usuarios y permisos',
 }
 
 

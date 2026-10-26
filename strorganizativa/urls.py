@@ -17,6 +17,7 @@ from django.urls import path
 from . import views
 from django.contrib.auth.decorators import login_required
 from usuarios.decorators import admin_required
+from usuarios.permisos_especiales import permiso_required
 
 urlpatterns = [
     
@@ -37,7 +38,8 @@ urlpatterns = [
     # ni solicitar. Editar sí puede pedirlo un Moderador, pero solo sobre las unidades que
     # tiene asignadas (se comprueba en `UnidadOrganizativaUpdateView.post`) y su envío se
     # convierte en solicitud.
-    path('add_uniorg/', admin_required(views.UnidadOrganizativaCreateView.as_view()), name='add_uniorg'),
+    # Crear unidades: también el Moderador con «Gestor de plantilla completo» (25-10-2026).
+    path('add_uniorg/', permiso_required('gestor_completo')(views.UnidadOrganizativaCreateView.as_view()), name='add_uniorg'),
     path('updt_uniorg/<pk>/', login_required(views.UnidadOrganizativaUpdateView.as_view()), name='updt_uniorg'),
     path('del_uniorg/<pk>/', admin_required(views.UnidadOrganizativaDeleteView.as_view()), name='del_uniorg'),
     

@@ -119,7 +119,9 @@
                             title="Devolver a En Espera">
                         <i class="fas fa-reply"></i>
                     </button>
-                    {% else %}
+                    {% endif %}
+                    {# El Moderador con «Resolver solicitudes» también envía y edita las suyas (25-10-2026). #}
+                    {% if user.es_moderador and not user.es_admin %}
                     <a class="btn btn-sm btn-outline-primary" id="btn-editar" href="#" title="Editar mi solicitud">
                         <i class="fas fa-edit"></i>
                     </a>
@@ -212,7 +214,7 @@
                     </div>
 
                     
-                    {% if not es_admin %}
+                    {% if not user.es_admin %}
                     <button type="button" class="btn btn-primary"
                             data-url="{% url 'add_solicitud' %}"
                             onclick="abrir_modal_creacion(this.dataset.url)">

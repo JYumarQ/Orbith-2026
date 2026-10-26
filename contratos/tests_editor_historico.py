@@ -531,3 +531,90 @@ class HistoricoQueNoEncajaTests(TestCase):
         self.assertEqual(enlace['href'], '/contrato/editor-historico/%d/' % self.persona.pk)
         self.assertEqual(enlace['etiqueta'], 'Abrir el editor del histórico')
         self.assertEqual(destino_de_regla(regla, moderador), (None, None))
+
+
+class EditorReglasDelContratoTests(TestCase):
+    """Reglas del contrato y «Escribir a mano» en el editor (25-10-2026, caso Lisandra)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        EditorHistoricoMotorTests.setUpTestData.__func__(cls)
+        # El primer movimiento se guardó con un departamento que hoy ya no existe.
+        TMovimiento.objects.filter(pk=cls.m_mov1.pk).update(departamento_nuevo='Contabilidad vieja')
+        cls.unidad = cls.cargo.departamento.unidad_organizativa
+        cls.cuadro = CargoPlantilla.objects.create(
+            ncargo=NCargo.objects.create(descripcion='Director', cat_ocupacional='CDI',
+                                         grupo_escala=cls.cargo.ncargo.grupo_escala, salario_basico=6000),
+            departamento=cls.cargo.departamento, cant_aprobada=1, orden_informe=3)
+
+    def errores(self, *cambios):
+        return eh.preparar(self.persona, list(cambios))[2]
+
+    def editar(self, mov, **campos):
+        return {'op': 'editar', 'evento': 'mov:%d' % mov.pk, 'campos': campos}
+
+    def test_reconoce_la_plaza_por_sus_nombres(self):
+        h = eh.cargar(self.persona)
+        self.assertTrue(h.evento('mov:%d' % self.m_alta1.pk).plaza_reconocida)
+        self.assertFalse(h.evento('mov:%d' % self.m_mov1.pk).plaza_reconocida)
+
+    def test_a_mano_se_guarda_con_su_marca_y_su_unidad_de_hoy(self):
+        from usuarios.models import CustomUser
+        admin = CustomUser.objects.create_user(username='adm_a_mano', password='x', es_admin=True)
+        eh.guardar(self.persona, [self.editar(self.m_mov1, a_mano=True, cargo_texto='Contador',
+                                              unidad_id=self.unidad.pk)], 'Plaza antigua', usuario=admin)
+        self.m_mov1.refresh_from_db()
+        self.assertEqual((self.m_mov1.escrito_a_mano, self.m_mov1.cargo_nuevo, self.m_mov1.unidad_nueva_fk_id),
+                         (True, 'Contador', self.unidad.pk))
+
+    def test_a_mano_exige_la_unidad_de_hoy(self):
+        errores = self.errores(self.editar(self.m_mov1, a_mano=True, cargo_texto='Contador'))
+        self.assertTrue(any('unidad de hoy' in e for e in errores))
+
+    def test_a_mano_no_vale_en_el_ultimo_del_vigente_ni_en_una_plaza_reconocida(self):
+        errores = self.errores(self.editar(self.m_mov2, a_mano=True, unidad_id=self.unidad.pk))
+        self.assertTrue(any('último del contrato vigente' in e for e in errores))
+        errores = self.errores(self.editar(self.m_alta1, a_mano=True, unidad_id=self.unidad.pk))
+        self.assertTrue(any('existe en la plantilla de hoy' in e for e in errores))
+
+    def test_un_insertado_se_puede_escribir_a_mano(self):
+        entre = self.f['alta2'] + timedelta(days=50)
+        errores = self.errores({'op': 'insertar', 'tras': 'mov:%d' % self.m_alta2.pk, 'campos': {
+            'fecha': entre, 'a_mano': True, 'cargo_texto': 'Ayudante', 'unidad_id': self.unidad.pk}})
+        self.assertEqual(errores, [])
+
+    def test_a_mano_solo_admite_listas_del_nomenclador(self):
+        with self.assertRaises(eh.ErrorDeBorrador):
+            self.errores(self.editar(self.m_mov1, a_mano=True, grupo_escala='ZZZ'))
+
+    def test_tridente_obligatorio_con_dinamico_y_vacio_en_un_cuadro(self):
+        errores = self.errores(self.editar(self.m_mov2, tipo_salario='DIN'))
+        self.assertTrue(any('falta el tridente' in e for e in errores))
+        _, propuesto, errores, _ = eh.preparar(self.persona, [
+            self.editar(self.m_mov2, cargo_id=self.cuadro.pk, tipo_salario='DIN')])
+        self.assertFalse(any('tridente' in e for e in errores))
+        self.assertEqual(propuesto.evento('mov:%d' % self.m_mov2.pk).estado['tridente'], '---')
+
+    def test_la_duracion_es_cero_o_mas_y_el_indeterminado_no_la_lleva(self):
+        h = eh.cargar(self.persona)
+        self.assertIsNone(h.evento('mov:%d' % self.m_mov1.pk).duracion)   # Indeterminado: vacía
+        _, propuesto, errores, _ = eh.preparar(self.persona, [
+            self.editar(self.m_mov2, tipo_id=self.determinado.pk, motivo_id=self.motivo.pk, duracion='')])
+        self.assertFalse(any('duración' in e for e in errores))
+        self.assertEqual(propuesto.evento('mov:%d' % self.m_mov2.pk).duracion, 0)
+        errores = self.errores(self.editar(self.m_mov2, duracion=30))
+        self.assertTrue(any('Indeterminado no lleva duración' in e for e in errores))
+        with self.assertRaises(eh.ErrorDeBorrador):
+            self.errores(self.editar(self.m_mov2, duracion=-1))
+
+    def test_el_ultimo_del_vigente_sin_duracion_toma_la_del_contrato(self):
+        CAlta.objects.filter(pk=self.contrato.pk).update(duracion=365)
+        self.assertEqual(eh.cargar(self.persona).evento('mov:%d' % self.m_mov2.pk).duracion, 365)
+
+    def test_plazas_libres_solo_en_el_ultimo_del_vigente(self):
+        NTipoContrato.objects.filter(pk=self.indeterminado.pk).update(ocupa_plaza=True)
+        CargoPlantilla.objects.filter(pk=self.cuadro.pk).update(cant_aprobada=0)
+        errores = self.errores(self.editar(self.m_mov2, cargo_id=self.cuadro.pk))
+        self.assertTrue(any('no tiene plazas disponibles' in e for e in errores))
+        errores = self.errores(self.editar(self.m_mov1, cargo_id=self.cuadro.pk))
+        self.assertFalse(any('plazas' in e for e in errores))

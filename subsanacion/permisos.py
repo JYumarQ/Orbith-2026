@@ -36,9 +36,14 @@ MENSAJE_SOLO_ADMIN = (
 
 
 def es_administrador(usuario):
+    """Administrador de Subsanación: el Administrador, y el Moderador con el permiso
+    especial «Subsanación como administrador» (25-10-2026), que ve y lanza lo mismo."""
     if not getattr(usuario, 'is_authenticated', False):
         return False
-    return bool(usuario.is_superuser or getattr(usuario, 'es_admin', False))
+    if usuario.is_superuser or getattr(usuario, 'es_admin', False):
+        return True
+    from usuarios.permisos_especiales import por_permiso_especial
+    return por_permiso_especial(usuario, 'subsanacion')
 
 
 def es_moderador(usuario):

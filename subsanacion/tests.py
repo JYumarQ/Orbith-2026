@@ -1539,7 +1539,7 @@ class CargoSinNivelDePreparacionTests(TestCase):
 
         grupo = NGrupoEscala.objects.create(nivel='XV')
         tipo_unidad = NTipoUnidadOrganizativa.objects.create(
-            descripcion='Empresa', es_principal=True)
+            descripcion='Empresa')
         cls.unidad = UnidadOrganizativa.objects.create(
             codigo_interno=9001, descripcion='Unidad de prueba', tipo=tipo_unidad,
             grupo_nomina=1)

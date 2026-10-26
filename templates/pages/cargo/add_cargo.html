@@ -18,7 +18,9 @@
                   hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
-                  id="cargoForm">
+                  id="cargoForm"
+                  data-validacion-visual
+                  data-recomendados="orden_informe,rol,nivel_preparacion">
                 
                 {% csrf_token %}
 

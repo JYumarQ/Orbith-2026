@@ -10,7 +10,7 @@ Uso:
     {% include 'pages/solicitudes/partials/boton_guardar.html' with texto='Guardar cambios' %}
 {% endcomment %}
 
-{% if user.es_moderador and not user.es_admin %}
+{% if user.es_moderador and not user.es_admin and not permisos.editar_sin_solicitud %}
     <button type="submit" class="btn btn-primary">
         <i class="fas fa-paper-plane me-1"></i> Enviar Solicitud
     </button>

@@ -91,7 +91,8 @@
          vistas van además protegidas con `admin_required` en `configuracion/urls.py` y
          `nomencladores/urls.py`: ocultar el menú no basta, la URL seguía siendo accesible.
       {% endcomment %}
-      {% if user.es_admin %}
+      {% comment %} También el Moderador con el permiso especial «Nomencladores y parámetros» (25-10-2026). {% endcomment %}
+      {% if permisos.nomencladores %}
           <li class="menu-header small text-uppercase">
             <span class="menu-header-text">Configuración</span>
           </li>
@@ -119,8 +120,10 @@
          de un acordeón que sí lo es. Solo `es_admin` ve la cabecera y todo su
          contenido — ni moderador ni staff, decisión explícita del usuario (aunque
          antes «Usuarios» viviera en «Configuración», visible también para ellos: al
-         moverlo aquí, un moderador deja de verlo). {% endcomment %}
-      {% if user.es_admin %}
+         moverlo aquí, un moderador deja de verlo). Excepción (25-10-2026): el
+         Moderador con el permiso especial «Auditoría y estadísticas» ve esas dos
+         entradas; Usuarios y Reportes siguen siendo solo del Administrador. {% endcomment %}
+      {% if user.es_admin or permisos.auditoria %}
           {% comment %} «Administración» no tiene página propia (su enlace es
              `javascript:void(0)`), así que NUNCA lleva `active`: solo
              `orb-padre-activo` —texto e icono morados, sin fondo— más `abierto`.
@@ -141,6 +144,7 @@
              {% comment %}`data-titulo` se pinta como rótulo solo con la barra colapsada (ver CSS). {% endcomment %}
             <ul class="orb-acordeon" data-titulo="Administración">
               <li>
+                {% if user.es_admin %}
                 <a href="{% url 'list_usuarios' %}"
                    class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'list_usuarios' %}activo{% endif %}">
                   <i class="bx bx-user"></i><span>Usuarios</span>
@@ -150,6 +154,7 @@
                    class="orb-acordeon-sublink {% if request.resolver_match.view_name == 'soporte:lista_reportes' %}activo{% endif %}">
                   <i class="bx bx-bug"></i><span>Reportes de Problemas</span>
                 </a>
+                {% endif %}
 
                 {% comment %} `namespace` y no `view_name`: así el sub-ítem sigue encendido en el
                    detalle de un evento, no solo en el índice. {% endcomment %}

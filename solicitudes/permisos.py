@@ -24,17 +24,35 @@ MENSAJE_SIN_ACCESO = 'No tiene acceso al módulo de Solicitudes.'
 
 
 def es_administrador(usuario):
+    """Quien resuelve solicitudes: el Administrador y el Moderador con el permiso
+    especial «Resolver solicitudes» (25-10-2026). Nunca las suyas: eso lo comprueban
+    `Solicitud.puede_revisarla` y `servicios` con `puede_resolver`."""
     if not getattr(usuario, 'is_authenticated', False):
         return False
-    return bool(usuario.is_superuser or getattr(usuario, 'es_admin', False))
+    if usuario.is_superuser or getattr(usuario, 'es_admin', False):
+        return True
+    from usuarios.permisos_especiales import por_permiso_especial
+    return por_permiso_especial(usuario, 'resolver_solicitudes')
+
+
+def _marcar_si_permiso(usuario):
+    """Las DECISIONES (aprobar, rechazar…) de un Moderador con «Resolver solicitudes»
+    quedan en Auditoría marcadas «con permiso especial»."""
+    from usuarios.permisos_especiales import marcar_en_esta_peticion, por_permiso_especial
+    if por_permiso_especial(usuario, 'resolver_solicitudes'):
+        marcar_en_esta_peticion('resolver_solicitudes')
 
 
 def es_moderador(usuario):
     if not getattr(usuario, 'is_authenticated', False):
         return False
     # Un administrador es superusuario en Orbith (`CustomUser.save()` lo fuerza), así que
-    # hay que excluirlo explícitamente para no confundir los dos roles.
-    return bool(getattr(usuario, 'es_moderador', False)) and not es_administrador(usuario)
+    # hay que excluirlo explícitamente para no confundir los dos roles. Se mira solo el
+    # ROL: el Moderador con «Resolver solicitudes» sigue siendo Moderador para enviar las
+    # suyas (si no, se saltaría la solicitud al editar, ver `integracion.requiere_solicitud`).
+    if usuario.is_superuser or getattr(usuario, 'es_admin', False):
+        return False
+    return bool(getattr(usuario, 'es_moderador', False))
 
 
 def tiene_acceso(usuario):
@@ -74,6 +92,7 @@ class SoloAdminMixin:
     def dispatch(self, request, *args, **kwargs):
         if not es_administrador(request.user):
             return _denegar(request, MENSAJE_SOLO_ADMIN)
+        _marcar_si_permiso(request.user)
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -91,5 +110,6 @@ def solo_admin(vista):
     def _envuelta(request, *args, **kwargs):
         if not es_administrador(request.user):
             return _denegar(request, MENSAJE_SOLO_ADMIN)
+        _marcar_si_permiso(request.user)
         return vista(request, *args, **kwargs)
     return _envuelta

@@ -91,6 +91,9 @@ class EventoAuditoria(models.Model):
     # Texto legible congelado, igual que Solicitud.descriptor: sobrevive a que el
     # registro real se elimine.
     descriptor = models.CharField(max_length=200, blank=True, default='')
+    # Nombre del permiso especial con el que un Moderador hizo esto (25-10-2026);
+    # vacío si no se usó ninguno. Ver `usuarios/permisos_especiales.py`.
+    permiso_especial = models.CharField(max_length=60, blank=True, default='')
 
     datos_antes = models.JSONField(default=dict, blank=True)
     datos_despues = models.JSONField(default=dict, blank=True)

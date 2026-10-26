@@ -74,6 +74,7 @@ ETIQUETAS = {
     'tipo_contrato': 'Tipo de contrato', 'motivo': 'Motivo', 'tipo_salario': 'Tipo de salario',
     'tridente': 'Tridente', 'salario': 'Salario', 'otros': 'Otros',
     'causa_baja': 'Causa de la baja', 'fecha_documento': 'Fecha del documento',
+    'a_mano': 'Escrito a mano', 'unidad_fk': 'Unidad de hoy a la que corresponde',
 }
 
 SIN_DATO = '---'
@@ -83,7 +84,16 @@ CAMPOS_EDITABLES = {
     'fecha', 'fecha_solicitud', 'observaciones', 'duracion', 'cargo_id', 'tipo_id',
     'motivo_id', 'tipo_salario', 'tridente_id', 'salario', 'otros', 'causa_baja_id',
     'fecha_documento',
+    # «Escribir a mano» (25-10-2026): plazas de antes que la plantilla de hoy no
+    # reconoce y movimientos insertados. Ver `_aplicar_a_mano`.
+    'a_mano', 'unidad_texto', 'departamento_texto', 'cargo_texto', 'grupo_escala',
+    'cat_ocupacional', 'rol', 'unidad_id',
 }
+
+#: Texto libre del modo «a mano» -> dato del estado.
+TEXTOS_A_MANO = {'unidad_texto': 'unidad', 'departamento_texto': 'departamento', 'cargo_texto': 'cargo'}
+#: Datos del modo «a mano» que se eligen de una lista del nomenclador.
+LISTAS_A_MANO = ('grupo_escala', 'cat_ocupacional', 'rol')
 
 
 class ErrorDeBorrador(Exception):
@@ -115,6 +125,10 @@ class Evento:
     mov_pk: int = None
     baja_pk: int = None
     ids: dict = field(default_factory=dict)   # ids del nomenclador elegidos en el borrador
+    a_mano: bool = False            # unidad, departamento y cargo escritos a mano
+    unidad_fk_id: int = None        # unidad de HOY a la que corresponde (filtros y alcance)
+    unidad_fk: str = ''
+    plaza_reconocida: bool = True   # su cargo·departamento·unidad existe en la plantilla de hoy
     borrado: bool = False
     nuevo: bool = False
     editado: set = field(default_factory=set)  # datos que tocó el Administrador
@@ -176,6 +190,18 @@ def _estado_de(movimiento, lado):
     return estado
 
 
+def clave_de_plaza(estado):
+    return (estado.get('cargo'), estado.get('departamento'), estado.get('unidad'))
+
+
+def plazas_de_hoy():
+    """Las plazas (cargo, departamento, unidad) de la plantilla de hoy, por sus
+    NOMBRES: así se sabe si el editor reconoce la plaza guardada en un evento."""
+    from strorganizativa.models import CargoPlantilla
+    return set(CargoPlantilla.objects.values_list(
+        'ncargo__descripcion', 'departamento__descripcion', 'departamento__unidad_organizativa__descripcion'))
+
+
 def cargar(aspirante):
     """El histórico de la persona, ordenado y agrupable en ciclos."""
     from django.db.models import Q
@@ -185,7 +211,8 @@ def cargar(aspirante):
     aspirante_id = getattr(aspirante, 'pk', aspirante)
     movimientos = list(
         TMovimiento.objects.filter(Q(aspirante_id=aspirante_id) | Q(contrato__aspirante_id=aspirante_id))
-        .order_by('fecha_efectiva', 'pk'))
+        .select_related('unidad_nueva_fk').order_by('fecha_efectiva', 'pk'))
+    plazas = plazas_de_hoy()
     bajas = list(CBaja.objects.filter(aspirante_id=aspirante_id).select_related('causa_baja'))
     bajas_por_fecha = {b.fecha_baja: b for b in bajas if b.fecha_baja}
     usadas = set()
@@ -197,7 +224,16 @@ def cargar(aspirante):
             clave='mov:%d' % m.pk, tipo=tipo, fecha=m.fecha_efectiva,
             estado={} if tipo == BAJA else _estado_de(m, 1), antes=_estado_de(m, 0),
             fecha_solicitud=m.fecha_solicitud, observaciones=m.observaciones or '',
-            duracion=m.duracion_nueva, mov_pk=m.pk)
+            # Duración (decisión del usuario, 25-10-2026): vacía en el Indeterminado,
+            # como en el contrato; en los demás, 0 o más y por defecto 0 (los movimientos
+            # antiguos sin ella se leen como 0).
+            duracion=(m.duracion_nueva if tipo == BAJA or es_indeterminado(m.tipo_contrato_nuevo)
+                      else (m.duracion_nueva or 0)),
+            mov_pk=m.pk, a_mano=m.escrito_a_mano,
+            unidad_fk_id=m.unidad_nueva_fk_id,
+            unidad_fk=m.unidad_nueva_fk.descripcion if m.unidad_nueva_fk_id else '')
+        if tipo != BAJA:
+            evento.plaza_reconocida = clave_de_plaza(evento.estado) in plazas
         if tipo == BAJA:
             baja = bajas_por_fecha.get(m.fecha_efectiva)
             if baja is not None:
@@ -226,6 +262,13 @@ def cargar(aspirante):
     contrato = CAlta.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_alta').first()
     historico = Historico(aspirante_id=aspirante_id, eventos=eventos,
                           contrato_pk=contrato.pk if contrato else None)
+    # El último evento del contrato vigente sin duración guardada toma la del
+    # contrato: si no, al corregirlo se le pondría 0 al contrato de hoy.
+    ultimo = ultimo_del_vigente(historico)
+    sin_duracion = {m.pk for m in movimientos if m.duracion_nueva is None}
+    if (contrato is not None and contrato.duracion is not None and ultimo is not None
+            and ultimo.mov_pk in sin_duracion):
+        ultimo.duracion = contrato.duracion
     historico.anomalias = anomalias + [e for e in _errores_de_orden(historico)]
     historico.version = huella(historico)
     return historico
@@ -238,7 +281,7 @@ def huella(historico):
     for e in historico.eventos:
         partes.append(repr((e.clave, e.tipo, e.fecha, sorted(e.estado.items()), sorted(e.antes.items()),
                             e.fecha_solicitud, e.observaciones, e.duracion, e.causa_baja_id,
-                            e.fecha_documento)))
+                            e.fecha_documento, e.a_mano, e.unidad_fk_id)))
     partes.append(repr(historico.contrato_pk))
     return hashlib.sha1('\n'.join(partes).encode('utf-8')).hexdigest()
 
@@ -301,7 +344,13 @@ def _aplicar_campos(evento, campos):
         evento.observaciones = marcar('observaciones', (campos['observaciones'] or '').strip())
     if 'duracion' in campos:
         valor = campos['duracion']
-        evento.duracion = marcar('duracion', int(valor) if valor not in (None, '') else None)
+        try:
+            numero = int(valor) if valor not in (None, '') else 0
+        except (TypeError, ValueError):
+            raise ErrorDeBorrador('La duración tiene que ser un número entero de días.')
+        if numero < 0:
+            raise ErrorDeBorrador('La duración no puede ser negativa (0 o más días).')
+        evento.duracion = marcar('duracion', numero)
     if 'causa_baja_id' in campos:
         causa = NCausaAltaBaja.objects.filter(pk=campos['causa_baja_id']).first()
         if causa is None:
@@ -310,6 +359,11 @@ def _aplicar_campos(evento, campos):
         evento.causa_baja = marcar('causa_baja', causa.descripcion)
 
     estado = evento.estado
+    if any(k in campos for k in ('a_mano', 'unidad_id') + tuple(TEXTOS_A_MANO) + LISTAS_A_MANO):
+        _aplicar_a_mano(evento, campos, marcar)
+    elif 'cargo_id' in campos and evento.a_mano:
+        # Elegir una plaza de la plantilla de hoy deja de ser «a mano».
+        evento.a_mano = marcar('a_mano', False)
     if 'cargo_id' in campos:
         cargo = (CargoPlantilla.objects.select_related(
             'ncargo__grupo_escala', 'departamento__unidad_organizativa', 'rol')
@@ -331,6 +385,9 @@ def _aplicar_campos(evento, campos):
         for clave, valor in nuevos.items():
             if estado.get(clave) != valor:
                 estado[clave] = marcar(clave, valor)
+        if evento.unidad_fk_id != evento.ids['unidad_id']:
+            evento.unidad_fk_id = evento.ids['unidad_id']
+            evento.unidad_fk = unidad.descripcion if unidad else ''
     if 'tipo_id' in campos:
         tipo = NTipoContrato.objects.filter(pk=campos['tipo_id']).first()
         if tipo is None:
@@ -372,6 +429,19 @@ def _aplicar_campos(evento, campos):
                 raise ErrorDeBorrador('El tridente elegido no existe.')
             evento.ids['tridente_id'] = tridente.pk
             estado['tridente'] = marcar('tridente', str(tridente))
+    if es_cuadro(estado) and not vacio(estado.get('tridente')) and (
+            'cargo_id' in campos or 'cat_ocupacional' in campos):
+        # Igual que el contrato: al pasar a un cargo de cuadro, el tridente se vacía solo.
+        evento.ids['tridente_id'] = None
+        estado['tridente'] = marcar('tridente', SIN_DATO)
+    if evento.tipo != BAJA:
+        # Igual que el contrato: el Indeterminado no lleva duración (se queda vacía);
+        # los demás tipos, 0 o más, nunca vacía.
+        if es_indeterminado(estado.get('tipo_contrato')):
+            if evento.duracion is not None and not ('duracion' in campos and evento.duracion):
+                evento.duracion = marcar('duracion', None)
+        elif evento.duracion is None:
+            evento.duracion = marcar('duracion', 0)
     for clave in ('salario', 'otros'):
         if clave in campos:
             try:
@@ -381,6 +451,66 @@ def _aplicar_campos(evento, campos):
             if valor < 0:
                 raise ErrorDeBorrador('%s no puede ser negativo.' % ETIQUETAS[clave])
             estado[clave] = marcar(clave, valor)
+
+
+def vacio(valor):
+    return valor in (None, '', SIN_DATO)
+
+
+def es_cuadro(estado):
+    """Cuadro Directivo o Ejecutivo (CDI/CEJ), por el texto de la categoría que
+    guarda el evento (`get_cat_ocupacional_display`)."""
+    return 'CUADRO' in (estado.get('cat_ocupacional') or '').upper()
+
+
+def es_indeterminado(tipo_contrato):
+    """Mismo criterio que el formulario del contrato: el Indeterminado no lleva duración."""
+    return 'INDETERMINADO' in (tipo_contrato or '').upper()
+
+
+def _aplicar_a_mano(evento, campos, marcar):
+    """«Escribir a mano»: unidad, departamento y cargo con su nombre de entonces;
+    grupo, categoría y rol de las listas del nomenclador; y la unidad de HOY a la
+    que corresponde, que es lo que usan los filtros y el alcance del Moderador."""
+    from nomencladores.models import NCargo, NGrupoEscala, NRol
+    from strorganizativa.models import UnidadOrganizativa
+
+    estado = evento.estado
+    if 'a_mano' in campos:
+        valor = campos['a_mano'] in (True, 'true', '1', 1)
+        if valor != evento.a_mano:
+            evento.a_mano = marcar('a_mano', valor)
+    if not evento.a_mano and any(k in campos for k in tuple(TEXTOS_A_MANO) + LISTAS_A_MANO):
+        raise ErrorDeBorrador('Para escribir la plaza a mano, marque antes «Escribir a mano» en el %s.'
+                              % evento.nombre.lower())
+    for clave_campo, dato in TEXTOS_A_MANO.items():
+        if clave_campo in campos:
+            valor = ' '.join(str(campos[clave_campo] or '').split())[:255] or SIN_DATO
+            if estado.get(dato) != valor:
+                estado[dato] = marcar(dato, valor)
+    if any(k in campos for k in LISTAS_A_MANO):
+        listas = {
+            'grupo_escala': set(NGrupoEscala.objects.values_list('nivel', flat=True)),
+            'cat_ocupacional': {etiqueta for _, etiqueta in NCargo._meta.get_field('cat_ocupacional').choices},
+            'rol': set(NRol.objects.values_list('tipo', flat=True)),
+        }
+        for dato, validos in listas.items():
+            if dato not in campos:
+                continue
+            valor = (campos[dato] or '').strip() or SIN_DATO
+            if valor != SIN_DATO and valor not in validos:
+                raise ErrorDeBorrador('%s «%s» no está en el nomenclador.' % (ETIQUETAS[dato], valor))
+            if estado.get(dato) != valor:
+                estado[dato] = marcar(dato, valor)
+    if 'unidad_id' in campos:
+        valor = campos['unidad_id']
+        unidad = UnidadOrganizativa.objects.filter(pk=valor).first() if str(valor or '').isdigit() else None
+        if valor not in (None, '') and unidad is None:
+            raise ErrorDeBorrador('La unidad de hoy elegida no existe.')
+        nuevo_id = unidad.pk if unidad else None
+        if evento.unidad_fk_id != nuevo_id:
+            evento.unidad_fk_id = nuevo_id
+            evento.unidad_fk = marcar('unidad_fk', unidad.descripcion if unidad else '')
 
 
 def aplicar(historico, cambios):
@@ -414,10 +544,12 @@ def aplicar(historico, cambios):
             campos = dict(cambio.get('campos') or {})
             if not campos.get('fecha'):
                 raise ErrorDeBorrador('Indique la fecha del movimiento que va a insertar.')
-            evento = Evento(clave='nuevo:%d' % nuevos, tipo=MOV,
+            evento = Evento(clave='nuevo:%d' % nuevos, tipo=MOV, duracion=0,
                             fecha=_fecha(campos.pop('fecha'), 'La fecha'),
                             estado=dict(anterior.estado), antes=dict(anterior.estado), nuevo=True)
             evento.ids = dict(anterior.ids)
+            evento.unidad_fk_id, evento.unidad_fk = anterior.unidad_fk_id, anterior.unidad_fk
+            evento.plaza_reconocida = anterior.plaza_reconocida
             _aplicar_campos(evento, campos)
             propuesto.eventos.insert(propuesto.eventos.index(anterior) + 1, evento)
         else:
@@ -522,9 +654,88 @@ def _errores_de_tipo(historico):
     return errores
 
 
+def ultimo_del_vigente(historico):
+    """El último evento vivo del contrato vigente (None si la persona está de baja)."""
+    grupos = ciclos(historico)
+    if grupos and grupos[-1][-1].tipo != BAJA:
+        return grupos[-1][-1]
+    return None
+
+
+def _errores_de_reglas(historico):
+    """Las reglas del formulario del contrato, en los eventos que se tocan (25-10-2026).
+
+    Solo en los corregidos o insertados: un evento antiguo que nadie toca se guarda
+    como estaba, aunque entonces se registrara sin alguna de estas reglas.
+
+    * Tridente: obligatorio con salario Dinámico en un cargo que no es cuadro; un
+      cuadro o un salario Fijo no lo llevan.
+    * Duración: vacía en el Indeterminado; en los demás, 0 o más (por defecto 0).
+    * Plazas libres: solo en el último evento del contrato vigente (es el que manda
+      en el contrato de hoy) y solo si cambia de cargo.
+    * «Escribir a mano»: solo si la plantilla de hoy no reconoce la plaza o en un
+      movimiento insertado, nunca en el último del contrato vigente, y siempre con
+      la unidad de hoy a la que corresponde.
+    """
+    from nomencladores.models import NTipoContrato
+    from strorganizativa.models import CargoPlantilla
+
+    from .models import CAlta
+
+    errores = []
+    ultimo = ultimo_del_vigente(historico)
+    tipos = {t.descripcion: t for t in NTipoContrato.objects.all()}
+    for e in historico.vivos():
+        if e.tipo == BAJA or not (e.nuevo or e.editado):
+            continue
+        s = e.estado
+        if e.a_mano:
+            if ultimo is not None and e.clave == ultimo.clave:
+                errores.append('%s: es el último del contrato vigente y manda en el contrato de hoy; elija '
+                               'la plaza en las listas (no se puede escribir a mano).' % e.nombre)
+            elif 'a_mano' in e.editado and not e.nuevo and e.plaza_reconocida:
+                errores.append('%s: su plaza existe en la plantilla de hoy; elíjala en las listas en vez '
+                               'de escribirla a mano.' % e.nombre)
+            faltan = [ETIQUETAS[d].lower() for d in ('unidad', 'departamento', 'cargo') if vacio(s.get(d))]
+            if faltan:
+                errores.append('%s: escriba %s.' % (e.nombre, ', '.join(faltan)))
+            if not e.unidad_fk_id:
+                errores.append('%s: elija a qué unidad de hoy corresponde (la usan los filtros y el '
+                               'alcance del Moderador).' % e.nombre)
+        elif 'a_mano' in e.editado and 'cargo_id' not in e.ids:
+            errores.append('%s: elija el cargo en las listas o deje marcado «Escribir a mano».' % e.nombre)
+
+        cuadro = es_cuadro(s)
+        if s.get('tipo_salario') == 'Dinámico' and not cuadro and vacio(s.get('tridente')):
+            errores.append('%s: falta el tridente (es obligatorio con salario Dinámico en un cargo que no '
+                           'es cuadro).' % e.nombre)
+        elif (cuadro or s.get('tipo_salario') == 'Fijo') and not vacio(s.get('tridente')):
+            errores.append('%s: %s no lleva tridente.' % (e.nombre, 'un cuadro' if cuadro else 'el salario Fijo'))
+
+        # Duración: el Indeterminado no la lleva (vacía, como en el contrato); los
+        # demás, 0 o más (decisión del usuario, 25-10-2026).
+        tipo = (s.get('tipo_contrato') or '').strip()
+        if tipo in tipos and es_indeterminado(tipo) and e.duracion:
+            errores.append('%s: el contrato Indeterminado no lleva duración.' % e.nombre)
+
+        if (ultimo is not None and e.clave == ultimo.clave and e.ids.get('cargo_id')
+                and tipo in tipos and tipos[tipo].ocupa_plaza):
+            contrato = CAlta.objects.filter(pk=historico.contrato_pk).values('cargo_id').first()
+            if contrato is None or contrato['cargo_id'] != e.ids['cargo_id']:
+                cargo = CargoPlantilla.objects.filter(pk=e.ids['cargo_id']).first()
+                if cargo is not None and not cargo.en_plantilla:
+                    errores.append('%s: el cargo «%s» está fuera de la plantilla aprobada y no admite '
+                                   'contratos que ocupen plaza.' % (e.nombre, cargo))
+                elif cargo is not None and cargo.cant_cubierta_real >= cargo.cant_aprobada:
+                    errores.append('%s: el cargo «%s» no tiene plazas disponibles (%s/%s).'
+                                   % (e.nombre, cargo, cargo.cant_cubierta_real, cargo.cant_aprobada))
+    return errores
+
+
 def comprobar(historico):
     """Errores del histórico propuesto (lista vacía si todo está bien)."""
-    return _errores_de_borrado(historico) + _errores_de_orden(historico) + _errores_de_tipo(historico)
+    return (_errores_de_borrado(historico) + _errores_de_orden(historico) + _errores_de_tipo(historico)
+            + _errores_de_reglas(historico))
 
 
 # --------------------------------------------------------------------------
@@ -536,6 +747,8 @@ def _texto(valor):
         return SIN_DATO
     if isinstance(valor, date):
         return valor.strftime('%d/%m/%Y')
+    if isinstance(valor, bool):
+        return 'Sí' if valor else 'No'
     if isinstance(valor, Decimal):
         return '{:,.2f}'.format(valor).replace(',', ' ').replace('.', ',')
     return str(valor)
@@ -765,7 +978,7 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
                         fecha_efectiva=e.fecha, fecha_solicitud=e.fecha_solicitud,
                         observaciones=e.observaciones, duracion_nueva=e.duracion,
                         tipo_movimiento=NOMBRE_TIPO[MOV], usuario=nombre_usuario,
-                        unidad_nueva_fk_id=e.ids.get('unidad_id'))
+                        unidad_nueva_fk_id=e.unidad_fk_id, escrito_a_mano=e.a_mano)
                     _volcar_estado(mov, e.antes, e.estado)
                     mov.save()
                     auditar(mov, AccionAuditoria.CREAR, despues=registro_automatico.fotografia(mov))
@@ -790,8 +1003,8 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
                     else:
                         mov.fecha_solicitud = e.fecha_solicitud
                         mov.duracion_nueva = e.duracion
-                        if 'unidad_id' in e.ids:
-                            mov.unidad_nueva_fk_id = e.ids['unidad_id']
+                        mov.unidad_nueva_fk_id = e.unidad_fk_id
+                        mov.escrito_a_mano = e.a_mano
                     _volcar_estado(mov, e.antes, e.estado if e.tipo != BAJA else None)
                     mov.save()
                     auditar(mov, AccionAuditoria.MODIFICAR, antes_foto, registro_automatico.fotografia(mov))
@@ -840,8 +1053,7 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
                         contrato.motivo_id = ids['motivo_id']
                         contrato.tridente_id = ids['tridente_id']
                         contrato.tipo_salario = ids['tipo_salario']
-                        if ultimo.duracion is not None:
-                            contrato.duracion = ultimo.duracion
+                        contrato.duracion = ultimo.duracion
                     if cambia_alta:
                         contrato.fecha_alta = alta.fecha
                     contrato.save()

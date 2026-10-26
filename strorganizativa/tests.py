@@ -177,12 +177,14 @@ class AlcanceGestorPlantillaTests(TestCase):
         cls.ajena = UnidadOrganizativa.objects.create(
             codigo_interno=3, descripcion='UEB Ajena', tipo=principal, grupo_nomina=2)
 
-        cls.dpto_propio = Departamento.objects.create(
-            descripcion='Dpto Propio', unidad_organizativa=cls.propia)
+        # Desde el 25-10-2026 una unidad principal no puede tener departamentos propios;
+        # estos se crean como datos antiguos (sin la validación) porque lo que se prueba
+        # aquí es el alcance del Moderador, también sobre esos datos.
+        cls.dpto_propio, cls.dpto_ajeno = Departamento.objects.bulk_create([
+            Departamento(descripcion='Dpto Propio', unidad_organizativa=cls.propia, orden_informe=1),
+            Departamento(descripcion='Dpto Ajeno', unidad_organizativa=cls.ajena, orden_informe=1)])
         cls.dpto_hija = Departamento.objects.create(
             descripcion='Dpto de la Subunidad', unidad_organizativa=cls.hija)
-        cls.dpto_ajeno = Departamento.objects.create(
-            descripcion='Dpto Ajeno', unidad_organizativa=cls.ajena)
 
         grupo = NGrupoEscala.objects.create(nivel='I')
         ncargo = NCargo.objects.create(
@@ -425,3 +427,53 @@ class GrupoDeNominaUnicoTests(TestCase):
         resultado = importar_estructura(salida)
         self.assertTrue(any('el grupo de nómina 7 ya lo tiene' in e for e in resultado['errores']))
         self.assertFalse(UnidadOrganizativa.objects.filter(descripcion='UEB Najasa').exists())
+
+
+class UnidadPrincipalSinDepartamentosTests(TestCase):
+    """Una unidad principal no tiene departamentos propios: los tienen sus subunidades
+    (25-10-2026). Lo comprueba el servidor, venga de donde venga."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from .models import Departamento
+        cls.Departamento = Departamento
+        cls.principal_tipo = NTipoUnidadOrganizativa.objects.create(descripcion='Dirección General', es_principal=True)
+        cls.ueb = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+        cls.principal = UnidadOrganizativa.objects.create(descripcion='Oficina Central', tipo=cls.principal_tipo,
+                                                          grupo_nomina=11, orden_informe=1)
+        cls.normal = UnidadOrganizativa.objects.create(descripcion='UEB Florida', tipo=cls.ueb,
+                                                       grupo_nomina=12, orden_informe=2)
+
+    def test_no_se_crea_un_departamento_en_una_unidad_principal(self):
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError) as error:
+            self.Departamento.objects.create(descripcion='Grupo Jurídico', unidad_organizativa=self.principal)
+        self.assertIn('es una unidad principal', str(error.exception))
+
+    def test_una_unidad_con_departamentos_no_pasa_a_principal(self):
+        from django.core.exceptions import ValidationError
+        self.Departamento.objects.create(descripcion='Dirección', unidad_organizativa=self.normal)
+        self.normal.tipo = self.principal_tipo
+        with self.assertRaises(ValidationError):
+            self.normal.save()
+
+    def test_el_importador_lo_rechaza_en_su_fila(self):
+        import io
+        from .importacion import exportar_estructura, importar_estructura
+        libro = exportar_estructura()
+        libro['Departamentos'].append(['Oficina Central', 'Grupo Jurídico', None])
+        salida = io.BytesIO()
+        libro.save(salida)
+        salida.seek(0)
+        resultado = importar_estructura(salida)
+        self.assertTrue(any('es una unidad principal' in e for e in resultado['errores']), resultado['errores'])
+        self.assertFalse(self.Departamento.objects.filter(descripcion='Grupo Jurídico').exists())
+
+    def test_est010_avisa_de_los_que_ya_existian(self):
+        from subsanacion.contexto import ContextoAnalisis
+        from subsanacion.reglas import obtener_regla
+        # Como los datos antiguos: entró sin pasar por la validación.
+        self.Departamento.objects.bulk_create([self.Departamento(
+            descripcion='Grupo Jurídico', unidad_organizativa=self.principal, orden_informe=1)])
+        hallazgos = list(obtener_regla('EST-010').ejecutar(ContextoAnalisis()))
+        self.assertEqual([h.object_id for h in hallazgos], [str(self.principal.pk)])

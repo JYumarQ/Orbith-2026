@@ -268,9 +268,18 @@ def panel_reglas(request):
     conteo = dict(abiertos.order_by().values_list('codigo_regla')
                   .annotate(n=Count('id')).values_list('codigo_regla', 'n'))
 
+    # Reglas activables (25-10-2026): también las desactivadas por el Administrador,
+    # con su estado y lo que tardaron y encontraron la última vez.
+    from .models import EstadoRegla
+    estados = {e.codigo: e for e in EstadoRegla.objects.select_related('cambiado_por')}
     por_modulo = {clave: [] for clave, _, _ in MODULOS}
-    for regla in obtener_reglas():
+    for regla in obtener_reglas(solo_activas=False):
+        if not type(regla).activa:
+            continue                     # retirada desde el código: no se ofrece
+        estado = estados.get(regla.codigo)
         por_modulo.setdefault(regla.modulo, []).append({
+            'activa': estado is None or estado.activa,
+            'estado': estado,
             'codigo': regla.codigo,
             'nombre': regla.nombre,
             'criticidad': dict(CRITICIDADES).get(regla.criticidad, ''),
@@ -292,6 +301,8 @@ def panel_reglas(request):
     return render(request, 'pages/subsanacion/partials/panel_reglas.html', {
         'categorias': categorias,
         'total': sum(len(c['reglas']) for c in categorias),
+        'desactivadas': sum(1 for c in categorias for r in c['reglas'] if not r['activa']),
+        'puede_gestionar_reglas': permisos.es_administrador(request.user),
         'prefijos': [(clave, texto, ejemplo) for clave, (texto, ejemplo) in PREFIJOS.items()],
         'modulo_extras': MODULO_EXTRAS,
     })
@@ -619,4 +630,77 @@ def problemas_registro(request, modelo, pk):
         })
     return render(request, 'pages/subsanacion/partials/problemas_registro.html', {
         'titulo': titulo, 'problemas': problemas, 'es_admin': es_admin,
+    })
+
+
+
+# --------------------------------------------------------------------------
+# Reglas activables (25-10-2026): el Administrador (y el Moderador con el permiso
+# especial «Subsanación como administrador») desactiva las reglas ya limpias para
+# aliviar el análisis, sin borrarlas, y puede probarlas cuando quiera.
+# --------------------------------------------------------------------------
+
+def _regla_conocida(codigo):
+    regla = obtener_regla(codigo)
+    if regla is None or not type(regla).activa:
+        raise Http404('Esa regla no existe.')
+    return regla
+
+
+@permisos.solo_admin_subsanacion
+@require_POST
+def cambiar_estado_regla(request, codigo):
+    """Activa o desactiva una regla. Los avisos que ya tenga abiertos no se tocan."""
+    from auditoria.models import AccionAuditoria
+    from auditoria.registro_automatico import registrar
+    from usuarios.permisos_especiales import con_permiso
+
+    from .models import EstadoRegla
+
+    regla = _regla_conocida(codigo)
+    activa = request.POST.get('activa') == '1'
+    motivo = (request.POST.get('motivo') or '').strip()[:255]
+    estado, _ = EstadoRegla.objects.get_or_create(codigo=regla.codigo)
+    if estado.activa != activa:
+        antes = {'Estado': 'Activa' if estado.activa else 'Desactivada'}
+        estado.activa = activa
+        estado.motivo = motivo
+        estado.cambiado_por = request.user
+        estado.cambiado_en = timezone.now()
+        estado.save()
+        with con_permiso(request.user, 'subsanacion'):
+            registrar(estado, AccionAuditoria.MODIFICAR, antes=antes,
+                      despues={'Estado': 'Activa' if activa else 'Desactivada',
+                               **({'Motivo': motivo} if motivo else {})},
+                      descriptor='Regla de Subsanación %s · %s' % (regla.codigo, regla.nombre),
+                      unidad=None)
+    return panel_reglas(request)
+
+
+@permisos.solo_admin_subsanacion
+@require_POST
+def probar_regla(request, codigo):
+    """«Probar ahora»: ejecuta solo esta regla, una vez, SIN crear avisos ni avisar a
+    nadie, y dice cuántos fallos encontraría (con los primeros de la lista)."""
+    import time
+
+    from .models import EstadoRegla
+
+    regla = _regla_conocida(codigo)
+    inicio = time.monotonic()
+    encontrados, muestra = 0, []
+    error = ''
+    try:
+        for detectado in regla.ejecutar(ContextoAnalisis()):
+            encontrados += 1
+            if len(muestra) < 20:
+                muestra.append(detectado.titulo)
+    except Exception as exc:                          # noqa: BLE001
+        logger.exception('Subsanación: falló la prueba de la regla %s', regla.codigo)
+        error = '%s: %s' % (type(exc).__name__, exc)
+    estado = EstadoRegla.objects.filter(codigo=regla.codigo).first()
+    return render(request, 'pages/subsanacion/partials/prueba_regla.html', {
+        'regla': regla, 'encontrados': encontrados, 'muestra': muestra, 'error': error,
+        'segundos': round(time.monotonic() - inicio, 2),
+        'activa': estado is None or estado.activa,
     })

@@ -954,6 +954,14 @@ class TMovimiento(models.Model):
     fecha_solicitud = models.DateField(null=True, blank=True, verbose_name="Fecha de Solicitud")
     observaciones = models.TextField(null=True, blank=True)
 
+    # Unidad, departamento y cargo escritos a mano en el editor del histórico
+    # (25-10-2026): plazas de antes que ya no existen en la plantilla de hoy, o
+    # movimientos que faltaron. Solo cambia cómo se ENSEÑA el evento (marca
+    # «escrito a mano» en el editor, el Histórico y su PDF); los informes no leen
+    # estos textos, y `unidad_nueva_fk` sigue diciendo a qué unidad de hoy
+    # corresponde.
+    escrito_a_mano = models.BooleanField(default=False, verbose_name='Escrito a mano')
+
     class Meta:
         verbose_name = "T Movimiento (detalle sin agrupar)"
         verbose_name_plural = "T Movimientos (detalle sin agrupar)"

@@ -23,7 +23,8 @@ from openpyxl import load_workbook
 
 from core.excel_admin import Simulacion, clave, columnas, hoja_con_titulos, libro_vacio, limpio
 
-from .models import Departamento, UnidadOrganizativa, unidad_con_el_grupo_de_nomina
+from .models import (MENSAJE_UNIDAD_PRINCIPAL, Departamento, UnidadOrganizativa,
+                     unidad_con_el_grupo_de_nomina)
 
 HOJA_UNIDADES = 'Unidades'
 HOJA_DEPARTAMENTOS = 'Departamentos'
@@ -237,6 +238,10 @@ def importar_estructura(archivo, estrategia='SALTAR', simular=False):
                     continue
                 existente = next((d for d in Departamento.objects.filter(unidad_organizativa=unidad)
                                   if clave(d.descripcion) == clave(datos['nombre'])), None)
+                if existente is None and unidad.tipo_id and unidad.tipo.es_principal:
+                    resultado['errores'].append('Departamentos, fila %d («%s»): %s' % (
+                        datos['fila'], datos['nombre'], MENSAJE_UNIDAD_PRINCIPAL % unidad.descripcion))
+                    continue
                 if existente is None:
                     Departamento.objects.create(
                         unidad_organizativa=unidad, descripcion=datos['nombre'],

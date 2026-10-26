@@ -13,7 +13,9 @@
                   hx-target="#modal_generic"
                   hx-swap="innerHTML"
                   
-                  id="uniorgForm">
+                  id="uniorgForm"
+                  data-validacion-visual
+                  data-recomendados="orden_informe">
 
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ next }}">
@@ -57,7 +59,7 @@
                     </div>
                 </div>
                 
-                {% if not user.es_moderador or user.es_admin %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
+                {% if not user.es_moderador or user.es_admin or permisos.editar_sin_solicitud %}{% include 'base/partials/motivo_cambio.html' %}{% endif %}
 
                 <div class="modal-footer px-0 pb-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>

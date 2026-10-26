@@ -180,7 +180,7 @@
             <i class="bx bx-help-circle me-1"></i>¿Cómo funciona?
           </button>
           <ul class="dropdown-menu" style="font-size: .875rem;">
-            {% if user.es_admin %}
+            {% if user.es_admin or permisos.subsanacion %}
             <li><button type="button" class="dropdown-item" data-recorrido="primer_analisis_subsanacion:subsanacion">
               <i class="bx bx-play-circle me-1"></i>Ejecutar un análisis</button></li>
             {% endif %}
@@ -234,7 +234,7 @@
         <i class="bi bi-journal-text me-1"></i>Índice de Reglas
       </button>
     </li>
-    {% if user.es_admin %}
+    {% if user.es_admin or permisos.subsanacion %}
     <li class="nav-item">
       <button class="nav-link" data-bs-toggle="tab" data-bs-target="#paneRevisiones" type="button"
               hx-get="{% url 'subsanacion:panel_revisiones' %}"
@@ -264,7 +264,7 @@
        ver la pantalla principal. {% endcomment %}
     <div class="tab-pane fade{% if tab_activo != 'hallazgos' %} show active{% endif %}" id="paneDashboard">
       {% if tab_activo != 'hallazgos' %}
-        {% if user.es_admin %}
+        {% if user.es_admin or permisos.subsanacion %}
           {% include 'pages/subsanacion/partials/panel_dashboard.html' %}
         {% else %}
           {% include 'pages/subsanacion/partials/panel_dashboard_moderador.html' %}
@@ -286,7 +286,7 @@
     <div class="tab-pane fade" id="paneReglas">
       <div class="sub-vacio"><div class="spinner-border spinner-border-sm"></div> Cargando el índice…</div>
     </div>
-    {% if user.es_admin %}
+    {% if user.es_admin or permisos.subsanacion %}
     {% comment %} El contenedor interior permite que la paginación del historial se
        recargue sola sin volver a pedir la pestaña entera. {% endcomment %}
     <div class="tab-pane fade" id="paneRevisiones">

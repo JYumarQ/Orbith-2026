@@ -96,9 +96,11 @@ class CustomUserCreateView(LoginRequiredMixin, CreateView):
 #        return JsonResponse({'form_is_valid': False, 'html_form': html_form})
 
     def form_valid(self, form):
+        from .permisos_especiales import registrar_cambio_de_perfil
         user = form.save(commit=False)
         user.save()
         form.save_m2m()
+        registrar_cambio_de_perfil(user, {'perfil': '', 'vence': '', 'motivo': ''})
         message = f'Usuario "{user.username}" creado correctamente.'
         return JsonResponse({
             'form_is_valid': True,
@@ -123,8 +125,11 @@ class CustomUserUpdateView(LoginRequiredMixin, AdvertenciasDelRegistroMixin, Mod
     url_por_defecto = reverse_lazy('list_usuarios')
 
     def form_valid(self, form):
+        from .permisos_especiales import foto_de_asignacion, registrar_cambio_de_perfil
+        antes = foto_de_asignacion(form.instance.pk)
         user = form.save()
         self.object = user
+        registrar_cambio_de_perfil(user, antes)
         hay_origen = bool(self.request.POST.get('next') or self.request.GET.get('next'))
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
             # Hay una redirección real posterior SOLO cuando hay `next` (ver
@@ -846,3 +851,61 @@ def ejecutar_todos_los_analisis(request):
         'etiqueta_primero': ETIQUETA_MODULO.get(solicitados[0]) if solicitados else '',
     })
     return render(request, 'pages/usuarios/partials/analisis_global.html', contexto)
+
+
+# --------------------------------------------------------------------------
+# Perfiles de permisos especiales (25-10-2026). Solo el Administrador.
+# --------------------------------------------------------------------------
+
+def perfiles_permisos(request):
+    """Lista de perfiles y formulario para crear uno o editar el elegido (?editar=id)."""
+    from .forms import PerfilPermisosForm
+    from .models import PerfilPermisos
+    from .permisos_especiales import PERMISOS, foto_de_asignacion, registrar_cambio_de_perfil
+
+    editando = None
+    if request.GET.get('editar') or request.POST.get('pk'):
+        editando = get_object_or_404(PerfilPermisos, pk=request.GET.get('editar') or request.POST.get('pk'))
+    if request.method == 'POST':
+        form = PerfilPermisosForm(request.POST, instance=editando)
+        if form.is_valid():
+            afectados = list(editando.moderadores.all()) if editando else []
+            antes = {m.pk: foto_de_asignacion(m.pk) for m in afectados}
+            perfil = form.save()
+            # Si cambian los permisos de un perfil en uso, se avisa a quienes lo tienen.
+            if editando and form.changed_data:
+                for moderador in afectados:
+                    antes[moderador.pk]['perfil'] = antes[moderador.pk]['perfil'] + ' (antes del cambio)'
+                    moderador.refresh_from_db()
+                    registrar_cambio_de_perfil(moderador, antes[moderador.pk])
+            messages.success(request, 'Perfil «%s» guardado.' % perfil.nombre)
+            return redirect('perfiles_permisos')
+    else:
+        form = PerfilPermisosForm(instance=editando)
+    perfiles = PerfilPermisos.objects.prefetch_related('moderadores').order_by('nombre')
+    return render(request, 'pages/usuarios/perfiles_permisos.html', {
+        'form': form, 'editando': editando, 'perfiles': perfiles,
+        'campos_permisos': [(form[codigo], nombre, ayuda) for codigo, nombre, ayuda in PERMISOS],
+    })
+
+
+@require_POST
+def borrar_perfil_permisos(request, pk):
+    """Borra el perfil; los Moderadores que lo tenían se quedan sin permisos especiales
+    (se les avisa y queda en Auditoría)."""
+    from .models import PerfilPermisos
+    from .permisos_especiales import foto_de_asignacion, registrar_cambio_de_perfil
+
+    perfil = get_object_or_404(PerfilPermisos, pk=pk)
+    moderadores = list(perfil.moderadores.all())
+    antes = {m.pk: foto_de_asignacion(m.pk) for m in moderadores}
+    CustomUser.objects.filter(pk__in=[m.pk for m in moderadores]).update(
+        perfil_permisos=None, perfil_vence=None, perfil_motivo='')
+    for moderador in moderadores:
+        moderador.refresh_from_db()
+        registrar_cambio_de_perfil(moderador, antes[moderador.pk])
+    nombre = perfil.nombre
+    perfil.delete()
+    messages.success(request, 'Perfil «%s» borrado.%s' % (
+        nombre, ' %d moderador(es) se quedaron sin permisos especiales.' % len(moderadores) if moderadores else ''))
+    return redirect('perfiles_permisos')

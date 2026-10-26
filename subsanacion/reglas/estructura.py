@@ -443,3 +443,112 @@ class GrupoDeNominaRepetido(ReglaBase):
                        'tambien_lo_tienen': ', '.join(otras)},
                 unidad_organizativa_id=fila['codigo_interno'],
             )
+
+
+class UnidadPrincipalConDepartamentos(ReglaBase):
+    """EST-010 (25-10-2026): una unidad principal con departamentos propios. Las
+    unidades principales no tienen departamentos: los tienen sus subunidades. El
+    Gestor, el formulario, el importador de Excel y el modelo ya no lo permiten; esta
+    regla encuentra los que ya existían."""
+
+    codigo = 'EST-010'
+    nombre = 'Unidad principal con departamentos propios'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'strorganizativa.UnidadOrganizativa'
+
+    descripcion = (
+        'Busca unidades principales que tienen departamentos colgados directamente. Los '
+        'departamentos van en sus subunidades.')
+    causa_probable = (
+        'Hasta el 25-10-2026 el servidor no lo impedía: entraban por el importador de Excel, '
+        'el admin de Django o una carga de datos.')
+    impacto = (
+        'El Gestor de Plantilla no muestra esos departamentos (en una unidad principal no '
+        'se cargan) y los informes los agrupan fuera de cualquier subunidad.')
+    solucion = (
+        'Cree las subunidades de la unidad principal y pase cada departamento a la suya '
+        '(editar el departamento y cambiar su unidad). Sus cargos, plazas y contratos van con él.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+        Departamento = apps.get_model('strorganizativa', 'Departamento')
+        filas = (self.base_queryset().filter(tipo__es_principal=True)
+                 .annotate(n_departamentos=Count('departamentos'))
+                 .filter(n_departamentos__gt=0)
+                 .values('codigo_interno', 'descripcion', 'n_departamentos'))
+        for fila in filas:
+            nombres = list(Departamento.objects.filter(unidad_organizativa_id=fila['codigo_interno'])
+                           .order_by('orden_informe').values_list('descripcion', flat=True)[:5])
+            yield HallazgoDetectado(
+                object_id=str(fila['codigo_interno']),
+                titulo=(f'{fila["descripcion"]} (código {fila["codigo_interno"]}) · unidad principal con '
+                        f'{fila["n_departamentos"]} departamentos propios'),
+                detalle=('Tiene departamentos colgados directamente, por ejemplo: '
+                         + ', '.join('«%s»' % n for n in nombres)
+                         + ('…' if fila['n_departamentos'] > 5 else '.')),
+                datos={'departamentos': fila['n_departamentos']},
+                unidad_organizativa_id=fila['codigo_interno'],
+            )
+
+
+class CargoSobregirado(ReglaBase):
+    """EST-011 (25-10-2026): un cargo con más contratos que ocupan plaza que plazas
+    aprobadas. «Editar contrato» ya no deja guardar los contratos de ese cargo hasta
+    resolverlo; esta regla los encuentra todos. Los cargos con 0 plazas aprobadas
+    los avisa VIS-006 (cargo cerrado con trabajadores)."""
+
+    codigo = 'EST-011'
+    nombre = 'Cargo con más plazas cubiertas que aprobadas'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_ALTA
+    modelo = 'strorganizativa.CargoPlantilla'
+
+    descripcion = (
+        'Busca cargos donde los contratos activos que ocupan plaza (por ejemplo, los '
+        'Indeterminados) son más que las plazas aprobadas.')
+    causa_probable = (
+        'Un contrato pasó a un tipo que ocupa plaza sin cambiar de cargo (hasta el '
+        '25-10-2026 no se comprobaba), se bajaron las plazas aprobadas del cargo, se cambió '
+        '«Ocupa plaza» en el tipo de contrato, o los datos entraron por el admin de Django '
+        'o una carga de datos.')
+    impacto = (
+        'La plantilla informa más plazas cubiertas que aprobadas (Anexo 17, Dashboard e '
+        'informes) y los contratos de ese cargo no se pueden guardar en «Editar contrato».')
+    solucion = (
+        'Decida quién ocupa la plaza por error y haga un movimiento de nómina a otro cargo o '
+        'a un tipo que no ocupe plaza, o corrija su histórico en el editor del histórico. Si '
+        'la plantilla aprobada tiene más plazas, suba la Cantidad aprobada del cargo.')
+
+    def ejecutar(self, contexto):
+        from django.apps import apps
+        CAlta = apps.get_model('contratos', 'CAlta')
+        filas = (self.base_queryset()
+                 .filter(cant_aprobada__gt=0)
+                 .annotate(ocupadas=Count(
+                     'calta', distinct=True,
+                     filter=Q(calta__aspirante__estado='ACTIVO', calta__tipo__ocupa_plaza=True)))
+                 .filter(ocupadas__gt=F('cant_aprobada'))
+                 .values('id', 'cant_aprobada', 'ocupadas', 'ncargo__descripcion',
+                         'departamento__descripcion', 'departamento__unidad_organizativa__descripcion',
+                         'departamento__unidad_organizativa_id'))
+        for fila in filas:
+            cargo = fila.get('ncargo__descripcion') or 'Cargo sin descripción'
+            lugar = '%s · %s' % (fila.get('departamento__descripcion') or '—',
+                                 fila.get('departamento__unidad_organizativa__descripcion') or '—')
+            nombres = ['%s %s (exp. %s)' % n for n in (
+                CAlta.objects.filter(cargo_id=fila['id'], aspirante__estado='ACTIVO', tipo__ocupa_plaza=True)
+                .order_by('fecha_alta', 'pk')
+                .values_list('aspirante__nombre', 'aspirante__papellido', 'no_expediente')[:6])]
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=(f'{cargo} · {lugar} · {fila["ocupadas"]} plazas cubiertas y '
+                        f'{fila["cant_aprobada"]} aprobadas'),
+                detalle=(f'Ocupan plaza: ' + ', '.join(nombres)
+                         + ('…' if fila['ocupadas'] > 6 else '.')
+                         + ' No se pueden guardar sus contratos en «Editar contrato» hasta resolverlo.'),
+                datos={'cargo': cargo, 'lugar': lugar, 'plazas_aprobadas': fila['cant_aprobada'],
+                       'plazas_cubiertas': fila['ocupadas'],
+                       'sobran': fila['ocupadas'] - fila['cant_aprobada']},
+                unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
+            )

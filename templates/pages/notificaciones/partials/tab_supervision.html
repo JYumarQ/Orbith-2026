@@ -1,0 +1,59 @@
+{% comment %} Pestaña «Supervisión» (solo Administrador, 25-10-2026): los avisos que
+   recibieron los moderadores, una fila por aviso, con quién lo ha leído. Es de solo
+   lectura: el Administrador no marca nada por nadie (su propia bandeja es la pestaña
+   «Notificaciones»). La construye `notificaciones/views.py::_contexto_tab_supervision`. {% endcomment %}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+  <p class="text-muted small mb-0">
+    <i class="bx bx-show me-1"></i>Lo que recibieron los moderadores y si ya lo leyeron. Solo consulta: desde aquí no se marca nada.
+  </p>
+  <div class="btn-group btn-group-sm" role="group" aria-label="Qué avisos ver">
+    <a class="btn {% if sub_supervision == 'pendientes' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+       href="?tab=supervision&sub=pendientes">Sin leer por algún moderador</a>
+    <a class="btn {% if sub_supervision == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+       href="?tab=supervision&sub=todos">Todos</a>
+  </div>
+</div>
+
+<div class="card orb-tabla-card">
+  <div class="orb-tabla-scroll">
+    <table class="table orb-tabla">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th class="text-wrap" style="min-width: 320px;">Aviso</th>
+          <th>Unidad</th>
+          <th>Moderadores</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for aviso in supervision %}
+        <tr>
+          <td class="text-nowrap">{{ aviso.fecha|date:"d/m/Y" }}<br><small class="text-muted">{{ aviso.fecha|date:"H:i" }}</small></td>
+          <td class="text-wrap">
+            <div class="fw-semibold">{{ aviso.titulo }}</div>
+            <small class="text-muted">{{ aviso.mensaje|truncatechars:220 }}</small>
+          </td>
+          <td class="text-wrap"><small>{{ aviso.unidad__descripcion|default:'—' }}</small></td>
+          <td>
+            <div class="d-flex flex-wrap gap-1">
+              {% for m in aviso.moderadores %}
+                <span class="badge {% if m.leido %}bg-label-success{% else %}bg-label-warning{% endif %}" style="text-transform: none;"
+                      title="{% if m.leido %}Leído{% else %}Sin leer{% endif %}">
+                  <i class="bx {% if m.leido %}bx-check{% else %}bx-time-five{% endif %} me-1"></i>{{ m.usuario }}
+                </span>
+              {% endfor %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-5">
+            {% if sub_supervision == 'pendientes' %}Los moderadores han leído todos sus avisos.{% else %}Los moderadores no tienen avisos.{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=supervision querystring=querystring_sin_pagina nombre='avisos' %}
+</div>

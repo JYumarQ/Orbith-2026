@@ -14,7 +14,7 @@ Uso:
     {% include 'pages/solicitudes/partials/aviso_moderador.html' with accion='eliminar' %}
 {% endcomment %}
 
-{% if user.es_moderador and not user.es_admin %}
+{% if user.es_moderador and not user.es_admin and not permisos.editar_sin_solicitud %}
 <div class="alert alert-info d-flex align-items-start" role="alert">
     <i class="fas fa-paper-plane me-2 mt-1"></i>
     <div class="small">
