@@ -259,7 +259,7 @@ class Solicitud(Base):
         return self.puede_editarla(usuario)
 
     def puede_revisarla(self, usuario):
-        """Cualquier Administrador (o Moderador con «Resolver solicitudes», nunca la suya),
+        """Cualquier Administrador (o Moderador con «Resolver solicitudes», también la suya),
         si está pendiente y no la tiene abierta otro."""
         from usuarios.permisos_especiales import puede_resolver
         if not puede_resolver(usuario, self):

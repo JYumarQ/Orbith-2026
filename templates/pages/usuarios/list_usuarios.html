@@ -507,9 +507,12 @@ function showToast(message, type = 'success') {
     $(document).on('blur', '#id_username', function() {
       const username = $(this).val();
       if (username.length < 3) return;
+      // Al EDITAR se manda quién es (26-10-2026): sin esto, su propio nombre contaba
+      // como «ya existe». La vista `validar_username` ya sabía excluirlo.
+      const userId = $(this).closest('form').data('user-id') || '';
       $.ajax({
         url: "{% url 'validar_username' %}",
-        data: { 'username': username },
+        data: { 'username': username, 'user_id': userId },
         dataType: 'json',
         success: function(data) {
           $('#username-error').remove();

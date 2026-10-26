@@ -95,13 +95,14 @@ class PermisosEspecialesTests(TestCase):
         self.asignar(PerfilPermisos.objects.create(nombre='Resuelve', resolver_solicitudes=True))
         self.assertFalse(requiere_solicitud(self.moderador))
 
-    def test_resolver_solicitudes_pero_nunca_las_suyas(self):
+    def test_resolver_solicitudes_tambien_las_suyas(self):
         from solicitudes.permisos import es_moderador
         self.asignar(self.todo)
         propia = type('S', (), {'solicitante_id': self.moderador.pk})()
         ajena = type('S', (), {'solicitante_id': self.otro.pk})()
         self.assertTrue(puede_resolver(self.moderador, ajena))
-        self.assertFalse(puede_resolver(self.moderador, propia))
+        self.assertTrue(puede_resolver(self.moderador, propia))
+        self.assertFalse(puede_resolver(self.otro, ajena))
         self.assertIn(self.moderador, usuarios_con_permiso('resolver_solicitudes'))
         # Sigue siendo Moderador para enviar las suyas.
         self.assertTrue(es_moderador(self.moderador))

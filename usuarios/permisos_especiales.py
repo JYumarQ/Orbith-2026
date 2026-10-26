@@ -8,7 +8,8 @@ cada Moderador, con caducidad y motivo opcionales.
 
 * Los permisos valen para TODA LA EMPRESA, no solo para las unidades del Moderador.
 * Límites fijos para cualquier perfil: nunca el admin de Django, nunca usuarios
-  ni perfiles, nunca resolver una solicitud propia.
+  ni perfiles. Quien tiene «Resolver solicitudes» resuelve también las suyas
+  (decisión del usuario, 26-10-2026).
 * Lo que se haga gracias a un permiso especial queda en Auditoría marcado
   «con permiso especial» (`con_permiso` / `permiso_en_uso`).
 
@@ -34,7 +35,7 @@ from django.utils import timezone
 #: booleano de `PerfilPermisos`.
 PERMISOS = (
     ('resolver_solicitudes', 'Resolver solicitudes',
-     'Aprueba o rechaza cualquier solicitud, como un Administrador (nunca las suyas), y '
+     'Aprueba o rechaza cualquier solicitud, también las suyas, como un Administrador, y '
      'recibe en la campana las solicitudes nuevas. Incluye «Editar sin solicitud»: no '
      'tiene que pedirse permiso a sí mismo.'),
     ('editar_sin_solicitud', 'Editar sin solicitud',
@@ -103,13 +104,13 @@ def usuarios_con_permiso(codigo):
 
 def puede_resolver(usuario, solicitud=None):
     """Resolver solicitudes: el Administrador, o el Moderador con ese permiso
-    especial, NUNCA sobre una solicitud suya."""
+    especial, TAMBIÉN sobre las suyas (decisión del usuario, 26-10-2026: si era un
+    Moderador normal y pasa a tener el permiso, puede aprobar las que envió antes).
+    `solicitud` se conserva en la firma por si algún día hiciera falta distinguirla."""
     if getattr(usuario, 'is_authenticated', False) and (
             getattr(usuario, 'es_admin', False) or usuario.is_superuser):
         return True
-    if not por_permiso_especial(usuario, 'resolver_solicitudes'):
-        return False
-    return solicitud is None or getattr(solicitud, 'solicitante_id', None) != usuario.pk
+    return por_permiso_especial(usuario, 'resolver_solicitudes')
 
 
 def permisos_de(usuario):

@@ -254,7 +254,7 @@ def cancelar_revision(solicitud, usuario):
     if solicitud.decidida:
         raise ErrorDeSolicitud('Esta solicitud ya fue decidida.')
     if not puede_resolver(usuario, solicitud):
-        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede cancelar una revisión.')
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con el permiso especial puede cancelar una revisión.')
 
     solicitud.estado = EstadoSolicitud.EN_ESPERA
     solicitud.revisor = None
@@ -302,7 +302,7 @@ def aprobar(solicitud, usuario, datos=None):
         raise ErrorDeSolicitud(
             f'Esta solicitud ya fue {solicitud.get_estado_display().lower()}.')
     if not puede_resolver(usuario, solicitud):
-        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede aprobar solicitudes.')
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con el permiso especial puede aprobar solicitudes.')
     if solicitud.bloqueada and solicitud.revisor_id != usuario.pk:
         raise ErrorDeSolicitud(
             f'{solicitud.bloqueada_por_nombre} está revisando esta solicitud.')
@@ -392,7 +392,7 @@ def rechazar(solicitud, usuario, motivo=''):
         raise ErrorDeSolicitud(
             f'Esta solicitud ya fue {solicitud.get_estado_display().lower()}.')
     if not puede_resolver(usuario, solicitud):
-        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede rechazar solicitudes.')
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con el permiso especial puede rechazar solicitudes.')
     if solicitud.bloqueada and solicitud.revisor_id != usuario.pk:
         raise ErrorDeSolicitud(
             f'{solicitud.bloqueada_por_nombre} está revisando esta solicitud.')
@@ -424,7 +424,7 @@ def devolver_a_espera(solicitud, usuario):
     solicitud = _bloquear(solicitud)
 
     if not puede_resolver(usuario, solicitud):
-        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con permiso especial (nunca el autor) puede devolver una solicitud a espera.')
+        raise ErrorDeSolicitud('Solo un Administrador o un Moderador con el permiso especial puede devolver una solicitud a espera.')
     if solicitud.estado != EstadoSolicitud.RECHAZADA:
         raise ErrorDeSolicitud('Solo se pueden devolver a espera las solicitudes rechazadas.')
 

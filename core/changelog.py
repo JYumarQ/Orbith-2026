@@ -39,6 +39,17 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.8.1",
+        "fecha": "2026-10-26",
+        "titulo": "Correcciones en Usuarios, permisos especiales y contrato",
+        "cambios": [
+            ("mejorado", "Permisos especiales: el Moderador con «Resolver solicitudes» puede aprobar o rechazar también sus propias solicitudes, incluidas las que envió antes de tener el permiso."),
+            ("mejorado", "Registrar y Editar contrato: «Modalidad de trabajo» pasa arriba y «Chofer Profesional» y «Jubilado Recontratado» debajo."),
+            ("corregido", "Los selectores de varias opciones (unidades del usuario, del Dashboard, de Informes…) no enseñaban la «×» de cada elemento elegido: ahora se ve y se quita con un clic, sin abrir la lista."),
+            ("corregido", "Al editar un usuario, su propio nombre aparecía como «El usuario ya existe»."),
+        ],
+    },
+    {
         "version": "3.8.0",
         "fecha": "2026-10-25",
         "titulo": "Permisos especiales para Moderadores, reglas de Subsanación activables y plazas sobregiradas",
@@ -433,74 +444,6 @@ CHANGELOG = [
         ],
     },
 
-    {
-        "version": "3.0.2",
-        "fecha": "2026-09-04",
-        "titulo": "Los seis Informes de RRHH exportan a Word y PDF, con una imagen común",
-        "cambios": [
-            ("nuevo", "Botón «Ejecutar todos los análisis» en la lista de "
-                    "Usuarios, solo para Administradores: busca incidencias, "
-                    "actualiza los recordatorios y analiza la integridad de la "
-                    "base de datos, los tres seguidos y mostrando el progreso. "
-                    "Antes había que pulsar tres botones repartidos en dos "
-                    "pantallas."),
-            ("corregido", "La búsqueda de incidencias creaba los avisos solo "
-                        "para quien pulsaba el botón. El nuevo «Ejecutar todos "
-                        "los análisis» los reparte a los destinatarios de cada "
-                        "Unidad Organizativa, y los que no tienen unidad van a "
-                        "los Administradores."),
-            ("nuevo", "Los SEIS Informes de RRHH se exportan ya a Word y a PDF. "
-                    "Antes solo tres tenían Word y dos, PDF: estrenan salida "
-                    "Trabajadores por UEB, Misiones Internacionales, Contratos "
-                    "Determinados y Registro Diario por Trabajadores."),
-            ("nuevo", "Todos los documentos llevan el mismo encabezado en cada "
-                    "página: logo, empresa, provincia, la unidad del informe, "
-                    "quién lo exportó, el período y «Hoja X de Y», con la fecha "
-                    "de exportación al pie."),
-            ("nuevo", "Contratos Determinados: conmutador «Desglosado / "
-                    "Consolidado». Desglosado agrupa por tipo de contrato, "
-                    "motivo y unidad; consolidado quita el nivel de la unidad y "
-                    "la pasa a columna. La pantalla, el Word y el PDF salen "
-                    "como se elija, y la elección se recuerda."),
-            ("nuevo", "Un color fijo para cada Categoría Ocupacional en toda la "
-                    "aplicación: Obreros, Técnicos, Administrativos, Servicios y "
-                    "Cuadros tienen su color en los gráficos del Dashboard y de "
-                    "los informes, en los desgloses y en las insignias de los "
-                    "listados."),
-            ("nuevo", "Registro Diario: el Plan Mensual se edita con doble clic "
-                    "sobre la cifra, y solo se guarda con el botón «Guardar "
-                    "plan». Pulsando Escape se descarta el cambio."),
-            ("nuevo", "Trabajadores por UEB estrena cifras de cabecera —total, "
-                    "mujeres, unidades con personal y la de mayor plantilla— y "
-                    "una columna de «% del total», para comparar unidades y no "
-                    "solo enumerarlas."),
-            ("mejorado", "El filtro por Unidad Organizativa vive ahora en la "
-                        "barra del título, el mismo sitio en los seis informes. "
-                        "Antes cada pantalla lo colocaba donde le parecía."),
-            ("mejorado", "Los seis informes comparten paleta: mismos colores "
-                        "para las cifras de cabecera, las cabeceras de tabla y "
-                        "las filas de totales. El naranja significa siempre «lo "
-                        "que falta» y el rojo «lo crítico»."),
-            ("mejorado", "El nombre del fichero descargado dice de qué es: "
-                        "«Puestos_Clave_Nuevitas_Septiembre_2026.docx» en vez de "
-                        "«Puestos_Clave_9_2026.docx»."),
-            ("mejorado", "El botón de PDF de los informes se ve como un botón: "
-                        "era el único de la aplicación con el fondo transparente "
-                        "y solo se coloreaba al pasar el ratón por encima."),
-            ("mejorado", "Las plantillas de Word de todos los informes viven "
-                        "juntas en la misma carpeta, incluida la del Modelo de "
-                        "Movimiento de Nómina."),
-            ("corregido", "Contratos Determinados coloreaba las categorías por "
-                        "orden de tamaño, así que la misma categoría cambiaba de "
-                        "color según los datos: Obreros salía de un color un mes "
-                        "y de otro al siguiente."),
-            ("corregido", "El PDF de Puestos Clave no repetía la cabecera de "
-                        "columnas al pasar de página."),
-            ("corregido", "Registro Diario: el campo del Plan se veía más alto "
-                        "que las otras tres cifras de su tarjeta, y el "
-                        "cumplimiento se partía en dos líneas."),
-        ],
-    },
 ]
 
 # Versión vigente: siempre la primera entrada de la lista.

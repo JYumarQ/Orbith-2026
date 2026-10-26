@@ -173,28 +173,7 @@
                                     </div>
                                 </div>
                                 
-                                <!--CHOFER-->
-                                <div class="col-md-12" id="bloqueChoferJubilado">
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch mb-2">
-                                                {{ form.profesional }}
-                                                <label class="form-check-label" for="id_profesional">
-                                                    {{ form.profesional.label }}
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch mb-2">
-                                                {{ form.jubilado_recontratado }}
-                                                <label class="form-check-label" for="id_jubilado_recontratado">
-                                                    {{ form.jubilado_recontratado.label }}
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
+                                {# Orden (26-10-2026): Modalidad de trabajo arriba; Chofer Profesional y Jubilado Recontratado debajo. #}
                                 {% comment %} Modalidad de trabajo (24-10-2026). Pueden coincidir entre
                                    sí; el Moderador las cambia sin solicitud. {% endcomment %}
                                 <div class="col-md-12">
@@ -216,6 +195,28 @@
                                             <div class="form-check form-switch mb-2">
                                                 {{ form.pluriempleo }}
                                                 <label class="form-check-label" for="id_pluriempleo">{{ form.pluriempleo.label }}</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!--CHOFER-->
+                                <div class="col-md-12" id="bloqueChoferJubilado">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.profesional }}
+                                                <label class="form-check-label" for="id_profesional">
+                                                    {{ form.profesional.label }}
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-check form-switch mb-2">
+                                                {{ form.jubilado_recontratado }}
+                                                <label class="form-check-label" for="id_jubilado_recontratado">
+                                                    {{ form.jubilado_recontratado.label }}
+                                                </label>
                                             </div>
                                         </div>
                                     </div>

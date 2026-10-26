@@ -194,6 +194,10 @@ select.form-control-sm + .select2-container .select2-selection {
     margin: 0.15rem 0.25rem 0.15rem 0 !important;
 }
 
+/* La «×» que quita la ficha (26-10-2026). El tema la dibuja como imagen de fondo y
+   esconde el texto (`text-indent`); al quitar aquí ese fondo, la aspa quedaba
+   INVISIBLE en todos los selectores múltiples —no se veía cómo quitar una unidad—.
+   Se enseña el propio carácter «×», del color de la ficha. */
 .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove {
     color: var(--orb-chip-texto) !important;
     background: transparent !important;
@@ -201,6 +205,16 @@ select.form-control-sm + .select2-container .select2-selection {
     opacity: 0.7;
     padding: 0 !important;
     margin-right: 0.1rem;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    text-indent: 0 !important;
+    font-size: 1rem !important;
+    font-weight: 700;
+    line-height: 1 !important;
+}
+.select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove > span {
+    display: inline !important;
 }
 .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice__remove:hover {
     opacity: 1;

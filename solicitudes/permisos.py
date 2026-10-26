@@ -25,8 +25,7 @@ MENSAJE_SIN_ACCESO = 'No tiene acceso al módulo de Solicitudes.'
 
 def es_administrador(usuario):
     """Quien resuelve solicitudes: el Administrador y el Moderador con el permiso
-    especial «Resolver solicitudes» (25-10-2026). Nunca las suyas: eso lo comprueban
-    `Solicitud.puede_revisarla` y `servicios` con `puede_resolver`."""
+    especial «Resolver solicitudes» (25-10-2026), también sobre las suyas."""
     if not getattr(usuario, 'is_authenticated', False):
         return False
     if usuario.is_superuser or getattr(usuario, 'es_admin', False):

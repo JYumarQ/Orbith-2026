@@ -156,10 +156,6 @@ def ver_personalizada(request, pk):
 @require_POST
 def responder_personalizada(request, pk):
     solicitud = _visible(request, pk)
-    from usuarios.permisos_especiales import puede_resolver
-    if not puede_resolver(request.user, solicitud):
-        messages.error(request, 'No puede responder una solicitud suya.')
-        return redirect('ver_solicitud_personalizada', pk=pk)
     if not solicitud.abierta:
         messages.warning(request, 'Esta solicitud ya estaba respondida.')
         return redirect('ver_solicitud_personalizada', pk=pk)
