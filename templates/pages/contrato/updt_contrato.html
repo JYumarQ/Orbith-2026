@@ -1073,8 +1073,11 @@
                         
                         if (data.redirect_to_wizard) {
                             $.get(data.redirect_to_wizard, function(html) {
-                                if ($('#editar_empl').length === 0) $('body').append('<div id="editar_empl"></div>');
-                                $('#editar_empl').html(html); new bootstrap.Modal(document.getElementById('modalMovimientoContrato')).show();
+                                // Contenedor propio y visible (26-10-2026): en la Lista de Contratos
+                                // `#editar_empl` es una ventana oculta y el movimiento no aparecía.
+                                let caja = document.getElementById('contenedor_movimiento');
+                                if (!caja) { caja = document.createElement('div'); caja.id = 'contenedor_movimiento'; document.body.appendChild(caja); }
+                                $(caja).html(html); new bootstrap.Modal(caja.querySelector('#modalMovimientoContrato')).show();
                             });
                         } else if (window.OrbithGestorSinNavegar) {
                             // Abierto desde el Gestor de Plantilla: no se navega,
