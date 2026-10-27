@@ -66,7 +66,7 @@
         titulo: 'Datos del contrato',
         texto: 'Escribe el <strong>Exp. Laboral</strong> (solo números, hasta 5 dígitos; si ya existe se marca en rojo) y elige el <strong>Tipo de Contrato</strong>: ' +
                'si ese tipo lo exige se enciende el <strong>Motivo</strong>, y si es indeterminado la <strong>D. de Contrato</strong> (duración) se apaga. ' +
-               'Pon la <strong>F. de Contratación</strong> y la <strong>F. Alta Entidad</strong> (cuando entró por primera vez en la entidad; no puede ser posterior a la contratación). ' +
+               'Pon la <strong>F. de Contratación</strong> y la <strong>F. Alta Entidad</strong> (desde cuándo trabaja sin interrupción en la Unión Eléctrica; tras una baja, normalmente la de este contrato; no puede ser posterior a la contratación). ' +
                'Los <strong>Años Servicio</strong> se calculan solos.',
         esperar: function () {
           return listos('#contratoForm', ['no_expediente', 'tipo', 'motivo', 'fecha_alta', 'fecha_alta_entidad', 'duracion']);

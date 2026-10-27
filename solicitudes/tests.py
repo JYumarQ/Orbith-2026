@@ -1452,6 +1452,27 @@ class ContratoDesviado(BaseDepartamento):
         solicitud.refresh_from_db()
         self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
 
+    def test_las_pantallas_de_revision_y_consulta_se_abren(self):
+        """Regresión (27-10-2026): Revisar una solicitud de Editar Contrato, o abrirla
+        ya aprobada, daba error 500 («Cannot combine a unique query with a non-unique
+        query») al preparar los desplegables bloqueados del contrato. Las pruebas de
+        arriba entran por `servicios.iniciar_revision` y no pasaban por la pantalla."""
+        self.client.force_login(self.moderador)
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk), HTTP_HX_REQUEST='true')
+        solicitud = Solicitud.objects.get()
+
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(reverse('revisar_solicitud', args=[solicitud.pk]))
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertContains(respuesta, 'Instructor Principal')
+
+        self.client.post(reverse('aprobar_solicitud', args=[solicitud.pk]),
+                         self._datos_contrato(instructor_nomenclador=self.instructor.pk))
+        solicitud.refresh_from_db()
+        self.assertEqual(solicitud.estado, EstadoSolicitud.APROBADA)
+        self.assertEqual(self.client.get(reverse('ver_solicitud', args=[solicitud.pk])).status_code, 200)
+
     def test_el_administrador_guarda_directamente(self):
         self.client.force_login(self.admin)
 

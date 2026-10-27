@@ -56,6 +56,8 @@ CHANGELOG = [
             ("corregido", "Borrar una nocturnidad, un municipio o la provincia de la entidad dejaba vacío el campo de quien los usaba; ahora se impide y se explica."),
             ("corregido", "Al editar un rol, una especialidad, una causa u otro nomenclador con un nombre no válido, la celda mostraba «undefined»; ahora sale el motivo y se puede corregir."),
             ("corregido", "La tabla de la escala salarial se descuadraba si faltaba un tridente: los importes se corrían de columna."),
+            ("corregido", "Solicitudes: el Administrador no podía revisar una solicitud de «Editar Contrato» (ni abrirla ya decidida): la pantalla daba un error. Ahora se revisa, se aprueba y se consulta con normalidad."),
+            ("corregido", "Subsanación (CTR-016 y CTR-017) y la visita guiada de Contratación explican bien la F. Alta Entidad: desde cuándo trabaja la persona sin interrupción en la Unión Eléctrica (tras una baja, normalmente la del nuevo contrato), no «la primera vez que entró»."),
         ],
     },
     {

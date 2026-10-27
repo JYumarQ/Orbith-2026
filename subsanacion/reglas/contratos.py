@@ -1017,7 +1017,7 @@ class ContratoSinFechaAltaEntidad(ReglaContratos):
     nombre = 'Contrato sin F. Alta Entidad'
     criticidad = CRITICIDAD_ALTA
 
-    descripcion = 'Busca contratos sin la fecha de alta inicial en la entidad registrada.'
+    descripcion = 'Busca contratos sin la F. Alta Entidad registrada.'
     causa_probable = (
         'El campo se incorporó después de que estos contratos ya existieran en '
         'producción, así que quedó vacío para todo el histórico previo a su '
@@ -1027,9 +1027,11 @@ class ContratoSinFechaAltaEntidad(ReglaContratos):
         'servicio ininterrumpido del trabajador dentro de la Unión Eléctrica. '
         'Sin ella, ese cálculo no puede hacerse correctamente para este contrato.')
     solucion = (
-        'Abra el contrato y registre la fecha en que el trabajador fue dado de '
-        'alta por primera vez en la entidad (puede coincidir con la F. de '
-        'Contratación).')
+        'Abra el contrato y registre desde cuándo trabaja el trabajador SIN '
+        'INTERRUPCIÓN en la Unión Eléctrica (UNE), en esta empresa o en otra de '
+        'sus empresas. Si en algún momento causó baja, ese servicio se interrumpió: '
+        'lo normal es la fecha de su contratación actual, salvo que la empresa haya '
+        'acordado mantener la anterior. No puede ser posterior a la F. de Contratación.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -1041,7 +1043,7 @@ class ContratoSinFechaAltaEntidad(ReglaContratos):
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
                 titulo=self.titulo_de(fila, 'sin F. Alta Entidad'),
-                detalle='El contrato no tiene registrada la fecha de alta inicial en la entidad.',
+                detalle='El contrato no tiene registrada la F. Alta Entidad (inicio del servicio ininterrumpido en la UNE).',
                 datos={'expediente': fila.get('no_expediente') or '—'},
                 unidad_organizativa_id=self.unidad_de(fila),
                 campo_formulario='fecha_alta_entidad',
@@ -1080,8 +1082,8 @@ class ContratoFechaAltaEntidadImposible(ReglaContratos):
         'cálculo da un resultado absurdo, y además la fecha aparece mal en cualquier '
         'informe o documento que la muestre.')
     solucion = (
-        'Abra el contrato y escriba de nuevo la fecha en que el trabajador fue dado de '
-        'alta por primera vez en la entidad, comprobando que el año tenga cuatro '
+        'Abra el contrato y escriba de nuevo desde cuándo trabaja el trabajador sin '
+        'interrupción en la Unión Eléctrica (UNE), comprobando que el año tenga cuatro '
         'cifras. El formulario ya no admite años anteriores a 1900.')
 
     def ejecutar(self, contexto):

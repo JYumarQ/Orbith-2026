@@ -530,7 +530,13 @@ class CAltaForm(forms.ModelForm):
                 campo.required = False
                 valor = valores.get(nombre)
                 if isinstance(campo, forms.ModelChoiceField) and valor is not None:
-                    campo.queryset = (campo.queryset | type(valor).objects.filter(pk=valor.pk)).distinct()
+                    # Las dos mitades con `.distinct()`: Django no une una consulta
+                    # «sin repetidos» con otra que no lo es, y el paso 3 de arriba
+                    # (pantalla de Solicitudes) ya deja `distinct` la de departamento
+                    # y cargo. Sin esto, revisar una solicitud de Editar Contrato daba
+                    # error 500 (27-10-2026).
+                    campo.queryset = (campo.queryset.distinct()
+                                      | type(valor).objects.filter(pk=valor.pk).distinct())
                     self.initial[nombre] = valor.pk
 
         # --- EL ESCUDO DEL SERVIDOR ---
