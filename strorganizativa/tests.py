@@ -477,3 +477,61 @@ class UnidadPrincipalSinDepartamentosTests(TestCase):
             descripcion='Grupo Jurídico', unidad_organizativa=self.principal, orden_informe=1)])
         hallazgos = list(obtener_regla('EST-010').ejecutar(ContextoAnalisis()))
         self.assertEqual([h.object_id for h in hallazgos], [str(self.principal.pk)])
+
+
+class InterruptorEnPlantillaTests(TestCase):
+    """El interruptor «En Plantilla» tiene que viajar con el formulario.
+
+    Error del 27-10-2026 (UEB Esmeralda): en «Registrar Nuevo Cargo» y «Editar
+    Cargo» el interruptor está en la cabecera de la ventana, FUERA del `<form>`, así
+    que el navegador nunca lo enviaba. Para Django un checkbox que no llega es
+    False: todo cargo creado o editado desde el Gestor quedaba «Fuera de Plantilla».
+    El servidor estaba bien; lo que fallaba era el HTML, y por eso estas pruebas
+    miran lo que se pinta: el interruptor debe declarar `form="cargoForm"`.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        from nomencladores.models import NCargo, NGrupoEscala
+
+        from .models import CargoPlantilla, Departamento
+
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_en_plantilla', password='x', es_admin=True)
+        tipo = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+        unidad = UnidadOrganizativa.objects.create(
+            codigo_interno=98, descripcion='UEB Esmeralda', tipo=tipo, grupo_nomina=1)
+        cls.departamento = Departamento.objects.create(
+            descripcion='Dirección', unidad_organizativa=unidad)
+        ncargo = NCargo.objects.create(
+            descripcion='Supervisor de Consumo', cat_ocupacional='TEC',
+            grupo_escala=NGrupoEscala.objects.create(nivel='X'), salario_basico=0)
+        cls.cargo = CargoPlantilla.objects.create(
+            ncargo=ncargo, departamento=cls.departamento, cant_aprobada=3, orden_informe=1)
+
+    def _interruptor(self, url):
+        import re
+
+        self.client.force_login(self.admin)
+        html = self.client.get(url).content.decode()
+        self.assertIn('id="cargoForm"', html)
+        etiqueta = re.search(r'<input[^>]*id="id_en_plantilla"[^>]*>', html)
+        self.assertIsNotNone(etiqueta, 'No se pinta el interruptor «En Plantilla»')
+        self.assertEqual(html.count('id="id_en_plantilla"'), 1)
+        return etiqueta.group(0)
+
+    def test_registrar_cargo_envia_el_interruptor_y_nace_en_plantilla(self):
+        interruptor = self._interruptor(
+            reverse('add_cargo') + f'?departamento={self.departamento.pk}')
+        self.assertIn('form="cargoForm"', interruptor)
+        self.assertIn('name="en_plantilla"', interruptor)
+        self.assertIn('checked', interruptor)
+
+    def test_editar_cargo_envia_el_interruptor_con_su_valor(self):
+        interruptor = self._interruptor(reverse('updt_cargo', args=[self.cargo.pk]))
+        self.assertIn('form="cargoForm"', interruptor)
+        self.assertIn('checked', interruptor)
+
+        self.cargo.en_plantilla = False
+        self.cargo.save(update_fields=['en_plantilla'])
+        self.assertNotIn('checked', self._interruptor(reverse('updt_cargo', args=[self.cargo.pk])))

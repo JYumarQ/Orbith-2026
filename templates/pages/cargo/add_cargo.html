@@ -3,7 +3,13 @@
         <div class="modal-header d-flex align-items-center pb-3 border-bottom mb-3">
             <h5 class="modal-title flex-grow-1" id="cargosModalLabel">Registrar Nuevo Cargo</h5>
             <div class="form-check form-switch m-0 d-flex align-items-center me-3">
-                {{ form.en_plantilla }}
+                {% comment %} El interruptor vive en la cabecera, FUERA del <form>: sin
+                   `form="cargoForm"` el navegador no lo enviaba y todo cargo se guardaba
+                   «Fuera de Plantilla» (27-10-2026, caso de la UEB Esmeralda). Se escribe a
+                   mano y no en el widget porque la revisión de Solicitudes pinta este mismo
+                   campo dentro de otro formulario. {% endcomment %}
+                <input type="checkbox" name="en_plantilla" id="id_en_plantilla" class="form-check-input"
+                       role="switch" form="cargoForm"{% if form.en_plantilla.value %} checked{% endif %}>
                 <label class="form-check-label ms-2" for="id_en_plantilla" id="label_en_plantilla" style="padding-top: 2px;">En Plantilla</label>
             </div>
             <div class="form-check form-switch m-0 d-flex align-items-center">
