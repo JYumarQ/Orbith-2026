@@ -6,7 +6,7 @@
 
 <div class="mb-2 d-flex align-items-center gap-2">
   <i class="bi bi-activity text-primary"></i>
-  <strong class="small">Analizando la base de datos…</strong>
+  <strong class="small" id="tituloAnalisis">Analizando la base de datos…</strong>
   <span class="text-muted small ms-auto">Análisis #{{ ejecucion.pk }}</span>
 </div>
 
@@ -30,7 +30,7 @@
   {% endif %}
 </div>
 
-<p class="small text-muted mt-3 mb-0">
+<p class="small text-muted mt-3 mb-0" id="avisoNoCerrar">
   <i class="bi bi-info-circle me-1"></i>No cierre esta página hasta que termine. Si la
   cierra, el análisis queda incompleto y no se marcará ningún hallazgo como corregido.
 </p>

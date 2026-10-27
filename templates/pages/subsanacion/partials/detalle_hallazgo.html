@@ -1,3 +1,4 @@
+{% load presentacion %}
 {% comment %} Detalle del hallazgo: qué encontró, por qué es un problema, cómo se corrige y
    a dónde ir a corregirlo. Se renderiza dentro de #contenidoModalHallazgo. {% endcomment %}
 
@@ -53,7 +54,7 @@
         {% for clave, valor in hallazgo.datos.items %}
           <div class="col-6 col-md-4">
             <div class="sub-guia-bloque sub-color-gris">
-              <div class="sub-dato-clave">{{ clave|cut:"_"|capfirst }}</div>
+              <div class="sub-dato-clave">{{ clave|etiqueta_dato }}</div>
               <div class="sub-dato-valor">{{ valor }}</div>
             </div>
           </div>

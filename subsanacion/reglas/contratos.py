@@ -263,7 +263,7 @@ class MotivoSinDuracion(ReglaContratos):
 
     descripcion = (
         'Cuando un contrato tiene un motivo de contratación registrado, debe tener '
-        'también su duración en meses.')
+        'también su duración en días.')
     causa_probable = (
         'Se completó el motivo del contrato pero no se rellenó la duración, o la '
         'duración se borró después sin quitar el motivo.')
@@ -272,7 +272,7 @@ class MotivoSinDuracion(ReglaContratos):
         'contrato (fecha_alta + duracion), así que este contrato no aparecerá '
         'en los avisos de contratos próximos a vencer aunque tenga un motivo que '
         'normalmente implica un plazo definido.')
-    solucion = 'Abra el contrato y complete la duración en meses.'
+    solucion = 'Abra el contrato y complete la duración en días (un año son 365).'
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -1189,7 +1189,7 @@ class ContratoDeterminadoVencido(ReglaContratos):
         'Busca los contratos de duración determinada cuya fecha de vencimiento ya '
         'pasó y cuyo trabajador sigue en estado Activo.')
     causa_probable = (
-        'El contrato se firmó por un número de meses y nadie lo renovó ni tramitó '
+        'El contrato se firmó por un número de días y nadie lo renovó ni tramitó '
         'la baja al llegar la fecha. Nada en el sistema avisaba del vencimiento.')
     impacto = (
         'El trabajador sigue cobrando en la nómina sin un contrato vigente que lo '

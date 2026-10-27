@@ -114,10 +114,10 @@ def avisar_decision(solicitud):
 
     if solicitud.estado == EstadoSolicitud.APROBADA:
         titulo = 'Solicitud aprobada'
-        mensaje = f'Se aprobó la solicitud "{solicitud.descriptor}".'
+        mensaje = f'Se aprobó la solicitud «{solicitud.descriptor}».'
     elif solicitud.estado == EstadoSolicitud.RECHAZADA:
         titulo = 'Solicitud rechazada'
-        mensaje = f'Se rechazó la solicitud "{solicitud.descriptor}".'
+        mensaje = f'Se rechazó la solicitud «{solicitud.descriptor}».'
         if solicitud.motivo_decision:
             mensaje = f'{mensaje} Motivo: {solicitud.motivo_decision}'
     else:
@@ -135,7 +135,7 @@ def avisar_devuelta_a_espera(solicitud):
         [solicitud.solicitante],
         CODIGO_REABIERTA,
         titulo='Solicitud reabierta',
-        mensaje=f'La solicitud "{solicitud.descriptor}" volvió a quedar en espera de revisión.',
+        mensaje=f'La solicitud «{solicitud.descriptor}» volvió a quedar en espera de revisión.',
     )
 
 

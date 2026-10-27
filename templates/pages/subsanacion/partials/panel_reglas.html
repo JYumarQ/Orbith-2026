@@ -1,3 +1,4 @@
+{% load presentacion %}
 {% comment %}
   Índice de Reglas: qué comprueba cada código, por qué suele fallar, qué impacto
   tiene y cómo se corrige. Los textos vienen de las propias reglas
@@ -95,7 +96,7 @@
       <div class="border-top pt-2 mt-2 small">
         <div class="d-flex flex-wrap gap-3 text-muted mb-2">
           <span><i class="bi bi-exclamation-circle me-1"></i>Avisos abiertos: <b>{{ regla.abiertos }}</b></span>
-          <span><i class="bi bi-calendar-x me-1"></i>Último fallo: <b>{% if regla.estado.ultimo_fallo %}{{ regla.estado.ultimo_fallo|date:"d/m/Y" }} ({{ regla.estado.ultimo_fallo|timesince }}){% else %}ninguno registrado{% endif %}</b></span>
+          <span><i class="bi bi-calendar-x me-1"></i>Último fallo: <b>{% if regla.estado.ultimo_fallo %}{{ regla.estado.ultimo_fallo|date:"d/m/Y" }} ({{ regla.estado.ultimo_fallo|hace }}){% else %}ninguno registrado{% endif %}</b></span>
           <span><i class="bi bi-stopwatch me-1"></i>Tarda: <b>{% if regla.estado.ultima_duracion_ms is not None %}{% if regla.estado.ultima_duracion_ms < 1000 %}{{ regla.estado.ultima_duracion_ms }} ms{% else %}{% widthratio regla.estado.ultima_duracion_ms 1000 1 %} s{% endif %}{% else %}sin medir{% endif %}</b></span>
           {% if regla.estado.cambiado_en %}<span>{% if regla.activa %}Activada{% else %}Desactivada{% endif %} el {{ regla.estado.cambiado_en|date:"d/m/Y" }}{% if regla.estado.cambiado_por %} por {{ regla.estado.cambiado_por.username }}{% endif %}{% if regla.estado.motivo %} · «{{ regla.estado.motivo }}»{% endif %}</span>{% endif %}
         </div>

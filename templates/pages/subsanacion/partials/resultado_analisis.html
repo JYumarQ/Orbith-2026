@@ -1,5 +1,11 @@
 {# Cierre de la cadena: resumen del análisis y acceso a los resultados. #}
 
+{% comment %} Fuera de banda: el título y el aviso de arriba son de `progreso_analisis.html` y
+   seguían diciendo «Analizando…» y «No cierre esta página» con el análisis ya
+   terminado (27-10-2026). {% endcomment %}
+<strong class="small" id="tituloAnalisis" hx-swap-oob="true">Análisis terminado</strong>
+<p id="avisoNoCerrar" hx-swap-oob="true" hidden></p>
+
 <div class="sub-paso sub-paso-hecho">
   <i class="bi bi-flag-fill"></i>
   <span>

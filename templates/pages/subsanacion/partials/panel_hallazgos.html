@@ -139,7 +139,7 @@
                   <i class="bi {{ hallazgo.icono_criticidad }}"></i>{{ hallazgo.get_criticidad_display }}
                 </span>
               </td>
-              <td><code class="text-muted">{{ hallazgo.codigo_regla }}</code></td>
+              <td class="text-nowrap"><code class="text-muted">{{ hallazgo.codigo_regla }}</code></td>
               <td>
                 <div class="fw-semibold">{{ hallazgo.titulo }}</div>
                 {% if hallazgo.detalle %}

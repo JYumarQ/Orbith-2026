@@ -96,3 +96,45 @@ def emparejar(columnas, valores):
     `par.0` y `par.1`.
     """
     return list(zip(columnas or [], valores or []))
+
+
+@register.filter
+def hace(momento):
+    """«hace 36 minutos», «hace 2 días»…: el `timesince` de Django en español.
+
+    `timesince` escribe en el idioma de LANGUAGE_CODE, que en Orbith es 'en-us'
+    (ver la nota en `core/settings.py`), y el Índice de Reglas mostraba
+    «(36 minutes)». Solo la unidad más grande: es una referencia, no un cronómetro.
+    """
+    from django.utils import timezone
+
+    if not momento:
+        return ''
+    segundos = max(int((timezone.now() - momento).total_seconds()), 0)
+    for tamano, una, varias in ((86400 * 365, 'año', 'años'), (86400 * 30, 'mes', 'meses'),
+                                (86400, 'día', 'días'), (3600, 'hora', 'horas'),
+                                (60, 'minuto', 'minutos')):
+        if segundos >= tamano:
+            n = segundos // tamano
+            return f'hace {n} {una if n == 1 else varias}'
+    return 'hace un momento'
+
+
+#: Nombres de datos de Subsanación que no se leen bien tal cual. La clave guardada
+#: NO se cambia: forma parte de la huella del hallazgo y cambiarla devolvería a
+#: Pendiente los ya revisados (ver `subsanacion.servicios.calcular_huella`).
+_ETIQUETAS_DATO = {
+    # CTR-018: la duración del contrato siempre fue en DÍAS; la clave dice meses.
+    'duracion_en_meses': 'Duración (días)',
+}
+
+
+@register.filter
+def etiqueta_dato(clave):
+    """«tipo_de_contrato» → «Tipo de contrato». Antes se quitaban los guiones bajos
+    sin poner espacios y salía «Tipodecontrato»."""
+    clave = str(clave or '')
+    if clave in _ETIQUETAS_DATO:
+        return _ETIQUETAS_DATO[clave]
+    texto = clave.replace('_', ' ').strip()
+    return texto[:1].upper() + texto[1:]
