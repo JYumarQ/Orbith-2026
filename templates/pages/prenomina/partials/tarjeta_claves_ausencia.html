@@ -19,9 +19,9 @@
           <th class="text-center" style="width: 70px;">Acción</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody data-orden="claves-ausencia">
         {% for clave in claves_ausencia %}
-          <tr>
+          <tr data-id="{{ clave.pk }}">
             <td class="font-monospace fw-bold text-slate-500">{{ clave.codigo }}</td>
             <td>{{ clave.descripcion }}</td>
             <td class="text-center">

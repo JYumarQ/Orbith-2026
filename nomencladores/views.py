@@ -23,6 +23,17 @@ from django.core.exceptions import ValidationError
 from decimal import Decimal, ROUND_HALF_UP
 from auditoria.models import AccionAuditoria
 from auditoria import registro_automatico
+from .proteccion import borrar_o_explicar, ERROR_GENERICO, guardar_validado, texto_de
+
+
+def _respuesta_error(error):
+    """Mensaje comprensible de un error (3.8.2, 27-10-2026): el de la validación (por
+    ejemplo «Ya existe…»), o uno genérico con el detalle anotado en el registro del
+    servidor. Nunca el texto técnico de Python, que antes llegaba tal cual a pantalla."""
+    if isinstance(error, ValidationError):
+        return JsonResponse({'success': False, 'error': texto_de(error)}, status=400)
+    logger.exception('Error en Nomencladores')
+    return JsonResponse({'success': False, 'error': ERROR_GENERICO}, status=500)
 
 # Mapeo de Municipios de Cuba (Abreviaturas estándar tipo ISO/IATA)
 ABR_MUNICIPIOS = {
@@ -126,7 +137,7 @@ def cargar_municipios(request):
     is_filter = request.GET.get('for_filter') 
 
     if prov_id:
-        qs = NMunicipio.objects.filter(provincia_id=prov_id).order_by('nombre')
+        qs = NMunicipio.objects.filter(provincia_id=prov_id)
     else:
         qs = NMunicipio.objects.none()
 
@@ -272,7 +283,7 @@ def eliminar_salarios_grupo(request, grupo_id):
                 return JsonResponse({'error': 'No se encontraron salarios para eliminar.'}, status=404)
                 
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return _respuesta_error(e)
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
 
@@ -299,8 +310,8 @@ def editar_salarios_grupo(request, grupo_id):
     
     # --- GET: Preparar datos para rellenar el modal de edición ---
     form = EditarSalariosForm(initial={'grupo_nombre': str(grupo)})
-    tridentes = NTridente.objects.all().order_by('tipo')
-    roles = grupo.roles.all().order_by('tipo') if grupo.tiene_rol else []
+    tridentes = NTridente.objects.all()
+    roles = grupo.roles.all() if grupo.tiene_rol else []
     
     # Mapeamos los montos existentes
     mapa_montos = {}
@@ -375,13 +386,11 @@ def crear_salarios_por_grupo(request):
     # --- RESPUESTA GET REPARADA E INTELIGENTE ---
     form = RegistrarSalariosForm()
     
-    # 1. ORDENAR ROLES PERSONALIZADO: Decisorio, Fundamental, Apoyo
-    roles_db = NRol.objects.all()
-    orden_deseado = {"Decisorio": 1, "Fundamental": 2, "Apoyo": 3}
-    # Ordenamos usando el diccionario. Si hay uno nuevo, se va al final (4)
-    roles = sorted(roles_db, key=lambda r: orden_deseado.get(r.tipo, 4))
+    # 1. Los roles en el orden del nomenclador (por defecto Decisorio, Fundamental,
+    #    Apoyo; el Administrador lo cambia arrastrando, 27-10-2026).
+    roles = list(NRol.objects.all())
     
-    tridentes = NTridente.objects.all().order_by('tipo')
+    tridentes = NTridente.objects.all()
     
     # 2. MAPA SÚPER INTELIGENTE (Ahora incluye los roles permitidos)
     grupos_info = {}
@@ -410,10 +419,10 @@ def tabla_salarios_modal(request):
         return HttpResponse("")
     
     grupo = get_object_or_404(NGrupoEscala, id=grupo_id)
-    tridentes = NTridente.objects.all().order_by('tipo')
+    tridentes = NTridente.objects.all()
     
     # Pasamos los roles SOLO si el grupo tiene la bandera encendida
-    roles = grupo.roles.all().order_by('tipo') if grupo.tiene_rol else []
+    roles = grupo.roles.all() if grupo.tiene_rol else []
     
     return render(request, 'nomencladores/partials/tabla_salarios_dinamica.html', {
         'grupo': grupo,
@@ -457,26 +466,27 @@ def tridente_create(request):
     tipo = data.get('tipo', '').strip()
     if not tipo:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj = NTridente.objects.create(tipo=tipo)
+    # Valida también el número romano (I, II o III) y que no exista ya (3.8.2).
+    obj = guardar_validado(NTridente(), tipo=tipo)
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 # UPDATE
 @require_http_methods(["PUT"])
 def tridente_update(request, pk):
-    obj = NTridente.objects.get(pk=pk)
+    obj = get_object_or_404(NTridente, pk=pk)
     data = json.loads(request.body)
     tipo = data.get('tipo', '').strip()
     if not tipo:
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
-    obj.tipo = tipo
-    obj.save()
+    guardar_validado(obj, tipo=tipo)
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 # DELETE
 @require_http_methods(["DELETE"])
 def tridente_delete(request, pk):
-    NTridente.objects.get(pk=pk).delete()
-    return JsonResponse({'success': True})
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NTridente, pk=pk))
 
 # ---------- CRUD NRol ----------
 @require_http_methods(["POST"])
@@ -488,7 +498,7 @@ def rol_create(request):
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
         
     # Ya no pasamos el es_cuadro
-    obj = NRol.objects.create(tipo=tipo)
+    obj = guardar_validado(NRol(), tipo=tipo)
     
     # Devolvemos solo lo que existe
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
@@ -502,16 +512,15 @@ def rol_update(request, pk):
     if not tipo: 
         return JsonResponse({'error': 'Campo obligatorio'}, status=400)
         
-    obj.tipo = tipo
-    # Eliminamos obj.es_cuadro = data.get('es_cuadro')
-    obj.save()
+    guardar_validado(obj, tipo=tipo)
     
     return JsonResponse({'id': obj.id, 'tipo': obj.tipo})
 
 @require_http_methods(["DELETE"])
 def rol_delete(request, pk):
-    NRol.objects.get(pk=pk).delete()
-    return JsonResponse({'success': True})
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NRol, pk=pk))
 
 # ---------- CRUD NGrupoEscala ----------
 @require_POST
@@ -526,7 +535,7 @@ def grupo_create(request):
         obj = NGrupoEscala.objects.create(nivel=nivel.upper())
         return JsonResponse({'id': obj.id, 'nivel': obj.nivel})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["PUT"])
 def grupo_update(request, pk):
@@ -542,15 +551,13 @@ def grupo_update(request, pk):
         obj.save()
         return JsonResponse({'id': obj.id, 'nivel': obj.nivel})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["DELETE"])
 def grupo_delete(request, pk):
-    try:
-        NGrupoEscala.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NGrupoEscala.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NGrupoEscala, pk=pk))
 
 # ---------- CRUD NProvincia ----------
 def _buscar_coincidencia_siglas(siglas, excluir_provincia_id=None, excluir_municipio_id=None):
@@ -648,11 +655,9 @@ def provincia_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def provincia_delete(request, pk):
-    try:
-        NProvincia.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NProvincia.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NProvincia, pk=pk))
 
 # ---------- CRUD NMunicipio ----------
 @require_POST
@@ -709,11 +714,9 @@ def municipio_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def municipio_delete(request, pk):
-    try:
-        NMunicipio.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NMunicipio.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NMunicipio, pk=pk))
 
 # ---------- CRUD NCausaAltaBaja ----------
 @require_POST
@@ -743,19 +746,15 @@ def causa_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def causa_delete(request, pk):
-    try:
-        NCausaAltaBaja.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NCausaAltaBaja.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NCausaAltaBaja, pk=pk))
 
 # ---------- CRUD NCondicionLaboralAnormal ----------
 @require_POST
 def condicion_create(request):
     try:
         data = json.loads(request.body)
-        print("📥 tarifa_hora recibido (CREATE):", data.get('tarifa_hora'))
-        print("📥 tipo de tarifa_hora (CREATE):", type(data.get('tarifa_hora')))
         nombre = data.get('nombre', '').strip()
         # 🔥 Convertir a Decimal y redondear a 2 decimales
         tarifa = Decimal(data.get('tarifa_hora', '0')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -773,10 +772,9 @@ def condicion_create(request):
         
         return JsonResponse({'id': obj.id, 'nombre': obj.nombre, 'tarifa_hora': str(obj.tarifa_hora)})
     except ValidationError as e:
-        error_msg = e.message_dict.get('nocturnidad', [str(e)])[0] if hasattr(e, 'message_dict') and 'nocturnidad' in e.message_dict else str(e)
-        return JsonResponse({'error': error_msg}, status=400)
+        return _respuesta_error(e)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_POST
 @login_required
@@ -816,18 +814,14 @@ def nocturnidad_create(request):
             'horas': obj.horas
         })
     except Exception as e:
-        # Imprimimos el error exacto en consola por si falla otra cosa
-        print(f"Error en nocturnidad_create: {e}") 
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["DELETE"])
 @login_required
 def nocturnidad_delete(request, pk):
-    try:
-        NNocturnidad.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except ProtectedError:
-        return JsonResponse({'error': 'No se puede eliminar. Está en uso.'}, status=400)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NNocturnidad, pk=pk))
 
 @require_http_methods(["PUT"])
 def condicion_update(request, pk):
@@ -835,8 +829,6 @@ def condicion_update(request, pk):
         obj = get_object_or_404(NCondicionLaboralAnormal, pk=pk)
         data = json.loads(request.body)
 
-        print("📥 tarifa_hora recibido:", data.get('tarifa_hora'))
-        print("📥 tipo de tarifa_hora:", type(data.get('tarifa_hora')))
 
         nombre = data.get('nombre', '').strip()
         # 🔥 Convertir a Decimal y redondear a 2 decimales
@@ -855,22 +847,16 @@ def condicion_update(request, pk):
         
         return JsonResponse({'id': obj.id, 'nombre': obj.nombre, 'tarifa_hora': str(obj.tarifa_hora)})
     except ValidationError as e:
-        error_msg = e.message_dict.get('nocturnidad', [str(e)])[0] if hasattr(e, 'message_dict') and 'nocturnidad' in e.message_dict else str(e)
-        return JsonResponse({'error': error_msg}, status=400)
+        return _respuesta_error(e)
     except Exception as e:
-        print("❌ Error en backend:", str(e))
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["DELETE"])
 @login_required
 def condicion_delete(request, pk):
-    try:
-        NCondicionLaboralAnormal.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NCondicionLaboralAnormal.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar. Esta condición está siendo usada por uno o más contratos.'}, status=400)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NCondicionLaboralAnormal, pk=pk))
 
 # ---------- CRUD NEspecialidad ----------
 @require_POST
@@ -909,11 +895,9 @@ def especialidad_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def especialidad_delete(request, pk):
-    try:
-        NEspecialidad.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NEspecialidad.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NEspecialidad, pk=pk))
 
 # ---------- CRUD NCargo API ----------
 @require_POST
@@ -948,7 +932,7 @@ def cargo_create(request):
     except NGrupoEscala.DoesNotExist:
         return JsonResponse({'error': 'Grupo de escala no encontrado'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["PUT"])
 def cargo_update(request, pk):
@@ -992,32 +976,13 @@ def cargo_update(request, pk):
     except NGrupoEscala.DoesNotExist:
         return JsonResponse({'error': 'Grupo de escala no encontrado'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["DELETE"])
 def cargo_delete(request, pk):
-    try:
-        # Buscamos el cargo
-        cargo = NCargo.objects.get(pk=pk)
-        
-        # Intentamos eliminar
-        cargo.delete()
-        
-        return JsonResponse({'success': True})
-
-    except NCargo.DoesNotExist:
-        return JsonResponse({'error': 'El cargo no existe.'}, status=404)
-
-    except RestrictedError:
-        # Capturamos el bloqueo de seguridad de Django
-        return JsonResponse({
-            'error': 'No se puede eliminar: Este Nomenclador está siendo usado en la Plantilla de Cargos o tiene históricos asociados.'
-        }, status=409) # 409 Conflict
-
-    except Exception as e:
-        # Capturamos cualquier otro error inesperado
-        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
-
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NCargo, pk=pk))
 
 @require_POST
 @login_required
@@ -1035,7 +1000,7 @@ def api_familia_create(request):
         familia = NFamiliaCargo.objects.create(nombre=nombre, tipo_familia=tipo_familia)
         return JsonResponse({'id': familia.id, 'nombre': familia.nombre})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
     
 @require_POST
 @login_required
@@ -1052,19 +1017,14 @@ def api_familia_update(request, pk):
         familia.save()
         return JsonResponse({'success': True, 'nombre': familia.nombre})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_POST
 @login_required
 def api_familia_delete(request, pk):
-    """Elimina una familia (las relaciones M2M se eliminan automáticamente)"""
-    try:
-        familia = get_object_or_404(NFamiliaCargo, pk=pk)
-        familia.delete()
-        return JsonResponse({'success': True})
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
-    
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NFamiliaCargo, pk=pk))
 
 @require_POST
 @login_required
@@ -1090,7 +1050,7 @@ def api_cargo_move(request):
             
         return JsonResponse({'success': True})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 
 @require_POST
@@ -1118,7 +1078,7 @@ def api_cargo_move_bulk(request):
 
         return JsonResponse({'success': True})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 
 # `api_get_contexto_familias` se eliminó: era código muerto que además no podía
@@ -1158,14 +1118,9 @@ def nivel_preparacion_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def nivel_preparacion_delete(request, pk):
-    try:
-        NNivelPreparacion.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NNivelPreparacion.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)
-    
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NNivelPreparacion, pk=pk))
 
 # ---------- CRUD Tipo de Contrato ----------
 @require_POST
@@ -1207,16 +1162,9 @@ def tipo_contrato_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def tipo_contrato_delete(request, pk):
-    try:
-        obj = NTipoContrato.objects.get(pk=pk)
-        obj.delete()
-        return JsonResponse({'success': True})
-    except NTipoContrato.DoesNotExist:
-        return JsonResponse({'error': 'El tipo de contrato ya no existe o fue eliminado.'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar porque está siendo usado en un contrato real.'}, status=409)
-    except Exception as e:
-        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NTipoContrato, pk=pk))
 
 @require_POST
 def tipo_contrato_toggle_plaza(request, pk):
@@ -1290,16 +1238,9 @@ def motivo_contrato_update(request, pk):
 
 @require_http_methods(["DELETE"])
 def motivo_contrato_delete(request, pk):
-    try:
-        obj = NMotivoContrato.objects.get(pk=pk)
-        obj.delete()
-        return JsonResponse({'success': True})
-    except NMotivoContrato.DoesNotExist:
-        return JsonResponse({'error': 'El motivo de contrato ya no existe o fue eliminado.'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar porque está siendo usado en un contrato real.'}, status=409)
-    except Exception as e:
-        return JsonResponse({'error': f'Error interno: {str(e)}'}, status=500)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NMotivoContrato, pk=pk))
 
 def tipo_contrato_info(request, pk):
     try:
@@ -1367,7 +1308,7 @@ def grupos_escala_tabla_parcial(request):
 @login_required
 def municipios_provincia_tabla(request, prov_id):
     # Buscamos los municipios de esa provincia específica
-    municipios = NMunicipio.objects.filter(provincia_id=prov_id).order_by('nombre')
+    municipios = NMunicipio.objects.filter(provincia_id=prov_id)
     
     # Devolvemos un pequeño HTML solo con las filas de la tabla
     return render(request, 'nomencladores/partials/municipios_table_rows.html', {
@@ -1423,28 +1364,9 @@ def guardar_tipo_unidad(request):
 @require_POST
 @login_required
 def eliminar_tipo_unidad(request, pk):
-    try:
-        tipo = get_object_or_404(NTipoUnidadOrganizativa, pk=pk)
-        
-        # PROTECCIÓN 1: No borrar si tiene subunidades
-        if tipo.es_principal:
-            hijas = NTipoUnidadOrganizativa.objects.filter(tipo_padre=tipo)
-            if hijas.exists():
-                return JsonResponse({
-                    'success': False, 
-                    'error': 'No se puede eliminar esta Unidad Principal porque tiene subunidades que dependen de ella.'
-                })
-            
-        tipo.delete()
-        return JsonResponse({'success': True})
-        
-    except ProtectedError:
-        # PROTECCIÓN 2: No borrar si ya está en uso en otra tabla
-        return JsonResponse({
-            'success': False, 
-            'error': 'No se puede eliminar porque hay Unidades Organizativas reales que están usando este Tipo.'
-        })
-        
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NTipoUnidadOrganizativa, pk=pk))
 
 # ---------- CRUD NTipoFamilia (Para el Modal) ----------
 @require_POST
@@ -1469,15 +1391,11 @@ def tipo_familia_create(request):
             
         return JsonResponse({'id': obj.id, 'nombre': obj.nombre})
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+        return _respuesta_error(e)
 
 @require_http_methods(["DELETE"])
 @login_required
 def tipo_familia_delete(request, pk):
-    try:
-        NTipoFamilia.objects.get(pk=pk).delete()
-        return JsonResponse({'success': True})
-    except NTipoFamilia.DoesNotExist:
-        return JsonResponse({'error': 'No encontrado'}, status=404)
-    except RestrictedError:
-        return JsonResponse({'error': 'No se puede eliminar porque está en uso.'}, status=409)
+    """Borra o explica qué lo usa y cuántos (3.8.2, 27-10-2026): nunca borra en
+    cadena ni devuelve un error técnico."""
+    return borrar_o_explicar(get_object_or_404(NTipoFamilia, pk=pk))

@@ -250,3 +250,13 @@
 .btn-action-top.active-muni.delete { background: #fff1f2; color: #f43f5e; cursor: pointer; }
 .btn-action-top.active-muni.delete:hover { background: #f43f5e; color: white; }
 
+
+/* Orden por arrastre (3.8.2): el asa ⋮⋮ de cada fila. */
+.orb-asa-orden {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.1rem; margin-right: .45rem; color: #a1acb8; cursor: grab;
+  touch-action: none;
+}
+.orb-asa-orden:hover { color: #696cff; }
+.orb-asa-orden:active { cursor: grabbing; }
+.sortable-ghost { opacity: .45; background: rgba(105, 108, 255, .08); }

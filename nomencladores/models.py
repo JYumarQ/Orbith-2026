@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -6,33 +7,136 @@ from auditoria.models import Base
 from datetime import timedelta
 from django.core.exceptions import ValidationError
 
+
+# --------------------------------------------------------------------------
+# COMUNES A LOS NOMENCLADORES (3.8.2, 27-10-2026)
+# --------------------------------------------------------------------------
+
+def clave_nomenclador(texto):
+    """«  Flórida » → «florida»: sin mayúsculas, acentos ni espacios de más. Es la
+    forma de comparar dos nombres para saber si son el mismo."""
+    descompuesto = unicodedata.normalize('NFKD', ' '.join(str(texto or '').split()).lower())
+    return ''.join(c for c in descompuesto if not unicodedata.combining(c))
+
+
+class SinRepetidos:
+    """Impide dos registros que solo se distinguen por mayúsculas, acentos o espacios.
+
+    La comprobación vive en el programa y NO como regla de la base de datos (decisión
+    del 27-10-2026): así la actualización del servidor nunca se para por repetidos
+    antiguos, que la regla CFG-007 de Subsanación lista para corregirlos a mano.
+
+    `campo_unico` es el campo que no se repite; `ambito_unico`, los campos (por su
+    nombre de columna) que delimitan dónde no se repite: el municipio, dentro de su
+    provincia; el motivo, dentro de su tipo de contrato.
+    """
+    campo_unico = None
+    ambito_unico = ()
+
+    def repetido(self):
+        """El registro que ya tiene ese nombre, o None."""
+        clave = clave_nomenclador(getattr(self, self.campo_unico))
+        if not clave:
+            return None
+        otros = type(self)._default_manager.filter(
+            **{campo: getattr(self, campo) for campo in self.ambito_unico})
+        if self.pk:
+            otros = otros.exclude(pk=self.pk)
+        return next((o for o in otros if clave_nomenclador(getattr(o, self.campo_unico)) == clave), None)
+
+    def _error_de_repetido(self):
+        otro = self.repetido()
+        if otro:
+            return ValidationError({self.campo_unico: (
+                f'Ya existe «{getattr(otro, self.campo_unico)}». No se puede repetir '
+                f'(da igual mayúsculas, acentos o espacios).')})
+        return None
+
+    def clean(self):
+        super().clean()
+        error = self._error_de_repetido()
+        if error:
+            raise error
+
+    def save(self, *args, **kwargs):
+        # También al guardar, no solo en `clean()`: las vistas JSON, los importadores
+        # y los scripts guardan sin validar, y por ahí entraría el repetido.
+        error = self._error_de_repetido()
+        if error:
+            raise error
+        super().save(*args, **kwargs)
+
+
+class Ordenable(models.Model):
+    """Orden que fija el Administrador arrastrando las filas (decisión del 27-10-2026).
+
+    Es el orden de TODO Orbith: la tarjeta del nomenclador, los desplegables, los
+    filtros y los informes, porque cada modelo lo declara en su `Meta.ordering`.
+    Un registro nuevo se coloca al final de su lista (`ambito_orden`: el municipio,
+    al final de los de su provincia).
+    """
+    orden = models.PositiveIntegerField(default=0, editable=False, db_index=True, verbose_name='Orden')
+
+    ambito_orden = ()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.orden:
+            ultimo = (type(self)._default_manager
+                      .filter(**{campo: getattr(self, campo) for campo in self.ambito_orden})
+                      .aggregate(m=models.Max('orden'))['m'])
+            self.orden = (ultimo or 0) + 1
+        super().save(*args, **kwargs)
+
+
+#: Los únicos tridentes posibles: «tridente» son tres niveles (decisión del 27-10-2026).
+TRIDENTES_VALIDOS = ('I', 'II', 'III')
+
 #?SALARIO
-class NTridente(Base):
-    
+class NTridente(SinRepetidos, Base):
+
     tipo = models.CharField(max_length=10, blank=False, null=False)
-    
+
+    campo_unico = 'tipo'
+
     class Meta:
         verbose_name = ("NTridente")
         verbose_name_plural = ("NTridentes")
+        # I < II < III también en orden alfabético: solo existen esos tres.
+        ordering = ['tipo']
+
+    def clean(self):
+        self.tipo = (self.tipo or '').strip().upper()
+        if self.tipo not in TRIDENTES_VALIDOS:
+            raise ValidationError({'tipo': 'El tridente es un número romano: I, II o III.'})
+        super().clean()
 
     def __str__(self):
         return f"Tridente {self.tipo}"
 
 # nomencladores/models.py
 
-class NRol(Base):
-    tipo = models.CharField(max_length=50)    
+class NRol(SinRepetidos, Ordenable, Base):
+    tipo = models.CharField(max_length=50)
     # Se eliminó el campo es_cuadro de aquí
+
+    campo_unico = 'tipo'
 
     class Meta:
         verbose_name = ("NRol")
         verbose_name_plural = ("NRoles")
+        # Orden oficial de la escala: Decisorio, Fundamental, Apoyo (de más a menos).
+        ordering = ['orden', 'tipo']
 
     def __str__(self):
         return self.tipo
 
-class NGrupoEscala(Base):
+class NGrupoEscala(SinRepetidos, Base):
     nivel = models.CharField(max_length=8, unique=True)
+
+    campo_unico = 'nivel'
     
     # --- NUEVOS CAMPOS ---
     es_cuadro = models.BooleanField(default=False, verbose_name="Es Cuadro")
@@ -49,6 +153,8 @@ class NGrupoEscala(Base):
     class Meta:
         verbose_name = ("NGrupoEscala")
         verbose_name_plural = ("NGruposEscalas")
+        # Por su número romano (I, II, … XXV), en todo Orbith.
+        ordering = ['valor_numerico_db', 'nivel']
     
     @property
     def valor_numerico(self):
@@ -85,9 +191,12 @@ class NGrupoEscala(Base):
     
 class NSalario(Base):
 
-    grupo_escala = models.ForeignKey(NGrupoEscala, on_delete=models.CASCADE)
-    rol = models.ForeignKey(NRol, null=True, blank=True, on_delete=models.CASCADE)
-    tridente = models.ForeignKey(NTridente, null=True, blank=True, on_delete=models.CASCADE)
+    # PROTECT (27-10-2026): borrar un grupo, un rol o un tridente se llevaba en silencio
+    # sus importes de la escala (así se perdieron los 66 del Tridente III). Ahora se
+    # impide y se explica; la escala se vacía antes, a propósito, desde su pantalla.
+    grupo_escala = models.ForeignKey(NGrupoEscala, on_delete=models.PROTECT)
+    rol = models.ForeignKey(NRol, null=True, blank=True, on_delete=models.PROTECT)
+    tridente = models.ForeignKey(NTridente, null=True, blank=True, on_delete=models.PROTECT)
     monto = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
@@ -106,24 +215,33 @@ class NSalario(Base):
             return f"{self.grupo_escala} - {self.rol} (CUADRO): ${self.monto}"
         return f"Salario {self.pk}"
         
-class NTipoFamilia(Base):
+class NTipoFamilia(SinRepetidos, Ordenable, Base):
     nombre = models.CharField(max_length=100, unique=True, verbose_name="Tipo de Familia")
+
+    campo_unico = 'nombre'
 
     class Meta:
         verbose_name = "Tipo de Familia"
         verbose_name_plural = "Tipos de Familias"
+        ordering = ['orden', 'nombre']
 
     def __str__(self):
         return self.nombre
 
-class NFamiliaCargo(Base):
+class NFamiliaCargo(SinRepetidos, Ordenable, Base):
     nombre = models.CharField(max_length=100, unique=True)
     descripcion = models.TextField(blank=True, null=True)
-    tipo_familia = models.ForeignKey(NTipoFamilia, on_delete=models.CASCADE, related_name='familias')
+    # PROTECT (27-10-2026): borrar un tipo de familia se llevaba todas sus familias.
+    tipo_familia = models.ForeignKey(NTipoFamilia, on_delete=models.PROTECT, related_name='familias')
+
+    campo_unico = 'nombre'
+    ambito_orden = ('tipo_familia_id',)
+
     class Meta:
         verbose_name = "Familia de Cargos"
         verbose_name_plural = "Familias de Cargos"
         unique_together = ('nombre', 'tipo_familia')
+        ordering = ['orden', 'nombre']
 
     def __str__(self):
         return f"{self.nombre} ({self.tipo_familia.nombre})"
@@ -419,14 +537,17 @@ class NCargo(Base):
     def __str__(self):
         return self.descripcion
     
-class NNocturnidad(Base):
+class NNocturnidad(SinRepetidos, Ordenable, Base):
     codigo = models.CharField(max_length=50, unique=True, verbose_name="Código (Ej: N1)")
     hora_inicio = models.TimeField(verbose_name="Hora Inicio")
     hora_fin = models.TimeField(verbose_name="Hora Fin")
 
+    campo_unico = 'codigo'
+
     class Meta:
         verbose_name = "Nocturnidad"
         verbose_name_plural = "Nocturnidades"
+        ordering = ['orden', 'codigo']
 
     def __str__(self):
         return f"{self.codigo} ({self.hora_inicio.strftime('%H:%M')} - {self.hora_fin.strftime('%H:%M')})"
@@ -445,7 +566,7 @@ class NNocturnidad(Base):
             return round(diff.total_seconds() / 3600, 2)
         return 0.0
 
-class NCondicionLaboralAnormal(models.Model):
+class NCondicionLaboralAnormal(SinRepetidos, Ordenable):
     nombre = models.CharField(max_length=10, unique=True)
     descripcion = models.TextField(max_length=200, blank=True, null=True)
 
@@ -456,17 +577,21 @@ class NCondicionLaboralAnormal(models.Model):
         default=Decimal("0")
     )
 
+    # PROTECT (27-10-2026): borrar la nocturnidad dejaba la condición sin ella en silencio.
     nocturnidad = models.OneToOneField(
         NNocturnidad,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         related_name="condicion"
     )
+
+    campo_unico = 'nombre'
 
     class Meta:
         verbose_name = "Condición Laboral Anormal"
         verbose_name_plural = "Condiciones Laborales Anormales"
+        ordering = ['orden', 'nombre']
 
     def __str__(self):
         return f"{self.nombre} ({self.tarifa_hora} CUP/h)"
@@ -537,7 +662,7 @@ def _validar_territorio(instancia):
     return errores
 
 
-class NProvincia(Base):
+class NProvincia(SinRepetidos, Ordenable, Base):
 
     nombre = models.CharField(max_length=50, unique=True)
     siglas = models.CharField(
@@ -547,9 +672,12 @@ class NProvincia(Base):
         help_text="Exactamente 3 letras mayúsculas"
     )
 
+    campo_unico = 'nombre'
+
     class Meta:
         verbose_name = ("NProvincia")
         verbose_name_plural = ("NProvincias")
+        ordering = ['orden', 'nombre']
 
     def clean(self):
         super().clean()
@@ -569,8 +697,8 @@ class NProvincia(Base):
     def __str__(self):
         return self.nombre
 
-class NMunicipio(Base):
-    
+class NMunicipio(SinRepetidos, Ordenable, Base):
+
     nombre = models.CharField(max_length=50)
     provincia = models.ForeignKey(NProvincia, on_delete=models.RESTRICT)    
     siglas = models.CharField(
@@ -580,10 +708,15 @@ class NMunicipio(Base):
         help_text="Exactamente 3 letras mayúsculas"
     )
 
+    campo_unico = 'nombre'
+    ambito_unico = ('provincia_id',)
+    ambito_orden = ('provincia_id',)
+
     class Meta:
         verbose_name = ("NMunicipio")
         verbose_name_plural = ("NMunicipios")
         unique_together = ('nombre', 'provincia')
+        ordering = ['orden', 'nombre']
 
     def clean(self):
         super().clean()
@@ -604,14 +737,17 @@ class NMunicipio(Base):
     
     
 #?CAUSAS ALTA/BAJA
-class NCausaAltaBaja(Base):
-    
+class NCausaAltaBaja(SinRepetidos, Ordenable, Base):
+
     descripcion = models.CharField(max_length=50, blank=False, null=False)
     alta = models.BooleanField(default=False, blank=False, null=False)
+
+    campo_unico = 'descripcion'
 
     class Meta:
         verbose_name = ("NCausa Alta/Baja")
         verbose_name_plural = ("NCausas de Alta/Baja")
+        ordering = ['orden', 'descripcion']
 
     def __str__(self):
         return self.descripcion
@@ -624,39 +760,48 @@ class NCausaAltaBaja(Base):
 # de trabajo se gestiona ahora desde Pre-Nómina → Calendario.
 
 #?PROFESIONES
-class NEspecialidad(models.Model):
+class NEspecialidad(SinRepetidos, Ordenable):
 
     nombre = models.CharField( max_length=50, unique=True)
     educ_superior = models.BooleanField(verbose_name='Educ. Superior', default=False)
 
+    campo_unico = 'nombre'
+
     class Meta:
         verbose_name = ("NEspecialidad")
         verbose_name_plural = ("NEspecialidad")
+        ordering = ['orden', 'nombre']
 
     def __str__(self):
         return self.nombre
 
 
-class NNivelPreparacion(Base):
+class NNivelPreparacion(SinRepetidos, Ordenable, Base):
     nombre = models.CharField(max_length=50, unique=True)
+
+    campo_unico = 'nombre'
 
     class Meta:
         verbose_name = "Nivel de Preparación"
         verbose_name_plural = "Niveles de Preparación"
+        ordering = ['orden', 'nombre']
 
     def __str__(self):
         return self.nombre
 
-class NTipoContrato(Base):
+class NTipoContrato(SinRepetidos, Ordenable, Base):
     descripcion = models.CharField(max_length=50, unique=True, verbose_name="Descripción")
     ocupa_plaza = models.BooleanField(default=False, verbose_name="¿Ocupa Plaza en Plantilla?")
     # NUEVO SWITCH
     requiere_motivo = models.BooleanField(default=False, verbose_name="¿Requiere Motivo?") 
     es_adiestrado = models.BooleanField(default=False, verbose_name="¿Es Adiest?")
 
+    campo_unico = 'descripcion'
+
     class Meta:
         verbose_name = "Tipo de Contrato"
         verbose_name_plural = "Tipos de Contratos"
+        ordering = ['orden', 'descripcion']
 
     def __str__(self):
         return self.descripcion
@@ -701,7 +846,7 @@ class NTipoContrato(Base):
                 'No se pudo avisar del recuento de plazas del tipo %s.', self.pk)
 
 # NUEVO NOMENCLADOR
-class NMotivoContrato(Base):
+class NMotivoContrato(SinRepetidos, Ordenable, Base):
     descripcion = models.CharField(max_length=100, verbose_name="Descripción")   # ← quitado unique=True
     tipo_contrato = models.ForeignKey(
         NTipoContrato,
@@ -710,9 +855,13 @@ class NMotivoContrato(Base):
         verbose_name="Tipo de Contrato Asociado"
     )
 
+    campo_unico = 'descripcion'
+    ambito_unico = ('tipo_contrato_id',)
+
     class Meta:
         verbose_name = "Motivo de Contrato"
         verbose_name_plural = "Motivos de Contratos"
+        ordering = ['orden', 'descripcion']
         constraints = [
             models.UniqueConstraint(
                 fields=['descripcion', 'tipo_contrato'],
@@ -723,19 +872,23 @@ class NMotivoContrato(Base):
     def __str__(self):
         return self.descripcion
 
-class NTipoUnidadOrganizativa(Base):
+class NTipoUnidadOrganizativa(SinRepetidos, Ordenable, Base):
     descripcion = models.CharField(max_length=150, unique=True, verbose_name="Tipo de Unidad")
     es_temporal = models.BooleanField(default=False, verbose_name="Es temporal")
     es_principal = models.BooleanField(default=False, verbose_name="Unidad Principal")
     es_subunidad = models.BooleanField(default=False, verbose_name="Subunidad")
-    tipo_padre = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subtipos', verbose_name="Tipo Principal (Padre)")
+    # PROTECT (27-10-2026): un tipo con subtipos no se borra (antes los dejaba sin padre).
+    tipo_padre = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, related_name='subtipos', verbose_name="Tipo Principal (Padre)")
 
     # Aquí guardaremos el código HEX del color (ej. #FF5733)
     color = models.CharField(max_length=20, blank=True, null=True, verbose_name="Color de Jerarquía")
 
+    campo_unico = 'descripcion'
+
     class Meta:
         verbose_name = "Tipo de Unidad Organizativa"
         verbose_name_plural = "Tipos de Unidades Organizativas"
+        ordering = ['orden', 'descripcion']
 
     def __str__(self):
         return self.descripcion
@@ -801,7 +954,7 @@ class NImporteGradoCientifico(Base):
                 aspirante__grado_cientifico=self.grado)
 
 
-class NPagoAdicional(Base):
+class NPagoAdicional(SinRepetidos, Ordenable, Base):
     """Los pagos de Instructor y de CNCI: varios registros de cada uno.
 
     Van en una sola tabla con un campo que los distingue, y no en dos modelos,
@@ -825,10 +978,14 @@ class NPagoAdicional(Base):
         validators=[MinValueValidator(Decimal('0.00'))],
         verbose_name='Importe')
 
+    campo_unico = 'descripcion'
+    ambito_unico = ('tipo',)
+    ambito_orden = ('tipo',)
+
     class Meta:
         verbose_name = 'Pago adicional'
         verbose_name_plural = 'Pagos adicionales'
-        ordering = ['tipo', 'descripcion']
+        ordering = ['tipo', 'orden', 'descripcion']
         constraints = [
             # Dos entradas con la misma descripción dentro del mismo tipo serían
             # indistinguibles en el desplegable del contrato.

@@ -924,7 +924,7 @@ class InformePuestosClaveView(GuiaInformeRRHHMixin, TemplateView):
         agrupacion = _agrupacion_elegida(self.request, CLAVE_AGRUPACION)
 
         # 2. Tipos de Familia
-        tipos_familia = NTipoFamilia.objects.all().order_by('nombre')
+        tipos_familia = NTipoFamilia.objects.all()
         if not tipo_id:
             tipo_id = 'puestos_clave'
 

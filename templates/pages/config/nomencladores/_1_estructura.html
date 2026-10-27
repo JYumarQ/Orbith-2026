@@ -33,9 +33,9 @@
                     <th class="text-uppercase text-center" style="font-size: 0.75rem;">Acciones</th>
                   </tr>
                 </thead>
-                <tbody id="tbody-tipos-unidad" class="table-border-bottom-0">
+                <tbody id="tbody-tipos-unidad" class="table-border-bottom-0" data-orden="tipo-unidad">
                   {% for tu in tipos_unidades %}
-                  <tr id="tu-row-{{ tu.id }}">
+                  <tr id="tu-row-{{ tu.id }}" data-id="{{ tu.id }}">
                     <td class="fw-semibold text-heading">{{ tu.descripcion }}</td>
                     <td class="text-center">
                       {% if tu.es_temporal %}
@@ -120,7 +120,7 @@
                 </div>
                 <div class="card-body p-0 overflow-auto">
                   <table class="table table-hover table-borderless align-middle m-0" id="roles-table">
-                    <tbody id="roles-tbody">
+                    <tbody id="roles-tbody" data-orden="rol">
                       {% for r in roles %}
                       <tr data-id="{{ r.id }}" class="border-bottom">
                         <td class="tipo-cell fw-medium text-heading ps-3">{{ r.tipo }}</td>
@@ -172,7 +172,7 @@
                 </div>
                 <div class="card-body p-0 overflow-auto">
                   <table class="table table-hover table-borderless align-middle m-0" id="tipos-familia-table">
-                    <tbody id="tipos-familia-tbody">
+                    <tbody id="tipos-familia-tbody" data-orden="tipo-familia">
                       {% for tf in tipos_familia %}
                       <tr data-id="{{ tf.id }}" class="border-bottom">
                         <td class="tipo-cell fw-medium text-heading ps-3">{{ tf.nombre }}</td>
@@ -520,6 +520,7 @@
             if (!tr) {
                 tr = document.createElement('tr');
                 tr.id = trId;
+                tr.dataset.id = data.tipo.id;
                 isNew = true;
             }
 

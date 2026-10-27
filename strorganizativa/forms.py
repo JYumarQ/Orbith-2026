@@ -502,7 +502,7 @@ class UnidadOrganizativaForm(forms.ModelForm):
         configuracion = Configuracion.objects.first()
         if configuracion and configuracion.provincia_entidad_id:
             self.fields['municipio'].queryset = (
-                NMunicipio.objects.filter(provincia_id=configuracion.provincia_entidad_id).order_by('nombre')
+                NMunicipio.objects.filter(provincia_id=configuracion.provincia_entidad_id)
             )
         else:
             self.fields['municipio'].widget.attrs['disabled'] = 'disabled'

@@ -13,6 +13,51 @@ from operator import attrgetter
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 
+def escala_salarial():
+    """La tabla de Parámetros → Escala salarial, construida desde los nomencladores
+    (opción C, decisión del 27-10-2026).
+
+    Antes tenía escritos a mano los tres roles y colocaba los importes por POSICIÓN:
+    al faltar un tridente, los demás se corrían de columna. Ahora las columnas salen
+    de los roles (en su orden: Decisorio, Fundamental, Apoyo, o el que fije el
+    Administrador) y de los tridentes (I, II, III), y cada importe va en su celda.
+
+    Cada celda dice además su estado: `ok` (tiene importe), `falta` (el rol
+    corresponde al grupo según su ficha pero no hay importe: un contrato así sale
+    «Sin salario») o `no_aplica` (la ficha del grupo no lleva ese rol, como XXIV y
+    XXV, que solo llevan Decisorio). Solo LEE: no cambia ningún dato.
+
+    Tres consultas en total; la versión anterior hacía unas cinco por grupo.
+    """
+    roles = list(NRol.objects.all())
+    tridentes = list(NTridente.objects.all())
+    montos = {(s.grupo_escala_id, s.rol_id, s.tridente_id): s.monto for s in NSalario.objects.all()}
+
+    filas = []
+    for grupo in NGrupoEscala.objects.prefetch_related('roles'):
+        del_grupo = {r.pk for r in grupo.roles.all()} if grupo.tiene_rol else set()
+        celdas = []
+        for rol in roles:
+            for tridente in tridentes:
+                monto = montos.get((grupo.pk, rol.pk, tridente.pk))
+                if rol.pk not in del_grupo and monto is None:
+                    estado = 'no_aplica'
+                else:
+                    estado = 'falta' if monto is None else 'ok'
+                celdas.append({'estado': estado, 'monto': monto})
+        cuadro = montos.get((grupo.pk, None, None))
+        if cuadro is None:
+            estado_cuadro = 'falta' if grupo.es_cuadro else 'no_aplica'
+        else:
+            estado_cuadro = 'ok'
+        # Como antes: solo los grupos que ya tienen escala (los demás se crean con
+        # «Nuevo Salario»).
+        if cuadro is not None or any(c['monto'] is not None for c in celdas):
+            filas.append({'nivel': grupo.nivel, 'grupo_id': grupo.pk, 'celdas': celdas,
+                          'cuadro': {'estado': estado_cuadro, 'monto': cuadro}})
+    return {'salarios': filas, 'escala_roles': roles, 'escala_tridentes': tridentes}
+
+
 class ParametrosGeneralesView(FormView):
     template_name = "pages/config/config.html"
     form_class = ConfiguracionForm
@@ -24,28 +69,10 @@ class ParametrosGeneralesView(FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        grupos_escala = sorted(NGrupoEscala.objects.all(), key=attrgetter('valor_numerico'))
-        salarios = []
-
-        for grupo in grupos_escala:
-            dec = NSalario.objects.filter(grupo_escala=grupo, rol__tipo='Decisorio').order_by('tridente__tipo')
-            fun = NSalario.objects.filter(grupo_escala=grupo, rol__tipo='Fundamental').order_by('tridente__tipo')
-            apo = NSalario.objects.filter(grupo_escala=grupo, rol__tipo='Apoyo').order_by('tridente__tipo')
-            salario_cuadro = NSalario.objects.filter(grupo_escala=grupo, rol=None, tridente=None).first()
-
-            if dec.exists() or fun.exists() or apo.exists() or salario_cuadro:
-                salarios.append({
-                    'nivel': grupo.nivel,
-                    'grupo_id': grupo.id,
-                    'decisorios': list(dec),
-                    'fundamentales': list(fun),
-                    'apoyo': list(apo),
-                    'cuadro': salario_cuadro,
-                })
+        context.update(escala_salarial())
 
         # (La sección de familias fue movida a FamiliasCargoView)
 
-        context['salarios'] = salarios
         context['active_tab'] = self.request.GET.get('tab', 'parametros')
 
         # Abreviaturas estándar de los municipios cubanos. El panel Territorial
@@ -72,11 +99,11 @@ class ParametrosGeneralesView(FormView):
         context['condiciones'] = NCondicionLaboralAnormal.objects.all()
         context['especialidades'] = NEspecialidad.objects.all()
         context['niveles_preparacion'] = NNivelPreparacion.objects.all()
-        context['tipos_contrato'] = NTipoContrato.objects.all().order_by('descripcion')
-        context['motivos_contrato'] = NMotivoContrato.objects.all().order_by('descripcion')
-        context['tipos_familia'] = NTipoFamilia.objects.all().order_by('nombre')
+        context['tipos_contrato'] = NTipoContrato.objects.all()
+        context['motivos_contrato'] = NMotivoContrato.objects.all()
+        context['tipos_familia'] = NTipoFamilia.objects.all()
         context['cargos'] = NCargo.objects.all().order_by('descripcion')
-        context['nocturnidades'] = NNocturnidad.objects.all().order_by('codigo')
+        context['nocturnidades'] = NNocturnidad.objects.all()
         context['config'] = Configuracion.objects.first()
         return context
 
@@ -130,7 +157,7 @@ class FamiliasCargoView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        tipos_familia = NTipoFamilia.objects.all().order_by('nombre')
+        tipos_familia = NTipoFamilia.objects.all()
         # Obtenemos el tipo desde el GET o usamos el primero por defecto
         tipo_id_get = self.request.GET.get('tipo_id')
         
@@ -145,7 +172,7 @@ class FamiliasCargoView(TemplateView):
         cargos_asignados = 0
 
         if tipo_actual:
-            familias = NFamiliaCargo.objects.filter(tipo_familia=tipo_actual).prefetch_related('cargos').order_by('-id')
+            familias = NFamiliaCargo.objects.filter(tipo_familia=tipo_actual).prefetch_related('cargos')
             cargos_pendientes = NCargo.objects.exclude(familias__tipo_familia=tipo_actual).order_by('descripcion')
             cargos_asignados = total_cargos - cargos_pendientes.count()
 

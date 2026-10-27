@@ -5,7 +5,7 @@ from nomencladores.models import NProvincia
 class ConfiguracionForm(forms.ModelForm):
     # Campo adicional (se guarda en la BD)
     provincia_entidad = forms.ModelChoiceField(
-        queryset=NProvincia.objects.all().order_by('nombre'),
+        queryset=NProvincia.objects.all(),
         required=False,
         empty_label="---------",
         label="Provincia Entidad",

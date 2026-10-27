@@ -13,9 +13,9 @@
           <th class="text-center" style="width: 70px;">Acción</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody data-orden="pagos-horas">
         {% for pago in pagos_horas %}
-          <tr>
+          <tr data-id="{{ pago.pk }}">
             <td class="font-monospace fw-bold text-slate-500">{{ pago.codigo }}</td>
             <td>{{ pago.descripcion }}</td>
             <td class="text-center">

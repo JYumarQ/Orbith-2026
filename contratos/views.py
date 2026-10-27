@@ -88,7 +88,7 @@ def _cascadas_de_filtro(request):
         especialidades = NEspecialidad.objects.none()
     return {
         'filtro_provincia': provincia if provincia.isdigit() else '',
-        'municipios_filtro': (NMunicipio.objects.filter(provincia_id=provincia).order_by('nombre')
+        'municipios_filtro': (NMunicipio.objects.filter(provincia_id=provincia)
                               if provincia.isdigit() else []),
         'especialidades_filtro': especialidades.order_by('nombre'),
     }
@@ -153,7 +153,7 @@ class ContratoListView(ListView):
         context['provincias_list'] = NProvincia.objects.all()
         context['niveles_educ'] = Aspirante._meta.get_field('nivel_educ').choices
         context['categorias_ocupacionales'] = NCargo._meta.get_field('cat_ocupacional').choices
-        context['tipos_contrato_list'] = NTipoContrato.objects.all().order_by('descripcion')
+        context['tipos_contrato_list'] = NTipoContrato.objects.all()
 
         # Preselección visual de los filtros al llegar con una querystring ya
         # armada (p.ej. desde un gráfico del Dashboard) — la tabla ya viene
@@ -325,7 +325,7 @@ def cargar_roles(request):
 
             # 4. Query Final
             if ids_validos:
-                roles_disponibles = NRol.objects.filter(id__in=ids_validos).order_by('tipo')
+                roles_disponibles = NRol.objects.filter(id__in=ids_validos)
             else:
                 roles_disponibles = NRol.objects.none()
 
@@ -2827,7 +2827,7 @@ class ExportarContratoWordView(FormView):
         contrato = self._get_contrato_optimizado(self.kwargs['pk'])
         context['contrato'] = contrato
         context['config'] = Configuracion.objects.first()
-        context['provincias'] = NProvincia.objects.all().order_by('nombre')
+        context['provincias'] = NProvincia.objects.all()
 
         # Municipio de la unidad organizativa del contrato, para precargarlo en
         # el desplegable. La provincia NO se toca: todas las unidades comparten

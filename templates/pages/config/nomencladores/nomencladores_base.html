@@ -1,6 +1,9 @@
 {% load static %}
 {% load estaticos %}
 <link rel="stylesheet" href="{% estatico 'css/nomencladores.css' %}">
+{# Orden por arrastre de las tarjetas (3.8.2). #}
+<script src="{% static 'vendor/js/sortable.min.js' %}"></script>
+<script src="{% estatico 'js/orden_nomencladores.js' %}"></script>
 
 <div class="tab-pane fade {% if active_tab == 'nomencladores' %}show active{% endif %}"
      id="navs-justified-nomencladores" role="tabpanel">
@@ -22,6 +25,76 @@
 <script>
   // Esta línea es vital para que Django te permita guardar datos
   var csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+  // Lee la respuesta del servidor sin romperse nunca (3.8.2, 27-10-2026). Si algo
+  // falla lanza un Error con el mensaje del servidor («Ya existe…», «No se puede
+  // eliminar…») o uno genérico: nunca «Unexpected token» ni «undefined» en la celda.
+  window.leerRespuesta = async function (r) {
+    let datos = {};
+    try { datos = await r.json(); } catch (e) { datos = {}; }
+    if (!r.ok || datos.error) {
+      throw new Error(datos.error || 'No se pudo completar la operación. Inténtelo de nuevo y, si se repite, avise al administrador de Orbith.');
+    }
+    return datos;
+  };
+  window.avisarError = function (err) {
+    window.mostrarToast((err && err.message) || String(err), 'warning');
+  };
+  function escaparHtml(texto) {
+    const div = document.createElement('div');
+    div.textContent = texto == null ? '' : String(texto);
+    return div.innerHTML;
+  }
+  // Fila de las tarjetas de una sola columna (Tridentes y Roles), igual que la de Django.
+  function filaSimple(id, texto) {
+    return `<tr data-id="${id}" class="border-bottom">
+      <td class="tipo-cell fw-medium text-heading ps-3">${escaparHtml(texto)}</td>
+      <td class="text-end pe-3" style="width: 80px;">
+        <div class="d-flex justify-content-end gap-1">
+          <button class="btn btn-xs btn-icon btn-text-secondary edit-btn"><i class="fas fa-pencil-alt text-muted"></i></button>
+          <button class="btn btn-xs btn-icon btn-text-secondary btn-eliminar delete-btn"><i class="fas fa-trash text-muted"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }
+  // Las altas de Tridente y Rol no existían: el botón de guardar llamaba a funciones
+  // que nadie había escrito y no pasaba nada (3.8.2).
+  async function guardarTridente(row) {
+    const tipo = row.querySelector('.input-tipo').value.trim().toUpperCase();
+    try {
+      const d = await fetch('/nomencladores/api/tridentes/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ tipo })
+      }).then(leerRespuesta);
+      row.remove();
+      const tbody = document.getElementById('tridentes-tbody');
+      tbody.insertAdjacentHTML('beforeend', filaSimple(d.id, d.tipo));
+      // Siempre I, II, III: de menor a mayor.
+      Array.from(tbody.querySelectorAll('tr[data-id]'))
+        .sort((a, b) => a.querySelector('.tipo-cell').textContent.trim().localeCompare(b.querySelector('.tipo-cell').textContent.trim()))
+        .forEach(tr => tbody.appendChild(tr));
+      window.mostrarToast(`Tridente ${d.tipo} creado. Complete sus importes en Parámetros → Escala salarial.`, 'success');
+    } catch (err) {
+      avisarError(err);
+    }
+  }
+  async function guardarRol(row) {
+    const tipo = row.querySelector('.input-tipo').value.trim();
+    try {
+      const d = await fetch('/nomencladores/api/roles/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+        body: JSON.stringify({ tipo })
+      }).then(leerRespuesta);
+      row.remove();
+      // Al final de la lista, que es donde lo deja el orden; luego se puede arrastrar.
+      document.getElementById('roles-tbody').insertAdjacentHTML('beforeend', filaSimple(d.id, d.tipo));
+      window.mostrarToast(`Rol «${d.tipo}» creado. Márquelo en los grupos escala que lo lleven y complete sus importes en la escala salarial.`, 'success');
+    } catch (err) {
+      avisarError(err);
+    }
+  }
 
   function cancelAllInsertRows() {
       document.querySelectorAll('.insert-row').forEach(row => row.remove());
@@ -66,19 +139,13 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ tipo: newTipo })
           })
-            .then(async r => {
-                if(!r.ok) {
-                    const data = await r.json();
-                    throw new Error(data.error || 'Error al actualizar el tridente');
-                }
-                return r.json();
-            })
+            .then(leerRespuesta)
             .then(d => {
               tipoCell.textContent = d.tipo;
               actionCell.innerHTML = originalButtons;
             })
             .catch(err => {
-                alert(err.message);
+                avisarError(err);
                 tipoCell.textContent = oldTipo;
                 actionCell.innerHTML = originalButtons;
             });
@@ -131,12 +198,12 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ tipo: newTipo })
           })
-          .then(r => r.json())
+          .then(leerRespuesta)
           .then(d => {
             tipoCell.textContent = d.tipo;
             actionCell.innerHTML = originalButtons;
           })
-          .catch(err => alert(err));
+          .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           tipoCell.textContent = oldTipo;
           actionCell.innerHTML = originalButtons;
@@ -181,13 +248,13 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ nombre: newNombre, educ_superior: newEduc })
           })
-            .then(r => r.json())
+            .then(leerRespuesta)
             .then(d => {
               nombreCell.textContent = d.nombre;
               educCell.textContent   = d.educ_superior ? 'Sí' : 'No';
               actionCell.innerHTML   = originalButtons;
             })
-            .catch(err => alert(err));
+            .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           nombreCell.textContent = oldNombre;
           educCell.textContent   = oldEduc ? 'Sí' : 'No';
@@ -229,12 +296,12 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ nombre: newNombre })
           })
-            .then(r => r.json())
+            .then(leerRespuesta)
             .then(d => {
               nombreCell.textContent = d.nombre;
               actionCell.innerHTML   = originalButtons;
             })
-            .catch(err => alert(err));
+            .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           nombreCell.textContent = oldNombre;
           actionCell.innerHTML   = originalButtons;
@@ -299,10 +366,7 @@
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify(payload)
-          }).then(async r => {
-              if(!r.ok) throw new Error('Error al actualizar');
-              return r.json();
-          }).then(d => {
+          }).then(leerRespuesta).then(d => {
               descCell.textContent = d.nombre;
               if (tableId === 'motivocontrato-table') {
                   const selectElement = tr.querySelector('.input-edit-tipo');
@@ -311,8 +375,8 @@
               }
               actionCell.innerHTML = originalButtons;
           }).catch(err => {
-              alert(err);
-              actionTaken = false; 
+              avisarError(err);
+              actionTaken = false;
           });
         } else {
           descCell.textContent = oldDesc;
@@ -362,13 +426,13 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ nombre: newNombre, tarifa_hora: newTarifa })
           })
-            .then(r => r.json())
+            .then(leerRespuesta)
             .then(d => {
               nombreCell.textContent = d.nombre;
               tarifaCell.textContent = d.tarifa_hora + ' CUP';
               actionCell.innerHTML = originalButtons;
             })
-            .catch(err => alert(err));
+            .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           nombreCell.textContent = oldNombre;
           tarifaCell.textContent = oldTarifa + ' CUP';
@@ -415,13 +479,13 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ descripcion: newDesc, alta: newAlta })
           })
-            .then(r => r.json())
+            .then(leerRespuesta)
             .then(d => {
               descCell.textContent = d.descripcion;
               altaCell.textContent = d.alta ? 'Sí' : 'No';
               actionCell.innerHTML = originalButtons;
             })
-            .catch(err => alert(err));
+            .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           descCell.textContent = oldDesc;
           altaCell.textContent = oldAlta ? 'Sí' : 'No';
@@ -462,12 +526,12 @@
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
             body: JSON.stringify({ nombre: newVal })
           })
-            .then(r => r.json())
+            .then(leerRespuesta)
             .then(d => {
               cell.textContent = d.nombre;
               actionCell.innerHTML = originalButtons;
             })
-            .catch(err => alert(err));
+            .catch(err => { avisarError(err); actionTaken = false; });
         } else {
           cell.textContent = oldVal;
           actionCell.innerHTML = originalButtons;
@@ -538,13 +602,7 @@
           method: 'DELETE',
           headers: { 'X-CSRFToken': csrftoken }
         })
-          .then(async r => {
-            if (!r.ok) {
-                const data = await r.json();
-                throw new Error(data.error || "Error al eliminar");
-            }
-            return r.json();
-          })
+          .then(leerRespuesta)
           .then(() => {
             tr.remove();
             window.mostrarToast('Registro eliminado con éxito.', 'success');
@@ -577,7 +635,7 @@
       switch (tableId) {
         case 'tridentes-table':
           row.innerHTML = `
-            <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="Tipo"></td>
+            <td><input type="text" class="form-control form-control-sm input-tipo" placeholder="I, II o III" maxlength="3"></td>
             <td class="text-center">
               <div class="btn-group btn-group-sm">
                 <button class="btn btn-sm save-create-btn" disabled><i class="fas fa-save text-primary"></i></button>

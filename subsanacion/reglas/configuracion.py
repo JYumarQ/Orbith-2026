@@ -360,3 +360,75 @@ class EscalaSalarialIncompleta(ReglaBase):
                          f'escala no los tiene: {lista}.'),
                 datos={'grupo_escala': nivel, 'importes_que_faltan': lista},
             )
+
+
+class NomencladorConRepetidos(ReglaBase):
+    """Dos registros de un nomenclador que solo se distinguen por mayúsculas, acentos
+    o espacios («Renuncia» y «renuncia »).
+
+    Desde la 3.8.2 (27-10-2026) Orbith ya no deja crearlos (`SinRepetidos`), pero la
+    comprobación vive en el programa y no en la base de datos a propósito, para que
+    la actualización del servidor nunca se pare por repetidos antiguos. Esta regla
+    los lista para unirlos a mano.
+    """
+
+    codigo = 'CFG-006'
+    nombre = 'Nomenclador con nombres repetidos'
+    modulo = MODULO_CONFIGURACION
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'configuracion.Configuracion'
+
+    descripcion = (
+        'Busca en los nomencladores (roles, tridentes, causas, motivos, provincias, '
+        'municipios, especialidades…) nombres repetidos que solo se distinguen por '
+        'mayúsculas, acentos o espacios.')
+    causa_probable = (
+        'Se crearon antes de la versión 3.8.2, que ya lo impide, o entraron por una '
+        'importación o una restauración de una copia de seguridad.')
+    impacto = (
+        'Los desplegables muestran la misma opción dos veces y los informes reparten '
+        'entre dos filas lo que es una sola cosa.')
+    solucion = (
+        'Abra Configuración → Parámetros Generales → Nomencladores, pase los registros '
+        'que usan uno de los dos al otro y elimine el que sobra (Orbith no deja '
+        'eliminarlo mientras alguien lo use).')
+
+    #: Los modelos cuyo nombre técnico no sirve para leerlo en pantalla.
+    NOMBRES = {
+        'nomencladores.nrol': 'Roles', 'nomencladores.ntridente': 'Tridentes',
+        'nomencladores.ngrupoescala': 'Grupos escala', 'nomencladores.nprovincia': 'Provincias',
+        'nomencladores.nmunicipio': 'Municipios', 'nomencladores.nespecialidad': 'Especialidades',
+        'nomencladores.ncausaaltabaja': 'Causas de alta y baja',
+        'nomencladores.npagoadicional': 'Instructor y CNCI',
+    }
+
+    def ejecutar(self, contexto):
+        from collections import defaultdict
+
+        from django.apps import apps
+
+        from nomencladores.models import SinRepetidos, clave_nomenclador
+
+        for modelo in apps.get_app_config('nomencladores').get_models():
+            if not issubclass(modelo, SinRepetidos) or not modelo.campo_unico:
+                continue
+            grupos = defaultdict(list)
+            campos = ['pk', modelo.campo_unico] + list(modelo.ambito_unico)
+            for fila in modelo._default_manager.values(*campos):
+                clave = (tuple(fila[c] for c in modelo.ambito_unico),
+                         clave_nomenclador(fila[modelo.campo_unico]))
+                if clave[1]:
+                    grupos[clave].append(fila)
+            for (ambito, clave), filas in grupos.items():
+                if len(filas) < 2:
+                    continue
+                nombres = ', '.join(f'«{f[modelo.campo_unico]}»' for f in filas)
+                lista = self.NOMBRES.get(modelo._meta.label_lower, modelo._meta.verbose_name_plural)
+                yield HallazgoDetectado(
+                    object_id='',
+                    clave_extra=f'{modelo._meta.label_lower}:{ambito}:{clave}',
+                    titulo=f'{lista}: {nombres} están repetidos',
+                    detalle=(f'En {lista} hay {len(filas)} registros que son el mismo '
+                             f'nombre escrito de otra forma: {nombres}.'),
+                    datos={'nomenclador': str(lista), 'repetidos': nombres},
+                )

@@ -60,7 +60,7 @@ LOOKUP_POR_OPERADOR = {
 
 def _opciones_tipos_familia():
     from nomencladores.models import NTipoFamilia
-    return list(NTipoFamilia.objects.order_by("nombre").values_list("nombre", "nombre"))
+    return list(NTipoFamilia.objects.values_list("nombre", "nombre"))
 
 
 def _opciones_familias_cargo():
@@ -132,37 +132,37 @@ def _opciones_cargos():
 
 def _opciones_especialidades():
     from nomencladores.models import NEspecialidad
-    return list(NEspecialidad.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+    return list(NEspecialidad.objects.values_list("nombre", "nombre").distinct())
 
 
 def _opciones_niveles_preparacion():
     from nomencladores.models import NNivelPreparacion
-    return list(NNivelPreparacion.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+    return list(NNivelPreparacion.objects.values_list("nombre", "nombre").distinct())
 
 
 def _opciones_tipos_contrato():
     from nomencladores.models import NTipoContrato
-    return list(NTipoContrato.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+    return list(NTipoContrato.objects.values_list("descripcion", "descripcion").distinct())
 
 
 def _opciones_motivos_contrato():
     from nomencladores.models import NMotivoContrato
-    return list(NMotivoContrato.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+    return list(NMotivoContrato.objects.values_list("descripcion", "descripcion").distinct())
 
 
 def _opciones_roles():
     from nomencladores.models import NRol
-    return list(NRol.objects.order_by("tipo").values_list("tipo", "tipo").distinct())
+    return list(NRol.objects.values_list("tipo", "tipo").distinct())
 
 
 def _opciones_tridentes():
     from nomencladores.models import NTridente
-    return list(NTridente.objects.order_by("tipo").values_list("tipo", "tipo").distinct())
+    return list(NTridente.objects.values_list("tipo", "tipo").distinct())
 
 
 def _opciones_causas_alta_baja():
     from nomencladores.models import NCausaAltaBaja
-    return list(NCausaAltaBaja.objects.order_by("descripcion").values_list("descripcion", "descripcion").distinct())
+    return list(NCausaAltaBaja.objects.values_list("descripcion", "descripcion").distinct())
 
 
 def _opciones_municipios():
@@ -172,7 +172,7 @@ def _opciones_municipios():
 
 def _opciones_provincias():
     from nomencladores.models import NProvincia
-    return list(NProvincia.objects.order_by("nombre").values_list("nombre", "nombre").distinct())
+    return list(NProvincia.objects.values_list("nombre", "nombre").distinct())
 
 
 # ---------------------------------------------------------------------------
@@ -1767,7 +1767,7 @@ def _campos_por_tipo_de_contrato():
     de que ese campo ya no existe (`motor._obtener_campo`)."""
     try:
         from nomencladores.models import NTipoContrato
-        tipos = list(NTipoContrato.objects.order_by('descripcion').values_list('pk', 'descripcion'))
+        tipos = list(NTipoContrato.objects.values_list('pk', 'descripcion'))
     except Exception:
         return {}
     return {

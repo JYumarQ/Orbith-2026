@@ -31,6 +31,8 @@ from django.db import models
 from django.db.models import F, Q
 
 from auditoria.models import Base
+# Orden por arrastre en todo Orbith (27-10-2026); ver `nomencladores.models.Ordenable`.
+from nomencladores.models import Ordenable
 from strorganizativa.models import UnidadOrganizativa
 
 from . import formulas
@@ -46,7 +48,7 @@ class TipoValorImporte(models.TextChoices):
     ESCALA = 'ESC', 'Escala de años de servicio'
 
 
-class NPagoHoras(Base):
+class NPagoHoras(Ordenable, Base):
     """Concepto que se paga en horas. Es una columna del grupo púrpura.
 
     El `codigo` no es decorativo: es la identidad de la columna en el Excel
@@ -66,7 +68,7 @@ class NPagoHoras(Base):
     class Meta:
         verbose_name = 'Pago Asociado por Horas'
         verbose_name_plural = 'Pagos Asociados por Horas'
-        ordering = ['codigo']
+        ordering = ['orden', 'codigo']
         constraints = [
             models.CheckConstraint(
                 condition=Q(codigo__gt=0), name='pagohoras_codigo_positivo'),
@@ -137,7 +139,7 @@ class NEscalaAnnosServicio(Base):
         return Decimal(str(escala[str(tramos[-1])]))
 
 
-class NPagoImporte(Base):
+class NPagoImporte(Ordenable, Base):
     """Concepto que se paga en dinero. Es una columna del grupo rojo.
 
     Tres formas de obtener el valor, y ninguna implica escribir lógica de
@@ -177,7 +179,7 @@ class NPagoImporte(Base):
     class Meta:
         verbose_name = 'Pago Asociado por Importe'
         verbose_name_plural = 'Pagos Asociados por Importe'
-        ordering = ['codigo']
+        ordering = ['orden', 'codigo']
         constraints = [
             models.CheckConstraint(
                 condition=Q(codigo__gt=0), name='pagoimporte_codigo_positivo'),
@@ -249,7 +251,7 @@ class NPagoImporte(Base):
             raise ValidationError(errores)
 
 
-class NClaveAusencia(Base):
+class NClaveAusencia(Ordenable, Base):
     """Clave de ausencia. Es una columna del grupo verde.
 
     Los tres interruptores de resta son **independientes entre sí** y también
@@ -284,7 +286,7 @@ class NClaveAusencia(Base):
     class Meta:
         verbose_name = 'Clave de Ausencia'
         verbose_name_plural = 'Claves de Ausencia'
-        ordering = ['codigo']
+        ordering = ['orden', 'codigo']
         constraints = [
             models.CheckConstraint(
                 condition=Q(codigo__gt=0), name='claveausencia_codigo_positivo'),

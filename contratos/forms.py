@@ -229,19 +229,19 @@ class CAltaForm(forms.ModelForm):
     )
 
     cla = CLAModelChoiceField(
-        queryset=NCondicionLaboralAnormal.objects.all().order_by('nombre'),
+        queryset=NCondicionLaboralAnormal.objects.all(),
         required=False,
         empty_label="---------",
         widget=forms.Select(attrs={'class': 'form-select select2-basic'})
     )
     nocturnidad_1 = NocturnidadModelChoiceField(
-        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False).order_by('nombre'),
+        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False),
         required=False,
         empty_label="---------",
         widget=forms.Select(attrs={'class': 'form-select select-nocturnidad', 'id': 'id_nocturnidad_1'})
     )
     nocturnidad_2 = NocturnidadModelChoiceField(
-        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False).order_by('nombre'),
+        queryset=NCondicionLaboralAnormal.objects.filter(nocturnidad__isnull=False),
         required=False,
         empty_label="---------",
         widget=forms.Select(attrs={'class': 'form-select select-nocturnidad', 'id': 'id_nocturnidad_2'})

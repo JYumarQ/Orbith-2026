@@ -29,9 +29,10 @@ class UnidadOrganizativa(Base):
 
     # Municipio donde radica la unidad. Se filtra en el formulario según la
     # provincia definida en Parámetros Generales (Configuracion.provincia_entidad).
+    # PROTECT (27-10-2026): borrar el municipio dejaba la unidad sin él en silencio.
     municipio = models.ForeignKey(
         NMunicipio,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         verbose_name="Municipio"

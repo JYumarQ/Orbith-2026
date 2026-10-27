@@ -47,7 +47,7 @@
                                         <th class="text-center" style="width: 90px;">Acciones</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody data-orden="nocturnidad">
                                     {% for n in nocturnidades %}
                                     <tr data-id="{{ n.pk }}">
                                         <td class="codigo-cell fw-bold">{{ n.codigo }}</td>
@@ -94,7 +94,7 @@
                                         <th class="text-center" style="width: 90px;">Acciones</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody data-orden="condicion">
                                     {% for c in condiciones %}
                                     <tr data-id="{{ c.id }}">
                                         <td class="nombre-cell">{{ c.nombre }}</td>

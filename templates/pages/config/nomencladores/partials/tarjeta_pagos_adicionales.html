@@ -39,9 +39,9 @@
           <th class="text-center" style="width: 90px;">Acciones</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody data-orden="{{ slug }}">
         {% for pago in pagos %}
-          <tr>
+          <tr data-id="{{ pago.pk }}">
             <td>{{ pago.descripcion }}</td>
             <td class="text-end font-monospace text-slate-600">{{ pago.importe|floatformat:2 }}</td>
             <td class="text-center">

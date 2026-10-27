@@ -50,9 +50,10 @@ class Configuracion(Base):
     direccion = models.TextField(max_length=200, blank=True, null=True)
     logo = models.ImageField(upload_to='img/empr/', blank=True, null=True)
     
+    # PROTECT (27-10-2026): borrar la provincia dejaba los Parámetros sin ella en silencio.
     provincia_entidad = models.ForeignKey(
         NProvincia,
-        on_delete=models.SET_NULL,
+        on_delete=models.PROTECT,
         null=True,
         blank=True,
         verbose_name="Provincia de la Entidad"

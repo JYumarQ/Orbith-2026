@@ -39,6 +39,25 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.8.2",
+        "fecha": "2026-10-27",
+        "titulo": "Nomencladores: borrados seguros, sin repetidos, orden por arrastre y escala salarial dinámica",
+        "cambios": [
+            ("nuevo", "Nomencladores: casi todas las listas se ordenan arrastrando el asa ⋮⋮ de cada fila (tipos de unidad, roles, tipos y familias de cargos, nocturnidad, condiciones laborales, causas, especialidades, niveles de preparación, tipos y motivos de contrato, provincias y municipios, Instructor, CNCI y los conceptos de Pre-Nómina). Ese orden es el de todo Orbith: tarjetas, desplegables, filtros e informes."),
+            ("nuevo", "Escala salarial: la tabla se construye con los roles y tridentes que existan, cada importe en su celda; en gris lo que no corresponde al grupo (como XXIV y XXV, que solo llevan Decisorio) y en amarillo el importe que falta."),
+            ("nuevo", "Subsanación: regla CFG-006 «Nomenclador con nombres repetidos», para unir los que se crearon antes de esta versión."),
+            ("mejorado", "Nomencladores: no se pueden crear repetidos aunque cambien las mayúsculas, los acentos o los espacios («renuncia » = «Renuncia»); el motivo puede repetirse en otro tipo de contrato y el municipio en otra provincia."),
+            ("mejorado", "Tridentes: solo I, II o III, siempre de menor a mayor. Grupos escala ordenados por su número romano en todo Orbith. Roles en el orden oficial: Decisorio, Fundamental, Apoyo."),
+            ("mejorado", "El filtro de rol del Anexo 17 sale del nomenclador, en su orden."),
+            ("corregido", "Crear un Tridente o un Rol no hacía nada al pulsar guardar."),
+            ("corregido", "Borrar un nomenclador en uso (por ejemplo, el Tridente II) mostraba «Unexpected token»; ahora no se borra y se explica qué lo usa y cuántos."),
+            ("corregido", "Borrar un tridente, un rol o un grupo escala se llevaba en silencio sus importes de la escala salarial, y borrar un tipo de familia, sus familias. Ahora nada se borra en cadena."),
+            ("corregido", "Borrar una nocturnidad, un municipio o la provincia de la entidad dejaba vacío el campo de quien los usaba; ahora se impide y se explica."),
+            ("corregido", "Al editar un rol, una especialidad, una causa u otro nomenclador con un nombre no válido, la celda mostraba «undefined»; ahora sale el motivo y se puede corregir."),
+            ("corregido", "La tabla de la escala salarial se descuadraba si faltaba un tridente: los importes se corrían de columna."),
+        ],
+    },
+    {
         "version": "3.8.1",
         "fecha": "2026-10-26",
         "titulo": "Correcciones en Usuarios, permisos especiales, contrato y Aspirantes",
@@ -393,67 +412,6 @@ CHANGELOG = [
         ],
     },
 
-    {
-        "version": "3.1.0",
-        "fecha": "2026-09-15",
-        "titulo": "Cargos fuera de la plantilla aprobada, y una aplicación más ligera",
-        "cambios": [
-            ("nuevo", "Interruptor «En Plantilla» en el alta y la edición de "
-                    "cargos. Un cargo fuera de la plantilla aprobada existe y "
-                    "puede tener trabajadores, pero no suma en ninguna cifra de "
-                    "plazas aprobadas ni admite contratos que ocupen plaza. Los "
-                    "cargos que cuelgan de una Unidad Organizativa temporal "
-                    "nacen ya marcados como fuera de plantilla."),
-            ("nuevo", "Un mismo cargo puede repetirse en el departamento si uno "
-                    "está dentro de la plantilla aprobada y el otro fuera. El "
-                    "desplegable de cargos se ajusta solo al mover el "
-                    "interruptor, y no deja crear dos iguales del mismo lado."),
-            ("nuevo", "Al elegir un cargo fuera de plantilla en el formulario de "
-                    "contrato, los tipos de contrato que ocupan plaza se "
-                    "desactivan solos. Y no se puede sacar de la plantilla un "
-                    "cargo que ya tenga un contrato indeterminado asociado."),
-            ("nuevo", "En el Gestor de Plantilla, los cargos fuera de la "
-                    "plantilla aprobada se distinguen en ámbar, y la tarjeta de "
-                    "Cargos estrena un filtro Todos / En plantilla / Fuera de "
-                    "plantilla."),
-            ("nuevo", "El Informe Inteligente incorpora el campo «En Plantilla», "
-                    "que se puede mostrar y filtrar, también sobre un período "
-                    "cerrado. Las tarjetas del resumen y el desglose por unidad "
-                    "ignoran siempre los cargos fuera de plantilla."),
-            ("nuevo", "El Anexo 17 lista los cargos fuera de la plantilla "
-                    "aprobada en una sección aparte, con su propio subtotal y "
-                    "sin sumar al total oficial, tanto en pantalla como en PDF "
-                    "y Excel."),
-            ("corregido", "Cualquier error de validación al editar un Cargo, un "
-                        "Departamento o una Unidad Organizativa devolvía un "
-                        "error 500 en lugar del formulario con sus mensajes. "
-                        "Afectaba a seis pantallas."),
-            ("corregido", "El botón «Confirmar y Guardar» de Parámetros "
-                        "Generales quedaba desactivado para siempre, sin que "
-                        "nada explicara por qué."),
-            ("corregido", "Editar un contrato o los datos personales de un "
-                        "trabajador desde el Gestor de Plantilla devolvía al "
-                        "usuario a la lista de contratos y perdía la unidad, el "
-                        "departamento y el cargo que tenía seleccionados."),
-            ("corregido", "Un cargo podía quedar marcado como Funcionario y "
-                        "Designado a la vez si se creaba sin pasar por el "
-                        "formulario."),
-            ("mejorado", "Las páginas viajan comprimidas: el Gestor de Plantilla "
-                        "pasa de 270 KB a 55 KB y el Dashboard de 229 KB a "
-                        "45 KB. Un 80% menos de datos en cada pantalla que se "
-                        "abre, que se nota sobre todo con conexiones lentas."),
-            ("mejorado", "La aplicación reutiliza la conexión con la base de "
-                        "datos en lugar de abrir una nueva en cada petición. "
-                        "Menos consumo de memoria en el servidor."),
-            ("mejorado", "El listado de Solicitudes resuelve los contadores de "
-                        "las tres pestañas en una sola consulta en vez de tres."),
-            ("mejorado", "La imagen de la pantalla de acceso pasa de 917 KB a "
-                        "62 KB."),
-            ("seguridad", "Los respaldos de la base de datos dejan de guardarse "
-                        "en el repositorio de código: contenían datos personales "
-                        "de los trabajadores."),
-        ],
-    },
 
 ]
 

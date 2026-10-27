@@ -75,7 +75,7 @@
                                             <th class="text-center" style="width: 70px;">Acción</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody data-orden="causa">
                                         {% for c in causas %}
                                         <tr data-id="{{ c.id }}">
                                             <td class="desc-cell">{{ c.descripcion }}</td>
@@ -135,7 +135,7 @@
                                             <th class="text-center" style="width: 90px;">Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody data-orden="especialidad">
                                         {% for e in especialidades %}
                                         <tr data-id="{{ e.id }}">
                                             <td class="nombre-cell">{{ e.nombre }}</td>
@@ -179,7 +179,7 @@
                                             <th class="text-center" style="width: 90px;">Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody data-orden="nivel-preparacion">
                                         {% for np in niveles_preparacion %}
                                         <tr data-id="{{ np.id }}">
                                             <td class="nombre-cell">{{ np.nombre }}</td>
@@ -222,7 +222,7 @@
                                             <th class="text-end" style="width: 100px;">Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody data-orden="tipo-contrato">
                                         {% for tc in tipos_contrato %}
                                         <tr data-id="{{ tc.id }}">
                                             <td class="nombre-cell fw-bold">{{ tc.descripcion }}</td>
@@ -269,7 +269,7 @@
                                             <th class="text-end" style="width: 100px;">Acciones</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody data-orden="motivo-contrato">
                                         {% for m in motivos_contrato %}
                                         <tr data-id="{{ m.id }}" data-tipo-id="{{ m.tipo_contrato_id|default:'' }}">
                                             <td class="nombre-cell">{{ m.descripcion }}</td>

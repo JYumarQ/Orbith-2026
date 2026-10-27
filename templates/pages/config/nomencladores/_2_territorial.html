@@ -40,7 +40,7 @@
                     <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
                       <table class="w-100" id="provincias-table">
                         <thead><tr><th>Nombre</th></tr></thead>
-                        <tbody id="provincias-tbody">
+                        <tbody id="provincias-tbody" data-orden="provincia">
                           {% for p in provincias %}
                           <tr data-id="{{ p.id }}" 
                               data-siglas="{{ p.siglas|default:'' }}"
@@ -89,7 +89,7 @@
                     <div class="overflow-auto pe-2 flex-grow-1" style="max-height: 400px;">
                       <table class="w-100" id="municipios-table">
                         <thead><tr><th>Nombre</th></tr></thead>
-                        <tbody id="municipios-tbody">
+                        <tbody id="municipios-tbody" data-orden="municipio">
                           <tr id="muni-empty-state" style="grid-column: 1 / -1; display: flex; flex-direction: column; background: transparent; border: none; box-shadow: none; cursor: default;">
                             <td class="text-center py-5 opacity-50 w-100">
                               <i class="fas fa-map-marked-alt fs-1 text-slate-400 mb-3"></i>

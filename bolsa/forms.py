@@ -179,7 +179,7 @@ class AspiranteForm(forms.ModelForm):
 
         if provincia_id:
             mun_field.queryset = (
-                NMunicipio.objects.filter(provincia_id=provincia_id).order_by('nombre')
+                NMunicipio.objects.filter(provincia_id=provincia_id)
             )
             mun_field.widget.attrs.pop('disabled', None)
         else:

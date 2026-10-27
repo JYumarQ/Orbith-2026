@@ -101,16 +101,16 @@ def _catalogos():
         })
     return {
         'cargos': cargos,
-        'tipos': list(NTipoContrato.objects.order_by('descripcion').values('id', 'descripcion', 'requiere_motivo')),
-        'motivos': list(NMotivoContrato.objects.order_by('descripcion').values('id', 'descripcion', 'tipo_contrato_id')),
-        'tridentes': [{'id': t.pk, 'texto': str(t)} for t in NTridente.objects.order_by('pk')],
-        'causas': list(NCausaAltaBaja.objects.order_by('descripcion').values('id', 'descripcion', 'alta')),
+        'tipos': list(NTipoContrato.objects.values('id', 'descripcion', 'requiere_motivo')),
+        'motivos': list(NMotivoContrato.objects.values('id', 'descripcion', 'tipo_contrato_id')),
+        'tridentes': [{'id': t.pk, 'texto': str(t)} for t in NTridente.objects.all()],
+        'causas': list(NCausaAltaBaja.objects.values('id', 'descripcion', 'alta')),
         # «Escribir a mano»: la unidad de hoy a la que corresponde y las listas.
         'unidades': [{'id': u.pk, 'descripcion': u.descripcion}
                      for u in UnidadOrganizativa.objects.order_by('orden_informe', 'descripcion')],
         'grupos': sorted(NGrupoEscala.objects.values_list('nivel', flat=True), key=nivel_romano_a_int),
         'categorias': [etiqueta for _, etiqueta in NCargo._meta.get_field('cat_ocupacional').choices],
-        'roles': list(NRol.objects.order_by('tipo').values_list('tipo', flat=True)),
+        'roles': list(NRol.objects.values_list('tipo', flat=True)),
     }
 
 

@@ -22,80 +22,61 @@
     <div class="card">
         <div class="orb-tabla-scroll text-nowrap">
           <table class="table table-bordered table-hover orb-tabla-fija" id="tabla-salarios" style="table-layout: fixed; width: 100%;">
+            {% comment %} Columnas desde los nomencladores (3.8.2, opción C): cada rol con sus
+               tridentes, en su orden. Gris «—»: el rol no corresponde al grupo (su ficha);
+               amarillo: corresponde pero falta el importe. Ver `configuracion.views.escala_salarial`. {% endcomment %}
             <thead>
               <tr class="table-light">
                 <th rowspan="3" class="align-middle text-center">Grupo<br>Escala</th>
                 <th rowspan="3" class="align-middle text-center">Cuadro</th>
-                <th colspan="3" class="text-center">DECISORIOS</th>
-                <th colspan="3" class="text-center">FUNDAMENTALES</th>
-                <th colspan="3" class="text-center">APOYO</th>
+                {% for rol in escala_roles %}
+                <th colspan="{{ escala_tridentes|length }}" class="text-center">{{ rol.tipo|upper }}</th>
+                {% endfor %}
               </tr>
               <tr class="table-light">
-                <th colspan="3" class="text-center">TRIDENTE</th>
-                <th colspan="3" class="text-center">TRIDENTE</th>
-                <th colspan="3" class="text-center">TRIDENTE</th>
+                {% for rol in escala_roles %}
+                <th colspan="{{ escala_tridentes|length }}" class="text-center">TRIDENTE</th>
+                {% endfor %}
               </tr>
               <tr class="table-light">
-                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
-                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
-                <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+                {% for rol in escala_roles %}{% for t in escala_tridentes %}
+                <th class="text-center">{{ t.tipo }}</th>
+                {% endfor %}{% endfor %}
               </tr>
             </thead>
             <tbody>
               {% for fila in salarios %}
                 <tr class="cursor-pointer salary-row" onclick="seleccionarSalario(this, '{{ fila.grupo_id }}')">
-                  
                   <td class="text-center fw-bold text-primary">{{ fila.nivel }}</td>
-                  
-                  <td class="text-center">
-                    {% if fila.cuadro and fila.cuadro.monto > 0 %}
-                        {{ fila.cuadro.monto|floatformat:2 }}
-                    {% else %}
-                        <span class="fw-bold">-</span>
-                    {% endif %}
+                  {% with c=fila.cuadro %}
+                  <td class="text-center escala-{{ c.estado }}"{% if c.estado == 'falta' %} title="Falta el importe de cuadro"{% elif c.estado == 'no_aplica' %} title="Este grupo no es de cuadro"{% endif %}>
+                    {% if c.estado == 'ok' and c.monto > 0 %}{{ c.monto|floatformat:2 }}{% elif c.estado == 'no_aplica' %}—{% else %}<span class="fw-bold">-</span>{% endif %}
                   </td>
-                  
-                  {% for s in fila.decisorios %}
-                    <td class="text-center">
-                        {% if s.monto > 0 %}
-                            {{ s.monto|floatformat:2 }}
-                        {% else %}
-                            <span class="fw-bold">-</span>
-                        {% endif %}
+                  {% endwith %}
+                  {% for c in fila.celdas %}
+                    <td class="text-center escala-{{ c.estado }}"{% if c.estado == 'falta' %} title="Falta el importe: un contrato con este rol y tridente saldría «Sin salario»"{% elif c.estado == 'no_aplica' %} title="Este rol no corresponde a este grupo escala"{% endif %}>
+                      {% if c.estado == 'ok' and c.monto > 0 %}{{ c.monto|floatformat:2 }}{% elif c.estado == 'no_aplica' %}—{% else %}<span class="fw-bold">-</span>{% endif %}
                     </td>
                   {% endfor %}
-
-                  {% for s in fila.fundamentales %}
-                    <td class="text-center">
-                        {% if s.monto > 0 %}
-                            {{ s.monto|floatformat:2 }}
-                        {% else %}
-                            <span class="fw-bold">-</span>
-                        {% endif %}
-                    </td>
-                  {% endfor %}
-
-                  {% for s in fila.apoyo %}
-                    <td class="text-center">
-                        {% if s.monto > 0 %}
-                            {{ s.monto|floatformat:2 }}
-                        {% else %}
-                            <span class="fw-bold">-</span>
-                        {% endif %}
-                    </td>
-                  {% endfor %}
-
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
     </div>
+    <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+        <span><span class="escala-leyenda escala-no_aplica">—</span> El rol no corresponde a ese grupo escala</span>
+        <span><span class="escala-leyenda escala-falta">-</span> Falta el importe (un contrato así sale «Sin salario»)</span>
+    </div>
 </div>
 
 <div class="modal fade" id="editar_salario_modal" tabindex="-1" aria-hidden="true" role="dialog"></div>
 
 <style>
+    /* Escala salarial (3.8.2): no aplica / falta. */
+    #tabla-salarios td.escala-no_aplica, .escala-leyenda.escala-no_aplica { background-color: #f1f3f5; color: #a1acb8; }
+    #tabla-salarios td.escala-falta, .escala-leyenda.escala-falta { background-color: #fff3cd; color: #b26b00; }
+    .escala-leyenda { display: inline-block; min-width: 1.6rem; text-align: center; border-radius: 4px; margin-right: .3rem; }
     /* Estilos copiados de list_aspirante.html */
     .table-active-row > td {
         background-color: rgba(105, 108, 255, 0.16) !important;

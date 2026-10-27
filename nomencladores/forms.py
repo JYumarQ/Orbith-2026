@@ -42,7 +42,7 @@ class NGrupoEscalaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Ordenamos los roles alfabéticamente
-        self.fields['roles'].queryset = NRol.objects.all().order_by('tipo')
+        self.fields['roles'].queryset = NRol.objects.all()
         
         # NUEVO: Si el grupo es nuevo (no tiene ID aún), marcamos todos los roles por defecto
         if not self.instance.pk:

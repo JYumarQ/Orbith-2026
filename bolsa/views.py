@@ -316,7 +316,7 @@ class BajaListView(ListView):
         context['filtro_baja_hasta'] = self.request.GET.get('baja_hasta', '')
         # Causa de la baja (24-10-2026, desde «Top causas de baja» de la Dashboard).
         from nomencladores.models import NCausaAltaBaja
-        context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False).order_by('descripcion')
+        context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
         context['filtro_causa'] = self.request.GET.get('causa', '')
         context.update(_aviso_recontratados(self.request))
 

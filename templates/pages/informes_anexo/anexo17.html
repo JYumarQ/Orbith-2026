@@ -156,9 +156,9 @@
                     <label class="anx-meta-label text-muted mb-1">Rol Estructural</label>
                     <select name="rol" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="ALL" {% if filtros.rol == "ALL" %}selected{% endif %}>Todos los roles</option>
-                        <option value="Decisorio" {% if filtros.rol == "Decisorio" %}selected{% endif %}>Decisorio</option>
-                        <option value="Fundamental" {% if filtros.rol == "Fundamental" %}selected{% endif %}>Fundamental</option>
-                        <option value="Apoyo" {% if filtros.rol == "Apoyo" %}selected{% endif %}>Apoyo</option>
+                        {% for rol in roles_filtro %}
+                        <option value="{{ rol }}" {% if filtros.rol == rol %}selected{% endif %}>{{ rol }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-2 d-flex gap-2">

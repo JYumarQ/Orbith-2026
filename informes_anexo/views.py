@@ -747,6 +747,10 @@ class AnexoDiecisieteView(PermisoAnexoMixin, TemplateView):
         # Activa el `hx-swap-oob` de la botonera de exportación: sus enlaces llevan
         # los filtros en el query string y quedarían desfasados tras el intercambio.
         context["intercambio_oob"] = bool(getattr(self.request, "htmx", False))
+        # Los roles del filtro, desde el nomenclador y en su orden (3.8.2): antes eran
+        # tres opciones escritas a mano.
+        from nomencladores.models import NRol
+        context["roles_filtro"] = NRol.objects.values_list("tipo", flat=True)
         return context
 
 
