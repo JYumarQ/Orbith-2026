@@ -566,6 +566,8 @@ class DashboardView(TemplateView):
         
         # ========== DEFINIR MESES AQUÍ (antes de cualquier uso) ==========
         meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+        MESES_COMPLETOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
+                           'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
         # ========== FILTRO GLOBAL (Unidad Organizativa) ==========
         # `resolver_filtros` ya valida los ids pedidos contra el alcance real
@@ -947,8 +949,14 @@ class DashboardView(TemplateView):
             'claves': json.dumps(claves_meses),
             'altas': datos_altas,               # Lista normal
             'bajas': datos_bajas,               # Lista normal
-            'altas_total': datos_altas[-1] if datos_altas else 0,
-            'bajas_total': datos_bajas[-1] if datos_bajas else 0
+            # Etiqueta de la esquina: el mes en curso Y el total de los 6 meses, cada
+            # uno con su periodo escrito (antes solo «+6 −10», sin decir que eran del
+            # mes en curso, y parecía el total del gráfico).
+            'mes_actual': MESES_COMPLETOS[hoy.month - 1],
+            'altas_mes': datos_altas[-1] if datos_altas else 0,
+            'bajas_mes': datos_bajas[-1] if datos_bajas else 0,
+            'altas_periodo': sum(datos_altas),
+            'bajas_periodo': sum(datos_bajas),
         }
 
         return context

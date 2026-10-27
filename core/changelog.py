@@ -49,6 +49,7 @@ CHANGELOG = [
             ("mejorado", "Nomencladores: no se pueden crear repetidos aunque cambien las mayúsculas, los acentos o los espacios («renuncia » = «Renuncia»); el motivo puede repetirse en otro tipo de contrato y el municipio en otra provincia."),
             ("mejorado", "Tridentes: solo I, II o III, siempre de menor a mayor. Grupos escala ordenados por su número romano en todo Orbith. Roles en el orden oficial: Decisorio, Fundamental, Apoyo."),
             ("mejorado", "El filtro de rol del Anexo 17 sale del nomenclador, en su orden."),
+            ("mejorado", "Dashboard: la esquina del gráfico «Evolución Altas y Bajas» dice de qué periodo es cada número: las altas y bajas del mes en curso y el total de los 6 meses del gráfico (antes solo «+6 −10», que parecía el total)."),
             ("corregido", "Crear un Tridente o un Rol no hacía nada al pulsar guardar."),
             ("corregido", "Borrar un nomenclador en uso (por ejemplo, el Tridente II) mostraba «Unexpected token»; ahora no se borra y se explica qué lo usa y cuántos."),
             ("corregido", "Borrar un tridente, un rol o un grupo escala se llevaba en silencio sus importes de la escala salarial, y borrar un tipo de familia, sus familias. Ahora nada se borra en cadena."),

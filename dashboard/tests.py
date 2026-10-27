@@ -225,8 +225,11 @@ class HistoricoAltasBajasTests(TestCase):
         # Mes actual: 1 alta (asp_activo) + 1 baja (asp_baja).
         self.assertEqual(graficos['altas'][-1], 1)
         self.assertEqual(graficos['bajas'][-1], 1)
-        self.assertEqual(graficos['altas_total'], 1)
-        self.assertEqual(graficos['bajas_total'], 1)
+        self.assertEqual(graficos['altas_mes'], 1)
+        self.assertEqual(graficos['bajas_mes'], 1)
+        # Total de los 6 meses: 2 altas (asp_activo + asp_baja) y 1 baja.
+        self.assertEqual(graficos['altas_periodo'], 2)
+        self.assertEqual(graficos['bajas_periodo'], 1)
 
         # Hace 2 meses: 1 alta (asp_baja, vía CBaja.fecha_alta), 0 bajas.
         # La ventana histórica cubre 6 meses (índice 5 = mes actual, índice 3 =

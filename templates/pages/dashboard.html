@@ -163,7 +163,7 @@
             <div class="card h-100 shadow border-0 animate__animated animate__fadeInRight">
                 <div class="card-header pb-0 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold">Evolución Altas y Bajas <small class="text-muted fw-normal ms-1" style="font-size: .72rem;">Pulse un mes para ver su listado</small></h6>
-                    <div><span class="badge bg-label-primary">+{{ graficos.altas_total|default:"0" }}</span> <span class="badge bg-label-danger">-{{ graficos.bajas_total|default:"0" }}</span></div>
+                    <div class="d-flex flex-wrap justify-content-end gap-1 small"><span class="text-muted" title="Altas y bajas del mes en curso">{{ graficos.mes_actual }}:</span> <span class="badge bg-label-primary" title="Altas de {{ graficos.mes_actual|lower }}">+{{ graficos.altas_mes|default:"0" }}</span> <span class="badge bg-label-danger" title="Bajas de {{ graficos.mes_actual|lower }}">−{{ graficos.bajas_mes|default:"0" }}</span><span class="text-muted ms-2" title="Total de los 6 meses del gráfico">6 meses:</span> <span class="badge bg-label-primary" title="Altas de los 6 meses">+{{ graficos.altas_periodo|default:"0" }}</span> <span class="badge bg-label-danger" title="Bajas de los 6 meses">−{{ graficos.bajas_periodo|default:"0" }}</span></div>
                 </div>
                 <div class="card-body p-0"><div id="altasBajasAreaChart"></div></div>
             </div>
