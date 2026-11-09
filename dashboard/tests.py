@@ -262,7 +262,8 @@ class FiltrosUOTests(TestCase):
         cls.admin = CustomUser.objects.create_user(
             username='admin_filtros', password='x', es_admin=True)
         cls.observador = CustomUser.objects.create_user(
-            username='obs_filtros', password='x', es_observador=True)
+            username='obs_filtros', password='x', es_observador=True,
+            todas_las_unidades=True)
         cls.moderador = CustomUser.objects.create_user(
             username='mod_filtros', password='x', es_moderador=True)
         cls.moderador.unidades.add(cls.unidad_propia)
@@ -708,7 +709,8 @@ class PlazasDashboardTests(TestCase):
         cargo('Fuera', 3, 0, en_plantilla=False)
         cls.admin = CustomUser.objects.create_user(username='admin_plazas', password='x', es_admin=True)
         cls.observador = CustomUser.objects.create_user(
-            username='obs_plazas', password='x', es_observador=True)
+            username='obs_plazas', password='x', es_observador=True,
+            todas_las_unidades=True)
 
     def nombres(self, vista, **extra):
         self.client.force_login(self.admin)

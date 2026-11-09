@@ -35,7 +35,8 @@ class BaseObservadorTests(TestCase):
         cls.admin = CustomUser.objects.create_user(
             username='admin_obs', password='x', es_admin=True)
         cls.observador = CustomUser.objects.create_user(
-            username='observador_obs', password='x', es_observador=True)
+            username='observador_obs', password='x', es_observador=True,
+            todas_las_unidades=True)
         cls.moderador = CustomUser.objects.create_user(
             username='moderador_obs', password='x', es_moderador=True)
 
@@ -186,7 +187,8 @@ class AlcanceDelObservadorTests(BaseObservadorTests):
     """
 
     def test_ve_todas_las_unidades_aunque_no_tenga_ninguna_asignada(self):
-        self.assertEqual(self.observador.unidades.count(), 0)
+        # Desde la 3.9.0 el Observador global es el que tiene «Todas las unidades».
+        self.assertTrue(self.observador.todas_las_unidades)
 
         self.client.force_login(self.observador)
         html = self.client.get(reverse('gestor_plantilla')).content.decode()

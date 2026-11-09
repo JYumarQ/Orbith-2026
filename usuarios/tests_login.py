@@ -389,6 +389,7 @@ class ReglasDeContrasenaTests(TestCase):
         valida = CustomUserCreationForm(data={
             'username': 'nuevo', 'password1': self.CLAVE_VALIDA,
             'password2': self.CLAVE_VALIDA, 'es_observador': True,
+            'unidades': ['todas'],   # obligatorio desde la 3.9.0
         })
         self.assertTrue(valida.is_valid(), valida.errors.as_data())
 

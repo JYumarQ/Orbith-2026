@@ -26,9 +26,14 @@ from strorganizativa.models import UnidadOrganizativa
 # El Administrador no las usa: su alcance es su rol, no una relacion en la base
 # de datos, asi que el selector se le apaga en la pantalla.
 #
-# Una unidad puede tener VARIOS observadores, pero un unico moderador. Por eso
-# `validar_moderador_unico()` solo mira `es_moderador`: dos personas vigilando
-# la misma unidad no se estorban, dos personas gestionandola si.
+# Una unidad puede tener VARIOS moderadores y varios observadores (3.9.0, decisión
+# de RRHH del 09-11-2026; antes era un único moderador por unidad).
+#
+# «Todas las unidades, también las futuras» (3.9.0) es la primera opción del
+# selector: marca `todas_las_unidades` y guarda TODAS las unidades en la tabla
+# (`strorganizativa/signals.py` añade las que se creen después). El Moderador y el
+# Observador tienen que tener unidades o «Todas»: un Observador sin nada ya no
+# significa «toda la empresa».
 #
 # Una subunidad NO se asigna por separado: se asigna su Unidad Principal, y las
 # subunidades entran con ella. Vale igual para los dos roles. Así lo pidió el usuario, y además evita el caso
@@ -54,6 +59,9 @@ from strorganizativa.models import UnidadOrganizativa
 # =========================================================================
 
 ETIQUETA_PRINCIPALES = 'UNIDADES PRINCIPALES'
+#: Primera opción del selector de unidades (3.9.0).
+VALOR_TODAS = 'todas'
+ETIQUETA_TODAS = 'Todas las unidades (también las futuras)'
 ETIQUETA_INDEPENDIENTES = 'UNIDADES INDEPENDIENTES'
 
 
@@ -81,6 +89,7 @@ class _IteradorUnidadesAgrupadas(ModelChoiceIterator):
     """
 
     def __iter__(self):
+        yield (VALOR_TODAS, ETIQUETA_TODAS)
         principales, independientes = [], []
         for objeto in self.queryset:
             opcion = self.choice(objeto)
@@ -95,7 +104,7 @@ class _IteradorUnidadesAgrupadas(ModelChoiceIterator):
 
 
 def moderadores_por_unidad(excluir_pk=None):
-    """Qué moderador lleva cada unidad: `{pk_unidad: username}`.
+    """Qué moderadores llevan cada unidad: `{pk_unidad: 'ana, luis'}`.
 
     `excluir_pk` deja fuera al usuario que se está editando: sus propias
     unidades no son un choque consigo mismo.
@@ -103,11 +112,17 @@ def moderadores_por_unidad(excluir_pk=None):
     consulta = CustomUser.objects.filter(es_moderador=True, unidades__isnull=False)
     if excluir_pk:
         consulta = consulta.exclude(pk=excluir_pk)
-    return dict(consulta.values_list('unidades__pk', 'username'))
+    resultado = {}
+    for pk, nombre in consulta.values_list('unidades__pk', 'username').order_by('username'):
+        resultado.setdefault(pk, []).append(nombre)
+    return {pk: ', '.join(nombres) for pk, nombres in resultado.items()}
 
 
 class SelectUnidadesConDueno(forms.SelectMultiple):
-    """Desplegable que APAGA las unidades que ya tiene otro moderador.
+    """Desplegable que dice qué otros moderadores llevan cada unidad.
+
+    3.9.0 (09-11-2026): una unidad puede tener VARIOS moderadores, así que ya no se
+    apaga ninguna opción; solo se informa. Lo de abajo explica cómo era antes.
 
     Una unidad organizativa solo puede tener un moderador. Esa regla ya la
     imponía `validar_moderador_unico()`, pero solo al GUARDAR: el usuario elegía
@@ -150,12 +165,9 @@ class SelectUnidadesConDueno(forms.SelectMultiple):
             return opcion   # la opción vacía
 
         dueno = self.ocupadas.get(pk)
-        if dueno and pk not in (self.ya_asignadas or ()):
-            opcion['attrs']['disabled'] = True
-            # Lo lee el JavaScript de la pantalla para volver a habilitarla
-            # cuando el rol elegido es Observador (ver el docstring).
-            opcion['attrs']['data-ocupada'] = dueno
-            opcion['label'] = f'{label}  ·  la lleva {dueno}'
+        if dueno:
+            # Desde la 3.9.0 una unidad admite varios moderadores: solo se informa.
+            opcion['label'] = f'{label}  ·  también la lleva {dueno}'
         return opcion
 
 
@@ -190,6 +202,16 @@ class CampoUnidadesAsignables(forms.ModelMultipleChoiceField):
         self.widget.ocupadas = moderadores_por_unidad(excluir_pk=pk)
         self.widget.ya_asignadas = (
             set(usuario.unidades.values_list('pk', flat=True)) if pk else set())
+
+    #: Lo deja `clean()`: si se eligió «Todas las unidades».
+    eligio_todas = False
+
+    def clean(self, value):
+        valores = [str(v) for v in (value or [])]
+        self.eligio_todas = VALOR_TODAS in valores
+        if self.eligio_todas:
+            return UnidadOrganizativa.objects.all()
+        return super().clean([v for v in valores if v != VALOR_TODAS])
 
     def label_from_instance(self, objeto):
         cuantas = getattr(objeto, 'num_subunidades', 0) or 0
@@ -241,6 +263,22 @@ def validar_invariante_subunidades(formulario, cleaned):
             'Una subunidad no se asigna por separado: debe asignarse su Unidad '
             'Principal, y las subunidades entran con ella. Sin su unidad '
             'principal: ' + '; '.join(huerfanas) + '.')
+    return cleaned
+
+
+def preparar_todas(formulario):
+    """Si el usuario tiene «Todas», el selector enseña solo esa opción elegida."""
+    if getattr(formulario.instance, 'todas_las_unidades', False) and not formulario.is_bound:
+        formulario.initial['unidades'] = [VALOR_TODAS]
+
+
+def aplicar_todas_y_exigir_unidades(formulario, cleaned):
+    """Guarda la marca «Todas» y exige unidades al Moderador y al Observador (3.9.0)."""
+    todas = formulario.fields['unidades'].eligio_todas
+    formulario.instance.todas_las_unidades = bool(todas and (cleaned.get('es_moderador')
+                                                             or cleaned.get('es_observador')))
+    if (cleaned.get('es_moderador') or cleaned.get('es_observador')) and not todas             and not cleaned.get('unidades'):
+        formulario.add_error('unidades', 'Elija sus unidades o «Todas las unidades».')
     return cleaned
 
 
@@ -369,6 +407,7 @@ class CustomUserCreationForm(UserCreationForm):
         # `SelectUnidadesConDueno`). En el alta no hay instancia guardada, así
         # que se apagan todas las ocupadas: el usuario aún no lleva ninguna.
         self.fields['unidades'].marcar_ocupadas(self.instance)
+        preparar_todas(self)
         preparar_permisos_especiales(self)
 
         self.fields['contrato'].label_from_instance = lambda obj: (
@@ -382,7 +421,9 @@ class CustomUserCreationForm(UserCreationForm):
         # choque en una subunidad no se detectaría.
         cleaned = expandir_a_subunidades(cleaned)
         cleaned = validar_invariante_subunidades(self, cleaned)
-        return validar_moderador_unico(self, cleaned)
+        # Desde la 3.9.0 una unidad admite varios moderadores: ya no se llama a
+        # `validar_moderador_unico`.
+        return aplicar_todas_y_exigir_unidades(self, cleaned)
 
 class CustomUserChangeForm(UserChangeForm):
 
@@ -426,6 +467,7 @@ class CustomUserChangeForm(UserChangeForm):
         self.fields['unidades'].widget.attrs.update({'class': 'form-select select2', 'data-placeholder': 'Buscar unidades...'})
         # Apaga las unidades que ya lleva otro moderador (ver `SelectUnidadesConDueno`).
         self.fields['unidades'].marcar_ocupadas(self.instance)
+        preparar_todas(self)
         preparar_permisos_especiales(self)
         self.fields['contrato'].label_from_instance = lambda obj: (
             f"{obj.aspirante.nombre} {obj.aspirante.papellido} {obj.aspirante.sapellido}".strip()
@@ -438,7 +480,9 @@ class CustomUserChangeForm(UserChangeForm):
         # invariante y solo entonces mirar si alguna unidad ya tiene moderador.
         cleaned = expandir_a_subunidades(cleaned)
         cleaned = validar_invariante_subunidades(self, cleaned)
-        return validar_moderador_unico(self, cleaned)
+        # Desde la 3.9.0 una unidad admite varios moderadores: ya no se llama a
+        # `validar_moderador_unico`.
+        return aplicar_todas_y_exigir_unidades(self, cleaned)
 
 from django import forms
 from django.contrib.auth import get_user_model

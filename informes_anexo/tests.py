@@ -101,7 +101,8 @@ class AlcanceAnexo17Tests(TestCase):
         cls.acotado.save()
         cls.acotado.unidades.add(cls.propia)
 
-        cls.global_ = CustomUser(username='anexo_alcance_obs_global', es_observador=True, is_active=True)
+        cls.global_ = CustomUser(username='anexo_alcance_obs_global', es_observador=True,
+            todas_las_unidades=True, is_active=True)
         cls.global_.set_password('Clave12345!')
         cls.global_.save()
 

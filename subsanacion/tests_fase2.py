@@ -37,7 +37,7 @@ class BaseFase2(TestCase):
                                                 requiere_motivo=False)
         cls.admin = CustomUser.objects.create_user(username='admin_f2', password='x', es_admin=True)
         cls.observador = CustomUser.objects.create_user(username='obs_f2', password='x',
-                                                        es_observador=True)
+                                                        es_observador=True, todas_las_unidades=True)
 
     def contrato(self, **extra):
         datos = dict(aspirante=self.aspirante, no_expediente='03001', tipo=self.tipo,

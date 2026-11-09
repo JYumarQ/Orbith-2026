@@ -34,13 +34,17 @@ def sincronizar_titulares_de_subunidad(sender, instance, raw=False, **kwargs):
     if raw:
         return
 
-    # Solo las subunidades tienen padre. Una principal o una independiente se
-    # asignan a mano y no hay nada que propagar.
-    if not instance.padre_id:
-        return
-
     from usuarios.models import CustomUser
 
-    titulares = CustomUser.objects.filter(unidades=instance.padre_id)
-    # Reverse del ManyToMany `CustomUser.unidades`, que no declara `related_name`.
-    instance.customuser_set.set(titulares)
+    # Solo las subunidades tienen padre. Una principal o una independiente se
+    # asignan a mano y no hay nada que propagar.
+    if instance.padre_id:
+        titulares = CustomUser.objects.filter(unidades=instance.padre_id)
+        # Reverse del ManyToMany `CustomUser.unidades`, que no declara `related_name`.
+        instance.customuser_set.set(titulares)
+
+    # «Todas las unidades, también las futuras» (3.9.0): quien la tiene marcada recibe
+    # cualquier unidad nueva, sea principal, independiente o subunidad.
+    con_todas = CustomUser.objects.filter(todas_las_unidades=True)
+    if con_todas.exists():
+        instance.customuser_set.add(*con_todas)

@@ -11,11 +11,12 @@ EL REPARTO
 ----------
 * **Administrador**: toda la empresa, siempre. Su alcance es su rol, no una
   relación en la base de datos.
-* **Observador SIN unidades asignadas**: toda la empresa. Es el comportamiento
-  histórico del rol y se conserva a propósito, para que los observadores que ya
-  existen sigan viendo lo mismo tras este cambio sin que nadie los toque.
-* **Observador CON unidades asignadas**: solo esas unidades. Es la novedad: el
-  Administrador puede acotar a un Observador a una, varias o todas las unidades.
+* **Observador con «Todas las unidades»** (3.9.0): toda la empresa, también las
+  unidades que se creen después.
+* **Observador con unidades concretas**: solo esas unidades.
+* **Observador sin nada** (3.9.0, decisión de RRHH del 09-11-2026): no ve nada.
+  Antes veía toda la empresa; la migración `usuarios.0012` marcó «Todas» a los que
+  no tenían unidades, así que nadie perdió lo que veía.
 * **Moderador**: solo sus unidades asignadas, tenga las que tenga. Un moderador
   sin ninguna no ve nada — nunca la empresa entera.
 * **Sin rol reconocido**: no ve nada.
@@ -79,13 +80,13 @@ def _sin_unidades(usuario):
 
 
 def es_observador_global(usuario):
-    """Observador sin unidades asignadas: el que ve la empresa entera."""
-    return es_observador(usuario) and _sin_unidades(usuario)
+    """Observador con «Todas las unidades»: el que ve la empresa entera (3.9.0)."""
+    return es_observador(usuario) and bool(getattr(usuario, 'todas_las_unidades', False))
 
 
 def es_observador_acotado(usuario):
-    """Observador con al menos una unidad asignada: solo ve esas."""
-    return es_observador(usuario) and not _sin_unidades(usuario)
+    """Observador sin «Todas»: solo ve sus unidades (ninguna, si no tiene)."""
+    return es_observador(usuario) and not es_observador_global(usuario)
 
 
 def ve_toda_la_empresa(usuario):

@@ -305,7 +305,7 @@ def dependencias_del_usuario(usuario):
     borrar. Se comprueban tres cosas, y las tres por el mismo motivo: son datos
     **personales suyos** de los que dependen otras partes del sistema.
 
-    * **Unidades Organizativas**: cada unidad tiene un solo moderador. Borrarlo
+    * **Unidades Organizativas**: lleva unidades a su cargo. Borrarlo
       dejaría a sus unidades sin responsable en silencio.
     * **Plantillas de reporte**: si alguna se usó en un reporte de pago, la
       clave foránea es `PROTECT` y el borrado reventaría con un error 500 en

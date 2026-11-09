@@ -201,7 +201,8 @@ class AlcanceGestorPlantillaTests(TestCase):
         cls.moderador.unidades.add(cls.propia)
 
         cls.observador = CustomUser.objects.create_user(
-            username='observador_alcance', password='x', es_observador=True)
+            username='observador_alcance', password='x', es_observador=True,
+            todas_las_unidades=True)
 
         cls.admin = CustomUser.objects.create_user(
             username='admin_alcance', password='x', es_admin=True)

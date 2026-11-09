@@ -49,7 +49,8 @@ def _lista_de(request, parametro, validos=None, convertir=None):
 
 
 def solicitudes_visibles(usuario):
-    """Base del listado: el Administrador ve todas, el Moderador solo las suyas.
+    """Base del listado: el Administrador ve todas; el Moderador, las suyas y las de
+    sus compañeros de unidad (3.9.0: una unidad puede tener varios Moderadores).
 
     Es el único punto donde se decide el alcance. Cualquier vista que liste solicitudes
     parte de aquí, para que no pueda existir una pantalla que se salte la regla.
@@ -58,7 +59,14 @@ def solicitudes_visibles(usuario):
         'solicitante', 'revisor', 'decidida_por', 'unidad', 'content_type')
     if es_administrador(usuario):
         return consulta
-    return consulta.filter(solicitante=usuario)
+    return consulta.filter(de_mi_unidad(usuario))
+
+
+def de_mi_unidad(usuario):
+    """Las suyas, más las de las unidades que lleva (3.9.0). Las que no tienen
+    unidad (un nomenclador global) solo las ve quien las envió."""
+    from django.db.models import Q
+    return Q(solicitante=usuario) | Q(unidad__in=usuario.unidades.all())
 
 
 def contar_pendientes(usuario):

@@ -61,6 +61,12 @@ class CustomUser(AbstractUser):
 
     unidades = models.ManyToManyField(UnidadOrganizativa, blank=True)
 
+    # «Todas las unidades, también las futuras» (3.9.0, decisión de RRHH del 09-11-2026),
+    # para Moderador y Observador. Además de la marca, `unidades` las lleva TODAS
+    # (y `strorganizativa/signals.py` le añade cada unidad nueva): así los muchos sitios
+    # que filtran por `unidades` funcionan sin tocarlos.
+    todas_las_unidades = models.BooleanField(default=False, verbose_name='Todas las unidades')
+
     es_admin = models.BooleanField(default=False)
     es_moderador = models.BooleanField(default=False)
     es_observador = models.BooleanField(default=False)

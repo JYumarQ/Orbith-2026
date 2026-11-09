@@ -66,11 +66,12 @@ class RespuestaPersonalizadaForm(forms.Form):
 
 
 def personalizadas_visibles(usuario):
+    from .filtros import de_mi_unidad
     consulta = SolicitudPersonalizada.objects.select_related(
         'contrato__aspirante', 'unidad', 'respondida_por', 'solicitante')
     if es_administrador(usuario):
         return consulta
-    return consulta.filter(solicitante=usuario)
+    return consulta.filter(de_mi_unidad(usuario))
 
 
 def total_abiertas(usuario):

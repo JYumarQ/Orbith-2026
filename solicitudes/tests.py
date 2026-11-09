@@ -1763,3 +1763,26 @@ class SolicitudPersonalizadaTests(TestCase):
         respuesta = self.client.get(reverse('list_solicitudes_personalizadas'))
         self.assertContains(respuesta, 'Error en el cargo')
         self.assertContains(respuesta, 'Personalizadas')
+
+
+class CompanerosDeUnidadTests(BaseDepartamento):
+    """3.9.0: una unidad puede tener varios Moderadores y cada uno ve también las
+    solicitudes de sus compañeros de unidad (pero solo edita o retira las suyas)."""
+
+    def test_el_companero_la_ve_pero_no_la_toca(self):
+        from django.contrib.contenttypes.models import ContentType
+        companero = CustomUser.objects.create_user(username='companero_del', password='x', es_moderador=True)
+        companero.unidades.add(self.unidad)
+        ajeno = CustomUser.objects.create_user(username='ajeno_del', password='x', es_moderador=True)
+        solicitud = Solicitud.objects.create(
+            operacion='dpto_upd', content_type=ContentType.objects.get_for_model(Departamento),
+            object_id=str(self.departamento.pk), descriptor='Contabilidad', motivo='x',
+            unidad=self.unidad, solicitante=self.moderador, solicitante_nombre='moderador_del')
+
+        from .filtros import solicitudes_visibles
+        self.assertIn(solicitud, solicitudes_visibles(companero))
+        self.assertNotIn(solicitud, solicitudes_visibles(ajeno))
+        self.assertTrue(solicitud.es_visible_para(companero))
+        self.assertFalse(solicitud.puede_editarla(companero))
+        self.assertFalse(solicitud.puede_retirarla(companero))
+        self.assertTrue(solicitud.puede_editarla(self.moderador))

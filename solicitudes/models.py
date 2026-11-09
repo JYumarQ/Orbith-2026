@@ -230,12 +230,14 @@ class Solicitud(Base):
 
     def es_visible_para(self, usuario):
         """El Administrador (y quien tiene el permiso «Resolver solicitudes») ve todas;
-        el Moderador solo las suyas."""
+        el Moderador, las suyas y las de sus unidades (3.9.0)."""
         from usuarios.permisos_especiales import puede_resolver
         if puede_resolver(usuario):
             return True
         if getattr(usuario, 'es_moderador', False):
-            return self.solicitante_id == usuario.pk
+            return (self.solicitante_id == usuario.pk
+                    or (self.unidad_id is not None
+                        and usuario.unidades.filter(pk=self.unidad_id).exists()))
         return False
 
     def puede_editarla(self, usuario):

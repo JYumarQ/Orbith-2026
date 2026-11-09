@@ -49,6 +49,9 @@ CHANGELOG = [
             ("mejorado", "Subsanación: las reglas Informativas solo se ven en Subsanación; ya no llenan la campana ni Advertencias. Pasan a Informativa el móvil, el teléfono fijo, la serie del carnet, la dirección, los espacios y mayúsculas del nombre, el orden de unidades, departamentos y cargos, el nivel de preparación del cargo, los números de resolución y el Administrador sin superusuario."),
             ("mejorado", "Subsanación: nuevas gravedades — Crítica: motivo incoherente con el tipo (CTR-002), salario distinto al de la escala (SAL-001) y más de un contrato de alta (CTR-008); Alta: motivo sin duración (CTR-005); Media: tridente asignado indebidamente (CTR-009), Moderador sin unidades o sin todas las subunidades (VIS-007, VIS-008) y unidad sin cierre declarado (CIE-001)."),
             ("mejorado", "Subsanación: las reglas de Pre-Nómina (jornada sin asignar, calendario sin horas y fórmulas de pagos) quedan desactivadas hasta que se use Pre-Nómina."),
+            ("nuevo", "Usuarios: una unidad puede tener varios Moderadores. Cada Moderador ve también las solicitudes de sus compañeros de unidad (solo edita o retira las suyas)."),
+            ("nuevo", "Usuarios: opción «Todas las unidades (también las futuras)» al asignar unidades a un Moderador o a un Observador; las unidades que se creen después se le añaden solas. Elegir unidades o «Todas» pasa a ser obligatorio: los Observadores que no tenían ninguna (y veían toda la empresa) reciben «Todas» al actualizar."),
+            ("mejorado", "Ficha de la persona: el móvil, el teléfono fijo y la serie del carnet dejan de marcarse en amarillo como recomendados."),
         ],
     },
     {

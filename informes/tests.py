@@ -497,7 +497,8 @@ class AlcancePorRol(BaseInformes):
     def setUpTestData(cls):
         super().setUpTestData()
         cls.observador = CustomUser.objects.create_user(
-            username='obs_informes', password='x', es_observador=True)
+            username='obs_informes', password='x', es_observador=True,
+            todas_las_unidades=True)
         cls.moderador = CustomUser.objects.create_user(
             username='mod_informes', password='x', es_moderador=True)
         cls.moderador.unidades.set([cls.unidad])

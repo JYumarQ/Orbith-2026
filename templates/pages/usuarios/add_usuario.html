@@ -163,7 +163,14 @@
       // Las unidades las usan el Moderador y el Observador. El Administrador
       // no: su alcance es su rol, no una relación en la base de datos.
       const habilitado = isModerador || isObservador;
-      $unidades.prop('disabled', !habilitado);
+      $unidades.prop('disabled', !habilitado);
+      // «Todas las unidades» (3.9.0) y las unidades sueltas se excluyen: al elegir una,
+      // se quita la otra.
+      $unidades.off('select2:select.todas').on('select2:select.todas', function (e) {
+        const valores = $unidades.val() || [];
+        const nuevos = e.params.data.id === 'todas' ? ['todas'] : valores.filter(v => v !== 'todas');
+        if (nuevos.length !== valores.length) { $unidades.val(nuevos).trigger('change'); }
+      });
       $unidades.select2({
         dropdownParent: $('#crear_usuario'),
         width: '100%',
@@ -178,9 +185,9 @@
       // es nada. Se dice aquí para que el Administrador no tenga que saberlo.
       if ($ayuda.length) {
         if (isObservador) {
-          $ayuda.text('Sin unidades, el Observador ve toda la empresa. Si le asigna una o varias, solo verá los informes y las vistas de esas unidades.').show();
+          $ayuda.text('Elija sus unidades o «Todas las unidades (también las futuras)». Solo verá los informes y las vistas de lo que elija.').show();
         } else if (isModerador) {
-          $ayuda.text('El Moderador solo ve lo de sus unidades asignadas. Sin ninguna, no verá nada.').show();
+          $ayuda.text('Elija sus unidades o «Todas las unidades (también las futuras)». Una unidad puede tener varios Moderadores.').show();
         } else if (isAdmin) {
           $ayuda.text('El Administrador ve toda la empresa por su rol: no necesita unidades asignadas.').show();
         } else {

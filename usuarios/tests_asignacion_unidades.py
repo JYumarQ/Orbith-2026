@@ -9,8 +9,7 @@ Estas pruebas fijan las cuatro piezas de la regla:
 
 1. qué se OFRECE (solo unidades sin padre, agrupadas y con el conteo);
 2. qué se GUARDA al elegir un padre (el padre y todas sus hijas);
-3. qué se RECHAZA (una subunidad enviada a mano, y un padre cuya hija ya tiene
-   otro moderador);
+3. qué se RECHAZA (una subunidad enviada a mano);
 4. qué pasa DESPUÉS (una subunidad nueva o mudada se reparte sola).
 """
 
@@ -147,36 +146,6 @@ class RechazosTests(BaseEstructura):
         self.assertFalse(formulario.is_valid())
         self.assertIn('unidades', formulario.errors)
 
-    def test_se_rechaza_si_una_hija_ya_tiene_otro_moderador(self):
-        otro = CustomUser.objects.create_user(
-            username='otro_moderador', password=CLAVE, es_moderador=True)
-        otro.unidades.add(self.hija_a)
-
-        formulario = CustomUserCreationForm(
-            data=self.datos(unidades=[self.padre.pk]))
-        self.assertFalse(formulario.is_valid())
-        mensaje = ' '.join(formulario.errors['unidades'])
-        # El aviso tiene que nombrar la HIJA en conflicto, no solo el padre:
-        # si no, el Administrador no sabe qué liberar.
-        self.assertIn('Camaguey', mensaje)
-        self.assertIn('otro_moderador', mensaje)
-
-    def test_el_conflicto_en_una_hija_no_se_detectaria_expandiendo_tarde(self):
-        """Fija el ORDEN de `clean()`, que es lo que hace posible la prueba anterior.
-
-        Si la expansión ocurriera después de `validar_moderador_unico`, esa
-        validación solo vería el padre —que está libre— y guardaría una hija con
-        dos moderadores. Aquí se comprueba que la hija llega ya al validador.
-        """
-        otro = CustomUser.objects.create_user(
-            username='duenno_de_la_hija', password=CLAVE, es_moderador=True)
-        otro.unidades.add(self.hija_b)
-
-        formulario = CustomUserCreationForm(
-            data=self.datos(unidades=[self.padre.pk]))
-        self.assertFalse(formulario.is_valid())
-        self.assertIn('Capital Humano', ' '.join(formulario.errors['unidades']))
-
 
 class PropagacionAutomaticaTests(BaseEstructura):
     """Qué pasa DESPUÉS, cuando la estructura cambia."""
@@ -224,51 +193,6 @@ class PropagacionAutomaticaTests(BaseEstructura):
         # Y el resto de su parcela sigue intacta.
         self.assertIn(self.padre, usuario.unidades.all())
         self.assertIn(self.hija_b, usuario.unidades.all())
-
-
-class ElMensajeLlegaALaPantallaTests(BaseEstructura):
-    """Rechazar no sirve de nada si el Administrador no ve por qué.
-
-    La pantalla de edición repinta esta misma plantilla dentro del modal cuando
-    el formulario no valida (`CustomUserUpdateView.form_invalid`), y no incluía
-    el bloque de errores de `unidades`: el formulario reaparecía intacto y sin
-    explicación, como si el guardado se hubiera perdido por las buenas.
-
-    Es un fallo que no deja rastro en ningún log y que solo se nota usando la
-    pantalla, así que conviene tenerlo fijado aquí.
-    """
-
-    def test_al_editar_se_ve_que_unidad_choca(self):
-        from django.urls import reverse
-
-        administrador = CustomUser.objects.create_user(
-            username='admin_mensaje', password=CLAVE, es_admin=True)
-        editado = CustomUser.objects.create_user(
-            username='moderador_editado', password=CLAVE, es_moderador=True)
-        rival = CustomUser.objects.create_user(
-            username='rival', password=CLAVE, es_moderador=True)
-        rival.unidades.add(self.hija_a)
-
-        self.client.force_login(administrador)
-        respuesta = self.client.post(
-            reverse('updt_usuario', args=[editado.pk]),
-            {
-                'username': 'moderador_editado',
-                'email': 'editado@orbith.test',
-                'es_moderador': 'on',
-                'is_active': 'on',
-                'unidades': [self.padre.pk],
-            },
-            headers={'x-requested-with': 'XMLHttpRequest'},
-        )
-
-        self.assertEqual(respuesta.status_code, 200)
-        cuerpo = respuesta.json()
-        self.assertFalse(cuerpo['form_is_valid'])
-        # El nombre de la subunidad en conflicto tiene que viajar hasta el HTML
-        # que se inyecta en el modal.
-        self.assertIn('Camaguey', cuerpo['html_form'])
-        self.assertIn('rival', cuerpo['html_form'])
 
 
 class ComandoSincronizarUnidadesTests(BaseEstructura):
@@ -391,86 +315,62 @@ class ComandoSincronizarUnidadesTests(BaseEstructura):
         self.assertEqual(observador.unidades.count(), 1)
 
 
-class UnidadesOcupadasEnElDesplegableTests(BaseEstructura):
-    """Una unidad que ya lleva otro moderador se ofrece APAGADA.
+class VariosModeradoresPorUnidadTests(BaseEstructura):
+    """3.9.0 (09-11-2026, RRHH): una unidad puede tener VARIOS moderadores. El
+    desplegable ya no apaga nada; solo dice quién más la lleva."""
 
-    La regla «una unidad, un moderador» ya la imponía `validar_moderador_unico`,
-    pero solo al GUARDAR: se elegía la unidad, se rellenaba el resto del
-    formulario y el choque aparecía al enviar.
+    def test_se_puede_dar_una_unidad_que_ya_lleva_otro(self):
+        otro = CustomUser.objects.create_user(username='otro_moderador', password=CLAVE, es_moderador=True)
+        otro.unidades.add(self.padre, self.hija_a, self.hija_b)
+        formulario = CustomUserCreationForm(data=self.datos(unidades=[self.padre.pk]))
+        self.assertTrue(formulario.is_valid(), formulario.errors.as_data())
+        nuevo = formulario.save()
+        self.assertEqual(set(nuevo.unidades.all()), {self.padre, self.hija_a, self.hija_b})
+        self.assertEqual(set(otro.unidades.all()), {self.padre, self.hija_a, self.hija_b})
 
-    Se apagan en vez de ocultarlas a propósito: una lista a la que le faltan
-    unidades sin decir por qué obliga a ir usuario por usuario averiguando quién
-    las lleva. Apagada, la respuesta está en la propia opción.
-    """
+    def test_la_opcion_dice_quien_mas_la_lleva_y_no_se_apaga(self):
+        otro = CustomUser.objects.create_user(username='mod_titular', password=CLAVE, es_moderador=True)
+        otro.unidades.add(self.independiente)
+        html = str(CustomUserCreationForm()['unidades'])
+        opcion = next(linea for linea in html.split('</option>') if 'Florida' in linea)
+        self.assertIn('también la lleva mod_titular', opcion)
+        self.assertNotIn('disabled', opcion)
 
-    def con_moderador(self, username, *unidades):
-        usuario = CustomUser.objects.create_user(
-            username=username, password=CLAVE, es_moderador=True)
-        usuario.unidades.set(unidades)
-        return usuario
 
-    def opciones(self, formulario):
-        """`{descripcion_de_la_opcion: esta_apagada}`."""
-        import re
+class TodasLasUnidadesTests(BaseEstructura):
+    """3.9.0: «Todas las unidades (también las futuras)» para Moderador y Observador,
+    y unidades obligatorias para los dos."""
 
-        html = str(formulario['unidades'])
-        return {
-            re.sub(r'\s+', ' ', m.group(3)).strip(): 'disabled' in m.group(2)
-            for m in re.finditer(r'<option value="(\d+)"([^>]*)>(.*?)</option>', html)
-        }
+    def test_es_la_primera_opcion(self):
+        html = str(CustomUserCreationForm()['unidades'])
+        self.assertLess(html.index('value="todas"'), html.index('Oficina Central'))
 
-    def test_la_unidad_de_otro_moderador_sale_apagada(self):
-        self.con_moderador('mod_titular', self.independiente)
+    def test_elegir_todas_marca_y_asigna_todas(self):
+        formulario = CustomUserCreationForm(data=self.datos(unidades=['todas']))
+        self.assertTrue(formulario.is_valid(), formulario.errors.as_data())
+        usuario = formulario.save()
+        self.assertTrue(usuario.todas_las_unidades)
+        self.assertEqual(usuario.unidades.count(), UnidadOrganizativa.objects.count())
 
-        opciones = self.opciones(CustomUserCreationForm())
+    def test_una_unidad_nueva_le_llega_sola(self):
+        formulario = CustomUserCreationForm(data=self.datos(unidades=['todas']))
+        self.assertTrue(formulario.is_valid())
+        usuario = formulario.save()
+        nueva = UnidadOrganizativa.objects.create(
+            codigo_interno=99, descripcion='UEB Nueva', tipo=self.tipo_normal, grupo_nomina=9)
+        self.assertIn(nueva, usuario.unidades.all())
 
-        apagadas = [texto for texto, apagada in opciones.items() if apagada]
-        self.assertEqual(len(apagadas), 1)
-        self.assertIn('Florida', apagadas[0])
+    def test_al_editar_se_ve_todas_elegida(self):
+        usuario = CustomUser.objects.create_user(username='con_todas', password=CLAVE,
+                                                 es_observador=True, todas_las_unidades=True)
+        html = str(CustomUserChangeForm(instance=usuario)['unidades'])
+        self.assertRegex(html, r'<option value="todas"[^>]*selected')
 
-    def test_la_opcion_apagada_dice_quien_la_lleva(self):
-        """Sin el nombre, el Administrador no sabe a quién reclamársela."""
-        self.con_moderador('mod_titular', self.independiente)
-
-        opciones = self.opciones(CustomUserCreationForm())
-
-        apagada = next(t for t, esta in opciones.items() if esta)
-        self.assertIn('la lleva mod_titular', apagada)
-
-    def test_una_unidad_libre_no_se_apaga(self):
-        self.con_moderador('mod_titular', self.independiente)
-
-        opciones = self.opciones(CustomUserCreationForm())
-
-        libre = next(t for t in opciones if 'Oficina Central' in t)
-        self.assertFalse(opciones[libre])
-
-    def test_al_editarse_a_si_mismo_sus_unidades_NO_se_apagan(self):
-        """El caso que rompería el formulario: una opción apagada no se envía, así
-        que al guardar se perderían las unidades que el moderador ya tenía."""
-        titular = self.con_moderador('mod_titular', self.padre)
-
-        opciones = self.opciones(CustomUserChangeForm(instance=titular))
-
-        propia = next(t for t in opciones if 'Oficina Central' in t)
-        self.assertFalse(opciones[propia])
-
-    def test_al_editar_a_otro_si_se_apagan(self):
-        self.con_moderador('mod_titular', self.padre)
-        otro = self.con_moderador('mod_otro')
-
-        opciones = self.opciones(CustomUserChangeForm(instance=otro))
-
-        ocupada = next(t for t in opciones if 'Oficina Central' in t)
-        self.assertTrue(opciones[ocupada])
-
-    def test_el_servidor_sigue_rechazando_aunque_se_fuerce_el_envio(self):
-        """Apagar la opción es comodidad, no seguridad: quien manda un POST a mano
-        se sigue encontrando la validación."""
-        self.con_moderador('mod_titular', self.independiente)
-
-        formulario = CustomUserCreationForm(
-            data=self.datos(unidades=[self.independiente.pk]))
-
-        self.assertFalse(formulario.is_valid())
-        self.assertIn('un moderador', str(formulario.errors['unidades']))
+    def test_moderador_y_observador_sin_unidades_se_rechazan(self):
+        for rol in ('es_moderador', 'es_observador'):
+            datos = self.datos()
+            datos.pop('unidades', None)
+            datos.update({'es_moderador': False, 'es_observador': False, rol: True})
+            formulario = CustomUserCreationForm(data=datos)
+            self.assertFalse(formulario.is_valid())
+            self.assertIn('Todas las unidades', ' '.join(formulario.errors['unidades']))
