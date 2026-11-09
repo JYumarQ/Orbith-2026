@@ -69,6 +69,11 @@ class RevisionPorRegistroTests(BaseFase2):
         Hallazgo.objects.filter(codigo_regla='CTR-018').update(estado=Hallazgo.IGNORADO)
         contrato.save()
         self.assertEqual(Hallazgo.objects.get(codigo_regla='CTR-018').estado, Hallazgo.IGNORADO)
+        # Desde la 3.9.0 al guardar se revisan todas las Críticas y Altas: este
+        # contrato de prueba no tiene Alta Inicial en su histórico (MOV-014), que es
+        # un aviso cierto pero ajeno a lo que se prueba aquí.
+        self.assertEqual(self.abiertos(contrato), {'MOV-014'})
+        Hallazgo.objects.filter(codigo_regla='MOV-014').update(estado=Hallazgo.IGNORADO)
         self.assertEqual(problemas_por_contrato([contrato]), {})
 
     def test_borrar_el_contrato_cierra_sus_hallazgos(self):

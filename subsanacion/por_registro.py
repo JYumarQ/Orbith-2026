@@ -11,10 +11,9 @@ los triángulos rojos y ámbar dicen siempre lo mismo, y lo silenciado como
 
 Su coste depende de cuántos registros se revisan, no del tamaño de la empresa.
 
-Las reglas que cruzan varios registros (trabajador de baja con contrato activo,
-varios contratos de alta, sin jornada, aspirante que sigue en la bolsa) no se pueden
-decidir mirando una fila: quedan para el análisis completo diario y la búsqueda al
-iniciar sesión.
+Desde la 3.9.0 se revisan TODAS las reglas Críticas y Altas de los contratos, fichas,
+cargos, movimientos y bajas de las personas afectadas. Las de otros modelos
+(configuración, unidades, usuarios) quedan para el análisis completo diario.
 """
 
 import logging
@@ -38,32 +37,43 @@ def sin_revision_por_registro():
     finally:
         _estado.desactivada = anterior
 
-#: Reglas Críticas y Altas que se pueden decidir mirando solo el registro revisado.
-REGLAS_POR_REGISTRO = (
-    # Contrato
-    'CTR-001', 'CTR-002', 'CTR-003', 'CTR-004', 'CTR-010', 'CTR-016', 'CTR-017',
-    'CTR-018', 'CTR-020', 'CTR-022', 'CTR-024', 'SAL-001', 'SAL-002',
-    # Ficha del trabajador (MOV-015 y MOV-016 miran su histórico: se cierran al guardar el editor)
-    'ASP-001', 'ASP-007', 'VIS-001', 'MOV-015', 'MOV-016',
-    # Cargo
-    'EST-001', 'EST-002', 'EST-008', 'EST-011', 'VIS-006',
-)
-
+#: De qué modelo es cada grupo de ids. Desde la 3.9.0 (09-11-2026, decisión de RRHH)
+#: se revisan TODAS las reglas Críticas y Altas de estos modelos, no una lista fija:
+#: antes, al corregir un contrato podía quedar el triángulo por una regla que no se
+#: revisaba al guardar (CTR-008, las del histórico y las bajas…).
 _MODELO = {
     'contratos.calta': 'contratos',
     'bolsa.aspirante': 'aspirantes',
     'strorganizativa.cargoplantilla': 'cargos',
+    'contratos.tmovimiento': 'movimientos',
+    'contratos.cbaja': 'bajas',
 }
 
 
+#: Medias que también se revisan al guardar: miran el histórico de la persona y
+#: tienen que cerrarse en cuanto se corrige con el editor del histórico.
+REGLAS_EXTRA = ('MOV-015', 'MOV-016')
+
+
+def reglas_por_registro():
+    """Reglas Críticas y Altas (más `REGLAS_EXTRA`), activas, cuyo modelo es uno de `_MODELO`."""
+    from .constantes import CRITICIDAD_ALTA
+    from .reglas import codigos_desactivados, obtener_reglas
+
+    desactivadas = codigos_desactivados()
+    return [r for r in obtener_reglas()
+            if (r.criticidad <= CRITICIDAD_ALTA or r.codigo in REGLAS_EXTRA) and r.codigo not in desactivadas
+            and r.modelo.lower() in _MODELO]
+
+
 def revisar_registros(contratos=(), aspirantes=(), cargos=()):
-    """Revisa esos registros con las reglas de `REGLAS_POR_REGISTRO`.
+    """Revisa esos registros —y los movimientos y bajas de esas personas— con todas
+    las reglas Críticas y Altas activas.
 
     Nunca lanza: es un aviso, no parte del guardado. Si fallara, el guardado se
     completa igual y el análisis diario lo recoge.
     """
     from .contexto import ContextoAnalisis
-    from .reglas import obtener_regla
     from .servicios import reconciliar_regla
 
     if getattr(_estado, 'desactivada', False):
@@ -72,24 +82,27 @@ def revisar_registros(contratos=(), aspirantes=(), cargos=()):
         'contratos': sorted({str(i) for i in contratos if i}),
         'aspirantes': sorted({str(i) for i in aspirantes if i}),
         'cargos': sorted({str(i) for i in cargos if i}),
+        'movimientos': [],
+        'bajas': [],
     }
     if not any(ids.values()):
         return
-    from .reglas import codigos_desactivados
+    if ids['aspirantes']:
+        from contratos.models import CBaja, TMovimiento
+        ids['movimientos'] = [str(i) for i in TMovimiento.objects.filter(
+            aspirante_id__in=ids['aspirantes']).values_list('pk', flat=True)]
+        ids['bajas'] = [str(i) for i in CBaja.objects.filter(
+            aspirante_id__in=ids['aspirantes']).values_list('pk', flat=True)]
 
     contexto = ContextoAnalisis()
-    desactivadas = codigos_desactivados()
-    for codigo in REGLAS_POR_REGISTRO:
-        regla = obtener_regla(codigo)
-        if regla is None or codigo in desactivadas:
-            continue
-        grupo = _MODELO.get(regla.modelo.lower())
-        if not grupo or not ids[grupo]:
+    for regla in reglas_por_registro():
+        grupo = _MODELO[regla.modelo.lower()]
+        if not ids[grupo]:
             continue
         try:
             reconciliar_regla(regla, None, contexto, ids=ids[grupo])
         except Exception:
-            logger.exception('No se pudo revisar la regla %s sobre %s.', codigo, ids[grupo])
+            logger.exception('No se pudo revisar la regla %s sobre %s.', regla.codigo, ids[grupo])
 
 
 def revisar_contratos(contratos):

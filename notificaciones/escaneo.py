@@ -116,9 +116,10 @@ def reglas_de_la_busqueda():
     """Las reglas en caliente más las Críticas y Altas de la revisión por registro
     (Fase 2, 23-10-2026): así la búsqueda pone al día en la campana todo lo
     importante del alcance del usuario, no solo los datos de ficha."""
-    from subsanacion.por_registro import REGLAS_POR_REGISTRO
+    from subsanacion.por_registro import reglas_por_registro
+    revisadas = {r.codigo for r in reglas_por_registro()}
     return [r for r in obtener_reglas()
-            if r.evaluable_en_caliente or r.codigo in REGLAS_POR_REGISTRO]
+            if r.evaluable_en_caliente or r.codigo in revisadas]
 
 
 def partes_de_la_busqueda():

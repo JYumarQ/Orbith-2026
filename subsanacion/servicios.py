@@ -213,12 +213,17 @@ def reconciliar_regla(regla, ejecucion, contexto, ids=None):
         detectados_regla = list(regla.ejecutar(contexto))
 
     for detectado in detectados_regla:
+        clave = (str(detectado.object_id or ''), detectado.clave_extra or '')
+        if ids is not None and clave[0] not in ids:
+            # Revisión por registro: una regla que no lee con `base_queryset()`
+            # (VIS-002, VIS-003…) recorre toda la tabla; aquí solo cuentan las filas
+            # pedidas, o crearía duplicados de hallazgos que no se cargaron arriba.
+            continue
         contados += 1
         if contados > LIMITE_HALLAZGOS_POR_REGLA:
             truncada = True
             break
 
-        clave = (str(detectado.object_id or ''), detectado.clave_extra or '')
         detectadas.add(clave)
         huella = calcular_huella(detectado.datos)
         existente = existentes.get(clave)

@@ -44,6 +44,7 @@ CHANGELOG = [
         "titulo": "Peticiones de la empresa: Subsanación más clara, varios Moderadores por unidad, fechas futuras y nombres largos",
         "cambios": [
             ("corregido", "Subsanación: la regla CFG-006 «Nomenclador con nombres repetidos» fallaba con nombres largos y el análisis la saltaba; ahora se guarda bien."),
+            ("mejorado", "Al guardar un contrato (o la ficha de la persona) se revisan al momento TODAS las reglas Críticas y Altas de ese trabajador: su contrato, su ficha, su cargo, su histórico y sus bajas. Antes algunas solo se revisaban en el análisis diario, y el triángulo podía seguir aunque el problema ya estuviera corregido."),
         ],
     },
     {
