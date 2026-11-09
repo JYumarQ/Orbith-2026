@@ -423,3 +423,15 @@ class EliminarPersonaTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertFalse(Aspirante.objects.filter(pk=persona.pk).exists())
         self.assertFalse(Solicitud.objects.exists())
+
+
+class NombresLargosTests(TestCase):
+    """3.9.0 (09-11-2026, RRHH): nombre y apellidos admiten 40 letras (antes 20 y 30);
+    algunos nombres compuestos se guardaban incompletos."""
+
+    def test_admite_40_y_el_formulario_lo_dice(self):
+        from .forms import AspiranteForm
+        from .models import Aspirante
+        for campo in ('nombre', 'papellido', 'sapellido'):
+            self.assertEqual(Aspirante._meta.get_field(campo).max_length, 40)
+        self.assertIn('maxlength="40"', str(AspiranteForm()['nombre']))

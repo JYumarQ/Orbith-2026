@@ -42,9 +42,10 @@ class Contacto(Base):
         validators=[SERIE_CI_VALIDATOR],
         verbose_name="Serie del Carnet",
         help_text="9 caracteres alfanuméricos en mayúsculas, tal como aparecen en el carnet.")
-    nombre = models.CharField(max_length=20, blank=False, null=False)
-    papellido = models.CharField(max_length=30, null=False, blank=False)
-    sapellido = models.CharField(max_length=30, null=False, blank=False)
+    # 40 letras desde la 3.9.0 (antes 20/30): algunos nombres compuestos no cabían.
+    nombre = models.CharField(max_length=40, blank=False, null=False)
+    papellido = models.CharField(max_length=40, null=False, blank=False)
+    sapellido = models.CharField(max_length=40, null=False, blank=False)
     movil_personal = models.CharField(max_length=15, blank=True, null= True)
     fijo_personal = models.CharField(max_length=10, blank= True, null=True)
     direccion = models.TextField(null=True, blank=True)

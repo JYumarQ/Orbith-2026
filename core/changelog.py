@@ -52,6 +52,7 @@ CHANGELOG = [
             ("nuevo", "Usuarios: una unidad puede tener varios Moderadores. Cada Moderador ve también las solicitudes de sus compañeros de unidad (solo edita o retira las suyas)."),
             ("nuevo", "Usuarios: opción «Todas las unidades (también las futuras)» al asignar unidades a un Moderador o a un Observador; las unidades que se creen después se le añaden solas. Elegir unidades o «Todas» pasa a ser obligatorio: los Observadores que no tenían ninguna (y veían toda la empresa) reciben «Todas» al actualizar."),
             ("mejorado", "Ficha de la persona: el móvil, el teléfono fijo y la serie del carnet dejan de marcarse en amarillo como recomendados."),
+            ("mejorado", "Aspirantes: el nombre y cada apellido admiten hasta 40 letras (antes 20 y 30); algunos nombres compuestos quedaban cortados."),
         ],
     },
     {
