@@ -3,6 +3,7 @@
 from django.db.models import Count, F, Q
 
 from ..constantes import (
+    CRITICIDAD_INFORMATIVA,
     CRITICIDAD_ALTA,
     CRITICIDAD_BAJA,
     CRITICIDAD_CRITICA,
@@ -203,7 +204,7 @@ class ReglaOrdenDePrioridad(ReglaBase):
 
     abstracta = True
     modulo = MODULO_ESTRUCTURA
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
 
     descripcion = 'Busca registros de la plantilla sin su orden de prioridad asignado.'
     causa_probable = (
@@ -296,7 +297,7 @@ class CargoSinNivelDePreparacion(ReglaBase):
     codigo = 'EST-007'
     nombre = 'Cargo sin nivel de preparación'
     modulo = MODULO_ESTRUCTURA
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
     modelo = 'strorganizativa.CargoPlantilla'
 
     descripcion = (

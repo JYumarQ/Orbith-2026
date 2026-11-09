@@ -7,6 +7,7 @@ from django.apps import apps
 from django.db.models import Count, F, Q
 
 from ..constantes import (
+    CRITICIDAD_INFORMATIVA,
     CRITICIDAD_ALTA,
     CRITICIDAD_BAJA,
     CRITICIDAD_CRITICA,
@@ -112,7 +113,7 @@ class MotivoIncoherenteConTipo(ReglaContratos):
 
     codigo = 'CTR-002'
     nombre = 'Motivo de contrato incoherente con el tipo'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = (
         'Comprueba dos cosas: que un tipo de contrato que exige motivo lo tenga, y '
@@ -259,7 +260,7 @@ class ContratoSinFechaAlta(ReglaContratos):
 class MotivoSinDuracion(ReglaContratos):
     codigo = 'CTR-005'
     nombre = 'Contrato con motivo pero sin duración'
-    criticidad = CRITICIDAD_MEDIA
+    criticidad = CRITICIDAD_ALTA
 
     descripcion = (
         'Cuando un contrato tiene un motivo de contratación registrado, debe tener '
@@ -329,7 +330,7 @@ class ContratoSinRegistroMilitar(ReglaContratos):
 class AspiranteConMultiplesContratos(ReglaContratos):
     codigo = 'CTR-008'
     nombre = 'Trabajador con más de un contrato de alta'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = (
         'Un trabajador solo debería tener un contrato de alta vigente a la vez. '
@@ -409,7 +410,7 @@ class TridenteIndebido(ReglaContratos):
 
     codigo = 'CTR-009'
     nombre = 'Contrato con tridente asignado indebidamente'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_MEDIA
     # Evaluable en caliente: O(1) — un único campo propio (`tipo_salario`) más un
     # salto de FK ya resuelto por `calcular_salario_escala()` momentos antes en el
     # mismo `save()` (`self.cargo.ncargo`), así que no añade una consulta nueva. Es
@@ -637,7 +638,7 @@ class FuncionarioODesignadoSinCodigo(ReglaContratos):
 
     codigo = 'CTR-012'
     nombre = 'Funcionario, designado o de confianza sin código de resolución'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
     # Evaluable en caliente: O(1) — un único salto de FK (`instancia.cargo`, ya
     # resuelto por las @property `funcionario`/`designado` de CAlta) más dos campos
     # propios de la instancia.
@@ -961,7 +962,7 @@ class ConformidadFormalSinCodigo(ReglaContratos):
 
     codigo = 'CTR-015'
     nombre = 'Conformidad formal sin código de resolución'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
     evaluable_en_caliente = True
 
     descripcion = (

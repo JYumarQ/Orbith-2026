@@ -650,7 +650,8 @@ def _regla_conocida(codigo):
 @permisos.solo_admin_subsanacion
 @require_POST
 def cambiar_estado_regla(request, codigo):
-    """Activa o desactiva una regla. Los avisos que ya tenga abiertos no se tocan."""
+    """Activa o desactiva una regla. Desde la 3.9.0, desactivarla OCULTA sus avisos y
+    reactivarla los devuelve (ver `subsanacion.ocultar`)."""
     from auditoria.models import AccionAuditoria
     from auditoria.registro_automatico import registrar
     from usuarios.permisos_especiales import con_permiso
@@ -668,6 +669,16 @@ def cambiar_estado_regla(request, codigo):
         estado.cambiado_por = request.user
         estado.cambiado_en = timezone.now()
         estado.save()
+        from .ocultar import mostrar_avisos_de, ocultar_avisos_de
+        try:
+            if activa:
+                mostrar_avisos_de(regla)
+            else:
+                ocultar_avisos_de(regla.codigo)
+        except Exception:
+            # El cambio de estado ya está guardado; lo que falte lo pone al día el
+            # siguiente análisis.
+            logger.exception('Subsanación: no se pudieron actualizar los avisos de %s', regla.codigo)
         with con_permiso(request.user, 'subsanacion'):
             registrar(estado, AccionAuditoria.MODIFICAR, antes=antes,
                       despues={'Estado': 'Activa' if activa else 'Desactivada',

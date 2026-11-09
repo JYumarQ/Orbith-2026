@@ -63,6 +63,13 @@ def filtrar_hallazgos(request):
     # botón «Abrir registro» lo necesita para construir la url.
     consulta = Hallazgo.objects.select_related('content_type')
 
+    # Las reglas desactivadas no enseñan nada, ni siquiera con «Incluir los ya
+    # resueltos» (3.9.0): sus avisos están ocultos, no resueltos.
+    from .reglas import codigos_desactivados
+    desactivadas = codigos_desactivados()
+    if desactivadas:
+        consulta = consulta.exclude(codigo_regla__in=desactivadas)
+
     # Alcance por rol (`subsanacion/permisos.py`): un Moderador solo ve hallazgos de
     # sus propias Unidades Organizativas. Un hallazgo SIN unidad (algunos globales,
     # de Configuración o de Usuarios) queda fuera de su alcance — mismo criterio que

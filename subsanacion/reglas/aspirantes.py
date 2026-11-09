@@ -4,6 +4,7 @@ from django.apps import apps
 from django.db.models import F, Q
 
 from ..constantes import (
+    CRITICIDAD_INFORMATIVA,
     CRITICIDAD_ALTA,
     CRITICIDAD_BAJA,
     CRITICIDAD_CRITICA,
@@ -308,7 +309,7 @@ def _campo_de_texto_vacio(valor):
 class DireccionVacia(ReglaAspirantes):
     codigo = 'ASP-006'
     nombre = 'Dirección sin completar'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
     evaluable_en_caliente = True
 
     descripcion = (
@@ -508,7 +509,7 @@ class SerieCarnetSinCompletar(ReglaAspirantes):
 
     codigo = 'ASP-008'
     nombre = 'Serie del carnet sin completar'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
     evaluable_en_caliente = True
 
     descripcion = (
@@ -567,7 +568,7 @@ class SerieCarnetConFormatoInvalido(ReglaAspirantes):
 
     codigo = 'ASP-009'
     nombre = 'Serie del carnet con formato inválido'
-    criticidad = CRITICIDAD_MEDIA
+    criticidad = CRITICIDAD_INFORMATIVA
 
     descripcion = (
         'Comprueba que la serie registrada tenga exactamente 9 caracteres '

@@ -76,7 +76,7 @@ class ModeradorSinLasSubunidadesDeSuPrincipal(ReglaRepartoDeUnidades):
 
     codigo = 'VIS-008'
     nombre = 'Moderador sin todas las subunidades de su unidad principal'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_MEDIA
 
     descripcion = (
         'Comprueba que un moderador que lleva una Unidad Principal tenga también '

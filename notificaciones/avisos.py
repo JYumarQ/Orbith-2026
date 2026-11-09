@@ -80,6 +80,12 @@ def _registrar_notificacion_de_hallazgo(*, tipo_ct, object_id, destinatario, reg
     """Un `HallazgoDetectado` + un destinatario -> una fila `Notificacion` de tipo
     Advertencia. Ver `_registrar_notificacion` para la clave de deduplicación y la
     protección de concurrencia."""
+    from subsanacion.constantes import CRITICIDAD_INFORMATIVA
+
+    # Las reglas Informativas no avisan (3.9.0, decisión de RRHH): solo se ven en
+    # Subsanación, ni en la campana ni en Advertencias.
+    if regla.criticidad >= CRITICIDAD_INFORMATIVA:
+        return None
     return _registrar_notificacion(
         tipo_ct=tipo_ct, object_id=object_id, destinatario=destinatario,
         codigo_regla=regla.codigo, clave_extra=hallazgo.clave_extra or '',

@@ -92,7 +92,7 @@ class UsuarioActivoConTrabajadorDeBaja(ReglaUsuarios):
 class AdminSinSuperusuario(ReglaUsuarios):
     codigo = 'USR-002'
     nombre = 'Administrador sin privilegios de superusuario'
-    criticidad = CRITICIDAD_MEDIA
+    criticidad = CRITICIDAD_INFORMATIVA
 
     descripcion = (
         'Todo usuario con el rol «Administrador» debe tener también el '

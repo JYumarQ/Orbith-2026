@@ -1579,7 +1579,8 @@ class CargoSinNivelDePreparacionTests(TestCase):
         # El alcance por unidad depende de este dato: sin él, el hallazgo no se
         # filtraría bien para un usuario limitado a su unidad.
         self.assertEqual(hallazgo.unidad_organizativa_id, self.unidad.pk)
-        self.assertEqual(CargoSinNivelDePreparacion.criticidad, CRITICIDAD_BAJA)
+        # Informativa desde la 3.9.0 (decisión de RRHH): solo se ve en Subsanación.
+        self.assertEqual(CargoSinNivelDePreparacion.criticidad, CRITICIDAD_INFORMATIVA)
         self.assertEqual(CargoSinNivelDePreparacion.modulo, MODULO_ESTRUCTURA)
 
 

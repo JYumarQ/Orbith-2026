@@ -7,7 +7,7 @@ sigue siendo corto: añadir una regla es añadir una clase, no navegar un archiv
 
 from django.db.models import Count, Q
 
-from ..constantes import CRITICIDAD_ALTA, MODULO_OCULTOS, TAMANO_LOTE
+from ..constantes import CRITICIDAD_MEDIA, CRITICIDAD_ALTA, MODULO_OCULTOS, TAMANO_LOTE
 from .base import HallazgoDetectado, ReglaBase
 
 
@@ -131,7 +131,7 @@ class ModeradorSinUnidades(ReglaBase):
     codigo = 'VIS-007'
     nombre = 'Moderador sin unidades organizativas asignadas'
     modulo = MODULO_OCULTOS
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_MEDIA
     modelo = 'usuarios.CustomUser'
 
     descripcion = (

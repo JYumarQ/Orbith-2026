@@ -12,7 +12,7 @@ import re
 from django.db.models import F, Q
 from django.db.models.functions import Upper
 
-from ..constantes import CRITICIDAD_BAJA, CRITICIDAD_MEDIA, MODULO_CALIDAD, TAMANO_LOTE
+from ..constantes import CRITICIDAD_INFORMATIVA, CRITICIDAD_BAJA, CRITICIDAD_MEDIA, MODULO_CALIDAD, TAMANO_LOTE
 from ..formato import referencia_trabajador
 from .base import HallazgoDetectado, ReglaBase
 
@@ -43,7 +43,7 @@ class ReglaAspiranteTexto(ReglaBase):
 class EspaciosIrregularesEnElNombre(ReglaAspiranteTexto):
     codigo = 'CAL-003'
     nombre = 'Espacios irregulares en el nombre o los apellidos'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
 
     descripcion = (
         'Busca espacios dobles o espacios al principio o al final del nombre '
@@ -89,7 +89,7 @@ class EspaciosIrregularesEnElNombre(ReglaAspiranteTexto):
 class CapitalizacionIrregularDelNombre(ReglaAspiranteTexto):
     codigo = 'CAL-004'
     nombre = 'Capitalización irregular del nombre o los apellidos'
-    criticidad = CRITICIDAD_BAJA
+    criticidad = CRITICIDAD_INFORMATIVA
 
     descripcion = (
         'Busca nombres o apellidos escritos completamente en mayúsculas, o que '

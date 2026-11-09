@@ -16,7 +16,7 @@ histórico. Son dos superficies distintas para el mismo hecho, igual que CTR-016
 convive con la validación del formulario de contrato.
 """
 
-from ..constantes import CRITICIDAD_ALTA, MODULO_CONFIGURACION, TAMANO_LOTE
+from ..constantes import CRITICIDAD_MEDIA, CRITICIDAD_ALTA, MODULO_CONFIGURACION, TAMANO_LOTE
 from .base import HallazgoDetectado, ReglaBase
 
 
@@ -35,7 +35,7 @@ class UnidadSinDeclararElCierre(ReglaBase):
     codigo = 'CIE-001'
     nombre = 'Unidad que no declaró su cierre mensual'
     modulo = MODULO_CONFIGURACION
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_MEDIA
     modelo = 'strorganizativa.UnidadOrganizativa'
 
     descripcion = (

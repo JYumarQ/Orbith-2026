@@ -45,6 +45,10 @@ CHANGELOG = [
         "cambios": [
             ("corregido", "Subsanación: la regla CFG-006 «Nomenclador con nombres repetidos» fallaba con nombres largos y el análisis la saltaba; ahora se guarda bien."),
             ("mejorado", "Al guardar un contrato (o la ficha de la persona) se revisan al momento TODAS las reglas Críticas y Altas de ese trabajador: su contrato, su ficha, su cargo, su histórico y sus bajas. Antes algunas solo se revisaban en el análisis diario, y el triángulo podía seguir aunque el problema ya estuviera corregido."),
+            ("mejorado", "Subsanación: desactivar una regla oculta sus avisos en todas partes (Hallazgos, triángulos, campana y Dashboard). No se borran: al reactivarla se ejecuta en el momento y vuelven los que sigan siendo ciertos, con su estado."),
+            ("mejorado", "Subsanación: las reglas Informativas solo se ven en Subsanación; ya no llenan la campana ni Advertencias. Pasan a Informativa el móvil, el teléfono fijo, la serie del carnet, la dirección, los espacios y mayúsculas del nombre, el orden de unidades, departamentos y cargos, el nivel de preparación del cargo, los números de resolución y el Administrador sin superusuario."),
+            ("mejorado", "Subsanación: nuevas gravedades — Crítica: motivo incoherente con el tipo (CTR-002), salario distinto al de la escala (SAL-001) y más de un contrato de alta (CTR-008); Alta: motivo sin duración (CTR-005); Media: tridente asignado indebidamente (CTR-009), Moderador sin unidades o sin todas las subunidades (VIS-007, VIS-008) y unidad sin cierre declarado (CIE-001)."),
+            ("mejorado", "Subsanación: las reglas de Pre-Nómina (jornada sin asignar, calendario sin horas y fórmulas de pagos) quedan desactivadas hasta que se use Pre-Nómina."),
         ],
     },
     {

@@ -80,7 +80,7 @@ class ReglaSalario(ReglaBase):
 class SalarioDesincronizado(ReglaSalario):
     codigo = 'SAL-001'
     nombre = 'Salario guardado distinto al de la escala'
-    criticidad = CRITICIDAD_ALTA
+    criticidad = CRITICIDAD_CRITICA
 
     descripcion = (
         'Compara el salario que tiene guardado el contrato con el que le corresponde '
