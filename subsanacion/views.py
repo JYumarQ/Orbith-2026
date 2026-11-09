@@ -283,6 +283,7 @@ def panel_reglas(request):
             'codigo': regla.codigo,
             'nombre': regla.nombre,
             'criticidad': dict(CRITICIDADES).get(regla.criticidad, ''),
+            'criticidad_valor': regla.criticidad,
             'color': COLOR_POR_CRITICIDAD.get(regla.criticidad, 'gris'),
             'icono_criticidad': ICONO_POR_CRITICIDAD.get(regla.criticidad, ''),
             'descripcion': regla.descripcion,
@@ -293,12 +294,28 @@ def panel_reglas(request):
             # Extras no sale en «Todas» del listado: hay que pedir su categoría.
             'es_extra': regla.modulo == MODULO_EXTRAS,
         })
-    categorias = [
-        {'clave': clave, 'etiqueta': etiqueta, 'icono': icono,
-         'reglas': sorted(por_modulo[clave], key=lambda r: r['codigo'])}
-        for clave, etiqueta, icono in MODULOS if por_modulo.get(clave)
-    ]
+    # Orden (3.9.0, petición de RRHH): por código, agrupadas por categoría (como
+    # siempre); o en una sola lista por gravedad o por hallazgos abiertos.
+    orden = request.GET.get('orden')
+    if orden not in ('gravedad', 'hallazgos'):
+        orden = 'codigo'
+    if orden == 'codigo':
+        categorias = [
+            {'clave': clave, 'etiqueta': etiqueta, 'icono': icono,
+             'reglas': sorted(por_modulo[clave], key=lambda r: r['codigo'])}
+            for clave, etiqueta, icono in MODULOS if por_modulo.get(clave)
+        ]
+    else:
+        todas = [r for reglas in por_modulo.values() for r in reglas]
+        if orden == 'gravedad':
+            todas.sort(key=lambda r: (r['criticidad_valor'], -r['abiertos'], r['codigo']))
+            etiqueta = 'Todas las reglas, de más grave a menos'
+        else:
+            todas.sort(key=lambda r: (-r['abiertos'], r['criticidad_valor'], r['codigo']))
+            etiqueta = 'Todas las reglas, de más a menos hallazgos abiertos'
+        categorias = [{'clave': 'todas', 'etiqueta': etiqueta, 'icono': 'bi-sort-down', 'reglas': todas}]
     return render(request, 'pages/subsanacion/partials/panel_reglas.html', {
+        'orden': orden,
         'categorias': categorias,
         'total': sum(len(c['reglas']) for c in categorias),
         'desactivadas': sum(1 for c in categorias for r in c['reglas'] if not r['activa']),

@@ -155,3 +155,27 @@ class InformativasSinAvisosTests(TestCase):
 
     def test_prenomina_desactivada(self):
         self.assertTrue({'CAL-101', 'CAL-102', 'PNM-002'} <= codigos_desactivados())
+
+
+class OrdenDelIndiceTests(TestCase):
+    """3.9.0: el Índice de Reglas se ordena por código (por categoría), por gravedad o
+    por hallazgos abiertos."""
+
+    def test_por_gravedad_y_por_hallazgos(self):
+        admin = CustomUser.objects.create_user(username='adm_orden', password='x', es_admin=True)
+        Hallazgo.objects.create(
+            codigo_regla='CTR-016', content_type=ContentType.objects.get_for_model(CustomUser),
+            object_id='1', modulo=MODULO_ESTRUCTURA, criticidad=CRITICIDAD_ALTA, titulo='x',
+            ultima_deteccion=timezone.now(), estado=Hallazgo.PENDIENTE)
+        self.client.force_login(admin)
+        url = reverse('subsanacion:panel_reglas')
+
+        reglas = self.client.get(url, {'orden': 'gravedad'}).context['categorias'][0]['reglas']
+        valores = [r['criticidad_valor'] for r in reglas]
+        self.assertEqual(valores, sorted(valores))
+
+        reglas = self.client.get(url, {'orden': 'hallazgos'}).context['categorias'][0]['reglas']
+        self.assertEqual(reglas[0]['codigo'], 'CTR-016')
+
+        categorias = self.client.get(url).context['categorias']
+        self.assertGreater(len(categorias), 1)   # por código: agrupadas como siempre

@@ -45,17 +45,44 @@
   </div>
   {% if puede_gestionar_reglas %}
   <div class="px-3 pt-2 small text-muted">
-    Puede <b>desactivar</b> las reglas que ya están limpias para aliviar el análisis: no se borran, el análisis
-    deja de ejecutarlas y sus avisos ya abiertos siguen normales. «Probar ahora» las ejecuta una vez sin crear avisos.
+    Puede <b>desactivar</b> una regla: no se borra, el análisis deja de ejecutarla y sus avisos se ocultan en
+    todas partes hasta que la vuelva a activar. «Probar ahora» la ejecuta una vez sin crear avisos.
   </div>
   {% endif %}
-  <div class="p-3 pb-2">
-    <div class="input-group input-group-sm">
+  <div class="p-3 pb-2 d-flex flex-wrap gap-2">
+    <div class="input-group input-group-sm flex-grow-1" style="min-width: 16rem;">
       <span class="input-group-text"><i class="bi bi-funnel"></i></span>
       <input type="search" class="form-control" id="filtroReglas"
              placeholder="Filtrar por código, nombre o texto (CTR, CTR-011, misión…)">
     </div>
+    {# Orden (3.9.0): se recuerda en este navegador. #}
+    <div class="input-group input-group-sm" style="width: auto;">
+      <label class="input-group-text" for="ordenReglas"><i class="bi bi-sort-down me-1"></i>Ordenar</label>
+      <select class="form-select" id="ordenReglas" name="orden" data-sin-select2
+              hx-get="{% url 'subsanacion:panel_reglas' %}" hx-target="#paneReglas" hx-swap="innerHTML"
+              hx-trigger="change">
+        <option value="codigo"{% if orden == 'codigo' %} selected{% endif %}>Por código (por categoría)</option>
+        <option value="gravedad"{% if orden == 'gravedad' %} selected{% endif %}>Por gravedad</option>
+        <option value="hallazgos"{% if orden == 'hallazgos' %} selected{% endif %}>Por hallazgos abiertos</option>
+      </select>
+    </div>
   </div>
+  <script>
+    (function () {
+      const selector = document.getElementById('ordenReglas');
+      if (!selector) return;
+      selector.addEventListener('change', function () {
+        try { localStorage.setItem('orbith_orden_reglas', selector.value); } catch (e) {}
+      });
+      let guardado = null;
+      try { guardado = localStorage.getItem('orbith_orden_reglas'); } catch (e) {}
+      if (guardado && guardado !== selector.value && !selector.dataset.recargado) {
+        selector.dataset.recargado = '1';
+        selector.value = guardado;
+        htmx.trigger(selector, 'change');
+      }
+    })();
+  </script>
 </div>
 
 {% for categoria in categorias %}
