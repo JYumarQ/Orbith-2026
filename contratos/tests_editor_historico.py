@@ -221,10 +221,8 @@ class EditorHistoricoGuardarTests(EditorHistoricoMotorTests):
         self.assertTrue(EventoAuditoria.objects.filter(
             descriptor__startswith='Corrección del histórico (Error de tecleo').exists())
 
-    def test_sin_motivo_o_con_errores_no_se_escribe_nada(self):
-        with self.assertRaises(eh.ErrorDeBorrador):
-            self.guardar({'op': 'editar', 'evento': 'mov:%d' % self.m_mov1.pk, 'campos': {'salario': '1'}},
-                         motivo='  ')
+    def test_con_errores_no_se_escribe_nada(self):
+        # Sin motivo ya no es un error (3.9.0): solo bloquean las reglas.
         with self.assertRaises(eh.ErrorDeBorrador):
             self.guardar({'op': 'editar', 'evento': 'mov:%d' % self.m_mov1.pk,
                           'campos': {'salario': '1', 'fecha': self.f['alta1']}})
@@ -457,13 +455,10 @@ class EditorHistoricoPantallaTests(TestCase):
         self.m_mov1.refresh_from_db()
         self.assertEqual(self.m_mov1.salario_nuevo, Decimal('4500.00'))
 
-        datos = self.post('guardar/', {'cambios': [cambio], 'motivo': ''}).json()
-        self.assertFalse(datos['ok'])
-        self.assertIn('motivo', datos['errores'][0])
-
+        # El motivo es opcional desde la 3.9.0 (decisión de RRHH del 09-11-2026).
         version = eh.cargar(self.persona).version
-        datos = self.post('guardar/', {'cambios': [cambio], 'motivo': 'Resolución 12/26', 'version': version}).json()
-        self.assertTrue(datos['ok'])
+        datos = self.post('guardar/', {'cambios': [cambio], 'motivo': '', 'version': version}).json()
+        self.assertTrue(datos['ok'], datos)
         self.m_mov1.refresh_from_db()
         self.assertEqual(self.m_mov1.salario_nuevo, Decimal('4800.00'))
 

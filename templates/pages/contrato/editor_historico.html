@@ -865,7 +865,7 @@
     html += (r.meses || []).length ? '<ul class="small mb-1">' + r.meses.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
       + '<p class="small text-muted mb-0">Cada cierre queda marcado «Corregido» con el motivo y se avisa a su moderador.</p>'
       : '<p class="small text-muted mb-0">Ningún mes cerrado cambia.</p>';
-    html += '<label class="form-label mt-3 fw-semibold" for="ehMotivoCorreccion">Motivo de la corrección (obligatorio)</label>'
+    html += '<label class="form-label mt-3 fw-semibold" for="ehMotivoCorreccion">Motivo de la corrección (opcional)</label>'
       + '<textarea class="form-control" id="ehMotivoCorreccion" rows="2" maxlength="500" placeholder="Ej.: el movimiento de marzo se registró con el cargo equivocado según la resolución 45/26."></textarea>'
       + '<div id="ehGuardarErrores" class="con-errores mt-2" hidden></div>';
     document.getElementById('ehRevisarCuerpo').innerHTML = html;
@@ -876,11 +876,7 @@
   function guardar() {
     if (guardando) return;
     const motivo = (document.getElementById('ehMotivoCorreccion').value || '').trim();
-    const cajaErrores = document.getElementById('ehGuardarErrores');
-    if (!motivo) {
-      cajaErrores.hidden = false; cajaErrores.textContent = 'Escriba el motivo de la corrección.';
-      document.getElementById('ehMotivoCorreccion').focus(); return;
-    }
+    // El motivo es opcional desde la 3.9.0 (decisión de RRHH del 09-11-2026).
     guardando = true;
     const boton = document.getElementById('ehGuardar');
     boton.disabled = true; boton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';

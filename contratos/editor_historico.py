@@ -915,10 +915,11 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
 
     * `version` es la `huella` con la que se abrió el editor: si el histórico
       cambió desde entonces, no se guarda nada y hay que recargar.
-    * `motivo` es obligatorio: queda en Auditoría y en los cambios externos.
+    * `motivo` es opcional (3.9.0; antes obligatorio): si lo hay, queda en Auditoría y
+      en los cambios externos.
 
     Devuelve el resumen de lo guardado. Lanza `ErrorDeBorrador` (sin escribir nada)
-    si falta el motivo, si las reglas no se cumplen o si el histórico cambió.
+    si las reglas no se cumplen o si el histórico cambió.
     """
     import uuid
 
@@ -932,8 +933,6 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
     from .models import CAlta, CBaja, CambioExterno, TMovimiento, correccion_de_historico
 
     motivo = (motivo or '').strip()
-    if not motivo:
-        raise ErrorDeBorrador('Escriba el motivo de la corrección.')
     aspirante_id = getattr(aspirante, 'pk', aspirante)
 
     with transaction.atomic():
@@ -955,7 +954,7 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
         originales = {e.clave: e for e in original.eventos}
         expediente = _expediente_de(original)
         nombre_usuario = (getattr(usuario, 'username', '') or '')[:100]
-        descripcion = 'Corrección del histórico (%s)' % motivo[:120]
+        descripcion = ('Corrección del histórico (%s)' % motivo[:120]) if motivo else 'Corrección del histórico'
         contrato = CAlta.objects.filter(pk=original.contrato_pk).first()
         grupos = ciclos(propuesto, incluir_borrados=True)
         ciclo_abierto = grupos[-1] if grupos and grupos[-1][-1].tipo != BAJA else []

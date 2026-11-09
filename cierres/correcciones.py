@@ -306,7 +306,7 @@ def corregir_cierres(original, propuesto, motivo, usuario=None, expediente=''):
 
     hoy = timezone.localdate().strftime('%d/%m/%Y')
     quien = (usuario.get_full_name() or usuario.username) if usuario else 'Sistema'
-    nota = 'Corregido el %s por %s: %s' % (hoy, quien, motivo)
+    nota = ('Corregido el %s por %s: %s' % (hoy, quien, motivo)) if motivo else ('Corregido el %s por %s.' % (hoy, quien))
 
     for cierre, accion, situacion in afectados:
         suyas = por_cierre.get(cierre.pk, [])
