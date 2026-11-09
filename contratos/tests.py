@@ -1995,7 +1995,8 @@ class CronologiaDelHistoricoTests(TestCase):
     def setUp(self):
         self.hoy = timezone.localdate()
         self.ayer = self.hoy - timedelta(days=1)
-        self.manana = self.hoy + timedelta(days=1)
+        # «Mañana» ya se admite (3.9.0: hasta 30 días); lo que se rechaza es pasar de 30.
+        self.manana = self.hoy + timedelta(days=31)
         self.hace_10 = self.hoy - timedelta(days=10)
         self.client.force_login(self.admin)
         self.xhr = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
@@ -2039,7 +2040,7 @@ class CronologiaDelHistoricoTests(TestCase):
     def test_alta_con_fecha_futura_se_rechaza(self):
         respuesta = self._recontratar(self.manana)
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn('no puede ser una fecha futura', respuesta.json()['error_popup'])
+        self.assertIn('días posterior a hoy', respuesta.json()['error_popup'])
         self.assertFalse(CAlta.objects.filter(aspirante=self.aspirante).exists())
 
     def test_recontratar_al_dia_siguiente_crea_siempre_el_alta_inicial(self):
@@ -2129,6 +2130,21 @@ class CronologiaDelHistoricoTests(TestCase):
         self.assertEqual(self._baja(contrato, self.manana).status_code, 400)
         self.assertEqual(self._baja(contrato, self.ayer, fecha_documento=self.manana).status_code, 400)
         self.assertTrue(CAlta.objects.filter(pk=contrato.pk).exists())
+
+    def test_hasta_30_dias_en_el_futuro_se_admite(self):
+        """3.9.0 (09-11-2026, RRHH): altas, movimientos y bajas admiten una fecha de
+        hasta 30 días después de hoy, y se aplican en el momento."""
+        en_30 = self.hoy + timedelta(days=30)
+        contrato = self._contrato_activo()
+        respuesta = self._movimiento(contrato, en_30 - timedelta(days=1))
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        respuesta = self._baja(contrato, en_30, fecha_documento=en_30)
+        self.assertTrue(respuesta.json()['success'], respuesta.content[:300])
+        self.assertFalse(CAlta.objects.filter(pk=contrato.pk).exists())
+
+    def test_alta_hasta_30_dias_en_el_futuro(self):
+        respuesta = self._recontratar(self.hoy + timedelta(days=30))
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
 
     def test_baja_posterior_se_registra(self):
         contrato = self._contrato_activo()

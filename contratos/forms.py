@@ -496,8 +496,9 @@ class CAltaForm(forms.ModelForm):
         if 'fecha_alta_entidad' in self.fields:
             self.fields['fecha_alta_entidad'].required = True
 
-        # El calendario no deja elegir fechas futuras; `clean()` lo vuelve a comprobar.
-        hoy_html = timezone.localdate().isoformat()
+        # El calendario no deja pasar de hoy + 30 días (3.9.0); `clean()` lo vuelve a comprobar.
+        from .cronologia import fecha_maxima
+        hoy_html = fecha_maxima().isoformat()
         for nombre in CAMPOS_FECHA_NO_FUTURA:
             if nombre in self.fields:
                 self.fields[nombre].widget.attrs['max'] = hoy_html
@@ -781,21 +782,24 @@ class CAltaForm(forms.ModelForm):
         return cleaned_data
 
     def _validar_no_futuras(self, cleaned_data):
-        """Rechaza una F. de Contratación o F. Alta Entidad posterior a hoy.
+        """Rechaza una F. de Contratación o F. Alta Entidad de más de 30 días después de
+        hoy (3.9.0; antes, cualquier fecha futura).
 
         Igual que `_validar_ano_minimo`, se salta el valor que YA está guardado: si un
         contrato antiguo tiene una fecha futura, abrirlo para corregir otra cosa no debe
         bloquearse por un campo que el usuario no puede tocar (Subsanación lo señala).
         """
-        hoy = timezone.localdate()
+        from .cronologia import DIAS_FUTUROS, fecha_maxima
+        tope = fecha_maxima()
         for nombre in CAMPOS_FECHA_NO_FUTURA:
             if nombre not in self.fields:
                 continue
             valor = cleaned_data.get(nombre)
-            if not valor or valor <= hoy or valor == getattr(self.instance, nombre, None):
+            if not valor or valor <= tope or valor == getattr(self.instance, nombre, None):
                 continue
             etiqueta = self.fields[nombre].label or nombre
-            self.add_error(nombre, f'"{etiqueta}" no puede ser una fecha futura.')
+            self.add_error(nombre, f'"{etiqueta}" no puede ser más de {DIAS_FUTUROS} días '
+                                   f'posterior a hoy (último día: {tope:%d/%m/%Y}).')
 
     def _validar_ano_minimo(self, cleaned_data):
         """Rechaza las fechas con un año imposible (ver `ANO_MINIMO_FECHAS`).
@@ -867,16 +871,20 @@ class MovimientoForm(CAltaForm):
             raise forms.ValidationError(
                 f'El año de la fecha efectiva debe ser {ANO_MINIMO_FECHAS} o posterior. '
                 f'Revise que haya escrito el año completo (por ejemplo 2022, no 0002).')
-        # Ningún movimiento con fecha futura (decisión de RRHH del 23-10-2026). La
+        # Hasta 30 días después de hoy (3.9.0; antes ninguna fecha futura). La
         # comparación con el resto del histórico la hace `contratos/cronologia.py`.
-        if fecha and fecha > timezone.localdate():
-            raise forms.ValidationError('La fecha efectiva no puede ser una fecha futura.')
+        from .cronologia import validar_fecha_no_futura
+        error = validar_fecha_no_futura(fecha, 'La fecha efectiva')
+        if error:
+            raise forms.ValidationError(error)
         return fecha
 
     def clean_fecha_solicitud(self):
         fecha = self.cleaned_data.get('fecha_solicitud')
-        if fecha and fecha > timezone.localdate():
-            raise forms.ValidationError('La fecha de solicitud no puede ser una fecha futura.')
+        from .cronologia import validar_fecha_no_futura
+        error = validar_fecha_no_futura(fecha, 'La fecha de solicitud')
+        if error:
+            raise forms.ValidationError(error)
         return fecha
 
     def __init__(self, *args, unidad_id=None, departamento_id=None, **kwargs):
@@ -910,9 +918,10 @@ class MovimientoForm(CAltaForm):
             self.fields['fecha_alta_entidad'].widget = forms.HiddenInput()
             self.fields['fecha_alta_entidad'].required = False
 
-        # Ni la fecha efectiva ni la de solicitud pueden ser futuras.
+        # Ni la fecha efectiva ni la de solicitud pueden pasar de hoy + 30 días (3.9.0).
+        from .cronologia import fecha_maxima
         for nombre in ('fecha_efectiva', 'fecha_solicitud'):
-            self.fields[nombre].widget.attrs['max'] = timezone.localdate().isoformat()
+            self.fields[nombre].widget.attrs['max'] = fecha_maxima().isoformat()
 
         # 3. Campos obligatorios para el movimiento
         self.fields['unidad'].required = True

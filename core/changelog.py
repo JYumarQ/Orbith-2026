@@ -53,6 +53,7 @@ CHANGELOG = [
             ("nuevo", "Usuarios: opción «Todas las unidades (también las futuras)» al asignar unidades a un Moderador o a un Observador; las unidades que se creen después se le añaden solas. Elegir unidades o «Todas» pasa a ser obligatorio: los Observadores que no tenían ninguna (y veían toda la empresa) reciben «Todas» al actualizar."),
             ("mejorado", "Ficha de la persona: el móvil, el teléfono fijo y la serie del carnet dejan de marcarse en amarillo como recomendados."),
             ("mejorado", "Aspirantes: el nombre y cada apellido admiten hasta 40 letras (antes 20 y 30); algunos nombres compuestos quedaban cortados."),
+            ("nuevo", "Altas, movimientos de nómina y bajas admiten una fecha de hasta 30 días después de hoy (fecha efectiva, de solicitud, de baja y de documento). Se aplican al confirmarlos. Subsanación solo avisa si una fecha pasa de esos 30 días."),
         ],
     },
     {

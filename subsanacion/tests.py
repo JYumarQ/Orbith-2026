@@ -2196,7 +2196,7 @@ class ReglasDeFechasImposiblesTests(TestCase):
         de_baja = esc.aspirante('80010113002', estado='BAJA')
         cls.futura = CBaja.objects.create(
             aspirante=de_baja, no_expediente='01002', tipo=esc.tipo_contrato, cargo=esc.cargo,
-            fecha_alta=date(2026, 1, 1), fecha_baja=date.today() + timedelta(days=30))
+            fecha_alta=date(2026, 1, 1), fecha_baja=date.today() + timedelta(days=31))  # >30 (3.9.0)
         cls.contrato_0026 = CAlta.objects.create(
             aspirante=esc.aspirante('80010113003'), no_expediente='01003',
             tipo=esc.tipo_contrato, cargo=esc.cargo, fecha_alta=date(26, 10, 13))
@@ -2257,9 +2257,9 @@ class ReglasDeCronologiaDelHistoricoTests(TestCase):
         cls.futuro = CAlta.objects.create(aspirante=esc.aspirante('80010114103'), no_expediente='01413',
                                           tipo=esc.tipo_contrato, cargo=esc.cargo,
                                           fecha_alta=date(2026, 3, 1),
-                                          fecha_alta_entidad=hoy + timedelta(days=5))
+                                          fecha_alta_entidad=hoy + timedelta(days=35))  # >30 días (3.9.0)
         mov(cls.futuro, date(2026, 3, 1), 'Alta Inicial')
-        cls.mov_futuro = mov(cls.futuro, hoy + timedelta(days=5))
+        cls.mov_futuro = mov(cls.futuro, hoy + timedelta(days=35))
 
         # Sin Alta Inicial, y con Alta Inicial de otra fecha.
         cls.sin_alta = CAlta.objects.create(aspirante=esc.aspirante('80010114104'), no_expediente='01414',

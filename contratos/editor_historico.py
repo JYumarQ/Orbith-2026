@@ -565,14 +565,15 @@ def aplicar(historico, cambios):
 def _errores_de_orden(historico):
     """Las reglas de la cronología sobre los eventos vivos (sin encadenar)."""
     errores = []
-    hoy = timezone.localdate()
+    from .cronologia import DIAS_FUTUROS, fecha_maxima
+    tope = fecha_maxima()
     vivos = historico.vivos()
     anterior = None
     for e in vivos:
         if e.fecha.year < ANO_MINIMO:
             errores.append('%s: el año debe ser %d o posterior.' % (e.nombre, ANO_MINIMO))
-        if e.fecha > hoy:
-            errores.append('%s: no puede tener fecha futura.' % e.nombre)
+        if e.fecha > tope:
+            errores.append('%s: no puede ser más de %d días posterior a hoy.' % (e.nombre, DIAS_FUTUROS))
         if anterior is not None:
             if e.fecha == anterior.fecha:
                 errores.append('%s y %s caen el mismo día: cada evento tiene que ser '

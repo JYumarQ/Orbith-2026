@@ -902,11 +902,11 @@
                 if (!valido) {
                     pintarBorde(this, false);
                 } else if (this.max && this.value > this.max) {
-                    // Ningún movimiento con fecha futura (decisión de RRHH del 23-10-2026).
+                    // Hasta 30 días después de hoy (3.9.0; antes ninguna fecha futura).
                     pintarBorde(this, false);
                     let $parent = $(this).parent();
                     $parent.find('.error-fecha').remove();
-                    $parent.append(`<small class="text-danger fw-bold error-fecha mt-1 d-block">La fecha efectiva no puede ser futura.</small>`);
+                    $parent.append(`<small class="text-danger fw-bold error-fecha mt-1 d-block">La fecha efectiva no puede ser más de 30 días posterior a hoy.</small>`);
                 } else if (fechaLimiteStr && this.value <= fechaLimiteStr) {
                     // Estrictamente posterior: dos eventos del trabajador nunca caen el
                     // mismo día (en una recontratación, como pronto el día siguiente a

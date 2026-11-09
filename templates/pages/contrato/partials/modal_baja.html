@@ -121,11 +121,14 @@ dentro de las funciones, así que este script puede ir antes de que se carguen.
         // UTC-4/-5) devolvía ya el día siguiente, que el servidor rechaza por futuro.
         const ahora = new Date();
         const hoy = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000).toISOString().split('T')[0];
-        // Ninguna de las dos fechas puede ser futura (decisión de RRHH del 23-10-2026).
+        // Hasta 30 días después de hoy (3.9.0; antes ninguna fecha futura).
+        const tope = new Date(ahora.getTime() - ahora.getTimezoneOffset() * 60000);
+        tope.setDate(tope.getDate() + 30);
+        const maximo = tope.toISOString().split('T')[0];
         ['baja_fecha', 'baja_fecha_efectiva'].forEach(function (id) {
             const campo = document.getElementById(id);
             campo.value = hoy;
-            campo.max = hoy;
+            campo.max = maximo;
         });
         document.getElementById('baja_causa').value = '';
         document.getElementById('baja_observaciones').value = '';
@@ -175,14 +178,14 @@ dentro de las funciones, así que este script puede ir antes de que se carguen.
             let noEstaVacio = valor && valor.trim() !== '';
 
             // 1. La Fecha de Baja tiene que ser POSTERIOR al último evento (no el
-            //    mismo día) y no puede ser futura. El servidor lo vuelve a comprobar.
+            //    mismo día) y como mucho 30 días después de hoy. El servidor lo comprueba.
             const max = this.getAttribute('max');
             const futura = noEstaVacio && max && valor > max;
             if (name === 'fecha_baja') {
                 $(this).parent().find('.error-cronologico').remove();
                 let error = '';
                 if (futura) {
-                    error = 'Error: La fecha de baja no puede ser futura';
+                    error = 'Error: La fecha de baja no puede ser más de 30 días posterior a hoy';
                 } else if (noEstaVacio && fechaLimiteStr && valor <= fechaLimiteStr) {
                     const fFmt = fechaLimiteStr.split('-').reverse().join('/');
                     error = `Error: Tiene que ser posterior al ${fFmt} (no se permiten dos eventos el mismo día)`;
@@ -192,7 +195,7 @@ dentro de las funciones, así que este script puede ir antes de que se carguen.
                 }
                 pintarBorde(this, noEstaVacio && !error);
             }
-            // 2. Fecha de Documento (sin fecha futura) y Causa: no pueden quedar vacíos.
+            // 2. Fecha de Documento (hasta 30 días después de hoy) y Causa: no pueden quedar vacíos.
             else if (obligatorios.includes(name)) {
                 pintarBorde(this, noEstaVacio && !futura);
             }

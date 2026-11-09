@@ -917,7 +917,7 @@
     const i = vivos.findIndex(function (e) { return e.clave === tras; });
     const anterior = vivos[i], siguiente = vivos[i + 1];
     document.getElementById('ehInsertarAyuda').innerHTML = 'La fecha tiene que quedar <b>después del ' + fecha(anterior.fecha) + '</b>'
-      + (siguiente ? ' y <b>antes del ' + fecha(siguiente.fecha) + '</b>' : ' y no puede ser futura')
+      + (siguiente ? ' y <b>antes del ' + fecha(siguiente.fecha) + '</b>' : ' y como mucho 30 días después de hoy')
       + ', sin coincidir con ningún otro evento. Su «antes» será lo que había tras el ' + esc(titulo(anterior).toLowerCase()) + '.';
     const campo = document.getElementById('ehNuevaFecha');
     campo.value = '';
@@ -926,7 +926,8 @@
       const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + desfase);
       return d.toISOString().slice(0, 10);
     };
-    const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset());
+    // Hasta 30 días después de hoy (3.9.0), igual que el servidor.
+    const hoy = new Date(); hoy.setMinutes(hoy.getMinutes() - hoy.getTimezoneOffset()); hoy.setDate(hoy.getDate() + 30);
     campo.min = dia(anterior.fecha, 1);
     campo.max = siguiente ? dia(siguiente.fecha, -1) : hoy.toISOString().slice(0, 10);
     bootstrap.Modal.getOrCreateInstance(document.getElementById('ehInsertar')).show();

@@ -1386,20 +1386,21 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
 
 
 class ContratoConFechaFutura(ReglaContratos):
-    """CTR-024: F. de Contratación o F. Alta Entidad posterior a hoy.
+    """CTR-024: F. de Contratación o F. Alta Entidad de más de 30 días después de hoy.
 
-    Desde el 23-10-2026 (decisión de RRHH) ninguna de las dos puede ser futura; los
-    formularios ya lo impiden. Las fechas de vencimiento quedan fuera: son futuras
+    Desde la 3.9.0 (decisión de RRHH del 09-11-2026) un alta puede registrarse con
+    hasta 30 días de antelación (`contratos.cronologia.DIAS_FUTUROS`); más allá, los
+    formularios lo impiden. Las fechas de vencimiento quedan fuera: son futuras
     por naturaleza.
     """
 
     codigo = 'CTR-024'
-    nombre = 'Contrato con fecha futura'
+    nombre = 'Contrato con fecha más de 30 días en el futuro'
     criticidad = CRITICIDAD_ALTA
 
     descripcion = (
-        'Busca contratos con la F. de Contratación o la F. Alta Entidad posterior al '
-        'día de hoy.')
+        'Busca contratos con la F. de Contratación o la F. Alta Entidad de más de 30 '
+        'días después de hoy.')
     causa_probable = (
         'Se escribió mal el año o el mes, o se registró por adelantado un contrato que '
         'todavía no ha empezado. Hasta el 23-10-2026 Orbith lo aceptaba.')
@@ -1411,9 +1412,9 @@ class ContratoConFechaFutura(ReglaContratos):
         'edita desde el formulario) junto con la de su movimiento de Alta Inicial.')
 
     def ejecutar(self, contexto):
-        from django.utils import timezone
+        from contratos.cronologia import fecha_maxima
 
-        hoy = timezone.localdate()
+        hoy = fecha_maxima()   # el último día admitido, no hoy (3.9.0)
         filas = (self.base_queryset()
                  .filter(Q(fecha_alta__gt=hoy) | Q(fecha_alta_entidad__gt=hoy))
                  .values(*self.COLUMNAS_BASE, 'fecha_alta', 'fecha_alta_entidad')
@@ -1427,7 +1428,7 @@ class ContratoConFechaFutura(ReglaContratos):
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
                 titulo=self.titulo_de(fila, f'{cual} futura ({texto})'),
-                detalle=f'El contrato tiene la {cual} {texto}, posterior a hoy.',
+                detalle=f'El contrato tiene la {cual} {texto}, más de 30 días después de hoy.',
                 datos={'campo': cual, 'fecha': texto},
                 unidad_organizativa_id=self.unidad_de(fila),
             )

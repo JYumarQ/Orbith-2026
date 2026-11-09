@@ -123,10 +123,10 @@ class EditorHistoricoMotorTests(TestCase):
         _, _, errores, _ = self.preparar(
             {'op': 'editar', 'evento': 'mov:%d' % self.m_mov1.pk, 'campos': {'fecha': self.f['alta1']}})
         self.assertTrue(any('el mismo día' in e for e in errores))
-        manana = timezone.localdate() + timedelta(days=1)
+        manana = timezone.localdate() + timedelta(days=31)   # hasta 30 se admite (3.9.0)
         _, _, errores, _ = self.preparar(
             {'op': 'editar', 'evento': 'mov:%d' % self.m_mov2.pk, 'campos': {'fecha': manana}})
-        self.assertTrue(any('fecha futura' in e for e in errores))
+        self.assertTrue(any('días posterior a hoy' in e for e in errores))
 
     def test_mover_un_movimiento_detras_de_la_baja_no_vale(self):
         _, _, errores, _ = self.preparar(

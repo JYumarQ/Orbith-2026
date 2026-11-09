@@ -5,8 +5,10 @@ asistente, el movimiento de nómina y la baja) comprueba aquí su fecha. Antes c
 vista hacía su propia comparación, el asistente no hacía ninguna en el servidor (solo
 el JavaScript) y dos eventos podían quedar en el mismo día.
 
-Decisiones de RRHH del 23-10-2026:
-* Ningún evento puede tener fecha futura.
+Decisiones de RRHH del 23-10-2026 (la primera, cambiada el 09-11-2026):
+* Un evento puede tener fecha futura de hasta 30 días (`DIAS_FUTUROS`): altas,
+  movimientos y bajas se registran al confirmarlos aunque rijan días después
+  (3.9.0). Antes no se admitía ninguna fecha futura.
 * Dos eventos del mismo trabajador nunca caen el mismo día: cada uno es
   ESTRICTAMENTE posterior al anterior. Por eso recontratar exige, como pronto, el
   día siguiente a la baja.
@@ -24,6 +26,15 @@ from django.utils import timezone
 #: Mismo corte que `contratos.forms.ANO_MINIMO_FECHAS` (se repite para no importar
 #: los formularios desde aquí).
 ANO_MINIMO = 1900
+
+#: Días después de hoy que puede tener la fecha de un evento (3.9.0, decisión de RRHH
+#: del 09-11-2026). Se aplica en el momento: el contrato cambia al confirmar.
+DIAS_FUTUROS = 30
+
+
+def fecha_maxima():
+    """Último día que admite la fecha de un evento: hoy + `DIAS_FUTUROS`."""
+    return timezone.localdate() + timedelta(days=DIAS_FUTUROS)
 
 
 def _texto(fecha):
@@ -57,9 +68,12 @@ def fecha_minima_permitida(aspirante_id, contrato=None):
 
 
 def validar_fecha_no_futura(fecha, etiqueta):
-    """Mensaje de error si `fecha` es posterior a hoy; None si es válida o vacía."""
-    if fecha and fecha > timezone.localdate():
-        return f'{etiqueta} no puede ser una fecha futura ({_texto(fecha)}).'
+    """Mensaje de error si `fecha` pasa de `fecha_maxima()`; None si es válida o vacía.
+
+    El nombre se conserva: lo usan varias vistas. Desde la 3.9.0 admite hasta 30 días."""
+    if fecha and fecha > fecha_maxima():
+        return (f'{etiqueta} ({_texto(fecha)}) no puede ser más de {DIAS_FUTUROS} días '
+                f'posterior a hoy: el último día permitido es el {_texto(fecha_maxima())}.')
     return None
 
 

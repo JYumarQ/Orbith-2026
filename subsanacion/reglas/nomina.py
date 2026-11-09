@@ -855,15 +855,15 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
 
 
 class BajaConFechaFutura(ReglaBase):
-    """MOV-010: una baja fechada después de hoy."""
+    """MOV-010: una baja fechada más de 30 días después de hoy (3.9.0)."""
 
     codigo = 'MOV-010'
-    nombre = 'Baja con fecha futura'
+    nombre = 'Baja con fecha más de 30 días en el futuro'
     modulo = MODULO_NOMINA
     criticidad = CRITICIDAD_ALTA
     modelo = 'contratos.CBaja'
 
-    descripcion = 'Busca bajas con fecha de baja posterior al día de hoy.'
+    descripcion = 'Busca bajas con fecha de baja de más de 30 días después de hoy.'
     causa_probable = (
         'Se escribió mal el año o el mes de la fecha de baja, o se registró por '
         'adelantado una baja que todavía no ha ocurrido.')
@@ -876,9 +876,9 @@ class BajaConFechaFutura(ReglaBase):
         'ha ocurrido, regístrela el día en que ocurra.')
 
     def ejecutar(self, contexto):
-        from django.utils import timezone
+        from contratos.cronologia import fecha_maxima
 
-        hoy = timezone.localdate()
+        hoy = fecha_maxima()   # el último día admitido, no hoy (3.9.0)
         filas = (self.base_queryset()
                  .filter(fecha_baja__gt=hoy)
                  .values('id', 'no_expediente', 'fecha_baja',
@@ -895,7 +895,7 @@ class BajaConFechaFutura(ReglaBase):
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
                 titulo=f'{referencia} · baja con fecha futura ({baja})',
-                detalle=f'La baja está fechada el {baja}, después de hoy.',
+                detalle=f'La baja está fechada el {baja}, más de 30 días después de hoy.',
                 datos={'fecha_de_baja': baja},
                 unidad_organizativa_id=fila.get('cargo__departamento__unidad_organizativa_id'),
             )
@@ -997,15 +997,15 @@ class EventosDelMismoDia(ReglaMovimientos):
 
 
 class MovimientoConFechaFutura(ReglaMovimientos):
-    """MOV-013: movimiento con fecha efectiva o de solicitud posterior a hoy."""
+    """MOV-013: movimiento con fecha efectiva o de solicitud de más de 30 días después de hoy."""
 
     codigo = 'MOV-013'
-    nombre = 'Movimiento con fecha futura'
+    nombre = 'Movimiento con fecha más de 30 días en el futuro'
     criticidad = CRITICIDAD_ALTA
 
     descripcion = (
         'Busca movimientos del histórico con la fecha efectiva o la de solicitud '
-        'posterior al día de hoy.')
+        'de más de 30 días después de hoy.')
     causa_probable = (
         'Se escribió mal el año o el mes, o se registró por adelantado un cambio que '
         'todavía no ha ocurrido. Hasta el 23-10-2026 Orbith lo aceptaba.')
@@ -1019,9 +1019,9 @@ class MovimientoConFechaFutura(ReglaMovimientos):
         'que ocurra.')
 
     def ejecutar(self, contexto):
-        from django.utils import timezone
+        from contratos.cronologia import fecha_maxima
 
-        hoy = timezone.localdate()
+        hoy = fecha_maxima()   # el último día admitido, no hoy (3.9.0)
         filas = (self.base_queryset()
                  .filter(Q(fecha_efectiva__gt=hoy) | Q(fecha_solicitud__gt=hoy))
                  .values('id', 'no_expediente', 'fecha_efectiva', 'fecha_solicitud',
@@ -1039,7 +1039,7 @@ class MovimientoConFechaFutura(ReglaMovimientos):
             yield HallazgoDetectado(
                 object_id=str(fila['id']),
                 titulo=self.titulo_de(fila, f'movimiento con {cual} futura ({fecha})'),
-                detalle=f'El movimiento tiene la {cual} {fecha}, posterior a hoy.',
+                detalle=f'El movimiento tiene la {cual} {fecha}, más de 30 días después de hoy.',
                 datos={
                     'fecha_efectiva': _fecha_texto(efectiva),
                     'fecha_de_solicitud': _fecha_texto(solicitud) if solicitud else '—',
