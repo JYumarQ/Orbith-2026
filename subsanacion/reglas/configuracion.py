@@ -4,6 +4,7 @@ Estas dos reglas son el único camino de los HALLAZGOS GLOBALES: los que no apun
 una fila concreta (`object_id` vacío) porque el problema es la ausencia del registro.
 """
 
+import hashlib
 from django.db.models import Count
 
 from ..constantes import (
@@ -426,7 +427,11 @@ class NomencladorConRepetidos(ReglaBase):
                 lista = self.NOMBRES.get(modelo._meta.label_lower, modelo._meta.verbose_name_plural)
                 yield HallazgoDetectado(
                     object_id='',
-                    clave_extra=f'{modelo._meta.label_lower}:{ambito}:{clave}',
+                    # Huella corta: `clave_extra` admite 50 caracteres y el nombre
+                    # repetido puede ser más largo (en el servidor la regla fallaba
+                    # con «value too long for type character varying(50)», 27-10-2026).
+                    clave_extra=hashlib.md5(
+                        f'{modelo._meta.label_lower}:{ambito}:{clave}'.encode('utf-8')).hexdigest(),
                     titulo=f'{lista}: {nombres} están repetidos',
                     detalle=(f'En {lista} hay {len(filas)} registros que son el mismo '
                              f'nombre escrito de otra forma: {nombres}.'),

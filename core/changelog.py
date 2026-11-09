@@ -39,6 +39,14 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.9.0",
+        "fecha": "2026-11-09",
+        "titulo": "Peticiones de la empresa: Subsanación más clara, varios Moderadores por unidad, fechas futuras y nombres largos",
+        "cambios": [
+            ("corregido", "Subsanación: la regla CFG-006 «Nomenclador con nombres repetidos» fallaba con nombres largos y el análisis la saltaba; ahora se guarda bien."),
+        ],
+    },
+    {
         "version": "3.8.2",
         "fecha": "2026-10-27",
         "titulo": "Nomencladores: borrados seguros, sin repetidos, orden por arrastre y escala salarial dinámica",
@@ -255,172 +263,6 @@ CHANGELOG = [
                         "administrador con la sesión abierta."),
         ],
     },
-
-    {
-        "version": "3.3.0",
-        "fecha": "2026-10-13",
-        "titulo": "Dashboard e Informes RRHH interactivos, y recontratados a la vista",
-        "cambios": [
-            ("nuevo", "Dashboard interactiva: Empleados Activos, Nuevas Altas, "
-                    "Nuevas Bajas, el equilibrio de género, Unidades y "
-                    "Departamentos llevan a su lista ya filtrada, conservando "
-                    "las unidades elegidas. El Gestor de Plantilla llega con la "
-                    "unidad abierta cuando solo hay una."),
-            ("nuevo", "Dashboard: ventanas de detalle para el salario promedio "
-                    "(por unidad y categoría), para cada mes del gráfico de "
-                    "Altas y Bajas (altas en azul y bajas en rojo, por fecha) y "
-                    "para cada barra de la Pirámide de Edades."),
-            ("nuevo", "Ventana de Plazas desde «Vacantes Libres» y «Ocupación de "
-                    "Plazas»: cargos con vacantes, llenos, inactivos o todos, "
-                    "quién ocupa cada uno y botón «Contratar aquí» con el cargo "
-                    "ya elegido."),
-            ("nuevo", "Años de Servicio: filtro «De __ a __ años» y botón «Ver "
-                    "más» con unidad, cargo, fecha de alta en la entidad e "
-                    "importe por escala. Cumpleaños: pestaña «Buscar» entre dos "
-                    "fechas. Recordatorios: filtro por prioridad. Radar de "
-                    "Jubilaciones: con el expediente y el histórico a un doble "
-                    "clic."),
-            ("nuevo", "Informes RRHH interactivos: en el Consolidado, "
-                    "Trabajadores por UEB, Puestos Clave, Registro Diario y Altas "
-                    "y Bajas, pulsar una cifra muestra quiénes son (o qué cargos, "
-                    "en las de plazas), también sobre un cierre mensual."),
-            ("nuevo", "Contratos: filtros «Alta desde/hasta», «Recontratados», "
-                    "«Baja anterior desde/hasta» y «Jubilados recontratados». "
-                    "Con esos filtros, una línea verde señala a los "
-                    "recontratados."),
-            ("nuevo", "Bajas: filtros de unidad y «Baja desde/hasta». Avisos "
-                    "cruzados entre las dos listas: en Contratos, quién entró en "
-                    "el período y ya causó baja; en Bajas, quién causó baja y "
-                    "fue recontratado, con enlace a sus contratos."),
-            ("nuevo", "Subsanación: cuatro reglas nuevas para fechas imposibles: "
-                    "bajas posteriores al contrato vigente (MOV-009), bajas con "
-                    "fecha futura (MOV-010), movimientos con año anterior a 1900 "
-                    "(MOV-011) y contratos con fecha de alta anterior a 1900 "
-                    "(CTR-022)."),
-            ("mejorado", "Las cifras de altas y bajas cuentan personas: quien se "
-                        "fue y volvió varias veces en el mismo período cuenta una "
-                        "vez, con la nota «2 bajas en el período». La tarjeta, la "
-                        "lista y su aviso siempre coinciden."),
-            ("mejorado", "Al causar baja se borran los avisos de su contrato y las "
-                        "alertas de datos de su ficha, que ya nadie podía "
-                        "resolver; el aviso «Baja de contrato» se conserva."),
-            ("mejorado", "El resumen de cierre del Ranking que reciben los "
-                        "Administradores muestra el nombre de usuario de quien no "
-                        "tiene nombre en su ficha."),
-            ("corregido", "Abrir una advertencia de un contrato que ya había "
-                        "causado baja daba un error de página no encontrada. "
-                        "Ahora se explica qué pasó y se ofrece volver."),
-            ("corregido", "El asistente de contratación mostraba un error técnico "
-                        "en vez del mensaje del formulario (por ejemplo, «el "
-                        "cargo no tiene plazas disponibles»), y aceptaba años "
-                        "imposibles como 0026 en la fecha efectiva."),
-            ("corregido", "En Aspirantes y Bajas, cambiar un filtro del panel no "
-                        "recargaba la tabla, y en Bajas esos filtros no "
-                        "filtraban nada."),
-            ("corregido", "En el Consolidado de Fuerza de Trabajo, el botón Word "
-                        "no hacía nada y el PDF solo tenía en cuenta la primera "
-                        "unidad elegida e ignoraba el cierre."),
-        ],
-    },
-
-    {
-        "version": "3.2.0",
-        "fecha": "2026-10-12",
-        "titulo": "Anexo 17.2, Ranking Mensual, auditoría completa y tablas a pantalla justa",
-        "cambios": [
-            ("nuevo", "Anexo 17.2 «Formación y Desarrollo», con pantalla propia y "
-                    "Excel: una hoja por departamento más las de Adiestrados, "
-                    "Contratados y Fuera de plantilla. Una fila por plaza "
-                    "aprobada, también las vacantes, con el importe mensual y "
-                    "la tarifa horaria, el nivel de preparación, los años de "
-                    "servicio y la CLA y nocturnidad del último reporte de "
-                    "Pre-Nómina cerrado."),
-            ("nuevo", "Anexos 17 y 17.1: una pestaña por unidad que se carga al "
-                    "abrirla, selector de varias unidades a la vez y Excel con "
-                    "portada y resumen. Nuevo botón para bajar el 17 y el 17.1 "
-                    "en un solo libro. Si hay filtros puestos, Orbith pregunta "
-                    "si exportar la plantilla completa o solo lo filtrado."),
-            ("nuevo", "Días e Importe de la misión en el contrato. Se pueden "
-                    "completar también desde el informe Misiones "
-                    "Internacionales, con confirmación antes de guardar, "
-                    "aviso si otro usuario cambió el dato a la vez y registro "
-                    "en Auditoría. La regla CTR-021 de Subsanación avisa de las "
-                    "misiones sin días o sin importe."),
-            ("nuevo", "Subsanación: regla CTR-020 para los contratos fijos en "
-                    "cargos fuera de plantilla, y pestaña «Índice de Reglas» "
-                    "que explica qué comprueba cada código y cómo se corrige."),
-            ("nuevo", "Subsanación: regla MOV-008 para los movimientos de nómina "
-                    "que conservan un número de expediente distinto al de su "
-                    "contrato. En MOV-008 y MOV-002 un Administrador puede "
-                    "corregir el caso con un botón, con confirmación y registro "
-                    "en Auditoría. Además, al corregir el expediente de un "
-                    "contrato, sus movimientos toman el número nuevo."),
-            ("nuevo", "Búsqueda con prefijos en Aspirantes, Bajas, Contratos y "
-                    "Subsanación: E: expediente, N: nombre, CI: carnet, CA: "
-                    "cargo, U: unidad y COD: código de regla. Se pueden "
-                    "combinar y los acentos no importan."),
-            ("nuevo", "El formulario de contrato muestra los años de servicio y "
-                    "su importe, calculados al momento desde la F. Alta "
-                    "Entidad y la escala vigente."),
-            ("nuevo", "Auditoría completa: todo lo que se crea, edita o elimina "
-                    "desde los formularios (contratos, aspirantes, estructura y "
-                    "nomencladores) queda registrado con el antes y el después. "
-                    "Antes solo se auditaban las Solicitudes y el panel de "
-                    "administración. Filtro por módulo, y las acciones Alta, "
-                    "Movimiento y Baja tienen color e icono propios."),
-            ("nuevo", "Parámetros Generales: opción para borrar la auditoría "
-                    "más antigua que los años que se elijan. Viene apagada."),
-            ("nuevo", "Guía de Orbith: categoría «Exportar» con ocho tareas que "
-                    "muestran el avance por formato, tarea «Busca con "
-                    "prefijos» y tareas según el rol. Todas las tareas tienen "
-                    "ya su guía visual paso a paso («¿Cómo funciona?»)."),
-            ("nuevo", "Ranking Mensual Orbith, en el menú de la foto: el trabajo "
-                    "de cada día suma XP, con niveles y una clasificación por "
-                    "rol. El día 1 se cierra el mes y llega el resultado a la "
-                    "campana. Los tres primeros de cada rol lucen el mes "
-                    "siguiente una distinción oro, plata o bronce, que se "
-                    "puede ocultar en Configuración."),
-            ("nuevo", "Estadísticas de uso, solo para Administradores: ranking "
-                    "del mes, uso de Orbith por usuario y módulo, usuarios sin "
-                    "actividad y unidades sin cierre en plazo, con botón para "
-                    "enviarles un recordatorio."),
-            ("nuevo", "Todas las tablas comparten estilo: caben justas en la "
-                    "pantalla, con la cabecera fija y la paginación siempre a "
-                    "la vista. Páginas numeradas y «Filas por página» 10, 25, "
-                    "50 o 100, que se recuerda por usuario y se puede elegir "
-                    "en Configuración. Los Informes RRHH y los Anexos fijan "
-                    "también su cabecera al desplazar."),
-            ("mejorado", "Títulos de página más pequeños y más arriba, y sin la "
-                        "barra superior vacía en el escritorio: más espacio "
-                        "para el contenido en todas las pantallas."),
-            ("mejorado", "Un solo formulario de Baja para la Lista de Contratos "
-                        "y el Gestor de Plantilla. El del Gestor no pedía "
-                        "Observaciones ni ofrecía el PDF al terminar."),
-            ("mejorado", "Cierres Mensuales adopta los colores de los Informes "
-                        "RRHH."),
-            ("corregido", "El Anexo 17 dejaba fuera las unidades que no son "
-                        "Principales, como las UEB de Florida, Nuevitas y "
-                        "Despacho."),
-            ("corregido", "Al exportar el Contrato de Trabajo o su Modificación, "
-                        "la «Fecha Efectiva de Firma» salía con la fecha de alta. "
-                        "Ahora propone la del último movimiento de nómina del "
-                        "contrato, y se puede cambiar antes de exportar."),
-            ("corregido", "La fecha mínima para dar de baja o hacer un movimiento "
-                        "de nómina podía salir más temprana de la cuenta si el "
-                        "expediente del contrato se había corregido. Las listas "
-                        "de Contratos y del Gestor de Plantilla, además, la "
-                        "calculan ahora sin una consulta por cada fila."),
-            ("corregido", "Los filtros de Auditoría, Advertencias y Solicitudes "
-                        "se cerraban al marcar la primera opción."),
-            ("corregido", "Auditoría, Subsanación e Informe Inteligente dejaban "
-                        "una franja en blanco encima del título."),
-            ("seguridad", "Los avisos de la campana muestran su texto tal cual: "
-                        "un título o mensaje con código ya no puede ejecutarse "
-                        "en el navegador de quien lo abre."),
-            ("eliminado", "La exportación a PDF del Anexo 17, que no se usaba."),
-        ],
-    },
-
 
 ]
 

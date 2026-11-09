@@ -2306,3 +2306,28 @@ class ReglasDeCronologiaDelHistoricoTests(TestCase):
     def test_mov006_queda_retirada(self):
         from .reglas import obtener_reglas
         self.assertNotIn('MOV-006', {r.codigo for r in obtener_reglas()})
+
+
+class NomencladorConRepetidosLargosTests(TestCase):
+    """CFG-006 fallaba en el servidor (27-10-2026): «value too long for type character
+    varying(50)». La clave del hallazgo llevaba el nombre repetido entero y
+    `Hallazgo.clave_extra` admite 50 caracteres."""
+
+    def test_nombres_largos_repetidos_se_guardan(self):
+        from nomencladores.models import NEspecialidad
+        from .models import Hallazgo
+        from .reglas.configuracion import NomencladorConRepetidos
+
+        largo = 'Técnico Medio en Mecánica Industrial y Mantenimiento'[:50]
+        # Repetidos antiguos, de antes de la regla: se crean saltándose `save()`.
+        NEspecialidad.objects.bulk_create([NEspecialidad(nombre=largo, orden=1),
+                                           NEspecialidad(nombre=largo.upper() + ' '[:0], orden=2)])
+        ejecucion = EjecucionAnalisis.objects.create(estado=EjecucionAnalisis.COMPLETA)
+        resultado = reconciliar_regla(NomencladorConRepetidos(), ejecucion, ContextoAnalisis(ejecucion))
+
+        self.assertEqual(resultado['nuevos'], 1)
+        hallazgo = Hallazgo.objects.get(codigo_regla='CFG-006')
+        self.assertLessEqual(len(hallazgo.clave_extra), 50)
+        # Mismo hallazgo en el siguiente análisis: la huella es estable.
+        otra = EjecucionAnalisis.objects.create(estado=EjecucionAnalisis.COMPLETA)
+        self.assertEqual(reconciliar_regla(NomencladorConRepetidos(), otra, ContextoAnalisis(otra))['nuevos'], 0)
