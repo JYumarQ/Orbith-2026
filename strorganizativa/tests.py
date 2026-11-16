@@ -536,3 +536,106 @@ class InterruptorEnPlantillaTests(TestCase):
         self.cargo.en_plantilla = False
         self.cargo.save(update_fields=['en_plantilla'])
         self.assertNotIn('checked', self._interruptor(reverse('updt_cargo', args=[self.cargo.pk])))
+
+
+class UnidadesTemporalesFueraDePlantillaTests(TestCase):
+    """Decisión de RRHH del 16-11-2026: en una unidad Temporal los cargos van, por
+    defecto, fuera de la plantilla aprobada (ver `strorganizativa.plantilla_temporal`)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from datetime import date
+
+        from bolsa.models import Aspirante
+        from contratos.models import CAlta
+        from nomencladores.models import (NCargo, NGrupoEscala, NMunicipio, NProvincia,
+                                          NTipoContrato)
+
+        from .models import CargoPlantilla, Departamento
+
+        cls.admin = CustomUser.objects.create_user(username='admin_temporal', password='x', es_admin=True)
+        cls.tipo_ueb = NTipoUnidadOrganizativa.objects.create(descripcion='UEB')
+        cls.tipo_temporal = NTipoUnidadOrganizativa.objects.create(descripcion='Temporal', es_temporal=True)
+        cls.unidad = UnidadOrganizativa.objects.create(
+            codigo_interno=70, descripcion='DIP Parque Solar', tipo=cls.tipo_ueb, grupo_nomina=7,
+            orden_informe=1)
+        cls.dpto = Departamento.objects.create(descripcion='Dirección', unidad_organizativa=cls.unidad)
+        grupo = NGrupoEscala.objects.create(nivel='V')
+
+        def cargo(nombre, orden, **extra):
+            return CargoPlantilla.objects.create(
+                ncargo=NCargo.objects.create(descripcion=nombre, cat_ocupacional='OPE',
+                                             grupo_escala=grupo, salario_basico=0),
+                departamento=cls.dpto, cant_aprobada=2, orden_informe=orden, **extra)
+        cls.libre = cargo('Operador', 1)
+        cls.ocupado = cargo('Chofer', 2)
+        # Un Indeterminado (ocupa plaza) en «Chofer»: ese cargo no puede salir de la plantilla.
+        provincia = NProvincia.objects.create(nombre='Camagüey', siglas='CMG')
+        persona = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Luis', papellido='Pérez', sapellido='Gil',
+            doc_identidad='85010112345', sexo='M', raza='BL', estado='ACTIVO', provincia=provincia,
+            municipio=NMunicipio.objects.create(nombre='Florida', provincia=provincia, siglas='FLA'))
+        CAlta.objects.create(
+            aspirante=persona, no_expediente='07001', cargo=cls.ocupado, tipo_salario='FIJ',
+            tipo=NTipoContrato.objects.create(descripcion='Indeterminado', ocupa_plaza=True),
+            fecha_alta=date(2026, 1, 15), fecha_alta_entidad=date(2026, 1, 15))
+
+    def _guardar_unidad(self, tipo, respuesta=None):
+        self.client.force_login(self.admin)
+        datos = {'descripcion': self.unidad.descripcion, 'tipo': tipo.pk,
+                 'grupo_nomina': self.unidad.grupo_nomina, 'orden_informe': 1}
+        if respuesta:
+            datos['cargos_plantilla'] = respuesta
+        return self.client.post(reverse('updt_uniorg', args=[self.unidad.pk]), datos,
+                                HTTP_HX_REQUEST='true')
+
+    def _en_plantilla(self):
+        from .models import CargoPlantilla
+        return dict(CargoPlantilla.objects.filter(departamento=self.dpto)
+                    .values_list('ncargo__descripcion', 'en_plantilla'))
+
+    def test_al_pasar_a_temporal_y_responder_si_se_mueven_los_que_se_pueden(self):
+        respuesta = self._guardar_unidad(self.tipo_temporal, 'mover')
+        self.assertEqual(respuesta.status_code, 204, respuesta.content[:300])
+        # «Chofer» se queda: tiene un contrato que ocupa plaza.
+        self.assertEqual(self._en_plantilla(), {'Operador': False, 'Chofer': True})
+        aviso = respuesta['HX-Trigger']
+        self.assertIn('1 cargo pas', aviso)
+        self.assertIn('Chofer', aviso)
+
+    def test_responder_no_los_deja_como_estaban(self):
+        self.assertEqual(self._guardar_unidad(self.tipo_temporal, 'dejar').status_code, 204)
+        self.assertEqual(self._en_plantilla(), {'Operador': True, 'Chofer': True})
+
+    def test_sin_cambio_de_tipo_no_se_mueve_nada_aunque_llegue_la_respuesta(self):
+        self._guardar_unidad(self.tipo_ueb, 'mover')
+        self.assertEqual(self._en_plantilla(), {'Operador': True, 'Chofer': True})
+
+    def test_al_dejar_de_ser_temporal_vuelven_a_la_plantilla(self):
+        from .models import CargoPlantilla
+        UnidadOrganizativa.objects.filter(pk=self.unidad.pk).update(tipo=self.tipo_temporal)
+        CargoPlantilla.objects.filter(pk=self.libre.pk).update(en_plantilla=False)
+        self._guardar_unidad(self.tipo_ueb, 'mover')
+        self.assertEqual(self._en_plantilla(), {'Operador': True, 'Chofer': True})
+
+    def test_la_ventana_lleva_los_datos_de_la_pregunta(self):
+        self.client.force_login(self.admin)
+        contexto = self.client.get(reverse('updt_uniorg', args=[self.unidad.pk]),
+                                   HTTP_HX_REQUEST='true').context['cargos_temporal']
+        self.assertEqual(contexto, {'preguntar': True, 'era_temporal': False,
+                                    'tipos_temporales': [self.tipo_temporal.pk],
+                                    'en_plantilla': 2, 'fuera': 0})
+
+    def test_subsanacion_lista_los_que_quedan_en_plantilla(self):
+        from subsanacion.reglas import obtener_regla
+        self._guardar_unidad(self.tipo_temporal, 'mover')
+        hallazgos = list(obtener_regla('EST-012').ejecutar(None))
+        self.assertEqual([h.object_id for h in hallazgos], [str(self.ocupado.pk)])
+        self.assertIn('no se puede sacar', hallazgos[0].detalle)
+
+    def test_un_cargo_nuevo_en_unidad_temporal_nace_fuera_de_plantilla(self):
+        import re
+        UnidadOrganizativa.objects.filter(pk=self.unidad.pk).update(tipo=self.tipo_temporal)
+        self.client.force_login(self.admin)
+        html = self.client.get(reverse('add_cargo') + f'?departamento={self.dpto.pk}').content.decode()
+        self.assertNotIn('checked', re.search(r'<input[^>]*id="id_en_plantilla"[^>]*>', html).group(0))

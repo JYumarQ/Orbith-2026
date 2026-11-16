@@ -70,6 +70,7 @@
     </div>
 </div>
 
+{{ cargos_temporal|json_script:"cargosTemporal" }}
 <script>
 (function() {
     const form = document.getElementById('uniorgForm');
@@ -169,6 +170,48 @@
 
     // --- 2. HTMX: CONTROL DE ENVÍO Y RESTAURACIÓN ---
 
+    // --- Unidades Temporales (16-11-2026): si el tipo pasa a Temporal (o deja de
+    // serlo) y la unidad tiene cargos en el otro lado de la plantilla, se pregunta si
+    // moverlos. El servidor aplica la respuesta (`strorganizativa.plantilla_temporal`).
+    const infoCargos = JSON.parse(document.getElementById('cargosTemporal').textContent);
+
+    function campoCargos() {
+        let campo = form.querySelector('input[name="cargos_plantilla"]');
+        if (!campo) {
+            campo = document.createElement('input');
+            campo.type = 'hidden';
+            campo.name = 'cargos_plantilla';
+            form.appendChild(campo);
+        }
+        return campo;
+    }
+
+    function preguntarCargos(continuar, cancelar) {
+        const campo = campoCargos();
+        campo.value = '';
+        if (!infoCargos.preguntar || !selectTipo) { continuar(); return; }
+        const ahoraTemporal = infoCargos.tipos_temporales.includes(parseInt(selectTipo.value, 10));
+        const cuantos = ahoraTemporal ? infoCargos.en_plantilla : infoCargos.fuera;
+        if (ahoraTemporal === infoCargos.era_temporal || !cuantos) { continuar(); return; }
+        const cargos = cuantos === 1 ? '1 cargo' : cuantos + ' cargos';
+        Swal.fire({
+            title: ahoraTemporal ? 'La unidad pasa a ser Temporal' : 'La unidad deja de ser Temporal',
+            html: ahoraTemporal
+                ? `Esta unidad tiene <b>${cargos} En Plantilla</b>. En una unidad Temporal los cargos van, por defecto, fuera de la plantilla aprobada.<br><br>¿Pasarlos a <b>Fuera de Plantilla</b>?<br><small class="text-muted">No se moverá el que tenga un contrato Indeterminado.</small>`
+                : `Esta unidad tiene <b>${cargos} Fuera de Plantilla</b>.<br><br>¿Pasarlos a <b>En Plantilla</b>?<br><small class="text-muted">Sus plazas aprobadas volverán a contar en la plantilla de la empresa.</small>`,
+            icon: 'question',
+            showDenyButton: true,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, pasarlos',
+            denyButtonText: 'No, dejarlos como están',
+            cancelButtonText: 'Cancelar'
+        }).then(function (resultado) {
+            if (resultado.isConfirmed) { campo.value = 'mover'; continuar(); }
+            else if (resultado.isDenied) { campo.value = 'dejar'; continuar(); }
+            else { cancelar(); }
+        });
+    }
+
     function campoAutoriza() {
         let campo = form.querySelector('input[name="autoriza_desplazamiento"]');
         if (!campo) {
@@ -195,8 +238,10 @@
             evaluarPadre(false);
         }
 
+        const enviar = function () { preguntarCargos(function () { e.detail.issueRequest(true); }, restaurar); };
+
         if (!inputOrden || typeof inputOrden.comprobarOrden !== 'function') {
-            e.detail.issueRequest(true);
+            enviar();
             return;
         }
 
@@ -212,7 +257,7 @@
             }
 
             if (res.estado !== 'ocupado') {
-                e.detail.issueRequest(true);
+                enviar();
                 return;
             }
 
@@ -228,7 +273,7 @@
             }).then(function(result) {
                 if (result.isConfirmed) {
                     autoriza.value = 'true';
-                    e.detail.issueRequest(true);
+                    enviar();
                 } else {
                     restaurar();
                 }

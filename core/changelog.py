@@ -39,6 +39,16 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.9.1",
+        "fecha": "2026-11-16",
+        "titulo": "Unidades Temporales: sus cargos van fuera de la plantilla aprobada",
+        "cambios": [
+            ("mejorado", "Los cargos que ya existían en unidades de tipo Temporal pasan a «Fuera de Plantilla» al actualizar (los nuevos ya nacían así). No se mueve el que tenga un contrato Indeterminado. Sus plazas dejan de contar en la plantilla aprobada de la empresa."),
+            ("nuevo", "Editar Unidad: si el tipo pasa a Temporal (o deja de serlo) y la unidad tiene cargos en el otro lado de la plantilla, Orbith pregunta si moverlos también."),
+            ("nuevo", "Subsanación: regla EST-012 «Cargo de una unidad Temporal dentro de la plantilla aprobada», para confirmarlos (Ignorado) o corregirlos."),
+        ],
+    },
+    {
         "version": "3.9.0",
         "fecha": "2026-11-09",
         "titulo": "Peticiones de la empresa: Subsanación más clara, varios Moderadores por unidad, fechas futuras y nombres largos",

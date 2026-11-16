@@ -566,12 +566,40 @@ class UnidadOrganizativaUpdateView(MotivoDeCambioMixin, RequiereEdicionMixin, Su
         padres_qs = UnidadOrganizativa.objects.filter(tipo__es_principal=True).exclude(pk=self.object.pk)
         context['tipos_info'] = json.dumps({t.id: {'es_subunidad': t.es_subunidad} for t in NTipoUnidadOrganizativa.objects.all()})
         context['padres_info'] = json.dumps({p.pk: p.grupo_nomina for p in padres_qs})
+        # Unidades Temporales (16-11-2026): al cambiar el tipo, la ventana pregunta si
+        # mover también los cargos (ver `strorganizativa.plantilla_temporal`). Al
+        # Moderador no: su envío es una solicitud y no cambia nada todavía.
+        from solicitudes.integracion import requiere_solicitud
+        from .plantilla_temporal import cargos_de, es_temporal
+        context['cargos_temporal'] = {
+            'preguntar': not requiere_solicitud(self.request.user),
+            # De la base, no de `self.object`: tras un envío con errores el formulario
+            # ya le cambió el tipo en memoria.
+            'era_temporal': es_temporal(UnidadOrganizativa.objects.select_related('tipo')
+                                        .filter(pk=self.object.pk).first()),
+            'tipos_temporales': list(NTipoUnidadOrganizativa.objects.filter(es_temporal=True)
+                                     .values_list('pk', flat=True)),
+            'en_plantilla': cargos_de(self.object, True).count(),
+            'fuera': cargos_de(self.object, False).count(),
+        }
         return context
-    
+
     def form_valid(self, form):
+        from .plantilla_temporal import es_temporal, mover_cargos, resumen_del_movimiento
+
+        era_temporal = es_temporal(UnidadOrganizativa.objects.select_related('tipo')
+                                   .filter(pk=self.object.pk).first())
         error = self.guardar_con_motivo(form, form.save)
         if error is not None:
             return error
+
+        # El tipo pasó a Temporal (o dejó de serlo) y el usuario respondió «Sí» a
+        # mover sus cargos. Va en la misma transacción que el guardado (ver `post`).
+        aviso_cargos = ''
+        ahora_temporal = es_temporal(self.object)
+        if era_temporal != ahora_temporal and self.request.POST.get('cargos_plantilla') == 'mover':
+            movidos, no_movidos = mover_cargos(self.object, a_plantilla=not ahora_temporal)
+            aviso_cargos = resumen_del_movimiento(movidos, no_movidos, a_plantilla=not ahora_temporal)
 
         if self.request.htmx:
             if self.request.POST.get('next') or self.request.GET.get('next'):
@@ -579,7 +607,14 @@ class UnidadOrganizativaUpdateView(MotivoDeCambioMixin, RequiereEdicionMixin, Su
             # 204 significa "Todo salió bien, no devuelvas HTML que rompa la pantalla"
             response = HttpResponse(status=204)
             # Aquí disparamos la recarga de la lista, cerramos el modal y mostramos el toast
-            response['HX-Trigger'] = 'updateUnitList, closeModal, showMessage'
+            if aviso_cargos:
+                response['HX-Trigger'] = json.dumps({
+                    'updateUnitList': True, 'updateDeptList': True, 'updateCargoList': True,
+                    'closeModal': True,
+                    'showMessage': {'icon': 'success',
+                                    'text': 'Unidad actualizada. ' + aviso_cargos}})
+            else:
+                response['HX-Trigger'] = 'updateUnitList, closeModal, showMessage'
             return response
 
         return super().form_valid(form)

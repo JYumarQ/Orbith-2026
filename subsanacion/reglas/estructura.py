@@ -553,3 +553,65 @@ class CargoSobregirado(ReglaBase):
                        'sobran': fila['ocupadas'] - fila['cant_aprobada']},
                 unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
             )
+
+
+class CargoDeTemporalEnPlantilla(ReglaBase):
+    """EST-012 (16-11-2026, decisión de RRHH): en una unidad de tipo Temporal los
+    cargos van, por defecto, fuera de la plantilla aprobada. Esta regla lista los que
+    están DENTRO, para confirmarlos (caso especial: se marca «Ignorado») o corregirlos.
+
+    Son, sobre todo, los que la migración `strorganizativa.0018` no pudo mover porque
+    tienen un contrato Indeterminado, y los de una unidad a la que se le cambió el tipo
+    respondiendo «No, dejarlos como están» (ver `strorganizativa.plantilla_temporal`).
+    """
+
+    codigo = 'EST-012'
+    nombre = 'Cargo de una unidad Temporal dentro de la plantilla aprobada'
+    modulo = MODULO_ESTRUCTURA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'strorganizativa.CargoPlantilla'
+
+    descripcion = (
+        'Busca cargos activos marcados «En Plantilla» en unidades organizativas de tipo '
+        'Temporal.')
+    causa_probable = (
+        'El cargo se creó antes de que la unidad fuera Temporal, tiene un contrato '
+        'Indeterminado que impidió sacarlo de la plantilla, o alguien encendió «En '
+        'Plantilla» al crearlo o editarlo.')
+    impacto = (
+        'Sus plazas aprobadas cuentan en la plantilla de la empresa (Dashboard, Anexos e '
+        'informes) aunque la unidad sea temporal.')
+    solucion = (
+        'Abra el cargo y apague «En Plantilla». Si tiene un contrato Indeterminado, antes '
+        'haga un movimiento de nómina a otro cargo o a un tipo de contrato que no ocupe '
+        'plaza. Si el cargo debe estar en la plantilla, marque este hallazgo como Ignorado '
+        'y explique el motivo.')
+
+    def ejecutar(self, contexto):
+        filas = (self.base_queryset()
+                 .filter(activo=True, en_plantilla=True,
+                         departamento__unidad_organizativa__tipo__es_temporal=True)
+                 .annotate(ocupadas=Count(
+                     'calta', distinct=True,
+                     filter=Q(calta__aspirante__estado='ACTIVO', calta__tipo__ocupa_plaza=True)))
+                 .values('id', 'cant_aprobada', 'ocupadas', 'ncargo__descripcion',
+                         'departamento__descripcion', 'departamento__unidad_organizativa__descripcion',
+                         'departamento__unidad_organizativa_id'))
+        for fila in filas:
+            cargo = fila.get('ncargo__descripcion') or 'Cargo sin descripción'
+            unidad = fila.get('departamento__unidad_organizativa__descripcion') or '—'
+            lugar = '%s · %s' % (fila.get('departamento__descripcion') or '—', unidad)
+            con_contrato = fila['ocupadas'] > 0
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=f'{cargo} · {lugar} · en plantilla en una unidad Temporal',
+                detalle=(f'«{unidad}» es una unidad Temporal y este cargo está dentro de la '
+                         f'plantilla aprobada.'
+                         + (f' Tiene {fila["ocupadas"]} contrato(s) que ocupan plaza: no se puede '
+                            f'sacar de la plantilla hasta moverlos.' if con_contrato else '')),
+                datos={'cargo': cargo, 'lugar': lugar,
+                       'plazas_aprobadas': fila['cant_aprobada'],
+                       'contratos_que_ocupan_plaza': fila['ocupadas']},
+                unidad_organizativa_id=fila.get('departamento__unidad_organizativa_id'),
+                campo_formulario='en_plantilla',
+            )
