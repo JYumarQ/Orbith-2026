@@ -32,7 +32,7 @@ from typing import Optional
 
 from django.contrib.contenttypes.models import ContentType
 
-from contratos.models import CAlta
+from contratos.models import CAlta, con_inicio_del_periodo
 
 from .avisos import _registrar_recordatorio, _resolver_notificaciones_obsoletas
 from .destinatarios import destinatarios_de_unidad
@@ -77,6 +77,8 @@ def detectar_contratos_por_vencer(queryset=None):
     contratos = queryset if queryset is not None else (
         CAlta.objects.filter(aspirante__estado='ACTIVO')
         .select_related('aspirante', 'tipo', 'cargo__departamento__unidad_organizativa'))
+    # El vencimiento cuenta desde el último movimiento (renovación, 18-11-2026).
+    contratos = con_inicio_del_periodo(contratos)
     for contrato in contratos:
         if contrato.tipo and 'INDETERMINADO' in (contrato.tipo.descripcion or '').upper():
             continue
@@ -101,6 +103,14 @@ _CAMPOS_VENCIMIENTO_CHOFER = (
 )
 
 
+_ARTICULO_DOCUMENTO = {'licencia': 'la', 'recalificación': 'la', 'seguro': 'el'}
+
+
+def _enumerar(partes):
+    """['a'] -> 'a'; ['a', 'b', 'c'] -> 'a, b y c'."""
+    return partes[0] if len(partes) == 1 else f'{", ".join(partes[:-1])} y {partes[-1]}'
+
+
 def detectar_documentos_chofer():
     """Fechas de vencimiento de licencia/recalificación/seguro de chóferes, cuando ya
     están registradas y próximas. Complementa a CTR-013 de Subsanación, que cubre el
@@ -109,6 +119,9 @@ def detectar_documentos_chofer():
                  .select_related('aspirante', 'cargo__departamento__unidad_organizativa'))
     for contrato in contratos:
         unidad_id = _unidad_del_contrato(contrato)
+        # Los documentos que vencen el MISMO día van en un solo aviso (18-11-2026):
+        # antes llegaban dos o tres avisos con la misma fecha para el mismo chófer.
+        por_fecha = {}
         for campo, nombre in _CAMPOS_VENCIMIENTO_CHOFER:
             fecha = getattr(contrato, campo)
             if not fecha:
@@ -116,64 +129,71 @@ def detectar_documentos_chofer():
             dias = (fecha - date.today()).days
             if dias > HORIZONTE_DIAS:
                 continue
+            por_fecha.setdefault(fecha, []).append((campo, nombre))
+        for fecha, documentos in por_fecha.items():
+            nombres = [nombre for _campo, nombre in documentos]
+            con_articulo = [f'{_ARTICULO_DOCUMENTO[nombre]} {nombre}' for nombre in nombres]
+            verbo = 'vence' if len(nombres) == 1 else 'vencen'
             yield RecordatorioDetectado(
-                object_id=str(contrato.pk), clave_extra=campo,
-                titulo=f'Vence {nombre} de chófer: {contrato.aspirante}',
+                object_id=str(contrato.pk),
+                clave_extra='+'.join(campo for campo, _nombre in documentos),
+                titulo=f'Vence {_enumerar(nombres)} de chófer: {contrato.aspirante}',
                 mensaje=(
-                    f'La {nombre} de {contrato.aspirante} vence el '
-                    f'{fecha.strftime("%d/%m/%Y")}.'),
+                    f'{_enumerar(con_articulo).capitalize()} de {contrato.aspirante} '
+                    f'{verbo} el {fecha.strftime("%d/%m/%Y")}.'),
                 fecha_objetivo=fecha,
                 unidad_organizativa_id=unidad_id,
             )
 
 
 def detectar_proximo_aniversario_antiguedad(queryset=None):
-    """Contratos de trabajadores activos a `HORIZONTE_ANTIGUEDAD_DIAS` o menos de
-    cumplir un nuevo año de antigüedad, contado desde `fecha_alta_entidad` (misma
-    fecha base que usa la tarjeta "Años de Servicio" del Dashboard —
-    `dashboard/views.py::antiguedad_html` — para no tener dos criterios distintos de
-    qué fecha marca el aniversario).
+    """Cambios de años de servicio que hay que registrar con un movimiento de nómina
+    (decisión de RRHH del 19-11-2026; antes avisaba de cada aniversario y el aviso
+    se iba solo al pasar el día).
 
-    El "próximo aniversario" es la primera fecha con el mismo (mes, día) de
-    `fecha_alta_entidad` que sea hoy o futura (mismo truco que el cálculo de
-    cumpleaños de `dashboard/views.py`, adaptado a años en vez de a edad).
-    Un aniversario que caiga en 29 de febrero de un año no bisiesto se descarta ese
-    año en vez de fallar (no hay una convención de RRHH sobre a qué día correr un
-    29-feb en un año normal, y no es razonable inventarla aquí).
+    * Solo los aniversarios (desde la F. Alta Entidad) que CAMBIAN el importe de la
+      Escala de Años de Servicio.
+    * Avisa `HORIZONTE_ANTIGUEDAD_DIAS` (10) días antes y, si llega el día sin
+      movimiento, el aviso se queda hasta que se haga (además, Subsanación CTR-025).
+    * Lo cierra CUALQUIER movimiento del contrato con fecha efectiva igual o
+      posterior al aniversario.
+    * Solo los aniversarios desde la actualización (`annos_servicio.avisos_desde`):
+      los anteriores no se reclaman.
+
+    Uno por aniversario (`clave_extra` = su fecha): el del año siguiente es otro aviso.
     """
+    from datetime import timedelta
+
+    from contratos.annos_servicio import avisos_desde, cambios_de_importe
+    from prenomina.models import NEscalaAnnosServicio
+
     contratos = queryset if queryset is not None else (
         CAlta.objects.filter(aspirante__estado='ACTIVO')
         .select_related('aspirante', 'cargo__departamento__unidad_organizativa'))
+    contratos = con_inicio_del_periodo(contratos)
     hoy = date.today()
+    desde = avisos_desde()
+    hasta = hoy + timedelta(days=HORIZONTE_ANTIGUEDAD_DIAS)
+    escala = NEscalaAnnosServicio.como_diccionario()
     for contrato in contratos:
-        if not contrato.fecha_alta_entidad:
-            continue
-        base = contrato.fecha_alta_entidad
-        try:
-            aniversario = base.replace(year=hoy.year)
-        except ValueError:
-            continue  # 29 de febrero, año no bisiesto: sin aniversario este año.
-        if aniversario < hoy:
-            try:
-                aniversario = base.replace(year=hoy.year + 1)
-            except ValueError:
-                continue
-        dias = (aniversario - hoy).days
-        if dias > HORIZONTE_ANTIGUEDAD_DIAS:
-            continue
-        anios_cumplidos = aniversario.year - base.year
-        if anios_cumplidos <= 0:
-            continue
-        yield RecordatorioDetectado(
-            object_id=str(contrato.pk),
-            titulo=f'{contrato.aspirante} cumple {anios_cumplidos} años de antigüedad',
-            mensaje=(
-                f'{contrato.aspirante} cumplirá {anios_cumplidos} años de antigüedad '
-                f'ininterrumpida el {aniversario.strftime("%d/%m/%Y")}. Registrar el '
-                f'Movimiento de Nómina correspondiente.'),
-            fecha_objetivo=aniversario,
-            unidad_organizativa_id=_unidad_del_contrato(contrato),
-        )
+        ultimo = contrato.ultimo_movimiento
+        for dia, annos, antes, despues in cambios_de_importe(
+                contrato.fecha_alta_entidad, desde, hasta, escala):
+            if ultimo and ultimo >= dia:
+                continue  # ya hay un movimiento con fecha efectiva ese día o después
+            cuando = 'cumplirá' if dia > hoy else 'cumplió'
+            yield RecordatorioDetectado(
+                object_id=str(contrato.pk),
+                titulo=f'{contrato.aspirante}: cambio de años de servicio ({annos} años)',
+                mensaje=(
+                    f'{contrato.aspirante} {cuando} {annos} años de servicio el '
+                    f'{dia:%d/%m/%Y}: el pago por años de servicio pasa de {antes:.2f} a '
+                    f'{despues:.2f}. Registre el movimiento de nómina con fecha efectiva '
+                    f'ese día o posterior.'),
+                fecha_objetivo=dia,
+                clave_extra=dia.isoformat(),
+                unidad_organizativa_id=_unidad_del_contrato(contrato),
+            )
 
 
 # `(modelo, codigo, detector)`. `codigo` ocupa `Notificacion.codigo_regla` — identifica

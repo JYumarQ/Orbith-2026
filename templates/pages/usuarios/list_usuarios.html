@@ -166,10 +166,10 @@
 <!-- Content wrapper -->
 
 <!-- Modales vacíos para cargar -->
-<div class="modal fade" id="editar_usuario" role="dialog"></div>
-<div class="modal fade" id="crear_usuario" role="dialog"></div>
-<div class="modal fade" id="cambiar_password" tabindex="-1" role="dialog" aria-hidden="true"></div>
-<div class="modal fade" id="eliminar_usuario" tabindex="-1" role="dialog" aria-hidden="true"></div>
+<div class="modal fade" id="editar_usuario" data-vaciar-al-cerrar role="dialog"></div>
+<div class="modal fade" id="crear_usuario" data-vaciar-al-cerrar role="dialog"></div>
+<div class="modal fade" id="cambiar_password" data-vaciar-al-cerrar tabindex="-1" role="dialog" aria-hidden="true"></div>
+<div class="modal fade" id="eliminar_usuario" data-vaciar-al-cerrar tabindex="-1" role="dialog" aria-hidden="true"></div>
 
 {% if request.user.es_admin %}
 {% comment %} Progreso de «Ejecutar todos los análisis». `data-bs-backdrop="static"` y

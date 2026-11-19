@@ -54,8 +54,8 @@
           </div>
           <div class="sub-indice-barra"><span style="width: {{ ejecucion.indice_salud|default:0 }}%"></span></div>
           <div class="small text-muted mt-2">
-            Porcentaje de registros sin ningún hallazgo pendiente.
-            La gravedad se ve en el panel de la derecha.
+            Porcentaje de registros sin ningún hallazgo pendiente. No cuentan las reglas
+            Informativas ni los Extras. La gravedad se ve en el panel de la derecha.
           </div>
 
           <div class="row g-2 mt-3 small">
@@ -151,6 +151,10 @@
           <div class="sub-modulo-valor text-muted">
             {% if modulo.total %}{{ modulo.total }} hallazgo{{ modulo.total|pluralize }}{% else %}Sin hallazgos{% endif %}
           </div>
+        {% elif modulo.situacion == 'no_cuenta' %}
+          {% comment %} Extras: datos complementarios que no cuentan en la salud. {% endcomment %}
+          <div class="sub-modulo-barra"></div>
+          <div class="sub-modulo-valor text-muted" style="font-size: .75rem;">No cuenta en la salud</div>
         {% else %}
           <div class="sub-modulo-barra"></div>
           <div class="sub-modulo-valor text-muted" style="font-size: .75rem;">No comprobado</div>

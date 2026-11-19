@@ -164,10 +164,12 @@
   </div>
 </div>
 
+{% comment %} La barra de acciones solo sirve con la tabla («Ver todos» o una
+   búsqueda); con los grupos se oculta (ver `sincronizarBarra` abajo). {% endcomment %}
 {% include 'pages/notificaciones/partials/toolbar_notificacion.html' %}
 
 <div id="resultados-advertencias">
-  {% include 'pages/notificaciones/partials/_tabla.html' %}
+  {% include 'pages/notificaciones/partials/_resultados_advertencias.html' %}
 </div>
 
 <script src="{% estatico 'js/notificaciones.js' %}"></script>
@@ -181,6 +183,16 @@
   function triggerSearchAdvertencias() {
     htmx.trigger(document.getElementById('search-advertencias'), 'searchFilters');
   }
+
+  function sincronizarBarra() {
+    // `d-none` y no `hidden`: la barra lleva `d-flex`, que gana a `hidden`.
+    document.getElementById('toolbar-notificacion').classList.toggle(
+      'd-none', !document.querySelector('#resultados-advertencias .fila-notificacion'));
+  }
+  sincronizarBarra();
+  document.getElementById('resultados-advertencias').addEventListener('htmx:afterSwap', function (e) {
+    if (e.target.id === 'resultados-advertencias') sincronizarBarra();
+  });
 
   // Chips de Módulo/Severidad: un solo valor activo por grupo (o "Todos"), sincronizado
   // con un <input type="hidden"> que es lo que de verdad viaja en el hx-include.

@@ -410,6 +410,17 @@ class EditorHistoricoMesesCerradosTests(EditorHistoricoMotorTests):
         self.assertEqual(cierre.cargos.get(ncargo_descripcion='Especialista B').cant_cubierta, 1)
         self.assertEqual(cierre.total_plazas_cubiertas, 1)
 
+    def test_crear_el_alta_que_faltaba_no_corrige_un_mes_cuya_foto_no_cambia(self):
+        """18-11-2026: el mes solo se marca «Corregido» (y se avisa) si su foto cambia."""
+        from cierres.models import CierreContrato
+        from notificaciones.models import Notificacion
+        CierreContrato.objects.filter(pk=self.fila('c3').pk).update(tipo_salario='FIJ')
+        TMovimiento.objects.filter(pk=self.m_alta2.pk).update(aspirante=None, contrato=None)
+        res = self.guardar({'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}})
+        self.assertEqual(res['meses'], [])
+        self.assertEqual(self.cierre('c3').correcciones, '')
+        self.assertFalse(Notificacion.objects.filter(codigo_regla='CIE-CORREGIDO').exists())
+
     def test_la_vista_previa_dice_los_meses_sin_tocarlos(self):
         _, _, errores, res = self.preparar(
             {'op': 'editar', 'evento': 'mov:%d' % self.m_mov1.pk, 'campos': {'salario': '4700'}})
@@ -613,3 +624,183 @@ class EditorReglasDelContratoTests(TestCase):
         self.assertTrue(any('no tiene plazas disponibles' in e for e in errores))
         errores = self.errores(self.editar(self.m_mov1, cargo_id=self.cuadro.pk))
         self.assertFalse(any('plazas' in e for e in errores))
+
+
+class FechaYAltaDelContratoTests(EditorHistoricoMotorTests):
+    """CTR-004 y MOV-014 (18-11-2026): la F. de Contratación es la fecha del Alta
+    Inicial y se corrige en el editor; si al contrato le falta el Alta, se crea ahí."""
+
+    def setUp(self):
+        from usuarios.models import CustomUser
+        self.admin = CustomUser.objects.create_user(username='adm_alta', password='x', es_admin=True)
+
+    def guardar(self, *cambios):
+        return eh.guardar(self.persona, list(cambios), '', usuario=self.admin)
+
+    def _sin_alta(self, tambien_el_movimiento=False):
+        """El contrato vigente sin su Alta Inicial (y sin movimientos, si se pide)."""
+        quitar = [self.m_alta2.pk] + ([self.m_mov2.pk] if tambien_el_movimiento else [])
+        TMovimiento.objects.filter(pk__in=quitar).update(aspirante=None, contrato=None)
+
+    def test_contrato_sin_fecha_la_toma_del_alta_al_guardar(self):
+        CAlta.objects.filter(pk=self.contrato.pk).update(fecha_alta=None)
+        h = eh.cargar(self.persona)
+        self.assertIsNone(h.fecha_contrato)
+        self.assertIsNone(h.alta_propuesta)  # el Alta sí existe
+        _, _, errores, res = self.preparar({'op': 'fecha_contrato'})
+        self.assertEqual(errores, [])
+        self.assertIn(('Contrato vigente', 'F. de Contratación', '---', self.f['alta2'].strftime('%d/%m/%Y')),
+                      res['cambios'])
+        self.guardar({'op': 'fecha_contrato'})
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.fecha_alta, self.f['alta2'])
+
+    def test_con_la_fecha_bien_no_hay_nada_que_pasar(self):
+        with self.assertRaises(eh.ErrorDeBorrador):
+            self.guardar({'op': 'fecha_contrato'})
+
+    def test_sin_alta_con_movimientos_se_crea_con_el_antes_del_primero(self):
+        self._sin_alta()
+        h = eh.cargar(self.persona)
+        self.assertTrue(h.anomalias)  # hoy el editor no puede guardar nada así
+        self.assertEqual(h.alta_propuesta['estado']['cargo'], 'Especialista B')
+        _, propuesto, errores, _ = self.preparar(
+            {'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}})
+        self.assertEqual(errores, [])
+        self.guardar({'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}})
+        alta = TMovimiento.objects.get(contrato=self.contrato, tipo_movimiento='Alta Inicial')
+        self.assertEqual((alta.fecha_efectiva, alta.cargo_anterior, alta.cargo_nuevo, alta.salario_nuevo),
+                         (self.f['alta2'], '---', 'Especialista B', Decimal('4000.00')))
+        self.assertEqual(eh.cargar(self.persona).anomalias, [])
+
+    def test_sin_alta_ni_movimientos_se_crea_con_lo_que_dice_el_contrato(self):
+        self._sin_alta(tambien_el_movimiento=True)
+        CAlta.objects.filter(pk=self.contrato.pk).update(tipo_salario='FIJ')
+        h = eh.cargar(self.persona)
+        propuesta = h.alta_propuesta
+        self.assertEqual((propuesta['fecha'], propuesta['estado']['cargo'], propuesta['estado']['tipo_contrato'],
+                          propuesta['ids']['cargo_id']),
+                         (self.f['alta2'], 'Especialista B', 'Indeterminado', self.cargo.pk))
+        self.guardar({'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}})
+        self.assertTrue(TMovimiento.objects.filter(contrato=self.contrato, tipo_movimiento='Alta Inicial',
+                                                   fecha_efectiva=self.f['alta2']).exists())
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.cargo_id, self.contrato.tipo_id), (self.cargo.pk, self.indeterminado.pk))
+
+    def test_no_se_crea_un_alta_si_ya_la_tiene(self):
+        with self.assertRaises(eh.ErrorDeBorrador):
+            self.preparar({'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}})
+
+    def test_los_avisos_llevan_al_editor_del_historico(self):
+        from django.urls import reverse
+        from subsanacion.enlaces import construir_enlace, destino_de_regla
+        from subsanacion.reglas.contratos import ContratoSinFechaAlta
+        url, etiqueta = destino_de_regla(ContratoSinFechaAlta(), self.admin)
+        enlace = construir_enlace('contratos.CAlta', str(self.contrato.pk), forzar_url=url,
+                                  usuario=self.admin, etiqueta=etiqueta)
+        self.assertEqual(enlace['etiqueta'], 'Abrir el editor del histórico')
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(enlace['href'] + '?next=/subsanacion/')
+        self.assertRedirects(respuesta, reverse('editor_historico', args=[self.persona.pk]) + '?next=/subsanacion/',
+                             fetch_redirect_response=False)
+
+    def test_relleno_al_actualizar_solo_con_un_alta(self):
+        import importlib
+        from django.apps import apps
+        from auditoria.models import EventoAuditoria
+        migracion = importlib.import_module('contratos.migrations.0031_fecha_contratacion_desde_alta_inicial')
+        CAlta.objects.filter(pk=self.contrato.pk).update(fecha_alta=None)
+        migracion.rellenar(apps, None)
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.fecha_alta, self.f['alta2'])
+        self.assertTrue(EventoAuditoria.objects.filter(usuario_nombre='Sistema', object_id=str(self.contrato.pk)).exists())
+
+        # Con dos Altas del mismo contrato no se sabe cuál: no se toca.
+        CAlta.objects.filter(pk=self.contrato.pk).update(fecha_alta=None)
+        TMovimiento.objects.filter(pk=self.m_alta1.pk).update(contrato=self.contrato)
+        migracion.rellenar(apps, None)
+        self.contrato.refresh_from_db()
+        self.assertIsNone(self.contrato.fecha_alta)
+
+    def test_el_movimiento_del_mismo_dia_era_el_alta_y_se_sustituye(self):
+        """76254, 2015 y 72166 (18-11-2026): el alta quedó como un movimiento de nómina."""
+        self._sin_alta()
+        TMovimiento.objects.filter(pk=self.m_mov2.pk).update(
+            fecha_efectiva=self.f['alta2'], fecha_solicitud=self.f['alta2'], observaciones='Alta en nómina')
+        propuesta = eh.cargar(self.persona).alta_propuesta
+        self.assertEqual(propuesta['sustituye'], 'mov:%d' % self.m_mov2.pk)
+        self.assertEqual(propuesta['estado']['cargo'], 'Especialista A')   # sus datos de DESPUÉS
+        cambios = [{'op': 'insertar', 'tipo': eh.ALTA, 'campos': {'fecha': self.f['alta2'].isoformat()}},
+                   {'op': 'borrar', 'evento': propuesta['sustituye']}]
+        self.assertEqual(self.preparar(*cambios)[2], [])
+        self.guardar(*cambios)
+        alta = TMovimiento.objects.get(contrato=self.contrato, tipo_movimiento='Alta Inicial')
+        self.assertEqual((alta.cargo_nuevo, alta.fecha_solicitud, alta.observaciones),
+                         ('Especialista A', self.f['alta2'], 'Alta en nómina'))
+        self.assertFalse(TMovimiento.objects.filter(pk=self.m_mov2.pk).exists())
+        self.assertTrue(CAlta.objects.filter(pk=self.contrato.pk).exists())
+
+    def test_alta_con_minuscula_se_escribe_bien_al_actualizar(self):
+        import importlib
+        from django.apps import apps
+        migracion = importlib.import_module('contratos.migrations.0031_fecha_contratacion_desde_alta_inicial')
+        TMovimiento.objects.filter(pk=self.m_alta2.pk).update(tipo_movimiento='Alta inicial')
+        migracion.rellenar(apps, None)
+        self.m_alta2.refresh_from_db()
+        self.assertEqual(self.m_alta2.tipo_movimiento, 'Alta Inicial')
+
+
+class MismoDiaAntiguoTests(EditorHistoricoMotorTests):
+    """Eventos antiguos el mismo día (18-11-2026): no bloquean el editor; se avisan con
+    «Quitar el duplicado» y «Pasar al día siguiente», y MOV-017 los lista."""
+
+    def setUp(self):
+        from usuarios.models import CustomUser
+        self.admin = CustomUser.objects.create_user(username='adm_mismo', password='x', es_admin=True)
+
+    def _duplicado(self):
+        """Un movimiento el mismo día que el segundo que repite exactamente lo mismo."""
+        h = eh.cargar(self.persona)
+        mov2 = h.evento('mov:%d' % self.m_mov2.pk)
+        return TMovimiento.objects.create(
+            aspirante=self.persona, contrato=self.contrato, no_expediente='01410',
+            fecha_efectiva=self.f['mov2'], tipo_movimiento='Movimiento de Nómina',
+            cargo_anterior=mov2.estado['cargo'], cargo_nuevo=mov2.estado['cargo'],
+            salario_anterior=4500, salario_nuevo=4500,
+            unidad_anterior='UEB Central', unidad_nueva='UEB Central',
+            departamento_anterior='Contabilidad', departamento_nuevo='Contabilidad',
+            tipo_contrato_anterior='Indeterminado', tipo_contrato_nuevo='Indeterminado',
+            tipo_salario_anterior='Fijo', tipo_salario_nuevo='Fijo', otros_anterior=0, otros_nuevo=0)
+
+    def test_no_bloquea_y_se_avisa_con_sus_arreglos(self):
+        dup = self._duplicado()
+        h = eh.cargar(self.persona)
+        self.assertEqual(h.anomalias, [])
+        avisos = eh.mismo_dia(h)
+        self.assertEqual(len(avisos), 1)
+        self.assertEqual((avisos[0]['segundo'], avisos[0]['duplicado']), ('mov:%d' % dup.pk, True))
+        self.assertEqual(avisos[0]['siguiente'], (self.f['mov2'] + timedelta(days=1)).isoformat())
+        # Se puede corregir otra cosa y guardar.
+        eh.guardar(self.persona, [{'op': 'editar', 'evento': 'mov:%d' % self.m_mov1.pk,
+                                   'campos': {'observaciones': 'revisado'}}], '', usuario=self.admin)
+
+    def test_quitar_el_duplicado_y_pasar_al_dia_siguiente(self):
+        dup = self._duplicado()
+        _, propuesto, errores, _ = self.preparar({'op': 'borrar', 'evento': 'mov:%d' % dup.pk})
+        self.assertEqual((errores, eh.mismo_dia(propuesto)), ([], []))
+        siguiente = (self.f['mov2'] + timedelta(days=1)).isoformat()
+        _, propuesto, errores, _ = self.preparar(
+            {'op': 'editar', 'evento': 'mov:%d' % dup.pk, 'campos': {'fecha': siguiente}})
+        self.assertEqual((errores, eh.mismo_dia(propuesto)), ([], []))
+
+    def test_un_evento_nuevo_el_mismo_dia_si_bloquea(self):
+        _, _, errores, _ = self.preparar({'op': 'insertar', 'tras': 'mov:%d' % self.m_mov2.pk,
+                                          'campos': {'fecha': self.f['mov2'].isoformat()}})
+        self.assertTrue(any('mismo día' in e for e in errores))
+
+    def test_mov_017_lista_a_la_persona(self):
+        from subsanacion.reglas.nomina import HistoricoConEventosElMismoDia
+        self.assertEqual(list(HistoricoConEventosElMismoDia().ejecutar(None)), [])
+        self._duplicado()
+        hallazgos = list(HistoricoConEventosElMismoDia().ejecutar(None))
+        self.assertEqual([h.object_id for h in hallazgos], [str(self.persona.pk)])

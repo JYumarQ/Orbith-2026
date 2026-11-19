@@ -39,6 +39,35 @@ TIPOS_CAMBIO = {
 
 CHANGELOG = [
     {
+        "version": "3.10.0",
+        "fecha": "2026-11-19",
+        "titulo": "Avisos agrupados, Ranking con nuevos niveles, Subsanación más clara y Orbith en español",
+        "cambios": [
+            ("mejorado", "Notificaciones: la campana solo cuenta lo que hay que hacer (advertencias Críticas y Altas, recordatorios de los próximos 15 días, solicitudes y cierres) y su desplegable lo agrupa: «CTR-018 · 3 nuevos». Las altas, bajas y cargos nuevos se ven juntos en «Actividad de hoy», con quién hizo cada cosa."),
+            ("mejorado", "Notificaciones: Advertencias agrupadas por regla, Recordatorios por tipo y Supervisión por moderador. Al decidir una solicitud, su aviso se cierra para todos los Administradores. Los avisos viejos se limpian solos cada día."),
+            ("nuevo", "Ranking: niveles Maestro (600 XP) y Leyenda (900 XP) para los Moderadores, distinción «Más mejorado del mes», +5 XP por corregir un hallazgo al guardar el registro y aviso el día 15 a quien aún no llega a Activo. El tope diario de Altas sube de 15 a 25."),
+            ("mejorado", "Subsanación: la salud de los datos ya no cuenta las reglas Informativas (son datos pendientes, no problemas) y se corrigió el porcentaje de cada categoría. 27 reglas explican mejor la solución, y su botón lleva a donde se arregla: el editor del histórico, el movimiento de nómina, Parámetros o Cierres."),
+            ("eliminado", "Subsanación: se retira la regla MOV-012; la sustituye MOV-017 (dos eventos del histórico el mismo día), que se arregla en el editor."),
+            ("nuevo", "Editor del histórico: crea el Alta Inicial que falte y arregla los eventos del mismo día con «Quitar el duplicado» o «Pasar al día siguiente». La F. de Contratación se toma del Alta Inicial."),
+            ("nuevo", "Años de servicio: aviso cuando un trabajador cumple años que cambian su importe, con un botón que abre el movimiento de nómina con la fecha y la observación ya puestas. Un movimiento sin otros cambios se puede guardar confirmándolo."),
+            ("mejorado", "Contratos: el vencimiento de un determinado cuenta desde su último movimiento (las renovaciones ya no salen como vencidas)."),
+            ("mejorado", "Word del Movimiento de Nómina: cada cifra lleva su tarifa debajo, la categoría va con su grupo y el organismo y la empresa salen de Parámetros Generales."),
+            ("corregido", "Al editar un contrato o un usuario y abrir después otra ventana sin recargar la página, la segunda no funcionaba bien (no cargaba los motivos ni los Permisos especiales). Las fechas de chófer y los números de resolución ya no se borran si no llegan al guardar."),
+            ("mejorado", "Orbith en español también en los mensajes automáticos y en el panel de administración."),
+            ("nuevo", "Admin de Django → Soporte → Actualizar Orbith: subir un paquete nuevo y ensayarlo con una copia de la base antes de instalarlo."),
+            ("mejorado", "Ficha del trabajador: si no hay especialidades del nivel elegido, el campo lo dice. RRHH debe crear en Nomencladores las especialidades de Técnico Medio (sin marcar «Educ. Superior»): hoy no hay ninguna y 334 técnicos medios no pueden tenerla."),
+        ],
+    },
+    {
+        "version": "3.9.2",
+        "fecha": "2026-11-18",
+        "titulo": "El histórico ya no falla con un contrato sin fecha y copia de la base desde el admin",
+        "cambios": [
+            ("corregido", "Histórico del trabajador: si el contrato no tenía F. de Contratación, la ventana mostraba «Error en la red» y el PDF «Exportar Todo» no se generaba. Ahora el evento aparece el primero, con «Sin fecha» en ámbar; Subsanación lo lista en la regla CTR-004 para completarlo."),
+            ("nuevo", "Admin de Django → Soporte → Copia de la base de datos: el Administrador prepara una copia completa de la base y la descarga para el desarrollador, sin entrar en el servidor. Cada copia preparada o descargada queda en Auditoría y se borra sola a las 24 horas."),
+        ],
+    },
+    {
         "version": "3.9.1",
         "fecha": "2026-11-16",
         "titulo": "Unidades Temporales: sus cargos van fuera de la plantilla aprobada",
@@ -202,90 +231,6 @@ CHANGELOG = [
             ("eliminado", "El informe antiguo del Anexo 17 que ya no se usaba."),
         ],
     },
-    {
-        "version": "3.5.0",
-        "fecha": "2026-10-24",
-        "titulo": "Anexos 17, De Confianza, modalidad de trabajo, «Otros» y nombres de fichero claros",
-        "cambios": [
-            ("nuevo", "Los Anexos 17, 17.1 y 17.2 se llaman ahora Anexo 17, 17.1 y 17.2 en toda la aplicación: menú, pantallas, Excel y Guía."),
-            ("nuevo", "El Excel del Anexo 17.2 sigue el modelo nuevo: cabeceras en vertical, columnas ajustadas y letra 12."),
-            ("nuevo", "Switch «De Confianza» en el cargo (Gestor de Plantilla), con su No. de resolución en el contrato. Puede coincidir con Funcionario o Designado."),
-            ("nuevo", "Contrato: «Modalidad de trabajo» con Trab. a distancia, Teletrabajo y Pluriempleo. El Moderador los cambia sin solicitud."),
-            ("nuevo", "Campo «Otros» (grado científico + Instructor + CNCI + años de servicio) en el contrato y en el movimiento de nómina. El movimiento lo guarda, así su documento no cambia con el tiempo."),
-            ("nuevo", "Movimiento de nómina: números de resolución (C. Formal, Funcionario, Designado y De Confianza), opcionales. Si se escriben, sustituyen a los del contrato."),
-            ("nuevo", "Informe Inteligente: Dirección en «Datos del Trabajador»; De Confianza, su resolución y la modalidad de trabajo; y cuántos contratos tiene cada cargo en «Estructura y Plantilla Aprobada»."),
-            ("nuevo", "Registro de errores del servidor, que el Administrador consulta y descarga desde el admin de Django (Soporte → Registro de errores)."),
-            ("mejorado", "Los ficheros descargados se reconocen por su nombre: MOV_, ALTA_, BAJA_, CON_ o MOD_CON_ + nombre + expediente; los informes llevan su nombre, la unidad o el período y la fecha."),
-            ("mejorado", "La sábana de Excel de Contratos exporta lo que se ve en la lista (filtros, búsqueda y orden), sin ventana intermedia y con columnas nuevas."),
-            ("mejorado", "«Buscar incidencias» y la búsqueda automática van por partes: ya no se cortan por exceder el tiempo en el servidor."),
-            ("mejorado", "Búsqueda automática: Administrador cada 2 horas, Moderador cada 30 minutos y solo sus registros, y ninguna a partir de las 16:00."),
-            ("mejorado", "El Moderador guarda sin solicitud los números de resolución y el switch Jubilado recontratado."),
-            ("mejorado", "Parámetros Generales: las pestañas siempre a la vista; en Salario, también los botones y la cabecera de la tabla."),
-            ("mejorado", "Si el color de una unidad es muy claro, su nombre se oscurece solo para leerse, y el nomenclador avisa al elegirlo."),
-            ("mejorado", "Histórico: ninguna fecha futura, nunca dos eventos el mismo día y recontratar como pronto al día siguiente de la baja."),
-            ("corregido", "Un texto técnico aparecía al principio de todas las pantallas."),
-            ("corregido", "Los switches Funcionario y Designado se veían apagados aunque estuvieran activos."),
-            ("corregido", "El aviso «no se ha aplicado ningún cambio» del movimiento de nómina nunca saltaba."),
-        ],
-    },
-    {
-        "version": "3.4.0",
-        "fecha": "2026-10-24",
-        "titulo": "El nomenclador manda, cambios externos en el histórico y problemas a la vista",
-        "cambios": [
-            ("corregido", "El Word del contrato y de su modificación podía salir con el "
-                        "salario de otro rol: tras un movimiento de nómina a un cargo con "
-                        "otro rol, el contrato conservaba una copia del rol anterior. El "
-                        "rol ya es solo del cargo, como define el Gestor de cargos."),
-            ("mejorado", "Maestría, Doctorado, CNCI e Instructor se leen siempre del "
-                        "nomenclador: cambiar un importe lo cambia desde hoy para todos. "
-                        "Los importes tecleados a mano que no coincidían se revisan en "
-                        "Subsanación (CTR-023). No se puede borrar una entrada en uso."),
-            ("corregido", "El salario, la tarifa horaria y las horas extras se calculan "
-                        "igual en todas las pantallas que en el Word y los informes. Antes "
-                        "la pantalla de edición ignoraba el salario fijo y el de los "
-                        "cuadros, y las horas extras salían distintas en cada pantalla."),
-            ("nuevo", "Cambios externos: al cambiar la escala salarial, el rol o el "
-                        "departamento de un cargo, un nomenclador de cargo, el nombre de una "
-                        "unidad o departamento, un importe o el grado científico de la "
-                        "ficha, cada trabajador afectado lo ve en su histórico (y en su "
-                        "PDF), con el motivo. No es un movimiento de nómina."),
-            ("nuevo", "Motivo del cambio: se pide solo cuando el cambio afecta a "
-                        "contratos. «Error humano» corrige un error de tecleo sin dejar "
-                        "rastro en el histórico (queda en Auditoría) y anula el cambio "
-                        "equivocado anterior."),
-            ("nuevo", "Histórico del trabajador: interruptor «Incluir cambios externos» "
-                        "para ver solo los movimientos de nómina o también los cambios."),
-            ("nuevo", "Triángulos de problemas: rojo (crítico) en cascada en el Gestor de "
-                        "plantilla, de contrato a cargo, departamento y unidad; ámbar "
-                        "(alto) en el contrato o el cargo. En Contratos, la fila crítica "
-                        "se enmarca en rojo. Al pulsar el triángulo se explica qué pasa y "
-                        "cómo se soluciona. Nuevo filtro «Con problemas»."),
-            ("mejorado", "Las advertencias se mantienen al día solas: al guardar un "
-                        "contrato, una ficha o un cargo se revisan sus reglas, el primer "
-                        "inicio de sesión del día lanza la revisión completa y, al entrar, "
-                        "Administradores y Moderadores ponen al día su campana (cada 4 h)."),
-            ("mejorado", "Al cambiar «Ocupa plaza» de un tipo de contrato se recuentan las "
-                        "plazas, y un movimiento de unidad actualiza la unidad de la ficha. "
-                        "Al pasar un cargo a Cuadro se le quitan el rol y el tridente."),
-            ("nuevo", "Subsanación: reglas nuevas para el fondo de tiempo y el porcentaje "
-                        "de horas extras (CFG-004), la escala salarial incompleta (CFG-005) "
-                        "y el cargo sin rol (EST-008). Rojo = criticidad Crítica en toda la "
-                        "aplicación."),
-            ("corregido", "El vencimiento de contrato de Subsanación contaba la duración en "
-                        "meses: ahora en días, como el Word y el recordatorio, y avisa "
-                        "desde el mismo día del vencimiento."),
-            ("corregido", "La Pre-Nómina no podía crearse con un instructor de 100 o más "
-                        "(tope de 99,99) y guardaba Maestría y Doctorado sin centavos."),
-            ("eliminado", "El Tridente I por defecto: un contrato dinámico sin tridente se "
-                        "queda sin él y se avisa hasta que RRHH elija el correcto. Y las "
-                        "reglas CTR-007 y CTR-019, que ya no pueden darse."),
-            ("seguridad", "Las pantallas de Nomencladores y Configuración ya exigen el token "
-                        "CSRF: una página ajena no puede cambiar datos en nombre de un "
-                        "administrador con la sesión abierta."),
-        ],
-    },
-
 ]
 
 # Versión vigente: siempre la primera entrada de la lista.

@@ -91,7 +91,10 @@ ICONO_POR_CRITICIDAD = {
 #        a superar el número de registros y el índice quedaba pegado a cero, con lo que
 #        dejaba de servir para ver si la base mejoraba o empeoraba.
 #   2 -> porcentaje de registros limpios. Ver `servicios.indice_desde_afectados()`.
-VERSION_INDICE_SALUD = 2
+#   3 -> lo mismo, sin contar las reglas Informativas (19-11-2026), que no son
+#        problemas: con ellas la nota bajaba por datos pendientes (906 cargos sin
+#        orden de prioridad). Ver `servicios.codigos_que_no_cuentan()`.
+VERSION_INDICE_SALUD = 3
 
 
 # ---------------------------------------------------------------------------

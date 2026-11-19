@@ -90,9 +90,8 @@ class ModeradorSinLasSubunidadesDeSuPrincipal(ReglaRepartoDeUnidades):
         'Informes, Dashboard, Pre-Nómina ni Notificaciones, y no puede declarar su '
         'cierre mensual. Nada se lo advierte: para él, esa gente no existe.')
     solucion = (
-        'Ejecute «manage.py sincronizar_unidades» para repararlo de una vez, o '
-        'abra la ficha del usuario en Administración → Usuarios y vuelva a '
-        'guardarla: al guardar, las subunidades entran solas.')
+        'Abra la ficha del usuario en Administración → Usuarios y vuelva a guardarla: '
+        'al guardar, las subunidades de su Unidad Principal entran solas.')
 
     def ejecutar(self, contexto):
         hijas_de, asignadas, nombre_de = self._mapa()

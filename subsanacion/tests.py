@@ -1690,6 +1690,26 @@ class ContratoDeterminadoVencidoTests(TestCase):
 
         self.assertNotIn(str(contrato.pk), self.hallazgos())
 
+    def test_la_duracion_cuenta_desde_el_ultimo_movimiento(self):
+        """Caso Arisbel (18-11-2026): renovar es un movimiento de nómina con los días
+        nuevos; el contrato ya no está vencido aunque lo estuviera desde la F. de
+        Contratación. Lo mismo vale para el vencimiento del contrato y el recordatorio."""
+        from contratos.models import TMovimiento
+        contrato = self._contrato('90010100006', date.today() - timedelta(days=400), 180)
+        self.assertIn(str(contrato.pk), self.hallazgos())
+        renovacion = date.today() - timedelta(days=45)
+        TMovimiento.objects.create(
+            aspirante=contrato.aspirante, contrato=contrato, no_expediente='0001',
+            fecha_efectiva=renovacion, tipo_movimiento='Movimiento de Nómina',
+            cargo_anterior='X', cargo_nuevo='X', salario_anterior=1, salario_nuevo=1, duracion_nueva=180)
+        self.assertNotIn(str(contrato.pk), self.hallazgos())
+        contrato = CAlta.objects.get(pk=contrato.pk)
+        self.assertEqual(contrato.inicio_periodo, renovacion)
+        self.assertEqual(contrato.fecha_vencimiento, renovacion + timedelta(days=180))
+        from contratos.models import con_inicio_del_periodo
+        self.assertEqual(con_inicio_del_periodo(CAlta.objects.filter(pk=contrato.pk)).get().fecha_vencimiento,
+                         renovacion + timedelta(days=180))
+
     def test_ignora_los_contratos_sin_duracion(self):
         """Sin duración el contrato es indeterminado: no vence."""
         contrato = self._contrato('90010100004', date.today() - timedelta(days=400), None)

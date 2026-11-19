@@ -77,6 +77,15 @@ class Configuracion(Base):
         validators=[MinValueValidator(2), MaxValueValidator(99)],
         verbose_name="Años de auditoría a conservar")
 
+    #?AÑOS DE SERVICIO
+    # Desde qué día se reclaman los cambios de años de servicio sin movimiento de
+    # nómina (decisión de RRHH del 19-11-2026: solo los aniversarios a partir de la
+    # actualización que trajo el aviso; los anteriores no). Lo pone la migración
+    # `configuracion.0009`. Ver `contratos/annos_servicio.py`.
+    annos_servicio_avisos_desde = models.DateField(
+        null=True, blank=True, editable=False,
+        verbose_name="Avisos de años de servicio desde")
+
     class Meta:
         verbose_name = ("Configuracion")
         verbose_name_plural = ("Configuraciones")

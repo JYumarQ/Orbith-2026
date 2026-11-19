@@ -1,59 +1,58 @@
-{% comment %} Pestaña «Supervisión» (solo Administrador, 25-10-2026): los avisos que
-   recibieron los moderadores, una fila por aviso, con quién lo ha leído. Es de solo
-   lectura: el Administrador no marca nada por nadie (su propia bandeja es la pestaña
-   «Notificaciones»). La construye `notificaciones/views.py::_contexto_tab_supervision`. {% endcomment %}
+{% comment %} Pestaña «Supervisión» (solo Administrador): por moderador, lo que tiene
+   sin leer de lo que hay que hacer, regla a regla (18-11-2026). Cada regla se abre
+   (`supervision_grupo`). Es de solo lectura: el Administrador no marca nada por
+   nadie. La construye `notificaciones/views.py::_contexto_tab_supervision`. {% endcomment %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
   <p class="text-muted small mb-0">
-    <i class="bx bx-show me-1"></i>Lo que recibieron los moderadores y si ya lo leyeron. Solo consulta: desde aquí no se marca nada.
+    <i class="bx bx-show me-1"></i>Lo que tienen pendiente los moderadores. Solo consulta: desde aquí no se marca nada.
   </p>
   <div class="btn-group btn-group-sm" role="group" aria-label="Qué avisos ver">
     <a class="btn {% if sub_supervision == 'pendientes' %}btn-primary{% else %}btn-outline-primary{% endif %}"
-       href="?tab=supervision&sub=pendientes">Sin leer por algún moderador</a>
+       href="?tab=supervision&sub=pendientes">Con pendientes</a>
     <a class="btn {% if sub_supervision == 'todos' %}btn-primary{% else %}btn-outline-primary{% endif %}"
        href="?tab=supervision&sub=todos">Todos</a>
   </div>
 </div>
 
-<div class="card orb-tabla-card">
-  <div class="orb-tabla-scroll">
-    <table class="table orb-tabla">
-      <thead>
-        <tr>
-          <th>Fecha</th>
-          <th class="text-wrap" style="min-width: 320px;">Aviso</th>
-          <th>Unidad</th>
-          <th>Moderadores</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for aviso in supervision %}
-        <tr>
-          <td class="text-nowrap">{{ aviso.fecha|date:"d/m/Y" }}<br><small class="text-muted">{{ aviso.fecha|date:"H:i" }}</small></td>
-          <td class="text-wrap">
-            <div class="fw-semibold">{{ aviso.titulo }}</div>
-            <small class="text-muted">{{ aviso.mensaje|truncatechars:220 }}</small>
-          </td>
-          <td class="text-wrap"><small>{{ aviso.unidad__descripcion|default:'—' }}</small></td>
-          <td>
-            <div class="d-flex flex-wrap gap-1">
-              {% for m in aviso.moderadores %}
-                <span class="badge {% if m.leido %}bg-label-success{% else %}bg-label-warning{% endif %}" style="text-transform: none;"
-                      title="{% if m.leido %}Leído{% else %}Sin leer{% endif %}">
-                  <i class="bx {% if m.leido %}bx-check{% else %}bx-time-five{% endif %} me-1"></i>{{ m.usuario }}
-                </span>
-              {% endfor %}
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="4" class="text-center text-muted py-5">
-            {% if sub_supervision == 'pendientes' %}Los moderadores han leído todos sus avisos.{% else %}Los moderadores no tienen avisos.{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% include 'base/partials/tabla_paginacion_enlaces.html' with pagina=supervision querystring=querystring_sin_pagina nombre='avisos' %}
-</div>
+{% for m in moderadores %}
+  <details class="orb-grupo" {% if forloop.first and m.sin_leer %}open{% endif %}>
+    <summary class="orb-grupo-cabecera">
+      <i class="bx bx-chevron-right orb-grupo-flecha" aria-hidden="true"></i>
+      <i class="bx bx-user text-muted" aria-hidden="true"></i>
+      <span class="orb-grupo-titulo">{{ m.usuario }}</span>
+      <span class="orb-grupo-cifras">
+        {% if m.sin_leer %}
+          <span class="badge bg-label-warning">{{ m.sin_leer }} pendiente{{ m.sin_leer|pluralize }}</span>
+        {% else %}
+          <span class="badge bg-label-success">Al día</span>
+        {% endif %}
+        <span class="text-muted small">{{ m.total }} aviso{{ m.total|pluralize }} en total</span>
+      </span>
+    </summary>
+    <div class="orb-grupo-cuerpo">
+      {% for g in m.grupos %}
+        <details class="orb-grupo-anidado"
+                 hx-get="{% url 'supervision_grupo' %}?moderador={{ m.id }}&tipo={{ g.tipo }}&codigo={{ g.codigo_regla|urlencode }}"
+                 hx-trigger="toggle once" hx-target="find .orb-grupo-anidado-cuerpo" hx-swap="innerHTML">
+          <summary class="orb-grupo-fila" style="cursor: pointer;">
+            <span class="orb-grupo-fila-texto">
+              {% if g.codigo_regla and g.tipo == 'ALE' %}<span class="text-muted">{{ g.codigo_regla }} ·</span>{% endif %}
+              {{ g.nombre }}
+            </span>
+            <span class="text-nowrap small">
+              {% if g.sin_leer %}<span class="badge bg-label-warning">{{ g.sin_leer }} sin leer</span>{% endif %}
+              <span class="text-muted">{{ g.total }}</span>
+            </span>
+          </summary>
+          <div class="orb-grupo-anidado-cuerpo">
+            <div class="text-muted small px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
+          </div>
+        </details>
+      {% endfor %}
+    </div>
+  </details>
+{% empty %}
+  <div class="card"><div class="card-body text-center text-muted py-5">
+    {% if sub_supervision == 'pendientes' %}Los moderadores están al día.{% else %}Los moderadores no tienen avisos.{% endif %}
+  </div></div>
+{% endfor %}

@@ -498,3 +498,30 @@ class ExcelCargosTests(TestCase):
         resultado = importar_cargos(salida, 'ACTUALIZAR')
         self.assertEqual((resultado['creados'], resultado['actualizados'], resultado['sin_cambios']),
                          ([], [], 2))
+
+
+class EspecialidadesSinNivelTests(TestCase):
+    """19-11-2026: en la empresa no había ninguna especialidad de Técnico Medio y el
+    campo salía vacío y gris sin decir por qué. Ahora lo explica."""
+
+    def setUp(self):
+        from .models import NEspecialidad
+
+        NEspecialidad.objects.create(nombre='Ing. Eléctrico', educ_superior=True)
+        self.usuario = CustomUser.objects.create_user(username='admin_esp', password='x', es_admin=True)
+        self.client.force_login(self.usuario)
+
+    def _opciones(self, nivel):
+        return self.client.get(reverse('cargar_esp'), {'nivel_educ': nivel, 'solo_opciones': '1'}).content.decode()
+
+    def test_sin_especialidades_del_nivel_lo_dice(self):
+        self.assertIn('No hay especialidades de este nivel', self._opciones('TM'))
+        self.assertIn('Ing. Eléctrico', self._opciones('NS'))
+
+    def test_en_cuanto_se_crean_se_pueden_elegir(self):
+        from .models import NEspecialidad
+
+        NEspecialidad.objects.create(nombre='T.M. Electricidad', educ_superior=False)
+        opciones = self._opciones('TM')
+        self.assertIn('T.M. Electricidad', opciones)
+        self.assertNotIn('No hay especialidades', opciones)

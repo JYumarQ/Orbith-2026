@@ -130,9 +130,39 @@ def cierres_afectados(original, propuesto):
         if despues is None:
             if cierre.pk in filas:
                 afectados.append((cierre, SALE, None))
+        elif cierre.pk in filas:
+            if not _foto_cambia(cierre, aspirante_id, despues):
+                continue
+            afectados.append((cierre, CORRIGE, despues))
         else:
-            afectados.append((cierre, CORRIGE if cierre.pk in filas else ENTRA, despues))
+            afectados.append((cierre, ENTRA, despues))
     return afectados
+
+
+#: Lo que `_volcar_historia` escribe en la fotografía: si nada de esto cambia, el mes
+#: cerrado ya está bien.
+DATOS_DE_LA_FOTO = ('ncargo_descripcion', 'departamento_descripcion', 'cat_ocupacional',
+                    'grupo_escala_nivel', 'rol_tipo', 'tipo_descripcion', 'motivo_descripcion',
+                    'tridente_tipo', 'tipo_salario', 'salario', 'fecha_alta', 'duracion',
+                    'cierre_cargo_id')
+
+
+def _foto_cambia(cierre, aspirante_id, situacion):
+    """¿La fotografía de la persona en ese cierre cambiaría con `situacion`? (18-11-2026)
+
+    Un mes cerrado solo se marca «Corregido» (y se avisa a su moderador) si de verdad
+    cambia algo. Pasaba al crear en el editor el Alta Inicial que le faltaba a un
+    contrato: el histórico de antes no tenía nada con que explicar la foto del mes,
+    aunque la foto (sacada del contrato) ya decía lo mismo."""
+    fila = (CierreContrato.objects.filter(cierre=cierre, aspirante_id_original=aspirante_id)
+            .order_by('pk').first())
+    if fila is None:
+        return True
+    copia = copy.copy(fila)
+    copia._state = copy.copy(fila._state)
+    copia._state.fields_cache = {}
+    _volcar_historia(copia, situacion, cierre)
+    return any(getattr(copia, campo) != getattr(fila, campo) for campo in DATOS_DE_LA_FOTO)
 
 
 def meses_por_evento(historico):

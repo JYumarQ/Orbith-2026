@@ -1,0 +1,22 @@
+{% comment %} Los primeros registros de un grupo de Advertencias, al abrirlo
+   (`grupo_advertencias`). Corregir lleva al registro y vuelve a este grupo; para
+   Descartar y el resto de acciones, «Ver todos» abre la tabla de siempre. {% endcomment %}
+{% for n in filas %}
+  <div class="orb-grupo-fila{% if not n.leido %} orb-grupo-fila-nueva{% endif %}">
+    <div class="orb-grupo-fila-texto">
+      {% if not n.leido %}<span class="orb-punto-nuevo" title="Nuevo"></span>{% endif %}
+      {{ n.titulo }}
+      <small class="text-muted d-block">{{ n.mensaje }}</small>
+    </div>
+    {% if n.enlace %}
+      <a href="{{ n.enlace.href }}" class="btn btn-sm btn-outline-primary text-nowrap">{{ n.enlace.etiqueta }}</a>
+    {% endif %}
+  </div>
+{% endfor %}
+<div class="orb-grupo-pie">
+  {% if total > filas|length %}
+    <a href="{{ ver_todos }}">Ver los {{ total }} en la tabla <i class="bx bx-right-arrow-alt"></i></a>
+  {% else %}
+    <a href="{{ ver_todos }}" class="text-muted">Abrir en la tabla <i class="bx bx-right-arrow-alt"></i></a>
+  {% endif %}
+</div>

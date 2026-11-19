@@ -11,7 +11,8 @@ class RankingConfig(AppConfig):
         Subsanación no sabe que estos receptores existen."""
         from subsanacion.signals import analisis_finalizado, hallazgo_revisado
 
-        from .receptores import al_finalizar_analisis, al_revisar_hallazgo
+        from .receptores import al_corregir_hallazgo, al_finalizar_analisis, al_revisar_hallazgo
 
         hallazgo_revisado.connect(al_revisar_hallazgo, dispatch_uid='ranking_hallazgo_revisado')
+        hallazgo_revisado.connect(al_corregir_hallazgo, dispatch_uid='ranking_hallazgo_corregido')
         analisis_finalizado.connect(al_finalizar_analisis, dispatch_uid='ranking_analisis_finalizado')

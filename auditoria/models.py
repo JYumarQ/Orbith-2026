@@ -57,6 +57,11 @@ class AccionAuditoria(models.TextChoices):
     ACCESO = 'ACC', 'Inicio de sesión'
     ACCESO_FALLIDO = 'ACF', 'Intento de acceso fallido'
     SALIDA = 'SAL', 'Cierre de sesión'
+    # Copia completa de la base preparada o descargada desde el admin (18-11-2026):
+    # lleva los datos personales de todos los trabajadores.
+    COPIA_BASE = 'CBD', 'Copia de la base de datos'
+    # Subir un paquete de Orbith o ensayarlo desde el admin (18-11-2026).
+    ACTUALIZACION = 'ACT', 'Actualización de Orbith'
 
 
 class EventoAuditoria(models.Model):

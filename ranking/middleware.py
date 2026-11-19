@@ -3,7 +3,7 @@ import re
 from progreso.middleware import FORMATO_POR_CONTENT_TYPE
 
 from .models import Actividad
-from .servicios import cerrar_mes_si_toca, registrar_actividad
+from .servicios import avisar_rezagados_si_toca, cerrar_mes_si_toca, registrar_actividad
 
 # Nombre del fichero en Content-Disposition (filename="..." o filename=...).
 _NOMBRE_FICHERO = re.compile(r'filename="?([^";]+)"?')
@@ -23,6 +23,7 @@ class RankingMiddleware:
 
     def __call__(self, request):
         cerrar_mes_si_toca()
+        avisar_rezagados_si_toca()
         response = self.get_response(request)
 
         usuario = getattr(request, 'user', None)

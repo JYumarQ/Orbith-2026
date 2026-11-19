@@ -7,6 +7,7 @@ pruebas cubren el "escudo" de `save()`, que es la última línea de defensa para
 cualquier guardado que no pase por el formulario (admin de Django, scripts).
 """
 
+import unittest
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -358,6 +359,23 @@ class ExportarMovimientoDesdeHistoricoTests(TestCase):
         self.assertIn('_00011.docx', respuesta['Content-Disposition'])
         self.assertIn('MOV_Ana_Perez_Gomez', respuesta['Content-Disposition'])
 
+    def test_documento_categoria_con_grupo_cifras_en_dos_lineas_y_cabecera(self):
+        """Fase 1 del 18-11-2026 (ejemplo de la empresa, exp. 75780): «T - IV», cada
+        importe con su tarifa horaria debajo y la cabecera desde Parámetros Generales."""
+        import io
+        import zipfile
+        from configuracion.models import Configuracion
+        Configuracion.objects.create(nombre_empresa='Empresa Eléctrica Camagüey', org_superior='MINEM')
+        self.client.force_login(self.admin)
+        respuesta = self.client.get(
+            reverse('imprimir_movimiento', kwargs={'pk': self.movimiento_alta_b.pk}))
+        xml = zipfile.ZipFile(io.BytesIO(respuesta.content)).read('word/document.xml').decode('utf-8')
+        self.assertIn('>T - IV<', xml)
+        self.assertRegex(xml, r'>4000\.00</w:t><w:br/><w:t[^>]*>\(')
+        self.assertIn('>MINEM<', xml)
+        self.assertIn('>Empresa Eléctrica Camagüey<', xml)
+        self.assertNotIn('{{', xml)
+
     def test_ruta_generica_es_la_que_confundia_los_trabajadores(self):
         """Documenta el bug tal cual ocurría en producción: por la ruta vieja
         (todavía viva para otros usos y por compatibilidad), el mismo pk de
@@ -559,6 +577,62 @@ class RecontratacionTrasVaciarHistoricoTests(TestCase):
         eventos_del_nuevo = [h['evento'] for h in datos if h.get('id') == nuevo_movimiento.pk]
         self.assertEqual(eventos_del_nuevo, ['Alta Inicial'])
         self.assertNotIn('Recontratación', [h['evento'] for h in datos])
+
+
+class HistoricoConContratoSinFechaTests(TestCase):
+    """Error 500 de la empresa (log del 16 y el 18-11-2026): un contrato sin F. de
+    Contratación (regla CTR-004) rompía el histórico del trabajador («Error en la red»)
+    y su PDF. Ahora el evento sale con «Sin fecha» y el primero."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(
+            descripcion='Contrato Determinado', ocupa_plaza=True, requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(nivel_educ='SA',
+            nombre='Sin', papellido='Fecha', sapellido='Prueba',
+            doc_identidad='90010112391', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.contrato = CAlta.objects.create(
+            aspirante=cls.aspirante, no_expediente='00092', tipo=cls.tipo,
+            cargo=cls.cargo, fecha_alta=None)
+        cls.admin = CustomUser.objects.create_user(
+            username='admin_sin_fecha', password='x', es_admin=True)
+
+    def setUp(self):
+        self.client.force_login(self.admin)
+
+    def _historico(self):
+        respuesta = self.client.get(
+            reverse('historico_trabajador', kwargs={'aspirante_id': self.aspirante.pk}))
+        self.assertEqual(respuesta.status_code, 200)
+        return respuesta.json()['data']
+
+    def test_contrato_sin_fecha_y_sin_movimientos(self):
+        """El caso del log: un solo evento, sin fecha (fallaba en `strftime`)."""
+        datos = self._historico()
+        self.assertEqual(len(datos), 1)
+        self.assertEqual(datos[0]['evento'], 'Alta Inicial')
+        self.assertEqual(datos[0]['fecha_inicio_str'], 'Sin fecha')
+        self.assertTrue(datos[0]['sin_fecha'])
+
+    def test_contrato_sin_fecha_con_movimientos(self):
+        """Con más eventos fallaba al ordenarlos (fecha vacía frente a fecha)."""
+        TMovimiento.objects.create(
+            aspirante=self.aspirante, contrato=self.contrato, no_expediente='00092',
+            fecha_efectiva=date(2025, 3, 1), cargo_anterior='Especialista B',
+            cargo_nuevo='Especialista B', salario_anterior=4000, salario_nuevo=4500,
+            tipo_movimiento='Movimiento')
+        datos = self._historico()
+        self.assertEqual([d['fecha_inicio_str'] for d in datos], ['Sin fecha', '01/03/2025'])
+        self.assertEqual(datos[0]['fecha_fin'], '28/02/2025')
+        self.assertFalse(datos[1]['sin_fecha'])
+
+    def test_el_pdf_tambien_se_genera(self):
+        respuesta = self.client.get(
+            reverse('exportar_historico_pdf', kwargs={'aspirante_id': self.aspirante.pk}))
+        self.assertEqual(respuesta.status_code, 200)
 
 
 class AvisoOrigenEdicionTests(TestCase):
@@ -1515,6 +1589,49 @@ class FechaEfectivaDeFirmaTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.context['form'].initial['fecha_efectiva'], date(2026, 9, 20))
 
+    def _documento(self, tipo, **extra):
+        import io
+        import zipfile
+        from configuracion.models import Configuracion
+        Configuracion.objects.get_or_create(nombre_empresa='Empresa Eléctrica Camagüey',
+                                            defaults={'direccion': 'Circunvalación Norte'})
+        import uuid
+        admin = CustomUser.objects.create_user(username='admin_doc_%s' % uuid.uuid4().hex[:8], password='x', es_admin=True)
+        self.client.force_login(admin)
+        datos = {'tipo_documento': tipo, 'fecha_efectiva': '2026-09-20', 'observaciones': 'x', **extra}
+        respuesta = self.client.post(reverse('exportar_contrato_word', kwargs={'pk': self.contrato.pk}), datos)
+        xml = zipfile.ZipFile(io.BytesIO(respuesta.content)).read('word/document.xml').decode('utf-8')
+        import re
+        return ''.join(re.findall(r'<w:t[^>]*>([^<]*)</w:t>', xml))
+
+    @unittest.skip('Plantillas nuevas de Contrato y Modificación: entran en la 3.10.1, '
+                   'cuando RRHH las mande corregidas (las de la 3.9.2 siguen en uso).')
+    def test_contrato_segun_el_procedimiento_nuevo(self):
+        """Procedimiento OC-PH 0503 nuevo (18-11-2026): empresa con domicilio, lugar de
+        trabajo, «persona trabajadora», sin Cuadro y con Trabajador de Confianza."""
+        texto = self._documento('creacion')
+        self.assertIn('DE UNA PARTE: Empresa Eléctrica Camagüey, con domicilio legal en Circunvalación Norte', texto)
+        self.assertIn('PRIMERO: El lugar de trabajo donde la persona trabajadora desempeñará sus funciones será: '
+                      'Contabilidad, UEB Central', texto)
+        self.assertIn('PERSONA TRABAJADORA', texto)
+        self.assertIn('DECIMOSEXTO', texto)
+        self.assertIn('Impuesto sobre Ingresos Personales', texto)
+        self.assertIn('Modalidad de trabajo: Trabajo a Distancia () Teletrabajo () Pluriempleo () Presencial (X)', texto)
+        self.assertIn('Trabajador de Confianza', texto)
+        self.assertNotIn('Cuadro', texto)
+        self.assertNotIn('{{', texto)
+
+    @unittest.skip('Plantillas nuevas de Contrato y Modificación: entran en la 3.10.1, '
+                   'cuando RRHH las mande corregidas (las de la 3.9.2 siguen en uso).')
+    def test_modificacion_marca_la_modalidad_del_contrato(self):
+        texto = self._documento('modificacion')
+        self.assertIn('Teletrabajo () Pluriempleo () Presencial (X)', texto)
+        CAlta.objects.filter(pk=self.contrato.pk).update(teletrabajo=True, pluriempleo=True)
+        texto = self._documento('modificacion')
+        self.assertIn('Teletrabajo (X) Pluriempleo (X) Presencial ()', texto)
+        self.assertIn('se denominará Persona Trabajadora', texto)
+        self.assertNotIn('{{', texto)
+
     def test_la_fecha_minima_de_la_baja_usa_el_mismo_criterio(self):
         self._movimiento(date(2026, 9, 20), expediente='1213')
         self.assertEqual(self.contrato.fecha_ultima_accion, date(2026, 9, 20))
@@ -2279,10 +2396,15 @@ class ConfianzaResolucionesYOtrosTests(TestCase):
         # El cargo nuevo no es Designado: su número deja de aplicar y se vacía.
         self.assertIsNone(self.contrato.designado_res)
 
-    def test_solo_escribir_resoluciones_no_es_un_movimiento(self):
+    def test_un_movimiento_sin_cambios_pide_confirmacion(self):
+        """Desde el 19-11-2026 se permite, pero preguntando antes (años de servicio)."""
         respuesta = self._movimiento(self.cargo, funcionario_res='11/26')
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn('No se ha aplicado ningún cambio', respuesta.json()['error_popup'])
+        self.assertIn('no cambia ningún dato del contrato', respuesta.json()['confirmar_sin_cambios'])
+        self.assertFalse(self.contrato.trazabilidad.filter(tipo_movimiento='Movimiento de Nómina').exists())
+        respuesta = self._movimiento(self.cargo, confirmar_sin_cambios='1')
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        self.assertTrue(self.contrato.trazabilidad.filter(tipo_movimiento='Movimiento de Nómina').exists())
 
     def test_otros_queda_congelado_en_el_movimiento(self):
         from decimal import Decimal
@@ -2410,3 +2532,116 @@ class ExpedienteUnicoDeLaPersonaTests(TestCase):
         formulario = CAltaForm(data={'no_expediente': '07777'}, aspirante=self.persona)
         formulario.is_valid()
         self.assertIn('ya pertenece a Otro Gil Sol', formulario.errors['no_expediente'][0])
+
+
+class CambioDeAnnosDeServicioTests(TestCase):
+    """Años de servicio (decisión de RRHH del 19-11-2026): aviso 10 días antes solo si
+    cambia el importe, CTR-025 desde el día sin movimiento, «Otros» congelado a la
+    fecha efectiva y el botón que abre el movimiento con la fecha puesta."""
+
+    @classmethod
+    def setUpTestData(cls):
+        from decimal import Decimal
+        from configuracion.models import Configuracion
+        from prenomina.models import NEscalaAnnosServicio
+        for annos, cuantia in ((1, '200'), (2, '400'), (3, '400'), (4, '600')):
+            NEscalaAnnosServicio.objects.update_or_create(annos=annos, defaults={'cuantia': Decimal(cuantia)})
+        cls.hoy = timezone.localdate()
+        Configuracion.objects.create(nombre_empresa='Empresa',
+                                     annos_servicio_avisos_desde=cls.hoy - timedelta(days=30))
+        cls.cargo = _crear_departamento_con_cargo()
+        provincia, municipio = _crear_provincia_municipio()
+        cls.tipo = NTipoContrato.objects.create(descripcion='Indeterminado', ocupa_plaza=True,
+                                                requiere_motivo=False)
+        cls.aspirante = Aspirante.objects.create(
+            nivel_educ='SA', nombre='Ana', papellido='Anos', sapellido='Servicio',
+            doc_identidad='80010114099', estado='ACTIVO', sexo='F', raza='BL',
+            provincia=provincia, municipio=municipio)
+        cls.admin = CustomUser.objects.create_user(username='admin_annos', password='x', es_admin=True)
+
+    def _contrato(self, aniversario_en_dias, annos=2):
+        """Contrato cuyo aniversario de `annos` años cae dentro de `aniversario_en_dias`."""
+        from contratos.annos_servicio import aniversario
+        dia = self.hoy + timedelta(days=aniversario_en_dias)
+        base = dia.replace(year=dia.year - annos)
+        contrato = CAlta.objects.create(
+            aspirante=self.aspirante, no_expediente='01499', tipo=self.tipo, cargo=self.cargo,
+            tipo_salario='FIJ', fecha_alta=self.hoy - timedelta(days=60), fecha_alta_entidad=base)
+        TMovimiento.objects.create(contrato=contrato, aspirante=self.aspirante, no_expediente='01499',
+                                   fecha_efectiva=self.hoy - timedelta(days=60), cargo_anterior='---',
+                                   cargo_nuevo='x', salario_anterior=0, salario_nuevo=4000,
+                                   tipo_movimiento='Alta Inicial')
+        self.assertEqual(aniversario(base, annos), dia)
+        return contrato, dia
+
+    def _detectados(self):
+        from notificaciones.recordatorios import detectar_proximo_aniversario_antiguedad
+        return list(detectar_proximo_aniversario_antiguedad())
+
+    def test_los_cambios_de_importe_y_el_29_de_febrero(self):
+        from contratos.annos_servicio import aniversario, cambios_de_importe
+        cambios = cambios_de_importe(date(2020, 3, 10), date(2021, 1, 1), date(2023, 12, 31))
+        self.assertEqual([(c[0], c[1]) for c in cambios], [(date(2021, 3, 10), 1), (date(2022, 3, 10), 2)])
+        self.assertEqual(aniversario(date(2020, 2, 29), 1), date(2021, 3, 1))
+
+    def test_aviso_10_dias_antes_solo_si_cambia_el_importe(self):
+        self._contrato(5)                                    # 2 años: 200 -> 400
+        detectados = self._detectados()
+        self.assertEqual(len(detectados), 1)
+        self.assertIn('pasa de 200.00 a 400.00', detectados[0].mensaje)
+        CAlta.objects.all().delete()
+        self._contrato(5, annos=3)                           # 3 años: 400 -> 400, no cambia
+        self.assertEqual(self._detectados(), [])
+        CAlta.objects.all().delete()
+        self._contrato(20)                                   # falta más de 10 días
+        self.assertEqual(self._detectados(), [])
+
+    def test_pasado_el_dia_sigue_hasta_el_movimiento_y_ctr025(self):
+        from subsanacion.reglas.contratos import CambioDeAnnosDeServicioSinMovimiento
+        contrato, dia = self._contrato(-3)
+        self.assertIn('cumplió', self._detectados()[0].mensaje)
+        self.assertEqual([h.object_id for h in CambioDeAnnosDeServicioSinMovimiento().ejecutar(None)],
+                         [str(contrato.pk)])
+        TMovimiento.objects.create(contrato=contrato, aspirante=self.aspirante, no_expediente='01499',
+                                   fecha_efectiva=dia, cargo_anterior='x', cargo_nuevo='x',
+                                   salario_anterior=4000, salario_nuevo=4000,
+                                   tipo_movimiento='Movimiento de Nómina')
+        self.assertEqual(self._detectados(), [])
+        self.assertEqual(list(CambioDeAnnosDeServicioSinMovimiento().ejecutar(None)), [])
+
+    def test_los_aniversarios_anteriores_a_la_actualizacion_no_se_reclaman(self):
+        from subsanacion.reglas.contratos import CambioDeAnnosDeServicioSinMovimiento
+        self._contrato(-40)                                  # antes de «avisos_desde» (hace 30 días)
+        self.assertEqual(self._detectados(), [])
+        self.assertEqual(list(CambioDeAnnosDeServicioSinMovimiento().ejecutar(None)), [])
+
+    def test_el_movimiento_congela_otros_a_la_fecha_efectiva(self):
+        """Se registra antes del aniversario: «DE» con los años de antes y «A» con los nuevos."""
+        from decimal import Decimal
+        contrato, dia = self._contrato(3)
+        self.client.force_login(self.admin)
+        url = reverse('movimiento_contrato', args=[contrato.pk])
+        formulario = self.client.get(url + '?fecha_efectiva=%s&annos_servicio=1' % dia.isoformat()).context['form']
+        self.assertEqual(formulario.initial['fecha_efectiva'], dia.isoformat())
+        self.assertEqual(formulario.initial['observaciones'], 'Cambio por años de servicio (2 años).')
+        respuesta = self.client.post(url, {
+            'fecha_efectiva': dia.isoformat(), 'unidad': self.cargo.departamento.unidad_organizativa_id,
+            'departamento': self.cargo.departamento_id, 'cargo': self.cargo.pk, 'tipo': self.tipo.pk,
+            'tipo_salario': 'FIJ', 'salarioEscala': '4000', 'observaciones': 'Años de servicio',
+            'confirmar_sin_cambios': '1'}, HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertTrue(respuesta.json()['form_is_valid'], respuesta.content[:300])
+        movimiento = contrato.trazabilidad.get(tipo_movimiento='Movimiento de Nómina')
+        self.assertEqual((movimiento.otros_anterior, movimiento.otros_nuevo),
+                         (Decimal('200.00'), Decimal('400.00')))
+        self.assertEqual(self._detectados(), [])
+
+    def test_el_boton_del_aviso_lleva_la_fecha(self):
+        from django.contrib.contenttypes.models import ContentType
+        from notificaciones.models import Notificacion
+        from notificaciones.views import _con_enlace
+        contrato, dia = self._contrato(5)
+        aviso = Notificacion(content_type=ContentType.objects.get_for_model(CAlta), object_id=str(contrato.pk),
+                             codigo_regla='REC-ANTIGUEDAD', fecha_objetivo=dia)
+        enlace = _con_enlace(aviso, usuario=self.admin).enlace
+        self.assertEqual(enlace['etiqueta'], 'Hacer el movimiento de años de servicio')
+        self.assertIn('fecha_efectiva=%s&annos_servicio=1' % dia.isoformat(), enlace['href'])

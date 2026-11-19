@@ -1,0 +1,40 @@
+{% comment %} Advertencias agrupadas por regla (decisión de RRHH del 18-11-2026): una
+   línea por regla con su gravedad, los registros afectados y cuántos son nuevos (sin
+   leer) para quien mira. Al abrirla se cargan sus primeros registros
+   (`grupo_advertencias`) con el enlace «Ver todos». `abrir` llega desde la campana y
+   abre ese grupo al cargar. Estilos en static/css/orbith-avisos.css. {% endcomment %}
+{% for g in grupos %}
+  <details class="orb-grupo" id="grupo-{{ g.codigo_regla }}" {% if g.codigo_regla == abrir %}open{% endif %}
+           hx-get="{% url 'grupo_advertencias' %}?{{ filtros_qs }}&regla={{ g.codigo_regla|urlencode }}"
+           hx-trigger="{% if g.codigo_regla == abrir %}load{% else %}toggle once{% endif %}"
+           hx-target="find .orb-grupo-cuerpo" hx-swap="innerHTML">
+    <summary class="orb-grupo-cabecera">
+      <i class="bx bx-chevron-right orb-grupo-flecha" aria-hidden="true"></i>
+      {% if g.gravedad == 10 or g.gravedad is None %}<span class="badge bg-danger">Crítica</span>
+      {% elif g.gravedad == 20 %}<span class="badge bg-warning">Alta</span>
+      {% elif g.gravedad == 30 %}<span class="badge bg-info">Media</span>
+      {% else %}<span class="badge bg-secondary">Baja</span>{% endif %}
+      <span class="orb-grupo-titulo">
+        {% if g.codigo_regla and g.codigo_regla != 'ALE-CRITICAS' %}<span class="text-muted">{{ g.codigo_regla }} ·</span>{% endif %}
+        {{ g.nombre }}
+      </span>
+      <span class="orb-grupo-cifras">
+        <span class="text-muted small">{{ g.registros }} registro{{ g.registros|pluralize }}</span>
+        {% if g.nuevos %}
+          <span class="badge bg-label-primary">{{ g.nuevos }} nuevo{{ g.nuevos|pluralize }}</span>
+          <button type="button" class="btn btn-sm btn-link p-0 orb-grupo-leer" title="Marcar como leídos los nuevos de esta regla"
+                  hx-post="{% url 'notificaciones_marcar_grupo_leido' %}" hx-vals='{"grupo": "ALE:{{ g.codigo_regla }}"}'
+                  hx-swap="none" hx-on::after-request="orbithAvisosRecargar()">Marcar leídos</button>
+        {% endif %}
+      </span>
+    </summary>
+    <div class="orb-grupo-cuerpo">
+      <div class="text-muted small px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
+    </div>
+  </details>
+{% empty %}
+  <div class="card"><div class="card-body text-center text-muted py-5">
+    <i class="bx bx-check-shield fs-3 d-block mb-2"></i>
+    No hay advertencias{% if hay_filtros %} con este filtro{% endif %}.
+  </div></div>
+{% endfor %}

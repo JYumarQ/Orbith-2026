@@ -63,6 +63,7 @@
     <link rel="stylesheet" href="{% estatico 'css/guia-orbith.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/ranking-orbith.css' %}">
     <link rel="stylesheet" href="{% estatico 'css/orbith-tablas.css' %}">
+    <link rel="stylesheet" href="{% estatico 'css/orbith-avisos.css' %}">
 
     {% block extra_head %}{% endblock %}
 
@@ -294,6 +295,18 @@
       document.body.addEventListener('htmx:configRequest', function (e) {
         var m = document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)');
         if (m) { e.detail.headers['X-CSRFToken'] = m.pop(); }
+      });
+
+      /* Ventanas que se rellenan desde el servidor cada vez que se abren
+         (`data-vaciar-al-cerrar`): al cerrarse se vacían (18-11-2026). Si no, su
+         formulario se quedaba escondido en la página y, al abrir otra ventana con los
+         mismos campos (Editar y luego Crear usuario o contrato), el código actuaba
+         sobre la escondida: no salían los Permisos especiales, ni los motivos del
+         contrato… Solo la propia ventana (`e.target === this`), no una interior. */
+      document.addEventListener('hidden.bs.modal', function (e) {
+        if (e.target.hasAttribute && e.target.hasAttribute('data-vaciar-al-cerrar')) {
+          if (window.jQuery) jQuery(e.target).empty(); else e.target.innerHTML = '';
+        }
       });
     </script>
 

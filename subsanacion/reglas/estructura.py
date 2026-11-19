@@ -210,18 +210,30 @@ class ReglaOrdenDePrioridad(ReglaBase):
     causa_probable = (
         'El campo es opcional a nivel de base de datos, así que puede quedar '
         'vacío al crear el registro.')
+    # Cada regla dice cómo se ordena SIN número (19-11-2026): antes este texto
+    # afirmaba que la posición «no estaba garantizada», y sí lo está (ver el
+    # `Meta.ordering` de cada modelo).
     impacto = (
-        'El orden de prioridad decide en qué posición aparece el registro en '
-        'el organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él, '
-        'su posición en esos listados depende del orden en que la base de '
-        'datos devuelva las filas, que no está garantizado.')
-    solucion = 'Abra el registro y asigne su orden de prioridad dentro de su nivel.'
+        'El orden de prioridad decide en qué posición aparece el registro en el '
+        'organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él no queda '
+        'desordenado: va detrás de los que tienen número.')
+    solucion = (
+        'Si la posición actual le sirve, no hace falta hacer nada. Si no, abra el '
+        'registro y asigne su orden de prioridad dentro de su nivel.')
 
 
 class UnidadSinOrdenDePrioridad(ReglaOrdenDePrioridad):
     codigo = 'EST-004'
     nombre = 'Unidad organizativa sin orden de prioridad'
     modelo = 'strorganizativa.UnidadOrganizativa'
+    solucion = (
+        'Si la posición actual le sirve, no hace falta hacer nada. Si no, abra la '
+        'unidad y asigne su orden de prioridad dentro de su nivel.')
+    impacto = (
+        'El orden de prioridad decide en qué posición aparece la unidad en el '
+        'organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él no queda '
+        'desordenado: va detrás de los que tienen número, por nombre. Solo hace falta '
+        'ponerlo si se quiere otra posición (por ejemplo, la Dirección la primera).')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -244,6 +256,15 @@ class DepartamentoSinOrdenDePrioridad(ReglaOrdenDePrioridad):
     codigo = 'EST-005'
     nombre = 'Departamento sin orden de prioridad'
     modelo = 'strorganizativa.Departamento'
+    solucion = (
+        'Si la posición actual le sirve, no hace falta hacer nada. Si no, abra el '
+        'departamento y asigne su orden de prioridad dentro de su nivel.')
+    impacto = (
+        'El orden de prioridad decide en qué posición aparece el departamento en el '
+        'organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él no queda '
+        'desordenado: va detrás de los que tienen número, en el orden en que se '
+        'crearon. Solo hace falta ponerlo si se quiere otra posición (por ejemplo, la '
+        'Dirección la primera).')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -265,6 +286,14 @@ class CargoSinOrdenDePrioridad(ReglaOrdenDePrioridad):
     codigo = 'EST-006'
     nombre = 'Cargo sin orden de prioridad'
     modelo = 'strorganizativa.CargoPlantilla'
+    solucion = (
+        'Si la posición actual le sirve, no hace falta hacer nada. Si no, abra el cargo '
+        'y asigne su orden de prioridad dentro de su nivel.')
+    impacto = (
+        'El orden de prioridad decide en qué posición aparece el cargo en el '
+        'organigrama, en el Gestor de Plantilla y en el Anexo 17. Sin él no queda '
+        'desordenado: va detrás de los que tienen número, por nombre. Solo hace falta '
+        'ponerlo si se quiere otra posición (por ejemplo, el Director el primero).')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()

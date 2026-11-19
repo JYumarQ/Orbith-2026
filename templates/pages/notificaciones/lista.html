@@ -32,13 +32,13 @@
         {% endif %}
       </h4>
       <small class="text-muted">
-        Eventos informativos y advertencias de integridad, separados por pestaña.
+        Lo que hay que hacer, agrupado por regla y por tipo; y la actividad de cada día.
       </small>
     </div>
 
-    {% if total_no_leidas %}
-      <span class="badge bg-label-danger fs-6">
-        {{ total_no_leidas }} sin leer
+    {% if total_pendientes %}
+      <span class="badge bg-label-danger fs-6" title="Lo mismo que el número de la campana: lo que hay que hacer">
+        {{ total_pendientes }} pendiente{{ total_pendientes|pluralize }}
       </span>
     {% endif %}
 
@@ -100,6 +100,15 @@
     return coincidencia ? decodeURIComponent(coincidencia.pop()) : null;
   }
   const csrftoken = obtenerCookie('csrftoken');
+
+  // «Marcar leídos» de un grupo: vuelve a pedir los resultados de la pestaña (sin
+  // recargar la página) y pone al día el número de la campana.
+  window.orbithAvisosRecargar = function () {
+    if (window.orbithActualizarCampana) window.orbithActualizarCampana();
+    const buscador = document.getElementById('search-advertencias') || document.getElementById('search-recordatorios');
+    if (buscador) htmx.trigger(buscador, 'searchFilters');
+    else window.location.reload();
+  };
 
   const btnTodas = document.getElementById('btn-marcar-todas-lista');
   if (btnTodas) {

@@ -474,12 +474,42 @@ class CAlta(ContratoBase):
         servicio. El movimiento lo CONGELA al crearse (`TMovimiento.otros_*`)."""
         return (self.importe_maestria + self.importe_doctorado + self.importe_instructor
                 + self.importe_cnci + self.importe_annos_servicio)
+
+    def importe_otros_a(self, fecha):
+        """«Otros» con los años de servicio que tiene a `fecha` (19-11-2026). El
+        movimiento congela «A» a su fecha efectiva y «DE» al día anterior: así sale
+        bien aunque se registre antes del aniversario."""
+        from .annos_servicio import annos_y_pago
+        _, pago = annos_y_pago(self.fecha_alta_entidad, fecha)
+        return self.importe_otros - self.importe_annos_servicio + (pago or Decimal('0.00'))
     
     @property
+    def inicio_periodo(self):
+        """Desde cuándo cuenta la duración del contrato (decisión de RRHH del 18-11-2026).
+
+        Renovar a una persona es un movimiento de nómina con los días nuevos (o el paso a
+        Indeterminado), así que la duración cuenta desde la fecha efectiva del ÚLTIMO
+        movimiento del contrato; sin movimientos, desde la F. de Contratación. Antes
+        contaba siempre desde la F. de Contratación y CTR-018 daba por vencidos
+        contratos ya renovados. Usa `ultimo_movimiento` si viene anotado
+        (`con_inicio_del_periodo`), para no hacer una consulta por contrato.
+        """
+        if 'ultimo_movimiento' in self.__dict__:
+            ultimo = self.ultimo_movimiento
+        elif self.pk:
+            ultimo = (self.trazabilidad.exclude(tipo_movimiento=TIPO_MOVIMIENTO_BAJA)
+                      .order_by('-fecha_efectiva').values_list('fecha_efectiva', flat=True).first())
+        else:
+            ultimo = None
+        fechas = [f for f in (self.fecha_alta, ultimo) if f]
+        return max(fechas) if fechas else None
+
+    @property
     def fecha_vencimiento(self):
-        if not self.fecha_alta or self.duracion is None:
+        inicio = self.inicio_periodo
+        if not inicio or self.duracion is None:
             return None
-        return self.fecha_alta + timedelta(days=self.duracion)
+        return inicio + timedelta(days=self.duracion)
 
     @property
     def dias_restantes(self):
@@ -994,6 +1024,16 @@ class TMovimientoAgrupado(TMovimiento):
         proxy = True
         verbose_name = "T Movimiento"
         verbose_name_plural = "T Movimientos"
+
+
+def con_inicio_del_periodo(queryset):
+    """Anota en cada contrato `ultimo_movimiento`: la fecha efectiva de su último
+    movimiento (sin contar bajas). Con ella `CAlta.inicio_periodo` y
+    `CAlta.fecha_vencimiento` no hacen una consulta por contrato."""
+    ultimo = (TMovimiento.objects.filter(contrato_id=models.OuterRef('pk'))
+              .exclude(tipo_movimiento=TIPO_MOVIMIENTO_BAJA)
+              .order_by('-fecha_efectiva').values('fecha_efectiva')[:1])
+    return queryset.annotate(ultimo_movimiento=models.Subquery(ultimo))
 
 
 # ==================== BORRADO DE TMOVIMIENTO DESDE EL ADMIN ====================

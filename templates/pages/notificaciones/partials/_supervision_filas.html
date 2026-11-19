@@ -1,0 +1,14 @@
+{% comment %} Supervisión: los avisos de un moderador y una regla, sin leer primero
+   (`supervision_grupo`). Solo lectura. {% endcomment %}
+{% for n in avisos %}
+  <div class="orb-grupo-fila" style="padding-left: 3.4rem;">
+    <div class="orb-grupo-fila-texto">
+      {% if n.leido %}<i class="bx bx-check text-success" title="Leído"></i>{% else %}<i class="bx bx-time-five text-warning" title="Sin leer"></i>{% endif %}
+      {{ n.titulo }}
+      <small class="text-muted d-block">{{ n.mensaje|truncatechars:220 }} · {{ n.fecha_creado|date:"d/m/Y H:i" }}</small>
+    </div>
+  </div>
+{% endfor %}
+{% if resto %}
+  <div class="orb-grupo-pie text-muted" style="padding-left: 3.4rem;">… y {{ resto }} más.</div>
+{% endif %}

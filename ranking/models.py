@@ -19,6 +19,7 @@ class Actividad(models.TextChoices):
     SOLICITUD_APROBADA = 'SAP', 'Solicitud aprobada'
     CIERRE_EN_PLAZO = 'CIE', 'Cierre en plazo'
     HALLAZGO_REVISADO = 'HAL', 'Hallazgo revisado'
+    HALLAZGO_CORREGIDO = 'HCO', 'Hallazgo corregido'
     RECORDATORIO_COMPLETADO = 'RCO', 'Recordatorio completado a tiempo'
     SOLICITUD_DECIDIDA = 'SDE', 'Solicitud decidida'
     ANALISIS_SUBSANACION = 'ANA', 'Análisis de Subsanación'
@@ -98,8 +99,11 @@ class GanadorMes(models.Model):
     rol = models.CharField(max_length=1, choices=Rol.choices)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                 related_name='premios_ranking')
+    # 1, 2 y 3: medallas. 0: «Más mejorado del mes» (18-11-2026).
     puesto = models.PositiveSmallIntegerField()
     xp = models.PositiveIntegerField()
+    # Solo el «Más mejorado»: cuántos XP subió respecto a su mes anterior.
+    subida = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'Ganador del mes'

@@ -204,6 +204,13 @@ def eliminar(solicitud, usuario):
                 f'{solicitud.bloqueada_por_nombre} está revisando esta solicitud. '
                 'No puede retirarla en este momento.')
         raise ErrorDeSolicitud('No tiene permisos para eliminar esta solicitud.')
+    # Sus avisos se van con ella: si no, «Solicitud nueva» quedaba pendiente en la
+    # campana de los administradores, apuntando a algo que ya no existe.
+    from django.contrib.contenttypes.models import ContentType
+
+    from notificaciones.models import Notificacion
+    Notificacion.objects.filter(content_type=ContentType.objects.get_for_model(solicitud),
+                                object_id=str(solicitud.pk)).delete()
     solicitud.delete()
 
 

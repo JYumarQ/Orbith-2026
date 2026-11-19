@@ -58,10 +58,8 @@ def _bandeja(usuario):
     Las filas sin destinatario (datos anteriores al reparto) se siguen viendo por
     unidad, como antes; el Administrador, todas.
     """
-    sin_destinatario = Q(destinatario__isnull=True)
-    if not usuario.es_admin:
-        sin_destinatario &= Q(unidad__in=usuario.unidades.all())
-    return Notificacion.objects.filter(Q(destinatario=usuario) | sin_destinatario)
+    from .campana import q_bandeja
+    return Notificacion.objects.filter(q_bandeja(usuario))
 
 
 def _notificaciones_del_usuario(usuario):
@@ -82,43 +80,76 @@ def copia_propia(usuario, notificacion):
             .order_by('-fecha_creado').first())
 
 
-def _serializar(n):
-    return {
-        'id': n.pk,
-        'titulo': n.titulo,
-        'mensaje': n.mensaje,
-        'fecha': n.fecha_creado.strftime('%Y-%m-%d %H:%M'),
-        'tipo': n.tipo,
-        'severidad': n.severidad,
-        'estado': n.estado,
-        # La campana abre la ventana del Ranking con los avisos de cierre de mes.
-        'codigo_regla': n.codigo_regla,
-    }
-
-
-# Create your views here.
 def notificaciones_json(request):
-    notificaciones = _notificaciones_del_usuario(request.user)
-    data = [_serializar(n) for n in notificaciones]
-    return JsonResponse({'notificaciones': data})
+    """El número rojo de la campana (cada página y cada 5 minutos). Solo el número:
+    antes devolvía TODOS los avisos sin leer con su texto (hasta 3 000) para que el
+    navegador los contara. Cuenta solo lo accionable (`notificaciones/campana.py`).
 
-# notificaciones/views.py
+    Es también lo primero que pide cualquiera al abrir Orbith, así que aquí se lanza
+    la limpieza diaria (una vez al día, ver `limpieza.limpiar_si_toca`)."""
+    from .campana import accionables
+    from .limpieza import limpiar_si_toca
+
+    limpiar_si_toca()
+    return JsonResponse({'total': accionables(request.user).count()})
+
+def _destino_de_linea(linea):
+    """A dónde lleva una línea del desplegable de la campana."""
+    lista = reverse('lista_notificaciones')
+    tipo, codigo = linea['tipo'], linea['codigo_regla']
+    if codigo == 'RANKING':
+        return None                       # abre la ventana del Ranking
+    if codigo == 'SOL-NUEVA':
+        return reverse('list_solicitudes')
+    if codigo == 'SOL-PERS-NUEVA':
+        return reverse('list_solicitudes_personalizadas')
+    if tipo == Notificacion.Tipo.ALERTA:
+        return f'{lista}?tab=advertencias&abrir={codigo}'
+    if tipo == Notificacion.Tipo.RECORDATORIO:
+        if not codigo:
+            return f'{lista}?tab=recordatorios&sub=administracion'
+        return f'{lista}?tab=recordatorios&abrir={codigo}'
+    return f'{lista}?tab=notificaciones'
+
+
 def ultimas_notificaciones(request):
-    # Sin `.order_by()` explícito: se respeta `Meta.ordering` del modelo
-    # (`['severidad', '-fecha_creado']`), para que una alerta crítica no quede tapada
-    # por un evento reciente sin gravedad.
-    # Excepción: los avisos del Ranking Mensual van primero. Llegan una vez al mes y,
-    # sin esto, quedarían detrás de cualquier advertencia (hay usuarios con cientos)
-    # y no se verían nunca en la campana.
-    from django.db.models import Case, IntegerField, Value, When
+    """El desplegable de la campana (18-11-2026): lo que hay que hacer, AGRUPADO
+    (una línea por regla o tipo: «CTR-018 · 3 nuevos»), lo más grave primero y los
+    avisos del Ranking Mensual arriba (llegan una vez al mes y si no, no se verían).
+    Debajo, la Actividad de hoy (altas, bajas…), que no cuenta en el número."""
+    from .agrupar import lineas_de_la_campana
 
-    from ranking.avisos import CODIGO_AVISO
-    notificaciones = (_notificaciones_del_usuario(request.user)
-                      .annotate(_ranking_primero=Case(When(codigo_regla=CODIGO_AVISO, then=Value(0)),
-                                                      default=Value(1), output_field=IntegerField()))
-                      .order_by('_ranking_primero', *Notificacion._meta.ordering)[:5])
-    data = [_serializar(n) for n in notificaciones]
-    return JsonResponse({'notificaciones': data})
+    # El Observador no tiene la bandeja (`gestion_required`): sus líneas no llevan
+    # a ella, solo se marcan como leídas.
+    con_bandeja = request.user.es_admin or request.user.es_moderador
+    hoy = timezone.localdate()
+    lineas, mas, actividad = lineas_de_la_campana(request.user)
+    for linea in lineas:
+        if linea['tipo'] == Notificacion.Tipo.RECORDATORIO and not linea['codigo_regla']:
+            linea['nombre'] = 'Recordatorios de la administración'
+        destino = _destino_de_linea(linea)
+        linea['href'] = destino if con_bandeja or not (destino or '').startswith(reverse('lista_notificaciones')) else None
+        linea['vencido'] = linea['objetivo'] is not None and linea['objetivo'] <= hoy
+        linea['objetivo'] = linea['objetivo'].strftime('%d/%m/%Y') if linea['objetivo'] else None
+    return JsonResponse({
+        'lineas': lineas, 'mas': mas, 'actividad': actividad,
+        'url_bandeja': reverse('lista_notificaciones') if con_bandeja else None,
+    })
+
+
+@login_required
+@require_POST
+def marcar_grupo_leido(request):
+    """Marca como leídos los avisos de un grupo («ALE:CTR-018», «REC:REC-CONTRATO»…),
+    solo las copias de quien lo pide. Lo usan la campana al pulsar una línea y el
+    botón «Marcar leídos» de cada grupo. No resuelve nada: siguen activos hasta que
+    se corrijan."""
+    tipo, _, codigo = (request.POST.get('grupo') or '').partition(':')
+    if tipo not in Notificacion.Tipo.values:
+        return JsonResponse({'ok': False, 'mensaje': 'Grupo no válido.'}, status=400)
+    actualizadas = (_notificaciones_del_usuario(request.user)
+                    .filter(tipo=tipo, codigo_regla=codigo).update(leido=True))
+    return JsonResponse({'ok': True, 'actualizadas': actualizadas})
 
 
 @login_required
@@ -167,10 +198,18 @@ def _con_enlace(notificacion, next_url=None, origen_label=None, usuario=None):
         from subsanacion.enlaces import destino_de_regla
         from subsanacion.reglas import obtener_regla
         forzar_url, texto_boton = destino_de_regla(obtener_regla(notificacion.codigo_regla), usuario)
+    if notificacion.codigo_regla == 'REC-ANTIGUEDAD':
+        texto_boton = 'Hacer el movimiento de años de servicio'
     notificacion.enlace = construir_enlace(
         etiqueta, notificacion.object_id, forzar_url=forzar_url,
         next_url=next_url, origen_label=origen_label, usuario=usuario, etiqueta=texto_boton
     ) if etiqueta else None
+    # Años de servicio (19-11-2026): el movimiento se abre con la fecha del aniversario
+    # y la observación ya puestas.
+    if notificacion.enlace and notificacion.codigo_regla == 'REC-ANTIGUEDAD' and notificacion.fecha_objetivo:
+        href = notificacion.enlace['href']
+        notificacion.enlace['href'] = '%s%sfecha_efectiva=%s&annos_servicio=1' % (
+            href, '&' if '?' in href else '?', notificacion.fecha_objetivo.isoformat())
     return notificacion
 
 
@@ -208,28 +247,110 @@ def _paginar_con_enlaces(request, queryset, origen_label):
 
 
 def _contexto_tab_notificaciones(request):
-    """Pestaña «Notificaciones»: solo eventos informativos, sin panel de filtros. Solo
-    las copias del usuario: cada aviso una vez."""
-    notificaciones = (_bandeja(request.user)
-                      .filter(tipo=Notificacion.Tipo.EVENTO)
-                      .select_related('content_type'))
+    """Pestaña «Notificaciones» (18-11-2026), en dos partes:
+
+    * Avisos: solicitudes, decisiones, Ranking, cierre corregido… uno a uno, como antes.
+    * Actividad: altas, bajas, cargos nuevos y cambios salariales, agrupados por día y
+      tipo («Hoy: 12 altas · 8 cargos nuevos»). Se abren día a día.
+
+    Con `?dia=AAAA-MM-DD&codigo=EVT-…` («Ver todos» de un tipo en un día) enseña la
+    lista completa de ese tipo y día. Solo las copias del usuario."""
+    from datetime import date
+
+    from .agrupar import dias_de_actividad, nombre_de_codigo
+    from .campana import PREFIJO_ACTIVIDAD
+
+    bandeja = _bandeja(request.user)
+    codigo = request.GET.get('codigo', '')
+    try:
+        dia = date.fromisoformat(request.GET.get('dia', ''))
+    except ValueError:
+        dia = None
+    if dia and codigo.startswith(PREFIJO_ACTIVIDAD):
+        del_dia = (bandeja.filter(tipo=Notificacion.Tipo.EVENTO, codigo_regla=codigo, fecha_creado__date=dia)
+                   .select_related('content_type', 'autor').order_by('-fecha_creado'))
+        return {'actividad_de': {'dia': dia, 'nombre': nombre_de_codigo(codigo)},
+                'notificaciones': _paginar_con_enlaces(request, del_dia, origen_label='Notificaciones')}
+
+    avisos = (bandeja.filter(tipo=Notificacion.Tipo.EVENTO)
+              .exclude(codigo_regla__startswith=PREFIJO_ACTIVIDAD)
+              .select_related('content_type'))
+    dias = Paginator(dias_de_actividad(bandeja), 7).get_page(request.GET.get('pagina_dias'))
     return {
-        'notificaciones': _paginar_con_enlaces(request, notificaciones, origen_label='Notificaciones'),
+        'notificaciones': _paginar_con_enlaces(request, avisos, origen_label='Notificaciones'),
+        'dias': dias,
+        'hoy': timezone.localdate(),
     }
 
 
-def _contexto_tab_advertencias(request):
-    """Pestaña «Advertencias»: solo alertas de integridad, con el panel de filtros."""
-    from .filtros import filtrar_advertencias
+@gestion_required
+def actividad_dia(request):
+    """Fragmento HTMX de «Actividad»: lo que pasó un día, por tipo, con la unidad y
+    quién lo hizo («por ti» si fue el propio usuario)."""
+    from datetime import date
 
-    notificaciones, filtros_aplicados = filtrar_advertencias(request, request.user)
+    from .agrupar import FILAS_AL_ABRIR, actividad_de_un_dia
+
+    try:
+        dia = date.fromisoformat(request.GET.get('dia', ''))
+    except ValueError:
+        return HttpResponse(status=400)
+    return render(request, 'pages/notificaciones/partials/_actividad_dia.html', {
+        'dia': dia, 'tipos': actividad_de_un_dia(_bandeja(request.user), dia, request.user),
+        'filas_al_abrir': FILAS_AL_ABRIR,
+    })
+
+
+def _resultados_advertencias(request, consulta, filtros):
+    """Lo que va dentro de `#resultados-advertencias`: los grupos por regla
+    (18-11-2026) o, si se eligió una regla o se busca un texto, la tabla de siempre
+    con un aviso por fila («Ver todos»)."""
+    from .agrupar import grupos_de_advertencias
+    from .filtros import _deduplicar
+
+    if filtros['reglas_actuales'] or filtros['q']:
+        lista = _deduplicar(consulta, request.user)
+        return {'vista_grupos': False,
+                'notificaciones': _paginar_con_enlaces(request, lista, origen_label='Advertencias')}
+    # Los filtros de la pestaña viajan al abrir cada grupo (sin pestaña, página ni búsqueda).
+    filtros_qs = request.GET.copy()
+    for parametro in ('tab', 'pagina', 'filas', 'abrir', 'regla', 'q'):
+        filtros_qs.pop(parametro, None)
+    return {'vista_grupos': True, 'grupos': grupos_de_advertencias(consulta, request.user),
+            'abrir': request.GET.get('abrir', ''), 'filtros_qs': filtros_qs.urlencode()}
+
+
+def _contexto_tab_advertencias(request):
+    """Pestaña «Advertencias»: alertas de integridad agrupadas por regla, con el panel
+    de filtros."""
+    from .filtros import consulta_advertencias
+
+    consulta, filtros_aplicados = consulta_advertencias(request, request.user)
     contexto = {
-        'notificaciones': _paginar_con_enlaces(request, notificaciones, origen_label='Advertencias'),
         'puede_escanear': request.user.es_admin or request.user.es_moderador,
         'mostrar_severidad': True,
     }
     contexto.update(filtros_aplicados)
+    contexto.update(_resultados_advertencias(request, consulta, filtros_aplicados))
     return contexto
+
+
+@gestion_required
+def grupo_advertencias(request):
+    """Fragmento HTMX: al abrir el grupo de una regla, sus primeros registros (con
+    los mismos filtros de la pestaña) y el enlace «Ver todos» a la tabla."""
+    from .agrupar import FILAS_AL_ABRIR
+    from .filtros import filtrar_advertencias
+
+    lista, filtros = filtrar_advertencias(request, request.user)
+    codigo = (filtros['reglas_actuales'] or [''])[0]
+    vuelta = f"{reverse('lista_notificaciones')}?tab=advertencias&sub={filtros['sub_activa']}"
+    filas = [_con_enlace(n, next_url=f'{vuelta}&abrir={codigo}', origen_label='Advertencias',
+                         usuario=request.user)
+             for n in lista[:FILAS_AL_ABRIR]]
+    return render(request, 'pages/notificaciones/partials/_grupo_filas.html', {
+        'filas': filas, 'total': len(lista), 'ver_todos': f'{vuelta}&regla={codigo}',
+    })
 
 
 def _color_prioridad(fecha_objetivo):
@@ -255,6 +376,32 @@ def _color_prioridad(fecha_objetivo):
     return {'emoji': '🟢', 'etiqueta': 'Lejano', 'dias': dias, 'clave': 'verde'}
 
 
+def _resultados_recordatorios(request, sub, recordatorios, filtros):
+    """Lo que va dentro de `#resultados-recordatorios`. Los automáticos, agrupados por
+    tipo con los más urgentes primero (18-11-2026); al buscar un texto o pulsar «Ver
+    todos» de un tipo, la tabla de siempre. Los manuales, siempre en tabla."""
+    from .agrupar import FILAS_AL_ABRIR, grupos_de_recordatorios
+
+    if sub == 'sistema' and not filtros['q'] and not filtros['codigo_actual']:
+        recordatorios = list(recordatorios)
+        for recordatorio in recordatorios:
+            recordatorio.prioridad = _color_prioridad(recordatorio.fecha_objetivo)
+        grupos = grupos_de_recordatorios(recordatorios)
+        vuelta = f"{reverse('lista_notificaciones')}?tab=recordatorios"
+        for grupo in grupos:
+            del_grupo = [r for r in recordatorios if r.codigo_regla == grupo['codigo_regla']]
+            grupo['filas'] = [
+                _con_enlace(r, next_url=f"{vuelta}&abrir={grupo['codigo_regla']}",
+                            origen_label='Recordatorios', usuario=request.user)
+                for r in del_grupo[:FILAS_AL_ABRIR]]
+        return {'vista_grupos': True, 'grupos': grupos, 'abrir': request.GET.get('abrir', '')}
+
+    pagina = _paginar_con_enlaces(request, recordatorios, origen_label='Recordatorios')
+    for recordatorio in pagina:
+        recordatorio.prioridad = _color_prioridad(recordatorio.fecha_objetivo)
+    return {'vista_grupos': False, 'recordatorios': pagina}
+
+
 def _contexto_tab_recordatorios(request):
     """Pestaña «Recordatorios»: subpestañas Sistema/Administración
     (`?tab=recordatorios&sub=sistema|administracion`, por defecto `sistema`), NUNCA
@@ -272,18 +419,14 @@ def _contexto_tab_recordatorios(request):
               else Notificacion.Origen.ADMINISTRACION)
 
     recordatorios, filtros_aplicados = filtrar_recordatorios(request, request.user, origen)
-    pagina = _paginar_con_enlaces(request, recordatorios, origen_label='Recordatorios')
-    for recordatorio in pagina:
-        recordatorio.prioridad = _color_prioridad(recordatorio.fecha_objetivo)
-
     contexto = {
-        'recordatorios': pagina,
         'sub_activa': sub,
         'unidades_admin': (UnidadOrganizativa.objects.order_by('descripcion')
                             if request.user.es_admin else None),
         'puede_actualizar_recordatorios': request.user.es_admin or request.user.es_moderador,
     }
     contexto.update(filtros_aplicados)
+    contexto.update(_resultados_recordatorios(request, sub, recordatorios, filtros_aplicados))
     return contexto
 
 
@@ -304,13 +447,16 @@ def lista_notificaciones(request):
     URL siempre refleja dónde está el usuario — es lo que permite que "Corregir" vuelva
     exactamente aquí (ver `_con_enlace`/`core.mixins.VolverAlOrigenMixin`).
     """
+    from .campana import accionables
+
     tab = request.GET.get('tab', 'notificaciones')
     if tab not in TABS or (tab == 'supervision' and not request.user.es_admin):
         tab = 'notificaciones'
 
     contexto = {
         'tab_activa': tab,
-        'total_no_leidas': _notificaciones_del_usuario(request.user).count(),
+        # Lo mismo que el número de la campana: solo lo que hay que hacer.
+        'total_pendientes': accionables(request.user).count(),
         'querystring_sin_pagina': _querystring_sin_pagina(request),
     }
     if tab == 'advertencias':
@@ -326,59 +472,58 @@ def lista_notificaciones(request):
 
 
 def _contexto_tab_supervision(request):
-    """Pestaña «Supervisión» (solo Administrador, 25-10-2026): los avisos que
-    recibieron los moderadores, UNA fila por aviso, con a quién le llegó y quién lo
-    ha leído. Es de solo lectura: no marca nada por nadie.
-
-    Una sola consulta agrupada en la base (`ArrayAgg` de PostgreSQL) y solo cuando se
-    abre esta pestaña. Un aviso es el mismo para todos sus destinatarios: mismo
-    objeto, regla, clave, tipo, título y mensaje.
-    """
-    from django.contrib.postgres.aggregates import ArrayAgg
-    from django.db.models import Count, Max
-
-    from core.paginacion import filas_por_pagina
+    """Pestaña «Supervisión» (solo Administrador): por moderador, lo que tiene sin
+    leer de lo que hay que hacer, regla a regla (18-11-2026), para ver de un vistazo
+    quién va atrasado. Cada regla se abre (`supervision_grupo`). Es de solo lectura:
+    no marca nada por nadie. Las cuentas se hacen en la base (`agrupar.py`)."""
+    from .agrupar import supervision_por_moderador
 
     sub = request.GET.get('sub', 'pendientes')
     if sub not in SUBTABS_SUPERVISION:
         sub = 'pendientes'
-    grupos = (Notificacion.objects
-              .filter(destinatario__es_moderador=True)
-              .values('content_type_id', 'object_id', 'codigo_regla', 'clave_extra', 'tipo',
-                      'titulo', 'mensaje', 'unidad__descripcion')
-              .annotate(fecha=Max('fecha_creado'), total=Count('pk'),
-                        sin_leer=Count('pk', filter=Q(leido=False)),
-                        lectores=ArrayAgg('destinatario__username', ordering='destinatario__username'),
-                        leidos=ArrayAgg('leido', ordering='destinatario__username'))
-              .order_by('-fecha'))
-    if sub == 'pendientes':
-        grupos = grupos.filter(sin_leer__gt=0)
-    pagina = Paginator(grupos, filas_por_pagina(request)).get_page(request.GET.get('pagina'))
-    for grupo in pagina:
-        grupo['moderadores'] = [{'usuario': u, 'leido': l} for u, l in zip(grupo['lectores'], grupo['leidos'])]
-    return {'supervision': pagina, 'sub_supervision': sub}
+    return {'moderadores': supervision_por_moderador(sub == 'pendientes'), 'sub_supervision': sub}
+
+
+@admin_required
+def supervision_grupo(request):
+    """Fragmento HTMX de Supervisión: los avisos de UN moderador y UNA regla, sin leer
+    primero. Solo lectura."""
+    from .agrupar import FILAS_AL_ABRIR
+
+    try:
+        moderador = int(request.GET.get('moderador', ''))
+    except ValueError:
+        return HttpResponse(status=400)
+    avisos = Notificacion.objects.filter(
+        destinatario_id=moderador, tipo=request.GET.get('tipo', ''),
+        codigo_regla=request.GET.get('codigo', ''))
+    primeros = list(avisos.order_by('leido', '-fecha_creado')[:FILAS_AL_ABRIR])
+    return render(request, 'pages/notificaciones/partials/_supervision_filas.html', {
+        'avisos': primeros, 'resto': avisos.count() - len(primeros),
+    })
 
 
 # Fragmento interno de `lista_notificaciones`: se cierra al Observador por el
 # mismo motivo que la página que lo contiene, y no porque llegue a pedirlo.
 @gestion_required
 def panel_advertencias(request):
-    """Fragmento HTMX: solo la tabla+paginación de Advertencias, actualizada por el
-    formulario de filtros de `tab_advertencias.html` (`hx-target="#resultados-advertencias"`,
+    """Fragmento HTMX: solo los resultados de Advertencias (grupos o tabla), al
+    cambiar los filtros de `tab_advertencias.html` (`hx-target="#resultados-advertencias"`;
     el propio formulario de filtros queda FUERA del swap para no perder el estado de
-    Select2 en cada cambio). Reutiliza `filtrar_advertencias()` — la misma función que
-    la carga inicial de la pestaña — para que nunca pueda haber dos criterios de
-    filtrado distintos."""
-    from .filtros import filtrar_advertencias
+    Select2 en cada cambio). Reutiliza `consulta_advertencias()` y
+    `_resultados_advertencias()` — lo mismo que la carga inicial de la pestaña — para
+    que nunca pueda haber dos criterios distintos."""
+    from .filtros import consulta_advertencias
 
-    notificaciones, filtros_aplicados = filtrar_advertencias(request, request.user)
+    consulta, filtros = consulta_advertencias(request, request.user)
     contexto = {
-        'notificaciones': _paginar_con_enlaces(request, notificaciones, origen_label='Advertencias'),
         'querystring_sin_pagina': _querystring_sin_pagina(request),
-        'hay_filtros': filtros_aplicados['hay_filtros'],
+        'hay_filtros': filtros['hay_filtros'],
         'mostrar_severidad': True,
+        'sub_activa': filtros['sub_activa'],
     }
-    respuesta = render(request, 'pages/notificaciones/partials/_tabla.html', contexto)
+    contexto.update(_resultados_advertencias(request, consulta, filtros))
+    respuesta = render(request, 'pages/notificaciones/partials/_resultados_advertencias.html', contexto)
     # Sin esto, htmx empujaría la URL de ESTE endpoint (panel-advertencias/?...), que al
     # refrescar solo devuelve el fragmento, sin layout. Se empuja la URL real de la
     # pestaña, que sí es recargable de forma independiente.
@@ -389,11 +534,9 @@ def panel_advertencias(request):
 
 @gestion_required
 def panel_recordatorios(request):
-    """Fragmento HTMX: solo la tabla+paginación de Recordatorios, actualizada por el
-    buscador+chips de prioridad de `tab_recordatorios.html`
-    (`hx-target="#resultados-recordatorios"`). Mismo patrón que `panel_advertencias`,
-    reutilizando `filtrar_recordatorios()` para que nunca pueda haber dos criterios de
-    filtrado distintos entre la carga inicial y esta actualización dinámica."""
+    """Fragmento HTMX: solo los resultados de Recordatorios (grupos o tabla), al
+    buscar o pulsar un chip de prioridad en `tab_recordatorios.html`
+    (`hx-target="#resultados-recordatorios"`). Mismo patrón que `panel_advertencias`."""
     from .filtros import filtrar_recordatorios
 
     sub = request.GET.get('sub', 'sistema')
@@ -402,18 +545,14 @@ def panel_recordatorios(request):
     origen = (Notificacion.Origen.SISTEMA if sub == 'sistema'
               else Notificacion.Origen.ADMINISTRACION)
 
-    recordatorios, filtros_aplicados = filtrar_recordatorios(request, request.user, origen)
-    pagina = _paginar_con_enlaces(request, recordatorios, origen_label='Recordatorios')
-    for recordatorio in pagina:
-        recordatorio.prioridad = _color_prioridad(recordatorio.fecha_objetivo)
-
+    recordatorios, filtros = filtrar_recordatorios(request, request.user, origen)
     contexto = {
-        'recordatorios': pagina,
         'sub_activa': sub,
         'querystring_sin_pagina': _querystring_sin_pagina(request),
-        'hay_filtros': filtros_aplicados['hay_filtros'],
+        'hay_filtros': filtros['hay_filtros'],
     }
-    respuesta = render(request, 'pages/notificaciones/partials/_tabla_recordatorios.html', contexto)
+    contexto.update(_resultados_recordatorios(request, sub, recordatorios, filtros))
+    respuesta = render(request, 'pages/notificaciones/partials/_resultados_recordatorios.html', contexto)
     url_lista = reverse('lista_notificaciones')
     respuesta['HX-Push-Url'] = f'{url_lista}?{request.GET.urlencode()}'
     return respuesta

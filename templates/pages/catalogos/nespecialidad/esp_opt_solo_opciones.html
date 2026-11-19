@@ -9,7 +9,11 @@ controles apilados. Devolviendo solo las opciones el <select> no se toca.
 `esp_opt.html` (el <select> completo) se conserva para los filtros de las
 listas de Aspirantes y Contratos, que no llevan Select2.
 {% endcomment %}
+{% if sin_especialidades %}
+<option value="">No hay especialidades de este nivel: el Administrador las carga en Nomencladores</option>
+{% else %}
 <option value="">Seleccione una especialidad...</option>
+{% endif %}
 {% for e in list_esp %}
   <option value="{{ e.id }}">{{ e.nombre }}</option>
 {% endfor %}

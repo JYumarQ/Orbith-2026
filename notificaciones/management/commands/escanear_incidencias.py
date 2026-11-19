@@ -36,7 +36,7 @@ y cómo quitarla (`schtasks /delete /tn "Orbith - Escaneo de incidencias" /f`).
 from django.core.management.base import BaseCommand
 
 from notificaciones.escaneo import escanear_globalmente_y_notificar_por_unidad
-from notificaciones.limpieza import purgar_notificaciones_antiguas
+from notificaciones.limpieza import limpieza_diaria
 from notificaciones.recordatorios import generar_recordatorios
 
 
@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 f" {resumen_recordatorios['sin_unidad']} sin unidad organizativa "
                 f"se enviaron a los administradores activos.")
 
-        resumen_purga = purgar_notificaciones_antiguas()
+        resumen_purga = limpieza_diaria()
         mensaje += (
             f" Purgadas {resumen_purga['advertencias_y_recordatorios']} "
             f"advertencia(s)/recordatorio(s) resueltos y {resumen_purga['eventos']} "

@@ -110,23 +110,16 @@ def _progreso_guia(usuario):
 
 
 def _contar_advertencias_pendientes(usuario):
-    """Advertencias ACTIVA y sin leer, visibles para `usuario` (por unidad
-    organizativa o asignación directa; TODAS si `es_admin`), para el badge de
-    `sidebar.html` — visible en TODA la app, no solo en la página de Notificaciones.
-    Mismo criterio de "pertenencia" que `notificaciones.views._notificaciones_visibles`,
-    reescrito aquí en pequeño en vez de importado: ese helper es privado de su módulo y
-    este context processor corre en CADA petición autenticada, así que conviene que no
-    dependa de las vistas de otra app.
+    """El número del badge de «Notificaciones» en `sidebar.html`, visible en TODA la
+    app: lo mismo que el número rojo de la campana (18-11-2026), es decir, solo lo
+    que hay que hacer de la bandeja personal (`notificaciones/campana.py`). Antes
+    contaba todas las advertencias sin leer, Medias y Bajas incluidas (miles en un
+    Administrador).
 
-    `leido=False` es imprescindible: sin él, el contador nunca baja aunque el usuario
-    lea (o incluso descarte) todas sus advertencias, porque "leído" y "resuelto" son
-    ejes independientes en el modelo (ver `Notificacion.leido`) y `estado=ACTIVA` por
-    sí solo no dice nada sobre si el usuario ya las vio.
+    `leido=False` es imprescindible (lo aplica `accionables`): sin él, el contador
+    nunca baja aunque el usuario lea todas sus advertencias, porque "leído" y
+    "resuelto" son ejes independientes en el modelo (ver `Notificacion.leido`).
     """
-    from django.db.models import Q
-
-    from notificaciones.models import Notificacion
-
     # El Observador ya no ve «Notificaciones» en la barra lateral (el panel es de
     # Administrador y Moderador, ver `notificaciones/views.py::lista_notificaciones`),
     # así que este contador no se pinta en ninguna parte para él. Se corta antes de
@@ -136,15 +129,8 @@ def _contar_advertencias_pendientes(usuario):
     if not (usuario.es_admin or usuario.es_moderador):
         return 0
 
-    base = Notificacion.objects.filter(
-        tipo=Notificacion.Tipo.ALERTA, estado=Notificacion.Estado.ACTIVA, leido=False)
-
-    # Solo las copias del usuario (bandeja personal, 25-10-2026): antes el
-    # Administrador contaba también las de los moderadores.
-    sin_destinatario = Q(destinatario__isnull=True)
-    if not usuario.es_admin:
-        sin_destinatario &= Q(unidad__in=usuario.unidades.all())
-    return base.filter(Q(destinatario=usuario) | sin_destinatario).count()
+    from notificaciones.campana import accionables
+    return accionables(usuario).count()
 
 
 def _contar_solicitudes_pendientes(usuario):

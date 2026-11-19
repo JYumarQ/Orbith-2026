@@ -75,6 +75,8 @@
                     </div>
                   {% elif modulo.situacion == 'sin_reglas' %}
                     <span class="badge bg-label-secondary">Sin reglas</span>
+                  {% elif modulo.situacion == 'no_cuenta' %}
+                    <span class="text-muted small">No cuenta en la salud</span>
                   {% else %}
                     <span class="text-muted small">Muy pocos registros</span>
                   {% endif %}

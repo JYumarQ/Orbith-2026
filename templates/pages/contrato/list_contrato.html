@@ -201,7 +201,7 @@
                         <input id="search" type="text" class="form-control border-0 shadow-none" 
                             placeholder="Buscar..." 
                             data-prefijos="E,N,CI,CA,U" data-pantalla="Contratos"
-                            name="filter_contrato"
+                            name="filter_contrato" value="{{ filtro_busqueda }}"
                             hx-get="{% url 'search_contrato' %}" 
                             hx-trigger="input changed delay:500ms, keyup[key=='Enter'], searchFilters" 
                             hx-target="#filter_contratos_results"
@@ -502,9 +502,9 @@
         <div class="modal-content" id="contenidoModalAltasConBaja"></div>
     </div>
 </div>
-<div class="modal fade" id="editar_empl" tabindex="-1" aria-hidden="true"></div>
-<div class="modal fade" id="crear_empl" tabindex="-1" aria-hidden="true"></div>
-<div class="modal fade" id="editar_aspir" tabindex="-1" aria-hidden="true"></div>
+<div class="modal fade" id="editar_empl" data-vaciar-al-cerrar tabindex="-1" aria-hidden="true"></div>
+<div class="modal fade" id="crear_empl" data-vaciar-al-cerrar tabindex="-1" aria-hidden="true"></div>
+<div class="modal fade" id="editar_aspir" data-vaciar-al-cerrar tabindex="-1" aria-hidden="true"></div>
 
 {# Formulario de Baja compartido con el Gestor de Plantilla. #}
 {% include 'pages/contrato/partials/modal_baja.html' %}

@@ -453,17 +453,22 @@ class TrabajadorContratadoSinEspecialidad(ReglaAspirantes):
         'Comprueba que los trabajadores contratados con nivel Medio Superior (TM) o '
         'Nivel Superior tengan registrada su especialidad.')
     causa_probable = (
-        'La especialidad se habilita al elegir el nivel educativo, pero el '
-        'formulario permite guardar sin completarla: el dato se dejó pendiente al '
-        'dar de alta al trabajador y no se volvió sobre él al contratarlo.')
+        'La especialidad se habilita al elegir el nivel educativo, pero el formulario '
+        'permite guardar sin completarla: el dato se dejó pendiente al dar de alta al '
+        'trabajador. O no se podía elegir: si el nomenclador no tiene especialidades de '
+        'su nivel, la lista sale vacía (hasta noviembre de 2026 no había ninguna de '
+        'Técnico Medio).')
     impacto = (
         'La especialidad es lo que dice en qué se formó el trabajador. Sin ella, '
         'los informes y las plantillas que se desglosan por especialidad lo dejan '
         'fuera de la cuenta, y no hay forma de saber si el cargo que ocupa se '
         'corresponde con su formación.')
     solucion = (
-        'Abra el trabajador y seleccione su especialidad: al tener ya elegido el '
-        'nivel educativo, la lista muestra las que le corresponden.')
+        'Abra el trabajador y seleccione su especialidad: la lista muestra las de su '
+        'nivel. Si sale «No hay especialidades de este nivel», primero un Administrador '
+        'las crea en Parámetros Generales → Nomencladores → Laborales y Profesionales → '
+        'Especialidades (las de Técnico Medio, sin marcar «Educ. Superior»); después ya '
+        'se pueden elegir.')
 
     def ejecutar(self, contexto):
         from django.db.models import Exists, OuterRef

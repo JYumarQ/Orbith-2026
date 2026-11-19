@@ -779,7 +779,47 @@ class CAltaForm(forms.ModelForm):
                 if nombre in self.fields:
                     cleaned_data[nombre] = None
 
+        # --- 6. CAMPOS QUE DEPENDEN DE OTRO (18-11-2026) ---
+        # En pantalla nacen deshabilitados y el JavaScript los activa; un campo
+        # deshabilitado no viaja. Para no depender de eso, decide el servidor:
+        # si el campo NO aplica, se vacía; si aplica pero no llegó en el envío, se
+        # conserva lo guardado (antes se habría guardado vacío sin avisar).
+        self._ajustar_campos_dependientes(cleaned_data, cargo)
+
         return cleaned_data
+
+    def _campos_dependientes(self, cleaned_data, cargo):
+        """`{campo: aplica}` de los campos que solo tienen sentido según otro dato."""
+        def valor(nombre):
+            # Un formulario que no trae el campo (el Movimiento no trae «Chófer» ni
+            # «C. Formal») usa lo guardado en el contrato.
+            if nombre in self.fields:
+                return cleaned_data.get(nombre)
+            return getattr(self.instance, nombre, None)
+
+        if cargo is None and 'cargo' not in self.fields:
+            cargo = getattr(self.instance, 'cargo', None)
+
+        def del_cargo(atributo):
+            return bool(cargo and getattr(cargo, atributo, False))
+
+        profesional = bool(valor('profesional'))
+        return {
+            'fecha_vence_lic': profesional, 'fecha_vence_recal': profesional, 'fecha_vence_seg': profesional,
+            'c_formal_res': bool(valor('c_formal')),
+            'funcionario_res': del_cargo('funcionario'),
+            'designado_res': del_cargo('designado'),
+            'confianza_res': del_cargo('de_confianza'),
+        }
+
+    def _ajustar_campos_dependientes(self, cleaned_data, cargo):
+        for nombre, aplica in self._campos_dependientes(cleaned_data, cargo).items():
+            if nombre not in self.fields or self.fields[nombre].disabled:
+                continue
+            if not aplica:
+                cleaned_data[nombre] = None
+            elif self.add_prefix(nombre) not in self.data and self.instance and self.instance.pk:
+                cleaned_data[nombre] = getattr(self.instance, nombre, None)
 
     def _validar_no_futuras(self, cleaned_data):
         """Rechaza una F. de Contratación o F. Alta Entidad de más de 30 días después de

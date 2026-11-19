@@ -145,6 +145,15 @@ class Historico:
     contrato_pk: int = None         # contrato vigente, si lo hay
     version: str = ''
     anomalias: list = field(default_factory=list)  # datos viejos que no cumplen las reglas
+    # F. de Contratación guardada en el contrato vigente (puede faltar: CTR-004). Al
+    # guardar, el contrato toma la fecha de su Alta Inicial (18-11-2026).
+    fecha_contrato: date = None
+    # Si el contrato vigente no tiene Alta Inicial en el histórico (MOV-014): con qué
+    # se crea el Alta cuando el Administrador pulsa «Crear el Alta Inicial».
+    alta_propuesta: dict = None
+    # Estado de la ficha hoy. El resumen lo compara con el que dejan los eventos: un
+    # contrato sin eventos no es un «Aspirante» aunque el histórico esté vacío.
+    estado_persona: str = ''
 
     def vivos(self):
         return [e for e in self.eventos if not e.borrado]
@@ -206,6 +215,8 @@ def cargar(aspirante):
     """El histórico de la persona, ordenado y agrupable en ciclos."""
     from django.db.models import Q
 
+    from bolsa.models import Aspirante
+
     from .models import CAlta, CBaja, TMovimiento
 
     aspirante_id = getattr(aspirante, 'pk', aspirante)
@@ -261,7 +272,12 @@ def cargar(aspirante):
     eventos.sort(key=lambda e: (e.fecha, {ALTA: 0, MOV: 1, BAJA: 2}[e.tipo]))
     contrato = CAlta.objects.filter(aspirante_id=aspirante_id).order_by('-fecha_alta').first()
     historico = Historico(aspirante_id=aspirante_id, eventos=eventos,
-                          contrato_pk=contrato.pk if contrato else None)
+                          contrato_pk=contrato.pk if contrato else None,
+                          fecha_contrato=contrato.fecha_alta if contrato else None,
+                          estado_persona=Aspirante.objects.filter(pk=aspirante_id)
+                          .values_list('estado', flat=True).first() or '')
+    if contrato is not None and alta_del_vigente(historico) is None:
+        historico.alta_propuesta = _alta_propuesta(historico, contrato, plazas)
     # El último evento del contrato vigente sin duración guardada toma la del
     # contrato: si no, al corregirlo se le pondría 0 al contrato de hoy.
     ultimo = ultimo_del_vigente(historico)
@@ -272,6 +288,93 @@ def cargar(aspirante):
     historico.anomalias = anomalias + [e for e in _errores_de_orden(historico)]
     historico.version = huella(historico)
     return historico
+
+
+def alta_del_vigente(historico):
+    """El Alta (o recontratación) con que empieza el contrato vigente, o None si la
+    persona no tiene contrato vigente o su histórico no tiene esa Alta (MOV-014)."""
+    grupos = ciclos(historico)
+    if (historico.contrato_pk and grupos and grupos[-1][-1].tipo != BAJA
+            and grupos[-1][0].tipo == ALTA):
+        return grupos[-1][0]
+    return None
+
+
+def _estado_del_contrato(contrato):
+    """El estado (y las claves del nomenclador) que tiene hoy el contrato vigente."""
+    cargo = contrato.cargo if contrato.cargo_id else None
+    ncargo = cargo.ncargo if cargo is not None and cargo.ncargo_id else None
+    departamento = cargo.departamento if cargo is not None and cargo.departamento_id else None
+    unidad = departamento.unidad_organizativa if departamento is not None else None
+    estado = {
+        'cargo': ncargo.descripcion if ncargo else SIN_DATO,
+        'departamento': departamento.descripcion if departamento else SIN_DATO,
+        'unidad': unidad.descripcion if unidad else SIN_DATO,
+        'grupo_escala': ncargo.grupo_escala.nivel if ncargo and ncargo.grupo_escala_id else SIN_DATO,
+        'cat_ocupacional': (ncargo.get_cat_ocupacional_display() or SIN_DATO) if ncargo else SIN_DATO,
+        'rol': cargo.rol.tipo if cargo is not None and cargo.rol_id else SIN_DATO,
+        'tipo_contrato': contrato.tipo.descripcion if contrato.tipo_id else SIN_DATO,
+        'motivo': contrato.motivo.descripcion if contrato.motivo_id else SIN_DATO,
+        'tipo_salario': 'Fijo' if contrato.tipo_salario == 'FIJ' else 'Dinámico',
+        'tridente': str(contrato.tridente) if contrato.tridente_id else SIN_DATO,
+        'salario': _decimal(contrato.salario_actual or contrato.calcular_salario_escala()),
+        'otros': _decimal(contrato.importe_otros),
+    }
+    ids = {'cargo_id': contrato.cargo_id, 'unidad_id': unidad.pk if unidad else None,
+           'tipo_id': contrato.tipo_id, 'motivo_id': contrato.motivo_id,
+           'tridente_id': contrato.tridente_id, 'tipo_salario': contrato.tipo_salario}
+    return estado, ids, unidad
+
+
+def _alta_propuesta(historico, contrato, plazas):
+    """Con qué nace el Alta Inicial que le falta al contrato vigente (MOV-014).
+
+    * Fecha: la F. de Contratación del contrato.
+    * Datos: si el contrato ya tiene movimientos, el «antes» del primero (así empezó);
+      si no tiene ninguno, lo que dice hoy el contrato (no ha cambiado desde el alta).
+    * Si el primer movimiento cae el MISMO día que la F. de Contratación, ese movimiento
+      era el alta registrada como movimiento: el Alta toma sus datos de DESPUÉS, su
+      fecha de solicitud y sus observaciones, y lo sustituye (`sustituye`: la pantalla
+      lo marca para borrar; el Administrador puede deshacerlo). Decidido el 18-11-2026.
+
+    El Administrador lo revisa en el editor antes de guardar.
+    """
+    from strorganizativa.models import UnidadOrganizativa
+
+    grupos = ciclos(historico)
+    abierto = grupos[-1] if grupos and grupos[-1][-1].tipo != BAJA else []
+    primero = abierto[0] if abierto else None
+    sustituye = primero if primero is not None and primero.fecha == contrato.fecha_alta else None
+    if sustituye is not None:
+        estado, ids = dict(sustituye.estado), dict(sustituye.ids)
+        unidad = (UnidadOrganizativa.objects.filter(pk=sustituye.unidad_fk_id).first()
+                  if sustituye.unidad_fk_id else None)
+        duracion = sustituye.duracion
+        if sustituye is abierto[-1] and not ids:
+            # Será el último del contrato vigente: si es la misma plaza que la del contrato,
+            # las claves del nomenclador salen de él (sin tener que deducirlas del texto).
+            del_contrato, ids_contrato, _ = _estado_del_contrato(contrato)
+            if clave_de_plaza(del_contrato) == clave_de_plaza(estado):
+                ids = ids_contrato
+    elif primero is not None:
+        estado, ids = dict(primero.antes), {}
+        unidad = UnidadOrganizativa.objects.filter(descripcion=estado.get('unidad')).first()
+        duracion = 0
+    else:
+        estado, ids, unidad = _estado_del_contrato(contrato)
+        duracion = contrato.duracion or 0
+    return {
+        'fecha': contrato.fecha_alta,
+        'estado': estado,
+        'ids': ids,
+        'duracion': None if es_indeterminado(estado.get('tipo_contrato')) else (duracion or 0),
+        'unidad_fk_id': unidad.pk if unidad else None,
+        'unidad_fk': unidad.descripcion if unidad else '',
+        'plaza_reconocida': clave_de_plaza(estado) in plazas,
+        'sustituye': sustituye.clave if sustituye is not None else None,
+        'fecha_solicitud': sustituye.fecha_solicitud if sustituye is not None else None,
+        'observaciones': sustituye.observaciones if sustituye is not None else '',
+    }
 
 
 def huella(historico):
@@ -520,6 +623,10 @@ def aplicar(historico, cambios):
     * `{'op': 'borrar', 'evento': clave}`
     * `{'op': 'insertar', 'tras': clave, 'campos': {'fecha': ..., ...}}` — un
       Movimiento de Nómina nuevo detrás de ese evento, que parte de lo que había.
+    * `{'op': 'insertar', 'tipo': 'ALTA', 'campos': {'fecha': ..., ...}}` — el Alta
+      Inicial que le falta al contrato vigente (MOV-014), con `alta_propuesta`.
+    * `{'op': 'fecha_contrato'}` — solo pasar al contrato la fecha de su Alta Inicial
+      (CTR-004). No cambia ningún evento: lo hace `guardar` y lo enseña `resumen`.
 
     No comprueba las reglas: eso lo hace `comprobar()`, para poder enseñarlas todas
     juntas.
@@ -528,6 +635,30 @@ def aplicar(historico, cambios):
     nuevos = 0
     for cambio in cambios:
         op = cambio.get('op')
+        if op == 'fecha_contrato':
+            continue
+        if op == 'insertar' and cambio.get('tipo') == ALTA:
+            propuesta = propuesto.alta_propuesta
+            if not propuesta:
+                raise ErrorDeBorrador('El contrato vigente ya tiene su Alta Inicial: no se puede crear otra.')
+            if any(e.nuevo and e.tipo == ALTA for e in propuesto.eventos):
+                raise ErrorDeBorrador('El Alta Inicial se añadió dos veces al borrador: pulse «Descartar '
+                                      'todo» y créela una sola vez.')
+            nuevos += 1
+            campos = dict(cambio.get('campos') or {})
+            if not campos.get('fecha'):
+                raise ErrorDeBorrador('Indique la fecha del Alta Inicial (la F. de Contratación).')
+            evento = Evento(clave='nuevo:%d' % nuevos, tipo=ALTA, duracion=propuesta['duracion'],
+                            fecha=_fecha(campos.pop('fecha'), 'La fecha'),
+                            estado=dict(propuesta['estado']), antes=estado_vacio(), nuevo=True,
+                            fecha_solicitud=propuesta['fecha_solicitud'],
+                            observaciones=propuesta['observaciones'])
+            evento.ids = dict(propuesta['ids'])
+            evento.unidad_fk_id, evento.unidad_fk = propuesta['unidad_fk_id'], propuesta['unidad_fk']
+            evento.plaza_reconocida = propuesta['plaza_reconocida']
+            _aplicar_campos(evento, campos)
+            propuesto.eventos.append(evento)
+            continue
         if op == 'editar':
             evento = propuesto.evento(cambio.get('evento'))
             if evento.borrado:
@@ -562,8 +693,50 @@ def aplicar(historico, cambios):
 # 3. Comprobar y encadenar
 # --------------------------------------------------------------------------
 
+def _tocado(evento):
+    """El Administrador lo insertó o le cambió la fecha en este borrador."""
+    return evento.nuevo or 'fecha' in evento.editado
+
+
+def mismo_dia(historico):
+    """Eventos antiguos que caen el mismo día (18-11-2026). No impiden guardar: se avisan
+    con dos arreglos rápidos que decide el Administrador.
+
+    * `duplicado`: el segundo es un movimiento que deja exactamente lo mismo que el
+      primero (mismos datos y misma duración): se puede quitar sin perder nada.
+    * `siguiente`: el día siguiente, si está libre (y no pasa del tope de fechas), para
+      pasar allí el segundo.
+    """
+    from datetime import timedelta
+
+    from .cronologia import fecha_maxima
+
+    vivos = historico.vivos()
+    fechas = {e.fecha for e in vivos}
+    tope = fecha_maxima()
+    avisos = []
+    for anterior, e in zip(vivos, vivos[1:]):
+        if e.fecha != anterior.fecha or _tocado(e) or _tocado(anterior):
+            continue
+        siguiente = e.fecha + timedelta(days=1)
+        avisos.append({
+            'texto': '%s y %s caen el mismo día.' % (anterior.nombre, e.nombre),
+            'primero': anterior.clave,
+            'segundo': e.clave,
+            'duplicado': (e.tipo == MOV and e.estado == anterior.estado
+                          and e.duracion == anterior.duracion),
+            'siguiente': siguiente.isoformat() if siguiente not in fechas and siguiente <= tope else None,
+        })
+    return avisos
+
+
 def _errores_de_orden(historico):
-    """Las reglas de la cronología sobre los eventos vivos (sin encadenar)."""
+    """Las reglas de la cronología sobre los eventos vivos (sin encadenar).
+
+    «Nunca dos eventos el mismo día» (23-10-2026) solo bloquea si el Administrador
+    insertó uno de los dos o le cambió la fecha: los datos antiguos que ya caían el
+    mismo día se avisan aparte (`mismo_dia`) y no impiden guardar (18-11-2026).
+    """
     errores = []
     from .cronologia import DIAS_FUTUROS, fecha_maxima
     tope = fecha_maxima()
@@ -575,7 +748,7 @@ def _errores_de_orden(historico):
         if e.fecha > tope:
             errores.append('%s: no puede ser más de %d días posterior a hoy.' % (e.nombre, DIAS_FUTUROS))
         if anterior is not None:
-            if e.fecha == anterior.fecha:
+            if e.fecha == anterior.fecha and (_tocado(e) or _tocado(anterior)):
                 errores.append('%s y %s caen el mismo día: cada evento tiene que ser '
                                'posterior al anterior.' % (anterior.nombre, e.nombre))
             if anterior.tipo == BAJA and e.tipo != ALTA:
@@ -802,6 +975,13 @@ def resumen(original, propuesto):
             if viejo != nuevo:
                 cambios.append((antes_ev.nombre, ETIQUETAS.get(dato, dato), _texto(viejo), _texto(nuevo)))
 
+    # La F. de Contratación es la fecha del Alta Inicial (18-11-2026): si no coinciden
+    # (o el contrato no la tiene, CTR-004), al guardar el contrato toma la del Alta.
+    alta = alta_del_vigente(propuesto)
+    if alta is not None and alta.fecha != propuesto.fecha_contrato:
+        cambios.append(('Contrato vigente', 'F. de Contratación',
+                        _texto(propuesto.fecha_contrato), _texto(alta.fecha)))
+
     ajustes = []
     for e in propuesto.vivos():
         antes_ev = originales.get(e.clave)
@@ -811,7 +991,8 @@ def resumen(original, propuesto):
         if diferencias:
             ajustes.append('%s: su «antes» se ajusta (%s).' % (e.nombre, ', '.join(diferencias).lower()))
 
-    antes_persona, despues_persona = estado_final(original), estado_final(propuesto)
+    antes_persona = original.estado_persona or estado_final(original)
+    despues_persona = estado_final(propuesto)
     vivos = propuesto.vivos()
     return {
         'cambios': cambios,
@@ -977,7 +1158,8 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
                         contrato=contrato if e.clave in en_ciclo_abierto else None,
                         fecha_efectiva=e.fecha, fecha_solicitud=e.fecha_solicitud,
                         observaciones=e.observaciones, duracion_nueva=e.duracion,
-                        tipo_movimiento=NOMBRE_TIPO[MOV], usuario=nombre_usuario,
+                        # Un movimiento insertado, o el Alta Inicial que faltaba (MOV-014).
+                        tipo_movimiento=NOMBRE_TIPO[e.tipo], usuario=nombre_usuario,
                         unidad_nueva_fk_id=e.unidad_fk_id, escrito_a_mano=e.a_mano)
                     _volcar_estado(mov, e.antes, e.estado)
                     mov.save()
@@ -1043,7 +1225,9 @@ def guardar(aspirante, cambios, motivo, version=None, usuario=None):
                     or ultimo.estado != ultimo_original.estado
                     or ultimo.duracion != ultimo_original.duracion)
                 alta = vivos_abiertos[0]
-                cambia_alta = alta.tipo == ALTA and 'fecha' in alta.editado
+                # La F. de Contratación es la fecha del Alta: también si el contrato no
+                # la tenía (CTR-004) o no coincidía con ella (MOV-014), 18-11-2026.
+                cambia_alta = alta.tipo == ALTA and contrato.fecha_alta != alta.fecha
                 if cambia_ultimo or cambia_alta:
                     antes_foto = registro_automatico.fotografia(contrato)
                     if cambia_ultimo:

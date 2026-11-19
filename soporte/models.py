@@ -134,3 +134,26 @@ class DiagnosticoServidor(models.Model):
         default_permissions = ('view',)
         verbose_name = 'Diagnóstico del servidor'
         verbose_name_plural = 'Diagnóstico del servidor'
+
+
+class CopiaBaseDatos(models.Model):
+    """Sin tabla: da a «Copia de la base de datos» un sitio en el admin de Django
+    (ver `CopiaBaseDatosAdmin` y `core/copia_base.py`)."""
+
+    class Meta:
+        managed = False
+        default_permissions = ('view',)
+        verbose_name = 'Copia de la base de datos'
+        verbose_name_plural = 'Copia de la base de datos'
+
+
+class ActualizacionOrbith(models.Model):
+    """Sin tabla: da a «Actualizar Orbith» un sitio en el admin de Django (ver
+    `ActualizacionOrbithAdmin` y `core/actualizacion.py`). Por ahora, diagnóstico
+    del servidor y ensayo de actualización (18-11-2026)."""
+
+    class Meta:
+        managed = False
+        default_permissions = ('view',)
+        verbose_name = 'Actualizar Orbith'
+        verbose_name_plural = 'Actualizar Orbith'

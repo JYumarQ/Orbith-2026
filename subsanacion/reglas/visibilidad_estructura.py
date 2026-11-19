@@ -82,9 +82,9 @@ class CargoCerradoConTrabajadores(ReglaBase):
         'respaldada, y eso es justo lo que se revisa en una auditoría de plantilla.')
     solucion = (
         'Decida cuál es la situación real. Si el cargo debe seguir existiendo, abra el '
-        'cargo y ponga las plazas aprobadas que le corresponden. Si se cierra de verdad, '
-        'mueva a esos trabajadores a otro cargo desde sus contratos antes de dejarlo a '
-        'cero.')
+        'cargo y ponga las plazas aprobadas que le corresponden. Si se cierra de '
+        'verdad, pase antes a esos trabajadores a otro cargo con un movimiento de '
+        'nómina (el cargo no se cambia en «Editar contrato»).')
 
     def ejecutar(self, contexto):
         # Todo en una consulta: el conteo condicional y el filtro los hace PostgreSQL.

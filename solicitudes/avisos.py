@@ -103,6 +103,23 @@ def avisar_nueva_solicitud(solicitud):
     )
 
 
+def _cerrar_aviso_de_nueva(solicitud, codigo, *, reabrir=False):
+    """La solicitud ya se decidió (o se reabrió): el aviso «nueva» de TODOS los
+    administradores se cierra (o vuelve a quedar pendiente). Antes se quedaba sin
+    leer en la campana de los demás aunque otro ya la hubiera resuelto (339 de 357
+    en la empresa, 18-11-2026)."""
+    from django.utils import timezone
+
+    avisos = Notificacion.objects.filter(
+        content_type=ContentType.objects.get_for_model(solicitud),
+        object_id=str(solicitud.pk), codigo_regla=codigo)
+    if reabrir:
+        avisos.update(estado=Notificacion.Estado.ACTIVA, fecha_resolucion=None, leido=False)
+    else:
+        avisos.filter(estado=Notificacion.Estado.ACTIVA).update(
+            estado=Notificacion.Estado.RESUELTA, fecha_resolucion=timezone.now(), leido=True)
+
+
 def avisar_decision(solicitud):
     """Al aprobar o rechazar: se avisa al Moderador que la envió.
 
@@ -123,11 +140,14 @@ def avisar_decision(solicitud):
     else:
         return
 
+    _cerrar_aviso_de_nueva(solicitud, CODIGO_NUEVA)
     _crear(solicitud, [solicitud.solicitante], CODIGO_DECISION, titulo=titulo, mensaje=mensaje)
 
 
 def avisar_devuelta_a_espera(solicitud):
-    """Al devolver una rechazada a En Espera: el autor debe saber que se reabrió."""
+    """Al devolver una rechazada a En Espera: el autor debe saber que se reabrió, y
+    los administradores vuelven a tenerla pendiente."""
+    _cerrar_aviso_de_nueva(solicitud, CODIGO_NUEVA, reabrir=True)
     if solicitud.solicitante is None:
         return
     _crear(
@@ -156,6 +176,7 @@ def avisar_personalizada_nueva(solicitud):
 
 def avisar_personalizada_respondida(solicitud):
     """El administrador respondió: al moderador que la envió."""
+    _cerrar_aviso_de_nueva(solicitud, CODIGO_PERSONALIZADA_NUEVA)
     if solicitud.solicitante is None:
         return
     _crear(solicitud, [solicitud.solicitante], CODIGO_PERSONALIZADA_RESPUESTA,

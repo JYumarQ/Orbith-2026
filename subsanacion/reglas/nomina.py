@@ -96,9 +96,11 @@ class SalarioDesincronizado(ReglaSalario):
         'no lo recalculan, así que arrastran la cifra equivocada. Con salarios es un '
         'problema que puede llegar a tener consecuencias legales.')
     solucion = (
-        'Abra el contrato y púlselo Guardar: Orbith recalcula el salario al guardar. '
-        'Compruebe antes que el cargo, el rol de pago y el tridente son los correctos, '
-        'porque si el error está en ellos el salario volverá a salir mal.')
+        'Abra el contrato y pulse Guardar: Orbith recalcula el salario al guardar. '
+        'Antes, compruebe que el cargo, el rol de pago y el tridente son los correctos: '
+        'si alguno está mal, el salario volverá a salir mal. El rol se corrige en el '
+        'cargo (Gestor de Plantilla); el cargo y el tridente, con un movimiento de '
+        'nómina o, si es un error de datos, en el editor del histórico (Administrador).')
 
     def ejecutar(self, contexto):
         evaluacion = _evaluar_salarios(contexto)
@@ -133,6 +135,9 @@ class SalarioDesincronizado(ReglaSalario):
 
 class SalarioNoCalculable(ReglaSalario):
     codigo = 'SAL-002'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato sin datos suficientes para calcular el salario'
     criticidad = CRITICIDAD_CRITICA
 
@@ -148,10 +153,14 @@ class SalarioNoCalculable(ReglaSalario):
         'cobre cero: es que Orbith no sabe cuánto le corresponde, así que cualquier '
         'total que lo incluya está incompleto.')
     solucion = (
-        'Abra el contrato y complete lo que falte según la lista de abajo: normalmente '
-        'el cargo o el tridente. Si están completos, el problema está en la escala '
-        'salarial: revise en Parámetros Generales que exista la combinación de grupo de '
-        'escala, rol y tridente que usa este contrato.')
+        'Mire en la lista de abajo qué dato falta. Si es el cargo o el tridente: no se '
+        'cambian en «Editar contrato»; si es un error de datos, el Administrador los '
+        'completa en el editor del histórico («Abrir el editor del histórico»), y si la '
+        'situación cambió, se registra un movimiento de nómina. Moderador: envíe una '
+        'solicitud personalizada al Administrador. Si los datos del contrato están '
+        'completos, el problema está en la escala salarial: revise en Parámetros '
+        'Generales que exista la combinación de grupo de escala, rol y tridente que usa '
+        'este contrato.')
 
     def ejecutar(self, contexto):
         evaluacion = _evaluar_salarios(contexto)
@@ -208,6 +217,9 @@ class CadenaDeSalariosRota(ReglaMovimientos):
     """El salario anterior de un movimiento no coincide con el nuevo del anterior."""
 
     codigo = 'MOV-001'
+    enlace_url = 'editor_historico_movimiento'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Cadena de salarios del histórico rota'
     criticidad = CRITICIDAD_ALTA
 
@@ -224,9 +236,11 @@ class CadenaDeSalariosRota(ReglaMovimientos):
         'de la evolución salarial del trabajador. Cualquier certificación o reclamación '
         'basada en él sería contradictoria.')
     solucion = (
-        'Revise el histórico del trabajador desde su contrato y localice el salto. '
-        'Corrija el contrato de alta y genere el movimiento que falte. Los movimientos '
-        'no se editan directamente: son el registro de lo que ocurrió.')
+        'Administrador: pulse «Abrir el editor del histórico» y localice el salto (el '
+        'salario anterior de un evento no coincide con el nuevo del evento previo). '
+        'Corrija el salario del evento que esté mal, o añada el movimiento que falte, y '
+        'guarde: el editor rehace la cadena de salarios. Moderador: envíe una solicitud '
+        'personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -434,6 +448,9 @@ class MovimientoDesconectadoDeSuContrato(ReglaMovimientos):
 
 class MovimientoAnteriorAlAlta(ReglaMovimientos):
     codigo = 'MOV-003'
+    enlace_url = 'editor_historico_movimiento'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Movimiento con fecha anterior al alta del contrato'
     criticidad = CRITICIDAD_MEDIA
 
@@ -450,10 +467,10 @@ class MovimientoAnteriorAlAlta(ReglaMovimientos):
         'Cualquier informe que ordene por fecha efectiva presenta una secuencia '
         'que no pudo haber ocurrido así.')
     solucion = (
-        'Verifique la fecha efectiva del movimiento y la fecha de alta del '
-        'contrato; corrija la que esté equivocada. Los movimientos no se editan '
-        'desde ningún formulario, así que si la fecha del movimiento es la '
-        'incorrecta, contacte al administrador de la base de datos.')
+        'Administrador: pulse «Abrir el editor del histórico», compruebe qué fecha está '
+        'mal, la del movimiento o la del Alta Inicial (que es la F. de Contratación), '
+        'corríjala y guarde. Moderador: envíe una solicitud personalizada al '
+        'Administrador.')
 
     def ejecutar(self, contexto):
         # Al recontratar, `CAlta.save()` reengancha al contrato nuevo los movimientos
@@ -589,6 +606,9 @@ class MovimientoConOtroExpediente(ReglaMovimientos):
 
 class BajaAnteriorAlAlta(ReglaBase):
     codigo = 'MOV-005'
+    enlace_url = 'editor_historico_baja'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Baja con fecha anterior a la del alta'
     modulo = MODULO_NOMINA
     criticidad = CRITICIDAD_ALTA
@@ -606,8 +626,9 @@ class BajaAnteriorAlAlta(ReglaBase):
         'calculan la antigüedad o la duración real del vínculo laboral quedan '
         'mal calculados.')
     solucion = (
-        'Revise el expediente de baja y corrija la fecha que esté equivocada, '
-        'la de alta o la de baja, según corresponda.')
+        'Administrador: pulse «Abrir el editor del histórico», compruebe qué fecha está '
+        'mal, la de la baja o la del alta de ese contrato, corríjala y guarde. '
+        'Moderador: envíe una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -794,6 +815,9 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
     empieza el contrato vigente también es imposible."""
 
     codigo = 'MOV-009'
+    enlace_url = 'editor_historico_baja'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Baja posterior al contrato vigente del trabajador'
     modulo = MODULO_NOMINA
     criticidad = CRITICIDAD_ALTA
@@ -811,10 +835,11 @@ class BajaPosteriorAlContratoVivo(ReglaBase):
         'baja mientras tiene un contrato vivo. Las cifras de altas y bajas de la '
         'Dashboard y de los informes cuentan esa baja en un mes en que no ocurrió.')
     solucion = (
-        'Abra el histórico del trabajador y decida qué está mal: la fecha de la baja, '
-        'la del contrato vigente, o si esa baja sobra. Corríjalo desde el panel de '
-        'administración. Esta regla no lo arregla sola porque hace falta decidir cuál '
-        'de los datos es el bueno.')
+        'Administrador: pulse «Abrir el editor del histórico» y decida qué está mal: la '
+        'fecha de la baja, la del contrato vigente, o si esa baja sobra. Corríjalo allí '
+        'y guarde. Esta regla no lo arregla sola porque hace falta decidir cuál de los '
+        'datos es el bueno. Moderador: envíe una solicitud personalizada al '
+        'Administrador.')
 
     def ejecutar(self, contexto):
         CAlta = apps.get_model('contratos', 'CAlta')
@@ -858,6 +883,9 @@ class BajaConFechaFutura(ReglaBase):
     """MOV-010: una baja fechada más de 30 días después de hoy (3.9.0)."""
 
     codigo = 'MOV-010'
+    enlace_url = 'editor_historico_baja'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Baja con fecha más de 30 días en el futuro'
     modulo = MODULO_NOMINA
     criticidad = CRITICIDAD_ALTA
@@ -871,9 +899,10 @@ class BajaConFechaFutura(ReglaBase):
         'El trabajador figura como baja antes de tiempo, y la baja se cuenta en un mes '
         'que aún no ha llegado en la Dashboard, los informes y los cierres.')
     solucion = (
-        'Compruebe la fecha de la baja en el histórico del trabajador. Si está mal '
-        'escrita, corríjala desde el panel de administración; si la baja todavía no '
-        'ha ocurrido, regístrela el día en que ocurra.')
+        'Si la fecha de la baja está mal escrita, el Administrador la corrige en el '
+        'editor del histórico («Abrir el editor del histórico»). Si la baja todavía no '
+        'ha ocurrido, quítela allí y regístrela el día en que ocurra. Moderador: envíe '
+        'una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         from contratos.cronologia import fecha_maxima
@@ -906,6 +935,9 @@ class MovimientoConAnoImposible(ReglaMovimientos):
     en vez de «2026»). Complementa a CTR-017 / CTR-022, que miran el contrato."""
 
     codigo = 'MOV-011'
+    enlace_url = 'editor_historico_movimiento'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Movimiento con fecha efectiva imposible'
     criticidad = CRITICIDAD_ALTA
 
@@ -920,9 +952,10 @@ class MovimientoConAnoImposible(ReglaMovimientos):
         'El movimiento se ordena antes que todo el histórico del trabajador y sale con '
         'una fecha absurda en informes, documentos y en el cálculo de fechas mínimas.')
     solucion = (
-        'Corrija la fecha efectiva del movimiento desde el panel de administración, '
-        'escribiendo el año con cuatro cifras. Revise también el contrato: si nació del '
-        'mismo asistente, su fecha de alta tendrá el mismo error (regla CTR-022).')
+        'Administrador: pulse «Abrir el editor del histórico» y escriba de nuevo la '
+        'fecha del movimiento con el año de cuatro cifras. Si es el Alta Inicial, el '
+        'contrato toma la misma fecha al guardar (regla CTR-022). Moderador: envíe una '
+        'solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -946,12 +979,18 @@ class MovimientoConAnoImposible(ReglaMovimientos):
 class EventosDelMismoDia(ReglaMovimientos):
     """MOV-012: dos movimientos del mismo trabajador con la misma fecha efectiva.
 
+    RETIRADA el 19-11-2026 (decisión del usuario): la sustituye MOV-017 («Histórico
+    con dos eventos el mismo día»), que avisa una vez por persona y se arregla en el
+    editor del histórico. Sus hallazgos se archivan solos en el siguiente análisis
+    completo (`archivar_hallazgos_de_reglas_retiradas`), sin darlos por corregidos.
+
     Desde el 23-10-2026 (decisión de RRHH) dos eventos del histórico nunca caen el
     mismo día (`contratos/cronologia.py`). Se señala cada movimiento que repite la
     fecha de otro anterior (por `id`), no el primero: así el hallazgo apunta al que
     hay que mover.
     """
 
+    activa = False
     codigo = 'MOV-012'
     nombre = 'Dos eventos del histórico el mismo día'
     criticidad = CRITICIDAD_MEDIA
@@ -1000,6 +1039,9 @@ class MovimientoConFechaFutura(ReglaMovimientos):
     """MOV-013: movimiento con fecha efectiva o de solicitud de más de 30 días después de hoy."""
 
     codigo = 'MOV-013'
+    enlace_url = 'editor_historico_movimiento'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Movimiento con fecha más de 30 días en el futuro'
     criticidad = CRITICIDAD_ALTA
 
@@ -1014,9 +1056,10 @@ class MovimientoConFechaFutura(ReglaMovimientos):
         'evento del trabajador queda en el futuro: no se puede registrar ningún '
         'movimiento ni baja nuevos hasta después de esa fecha.')
     solucion = (
-        'Compruebe la fecha en el histórico del trabajador y corríjala desde el panel '
-        'de administración. Si el cambio todavía no ha ocurrido, regístrelo el día en '
-        'que ocurra.')
+        'Si la fecha está mal escrita, el Administrador la corrige en el editor del '
+        'histórico («Abrir el editor del histórico»). Si el cambio todavía no ha '
+        'ocurrido, quítelo allí y regístrelo el día en que ocurra. Moderador: envíe una '
+        'solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         from contratos.cronologia import fecha_maxima
@@ -1064,6 +1107,11 @@ class ContratoSinAltaInicial(ReglaBase):
     modulo = MODULO_NOMINA
     criticidad = CRITICIDAD_ALTA
     modelo = 'contratos.CAlta'
+    # Se arregla en el editor del histórico (18-11-2026): allí se crea el Alta que falta
+    # y el contrato toma su fecha al guardar. Los demás ven el botón del contrato.
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
 
     descripcion = (
         'Busca contratos sin un movimiento «Alta Inicial» con la misma fecha que su '
@@ -1077,9 +1125,11 @@ class ContratoSinAltaInicial(ReglaBase):
         'empezó el contrato, y la cadena de salarios (MOV-001) no tiene punto de '
         'partida.')
     solucion = (
-        'Si no hay Alta Inicial, regístrela desde el panel de administración con los '
-        'datos con que empezó el contrato. Si existe pero con otra fecha, corrija la '
-        'que esté equivocada (la del movimiento o la F. de Contratación).')
+        'Administrador: pulse «Abrir el editor del histórico». Si falta el Alta Inicial, '
+        'créela con «Crear el Alta Inicial» (sale con la F. de Contratación y los datos con '
+        'que empezó el contrato; revísela). Si existe con otra fecha, al guardar el contrato '
+        'toma la del Alta Inicial: si la correcta es la del contrato, corrija la del Alta. '
+        'Moderador: envíe una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         TMovimiento = apps.get_model('contratos', 'TMovimiento')
@@ -1304,5 +1354,77 @@ class HistoricoSinTipoDeContrato(ReglaBase):
                        f'del histórico sin tipo de contrato o sin motivo',
                 detalle='Incompletos: ' + '; '.join(textos[:5]) + ('…' if cuantos > 5 else '.'),
                 datos={f'evento_{n}': t for n, t in enumerate(textos[:10], start=1)},
+                unidad_organizativa_id=unidad,
+            )
+
+
+class HistoricoConEventosElMismoDia(ReglaBase):
+    """MOV-017: dos eventos del histórico el mismo día (18-11-2026).
+
+    Desde el 23-10-2026 el histórico no admite dos eventos el mismo día, pero los
+    datos de antes sí los tienen. El editor ya no se bloquea por ellos (solo los
+    avisa, con «Quitar el duplicado» y «Pasar al día siguiente»); esta regla da a los
+    Administradores la lista de personas para revisarlas. Un hallazgo por PERSONA.
+    """
+
+    codigo = 'MOV-017'
+    nombre = 'Histórico con dos eventos el mismo día'
+    modulo = MODULO_NOMINA
+    criticidad = CRITICIDAD_MEDIA
+    modelo = 'bolsa.Aspirante'
+    enlace_url = 'editor_historico'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
+
+    descripcion = (
+        'Busca las personas cuyo histórico tiene dos eventos (alta, movimiento de nómina '
+        'o baja) con la misma fecha.')
+    causa_probable = (
+        'Antes del 23-10-2026 Orbith dejaba registrar dos eventos el mismo día: por ejemplo, '
+        'el alta y un movimiento de nómina que repetía los mismos datos.')
+    impacto = (
+        'Con dos eventos el mismo día no se sabe cuál fue primero: el histórico, sus fechas '
+        'de inicio y fin y el vencimiento del contrato pueden salir mal.')
+    solucion = (
+        'Un Administrador abre el editor del histórico de la persona. Arriba aparece cada '
+        'par del mismo día con dos arreglos: «Quitar el duplicado» (si el segundo repite '
+        'exactamente lo mismo) o «Pasar al día siguiente». Revise y guarde. '
+        'Un Moderador puede pedirlo con una solicitud personalizada.')
+
+    def ejecutar(self, contexto):
+        TMovimiento = apps.get_model('contratos', 'TMovimiento')
+        ids = self.base_queryset().values('pk')
+        filas = (TMovimiento.objects
+                 .filter(Q(aspirante_id__in=ids) | Q(contrato__aspirante_id__in=ids))
+                 .values('aspirante_id', 'contrato__aspirante_id', 'fecha_efectiva', 'unidad_nueva_fk_id')
+                 .order_by('fecha_efectiva', 'id'))
+        por_persona = {}
+        for fila in filas:
+            persona = fila['aspirante_id'] or fila['contrato__aspirante_id']
+            dias = por_persona.setdefault(persona, {})
+            dias.setdefault(fila['fecha_efectiva'], []).append(fila)
+        repetidos = {persona: {dia: f for dia, f in dias.items() if len(f) > 1}
+                     for persona, dias in por_persona.items()}
+        repetidos = {persona: dias for persona, dias in repetidos.items() if dias}
+        if not repetidos:
+            return
+        Aspirante = apps.get_model('bolsa', 'Aspirante')
+        nombres = {a['id']: a for a in Aspirante.objects.filter(pk__in=repetidos).values(
+            'id', 'nombre', 'papellido', 'sapellido', 'doc_identidad')}
+        for persona, dias in repetidos.items():
+            datos_persona = nombres.get(persona) or {}
+            referencia = referencia_trabajador(
+                datos_persona.get('nombre'), datos_persona.get('papellido'),
+                datos_persona.get('sapellido'), datos_persona.get('doc_identidad'))
+            textos = [_fecha_texto(dia) for dia in sorted(dias)]
+            cuantos = len(textos)
+            unidad = next((f['unidad_nueva_fk_id'] for dia in sorted(dias, reverse=True)
+                           for f in dias[dia] if f['unidad_nueva_fk_id']), None)
+            yield HallazgoDetectado(
+                object_id=str(persona),
+                titulo=f'{referencia} · {cuantos} {"día" if cuantos == 1 else "días"} con dos eventos '
+                       f'en el histórico',
+                detalle='Días con más de un evento: ' + ', '.join(textos[:5]) + ('…' if cuantos > 5 else '.'),
+                datos={f'dia_{n}': t for n, t in enumerate(textos[:10], start=1)},
                 unidad_organizativa_id=unidad,
             )

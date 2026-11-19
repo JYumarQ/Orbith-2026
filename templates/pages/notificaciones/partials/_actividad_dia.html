@@ -1,0 +1,25 @@
+{% comment %} Lo que pasó un día, por tipo (`actividad_dia`): la unidad y quién lo
+   hizo. Los avisos idénticos (varias plazas del mismo cargo) van en una línea con
+   «×N». {% endcomment %}
+{% for t in tipos %}
+  <div class="orb-grupo-subtitulo">{{ t.nombre }} ({{ t.total }})</div>
+  {% for l in t.lineas %}
+    <div class="orb-grupo-fila">
+      <div class="orb-grupo-fila-texto">
+        {{ l.mensaje }}{% if l.veces > 1 %} <span class="badge bg-label-secondary">×{{ l.veces }}</span>{% endif %}
+        <small class="text-muted d-block">
+          {{ l.unidad__descripcion|default:"Sin unidad" }}
+          {% if l.es_mio %} · por ti{% elif l.autor__username %} · por {{ l.autor__username }}{% endif %}
+          · {{ l.ultima|date:"H:i" }}
+        </small>
+      </div>
+    </div>
+  {% endfor %}
+  {% if t.total > t.lineas|length %}
+    <div class="orb-grupo-pie">
+      <a href="?tab=notificaciones&dia={{ dia|date:'Y-m-d' }}&codigo={{ t.codigo_regla|urlencode }}">Ver {{ t.total|pluralize:"el,los" }} {{ t.total }} <i class="bx bx-right-arrow-alt"></i></a>
+    </div>
+  {% endif %}
+{% empty %}
+  <div class="text-muted small px-3 py-2">Sin actividad este día.</div>
+{% endfor %}

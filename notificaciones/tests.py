@@ -1301,15 +1301,18 @@ class BandejaPersonalTests(TestCase):
         self.assertFalse(self.copias['moderador_bandeja'].leido)
 
     def test_supervision_ensena_lo_que_tiene_pendiente_el_moderador(self):
+        # Agrupada por moderador y regla (18-11-2026); solo cuenta lo que hay que
+        # hacer: una solicitud sí, un alta (actividad) no.
+        Notificacion.objects.filter(pk=self.copias['moderador_bandeja'].pk).update(codigo_regla='SOL-NUEVA')
         self.client.force_login(self.admin)
         respuesta = self.client.get(reverse('lista_notificaciones') + '?tab=supervision')
-        avisos = list(respuesta.context['supervision'])
-        self.assertEqual(len(avisos), 1)
-        self.assertEqual(avisos[0]['moderadores'], [{'usuario': 'moderador_bandeja', 'leido': False}])
+        moderadores = respuesta.context['moderadores']
+        self.assertEqual([(m['usuario'], m['sin_leer']) for m in moderadores], [('moderador_bandeja', 1)])
+        self.assertEqual([(g['codigo_regla'], g['sin_leer']) for g in moderadores[0]['grupos']], [('SOL-NUEVA', 1)])
         # Cuando el moderador lo lee, deja de estar pendiente.
         Notificacion.objects.filter(pk=self.copias['moderador_bandeja'].pk).update(leido=True)
         respuesta = self.client.get(reverse('lista_notificaciones') + '?tab=supervision')
-        self.assertEqual(list(respuesta.context['supervision']), [])
+        self.assertEqual(respuesta.context['moderadores'], [])
 
     def test_el_moderador_no_tiene_supervision(self):
         self.client.force_login(self.moderador)

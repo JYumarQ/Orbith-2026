@@ -165,17 +165,48 @@ def cerrar_mes(anno, mes):
                 for fila in filas
                 if fila['xp'] > 0 and fila['puesto'] <= PUESTOS_PREMIADOS
             ]
+            ganadores += _mas_mejorados(anno, mes, clasificaciones, ganadores)
             GanadorMes.objects.bulk_create(ganadores)
             # Un mes sin ninguna actividad (antes de activar el Ranking) se
             # cierra en silencio: no tiene sentido avisar "no sumaste XP" a todos.
             inicio, fin = limites_mes(anno, mes)
             if ActividadXP.objects.filter(dia__gte=inicio, dia__lt=fin).exists():
-                avisar_cierre(cerrado, clasificaciones)
+                avisar_cierre(cerrado, clasificaciones,
+                              {g.usuario_id: g for g in ganadores if g.puesto == PUESTO_MEJORADO})
             limpiar_meses_antiguos(*mes_anterior(anno, mes, -1))
     except IntegrityError:
         # Otra petición lo cerró a la vez.
         return False
     return True
+
+
+#: `GanadorMes.puesto` del «Más mejorado del mes».
+PUESTO_MEJORADO = 0
+
+
+def _mas_mejorados(anno, mes, clasificaciones, premiados):
+    """«Más mejorado del mes» de cada rol (18-11-2026): quien más XP subió respecto
+    a su mes anterior, con al menos el nivel Activo este mes y sin medalla (nadie se
+    lleva dos distinciones). Con empate, los dos."""
+    from .puntos import UMBRALES
+
+    con_medalla = {g.usuario_id for g in premiados}
+    anteriores = totales_del_mes(*mes_anterior(anno, mes))
+    mejorados = []
+    for rol, filas in clasificaciones.items():
+        candidatos = [
+            (fila['xp'] - anteriores.get(fila['usuario'].pk, 0), fila)
+            for fila in filas
+            if fila['xp'] >= UMBRALES[rol][1] and fila['usuario'].pk not in con_medalla
+        ]
+        candidatos = [(subida, fila) for subida, fila in candidatos if subida > 0]
+        if not candidatos:
+            continue
+        mejor = max(subida for subida, _fila in candidatos)
+        mejorados += [GanadorMes(anno=anno, mes=mes, rol=rol, usuario=fila['usuario'],
+                                 puesto=PUESTO_MEJORADO, xp=fila['xp'], subida=subida)
+                      for subida, fila in candidatos if subida == mejor]
+    return mejorados
 
 
 def limpiar_meses_antiguos(anno, mes):
@@ -214,6 +245,34 @@ def cerrar_mes_si_toca(hoy=None):
         return False
 
 
+#: Día del mes en que se anima a quien no llegó al nivel Activo.
+DIA_AVISO_REZAGADOS = 15
+
+# Mes que ESTE proceso ya avisó (mismo truco que `_mes_revisado`).
+_rezagados_avisados = None
+
+
+def avisar_rezagados_si_toca(hoy=None):
+    """Desde el día 15, una vez al mes, avisa a los rezagados
+    (`avisos.avisar_rezagados`). La llama el middleware en cada petición, pero solo
+    consulta la base de datos una vez al mes por proceso; si el día 15 nadie entra,
+    se avisa el siguiente día que alguien entre. Nunca lanza excepciones."""
+    global _rezagados_avisados
+    hoy = hoy or timezone.localdate()
+    actual = (hoy.year, hoy.month)
+    if hoy.day < DIA_AVISO_REZAGADOS or _rezagados_avisados == actual:
+        return 0
+    try:
+        from .avisos import avisar_rezagados
+        with transaction.atomic():
+            avisados = avisar_rezagados(*actual)
+        _rezagados_avisados = actual
+        return avisados
+    except Exception:
+        logger.exception('No se pudo avisar a los rezagados del Ranking')
+        return 0
+
+
 # ----------------------------------------------------------------------
 # Ventana "Ranking Mensual Orbith" del usuario
 # ----------------------------------------------------------------------
@@ -235,6 +294,7 @@ ICONOS = {
     Actividad.SOLICITUD_APROBADA: 'bx-check-circle',
     Actividad.CIERRE_EN_PLAZO: 'bx-lock-alt',
     Actividad.HALLAZGO_REVISADO: 'bx-search-alt',
+    Actividad.HALLAZGO_CORREGIDO: 'bx-check-shield',
     Actividad.RECORDATORIO_COMPLETADO: 'bx-task',
     Actividad.SOLICITUD_DECIDIDA: 'bx-list-check',
     Actividad.ANALISIS_SUBSANACION: 'bx-analyse',
@@ -245,7 +305,7 @@ ICONOS = {
 }
 
 
-METALES = {1: 'oro', 2: 'plata', 3: 'bronce'}
+METALES = {1: 'oro', 2: 'plata', 3: 'bronce', PUESTO_MEJORADO: 'mejorado'}
 
 
 def distincion_de(usuario, hoy=None):
@@ -350,13 +410,14 @@ def datos_ventana(usuario, hoy=None):
         m['porcentaje'] = max(4, round(100 * m['xp'] / maximo)) if m['xp'] else 0
 
     ganadores = []
-    for g in (GanadorMes.objects.filter(rol=rol).select_related('usuario__contrato__aspirante')
-              .order_by('-anno', '-mes', 'puesto')):
+    # El «Más mejorado» (puesto 0) va después de las medallas.
+    for g in sorted(GanadorMes.objects.filter(rol=rol).select_related('usuario__contrato__aspirante'),
+                    key=lambda g: (-g.anno, -g.mes, g.puesto == PUESTO_MEJORADO, g.puesto)):
         etiqueta = f'{MESES[g.mes - 1]} {g.anno}'
         if not ganadores or ganadores[-1]['etiqueta'] != etiqueta:
             ganadores.append({'etiqueta': etiqueta, 'personas': []})
         ganadores[-1]['personas'].append(
-            _persona({'usuario': g.usuario, 'xp': g.xp, 'puesto': g.puesto}, usuario))
+            _persona({'usuario': g.usuario, 'xp': g.xp, 'puesto': g.puesto, 'subida': g.subida}, usuario))
 
     return {
         'rol': rol,

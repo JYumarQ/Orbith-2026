@@ -399,7 +399,6 @@
         
         // 🔥 VALIDACIÓN FRONTEND: Nocturnidad ocupada
         if (noct_id) {
-            console.log('noct_id en guardado:', noct_id);
             let ocupado = false;
             let ocupadoPor = '';
             $('.select-nocturnidad:not(.input-nocturnidad)').each(function() {
@@ -422,12 +421,6 @@
             const url = id ? `/nomencladores/api/condiciones/update/${id}/` : "/nomencladores/api/condiciones/";
             const method = id ? 'PUT' : 'POST';
             
-            console.log('Enviando al backend:', { 
-                nombre, 
-                tarifa_hora: tarifa,      // Esto es un string
-                nocturnidad_id: noct_id 
-            });
-
             const res = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
@@ -661,7 +654,6 @@
     // 2. VALIDACIÓN 1 A 1 EN CONDICIONES LABORALES
     // ==========================================
     $(document).on('change', '.select-nocturnidad, .input-nocturnidad', function() {
-        console.log('Evento change disparado en:', this);
         const $select = $(this);
         const $selectedOption = $select.find('option:selected');
         const ocupadoPor = $selectedOption.attr('data-ocupado-por');

@@ -21,11 +21,11 @@ from django.db.models import Q, ProtectedError, Value
 from django.db.models.functions import Concat
 from django.db import transaction
 from xhtml2pdf import pisa
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from .forms import CAltaForm, MovimientoForm
 from .cronologia import (bloquear_historico, ultimo_evento, validar_fecha_evento,
                          validar_fecha_no_futura)
-from docxtpl import DocxTemplate, RichText
+from docxtpl import DocxTemplate, Listing, RichText
 from io import BytesIO
 import os
 import logging
@@ -119,6 +119,11 @@ class ContratoListView(ListView):
         # misma consulta.
         qs = anotar_recontratado(CAlta.con_fecha_ultimo_movimiento(qs))
         qs = anotar_movimientos_del_periodo(self.request, qs)
+        # Búsqueda que llega en el enlace (botón del aviso CTR-008, 19-11-2026): la
+        # misma que aplica el buscador de la pantalla (`_contratos_de_la_lista`).
+        busqueda = self.request.GET.get('filter_contrato', '').strip()
+        if busqueda:
+            qs = _aplicar_busqueda_contratos(qs, busqueda)
         return aplicar_filtros(self.request, qs.select_related(
             'aspirante',
             'tipo',
@@ -147,6 +152,7 @@ class ContratoListView(ListView):
         filas = list(context['object_list'])
         context['object_list'] = marcar(filas, problemas_por_contrato(filas), 'contrato')
         context['filtro_problemas'] = self.request.GET.get('problemas', '')
+        context['filtro_busqueda'] = self.request.GET.get('filter_contrato', '')
         context['form'] = CAltaForm()
         context['search_url'] = 'search_contrato'
         context['causas_baja'] = NCausaAltaBaja.objects.filter(alta=False)
@@ -505,6 +511,14 @@ def _contratos_de_la_lista(request, *relaciones_extra):
     return contratos_list
 
 
+def contratos_del_trabajador(request, aspirante_id):
+    """La lista de Contratos buscando a esa persona por su carnet. La usa el botón del
+    aviso CTR-008 (más de un contrato de alta), 19-11-2026: ahí se ve cuál sobra y se
+    tramita su baja. La lista ya acota lo que cada uno puede ver."""
+    persona = get_object_or_404(Aspirante, pk=aspirante_id)
+    return redirect(f"{reverse('list_contrato')}?filter_contrato={persona.doc_identidad}")
+
+
 def search_contratos(request):
     contratos_list = _contratos_de_la_lista(request)
 
@@ -645,6 +659,21 @@ def cargar_cargos(request):
             
     return render(request, 'pages/contrato/partials/options_cargos.html', {'cargos': cargos})
 
+
+
+#: Texto de la ventana y del PDF para un evento sin fecha registrada (18-11-2026).
+SIN_FECHA = 'Sin fecha'
+
+
+def _clave_fecha(fecha):
+    """Clave para ordenar el histórico. Un evento sin fecha (por ejemplo, un contrato
+    sin F. de Contratación, regla CTR-004) va el primero en lugar de romper la ventana:
+    en la empresa, el histórico de esa persona daba error 500 (18-11-2026)."""
+    return fecha or date.min
+
+
+def _texto_fecha(fecha):
+    return fecha.strftime('%d/%m/%Y') if fecha else SIN_FECHA
 
 
 def historico_trabajador(request, aspirante_id):
@@ -864,7 +893,7 @@ def historico_trabajador(request, aspirante_id):
         item['a_mano'] = bool(mov is not None and mov.escrito_a_mano)
 
     # --- ORDENACIÓN Y LÓGICA CRONOLÓGICA ---
-    hitos.sort(key=lambda x: x['fecha_orden'])
+    hitos.sort(key=lambda x: _clave_fecha(x['fecha_orden']))
 
     lista_final = []
     total = len(hitos)
@@ -902,13 +931,15 @@ def historico_trabajador(request, aspirante_id):
             # REGLA A: Contrato (Alta/Mov) seguido por su propia Baja.
             # El contrato termina el mismo día que se emite la baja.
             if not item['es_baja'] and proximo['es_baja'] and item['expediente'] == proximo['expediente']:
-                item['fecha_fin'] = proximo['fecha_inicio'].strftime('%d/%m/%Y')
-            
+                item['fecha_fin'] = _texto_fecha(proximo['fecha_inicio'])
+
             # REGLA B: Baja seguida por Recontratación (o Movimiento seguido por otro Movimiento).
             # El estado anterior termina un día antes de que empiece el nuevo hito.
-            else:
+            elif proximo['fecha_inicio']:
                 fin_dt = proximo['fecha_inicio'] - timedelta(days=1)
                 item['fecha_fin'] = fin_dt.strftime('%d/%m/%Y')
+            else:
+                item['fecha_fin'] = SIN_FECHA
 
         # 3. Asignar Colores (Solo para la fecha fin)
         colores = {
@@ -921,7 +952,8 @@ def historico_trabajador(request, aspirante_id):
         item['estado_clase'] = colores.get(item['evento'], 'text-muted')
         
         # Formatear fecha inicio
-        item['fecha_inicio_str'] = item['fecha_inicio'].strftime('%d/%m/%Y')
+        item['fecha_inicio_str'] = _texto_fecha(item['fecha_inicio'])
+        item['sin_fecha'] = item['fecha_inicio'] is None
         lista_final.append(item)
 
     # --- CAMBIOS EXTERNOS (23-10-2026) ---
@@ -949,7 +981,7 @@ def historico_trabajador(request, aspirante_id):
             'salario': '---', 'es_baja': False, 'estado_clase': 'text-secondary',
         })
     # Orden estable: en el mismo día, el movimiento va antes que el cambio externo.
-    lista_final.sort(key=lambda x: (x['fecha_orden'], bool(x.get('es_cambio_externo'))))
+    lista_final.sort(key=lambda x: (_clave_fecha(x['fecha_orden']), bool(x.get('es_cambio_externo'))))
     lista_final = _con_situaciones(lista_final)
 
     return JsonResponse({'data': lista_final, 'encabezado': encabezado})
@@ -1558,6 +1590,21 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
         kwargs['user'] = self.request.user
         return kwargs
 
+    def get_initial(self):
+        """Desde el aviso de años de servicio (19-11-2026) llegan la fecha del aniversario
+        y la marca `annos_servicio`: el movimiento se abre con la fecha efectiva y la
+        observación ya puestas (se pueden cambiar antes de guardar)."""
+        initial = super().get_initial()
+        from django.utils.dateparse import parse_date
+        fecha = parse_date(self.request.GET.get('fecha_efectiva') or '')
+        if fecha:
+            initial['fecha_efectiva'] = fecha.isoformat()
+            if self.request.GET.get('annos_servicio') and self.object.fecha_alta_entidad:
+                from prenomina.captura import annos_de_servicio
+                annos = annos_de_servicio(self.object.fecha_alta_entidad, fecha)
+                initial['observaciones'] = 'Cambio por años de servicio (%d años).' % annos
+        return initial
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         contrato = self.object
@@ -1638,15 +1685,19 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             # observaciones no tienen valor inicial, así que este aviso nunca
             # saltaba (24-10-2026). Escribir solo un número de resolución tampoco es
             # un movimiento: eso se hace editando el contrato.
+            #
+            # Desde el 19-11-2026 un movimiento SIN cambios se permite, pero con
+            # confirmación (decisión de RRHH): sirve, por ejemplo, para registrar el
+            # cambio de años de servicio, que solo cambia «Otros».
             cambios = [c for c in form.changed_data if c in MovimientoForm.CAMPOS_DEL_MOVIMIENTO]
-            if not cambios:
-                mensaje = "No se ha aplicado ningún cambio válido. Modifique algún dato para generar un movimiento."
-                
+            if not cambios and self.request.POST.get('confirmar_sin_cambios') != '1':
+                mensaje = ("Este movimiento no cambia ningún dato del contrato (cargo, tipo, motivo, "
+                           "duración, tipo de salario ni tridente). ¿Registrarlo igual? Sirve, por "
+                           "ejemplo, para el cambio de años de servicio.")
                 if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'form_is_valid': False, 'error_popup': mensaje}, status=400)
-                else:
-                    form.add_error(None, mensaje)
-                    return self.form_invalid(form)
+                    return JsonResponse({'form_is_valid': False, 'confirmar_sin_cambios': mensaje}, status=400)
+                form.add_error(None, mensaje)
+                return self.form_invalid(form)
             
             # Obtenemos el contrato previo seguro para extraer la historia
             contrato_previo = CAlta.objects.get(pk=self.object.pk)
@@ -1712,8 +1763,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
                 rol_anterior=rol_ant_str,       
                 tridente_anterior=tri_ant_str,  
                 salario_anterior=salario_ant,
-                # «Otros» congelado (24-10-2026); el «A» se anota tras guardar.
-                otros_anterior=contrato_previo.importe_otros,
+                # «Otros» congelado (24-10-2026); el «A» se anota tras guardar. Con los
+                # años de servicio del día anterior a la fecha efectiva (19-11-2026).
+                otros_anterior=contrato_previo.importe_otros_a(
+                    (nueva_fecha or timezone.now().date()) - timedelta(days=1)),
                 unidad_anterior=unidad_ant,
                 unidad_anterior_fk=unidad_ant_obj,
                 tipo_contrato_anterior=tipo_ant_str, # <--- NUEVO
@@ -1742,8 +1795,10 @@ class MovimientoUpdateView(RequiereEdicionMixin, ModalOPaginaCompletaMixin, Volv
             form.instance.en_proceso_movimiento = False
             self.object = form.save()
             # Releído de la base: así las fechas ya son fechas y no el texto del formulario.
+            # «A»: con los años de servicio a la fecha efectiva (19-11-2026).
             TMovimiento.objects.filter(pk=nuevo_mov.pk).update(
-                otros_nuevo=CAlta.objects.get(pk=self.object.pk).importe_otros)
+                otros_nuevo=CAlta.objects.get(pk=self.object.pk).importe_otros_a(
+                    nuevo_mov.fecha_efectiva))
             registro_automatico.registrar(
                 self.object, AccionAuditoria.MOVIMIENTO, antes=antes_auditoria,
                 despues=registro_automatico.fotografia(self.object, con_vacios=True))
@@ -1877,6 +1932,13 @@ class ModeloMovimientoDocxView(View):
         # la tarifa queda vacía y la regla CFG-004 lo avisa).
         fondo = float(parametros_de_tarifa()[0] or 0)
 
+        # Cabecera «ENTIDAD: … / Empresa: …» desde Parámetros Generales (18-11-2026). Si el
+        # nombre ya empieza por «Empresa» no se repite la etiqueta.
+        config = Configuracion.objects.first()
+        nombre_empresa = ((config.nombre_empresa or '') if config else '').strip()
+        empresa_texto = (nombre_empresa if nombre_empresa.lower().startswith('empresa')
+                         else ('Empresa: %s' % nombre_empresa if nombre_empresa else ''))
+
         # --- FUNCIONES DE FORMATO LIBRES DE "NONE" ---
         def obtener_inicial_categoria(cat_str):
             if not cat_str or str(cat_str) == "None": return ""
@@ -1887,6 +1949,15 @@ class ModeloMovimientoDocxView(View):
             if "SERVICIOS" in cat: return "S"
             if "ADMINISTRATIVO" in cat: return "A"
             return cat[0]
+
+        def cifra(importe):
+            """«3680.00» y debajo «(19.30745)»: el importe y su tarifa horaria en dos
+            líneas (decisión de RRHH del 18-11-2026). `Listing` conserva la letra de la
+            celda de la plantilla. Vacío si no hay importe."""
+            if not importe or importe <= 0:
+                return ""
+            tarifa = importe / fondo if fondo else 0
+            return Listing(f"{importe:.2f}\n({tarifa:.5f})")
 
         def formatear_tridente(tri_obj):
             """Extrae el numeral romano (I/II/III) del texto guardado ("Tridente I", etc.)
@@ -1938,7 +2009,13 @@ class ModeloMovimientoDocxView(View):
         if not cat_str or cat_str == "---":
             cat_str = cargo_ref.ncargo.get_cat_ocupacional_display() if cargo_ref and hasattr(cargo_ref.ncargo, 'get_cat_ocupacional_display') else ""
         
-        cat_val = obtener_inicial_categoria(cat_str)
+        # «S - IV»: la categoría y, al lado, el grupo de la escala (decisión de RRHH del
+        # 18-11-2026; también en los cuadros). Sin grupo, solo la categoría.
+        grupo_str = getattr(obj, 'grupo_escala_nuevo', None) if es_movimiento_real else ""
+        if not grupo_str or grupo_str == "---":
+            grupo_str = (cargo_ref.ncargo.grupo_escala.nivel
+                         if cargo_ref and cargo_ref.ncargo.grupo_escala_id else "")
+        cat_val = " - ".join(p for p in (obtener_inicial_categoria(cat_str), grupo_str) if p)
 
         # Extracción segura del Rol
         rol_n = getattr(obj, 'rol_nuevo', "") if es_movimiento_real else ""
@@ -1964,8 +2041,7 @@ class ModeloMovimientoDocxView(View):
 
         # --- LÓGICA DE SALARIOS BASE ---
         salario_base_num = float(getattr(obj, 'salario_nuevo', 0) or 0) if es_movimiento_real else float(contrato_base.calcular_salario_escala() or 0)
-        tarifa_base_num = salario_base_num / fondo if fondo else 0
-        salario_str = f"{salario_base_num:.2f} ({tarifa_base_num:.5f})" if salario_base_num > 0 else ""
+        salario_str = cifra(salario_base_num)
 
         # --- OTROS Y TOTAL ---
         # Desde el 24-10-2026 «Otros» (grado científico + Instructor + CNCI + Años
@@ -1977,15 +2053,8 @@ class ModeloMovimientoDocxView(View):
         elif contrato_base is not None and not es_movimiento_real:
             suma_otros_num = float(contrato_base.importe_otros)
 
-        if suma_otros_num > 0:
-            tarifa_otros_num = suma_otros_num / fondo if fondo else 0
-            otros_str = f"{suma_otros_num:.2f} ({tarifa_otros_num:.5f})"
-        else:
-            otros_str = ""
-        
-        total_num = salario_base_num + suma_otros_num
-        tarifa_total_num = total_num / fondo if fondo else 0
-        total_str = f"{total_num:.2f} ({tarifa_total_num:.5f})" if total_num > 0 else ""
+        otros_str = cifra(suma_otros_num)
+        total_str = cifra(salario_base_num + suma_otros_num)
 
         # --- LÓGICA DE FECHAS (CORREGIDA) ---
         f_sol = getattr(obj, 'fecha_solicitud', None)
@@ -2010,6 +2079,9 @@ class ModeloMovimientoDocxView(View):
         context = {
             'doc_id': f"{obj.pk:06d}" if es_movimiento_real and not es_alta else "", 
             'ueb': ueb_val,
+            # Cabecera desde Parámetros Generales (18-11-2026); antes, escrita en la plantilla.
+            'org_superior': (config.org_superior or '') if config else '',
+            'empresa_texto': empresa_texto,
             
             # CABECERA SUPERIOR → FECHA DE SOLICITUD (o vacío)
             'd': d_sol,
@@ -2047,20 +2119,12 @@ class ModeloMovimientoDocxView(View):
         # --- FILA "DE:" (HISTÓRICO) ---
         if es_movimiento_real:
             sal_ant_num = float(getattr(obj, 'salario_anterior', 0) or 0)
-            tarifa_ant_num = sal_ant_num / fondo if fondo else 0
             
             # «Otros» de antes, congelado en el movimiento (24-10-2026).
             suma_otros_ant = float(getattr(obj, 'otros_anterior', None) or 0)
 
-            if suma_otros_ant > 0:
-                tarifa_otros_ant = suma_otros_ant / fondo if fondo else 0
-                otros_ant_str = f"{suma_otros_ant:.2f} ({tarifa_otros_ant:.5f})"
-            else:
-                otros_ant_str = ""
-
-            total_ant_num = sal_ant_num + suma_otros_ant
-            tarifa_total_ant = total_ant_num / fondo if fondo else 0
-            total_ant_str = f"{total_ant_num:.2f} ({tarifa_total_ant:.5f})" if total_ant_num > 0 else ""
+            otros_ant_str = cifra(suma_otros_ant)
+            total_ant_str = cifra(sal_ant_num + suma_otros_ant)
 
             # Extraemos el Rol asegurándonos de que si viene la palabra "None" la borre
             rol_ant_bd = str(getattr(obj, 'rol_anterior', ""))
@@ -2068,7 +2132,7 @@ class ModeloMovimientoDocxView(View):
             context.update({
                 'rol_ant': "" if rol_ant_bd == "None" else rol_ant_bd,
                 'tri_ant': formatear_tridente(getattr(obj, 'tridente_anterior', "")),
-                'sal_ant': f"{sal_ant_num:.2f} ({tarifa_ant_num:.5f})" if sal_ant_num > 0 else "",
+                'sal_ant': cifra(sal_ant_num),
                 'otros_ant': otros_ant_str,
                 'total_ant': total_ant_str,
             })
@@ -2522,7 +2586,7 @@ def finalizar_contrato_wizard(request, aspirante_id):
                     # «Otros» congelado del alta (24-10-2026).
                     # Releído de la base: en el asistente las fechas aún llegan como texto.
                     TMovimiento.objects.filter(pk=mov_alta.pk).update(
-                        otros_nuevo=CAlta.objects.get(pk=contrato.pk).importe_otros)
+                        otros_nuevo=CAlta.objects.get(pk=contrato.pk).importe_otros_a(contrato.fecha_alta))
                     # Apuntamos al movimiento recién creado, no al contrato: así el
                     # documento no depende de resolver un pk ambiguo entre tablas.
                     pdf_url = reverse('imprimir_movimiento', kwargs={'pk': mov_alta.pk})
@@ -2933,6 +2997,18 @@ class ExportarContratoWordView(FormView):
             res_no = contrato.funcionario_res
         elif contrato.designado and contrato.designado_res:
             res_no = contrato.designado_res
+        elif contrato.de_confianza and contrato.confianza_res:
+            res_no = contrato.confianza_res
+
+        # Procedimiento OC-PH 0503 nuevo (18-11-2026): lugar de trabajo (cláusula
+        # PRIMERO) y el importe de los años de servicio a la fecha del documento.
+        cargo = contrato.cargo
+        departamento = cargo.departamento if cargo and cargo.departamento_id else None
+        lugar_trabajo = ", ".join(p for p in (
+            departamento.descripcion if departamento else "",
+            departamento.unidad_organizativa.descripcion if departamento else "") if p)
+        from .annos_servicio import annos_y_pago
+        _, importe_annos = annos_y_pago(contrato.fecha_alta_entidad, fecha_efectiva)
 
         # 6. Código del tridente en números romanos ('I', 'II', 'III')
         tridente_codigo = (contrato.tridente.tipo or '').strip().upper() if contrato.tridente else ''
@@ -2947,6 +3023,7 @@ class ExportarContratoWordView(FormView):
                 if contrato.cargo and contrato.cargo.departamento and contrato.cargo.departamento.unidad_organizativa
                 else ""
             ),
+            'empresa_nombre': (config.nombre_empresa or "") if config else "",
             'entidad_direccion': config.direccion if config else "",
             'entidad_rama': config.rama if config else "",
             'entidad_provincia': entidad_provincia, 
@@ -2955,6 +3032,7 @@ class ExportarContratoWordView(FormView):
             'empleador_cargo': empleador_cargo,
 
             # TRABAJADOR
+            'lugar_trabajo': lugar_trabajo,
             'trabajador_nombre': f"{contrato.aspirante.nombre} {contrato.aspirante.papellido} {contrato.aspirante.sapellido or ''}".strip(),
             'trabajador_ci': contrato.aspirante.doc_identidad,
             'trabajador_fecha_nacimiento': self._extraer_fecha_nacimiento(contrato.aspirante.doc_identidad).replace('_', ''),
@@ -3005,6 +3083,7 @@ class ExportarContratoWordView(FormView):
             'pago_cla': f"(${contrato.cla.tarifa_hora})" if contrato.cla else "",
             'pago_nocturnidad': cleaned_data.get('nocturnidad_texto') or "",
             'pago_cnci': contrato.importe_cnci or "",
+            'pago_annos_servicio': f"${importe_annos:.2f}" if importe_annos else "",
             'check_maestria': "X" if getattr(contrato, 'importe_maestria', 0) > 0 else "",
             'maestria_importe': f"${contrato.importe_maestria}" if getattr(contrato, 'importe_maestria', 0) > 0 else "",
             'check_doctorado': "X" if getattr(contrato, 'importe_doctorado', 0) > 0 else "",
@@ -3017,6 +3096,15 @@ class ExportarContratoWordView(FormView):
             'resolucion_nombramiento_no': res_no,
             'check_es_funcionario': "X" if contrato.funcionario else "",
             'check_es_designado': "X" if contrato.designado else "",
+            'check_es_confianza': "X" if contrato.de_confianza else "",
+
+            # Modificación · «Motivo del cambio» (18-11-2026): se marca cada interruptor
+            # activo del contrato; sin ninguno, Presencial. Semipresencial, a mano.
+            'check_distancia': "X" if contrato.trabajo_distancia else "",
+            'check_teletrabajo': "X" if contrato.teletrabajo else "",
+            'check_pluriempleo': "X" if contrato.pluriempleo else "",
+            'check_presencial': "" if (contrato.trabajo_distancia or contrato.teletrabajo
+                                       or contrato.pluriempleo) else "X",
             'municipio_firma': entidad_municipio,
             'firma_dia': firma_dia,
             'firma_mes': firma_mes,

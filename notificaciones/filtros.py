@@ -8,7 +8,7 @@ filtro que ya no existe siga mostrando el listado en vez de fallar).
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q
 
-from subsanacion.constantes import CLAVES_MODULOS, CRITICIDADES, MODULOS_CHOICES
+from subsanacion.constantes import CLAVES_MODULOS, CRITICIDAD_INFORMATIVA, CRITICIDADES, MODULOS_CHOICES
 from subsanacion.reglas import obtener_reglas
 
 from .models import Notificacion
@@ -68,7 +68,9 @@ def opciones_de_filtro(usuario):
         'reglas': sorted(
             ((codigo, catalogo_reglas.get(codigo, codigo)) for codigo in codigos_presentes if codigo),
             key=lambda par: par[1]),
-        'severidades': CRITICIDADES,
+        # Las Informativas ya no son avisos (se ven solo en Subsanación).
+        'severidades': [(valor, etiqueta) for valor, etiqueta in CRITICIDADES
+                        if valor < CRITICIDAD_INFORMATIVA],
         'unidades': [],
         'modelos': modelos,
         'destinatarios': [],
@@ -144,16 +146,21 @@ SUBTABS_ADVERTENCIAS = {
 
 
 def filtrar_advertencias(request, usuario):
-    """Devuelve `(lista_deduplicada, contexto_de_filtros)` sobre las alertas visibles
+    """`consulta_advertencias` con las copias de un mismo aviso colapsadas en una
+    sola fila (`_deduplicar`): lo que enseña la tabla."""
+    consulta, contexto = consulta_advertencias(request, usuario)
+    return _deduplicar(consulta, usuario), contexto
+
+
+def consulta_advertencias(request, usuario):
+    """Devuelve `(consulta, contexto_de_filtros)` sobre las alertas visibles
     para `usuario`, según la subpestaña (`sub`) y los parámetros de filtro de la URL.
 
-    Antes del punto de retorno partía de un queryset de `_notificaciones_visibles(usuario)`
-    (el propio módulo lo importa de forma local para evitar un import circular:
-    `views.py` ya importa `filtros.py`); se materializa y deduplica al final
-    (`_deduplicar`), así que lo que devuelve ya no es un queryset perezoso — a esta
-    escala de datos (cientos de filas, no millones) no compensa la complejidad de
-    deduplicar en SQL con `DISTINCT ON`, que además obligaría a ordenar por la clave
-    de deduplicación en vez de por severidad/fecha.
+    Parte de `_notificaciones_visibles(usuario)` (importado de forma local para
+    evitar un import circular: `views.py` ya importa `filtros.py`) y devuelve la
+    consulta SIN materializar: los grupos por regla (`agrupar.grupos_de_advertencias`)
+    cuentan sobre ella en la base de datos, y la tabla la deduplica después
+    (`filtrar_advertencias`).
     """
     from .views import _notificaciones_visibles
 
@@ -207,7 +214,7 @@ def filtrar_advertencias(request, usuario):
             busqueda or modulos or codigos_regla or severidades
             or unidades or modelos or destinatarios),
     }
-    return _deduplicar(consulta, usuario), contexto
+    return consulta, contexto
 
 
 def filtrar_recordatorios(request, usuario, origen):
@@ -240,6 +247,10 @@ def filtrar_recordatorios(request, usuario, origen):
     if busqueda:
         consulta = consulta.filter(
             Q(titulo__icontains=busqueda) | Q(mensaje__icontains=busqueda))
+    # «Ver todos» de un grupo (18-11-2026).
+    codigo = (request.GET.get('codigo') or '').strip()
+    if codigo:
+        consulta = consulta.filter(codigo_regla=codigo)
 
     if prioridad:
         # La prioridad no es una columna: se calcula al vuelo desde `fecha_objetivo`
@@ -251,6 +262,7 @@ def filtrar_recordatorios(request, usuario, origen):
     contexto = {
         'q': busqueda,
         'prioridad_actual': prioridad,
-        'hay_filtros': bool(busqueda or prioridad),
+        'codigo_actual': codigo,
+        'hay_filtros': bool(busqueda or prioridad or codigo),
     }
     return _deduplicar(consulta, usuario), contexto

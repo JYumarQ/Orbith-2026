@@ -1,12 +1,58 @@
 {% load static %}
 {% load estaticos %}
-{% comment %} Pestaña «Notificaciones»: solo eventos informativos, sin panel de
-   filtros — el volumen esperado es bajo y no lo pidió el usuario. {% endcomment %}
-{% include 'pages/notificaciones/partials/toolbar_notificacion.html' %}
+{% comment %} Pestaña «Notificaciones» (18-11-2026), en dos partes: los avisos que
+   piden algo (solicitudes, decisiones, Ranking…), uno a uno, y la «Actividad»
+   (altas, bajas, cargos nuevos, cambios salariales) agrupada por día y tipo. Con
+   `actividad_de` es la lista completa de un tipo en un día («Ver todos»). La
+   construye `notificaciones/views.py::_contexto_tab_notificaciones`. {% endcomment %}
 
-<div id="resultados-notificaciones">
+{% if actividad_de %}
+  <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+    <a href="?tab=notificaciones" class="btn btn-sm btn-link px-0"><i class="bx bx-arrow-back me-1"></i>Volver</a>
+    <h6 class="mb-0">{{ actividad_de.nombre }} del {{ actividad_de.dia|date:"d/m/Y" }}</h6>
+  </div>
+{% else %}
+  <h6 class="text-muted text-uppercase small fw-bold mb-2">Avisos</h6>
+{% endif %}
+
+{% include 'pages/notificaciones/partials/toolbar_notificacion.html' %}
+<div id="resultados-notificaciones" class="mb-4">
   {% include 'pages/notificaciones/partials/_tabla.html' %}
 </div>
+
+{% if not actividad_de %}
+  <h6 class="text-muted text-uppercase small fw-bold mb-2">Actividad</h6>
+  {% for d in dias %}
+    <details class="orb-grupo" {% if d.dia == hoy %}open{% endif %}
+             hx-get="{% url 'actividad_dia' %}?dia={{ d.dia|date:'Y-m-d' }}"
+             hx-trigger="{% if d.dia == hoy %}load{% else %}toggle once{% endif %}"
+             hx-target="find .orb-grupo-cuerpo" hx-swap="innerHTML">
+      <summary class="orb-grupo-cabecera">
+        <i class="bx bx-chevron-right orb-grupo-flecha" aria-hidden="true"></i>
+        <i class="bx bx-calendar text-muted" aria-hidden="true"></i>
+        <span class="orb-grupo-titulo">
+          {% if d.dia == hoy %}Actividad de hoy · {% endif %}{{ d.nombre_dia }} {{ d.dia|date:"d/m/Y" }}
+        </span>
+        <span class="orb-grupo-cifras text-muted small">
+          {% for t in d.tipos %}{{ t.total }} {{ t.nombre|lower }}{% if not forloop.last %} · {% endif %}{% endfor %}
+        </span>
+      </summary>
+      <div class="orb-grupo-cuerpo">
+        <div class="text-muted small px-3 py-2"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>
+      </div>
+    </details>
+  {% empty %}
+    <div class="card"><div class="card-body text-center text-muted py-4">
+      <i class="bx bx-calendar fs-3 d-block mb-2"></i>Sin actividad en los últimos 60 días.
+    </div></div>
+  {% endfor %}
+  {% if dias.has_other_pages %}
+    <div class="d-flex justify-content-between mt-2">
+      {% if dias.has_previous %}<a class="btn btn-sm btn-outline-secondary" href="?tab=notificaciones&pagina_dias={{ dias.previous_page_number }}"><i class="bx bx-chevron-left"></i> Días más recientes</a>{% else %}<span></span>{% endif %}
+      {% if dias.has_next %}<a class="btn btn-sm btn-outline-secondary" href="?tab=notificaciones&pagina_dias={{ dias.next_page_number }}">Días anteriores <i class="bx bx-chevron-right"></i></a>{% endif %}
+    </div>
+  {% endif %}
+{% endif %}
 
 <script src="{% estatico 'js/notificaciones.js' %}"></script>
 <script>

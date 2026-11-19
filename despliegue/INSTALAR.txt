@@ -1,284 +1,82 @@
-===============================================================================
- ORBITH 3.9.1 - INSTALACION EN EL SERVIDOR, SIN INTERNET
- Empresa Electrica Camaguey - Para el Jefe de Informatica
- Fecha: 17/11/2026
-===============================================================================
+========================================================================================================================
+ORBITH 3.10.0 — ACTUALIZAR EL SERVIDOR SIN INTERNET
+Para el Jefe de Informática · Empresa Eléctrica Camagüey · 19/11/2026
+========================================================================================================================
 
-QUE ES ESTE DOCUMENTO
----------------------
-Pasos para instalar la version 3.9.1 de Orbith en el servidor SIN conexion a
-internet. NO hay ningun script: todos los pasos son ordenes que usted escribe
-y revisa una a una. Usted decide en cada momento.
+La memoria trae orbith.tar.gz (código, paquetes de Python y script, sin contraseñas) y esta hoja. Orbith vive siempre
+en /home/ebm/orbith: la versión actual se guarda con la fecha y el servicio y Nginx no se cambian. Ejecute todo como el
+usuario ebm, no como root.
 
-Se mantiene su forma de trabajar: una CARPETA NUEVA para esta version. La
-version que funciona hoy NO se toca: queda intacta para volver a ella si hace
-falta.
 
-Hasta ahora la instalacion pedia internet para descargar los paquetes de
-Python (requirements.txt). Ahora esos paquetes van en la memoria USB y se
-instalan desde ella.
+========================================================================================================================
+UNA SOLA VEZ (antes de esta actualización)
+========================================================================================================================
 
+Orbith sirve ahora sus propios estilos y JavaScript. En la configuración de Nginx de Orbith, quite el bloque
+"location /static/ { ... }" (el de /media/ se queda) y recargue Nginx. Así no hay que buscar la carpeta static_root.
 
-QUE TRAE LA MEMORIA USB
------------------------
-  orbith-3.9.1.tar.gz                 Codigo de Orbith 3.9.1 (unos 9 MB).
-                                      NO trae el archivo core/.env (claves y
-                                      datos de la base): se copia del servidor.
-  paquetes-python-linux-py312.tar.gz  Los 67 paquetes de Python para Linux
-                                      64 bits y Python 3.12 (unos 65 MB).
-                                      Sirve para las proximas versiones
-                                      mientras no cambie requirements.txt.
-  SHA256SUMS.txt                      Huellas para comprobar que los archivos
-                                      llegaron sin danos.
-  INSTALAR.txt                        Este documento.
 
+========================================================================================================================
+ACTUALIZAR
+========================================================================================================================
 
-EN LAS ORDENES DE ESTE DOCUMENTO
---------------------------------
-  - Lo que esta entre < > lo cambia usted por el valor real de su servidor.
-  - Las rutas de ejemplo salen del registro de errores del servidor
-    (/home/ebm/orbith, usuario ebm). Cambielas si no coinciden.
-  - Ejecute todo como el usuario que corre Orbith (ebm), NO como root, salvo
-    lo que usted haga normalmente como administrador (parar y arrancar el
-    servicio, Nginx).
+1. Copie orbith.tar.gz al servidor (por ejemplo a /home/ebm/usb) y compruebe que su huella es esta:
+   HUELLA_DEL_PAQUETE
 
+   sha256sum /home/ebm/usb/orbith.tar.gz
 
-===============================================================================
- PARTE A - PREPARAR (Orbith sigue funcionando, no se toca nada en uso)
-===============================================================================
+2. Ponga Orbith en modo mantenimiento y detenga su servicio, como siempre.
 
-A1. Copie los 4 archivos de la memoria a una carpeta del servidor, por ejemplo
-    /home/ebm/usb-3.9.1, y compruebe las huellas:
+3. Ejecute estas tres órdenes:
 
-      cd /home/ebm/usb-3.9.1
-      sha256sum -c SHA256SUMS.txt
+   mv /home/ebm/orbith /home/ebm/orbith-$(date +%F)
+   tar -xzkf /home/ebm/usb/orbith.tar.gz -C /home/ebm
+   bash /home/ebm/orbith/despliegue/actualizar.sh /home/ebm/orbith-$(date +%F)
 
-    Las tres lineas deben terminar en "OK" (o "La suma coincide"). Si alguna
-    falla, el archivo se dano al copiarlo: vuelva a copiarlo y no siga.
+   La primera guarda la versión actual con la fecha de hoy. La segunda crea la carpeta orbith nueva. La tercera es el
+   script: pregunta una vez y copia la configuración, las fotos y el registro de errores, instala los paquetes de
+   Python sin internet, hace una copia de la base de datos y la actualiza. Tarda unos minutos.
 
-A2. Compruebe el servidor:
+4. Arranque el servicio. En Orbith, menú del usuario > Acerca de Orbith debe decir 3.10.0. Quite el modo mantenimiento.
 
-      python3 --version     -> debe decir Python 3.12.x
-      uname -m              -> debe decir x86_64
-      df -h /home/ebm       -> hacen falta unos 600 MB libres
 
-    Si Python NO es 3.12 o la maquina NO es x86_64, NO siga: los paquetes no
-    servirian. Avise a Juan para preparar otros.
+========================================================================================================================
+SI ALGO FALLA
+========================================================================================================================
 
-A3. Anote la carpeta de la version actual (la que usa hoy el servicio). Por
-    ejemplo /home/ebm/orbith. En este documento la llamamos ANTERIOR:
+El script se detiene, explica el motivo, indica el archivo .log que debe enviar a Juan y muestra las órdenes exactas
+para volver a la versión anterior (si ya había tocado la base, también la de restaurar la copia que hizo antes).
 
-      ANTERIOR=</home/ebm/carpeta-de-la-version-actual>
-      NUEVA=/home/ebm/orbith-3.9.1
-      PAQUETES=/home/ebm/orbith-paquetes-python
+Para volver a la versión anterior días después: detenga el servicio, cambie el nombre de /home/ebm/orbith, devuelva la
+carpeta con la fecha a /home/ebm/orbith y restaure la copia de /home/ebm/orbith-respaldos (los datos de conexión están
+en core/.env). Se pierde lo registrado en Orbith desde la actualización.
 
-A4. Descomprima el codigo y los paquetes:
+pg_restore --clean --if-exists --no-owner -h HOST -p PUERTO -U USUARIO -d BASE /home/ebm/orbith-respaldos/COPIA.dump
 
-      tar -xzf /home/ebm/usb-3.9.1/orbith-3.9.1.tar.gz -C /home/ebm
-      mkdir -p $PAQUETES
-      tar -xzf /home/ebm/usb-3.9.1/paquetes-python-linux-py312.tar.gz -C $PAQUETES
 
-    Resultado: la carpeta /home/ebm/orbith-3.9.1 y, dentro de $PAQUETES,
-    los 67 archivos .whl.
+========================================================================================================================
+CAMBIOS EN LA BASE DE DATOS (para Seguridad Informática)
+========================================================================================================================
 
-A5. Copie la configuracion (claves y conexion a la base) de la version actual:
+Solo se aplican los que la base aún no tiene. Ninguno borra contratos, personas, movimientos ni plantilla, y no hacen
+falta extensiones ni permisos nuevos en PostgreSQL.
 
-      cp $ANTERIOR/core/.env $NUEVA/core/.env
-
-A6. Fotos de los usuarios y registro de errores. Mire si el .env los guarda
-    fuera de la carpeta de la version:
-
-      grep -E "MEDIA_DIR|LOG_DIR" $NUEVA/core/.env
-
-    - Si aparece MEDIA_DIR: las fotos ya estan fuera y no hay que hacer nada.
-    - Si NO aparece: copie la carpeta de fotos a la version nueva:
-        cp -a $ANTERIOR/media $NUEVA/
-    - Igual con LOG_DIR y la carpeta logs (si no aparece, no hace falta copiar
-      nada: la version nueva crea su propia carpeta logs).
-
-A7. Cree el entorno de Python de la version nueva e instale los paquetes
-    DESDE LA CARPETA, sin internet:
-
-      cd $NUEVA
-      python3 -m venv venv
-      venv/bin/pip install --no-index --find-links=$PAQUETES -r requirements.txt
-
-    "--no-index" hace que pip NO intente conectarse a internet.
-    Debe terminar con "Successfully installed ...". Si dice que no encuentra
-    un paquete, NO siga y avise a Juan con el mensaje exacto.
-
-    IMPORTANTE: un entorno de Python (venv) NO se puede mover ni renombrar de
-    carpeta despues de crearlo. Por eso se crea ya en su carpeta definitiva.
-
-A8. Compruebe la version nueva SIN tocar la base de datos:
-
-      venv/bin/python manage.py check
-        -> debe decir "System check identified no issues"
-
-      venv/bin/python manage.py showmigrations | grep "\[ \]"
-        -> lista los cambios de la base que faltan por aplicar. Compare con
-           la PARTE E de este documento. Ninguna linea = la base ya esta al dia.
-
-A9. Prepare los archivos estaticos (estilos, imagenes, JavaScript) en la
-    carpeta nueva. No afecta a la version en uso:
-
-      venv/bin/python manage.py collectstatic --noinput
-
-Hasta aqui NADA ha cambiado en el Orbith que se esta usando.
-
-
-===============================================================================
- PARTE B - ACTUALIZAR (con Orbith detenido; calcule unos 15 minutos)
-===============================================================================
-
-Avise a los usuarios de que Orbith estara detenido unos minutos.
-
-B1. Detenga el servicio de Orbith como lo hace normalmente
-    (por ejemplo: sudo systemctl stop <nombre-del-servicio>).
-
-B2. Haga una COPIA DE LA BASE DE DATOS. Los datos de conexion estan en el .env:
-
-      grep -E "DATABASE_(NAME|USER|HOST|PORT)" $NUEVA/core/.env
-
-      mkdir -p /home/ebm/orbith-respaldos
-      pg_dump -Fc -h <HOST> -p <PUERTO> -U <USUARIO> -d <NOMBRE_BASE> \
-              -f /home/ebm/orbith-respaldos/orbith_antes_3.9.1_$(date +%Y%m%d_%H%M).dump
-
-    Pedira la contrasena de la base (DATABASE_PASSWORD del .env).
-    Compruebe que la copia es legible:
-
-      pg_restore -l /home/ebm/orbith-respaldos/orbith_antes_3.9.1_*.dump | head
-
-    Debe mostrar unas lineas que empiezan por ";". Si da error, NO siga:
-    arranque de nuevo el servicio (version anterior) y avise a Juan.
-
-B3. Aplique los cambios de la base de datos:
-
-      cd $NUEVA
-      venv/bin/python manage.py migrate --noinput
-
-    Debe terminar sin errores ("Applying ... OK" en cada linea).
-    -> Si da un ERROR: vaya a la PARTE C. NO arranque la version nueva.
-
-B4. Compruebe que no queda nada pendiente:
-
-      venv/bin/python manage.py showmigrations | grep "\[ \]"
-        -> no debe mostrar ninguna linea.
-
-B5. Haga que el servicio use la carpeta nueva. Es el paso que usted hace
-    siempre al cambiar de version: en la configuracion del servicio, cambie
-    la ruta de la carpeta anterior por la nueva ($NUEVA), tanto la carpeta de
-    trabajo como la del programa (venv/bin/gunicorn). Si Nginx sirve /static/
-    o /media/ desde la carpeta anterior, cambie tambien esas rutas.
-
-B6. Arranque el servicio (por ejemplo: sudo systemctl start <nombre-del-servicio>).
-
-B7. Compruebe en el navegador:
-    - Orbith abre y deja entrar.
-    - Menu del usuario -> "Acerca de Orbith": debe decir version 3.9.1.
-    - Abra la Lista de Contratos y el Gestor de Plantilla: deben cargar.
-    Si algo falla, mire el registro de errores (carpeta logs o LOG_DIR, archivo
-    del dia) y envieselo a Juan.
-
-
-===============================================================================
- PARTE C - SI FALLA EL "migrate" DEL PASO B3
-===============================================================================
-
-NO arranque la version nueva. Copie el mensaje de error completo para Juan.
-
-Cada cambio de la base se aplica entero o no se aplica, pero los cambios
-anteriores al que fallo SI quedaron aplicados. Por eso lo seguro es devolver
-la base exactamente a como estaba, con la copia del paso B2. Decida usted:
-
-  1) Devolver la base a como estaba (recomendado):
-
-       pg_restore --clean --if-exists --no-owner \
-                  -h <HOST> -p <PUERTO> -U <USUARIO> -d <NOMBRE_BASE> \
-                  /home/ebm/orbith-respaldos/orbith_antes_3.9.1_<FECHA>.dump
-
-     Despues arranque el servicio SIN cambiar nada de su configuracion: sigue
-     apuntando a la carpeta anterior, que esta intacta.
-
-  2) Dejar la base como quedo y esperar instrucciones de Juan (Orbith sigue
-     detenido mientras tanto).
-
-Estas ordenes de copia (B2) y restauracion se probaron en PostgreSQL 17 sobre
-una copia de la base de pruebas.
-
-
-===============================================================================
- PARTE D - VOLVER A LA VERSION ANTERIOR DESPUES (si aparece un problema grave)
-===============================================================================
-
-  1. Detenga el servicio.
-  2. Devuelva la base a como estaba (la orden de la PARTE C, opcion 1).
-     ATENCION: se pierde todo lo que se haya registrado en Orbith despues de
-     la actualizacion.
-  3. Vuelva a poner en el servicio (y en Nginx) la ruta de la carpeta anterior.
-  4. Arranque el servicio.
-
-No se borra nada: la carpeta anterior, la nueva y las copias de la base se
-conservan todas.
-
-
-===============================================================================
- PARTE E - QUE CAMBIA EN LA BASE DE DATOS (para Seguridad Informatica)
-===============================================================================
-
-Solo se aplican las que el paso A8 muestre como pendientes ([ ]). Ninguna
-borra contratos, personas, movimientos ni plantilla.
-
-Version 3.7.0 / 3.7.1
-  usuarios 0010        Anade los campos de firmantes de los Anexos al perfil.
-  contratos 0029       Anade la situacion (departamento, cargo...) a los
-                       cambios externos y la rellena desde el historico.
-
-Version 3.8.0
-  usuarios 0011        Crea la tabla de perfiles de permisos especiales y tres
-                       campos en el usuario (perfil, vencimiento, motivo).
-  auditoria 0005       Anade "con permiso especial" a los eventos de Auditoria.
-  contratos 0030       Anade la marca "escrito a mano" a los movimientos.
-  subsanacion 0008     Crea la tabla del estado de las reglas (activa/inactiva).
-
-Version 3.8.1
-  bolsa 0010           BORRA la columna "unidad organizativa" de la ficha de
-                       la persona. Era un dato duplicado: la unidad de una
-                       persona es siempre la del cargo de su contrato. Se
-                       decidio quitarla porque se contradecia con el contrato.
-
-Version 3.8.2
-  nomencladores 0014, prenomina 0009, strorganizativa 0017, configuracion 0008
-                       Anaden el campo "orden" a los nomencladores y cambian la
-                       regla de borrado a "proteger" (no cambia nada en las
-                       tablas de PostgreSQL).
-  nomencladores 0015, prenomina 0010
-                       Numeran ese orden (alfabetico; los roles: Decisorio,
-                       Fundamental, Apoyo).
-
-Version 3.9.0
-  subsanacion 0009     Desactiva las 3 reglas de Pre-Nomina, pone al dia la
-                       gravedad de los avisos guardados y borra de la campana
-                       las advertencias "Informativas".
-  usuarios 0012        Anade "Todas las unidades" al usuario. A los
-                       Observadores que no tenian ninguna unidad (y por eso
-                       veian toda la empresa) se les marca "Todas".
-  bolsa 0011           Amplia nombre y apellidos a 40 letras (solo crece la
-                       columna; no se pierde nada).
-
-Version 3.9.1
-  strorganizativa 0018 Los cargos de las unidades de tipo Temporal pasan a
-                       "Fuera de Plantilla" (no se mueve el que tenga un
-                       contrato Indeterminado). Sus plazas dejan de contar en
-                       la plantilla aprobada de la empresa.
-
-No hace falta crear extensiones de PostgreSQL ni permisos nuevos en la base.
-
-
-===============================================================================
- RESUMEN EN UNA LINEA
-===============================================================================
- Comprobar huellas -> carpeta nueva -> copiar .env -> venv + pip --no-index ->
- check -> collectstatic -> PARAR -> copia de la base -> migrate -> cambiar
- ruta del servicio -> ARRANCAR -> comprobar "Acerca de Orbith".
-===============================================================================
+3.7    usuarios 0010: firmantes de los Anexos en el perfil.
+       contratos 0029: situación (departamento, cargo…) en los cambios externos.
+3.8.0  usuarios 0011: perfiles de permisos especiales. auditoria 0005: marca de permiso especial.
+       contratos 0030: marca "escrito a mano". subsanacion 0008: estado activo/inactivo de las reglas.
+3.8.1  bolsa 0010: BORRA la columna "unidad organizativa" de la ficha de la persona, un dato duplicado que se
+       contradecía con el contrato.
+3.8.2  nomencladores 0014-0015, prenomina 0009-0010, strorganizativa 0017, configuracion 0008: campo "orden" en los
+       nomencladores y protección contra borrados.
+3.9.0  subsanacion 0009: desactiva las reglas de Pre-Nómina y ajusta la gravedad de los avisos.
+       usuarios 0012: opción "Todas las unidades". bolsa 0011: nombre y apellidos hasta 40 letras.
+3.9.1  strorganizativa 0018: los cargos de las unidades Temporales pasan a "Fuera de Plantilla", salvo los que tienen
+       contrato Indeterminado.
+3.9.2  soporte 0006 y auditoria 0006: copia de la base de datos desde el admin.
+3.10.0 contratos 0031: el contrato sin F. de Contratación toma la de su Alta Inicial. configuracion 0009: fecha desde
+       la que se avisan los años de servicio. ranking 0002: «Más mejorado del mes». soporte 0007 y auditoria 0007:
+       actualizar Orbith desde el admin. notificaciones 0015-0016: autor de los avisos; los avisos de actividad
+       pasan a leídos y se BORRAN los de reglas informativas y los de más de 60 días. subsanacion 0010: nueva
+       fórmula de la salud de los datos; se ocultan los avisos de las reglas desactivadas.
+========================================================================================================================

@@ -370,9 +370,9 @@
                                 </td>
                                 <td>
                                     <div class="d-flex align-items-center justify-content-center gap-2">
-                                        <div class="date-pill date-normal">
-                                            <i class="fas fa-calendar-alt text-muted opacity-50"></i> ${item.fecha_inicio_str}
-                                        </div>
+                                        ${item.sin_fecha
+                                            ? `<div class="date-pill date-normal text-warning fw-bold" title="Este evento no tiene fecha registrada. Si es el contrato, le falta la F. de Contratación (Subsanación, regla CTR-004)."><i class="fas fa-triangle-exclamation"></i> ${item.fecha_inicio_str}</div>`
+                                            : `<div class="date-pill date-normal"><i class="fas fa-calendar-alt text-muted opacity-50"></i> ${item.fecha_inicio_str}</div>`}
                                         <i class="fas fa-arrow-right text-muted opacity-25" style="font-size: 0.6rem;"></i>
                                         ${finHtml}
                                     </div>

@@ -176,6 +176,8 @@
     </div>
   </div>
 
+  <div id="ehContrato" class="aviso aviso-anomalia mb-3" hidden></div>
+  <div id="ehMismoDia" class="aviso aviso-anomalia mb-3" hidden></div>
   <div id="ehAnomalias" class="aviso aviso-anomalia mb-3" hidden></div>
   <div id="ehErrores" class="aviso aviso-error mb-3" hidden role="alert"></div>
 
@@ -246,8 +248,11 @@
   DATOS.eventos.forEach(function (e) { originales[e.clave] = e; });
 
   // El borrador: lo único que el navegador recuerda. Nada se guarda hasta «Guardar todo».
-  let borrador = { ediciones: {}, borrados: [], inserciones: [] };
+  // `fechaContrato`: solo pasar al contrato la fecha de su Alta Inicial (CTR-004).
+  function borradorVacio() { return { ediciones: {}, borrados: [], inserciones: [], fechaContrato: false }; }
+  let borrador = borradorVacio();
   let eventos = DATOS.eventos;
+  let avisosMismoDia = DATOS.avisos || [];
   let seleccion = null;
   let previa = { ok: true, errores: [], resumen: null };
   let peticion = 0;
@@ -288,13 +293,15 @@
         lista.push({ op: 'editar', evento: clave, campos: campos });
     });
     borrador.inserciones.forEach(function (ins) {
-      lista.push({ op: 'insertar', tras: ins.tras, campos: Object.assign({ fecha: ins.fecha }, ins.campos) });
+      // `tipo: 'ALTA'`: el Alta Inicial que le faltaba al contrato vigente (MOV-014).
+      lista.push({ op: 'insertar', tras: ins.tras, tipo: ins.tipo, campos: Object.assign({ fecha: ins.fecha }, ins.campos) });
     });
     borrador.borrados.forEach(function (clave) { lista.push({ op: 'borrar', evento: clave }); });
+    if (borrador.fechaContrato) lista.push({ op: 'fecha_contrato' });
     return lista;
   }
   function cuantos() {
-    let n = borrador.inserciones.length + borrador.borrados.length;
+    let n = borrador.inserciones.length + borrador.borrados.length + (borrador.fechaContrato ? 1 : 0);
     Object.keys(borrador.ediciones).forEach(function (c) {
       if (borrador.borrados.indexOf(c) === -1) n += Object.keys(borrador.ediciones[c]).length;
     });
@@ -364,6 +371,9 @@
         if (j === n) ins.tras = quitado.tras;
         else if (j > n) ins.tras = 'nuevo:' + j;
       });
+      // Quitar el Alta creada devuelve el movimiento al que sustituía.
+      if (quitado.tipo === 'ALTA' && DATOS.alta_sustituye)
+        borrador.borrados = borrador.borrados.filter(function (c) { return c !== DATOS.alta_sustituye; });
       seleccion = quitado.tras;
     } else if (borrador.borrados.indexOf(clave) === -1) {
       borrador.borrados.push(clave);
@@ -392,7 +402,7 @@
     const mia = ++peticion;
     pintarBorrador(true);
     if (!cuantos()) {
-      eventos = DATOS.eventos; previa = { ok: true, errores: [], resumen: null };
+      eventos = DATOS.eventos; avisosMismoDia = DATOS.avisos || []; previa = { ok: true, errores: [], resumen: null };
       pintar(); return;
     }
     fetch(URL_BASE + 'previa/', {
@@ -402,6 +412,7 @@
       if (mia !== peticion) return;   // llegó otra respuesta más nueva
       previa = datos;
       if (datos.eventos) eventos = datos.eventos;
+      if (datos.avisos) avisosMismoDia = datos.avisos;
       if (datos.version_actual && datos.version_actual !== DATOS.version) {
         previa.errores = ['Otro administrador u otra operación cambió este histórico. Recargue la página '
                           + '(perderá el borrador) antes de seguir.'].concat(previa.errores || []);
@@ -417,10 +428,88 @@
 
   // ---------------- pintar ----------------
   function pintar() {
+    pintarContrato();
+    // Los datos antiguos que no cumplen las reglas se avisan al abrir; con el borrador
+    // en marcha, lo que quede por resolver ya lo dice el recuadro de errores.
+    const anomalias = document.getElementById('ehAnomalias');
+    if (anomalias.innerHTML) anomalias.hidden = cuantos() > 0;
+    pintarMismoDia();
     pintarErrores();
     pintarLinea();
     pintarMesa();
     pintarBorrador(false);
+  }
+
+  // La F. de Contratación es la fecha del Alta Inicial del contrato vigente (CTR-004 y
+  // MOV-014, 18-11-2026): si le falta el Alta, o las dos fechas no coinciden, se avisa.
+  function pintarContrato() {
+    const caja = document.getElementById('ehContrato');
+    let html = '';
+    const altaNueva = borrador.inserciones.some(function (ins) { return ins.tipo === 'ALTA'; });
+    if (DATOS.falta_alta && !altaNueva) {
+      const sustituido = DATOS.alta_sustituye ? originales[DATOS.alta_sustituye] : null;
+      html = '<b>El contrato vigente no tiene su Alta Inicial en el histórico.</b> Créela aquí: sale con la F. de Contratación'
+        + (DATOS.fecha_contrato ? ' (' + fecha(DATOS.fecha_contrato) + ')' : '')
+        + ' y los datos con que empezó el contrato. Revísela antes de guardar.'
+        + (sustituido ? ' El movimiento de nómina del ' + fecha(sustituido.fecha) + ' cae ese mismo día: era el alta, así que el Alta Inicial '
+           + 'lo sustituye con sus datos, su fecha de solicitud y sus observaciones (el movimiento se borrará al guardar).' : '')
+        + '<div class="mt-2"><button type="button" class="btn btn-sm btn-orb px-3" id="ehCrearAlta"><i class="fas fa-plus-circle me-1"></i>Crear el Alta Inicial</button></div>';
+    } else if (DATOS.fecha_contrato !== null) {
+      const alta = eventos.find(function (e) { return e.contrato_abierto && e.tipo === 'ALTA' && !e.borrado; });
+      if (alta && alta.fecha !== (DATOS.fecha_contrato || '')) {
+        html = (DATOS.fecha_contrato
+          ? '<b>La F. de Contratación del contrato (' + fecha(DATOS.fecha_contrato) + ') no coincide con la de su Alta Inicial ('
+            + fecha(alta.fecha) + ').</b> Al guardar, el contrato tomará la del Alta Inicial. Si la correcta es la del contrato, corrija la fecha del Alta Inicial.'
+          : '<b>El contrato no tiene F. de Contratación.</b> Al guardar tomará la de su Alta Inicial (' + fecha(alta.fecha)
+            + '). Si esa no es la correcta, corrija la fecha del Alta Inicial.')
+          + (cuantos() ? '' : '<div class="mt-2"><button type="button" class="btn btn-sm btn-orb px-3" id="ehFechaContrato"><i class="fas fa-calendar-check me-1"></i>Pasar la fecha al contrato</button></div>');
+      }
+    }
+    caja.hidden = !html;
+    caja.innerHTML = html ? '<i class="fas fa-exclamation-triangle mt-1"></i><div>' + html + '</div>' : '';
+  }
+
+  // Eventos antiguos el mismo día (18-11-2026): no impiden guardar; el Administrador
+  // decide con dos arreglos rápidos, que van al borrador como cualquier otro cambio.
+  function pintarMismoDia() {
+    const caja = document.getElementById('ehMismoDia');
+    caja.hidden = !avisosMismoDia.length;
+    if (!avisosMismoDia.length) { caja.innerHTML = ''; return; }
+    caja.innerHTML = '<i class="fas fa-exclamation-triangle mt-1"></i><div><b>Datos antiguos: eventos el mismo día.</b> '
+      + 'No impiden guardar, pero conviene corregirlos (nunca debe haber dos eventos el mismo día):<ul class="mb-0">'
+      + avisosMismoDia.map(function (a, i) {
+        let botones = '';
+        if (a.duplicado) botones += ' <button type="button" class="btn btn-sm btn-orb px-2 py-0 ms-1" data-duplicado="' + i + '" '
+          + 'title="El segundo deja exactamente lo mismo que el primero: se borra sin perder ningún dato.">Quitar el duplicado</button>';
+        if (a.siguiente) botones += ' <button type="button" class="btn btn-sm btn-outline-secondary bg-white px-2 py-0 ms-1" data-siguiente="' + i + '" '
+          + 'title="El segundo pasa al ' + fecha(a.siguiente) + ', que está libre.">Pasar al día siguiente</button>';
+        return '<li class="mb-1">' + esc(a.texto) + botones + '</li>';
+      }).join('') + '</ul></div>';
+  }
+
+  function crearAlta() {
+    // Una sola vez: un doble clic (o pulsar mientras se comprueba) la añadía dos veces.
+    if (borrador.inserciones.some(function (ins) { return ins.tipo === 'ALTA'; })) return;
+    const poner = function (valor) {
+      if (borrador.inserciones.some(function (ins) { return ins.tipo === 'ALTA'; })) return;
+      // El movimiento del mismo día que la F. de Contratación ERA el alta: el Alta lo
+      // sustituye (con sus datos de después) y él se marca para borrar.
+      const sustituye = DATOS.alta_sustituye;
+      if (sustituye && borrador.borrados.indexOf(sustituye) === -1) {
+        borrador.borrados.push(sustituye);
+        delete borrador.ediciones[sustituye];
+      }
+      borrador.inserciones.push({ tras: null, tipo: 'ALTA', fecha: valor, campos: {} });
+      seleccion = 'nuevo:' + borrador.inserciones.length;
+      pintarContrato();   // el botón desaparece ya, sin esperar a la comprobación
+      actualizar();
+    };
+    if (DATOS.fecha_contrato) { poner(DATOS.fecha_contrato); return; }
+    Swal.fire({
+      title: 'Fecha del Alta Inicial', text: 'El contrato tampoco tiene F. de Contratación: indique la fecha en que fue contratado.',
+      input: 'date', showCancelButton: true, confirmButtonText: 'Crear', cancelButtonText: 'Cancelar', confirmButtonColor: '#696cff',
+      inputValidator: function (valor) { return valor ? null : 'Indique la fecha.'; }
+    }).then(function (r) { if (r.isConfirmed) poner(r.value); });
   }
 
   function pintarErrores() {
@@ -462,7 +551,8 @@
     });
     if (!contratos.length) {
       document.getElementById('ehLinea').innerHTML = '<div class="contrato p-4 text-center text-muted">'
-        + 'Sin eventos: al guardar, la persona vuelve a la lista de aspirantes.</div>';
+        + (DATOS.falta_alta ? 'Su contrato todavía no tiene eventos en el histórico: cree su Alta Inicial con el botón de arriba.'
+           : 'Sin eventos: al guardar, la persona vuelve a la lista de aspirantes.') + '</div>';
       return;
     }
     const html = contratos.map(function (grupo, i) {
@@ -735,7 +825,9 @@
     if (e.borrado) boton = '<button type="button" class="btn-deshacer" id="ehDeshacer"><i class="fas fa-undo me-1"></i>Deshacer el borrado</button>';
     else if (e.nuevo) boton = '<button type="button" class="btn-borrar" id="ehBorrar"><i class="fas fa-times me-1"></i>Quitar</button>';
     else if (e.tipo !== 'BAJA') boton = '<button type="button" class="btn-borrar" id="ehBorrar"><i class="fas fa-trash-alt me-1"></i>Borrar</button>';
-    const sub = e.tipo === 'BAJA' ? 'La baja y su documento' : (e.nuevo ? 'Movimiento nuevo: parte de lo que había antes' : 'Lo que quedó después del ' + (e.tipo === 'ALTA' ? 'alta' : 'movimiento'));
+    const sub = e.tipo === 'BAJA' ? 'La baja y su documento'
+      : (e.nuevo ? (e.tipo === 'ALTA' ? 'Alta Inicial nueva: revise los datos con que empezó el contrato' : 'Movimiento nuevo: parte de lo que había antes')
+        : 'Lo que quedó después del ' + (e.tipo === 'ALTA' ? 'alta' : 'movimiento'));
     mesa.innerHTML = '<div class="mesa-cab"><div><div class="eyebrow">' + (e.borrado ? 'Marcado para borrar' : 'Corrigiendo') + '</div>'
       + '<h3>' + esc(titulo(e)) + '</h3><div class="sub">' + sub + '</div></div>' + boton + '</div>'
       + (e.borrado ? '<div class="mesa-vacia">Este evento se borrará al guardar. Los que vienen detrás tomarán como «antes» lo que dejó el anterior.</div>'
@@ -885,7 +977,7 @@
       body: JSON.stringify({ cambios: listaDeCambios(), motivo: motivo, version: DATOS.version })
     }).then(function (r) { return r.json(); }).then(function (datos) {
       if (datos.ok) {
-        borrador = { ediciones: {}, borrados: [], inserciones: [] };
+        borrador = borradorVacio();
         const meses = (datos.resumen.meses || []).length;
         Swal.fire({
           icon: 'success', title: 'Histórico corregido',
@@ -949,6 +1041,21 @@
       ev.preventDefault(); ev.target.click();
     }
   });
+  document.getElementById('ehMismoDia').addEventListener('click', function (ev) {
+    const quitar = ev.target.closest('[data-duplicado]');
+    const pasar = ev.target.closest('[data-siguiente]');
+    if (quitar) {
+      const a = avisosMismoDia[parseInt(quitar.dataset.duplicado, 10)];
+      if (a) { seleccion = a.primero; marcarBorrado(a.segundo); }
+    } else if (pasar) {
+      const a = avisosMismoDia[parseInt(pasar.dataset.siguiente, 10)];
+      if (a) { seleccion = a.segundo; fijar(a.segundo, 'fecha', a.siguiente); }
+    }
+  });
+  document.getElementById('ehContrato').addEventListener('click', function (ev) {
+    if (ev.target.closest('#ehCrearAlta')) crearAlta();
+    else if (ev.target.closest('#ehFechaContrato')) { borrador.fechaContrato = true; actualizar(); }
+  });
   document.getElementById('ehDescartar').addEventListener('click', function () {
     Swal.fire({
       icon: 'question', title: 'Descartar el borrador', text: 'Se pierden todos los cambios sin guardar.',
@@ -956,7 +1063,7 @@
       confirmButtonColor: '#dc2626'
     }).then(function (r) {
       if (!r.isConfirmed) return;
-      borrador = { ediciones: {}, borrados: [], inserciones: [] };
+      borrador = borradorVacio();
       if (seleccion && seleccion.indexOf('nuevo:') === 0) seleccion = null;
       actualizar();
     });

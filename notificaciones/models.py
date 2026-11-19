@@ -98,6 +98,13 @@ class Notificacion(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
         related_name='notificaciones_personales', verbose_name='Destinatario')
 
+    # Quién causó el evento (alta, baja, cargo nuevo…), para «Actividad de hoy»
+    # («por Fulano» / «por ti», decisión del 18-11-2026). Vacío en advertencias,
+    # recordatorios y en los eventos anteriores a ese día.
+    autor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name='Autor')
+
     # url_destino = models.URLField(blank=True, null=True)  # URL a la vista correspondiente
 
     class Meta:

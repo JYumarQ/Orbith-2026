@@ -1,0 +1,13 @@
+{% comment %} Lo que va dentro de #resultados-advertencias: los grupos por regla o, al
+   elegir una regla o buscar un texto, la tabla de siempre («Ver todos»). Lo decide
+   `notificaciones/views.py::_resultados_advertencias`. {% endcomment %}
+{% if vista_grupos %}
+  {% include 'pages/notificaciones/partials/_grupos_advertencias.html' %}
+{% else %}
+  {% if reglas_actuales and not q %}
+    <a href="?tab=advertencias&sub={{ sub_activa }}" class="btn btn-sm btn-link px-0 mb-2">
+      <i class="bx bx-arrow-back me-1"></i>Volver a los grupos
+    </a>
+  {% endif %}
+  {% include 'pages/notificaciones/partials/_tabla.html' %}
+{% endif %}

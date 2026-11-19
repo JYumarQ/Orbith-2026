@@ -170,6 +170,13 @@ class AspiranteForm(forms.ModelForm):
             esp_field.widget.attrs['disabled'] = 'disabled'
         
         esp_field.queryset = qs_esp
+        # El nivel lleva especialidad pero el nomenclador no tiene ninguna de ese nivel
+        # (19-11-2026: no había ninguna de Técnico Medio): el campo se bloquea y lo dice,
+        # en vez de quedarse vacío sin explicación. Mismo texto que `cargar_esp`.
+        if nivel in ('NS', 'TM') and not qs_esp.exists():
+            esp_field.widget.attrs['disabled'] = 'disabled'
+            esp_field.empty_label = ('No hay especialidades de este nivel: '
+                                     'el Administrador las carga en Nomencladores')
 
         # --- Municipios dependientes de la provincia ---
         provincia_id = self.data.get('provincia') or getattr(getattr(self.instance, 'provincia', None), 'id', None)

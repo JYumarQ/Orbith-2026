@@ -449,8 +449,12 @@ def cargar_esp(request):
     if request.GET.get('solo_opciones'):
         # MODO FORMULARIO (Aspirante): solo las <option>, para que HTMX pueda
         # hacer `hx-swap="innerHTML"` y no destruya el Select2 del <select>.
+        # `sin_especialidades`: el nivel lleva especialidad pero el nomenclador no
+        # tiene ninguna de ese nivel (19-11-2026: en la empresa no había ninguna de
+        # Técnico Medio y el campo salía vacío y gris sin decir por qué).
         return render(request, 'pages/catalogos/nespecialidad/esp_opt_solo_opciones.html', {
             'list_esp': list_esp,
+            'sin_especialidades': nivel in ('NS', 'TM') and not list_esp.exists(),
         })
 
     return render(request, 'pages/catalogos/nespecialidad/esp_opt.html', {

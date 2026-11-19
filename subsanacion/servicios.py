@@ -38,6 +38,7 @@ from django.utils import timezone
 
 from .constantes import (
     CLAVES_MODULOS,
+    CRITICIDAD_INFORMATIVA,
     ETIQUETA_MODULO,
     color_de_indice,
     LIMITE_HALLAZGOS_POR_REGLA,
@@ -563,7 +564,17 @@ def contar_registros_afectados(codigos_regla=None):
         vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS)
     if codigos_regla is not None:
         consulta = consulta.filter(codigo_regla__in=codigos_regla)
-    return consulta.values('content_type', 'object_id').distinct().count()
+    # `order_by()` vacío: con el orden por defecto del modelo, Django mete sus columnas
+    # en el DISTINCT y deja de contar registros distintos.
+    return consulta.order_by().values('content_type', 'object_id').distinct().count()
+
+
+def codigos_que_no_cuentan():
+    """Reglas que se detectan y se ven, pero no bajan la nota de salud: las de Extras
+    (datos complementarios, decisión de RRHH) y las Informativas (desde el 19-11-2026:
+    no son problemas, solo datos pendientes; desde la 3.9.0 tampoco avisan)."""
+    return {regla.codigo for regla in obtener_reglas(solo_activas=False)
+            if regla.modulo == MODULO_EXTRAS or regla.criticidad >= CRITICIDAD_INFORMATIVA}
 
 
 def indice_desde_afectados(afectados, registros):
@@ -679,12 +690,11 @@ def finalizar_ejecucion(ejecucion):
             vigente=True, codigo_regla__in=codigos_regla).count()
 
         # Extras (datos complementarios: útiles pero no importantes, ver
-        # `reglas/extras.py`) se excluye del índice de SALUD global — se sigue
-        # detectando y contando en `hallazgos_vigentes` de arriba y en su propia
-        # tarjeta de `resumen_por_modulo()`, pero no debe bajar la nota general por
-        # un dato que RRHH decidió que no es un problema de calidad.
-        codigos_extras = {r.codigo for r in obtener_reglas() if r.modulo == MODULO_EXTRAS}
-        codigos_para_indice = [c for c in codigos_regla if c not in codigos_extras]
+        # `reglas/extras.py`) y las Informativas (19-11-2026) se excluyen del índice de
+        # SALUD — se siguen detectando y contando en `hallazgos_vigentes` de arriba,
+        # pero no deben bajar la nota por un dato que no es un problema de calidad.
+        no_cuentan = codigos_que_no_cuentan()
+        codigos_para_indice = [c for c in codigos_regla if c not in no_cuentan]
         ejecucion.indice_salud = calcular_indice_salud(total, codigos_para_indice)
     else:
         # No se reconcilió ninguna regla (ejecución FALLIDA): no hay nada que contar,
@@ -818,8 +828,14 @@ def resumen_por_modulo(ejecucion=None):
     # … y nº de REGISTROS DISTINTOS afectados (para el porcentaje). Son dos cifras
     # distintas a propósito: un trabajador con diez movimientos da diez hallazgos y un
     # solo registro afectado.
+    # Sin las reglas que no cuentan (Extras, Informativas) y con `order_by()` vacío:
+    # con el orden por defecto del modelo, Django mete sus columnas en el DISTINCT y
+    # se contaban hallazgos en vez de registros (19-11-2026: Aspirantes salía al
+    # 11,67 % con 1 188 «registros» afectados que eran 941).
     afectados = (Hallazgo.objects
                  .filter(vigente=True, estado__in=Hallazgo.ESTADOS_ABIERTOS)
+                 .exclude(codigo_regla__in=codigos_que_no_cuentan())
+                 .order_by()
                  .values('modulo', 'content_type', 'object_id')
                  .distinct())
     afectados_por_modulo = {}
@@ -843,6 +859,11 @@ def resumen_por_modulo(ejecucion=None):
         #   * caso normal     -> porcentaje
         if not numero_reglas:
             situacion = 'sin_reglas'
+            indice = None
+        elif clave == MODULO_EXTRAS:
+            # Datos complementarios: no cuentan en la salud, así que su tarjeta no
+            # lleva nota (antes salía un 0 % en rojo que contradecía eso).
+            situacion = 'no_cuenta'
             indice = None
         elif registros < MINIMO_REGISTROS_PARA_PORCENTAJE:
             situacion = 'sin_porcentaje'

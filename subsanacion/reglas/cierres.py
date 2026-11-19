@@ -33,6 +33,8 @@ class UnidadSinDeclararElCierre(ReglaBase):
     """
 
     codigo = 'CIE-001'
+    enlace_url = 'list_cierres'
+    enlace_etiqueta = 'Abrir Cierres'
     nombre = 'Unidad que no declaró su cierre mensual'
     modulo = MODULO_CONFIGURACION
     criticidad = CRITICIDAD_MEDIA

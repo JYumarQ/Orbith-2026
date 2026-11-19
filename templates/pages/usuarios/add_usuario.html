@@ -226,7 +226,6 @@
     // El evento se dispara desde list_usuarios.html,
     // pero lo dejamos como respaldo.
     $(document).on('shown.bs.modal', '#crear_usuario', function () {
-      console.log('[DEBUG] Modal #crear_usuario mostrado (respaldo)');
       // Esperar un momento para asegurar que Select2 esté listo
       setTimeout(function() {
         window.toggleUnidades();

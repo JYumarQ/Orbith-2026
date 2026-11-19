@@ -154,8 +154,8 @@ DATABASES = {
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
 # Reglas de contraseña. Apuntan a `usuarios.validadores` y no directamente a los
-# de Django porque estos emiten sus mensajes en el idioma de LANGUAGE_CODE
-# ('en-us' aquí), y en Orbith todo mensaje va en español: al dar de alta una
+# de Django porque estos emitían sus mensajes en el idioma de LANGUAGE_CODE
+# ('en-us' hasta el 19-11-2026), y en Orbith todo mensaje va en español: al dar de alta una
 # cuenta se leía "This password is too common.". Las subclases reutilizan la
 # lógica de Django intacta —incluida la lista de 20.000 contraseñas comunes— y
 # solo sustituyen el texto. Ver el docstring de ese módulo.
@@ -183,7 +183,11 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+# Español desde el 19-11-2026: todo lo que escribe Django sale en español. Sus
+# formatos de fecha y número los ajusta `core/formatos/es/formats.py` para que no
+# cambie nada de lo que ya funcionaba (fechas internas aaaa-mm-dd, punto decimal).
+LANGUAGE_CODE = 'es'
+FORMAT_MODULE_PATH = ['core.formatos']
 TIME_ZONE = 'America/Havana'
 USE_I18N = True
 USE_TZ = True
@@ -351,3 +355,13 @@ CARPETA_REGISTRO_ERRORES = env('LOG_DIR', default=str(BASE_DIR / 'logs'))
 # Las pruebas provocan errores A PROPÓSITO: no deben llenar el registro real.
 _EJECUTANDO_PRUEBAS = len(sys.argv) > 1 and sys.argv[1] == 'test'
 LOGGING = configuracion_logging(None if _EJECUTANDO_PRUEBAS else CARPETA_REGISTRO_ERRORES)
+
+# Copias completas de la base (18-11-2026): el Administrador las prepara y descarga en
+# el admin (Soporte → Copia de la base de datos). Carpeta que Nginx NO sirve; se puede
+# llevar a otra con COPIAS_DIR en `core/.env`. Ver core/copia_base.py.
+CARPETA_COPIAS_BD = env('COPIAS_DIR', default=str(BASE_DIR / 'copias_bd'))
+
+# Paquetes subidos, registros y carpetas del ensayo de actualización (18-11-2026): el
+# Administrador los gestiona en el admin (Soporte → Actualizar Orbith). Nginx no la
+# sirve. Se puede llevar a otra con ACTUALIZACIONES_DIR. Ver core/actualizacion.py.
+CARPETA_ACTUALIZACIONES = env('ACTUALIZACIONES_DIR', default=str(BASE_DIR / 'actualizaciones'))

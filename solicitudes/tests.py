@@ -188,6 +188,42 @@ class NotificacionesDeSolicitud(BaseSolicitudes):
         self.assertEqual(notificaciones.count(), 1)
 
 
+class AvisoNuevaSeCierraParaTodos(BaseSolicitudes):
+    """18-11-2026: decidida una solicitud, el «Solicitud nueva» de todos los
+    administradores se cierra; al reabrirla vuelve a estar pendiente; al retirarla,
+    sus avisos se borran."""
+
+    def setUp(self):
+        self.segundo_admin = CustomUser.objects.create_user(
+            username='admin_segundo', password='x', es_admin=True)
+
+    def _avisos_nueva(self, solicitud):
+        from notificaciones.models import Notificacion
+        from solicitudes.avisos import CODIGO_NUEVA
+        return Notificacion.objects.filter(object_id=str(solicitud.pk), codigo_regla=CODIGO_NUEVA,
+                                           content_type=ContentType.objects.get_for_model(solicitud))
+
+    def test_rechazar_la_cierra_para_todos_y_reabrir_la_devuelve(self):
+        from notificaciones.models import Notificacion
+
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        self.assertEqual(self._avisos_nueva(solicitud).filter(estado=Notificacion.Estado.ACTIVA).count(), 2)
+        servicios.iniciar_revision(solicitud, self.admin)
+        servicios.rechazar(solicitud, self.admin, 'No procede.')
+        self.assertEqual(set(self._avisos_nueva(solicitud).values_list('estado', 'leido')),
+                         {(Notificacion.Estado.RESUELTA, True)})
+
+        solicitud.refresh_from_db()
+        servicios.devolver_a_espera(solicitud, self.admin)
+        self.assertEqual(set(self._avisos_nueva(solicitud).values_list('estado', 'leido')),
+                         {(Notificacion.Estado.ACTIVA, False)})
+
+    def test_retirarla_borra_sus_avisos(self):
+        solicitud = self._solicitud_de_edicion(salario_basico=9999)
+        servicios.eliminar(solicitud, self.moderador)
+        self.assertFalse(self._avisos_nueva(solicitud).exists())
+
+
 class Visibilidad(BaseSolicitudes):
 
     def test_moderador_no_ve_las_solicitudes_de_otro_moderador(self):
@@ -1293,10 +1329,14 @@ class ContratoDesviado(BaseDepartamento):
         """Desde el 24-10-2026 (decisión de RRHH) los números de resolución y el
         switch Jubilado recontratado también son `campos_libres`: los números llegan
         semanas después y no tiene sentido una solicitud por cada uno."""
+        # Cada número solo se guarda si aplica (18-11-2026): C. Formal marcada y
+        # cargo de Funcionario. El de Designado no aplica (el cargo no lo es) y se vacía.
+        CAlta.objects.filter(pk=self.contrato.pk).update(c_formal=True)
+        CargoPlantilla.objects.filter(pk=self.cargo.pk).update(funcionario=True)
         self.client.force_login(self.moderador)
 
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
-                         self._datos_contrato(c_formal_res='12/26', funcionario_res='34/26',
+                         self._datos_contrato(c_formal='on', c_formal_res='12/26', funcionario_res='34/26',
                                               designado_res='56/26',
                                               jubilado_recontratado='on'),
                          HTTP_HX_REQUEST='true')
@@ -1304,12 +1344,13 @@ class ContratoDesviado(BaseDepartamento):
         self.contrato.refresh_from_db()
         self.assertEqual((self.contrato.c_formal_res, self.contrato.funcionario_res,
                           self.contrato.designado_res, self.contrato.jubilado_recontratado),
-                         ('12/26', '34/26', '56/26', True))
+                         ('12/26', '34/26', None, True))
         self.assertEqual(Solicitud.objects.count(), 0)
 
     def test_el_moderador_guarda_directo_confianza_y_modalidad(self):
         """De Confianza (su número) y la modalidad de trabajo también son libres
         (24-10-2026)."""
+        CargoPlantilla.objects.filter(pk=self.cargo.pk).update(de_confianza=True)
         self.client.force_login(self.moderador)
         self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
                          self._datos_contrato(confianza_res='77/26', teletrabajo='on', pluriempleo='on'),
@@ -1319,6 +1360,29 @@ class ContratoDesviado(BaseDepartamento):
                           self.contrato.pluriempleo, self.contrato.trabajo_distancia),
                          ('77/26', True, True, False))
         self.assertEqual(Solicitud.objects.count(), 0)
+
+    def test_campos_que_dependen_de_otro_los_decide_el_servidor(self):
+        """18-11-2026: si un campo no aplica se vacía; si aplica y no llegó (en
+        pantalla estaba deshabilitado), se conserva lo guardado."""
+        CAlta.objects.filter(pk=self.contrato.pk).update(
+            profesional=True, fecha_vence_lic=date(2027, 1, 1), fecha_vence_seg=date(2027, 2, 1))
+        self.client.force_login(self.admin)
+
+        # Chófer marcado, pero la licencia no viaja: se conserva. El seguro sí viaja.
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(profesional='on', fecha_vence_seg='2027-03-01'),
+                         HTTP_HX_REQUEST='true')
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.fecha_vence_lic, self.contrato.fecha_vence_seg),
+                         (date(2027, 1, 1), date(2027, 3, 1)))
+
+        # Deja de ser chófer: las fechas ya no aplican y se vacían aunque lleguen.
+        self.client.post(reverse('updt_contrato', args=[self.contrato.pk]),
+                         self._datos_contrato(fecha_vence_lic='2027-01-01'),
+                         HTTP_HX_REQUEST='true')
+        self.contrato.refresh_from_db()
+        self.assertEqual((self.contrato.profesional, self.contrato.fecha_vence_lic, self.contrato.fecha_vence_seg),
+                         (False, None, None))
 
     def test_activar_calificacion_formal_sigue_pidiendo_solicitud(self):
         self.client.force_login(self.moderador)

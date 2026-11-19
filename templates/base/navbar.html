@@ -95,10 +95,6 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
     // URLs de notificaciones
     const urlCount    = "{% url 'notificaciones_json' %}";
     const urlUltimas  = "{% url 'ultimas_notificaciones' %}";
-    // Con `pk` dinámico: se sustituye el 0 por el id real antes de usarla (el
-    // truco estándar para pasar una url con parámetro a JS sin tener el id en
-    // tiempo de renderizado del template).
-    const urlMarcarLeidaPlantilla = "{% url 'notificacion_marcar_leida' 0 %}";
     const urlMarcarTodasLeidas    = "{% url 'notificaciones_marcar_todas_leidas' %}";
 
     // Referencias DOM
@@ -117,10 +113,6 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
     }
     const csrftoken = obtenerCookie('csrftoken');
 
-    // Colores por severidad: mismos valores numéricos que usa Subsanación
-    // (10=Crítica … 50=Informativa). `null` (los EVENTO) no colorea nada especial.
-    const COLOR_POR_SEVERIDAD = {10: 'danger', 20: 'warning', 30: 'info', 40: 'secondary', 50: 'light'};
-
     // Los textos de los avisos pueden llevar nombres de trabajadores o lo que
     // escribió un usuario: se escapan para que nunca se interpreten como HTML.
     function escaparHtml(texto) {
@@ -129,40 +121,13 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
       return div.innerHTML;
     }
 
-    function marcadorDeNotificacion(n) {
-      const partes = [];
-      if (n.severidad != null && COLOR_POR_SEVERIDAD[n.severidad]) {
-        partes.push(`<span class="badge bg-${COLOR_POR_SEVERIDAD[n.severidad]} me-1">&nbsp;</span>`);
-      }
-      if (n.estado === 'RES') {
-        partes.push('<span class="badge bg-label-success me-1">Resuelto</span>');
-      }
-      return partes.join('');
-    }
-
-    async function marcarLeida(id) {
-      // La plantilla es ".../0/leer/" (0 es el pk de relleno usado al renderizar
-      // la url); se sustituye por el id real de la notificación.
-      const url = urlMarcarLeidaPlantilla.replace('/0/leer/', '/' + id + '/leer/');
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'X-CSRFToken': csrftoken },
-        });
-        if (!res.ok) throw new Error(res.statusText);
-        await actualizarBadge();
-      } catch (e) {
-        console.error('Error al marcar como leída:', e);
-      }
-    }
-
     // — Funciones de notificaciones —
     async function actualizarBadge() {
       try {
         const res = await fetch(urlCount);
         if (!res.ok) throw new Error(res.statusText);
-        const { notificaciones } = await res.json();
-        const count = notificaciones.length;
+        // Solo llega el número de lo que hay que hacer (notificaciones/campana.py).
+        const { total: count } = await res.json();
         if (count > 0) {
           badge.textContent = count;
           badge.style.display = 'inline-block';
@@ -174,47 +139,82 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
       }
     }
 
+    // Desplegable (18-11-2026): lo que hay que hacer, AGRUPADO por regla o tipo
+    // («CTR-018 · 3 nuevos»), y aparte la Actividad de hoy. Pulsar una línea marca
+    // como leídos los avisos de ese grupo y lleva a él (notificaciones/agrupar.py).
+    const urlMarcarGrupo = "{% url 'notificaciones_marcar_grupo_leido' %}";
+
+    function colorDeLinea(l) {
+      if (l.tipo === 'ALE') return (l.gravedad === null || l.gravedad <= 10) ? 'danger' : 'warning';
+      if (l.tipo === 'REC') return l.vencido ? 'danger' : 'warning';
+      return 'primary';
+    }
+
+    function detalleDeLinea(l) {
+      if (l.codigo_regla === 'RANKING' || (l.tipo === 'EVE' && l.total === 1)) return escaparHtml(l.titulo);
+      if (l.tipo === 'ALE') return `${l.codigo_regla ? escaparHtml(l.codigo_regla) + ' · ' : ''}${l.total} nuevo${l.total === 1 ? '' : 's'}`;
+      if (l.tipo === 'REC' && l.objetivo) return `El más próximo: ${escaparHtml(l.objetivo)}`;
+      return `${l.total} sin leer`;
+    }
+
+    async function abrirLinea(l) {
+      try {
+        const datos = new FormData();
+        datos.append('grupo', l.grupo);
+        await fetch(urlMarcarGrupo, { method: 'POST', headers: { 'X-CSRFToken': csrftoken }, body: datos });
+      } catch (e) {
+        console.error('Error al marcar el grupo como leído:', e);
+      }
+      if (l.codigo_regla === 'RANKING' && window.orbithAbrirRanking) {
+        menuNotificaciones.style.display = 'none';
+        window.orbithAbrirRanking('ganadores');
+        actualizarBadge();
+      } else if (l.href) {
+        window.location.href = l.href;
+      } else {
+        actualizarBadge();
+        cargarUltimasNotificaciones();
+      }
+    }
+
     async function cargarUltimasNotificaciones() {
       try {
         const res = await fetch(urlUltimas);
         if (!res.ok) throw new Error(res.statusText);
-        const { notificaciones } = await res.json();
+        const { lineas, mas, actividad, url_bandeja } = await res.json();
 
         listaNotificaciones.innerHTML = '';
-        if (notificaciones.length === 0) {
-          listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
-          return;
+        if (lineas.length === 0) {
+          listaNotificaciones.innerHTML = '<li class="text-center text-muted py-2">No tiene nada pendiente</li>';
         }
-
-        notificaciones.forEach(n => {
+        lineas.forEach(l => {
           const a = document.createElement('a');
-          a.href = "#";
-          a.dataset.id = n.id;
-          a.className = 'dropdown-item d-flex align-items-start gap-2 py-2 border-bottom';
+          a.href = l.href || '#';
+          a.className = 'dropdown-item orb-campana-linea';
           a.innerHTML = `
-            <div class="grow">
-              ${marcadorDeNotificacion(n)}
-              <strong class="text-truncate d-block">${escaparHtml(n.titulo)}</strong>
-              <small class="text-muted">${escaparHtml(n.fecha)}</small>
-              <p class="mb-0 text-truncate" style="max-width: 280px;">${escaparHtml(n.mensaje)}</p>
-            </div>
-          `;
-          // Clic en la notificación: la marca como leída y la quita del dropdown
-          // (que solo enseña las NO leídas) sin esperar el polling de 5 minutos.
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            marcarLeida(n.id);
-            a.remove();
-            if (!listaNotificaciones.children.length) {
-              listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
-            }
-            // Avisos de cierre del Ranking Mensual: abren su ventana en «Ganadores».
-            if (n.codigo_regla === 'RANKING' && window.orbithAbrirRanking) {
-              window.orbithAbrirRanking('ganadores');
-            }
-          });
+            <span class="badge bg-${colorDeLinea(l)} orb-campana-cifra">${l.total}</span>
+            <span class="orb-campana-linea-texto">
+              <strong class="d-block">${escaparHtml(l.nombre)}</strong>
+              <small class="text-muted">${detalleDeLinea(l)}</small>
+            </span>`;
+          a.addEventListener('click', (e) => { e.preventDefault(); abrirLinea(l); });
           listaNotificaciones.appendChild(a);
         });
+        if (mas > 0 && url_bandeja) {
+          const mas_ = document.createElement('a');
+          mas_.href = url_bandeja;
+          mas_.className = 'dropdown-item small text-muted text-center';
+          mas_.textContent = `y ${mas} grupo${mas === 1 ? '' : 's'} más en Notificaciones`;
+          listaNotificaciones.appendChild(mas_);
+        }
+        if (actividad.length) {
+          const texto = 'Actividad de hoy: ' + actividad.map(t => `${t.total} ${escaparHtml(t.nombre)}`).join(' · ');
+          const bloque = document.createElement(url_bandeja ? 'a' : 'div');
+          if (url_bandeja) bloque.href = url_bandeja + '?tab=notificaciones';
+          bloque.className = 'orb-campana-actividad';
+          bloque.innerHTML = `<i class="bx bx-calendar me-1"></i>${texto}`;
+          listaNotificaciones.appendChild(bloque);
+        }
       } catch (e) {
         console.error('Error al cargar últimas notificaciones:', e);
       }
@@ -242,7 +242,7 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
           headers: { 'X-CSRFToken': csrftoken },
         });
         if (!res.ok) throw new Error(res.statusText);
-        listaNotificaciones.innerHTML = '<li class="text-center text-muted">No hay notificaciones</li>';
+        listaNotificaciones.innerHTML = '<li class="text-center text-muted py-2">No tiene nada pendiente</li>';
         await actualizarBadge();
       } catch (e2) {
         console.error('Error al marcar todas como leídas:', e2);
@@ -260,7 +260,13 @@ barra en el flujo y perdían 62 px de alto en blanco encima del título.
     });
 
     // — Inicialización —
+    // Otras pantallas (la bandeja) ponen al día el número sin esperar.
+    window.orbithActualizarCampana = actualizarBadge;
     actualizarBadge();
     setInterval(actualizarBadge, 300000);
+    // Al volver a Orbith desde otra pestaña o programa, sin esperar los 5 minutos.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') actualizarBadge();
+    });
   });
 </script>

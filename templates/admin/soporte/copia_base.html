@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% comment %} Copia de la base de datos (18-11-2026): ver soporte/admin.py::CopiaBaseDatosAdmin
+   y core/copia_base.py. {% endcomment %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; Copia de la base de datos
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .copias-bd { list-style: none; padding: 0; margin: 1rem 0; max-width: 40rem; }
+  .copias-bd li { padding: .5rem; border-bottom: 1px solid var(--hairline-color, #eee); }
+</style>
+
+<p>Copia completa de la base de datos de Orbith para el desarrollador. <strong>Contiene los datos
+   personales de todos los trabajadores:</strong> entréguela solo en mano. Cada copia preparada o
+   descargada queda en Auditoría, y las copias se borran solas a las {{ horas }} horas.</p>
+
+{% if sin_programa %}
+  <p class="errornote">El servidor no tiene <code>pg_dump</code>, el programa de PostgreSQL que hace la
+     copia. Avise a informática.</p>
+{% elif preparando %}
+  <p><strong>Preparando la copia…</strong> Puede tardar unos minutos. Esta página se actualiza sola.</p>
+  <script>setTimeout(function () { location.reload(); }, 10000);</script>
+{% else %}
+  <form method="post" action="{% url 'admin:soporte_copiabasedatos_preparar' %}">
+    {% csrf_token %}
+    <input type="submit" class="default" value="Preparar una copia nueva" style="float: none;">
+  </form>
+{% endif %}
+
+{% if error and not preparando %}
+  <p class="errornote">La última copia falló. Mensaje de PostgreSQL:<br><code>{{ error }}</code></p>
+{% endif %}
+
+{% if copias %}
+  <ul class="copias-bd">
+    {% for c in copias %}
+      <li>{{ c.nombre }} <small>({{ c.mb }} MB)</small>
+        · <a href="{% url 'admin:soporte_copiabasedatos_descargar' c.nombre %}">Descargar</a></li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

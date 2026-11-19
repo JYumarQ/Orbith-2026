@@ -4,6 +4,7 @@
     {% if p.puesto == 1 %}<i class="bx bxs-medal ranking-oro" title="1º puesto"></i>
     {% elif p.puesto == 2 %}<i class="bx bxs-medal ranking-plata" title="2º puesto"></i>
     {% elif p.puesto == 3 %}<i class="bx bxs-medal ranking-bronce" title="3º puesto"></i>
+    {% elif p.subida %}<i class="bx bx-trending-up ranking-mejorado" title="Más mejorado del mes"></i>
     {% elif p.puesto %}{{ p.puesto }}º
     {% else %}—{% endif %}
   </span>
@@ -16,7 +17,8 @@
   {% endif %}
   <span class="flex-grow-1 text-truncate">
     <span class="ranking-nombre">{{ p.nombre }}{% if p.soy_yo %} <small class="text-primary">(tú)</small>{% endif %}</span>
-    {% if p.nivel %}<small class="d-block text-muted">{{ p.nivel }}</small>{% endif %}
+    {% if p.subida %}<small class="d-block text-muted">Más mejorado del mes · +{{ p.subida }} XP</small>
+    {% elif p.nivel %}<small class="d-block text-muted">{{ p.nivel }}</small>{% endif %}
   </span>
   <span class="ranking-xp">{{ p.xp }} XP</span>
 </li>

@@ -1,0 +1,137 @@
+{% extends "admin/base_site.html" %}
+{% comment %} Actualizar Orbith (18-11-2026): diagnóstico del servidor y ensayo de
+   actualización. Ver soporte/admin.py::ActualizacionOrbithAdmin y core/actualizacion.py. {% endcomment %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; Actualizar Orbith
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .act-seccion { margin-bottom: 2rem; max-width: 70rem; }
+  .act-seccion h2 { margin-bottom: .5rem; }
+  .act-seccion pre { max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
+                     font-size: 12px; padding: 1rem; background: var(--darkened-bg, #f8f8f8);
+                     border: 1px solid var(--hairline-color, #eee); }
+  .act-barra { height: 1rem; background: var(--darkened-bg, #eee); border-radius: .3rem; overflow: hidden; max-width: 30rem; }
+  .act-barra div { height: 100%; width: 0; background: var(--default-button-bg, #417690); transition: width .2s; }
+  .act-lista { list-style: none; padding: 0; margin: .5rem 0; }
+  .act-lista li { padding: .3rem 0; border-bottom: 1px solid var(--hairline-color, #eee); }
+  .act-lista li.actual { font-weight: bold; }
+</style>
+
+<p><strong>Por ahora esta página solo ENSAYA:</strong> comprueba un paquete nuevo y prepara la versión en una
+   carpeta aparte, sin tocar el Orbith que está en uso ni su base de datos. Todo lo que pasa queda en un
+   registro que se descarga y se envía al desarrollador.</p>
+
+<div class="act-seccion">
+  <h2>1. Diagnóstico del servidor</h2>
+  <p>Cómo está montado el servidor (servicio, Nginx, carpetas, PostgreSQL). Solo lee; no enseña contraseñas.</p>
+  <p>
+    <a class="button" href="?diagnostico=1">Ver el diagnóstico</a>
+    <a class="button" href="{% url 'admin:soporte_actualizacion_diagnostico' %}">Descargar el diagnóstico</a>
+  </p>
+  {% if diagnostico %}<pre>{{ diagnostico }}</pre>{% endif %}
+</div>
+
+<div class="act-seccion">
+  <h2>2. Subir el paquete</h2>
+  <p>Elija el archivo <code>orbith-&lt;versión&gt;.tar.gz</code>. Se sube por trozos pequeños; no cierre la página
+     hasta que termine.</p>
+  <p><input type="file" id="actArchivo" accept=".gz"> <button type="button" class="button" id="actSubir">Subir</button></p>
+  <div class="act-barra" id="actBarra" hidden><div></div></div>
+  <p id="actEstado"></p>
+  {% if paquetes %}
+    <ul class="act-lista">
+      {% for p in paquetes %}<li>{{ p.nombre }} <small>({{ p.mb }} MB)</small></li>{% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+<div class="act-seccion">
+  <h2>3. Ensayar la actualización</h2>
+  {% if en_curso %}
+    <p><strong>Ensayo en marcha…</strong> Puede tardar varios minutos. Esta página se actualiza sola.</p>
+    <script>setTimeout(function () { location.reload(); }, 8000);</script>
+  {% elif paquetes %}
+    <form method="post" action="{% url 'admin:soporte_actualizacion_ensayar' %}">
+      {% csrf_token %}
+      <select name="paquete">{% for p in paquetes %}<option value="{{ p.nombre }}">{{ p.nombre }}</option>{% endfor %}</select>
+      <input type="submit" class="default" value="Empezar el ensayo" style="float: none;">
+    </form>
+  {% else %}
+    <p>Primero suba un paquete.</p>
+  {% endif %}
+</div>
+
+<div class="act-seccion">
+  <h2>4. Registros de los ensayos</h2>
+  {% if registros %}
+    <ul class="act-lista">
+      {% for nombre in registros %}
+        <li {% if nombre == elegido %}class="actual"{% endif %}>
+          <a href="?registro={{ nombre|urlencode }}">{{ nombre }}</a>
+          · <a href="{% url 'admin:soporte_actualizacion_registro' nombre %}">Descargar</a>
+        </li>
+      {% endfor %}
+    </ul>
+    <p class="help">Se guardan {{ dias }} días. Descargue el registro y envíeselo al desarrollador.</p>
+    {% if texto_registro %}<pre id="actRegistro">{{ texto_registro }}</pre>{% endif %}
+  {% else %}
+    <p>Todavía no hay ningún ensayo.</p>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  const TROZO = {{ tamano_trozo }};
+  const URL_SUBIR = "{% url 'admin:soporte_actualizacion_subir' %}";
+  const estado = document.getElementById('actEstado');
+  const barra = document.getElementById('actBarra');
+  const relleno = barra.querySelector('div');
+  const pre = document.getElementById('actRegistro');
+  if (pre) pre.scrollTop = pre.scrollHeight;
+
+  function csrf() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  document.getElementById('actSubir').addEventListener('click', async function () {
+    const archivo = document.getElementById('actArchivo').files[0];
+    if (!archivo) { estado.textContent = 'Elija primero el archivo.'; return; }
+    if (!/^orbith-[0-9][\w.\-]*\.tar\.gz$/.test(archivo.name)) {
+      estado.textContent = 'El archivo tiene que ser el paquete de Orbith: orbith-<versión>.tar.gz.'; return;
+    }
+    const boton = this;
+    boton.disabled = true;
+    barra.hidden = false;
+    const total = Math.ceil(archivo.size / TROZO);
+    try {
+      for (let i = 0; i < total; i++) {
+        const datos = new FormData();
+        datos.append('nombre', archivo.name);
+        datos.append('indice', i);
+        datos.append('total', total);
+        datos.append('trozo', archivo.slice(i * TROZO, (i + 1) * TROZO), archivo.name);
+        const r = await fetch(URL_SUBIR, { method: 'POST', body: datos, headers: { 'X-CSRFToken': csrf() } });
+        let j = {};
+        try { j = await r.json(); } catch (e) { j = { ok: false, error: 'El servidor respondió ' + r.status + '.' }; }
+        if (!j.ok) throw new Error(j.error || 'Error al subir.');
+        relleno.style.width = Math.round((i + 1) * 100 / total) + '%';
+        estado.textContent = 'Subiendo… ' + (i + 1) + ' de ' + total + ' trozos';
+      }
+      estado.textContent = 'Paquete subido. Recargando…';
+      location.reload();
+    } catch (e) {
+      estado.textContent = 'No se pudo subir: ' + e.message;
+      boton.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

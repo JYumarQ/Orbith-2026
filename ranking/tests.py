@@ -10,6 +10,8 @@ from django.utils import timezone
 
 from . import servicios
 from .middleware import RankingMiddleware
+from notificaciones.models import Notificacion
+
 from .models import Actividad, ActividadXP, GanadorMes, MesCerrado, Rol
 from .puntos import nivel_de
 from .servicios import (cerrar_mes, cerrar_mes_si_toca, clasificacion, limpiar_meses_antiguos,
@@ -135,6 +137,10 @@ class ClasificacionTests(TestCase):
         self.assertEqual(nivel_de(Rol.MODERADOR, 50), 'Activo')
         self.assertEqual(nivel_de(Rol.ADMINISTRADOR, 250), 'Experto')
         self.assertEqual(nivel_de(Rol.OBSERVADOR, 40), 'Destacado')
+        # Maestro y Leyenda (18-11-2026): solo Moderadores.
+        self.assertEqual(nivel_de(Rol.MODERADOR, 600), 'Maestro')
+        self.assertEqual(nivel_de(Rol.MODERADOR, 900), 'Leyenda')
+        self.assertEqual(nivel_de(Rol.ADMINISTRADOR, 900), 'Experto')
 
 
 class CierreMesTests(TestCase):
@@ -155,13 +161,31 @@ class CierreMesTests(TestCase):
     def test_reparte_los_tres_primeros_puestos_con_empates(self):
         self.assertTrue(cerrar_mes(2026, 9))
         ganadores = GanadorMes.objects.filter(anno=2026, mes=9).order_by('puesto', 'usuario__username')
+        # Puesto 0: «Más mejorado» (m3 subió 70 XP; los premiados no cuentan).
         self.assertEqual([(g.usuario.username, g.puesto) for g in ganadores],
-                         [('m0', 1), ('m1', 2), ('m2', 2)])
+                         [('m3', 0), ('m0', 1), ('m1', 2), ('m2', 2)])
 
     def test_no_cierra_dos_veces(self):
         self.assertTrue(cerrar_mes(2026, 9))
         self.assertFalse(cerrar_mes(2026, 9))
-        self.assertEqual(GanadorMes.objects.count(), 3)
+        self.assertEqual(GanadorMes.objects.count(), 4)
+
+    def test_mas_mejorado_compara_con_su_mes_anterior(self):
+        # m3 ya tenía 60 XP en agosto (sube 10) y m4 pasa de 0 a 55 (sube 55).
+        anotar(self.usuarios[3], Actividad.ALTA, 60, date(2026, 8, 10))
+        anotar(self.usuarios[4], Actividad.ALTA, 55, date(2026, 9, 20))
+        self.assertTrue(cerrar_mes(2026, 9))
+        mejorado = GanadorMes.objects.get(anno=2026, mes=9, puesto=0)
+        self.assertEqual((mejorado.usuario.username, mejorado.subida), ('m4', 55))
+        aviso = Notificacion.objects.get(destinatario=self.usuarios[4], codigo_regla='RANKING')
+        self.assertIn('Más mejorado', aviso.titulo)
+        self.assertEqual(servicios.distincion_de(self.usuarios[4], hoy=date(2026, 10, 5))['metal'], 'mejorado')
+
+    def test_sin_llegar_a_activo_no_hay_mas_mejorado(self):
+        GanadorMes.objects.all().delete()
+        ActividadXP.objects.filter(usuario=self.usuarios[3]).update(xp=40)
+        self.assertTrue(cerrar_mes(2026, 9))
+        self.assertFalse(GanadorMes.objects.filter(puesto=0).exists())
 
     def test_cierre_automatico_el_primer_dia_del_mes(self):
         self.assertTrue(cerrar_mes_si_toca(date(2026, 10, 1)))
@@ -246,7 +270,9 @@ class VentanaUsuarioTests(TestCase):
         progreso = servicios.progreso_nivel(Rol.MODERADOR, 42)
         self.assertEqual((progreso['nivel'], progreso['siguiente'], progreso['faltan'], progreso['porcentaje']),
                          ('Inicial', 'Activo', 8, 84))
-        self.assertIsNone(servicios.progreso_nivel(Rol.MODERADOR, 300)['siguiente'])
+        self.assertEqual(servicios.progreso_nivel(Rol.MODERADOR, 300)['siguiente'], 'Maestro')
+        self.assertIsNone(servicios.progreso_nivel(Rol.MODERADOR, 900)['siguiente'])
+        self.assertIsNone(servicios.progreso_nivel(Rol.ADMINISTRADOR, 250)['siguiente'])
 
     def test_detalle_y_tres_meses(self):
         datos = servicios.datos_ventana(self.yo, hoy=self.HOY)
@@ -351,6 +377,14 @@ class AvisosCierreTests(TestCase):
 
 
 class CampanaTests(TestCase):
+    def setUp(self):
+        # Sin el aviso de mitad de mes a rezagados, que el middleware lanzaría aquí.
+        hoy = timezone.localdate()
+        servicios._rezagados_avisados = (hoy.year, hoy.month)
+
+    def tearDown(self):
+        servicios._rezagados_avisados = None
+
     def test_los_avisos_del_ranking_salen_primero(self):
         from django.contrib.contenttypes.models import ContentType
         from notificaciones.models import Notificacion
@@ -362,10 +396,11 @@ class CampanaTests(TestCase):
         Notificacion.objects.create(titulo='Ranking', mensaje='x', destinatario=usuario, codigo_regla='RANKING',
                                     content_type=ct, object_id='99')
         self.client.force_login(usuario)
-        datos = self.client.get(reverse('ultimas_notificaciones')).json()['notificaciones']
+        # Desde el 18-11-2026 el desplegable va agrupado: las 6 alertas son una línea.
+        datos = self.client.get(reverse('ultimas_notificaciones')).json()['lineas']
         self.assertEqual(datos[0]['titulo'], 'Ranking')
         self.assertEqual(datos[0]['codigo_regla'], 'RANKING')
-        self.assertEqual(len(datos), 5)
+        self.assertEqual([(l['tipo'], l['total']) for l in datos], [('EVE', 1), ('ALE', 6)])
 
 
 class EstadisticasUsoTests(TestCase):
@@ -578,3 +613,69 @@ class DistincionTests(TestCase):
 def estadisticas_nombre(usuario):
     from .estadisticas import nombre_para_admin
     return nombre_para_admin(usuario)
+
+
+class AvisoRezagadosTests(TestCase):
+    """Día 15 (18-11-2026): a quien no llegó a Activo, cuántos XP le faltan."""
+
+    def setUp(self):
+        servicios._rezagados_avisados = None
+        self.rezagado = crear_usuario('rezagado')
+        self.activo = crear_usuario('activo')
+        anotar(self.rezagado, Actividad.ALTA, 20, date(2026, 11, 3))
+        anotar(self.activo, Actividad.ALTA, 60, date(2026, 11, 3))
+
+    def tearDown(self):
+        servicios._rezagados_avisados = None
+
+    def test_antes_del_dia_15_no_avisa(self):
+        self.assertEqual(servicios.avisar_rezagados_si_toca(date(2026, 11, 14)), 0)
+        self.assertFalse(Notificacion.objects.exists())
+
+    def test_avisa_una_vez_con_lo_que_falta(self):
+        servicios.avisar_rezagados_si_toca(date(2026, 11, 15))
+        servicios._rezagados_avisados = None          # otro proceso del servidor
+        servicios.avisar_rezagados_si_toca(date(2026, 11, 16))
+        aviso = Notificacion.objects.get()
+        self.assertEqual(aviso.destinatario, self.rezagado)
+        self.assertEqual(aviso.titulo, 'Te faltan 30 XP para el nivel Activo')
+        self.assertIn('cierre en plazo (20 XP)', aviso.mensaje)
+
+
+class HallazgoCorregidoTests(TestCase):
+    """+5 XP al moderador que guarda el registro y así se cierra un hallazgo."""
+
+    def setUp(self):
+        from nomencladores.models import NTipoUnidadOrganizativa
+        from strorganizativa.models import UnidadOrganizativa
+        tipo = NTipoUnidadOrganizativa.objects.create(descripcion='Tipo XP')
+        self.unidad = UnidadOrganizativa.objects.create(
+            codigo_interno=871, descripcion='UEB XP', tipo=tipo, grupo_nomina=2)
+        self.moderador = crear_usuario('mod_xp')
+        self.moderador.unidades.add(self.unidad)
+
+    def _corregir(self, *, por_registro=True, unidad=None):
+        from types import SimpleNamespace
+
+        from subsanacion import por_registro as modulo
+        from subsanacion.models import Hallazgo
+
+        from .receptores import al_corregir_hallazgo
+        hallazgo = SimpleNamespace(unidad_organizativa_id=unidad or self.unidad.pk, __str__=lambda s: 'h')
+        modulo._estado.revisando = por_registro
+        try:
+            with patch('auditoria.middleware.get_current_user', return_value=self.moderador):
+                al_corregir_hallazgo(None, hallazgo=hallazgo, estado_anterior=Hallazgo.PENDIENTE,
+                                     estado_nuevo=Hallazgo.CORREGIDO, usuario=None, nota='', automatica=True)
+        finally:
+            modulo._estado.revisando = False
+        return ActividadXP.objects.filter(usuario=self.moderador, actividad=Actividad.HALLAZGO_CORREGIDO)
+
+    def test_al_guardar_suma_5_xp(self):
+        self.assertEqual(list(self._corregir().values_list('xp', flat=True)), [5])
+
+    def test_el_analisis_diario_no_da_xp(self):
+        self.assertFalse(self._corregir(por_registro=False).exists())
+
+    def test_de_otra_unidad_no_da_xp(self):
+        self.assertFalse(self._corregir(unidad=999999).exists())

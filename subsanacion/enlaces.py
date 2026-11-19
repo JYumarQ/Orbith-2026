@@ -147,7 +147,10 @@ def construir_enlace(etiqueta_modelo, object_id, forzar_url=None, next_url=None,
         return None
 
     nombre_url = forzar_url or definicion['url']
-    sin_argumento = definicion.get('sin_argumento', False)
+    # `sin_argumento` es del destino POR DEFECTO del modelo (un listado). Si la regla
+    # lleva a otra url, se intenta con el registro y, si no lo admite, sin él (abajo):
+    # así un aviso sobre un movimiento puede abrir el editor de esa persona.
+    sin_argumento = definicion.get('sin_argumento', False) and not forzar_url
 
     # Un hallazgo global (object_id vacío) no puede llevar argumento aunque la url
     # normalmente lo lleve.
@@ -158,7 +161,14 @@ def construir_enlace(etiqueta_modelo, object_id, forzar_url=None, next_url=None,
         if sin_argumento:
             href = reverse(nombre_url)
         else:
-            href = reverse(nombre_url, args=[object_id])
+            try:
+                href = reverse(nombre_url, args=[object_id])
+            except NoReverseMatch:
+                # Una regla que lleva a una pantalla general (Parámetros, Cierres…),
+                # no a la ficha del registro: esa url no lleva argumento (19-11-2026).
+                if not forzar_url:
+                    raise
+                href = reverse(nombre_url)
     except NoReverseMatch:
         logger.warning(
             'Subsanación: no se pudo construir el enlace «%s» para %s (id=%r). '

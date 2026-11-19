@@ -19,13 +19,15 @@ _COMUNES = {
 PUNTOS = {
     Rol.MODERADOR: {
         Actividad.ASPIRANTE: (3, 20),
-        Actividad.ALTA: (10, 15),
+        Actividad.ALTA: (10, 25),
         Actividad.MOVIMIENTO: (8, 15),
         Actividad.ENVIO_MOVIMIENTO: (4, 10),
         Actividad.BAJA: (8, 15),
         Actividad.SOLICITUD_APROBADA: (6, 10),
         Actividad.CIERRE_EN_PLAZO: (20, None),
         Actividad.HALLAZGO_REVISADO: (3, 20),
+        # Corregir de verdad (al guardar el registro, el hallazgo se cierra).
+        Actividad.HALLAZGO_CORREGIDO: (5, 20),
         Actividad.RECORDATORIO_COMPLETADO: (5, 10),
         **_COMUNES,
     },
@@ -38,10 +40,11 @@ PUNTOS = {
     Rol.OBSERVADOR: dict(_COMUNES),
 }
 
-# Umbrales de XP de cada nivel del mes (Inicial, Activo, Destacado, Experto).
-NIVELES = ('Inicial', 'Activo', 'Destacado', 'Experto')
+# Umbrales de XP de cada nivel del mes. Maestro y Leyenda (18-11-2026) solo
+# para Moderadores: eran los únicos que ya pasaban de largo el nivel Experto.
+NIVELES = ('Inicial', 'Activo', 'Destacado', 'Experto', 'Maestro', 'Leyenda')
 UMBRALES = {
-    Rol.MODERADOR: (0, 50, 150, 300),
+    Rol.MODERADOR: (0, 50, 150, 300, 600, 900),
     Rol.ADMINISTRADOR: (0, 40, 120, 250),
     Rol.OBSERVADOR: (0, 15, 40, 80),
 }

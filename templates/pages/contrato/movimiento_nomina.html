@@ -361,6 +361,8 @@
                                                 <input class="form-control bg-light text-center" value="{{ movimiento.duracion_nueva|default:'-' }}" readonly>
                                             {% else %}
                                                 {{ form.duracion }}
+                                                {# Renovar = movimiento con los días nuevos: el vencimiento cuenta desde aquí (18-11-2026). #}
+                                                <div class="text-muted lh-sm mt-1" style="font-size: 0.65rem;">Los días cuentan desde la fecha efectiva de este movimiento.</div>
                                             {% endif %}
                                         </div>
                                         <div class="col-md-3 mt-2 {% if is_wizard %}wizard-bloqueado{% endif %}">
@@ -668,14 +670,15 @@
                 });
             });
 
-            function enviarDatos() {
+            function enviarDatos(sinCambios) {
                 // Mostrar estado de carga (opcional pero recomendado)
                 Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
 
                 $.ajax({
                     url: $form.attr('action'),
                     type: 'POST',
-                    data: $form.serialize(),
+                    // Movimiento sin cambios ya confirmado (19-11-2026).
+                    data: $form.serialize() + (sinCambios ? '&confirmar_sin_cambios=1' : ''),
                     success: function(response) {
                         if (response.form_is_valid) {
                             $('#modalMovimientoContrato').modal('hide');
@@ -715,7 +718,14 @@
                     },
                     error: function(xhr) {
                         var res = xhr.responseJSON;
-                        if (res && res.error_popup) {
+                        if (res && res.confirmar_sin_cambios) {
+                            // No cambia nada del contrato: se pregunta antes de registrarlo.
+                            Swal.fire({
+                                icon: 'question', title: 'Movimiento sin cambios', text: res.confirmar_sin_cambios,
+                                showCancelButton: true, confirmButtonText: 'Sí, registrarlo',
+                                cancelButtonText: 'Cancelar', confirmButtonColor: '#696cff', cancelButtonColor: '#8592a3'
+                            }).then(function (r) { if (r.isConfirmed) enviarDatos(true); });
+                        } else if (res && res.error_popup) {
                             // Cubre TANTO errores críticos (500) COMO errores de validación (400)
                             window.mostrarToast(res.error_popup, 'error');
                         } else if (xhr.status === 400) {

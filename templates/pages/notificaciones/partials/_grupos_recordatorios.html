@@ -1,0 +1,49 @@
+{% comment %} Recordatorios automáticos agrupados por tipo (decisión de RRHH del
+   18-11-2026): cuántos hay de cada color y, al abrir, los más urgentes primero. Son
+   pocos (decenas), así que vienen ya cargados, sin otra petición. `abrir` llega desde
+   la campana. Estilos en static/css/orbith-avisos.css. {% endcomment %}
+{% for g in grupos %}
+  <details class="orb-grupo" id="grupo-{{ g.codigo_regla }}" {% if g.codigo_regla == abrir %}open{% endif %}>
+    <summary class="orb-grupo-cabecera">
+      <i class="bx bx-chevron-right orb-grupo-flecha" aria-hidden="true"></i>
+      <span class="orb-grupo-titulo">{{ g.nombre }}</span>
+      <span class="orb-grupo-cifras">
+        {% if g.rojo %}<span class="badge bg-label-danger" title="Vencidos o de hoy">🔴 {{ g.rojo }}</span>{% endif %}
+        {% if g.amarillo %}<span class="badge bg-label-warning" title="En los próximos 15 días">🟡 {{ g.amarillo }}</span>{% endif %}
+        {% if g.naranja %}<span class="badge bg-label-secondary" title="De 16 a 59 días">🟠 {{ g.naranja }}</span>{% endif %}
+        {% if g.verde %}<span class="badge bg-label-secondary" title="60 días o más">🟢 {{ g.verde }}</span>{% endif %}
+        <span class="text-muted small">{{ g.total }} en total</span>
+        {% if g.nuevos %}
+          <button type="button" class="btn btn-sm btn-link p-0 orb-grupo-leer" title="Marcar como leídos los de este tipo"
+                  hx-post="{% url 'notificaciones_marcar_grupo_leido' %}" hx-vals='{"grupo": "REC:{{ g.codigo_regla }}"}'
+                  hx-swap="none" hx-on::after-request="orbithAvisosRecargar()">Marcar leídos</button>
+        {% endif %}
+      </span>
+    </summary>
+    <div class="orb-grupo-cuerpo">
+      {% for r in g.filas %}
+        <div class="orb-grupo-fila{% if not r.leido %} orb-grupo-fila-nueva{% endif %}">
+          <div class="orb-grupo-fila-texto">
+            <span title="{{ r.prioridad.etiqueta }}">{{ r.prioridad.emoji }}</span>
+            <small class="text-muted me-1">{{ r.fecha_objetivo|date:"d/m/Y" }}</small>
+            {{ r.titulo }}
+            <small class="text-muted d-block">{{ r.mensaje }}{% if r.unidad %} · {{ r.unidad }}{% endif %}</small>
+          </div>
+          {% if r.enlace %}
+            <a href="{{ r.enlace.href }}" class="btn btn-sm btn-outline-primary text-nowrap">{{ r.enlace.etiqueta }}</a>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <div class="orb-grupo-pie">
+        <a href="?tab=recordatorios&sub=sistema&codigo={{ g.codigo_regla|urlencode }}">
+          {% if g.total > g.filas|length %}Ver los {{ g.total }} en la tabla{% else %}Abrir en la tabla{% endif %}
+          <i class="bx bx-right-arrow-alt"></i></a>
+      </div>
+    </div>
+  </details>
+{% empty %}
+  <div class="card"><div class="card-body text-center text-muted py-5">
+    <i class="bx bx-calendar-check fs-3 d-block mb-2"></i>
+    Sin recordatorios automáticos pendientes{% if hay_filtros %} con este filtro{% endif %}.
+  </div></div>
+{% endfor %}

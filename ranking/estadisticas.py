@@ -59,6 +59,7 @@ COLUMNAS_TRABAJO = {
         (Actividad.SOLICITUD_APROBADA, 'Solicitudes aprobadas'),
         (Actividad.CIERRE_EN_PLAZO, 'Cierres en plazo'),
         (Actividad.HALLAZGO_REVISADO, 'Hallazgos revisados'),
+        (Actividad.HALLAZGO_CORREGIDO, 'Hallazgos corregidos'),
         (Actividad.RECORDATORIO_COMPLETADO, 'Recordatorios completados'),
         (Actividad.INFORME, 'Informes'),
         (Actividad.DESCARGA, 'Descargas'),

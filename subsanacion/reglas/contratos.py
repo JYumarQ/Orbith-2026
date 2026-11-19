@@ -64,6 +64,9 @@ class ReglaContratos(ReglaBase):
 
 class ContratoSinCargo(ReglaContratos):
     codigo = 'CTR-001'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato sin cargo asignado'
     criticidad = CRITICIDAD_CRITICA
 
@@ -78,9 +81,14 @@ class ContratoSinCargo(ReglaContratos):
         'plaza en la plantilla y no aparece en los informes que agrupan por cargo, '
         'categoría ocupacional o unidad organizativa (incluido el Anexo 17).')
     solucion = (
-        'Abra el contrato y asigne el cargo de plantilla que corresponde. Si el cargo '
-        'todavía no existe, créelo primero en el Gestor de Plantilla. Al guardar el '
-        'contrato, Orbith recalcula el salario y el conteo de plazas.')
+        'El cargo no se cambia en «Editar contrato»: va al histórico. Si el contrato '
+        'está así por un error de datos, el Administrador lo corrige en el editor del '
+        'histórico («Abrir el editor del histórico»): elija el cargo en el evento más '
+        'reciente (o en el Alta Inicial si no hay otro) y guarde; el contrato toma el '
+        'dato solo. Si la situación del trabajador cambió de verdad, registre un '
+        'movimiento de nómina. Moderador: envíe una solicitud personalizada al '
+        'Administrador. Si el cargo todavía no existe, créelo primero en el Gestor de '
+        'Plantilla.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -112,6 +120,9 @@ class MotivoIncoherenteConTipo(ReglaContratos):
     """
 
     codigo = 'CTR-002'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Motivo de contrato incoherente con el tipo'
     criticidad = CRITICIDAD_CRITICA
 
@@ -127,8 +138,14 @@ class MotivoIncoherenteConTipo(ReglaContratos):
         'crear hoy. Los informes que agrupan por motivo de contratación cuentan mal, y '
         'el modelo impreso del contrato puede citar una base legal que no corresponde.')
     solucion = (
-        'Abra el contrato y elija un motivo de la lista del tipo de contrato actual. '
-        'Si el tipo es el equivocado, corrija primero el tipo y después el motivo.')
+        'El motivo (y el tipo de contrato) no se cambia en «Editar contrato»: va al '
+        'histórico. Si el contrato está así por un error de datos, el Administrador lo '
+        'corrige en el editor del histórico («Abrir el editor del histórico»): elija en '
+        'el evento más reciente un motivo de la lista de su tipo de contrato (si el '
+        'tipo es el equivocado, corrija primero el tipo) y guarde; el contrato toma el '
+        'dato solo. Si la situación del trabajador cambió de verdad, registre un '
+        'movimiento de nómina. Moderador: envíe una solicitud personalizada al '
+        'Administrador.')
 
     def ejecutar(self, contexto):
         columnas = self.COLUMNAS_BASE + (
@@ -194,6 +211,9 @@ class MotivoIncoherenteConTipo(ReglaContratos):
 
 class ContratoSinTipo(ReglaContratos):
     codigo = 'CTR-003'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato sin tipo de contrato'
     criticidad = CRITICIDAD_CRITICA
 
@@ -207,7 +227,14 @@ class ContratoSinTipo(ReglaContratos):
         'plantilla y si es un adiestramiento. Sin él, esas comprobaciones no se '
         'pueden hacer y el contrato queda fuera de los informes que agrupan por '
         'tipo de contratación.')
-    solucion = 'Abra el contrato y asigne el tipo de contrato que corresponde.'
+    solucion = (
+        'El tipo de contrato no se cambia en «Editar contrato»: va al histórico. Si el '
+        'contrato está así por un error de datos, el Administrador lo corrige en el '
+        'editor del histórico («Abrir el editor del histórico»): elija el tipo en el '
+        'evento más reciente (o en el Alta Inicial si no hay otro) y guarde; el '
+        'contrato toma el dato solo. Si la situación del trabajador cambió de verdad, '
+        'registre un movimiento de nómina. Moderador: envíe una solicitud personalizada '
+        'al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -229,17 +256,26 @@ class ContratoSinFechaAlta(ReglaContratos):
     codigo = 'CTR-004'
     nombre = 'Contrato sin fecha de contratación'
     criticidad = CRITICIDAD_CRITICA
+    # La F. de Contratación está bloqueada en Editar contrato: se corrige en el editor
+    # del histórico (18-11-2026). Los demás ven el botón del contrato.
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
 
     descripcion = 'Busca contratos sin fecha de alta registrada.'
     causa_probable = (
-        'El campo es opcional a nivel de base de datos, así que quedó vacío en una '
-        'importación o al crear el contrato fuera del formulario habitual.')
+        'Hasta agosto de 2026, aprobar una solicitud de «Editar contrato» podía dejarla '
+        'vacía; también puede venir de una importación de datos.')
     impacto = (
         'La fecha de alta es la base para calcular el vencimiento del contrato '
         '(fecha_alta + duracion) y para ordenar el histórico del trabajador. '
         'Sin ella, Orbith no puede avisar de contratos por vencer ni situar '
         'correctamente el contrato en la línea de tiempo del trabajador.')
-    solucion = 'Abra el contrato y registre la fecha en que el trabajador fue contratado.'
+    solucion = (
+        'La F. de Contratación es la fecha del Alta Inicial del histórico y solo se corrige '
+        'allí. Administrador: pulse «Abrir el editor del histórico»; si el contrato tiene '
+        'Alta Inicial, al guardar toma su fecha, y si no la tiene, créela con «Crear el Alta '
+        'Inicial». Moderador: envíe una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -329,6 +365,8 @@ class ContratoSinRegistroMilitar(ReglaContratos):
 
 class AspiranteConMultiplesContratos(ReglaContratos):
     codigo = 'CTR-008'
+    enlace_url = 'contratos_del_trabajador'
+    enlace_etiqueta = 'Ver sus contratos'
     nombre = 'Trabajador con más de un contrato de alta'
     criticidad = CRITICIDAD_CRITICA
 
@@ -343,8 +381,9 @@ class AspiranteConMultiplesContratos(ReglaContratos):
         'calculándose en paralelo. Los informes de nómina cuentan a esta persona '
         'dos veces.')
     solucion = (
-        'Revise cuál de los contratos es el vigente y dé de baja el que ya no '
-        'corresponde desde su propio formulario.')
+        'Pulse «Ver sus contratos»: la lista de Contratos se abre con los de esta '
+        'persona. Decida cuál es el vigente y tramite la baja del que ya no '
+        'corresponde.')
 
     # Este hallazgo apunta al ASPIRANTE, no al contrato, aunque la regla viva en el
     # módulo de Contratos por afinidad temática con el resto de reglas de esta
@@ -558,6 +597,9 @@ class NocturnidadesDuplicadas(ReglaContratos):
 
 class NocturnidadSinConfigurar(ReglaContratos):
     codigo = 'CTR-011'
+    enlace_url = 'parametros'
+    enlace_etiqueta = 'Abrir parámetros generales'
+    enlace_solo_admin = True
     nombre = 'Nocturnidad del contrato sin horario configurado'
     criticidad = CRITICIDAD_MEDIA
 
@@ -572,9 +614,10 @@ class NocturnidadSinConfigurar(ReglaContratos):
         'Sin el horario de nocturnidad configurado, Orbith no puede calcular '
         'cuántas horas nocturnas corresponde pagar en este contrato.')
     solucion = (
-        'Vaya al nomenclador de Condiciones Laborales Anormales y asigne el '
-        'horario de nocturnidad que falta. No hace falta tocar el contrato: en '
-        'cuanto se configure el nomenclador, el cálculo queda correcto.')
+        'Administrador: abra Parámetros Generales (botón de abajo) y, en el nomenclador '
+        'de Condiciones Laborales Anormales, asigne el horario de nocturnidad que '
+        'falta. No hace falta tocar el contrato: en cuanto se configure el nomenclador, '
+        'el cálculo queda correcto. Moderador: pídaselo al Administrador.')
 
     def ejecutar(self, contexto):
         columnas = self.COLUMNAS_BASE + (
@@ -1124,6 +1167,9 @@ class ContratoFechaAltaImposible(ReglaContratos):
     solución pasa por el panel de administración."""
 
     codigo = 'CTR-022'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato con fecha de alta imposible'
     criticidad = CRITICIDAD_ALTA
     ANO_MINIMO = 1900
@@ -1137,9 +1183,10 @@ class ContratoFechaAltaImposible(ReglaContratos):
         'bajas y movimientos queda en un año absurdo, y las cifras de altas por mes de '
         'la Dashboard y los informes no lo cuentan en el mes real.')
     solucion = (
-        'Corrija la fecha de alta del contrato desde el panel de administración, '
-        'escribiendo el año con cuatro cifras, y revise su movimiento «Alta Inicial» '
-        '(regla MOV-011). El asistente ya no admite años anteriores a 1900.')
+        'La F. de Contratación es la fecha del Alta Inicial del histórico y solo se '
+        'corrige allí. Administrador: pulse «Abrir el editor del histórico», corrija la '
+        'fecha del Alta Inicial (año con cuatro cifras) y guarde: el contrato toma la '
+        'nueva fecha. Moderador: envíe una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         filas = (self.base_queryset()
@@ -1183,6 +1230,8 @@ class ContratoDeterminadoVencido(ReglaContratos):
     """
 
     codigo = 'CTR-018'
+    enlace_url = 'movimiento_contrato'
+    enlace_etiqueta = 'Hacer el movimiento de nómina'
     nombre = 'Contrato determinado vencido con el trabajador todavía activo'
     criticidad = CRITICIDAD_CRITICA
 
@@ -1190,21 +1239,24 @@ class ContratoDeterminadoVencido(ReglaContratos):
         'Busca los contratos de duración determinada cuya fecha de vencimiento ya '
         'pasó y cuyo trabajador sigue en estado Activo.')
     causa_probable = (
-        'El contrato se firmó por un número de días y nadie lo renovó ni tramitó '
-        'la baja al llegar la fecha. Nada en el sistema avisaba del vencimiento.')
+        'El contrato (o su última renovación) se firmó por un número de días y nadie lo '
+        'renovó ni tramitó la baja al llegar la fecha.')
     impacto = (
         'El trabajador sigue cobrando en la nómina sin un contrato vigente que lo '
         'ampare, y ocupa una plaza de la plantilla que consta como cubierta.')
     solucion = (
-        'Renueve el contrato con una fecha y una duración nuevas, o tramite la baja '
-        'del trabajador si ya no presta servicios.')
+        'Renueve a la persona con un movimiento de nómina que lleve los días nuevos (o el '
+        'paso a Indeterminado): la duración cuenta desde su fecha efectiva. Si ya no presta '
+        'servicios, tramite la baja.')
 
     def ejecutar(self, contexto):
+        from contratos.models import con_inicio_del_periodo
+
         hoy = date.today()
         columnas = self.COLUMNAS_BASE + (
-            'fecha_alta', 'duracion', 'tipo__descripcion')
+            'fecha_alta', 'duracion', 'tipo__descripcion', 'ultimo_movimiento')
 
-        filas = (self.base_queryset()
+        filas = (con_inicio_del_periodo(self.base_queryset())
                  .filter(aspirante__estado='ACTIVO',
                          duracion__isnull=False, duracion__gt=0,
                          fecha_alta__isnull=False)
@@ -1212,7 +1264,13 @@ class ContratoDeterminadoVencido(ReglaContratos):
                  .iterator(chunk_size=TAMANO_LOTE))
 
         for fila in filas:
-            vence = _vencimiento_de(fila.get('fecha_alta'), fila.get('duracion'))
+            # La duración cuenta desde el último movimiento del contrato: renovar es un
+            # movimiento de nómina con los días nuevos (decisión de RRHH del 18-11-2026).
+            # Antes contaba desde la F. de Contratación y daba por vencidos contratos
+            # ya renovados (16 de 28 en la empresa). Mismo criterio que
+            # `CAlta.inicio_periodo`.
+            inicio = max(f for f in (fila['fecha_alta'], fila.get('ultimo_movimiento')) if f)
+            vence = _vencimiento_de(inicio, fila.get('duracion'))
             # Crítica desde el mismo día del vencimiento (antes de vencer avisa el
             # Recordatorio de 60 días; decisión de RRHH del 23-10-2026).
             if vence is None or vence > hoy:
@@ -1226,7 +1284,8 @@ class ContratoDeterminadoVencido(ReglaContratos):
                     else f'contrato vencido el {vence:%d/%m/%Y}'),
                 detalle=(
                     f'El contrato es de {fila["duracion"]} días desde el '
-                    f'{fila["fecha_alta"]:%d/%m/%Y}, así que '
+                    f'{inicio:%d/%m/%Y}'
+                    f'{" (su último movimiento)" if inicio != fila["fecha_alta"] else ""}, así que '
                     f'{"vence hoy" if vence == hoy else f"venció el {vence:%d/%m/%Y}"}, '
                     f'y el trabajador sigue activo.'),
                 # `dias` NO entra en `datos`: cambia cada día que pasa y movería la
@@ -1236,6 +1295,9 @@ class ContratoDeterminadoVencido(ReglaContratos):
                     'fecha_de_contratacion': f'{fila["fecha_alta"]:%d/%m/%Y}',
                     'duracion_en_meses': fila['duracion'],
                     'venció_el': f'{vence:%d/%m/%Y}',
+                    # Solo si cuenta desde un movimiento: así los avisos de siempre
+                    # conservan su huella (y su estado, si estaban silenciados).
+                    **({'cuenta_desde': f'{inicio:%d/%m/%Y}'} if inicio != fila['fecha_alta'] else {}),
                 },
                 unidad_organizativa_id=self.unidad_de(fila),
                 campo_formulario='duracion',
@@ -1333,6 +1395,9 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
     """
 
     codigo = 'CTR-020'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato que ocupa plaza sobre un cargo fuera de la plantilla aprobada'
     criticidad = CRITICIDAD_CRITICA
 
@@ -1351,10 +1416,13 @@ class ContratoFijoEnCargoFueraDePlantilla(ReglaContratos):
         'con la realidad.')
     solucion = (
         'Hay dos salidas y la correcta depende del caso, así que la decide Capital '
-        'Humano: si la plaza NO debía existir, cambie el tipo de contrato a uno que '
-        'no ocupe plaza (Determinado o Adiestrado). Si la plaza SÍ hace falta, '
-        'apruebe el cargo en la plantilla desde el Gestor de Plantilla. Aprobar un '
-        'cargo solo para silenciar el aviso es la salida equivocada.')
+        'Humano. Si la plaza NO debía existir, pase al trabajador a un tipo de contrato '
+        'que no ocupe plaza (Determinado o Adiestrado) con un movimiento de nómina; si '
+        'el tipo estaba mal desde el principio, el Administrador lo corrige en el '
+        'editor del histórico. Si la plaza SÍ hace falta, apruebe el cargo en la '
+        'plantilla desde el Gestor de Plantilla. Aprobar un cargo solo para silenciar '
+        'el aviso es la salida equivocada. Moderador: envíe una solicitud personalizada '
+        'al Administrador.')
 
     def ejecutar(self, contexto):
         columnas = self.COLUMNAS_BASE + (
@@ -1395,6 +1463,9 @@ class ContratoConFechaFutura(ReglaContratos):
     """
 
     codigo = 'CTR-024'
+    enlace_url = 'editor_historico_contrato'
+    enlace_etiqueta = 'Abrir el editor del histórico'
+    enlace_solo_admin = True
     nombre = 'Contrato con fecha más de 30 días en el futuro'
     criticidad = CRITICIDAD_ALTA
 
@@ -1408,8 +1479,11 @@ class ContratoConFechaFutura(ReglaContratos):
         'El trabajador figura contratado antes de tiempo, los años de servicio y el '
         'vencimiento salen mal, y el contrato se cuenta en un mes que aún no ha llegado.')
     solucion = (
-        'Corrija la fecha desde el panel de administración (la F. de Contratación no se '
-        'edita desde el formulario) junto con la de su movimiento de Alta Inicial.')
+        'Si la fecha equivocada es la F. Alta Entidad, corríjala en «Editar contrato». '
+        'Si es la F. de Contratación, se corrige en el histórico: Administrador, pulse '
+        '«Abrir el editor del histórico» y corrija la fecha del Alta Inicial. Si el '
+        'contrato todavía no ha empezado, regístrelo el día en que empiece. Moderador: '
+        'envíe una solicitud personalizada al Administrador.')
 
     def ejecutar(self, contexto):
         from contratos.cronologia import fecha_maxima
@@ -1430,5 +1504,67 @@ class ContratoConFechaFutura(ReglaContratos):
                 titulo=self.titulo_de(fila, f'{cual} futura ({texto})'),
                 detalle=f'El contrato tiene la {cual} {texto}, más de 30 días después de hoy.',
                 datos={'campo': cual, 'fecha': texto},
+                unidad_organizativa_id=self.unidad_de(fila),
+            )
+
+
+class CambioDeAnnosDeServicioSinMovimiento(ReglaContratos):
+    """CTR-025: el trabajador cumplió años de servicio que cambian su importe y no se
+    registró el movimiento de nómina (decisión de RRHH del 19-11-2026).
+
+    Diez días antes avisa el recordatorio REC-ANTIGUEDAD (campana); desde el día del
+    aniversario lo marca esta regla, con triángulo, hasta que haya un movimiento con
+    fecha efectiva ese día o posterior. Solo los aniversarios desde la actualización
+    (`contratos.annos_servicio.avisos_desde`): los anteriores no se reclaman.
+    """
+
+    codigo = 'CTR-025'
+    nombre = 'Cambio de años de servicio sin movimiento de nómina'
+    criticidad = CRITICIDAD_ALTA
+    enlace_url = 'movimiento_contrato'
+    enlace_etiqueta = 'Hacer el movimiento de nómina'
+
+    descripcion = (
+        'Busca los trabajadores activos que ya cumplieron unos años de servicio que cambian '
+        'el importe de la escala y no tienen un movimiento de nómina con fecha efectiva ese '
+        'día o posterior.')
+    causa_probable = (
+        'El aniversario de la F. Alta Entidad pasó y nadie registró el movimiento de nómina '
+        'del cambio de años de servicio.')
+    impacto = (
+        'El histórico y el documento de movimiento no reflejan el nuevo importe por años de '
+        'servicio, aunque los cálculos de pago ya lo usen.')
+    solucion = (
+        'Registre un movimiento de nómina con fecha efectiva el día del aniversario o '
+        'posterior. Aunque no cambie ningún otro dato del contrato, se puede guardar: '
+        'Orbith pide confirmarlo.')
+
+    def ejecutar(self, contexto):
+        from contratos.annos_servicio import avisos_desde, cambios_de_importe
+        from contratos.models import con_inicio_del_periodo
+        from prenomina.models import NEscalaAnnosServicio
+
+        hoy = date.today()
+        desde = avisos_desde()
+        escala = NEscalaAnnosServicio.como_diccionario()
+        filas = (con_inicio_del_periodo(self.base_queryset())
+                 .filter(aspirante__estado='ACTIVO', fecha_alta_entidad__isnull=False)
+                 .values(*self.COLUMNAS_BASE, 'fecha_alta_entidad', 'ultimo_movimiento')
+                 .iterator(chunk_size=TAMANO_LOTE))
+        for fila in filas:
+            ultimo = fila.get('ultimo_movimiento')
+            pendientes = [c for c in cambios_de_importe(fila['fecha_alta_entidad'], desde, hoy, escala)
+                          if not (ultimo and ultimo >= c[0])]
+            if not pendientes:
+                continue
+            dia, annos, antes, despues = pendientes[-1]
+            yield HallazgoDetectado(
+                object_id=str(fila['id']),
+                titulo=self.titulo_de(fila, f'cumplió {annos} años de servicio sin movimiento'),
+                detalle=(f'El {dia:%d/%m/%Y} cumplió {annos} años de servicio: el pago pasa de '
+                         f'{antes:.2f} a {despues:.2f} y no hay un movimiento de nómina con fecha '
+                         f'efectiva ese día o posterior.'),
+                datos={'años_de_servicio': annos, 'cumplidos_el': f'{dia:%d/%m/%Y}',
+                       'importe_anterior': f'{antes:.2f}', 'importe_nuevo': f'{despues:.2f}'},
                 unidad_organizativa_id=self.unidad_de(fila),
             )

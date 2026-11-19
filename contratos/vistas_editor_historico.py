@@ -158,8 +158,17 @@ def editor_historico(request, aspirante_id):
         'version': historico.version,
         'eventos': _eventos_json(historico, meses_por_evento(historico)),
         'anomalias': historico.anomalias,
+        # Eventos antiguos el mismo día: no bloquean, se avisan con arreglos rápidos.
+        'avisos': eh.mismo_dia(historico),
         'catalogos': _catalogos(),
         'tiene_contrato': contrato is not None,
+        # F. de Contratación del contrato vigente y si le falta el Alta Inicial
+        # (CTR-004 y MOV-014, 18-11-2026): la pantalla lo avisa arriba.
+        'fecha_contrato': _iso(historico.fecha_contrato) if contrato is not None else None,
+        'falta_alta': bool(historico.alta_propuesta),
+        # El movimiento que era el alta (el mismo día que la F. de Contratación): al
+        # crear el Alta Inicial, la pantalla lo marca para borrar.
+        'alta_sustituye': (historico.alta_propuesta or {}).get('sustituye'),
     }
     return render(request, 'pages/contrato/editor_historico.html', {
         'persona': persona,
@@ -170,6 +179,53 @@ def editor_historico(request, aspirante_id):
         'bajas_sueltas': CBaja.objects.filter(aspirante=persona).count(),
         'datos_editor': datos,
     })
+
+
+@admin_required
+@require_GET
+def editor_historico_de_contrato(request, pk):
+    """El editor del histórico de la persona de ese contrato. Lo usan los avisos de
+    Subsanación que se guardan sobre el contrato (CTR-004, MOV-014), 18-11-2026."""
+    from django.shortcuts import redirect
+    from django.urls import reverse
+
+    from .models import CAlta
+
+    contrato = get_object_or_404(CAlta, pk=pk)
+    destino = reverse('editor_historico', args=[contrato.aspirante_id])
+    consulta = request.META.get('QUERY_STRING')
+    return redirect(f'{destino}?{consulta}' if consulta else destino)
+
+
+def _al_editor_de(request, aspirante_id):
+    from django.shortcuts import redirect
+    from django.urls import reverse
+
+    destino = reverse('editor_historico', args=[aspirante_id])
+    consulta = request.META.get('QUERY_STRING')
+    return redirect(f'{destino}?{consulta}' if consulta else destino)
+
+
+@admin_required
+@require_GET
+def editor_historico_de_movimiento(request, pk):
+    """El editor del histórico de la persona de ese movimiento de nómina: lo usan los
+    avisos de Subsanación sobre movimientos (MOV-001, 003, 011, 013), 19-11-2026."""
+    from .models import TMovimiento
+
+    movimiento = get_object_or_404(TMovimiento, pk=pk, aspirante__isnull=False)
+    return _al_editor_de(request, movimiento.aspirante_id)
+
+
+@admin_required
+@require_GET
+def editor_historico_de_baja(request, pk):
+    """El editor del histórico de la persona de esa baja: lo usan los avisos de
+    Subsanación sobre bajas (MOV-005, 009, 010), 19-11-2026."""
+    from .models import CBaja
+
+    baja = get_object_or_404(CBaja, pk=pk, aspirante__isnull=False)
+    return _al_editor_de(request, baja.aspirante_id)
 
 
 @admin_required
@@ -186,6 +242,7 @@ def editor_historico_previa(request, aspirante_id):
         'ok': not errores,
         'errores': errores,
         'eventos': _eventos_json(propuesto, meses_por_evento(original)),
+        'avisos': eh.mismo_dia(propuesto),
         'resumen': _resumen_json(res),
         'version_actual': original.version,
     })

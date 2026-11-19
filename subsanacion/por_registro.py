@@ -37,6 +37,14 @@ def sin_revision_por_registro():
     finally:
         _estado.desactivada = anterior
 
+def en_revision_por_registro():
+    """True mientras se revisan los registros que alguien acaba de guardar. El
+    Ranking lo usa para dar XP por corregir un hallazgo (18-11-2026): si un hallazgo
+    se cierra aquí, lo cerró quien guardó; si se cierra en el análisis diario, no se
+    sabe quién lo arregló."""
+    return getattr(_estado, 'revisando', False)
+
+
 #: De qué modelo es cada grupo de ids. Desde la 3.9.0 (09-11-2026, decisión de RRHH)
 #: se revisan TODAS las reglas Críticas y Altas de estos modelos, no una lista fija:
 #: antes, al corregir un contrato podía quedar el triángulo por una regla que no se
@@ -52,7 +60,7 @@ _MODELO = {
 
 #: Medias que también se revisan al guardar: miran el histórico de la persona y
 #: tienen que cerrarse en cuanto se corrige con el editor del histórico.
-REGLAS_EXTRA = ('MOV-015', 'MOV-016')
+REGLAS_EXTRA = ('MOV-015', 'MOV-016', 'MOV-017')
 
 
 def reglas_por_registro():
@@ -95,14 +103,18 @@ def revisar_registros(contratos=(), aspirantes=(), cargos=()):
             aspirante_id__in=ids['aspirantes']).values_list('pk', flat=True)]
 
     contexto = ContextoAnalisis()
-    for regla in reglas_por_registro():
-        grupo = _MODELO[regla.modelo.lower()]
-        if not ids[grupo]:
-            continue
-        try:
-            reconciliar_regla(regla, None, contexto, ids=ids[grupo])
-        except Exception:
-            logger.exception('No se pudo revisar la regla %s sobre %s.', regla.codigo, ids[grupo])
+    _estado.revisando = True
+    try:
+        for regla in reglas_por_registro():
+            grupo = _MODELO[regla.modelo.lower()]
+            if not ids[grupo]:
+                continue
+            try:
+                reconciliar_regla(regla, None, contexto, ids=ids[grupo])
+            except Exception:
+                logger.exception('No se pudo revisar la regla %s sobre %s.', regla.codigo, ids[grupo])
+    finally:
+        _estado.revisando = False
 
 
 def revisar_contratos(contratos):

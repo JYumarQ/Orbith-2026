@@ -74,8 +74,10 @@ class BajaConContratoActivo(ReglaTrabajadorOculto):
         'criterio de cada uno, así que las cifras dejan de cuadrar entre sí.')
     solucion = (
         'Decida cuál es la situación real. Si la persona ya no trabaja en la entidad, '
-        'complete su baja desde el contrato, para que el contrato de alta desaparezca y la '
-        'plaza quede libre. Si sigue trabajando, cambie su estado a ACTIVO.')
+        'tramite su baja desde la lista de Contratos, para que el contrato desaparezca '
+        'y la plaza quede libre. Si sigue trabajando, su estado debe ser ACTIVO: no se '
+        'cambia en la ficha del trabajador, lo corrige un Administrador en el panel de '
+        'administración (Aspirantes → la persona → Estado).')
 
     def ejecutar(self, contexto):
         filas = (self.con_contrato(True)
@@ -116,8 +118,9 @@ class AspiranteYaContratado(ReglaTrabajadorOculto):
         'disponible, con el riesgo de que se la proponga para otra plaza estando ya '
         'contratada. Y los informes que cuentan trabajadores por estado no la cuentan.')
     solucion = (
-        'Abra el trabajador y cambie su estado a ACTIVO, que es lo que corresponde a quien '
-        'tiene un contrato de alta vigente.')
+        'Su estado debe ser ACTIVO, que es lo que corresponde a quien tiene un contrato '
+        'de alta. No se cambia en la ficha del trabajador: lo corrige un Administrador '
+        'en el panel de administración (Aspirantes → la persona → Estado).')
 
     def ejecutar(self, contexto):
         filas = (self.con_contrato(True)
@@ -178,10 +181,12 @@ class TrabajadorActivoSinContrato(ReglaBase):
         'los informes que cuentan trabajadores por estado la incluyen sin que haya '
         'forma de ver quién es.')
     solucion = (
-        'Decida cuál de las dos situaciones es la real y arréglela desde el formulario '
-        'del trabajador, al que puede llegar con el botón de abajo: si la persona '
-        'trabaja en la entidad, créele el contrato de alta que le falta; si ya no '
-        'trabaja, cambie su estado a BAJA y registre la baja correspondiente.')
+        'Decida cuál de las dos situaciones es la real. Si la persona trabaja en la '
+        'entidad, hay que crearle el contrato de alta que le falta; si ya no trabaja, '
+        'su estado debe ser BAJA. El estado no se cambia en la ficha del trabajador: lo '
+        'corrige un Administrador en el panel de administración (Aspirantes → la '
+        'persona → Estado). Con el estado en ASPIRANTE vuelve a aparecer en la bolsa '
+        'para contratarla.')
 
     def ejecutar(self, contexto):
         # apps.get_model dentro de ejecutar(), no a nivel de módulo: evita imports

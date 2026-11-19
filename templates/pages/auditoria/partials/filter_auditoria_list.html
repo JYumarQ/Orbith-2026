@@ -40,6 +40,10 @@ el módulo es de solo lectura, cada fila abre su propio detalle.
             <span class="badge bg-label-secondary"><i class="bx bx-log-out-circle me-1"></i>Cierre de sesión</span>
         {% elif evento.accion == 'ACF' %}
             <span class="badge bg-label-warning"><i class="bx bx-error-circle me-1"></i>Intento de acceso fallido</span>
+        {% elif evento.accion == 'CBD' %}
+            <span class="badge bg-label-danger"><i class="bx bx-data me-1"></i>Copia de la base de datos</span>
+        {% elif evento.accion == 'ACT' %}
+            <span class="badge bg-label-dark"><i class="bx bx-upload me-1"></i>Actualización de Orbith</span>
         {% else %}
             {# Cualquier acción que se añada en el futuro sale con su nombre, nunca vacía. #}
             <span class="badge bg-label-secondary">{{ evento.get_accion_display }}</span>

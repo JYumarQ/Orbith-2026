@@ -10,6 +10,11 @@ urlpatterns = [
     path('notificaciones/lista/', login_required(views.lista_notificaciones), name='lista_notificaciones'),
     path('notificaciones/panel-advertencias/', views.panel_advertencias, name='panel_advertencias'),
     path('notificaciones/panel-recordatorios/', views.panel_recordatorios, name='panel_recordatorios'),
+    # Avisos agrupados (18-11-2026).
+    path('notificaciones/grupo/leer/', views.marcar_grupo_leido, name='notificaciones_marcar_grupo_leido'),
+    path('notificaciones/grupo/advertencias/', views.grupo_advertencias, name='grupo_advertencias'),
+    path('notificaciones/actividad/', views.actividad_dia, name='actividad_dia'),
+    path('notificaciones/supervision/grupo/', views.supervision_grupo, name='supervision_grupo'),
     path('notificaciones/buscar-incidencias/', views.buscar_incidencias, name='buscar_incidencias'),
     path('notificaciones/recordatorios/actualizar/', views.actualizar_recordatorios, name='actualizar_recordatorios'),
     path('notificaciones/<int:pk>/descartar/', views.descartar_advertencia, name='descartar_advertencia'),

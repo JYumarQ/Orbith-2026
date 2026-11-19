@@ -34,7 +34,7 @@ from django.utils import timezone
 from cierres import servicios as servicios_cierres
 from cierres.models import CierreCargo, CierreContrato, CierreUnidad
 from cierres.periodos import Periodo, desde_clave
-from contratos.models import CAlta
+from contratos.models import CAlta, con_inicio_del_periodo
 from strorganizativa.models import CargoPlantilla, UnidadOrganizativa
 from usuarios.alcance import tiene_alcance_acotado, ve_toda_la_empresa
 
@@ -133,6 +133,9 @@ class FilaContrato:
     # Para abrir el histórico del trabajador desde un informe (la cifra que se
     # pulsa enseña quiénes son). En un cierre es el id que tenía al cerrar.
     aspirante_id: object = None
+    # Desde cuándo cuenta la duración: el último movimiento del contrato (renovación,
+    # 18-11-2026). En un cierre no se sabe: cuenta desde la F. de Contratación.
+    inicio_periodo: object = None
 
     @property
     def es_mujer(self):
@@ -140,11 +143,13 @@ class FilaContrato:
 
     @property
     def fecha_vencimiento(self):
-        """Réplica de `CAlta.fecha_vencimiento`, que la plantilla de Motivos usa."""
-        if not self.fecha_alta or self.duracion is None:
+        """Réplica de `CAlta.fecha_vencimiento`, que la plantilla de Motivos usa: la
+        duración cuenta desde `inicio_periodo` (el último movimiento, 18-11-2026)."""
+        inicio = self.inicio_periodo or self.fecha_alta
+        if not inicio or self.duracion is None:
             return None
         from datetime import timedelta
-        return self.fecha_alta + timedelta(days=self.duracion)
+        return inicio + timedelta(days=self.duracion)
 
 
 @dataclass
@@ -355,10 +360,10 @@ def fuente_actual(unidades_ids=None):
                      filter=Q(calta__aspirante__estado='ACTIVO',
                               calta__tipo__ocupa_plaza=True),
                  )))
-    contratos_qs = (CAlta.objects
-                    .select_related('aspirante', 'cargo', 'cargo__departamento',
-                                    'cargo__ncargo', 'cargo__ncargo__grupo_escala',
-                                    'tipo', 'motivo'))
+    contratos_qs = con_inicio_del_periodo(
+        CAlta.objects.select_related('aspirante', 'cargo', 'cargo__departamento',
+                                     'cargo__ncargo', 'cargo__ncargo__grupo_escala',
+                                     'tipo', 'motivo'))
     # `is not None` y no la comprobación de verdad a secas: desde que el alcance
     # por rol acota los informes, una lista VACÍA es un caso real y significativo
     # —un Moderador sin unidades asignadas— que no debe ver ninguna fila. Con
@@ -434,7 +439,8 @@ def fuente_actual(unidades_ids=None):
             fecha_alta=contrato.fecha_alta,
             duracion=contrato.duracion,
             salario=contrato.salario_actual,
-            dias_restantes=_dias_restantes(contrato.fecha_alta, contrato.duracion, hoy),
+            inicio_periodo=contrato.inicio_periodo,
+            dias_restantes=_dias_restantes(contrato.inicio_periodo, contrato.duracion, hoy),
             en_plantilla=bool(cargo.en_plantilla) if cargo else True,
             aspirante_id=contrato.aspirante_id,
         ))
@@ -685,14 +691,14 @@ def _nombre(aspirante):
     return ' '.join(p for p in partes if p).strip()
 
 
-def _dias_restantes(fecha_alta, duracion, referencia):
+def _dias_restantes(inicio, duracion, referencia):
     """Réplica de `CAlta.dias_restantes`, pero contra una fecha elegible.
 
     En tiempo real la referencia es hoy; en un histórico, el día en que se
     declaró el cierre. Preguntar «cuántos días le quedaban» a un contrato de
     agosto usando la fecha de hoy no significaría nada.
     """
-    if not fecha_alta or duracion is None or referencia is None:
+    if not inicio or duracion is None or referencia is None:
         return None
     from datetime import timedelta
-    return ((fecha_alta + timedelta(days=duracion)) - referencia).days
+    return ((inicio + timedelta(days=duracion)) - referencia).days

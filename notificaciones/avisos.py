@@ -230,6 +230,27 @@ def avisar_hallazgos_en_caliente(instancia):
 #: `_registrar_notificacion`. Antes se creaban con `bulk_create()` y `codigo_regla=''`
 #: (el valor por defecto de un EVENTO), sin ninguna clave natural que las protegiera —
 #: el mismo hueco que causó los avisos de Solicitud duplicados en producción.
+def _autor_actual():
+    """Quien está haciendo el cambio (None en scripts y migraciones)."""
+    usuario = get_current_user()
+    if usuario is not None and getattr(usuario, 'is_authenticated', False):
+        return usuario
+    return None
+
+
+def _datos_de_evento(titulo, mensaje, unidad, autor, destinatario):
+    """Campos de un aviso de actividad (alta, baja, cargo, cambio salarial). Guarda
+    el autor para «Actividad de hoy» («por Fulano») y, si el aviso es para el propio
+    autor, nace leído: nadie necesita que le avisen de lo que hizo él mismo, pero lo
+    sigue viendo en su Actividad de hoy (decisión del 18-11-2026)."""
+    return {
+        'titulo': titulo, 'mensaje': mensaje,
+        'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
+        'unidad': unidad, 'autor': autor,
+        'leido': autor is not None and destinatario.pk == autor.pk,
+    }
+
+
 CODIGO_ALTA_CONTRATO = 'EVT-ALTA'
 CODIGO_BAJA_CONTRATO = 'EVT-BAJA'
 CODIGO_NUEVO_CARGO = 'EVT-CARGO'
@@ -258,15 +279,12 @@ def avisar_alta_contrato(contrato):
     # `Aspirante.__str__` ya devuelve "nombre papellido sapellido" limpio.
     mensaje = f"Se ha creado el contrato {contrato.no_expediente} de {contrato.aspirante}."
 
+    autor = _autor_actual()
     for destinatario in destinatarios:
         _registrar_notificacion(
             tipo_ct=tipo_ct, object_id=str(contrato.pk), destinatario=destinatario,
             codigo_regla=CODIGO_ALTA_CONTRATO, clave_extra='',
-            defaults={
-                'titulo': titulo, 'mensaje': mensaje,
-                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
-                'unidad': unidad,
-            },
+            defaults=_datos_de_evento(titulo, mensaje, unidad, autor, destinatario),
         )
 
 
@@ -301,15 +319,12 @@ def avisar_baja_contrato(contrato):
     titulo = "Baja de contrato"
     mensaje = f"Se ha dado de baja el contrato {contrato.no_expediente} de {contrato.aspirante}."
 
+    autor = _autor_actual()
     for destinatario in destinatarios:
         _registrar_notificacion(
             tipo_ct=tipo_ct, object_id=str(contrato.aspirante_id), destinatario=destinatario,
             codigo_regla=CODIGO_BAJA_CONTRATO, clave_extra=str(contrato.pk),
-            defaults={
-                'titulo': titulo, 'mensaje': mensaje,
-                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
-                'unidad': unidad,
-            },
+            defaults=_datos_de_evento(titulo, mensaje, unidad, autor, destinatario),
         )
 
 
@@ -335,15 +350,12 @@ def avisar_nuevo_cargo(cargo):
     titulo = "Nuevo Cargo creado"
     mensaje = f"Se ha creado un nuevo cargo: {cargo.ncargo.descripcion} en {cargo.departamento}."
 
+    autor = _autor_actual()
     for destinatario in destinatarios:
         _registrar_notificacion(
             tipo_ct=tipo_ct, object_id=str(cargo.pk), destinatario=destinatario,
             codigo_regla=CODIGO_NUEVO_CARGO, clave_extra='',
-            defaults={
-                'titulo': titulo, 'mensaje': mensaje,
-                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
-                'unidad': unidad,
-            },
+            defaults=_datos_de_evento(titulo, mensaje, unidad, autor, destinatario),
         )
 
 
@@ -376,13 +388,10 @@ def avisar_cambio_salarial(objeto, *, codigo, titulo, mensaje, unidad=None):
 
     tipo_ct = ContentType.objects.get_for_model(objeto)
     instante = timezone.now().strftime('%Y%m%d%H%M%S%f')
+    autor = _autor_actual()
     for destinatario in destinatarios:
         _registrar_notificacion(
             tipo_ct=tipo_ct, object_id=str(objeto.pk), destinatario=destinatario,
             codigo_regla=codigo, clave_extra=instante,
-            defaults={
-                'titulo': titulo, 'mensaje': mensaje,
-                'tipo': Notificacion.Tipo.EVENTO, 'estado': Notificacion.Estado.ACTIVA,
-                'unidad': unidad,
-            },
+            defaults=_datos_de_evento(titulo, mensaje, unidad, autor, destinatario),
         )

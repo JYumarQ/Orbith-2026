@@ -8,6 +8,8 @@
   --ranking-oro: #d4a017;
   --ranking-plata: #8a99ad;
   --ranking-bronce: #b5651d;
+  /* «Más mejorado del mes» (18-11-2026). */
+  --ranking-mejorado: #03a9c9;
 }
 
 /* --- Resumen --- */
@@ -70,6 +72,7 @@
 .ranking-oro { color: var(--ranking-oro); }
 .ranking-plata { color: var(--ranking-plata); }
 .ranking-bronce { color: var(--ranking-bronce); }
+.ranking-mejorado { color: var(--ranking-mejorado); }
 .ranking-avatar {
   width: 36px;
   height: 36px;
@@ -174,6 +177,7 @@
 html.distincion-oro { --distincion: var(--ranking-oro); }
 html.distincion-plata { --distincion: var(--ranking-plata); }
 html.distincion-bronce { --distincion: var(--ranking-bronce); }
+html.distincion-mejorado { --distincion: var(--ranking-mejorado); }
 
 html[class*="distincion-"] #layout-menu .menu-inner > .menu-item > .menu-link > .menu-icon,
 html[class*="distincion-"] #notificacionesDropdown .fa-bell {
