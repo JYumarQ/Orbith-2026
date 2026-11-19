@@ -36,7 +36,9 @@ MANIFIESTO = 'despliegue/MANIFIESTO.txt'
 TAMANO_TROZO = 512 * 1024
 #: Tamaño máximo de un paquete (hoy son unos 76 MB).
 TAMANO_MAXIMO = 400 * 1024 * 1024
-PATRON_PAQUETE = re.compile(r'^orbith-[0-9][\w.\-]*\.tar\.gz$')
+#: Desde la 3.10.0 el paquete se llama «orbith.tar.gz» y trae la carpeta «orbith» (lo
+#: pidió Informática); se siguen aceptando los de antes, «orbith-<versión>.tar.gz».
+PATRON_PAQUETE = re.compile(r'^orbith(-[0-9][\w.\-]*)?\.tar\.gz$')
 #: Registros de ensayo que se guardan; los más antiguos se borran solos.
 DIAS_QUE_SE_GUARDAN = 60
 #: Un ensayo «en curso» desde hace más se da por muerto (se reinició el servidor).
@@ -314,7 +316,7 @@ def recibir_trozo(nombre, indice, total, datos):
     Los trozos llegan en orden (el navegador espera a cada uno): el 0 empieza de cero.
     """
     if not PATRON_PAQUETE.match(nombre or ''):
-        raise ErrorDeActualizacion('El archivo tiene que ser el paquete de Orbith: orbith-<versión>.tar.gz.')
+        raise ErrorDeActualizacion('El archivo tiene que ser el paquete de Orbith: orbith.tar.gz.')
     if not (0 <= indice < total) or total * TAMANO_TROZO > TAMANO_MAXIMO + TAMANO_TROZO:
         raise ErrorDeActualizacion('La subida no es válida. Vuelva a empezarla.')
     parcial = subidas() / (nombre + '.parcial')
@@ -354,7 +356,8 @@ def escribir_manifiesto(raiz):
             lineas.append('%s  %s' % (huella(ruta), relativa))
     destino = raiz / MANIFIESTO
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text('\n'.join(lineas) + '\n', encoding='utf-8')
+    # Finales LF aunque se prepare en Windows: en Linux vale también para «sha256sum -c».
+    destino.write_text('\n'.join(lineas) + '\n', encoding='utf-8', newline='\n')
     return len(lineas)
 
 
@@ -460,8 +463,9 @@ def _extraer(paquete, destino):
     with tarfile.open(paquete, 'r:gz') as tar:
         miembros = tar.getmembers()
         raices = {m.name.split('/', 1)[0] for m in miembros}
-        if len(raices) != 1 or not next(iter(raices)).startswith('orbith-'):
-            raise ErrorDeActualizacion('El paquete no trae una sola carpeta orbith-<versión>.')
+        raiz = next(iter(raices)) if len(raices) == 1 else ''
+        if raiz != 'orbith' and not raiz.startswith('orbith-'):
+            raise ErrorDeActualizacion('El paquete no trae una sola carpeta orbith.')
         for m in miembros:
             if m.name.startswith('/') or '..' in Path(m.name).parts or not (m.isfile() or m.isdir()):
                 raise ErrorDeActualizacion('El paquete trae una ruta no permitida: %s' % m.name)
@@ -469,7 +473,7 @@ def _extraer(paquete, destino):
             tar.extractall(destino, filter='data')
         else:
             tar.extractall(destino)
-    return Path(destino) / next(iter(raices))
+    return Path(destino) / raiz
 
 
 def _version_de(raiz):

@@ -263,11 +263,11 @@ class ActualizacionOrbithTests(TestCase):
         self.url = reverse('admin:soporte_actualizacionorbith_changelist')
         self.admin = CustomUser.objects.create_user(username='adm_act', password='x', es_admin=True, is_staff=True)
 
-    def _paquete(self, nombre='orbith-9.9.9.tar.gz', estropear=False):
+    def _paquete(self, nombre='orbith-9.9.9.tar.gz', estropear=False, carpeta_raiz='orbith-9.9.9'):
         """Un paquete mínimo con su lista de huellas."""
         import tarfile
         from core import actualizacion
-        raiz = self.carpeta / 'fuente' / 'orbith-9.9.9'
+        raiz = self.carpeta / 'fuente' / carpeta_raiz
         (raiz / 'core').mkdir(parents=True, exist_ok=True)
         (raiz / 'core' / 'changelog.py').write_text('CHANGELOG = [\n    {"version": "9.9.9"},\n]\n', encoding='utf-8')
         (raiz / 'requirements.txt').write_text('', encoding='utf-8')
@@ -276,7 +276,7 @@ class ActualizacionOrbithTests(TestCase):
             (raiz / 'requirements.txt').write_text('cambiado', encoding='utf-8')
         destino = actualizacion.subidas() / nombre
         with tarfile.open(destino, 'w:gz') as tar:
-            tar.add(raiz, arcname='orbith-9.9.9')
+            tar.add(raiz, arcname=carpeta_raiz)
         return destino
 
     def test_solo_el_administrador(self):
@@ -320,6 +320,7 @@ class ActualizacionOrbithTests(TestCase):
         (raiz / 'a').mkdir(parents=True)
         (raiz / 'a' / 'b.txt').write_text('hola', encoding='utf-8')
         actualizacion.escribir_manifiesto(raiz)
+        self.assertNotIn(b'\r', (raiz / actualizacion.MANIFIESTO).read_bytes())   # LF también en Windows
         self.assertEqual(actualizacion.comprobar_manifiesto(raiz), [])
         (raiz / 'a' / 'b.txt').write_text('otra cosa', encoding='utf-8')
         (raiz / 'intruso.py').write_text('x', encoding='utf-8')
@@ -358,6 +359,16 @@ class ActualizacionOrbithTests(TestCase):
         self.assertIn('RESULTADO: ENSAYO CORRECTO', texto)
         self.assertEqual(list(actualizacion.trabajo().iterdir()), [])     # sin restos
         self.assertIsNone(actualizacion.ensayo_en_curso())
+
+    def test_paquete_con_el_nombre_de_la_3_10(self):
+        """Desde la 3.10.0 el paquete es orbith.tar.gz con la carpeta orbith (sin versión)."""
+        from core.actualizacion import PATRON_PAQUETE
+        self.assertTrue(PATRON_PAQUETE.match('orbith.tar.gz'))
+        self.assertTrue(PATRON_PAQUETE.match('orbith-3.9.2.tar.gz'))
+        self.assertFalse(PATRON_PAQUETE.match('orbith (1).tar.gz'))
+        texto = self._ensayar(self._paquete('orbith.tar.gz', carpeta_raiz='orbith'))
+        self.assertIn('Versión del paquete: 9.9.9', texto)
+        self.assertIn('RESULTADO: ENSAYO CORRECTO', texto)
 
     def test_ensayo_con_un_paquete_cambiado_se_detiene(self):
         texto = self._ensayar(self._paquete(estropear=True))

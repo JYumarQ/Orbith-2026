@@ -40,7 +40,7 @@
 
 <div class="act-seccion">
   <h2>2. Subir el paquete</h2>
-  <p>Elija el archivo <code>orbith-&lt;versión&gt;.tar.gz</code>. Se sube por trozos pequeños; no cierre la página
+  <p>Elija el archivo <code>orbith.tar.gz</code>. Se sube por trozos pequeños; no cierre la página
      hasta que termine.</p>
   <p><input type="file" id="actArchivo" accept=".gz"> <button type="button" class="button" id="actSubir">Subir</button></p>
   <div class="act-barra" id="actBarra" hidden><div></div></div>
@@ -104,8 +104,8 @@
   document.getElementById('actSubir').addEventListener('click', async function () {
     const archivo = document.getElementById('actArchivo').files[0];
     if (!archivo) { estado.textContent = 'Elija primero el archivo.'; return; }
-    if (!/^orbith-[0-9][\w.\-]*\.tar\.gz$/.test(archivo.name)) {
-      estado.textContent = 'El archivo tiene que ser el paquete de Orbith: orbith-<versión>.tar.gz.'; return;
+    if (!/^orbith(-[0-9][\w.\-]*)?\.tar\.gz$/.test(archivo.name)) {
+      estado.textContent = 'El archivo tiene que ser el paquete de Orbith: orbith.tar.gz.'; return;
     }
     const boton = this;
     boton.disabled = true;

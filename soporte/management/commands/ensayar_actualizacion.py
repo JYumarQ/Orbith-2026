@@ -10,7 +10,7 @@ class Command(BaseCommand):
     help = 'Ensaya un paquete de actualización de Orbith sin tocar la versión en uso.'
 
     def add_arguments(self, parser):
-        parser.add_argument('paquete', help='Ruta del paquete orbith-<versión>.tar.gz subido.')
+        parser.add_argument('paquete', help='Ruta del paquete orbith.tar.gz subido.')
         parser.add_argument('registro', help='Nombre del fichero de registro (ensayo-<fecha>.log).')
 
     def handle(self, *args, **options):
